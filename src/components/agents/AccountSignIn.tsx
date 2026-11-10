@@ -68,7 +68,7 @@ export function AccountSignIn({ account, onDone }: { account: UsageAccount; onDo
           </p>
           <label className="connect-modal-field">
             <span>
-              Account email <span className="connect-modal-muted">(shown in Settings)</span>
+              Account email <span className="connect-modal-muted">(shown in Usage)</span>
             </span>
             <TextField
               type="email"

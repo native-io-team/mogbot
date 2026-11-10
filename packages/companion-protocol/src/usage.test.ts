@@ -116,7 +116,7 @@ describe('the capacity inventory, in words', () => {
       }),
       NOW
     );
-    expect(line?.text).toMatch(/^Claude 5-hour limit resets .+ · 62% unused$/);
+    expect(line?.text).toMatch(/^Claude 5-hour limit resets .+ · 62% left$/);
     expect(line?.detail).toContain('spare-capacity list (1 waiting)');
     // A reset that has passed is history.
     expect(

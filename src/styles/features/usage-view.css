@@ -169,10 +169,18 @@
 
 /* ------------------------------------------------------------- the view */
 
-.agents-usage-view__column {
+/* The one rendering of usage and accounts: the view's body and Settings →
+   Accounts & usage alike. */
+.usage-panel {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xl);
+  min-width: 0;
+}
+
+.agents-usage-view__column {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: calc(var(--agents-chat-width) + (var(--spacing-xl) * 2));
   margin: 0 auto;
@@ -509,7 +517,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* An estimate is information, never "needs you": secondary ink. Only with
+   little left does a small warning mark lead it. */
 .usage-key__pace {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-3xs);
+  color: var(--text-secondary);
+}
+
+.usage-key__pace-icon {
+  flex: none;
+  align-self: center;
   color: var(--accent-warning);
 }
 

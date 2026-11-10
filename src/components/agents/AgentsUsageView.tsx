@@ -27,7 +27,7 @@
  * @module components/agents/AgentsUsageView
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AddIcon, ZapIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { SegmentedControl } from '../primitives/SegmentedControl';
@@ -41,6 +41,7 @@ import {
   renameUsageAccount,
   reorderUsageAccounts,
   suggestName,
+  takeAccountsRequest,
   takeUsageAdd,
   type UsageAccount,
 } from '../../lib/agentAccounts';
@@ -48,6 +49,7 @@ import {
   USAGE_MODES,
   USAGE_MODE_DETAIL,
   USAGE_MODE_LABEL,
+  estimateLine,
   localLine,
   setUsageMode,
   setCrossover,
@@ -55,6 +57,8 @@ import {
   type StackEngine,
   type UsageMode,
 } from '../../lib/agentsUsage';
+import { takeSettingsSectionRequest } from '../../lib/settings';
+import { onAccountSignIn, takeAccountSignIn } from '../../lib/settingsFromChat';
 import { ADD_ACCOUNT_WHY } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { AccountSignIn } from './AccountSignIn';
 import { EngineSignInModal } from './EngineSignInModal';
@@ -66,6 +70,32 @@ import { StackMeter, UsageKey } from './UsageStack';
 const say = (e: unknown) => formatCommandError(asCommandError(e));
 
 export function AgentsUsageView() {
+  return (
+    <section className="agent-chat agents-usage-view" aria-label="Usage">
+      <header className="agent-chat__header">
+        <div className="agent-chat__title">Usage</div>
+      </header>
+      <div
+        className="agent-chat__scroll"
+        tabIndex={0}
+        role="region"
+        aria-label="Usage and accounts"
+      >
+        <div className="agents-usage-view__column">
+          <UsagePanel />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Usage and accounts, the one rendering: the Usage view's body, and Settings
+ * → Accounts & usage (`inSettings`), so the two can never disagree. In
+ * Settings it also answers what opens that page: ⌘K's "Add an account…"
+ * for an engine, and the Chief starting an account's sign-in from chat.
+ */
+export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
   const { showToast } = useOptionalToast();
   const { accounts, all, glance, inventory, now, engines, attempt, remove, reload } =
     useUsageGlance({ look: true });
@@ -83,12 +113,36 @@ export function AgentsUsageView() {
     if (ok && added) setSigningIn(added);
   };
 
-  // ⌘K "Add an account…": straight to adding one, when there's one engine to add to.
+  // ⌘K "Add an account…": straight to adding one, when there's one engine to
+  // add to. In Settings, also the palette's request for a given engine, and
+  // being scrolled to.
+  const top = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (installed.length > 0 && takeUsageAdd()) void add(installed[0]);
+    if (installed.length === 0) return;
+    const asked = inSettings ? takeAccountsRequest() : null;
+    if (inSettings && takeSettingsSectionRequest('agent-usage')) {
+      top.current?.scrollIntoView?.({ block: 'start' });
+    }
+    if (asked && asked !== 'show' && installed.includes(asked)) void add(asked);
+    else if (takeUsageAdd()) void add(installed[0]);
     // Once, when the engines are known.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [installed.length]);
+
+  // An account the Chief added from chat (`manage_account add`): its
+  // sign-in runs here, once the list has it. Only Settings answers, which is
+  // where the Chief's request opens, so two sign-ins never start.
+  const [signInFor, setSignInFor] = useState<string | null>(() =>
+    inSettings ? takeAccountSignIn() : null
+  );
+  useEffect(() => (inSettings ? onAccountSignIn(setSignInFor) : undefined), [inSettings]);
+  useEffect(() => {
+    if (!signInFor) return;
+    const asked = all.find((a) => a.id === signInFor);
+    if (!asked) return;
+    setSignInFor(null);
+    if (!asked.signedIn) setSigningIn(asked);
+  }, [signInFor, all]);
 
   const signIn = (engine: AgentEngine, id: string) => {
     const account = all.find((a) => a.engine === engine && a.id === id);
@@ -132,183 +186,189 @@ export function AgentsUsageView() {
   };
 
   return (
-    <section className="agent-chat agents-usage-view" aria-label="Usage">
-      <header className="agent-chat__header">
-        <div className="agent-chat__title">Usage</div>
-      </header>
-      <div
-        className="agent-chat__scroll"
-        tabIndex={0}
-        role="region"
-        aria-label="Usage and accounts"
-      >
-        <div className="agents-usage-view__column">
-          {!accounts ? null : (
-            <>
-              <div className="usage-hero" data-tone={glance.tone} data-testid="usage-hero">
-                <p className="usage-hero__eyebrow">
-                  {glance.keys.length === 1 ? 'Your account' : 'Your accounts, together'}
-                </p>
-                <h2 className="usage-hero__headline">{glance.headline}</h2>
-                {glance.estimate && (
-                  <p className="usage-hero__estimate">
-                    {glance.estimate}. An estimate, not a reading.
-                  </p>
+    <div className="usage-panel" ref={top} data-in-settings={inSettings || undefined}>
+      {!accounts ? null : (
+        <>
+          <div className="usage-hero" data-tone={glance.tone} data-testid="usage-hero">
+            <p className="usage-hero__eyebrow">
+              {glance.keys.length === 1 ? 'Your account' : 'Your accounts, together'}
+            </p>
+            <h2 className="usage-hero__headline">{glance.headline}</h2>
+            {glance.estimate && (
+              <p className="usage-hero__estimate">{glance.estimate}. An estimate, not a reading.</p>
+            )}
+            <StackMeter keys={glance.keys} size="large" labelled />
+            {glance.soonest && (
+              <p className="usage-hero__reset">
+                Next reset: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
+                {glance.soonest.resetsIn} ({glance.soonest.resetsAt})
+              </p>
+            )}
+          </div>
+
+          {glance.low && (
+            <div className="usage-bar" role="status" data-testid="usage-low">
+              <p className="usage-bar__text">{glance.low.text}</p>
+              <div className="usage-bar__actions">
+                {installed.length > 0 && (
+                  <Button
+                    size="compact"
+                    variant="secondary"
+                    leftIcon={<AddIcon size={14} />}
+                    onClick={() => void add(glance.keys[0]?.engine ?? installed[0])}
+                  >
+                    Add an account
+                  </Button>
                 )}
-                <StackMeter keys={glance.keys} size="large" labelled />
-                {glance.soonest && (
-                  <p className="usage-hero__reset">
-                    Next reset: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()}{' '}
-                    limit, {glance.soonest.resetsIn} ({glance.soonest.resetsAt})
-                  </p>
+                {glance.low.otherEngine && (
+                  <Button
+                    size="compact"
+                    variant="secondary"
+                    onClick={() =>
+                      void carryOn(
+                        glance.engines.find((e) => e.engine !== glance.low?.otherEngine)?.engine ??
+                          'claude'
+                      )
+                    }
+                  >
+                    Carry on with {ENGINE_LABEL[glance.low.otherEngine]}
+                  </Button>
+                )}
+                {glance.low.waitUntil && (
+                  <span className="usage-bar__wait">{glance.low.waitUntil}</span>
                 )}
               </div>
+            </div>
+          )}
 
-              {glance.low && (
-                <div className="usage-bar" role="status" data-testid="usage-low">
-                  <p className="usage-bar__text">{glance.low.text}</p>
-                  <div className="usage-bar__actions">
-                    {installed.length > 0 && (
-                      <Button
-                        size="compact"
-                        variant="secondary"
-                        leftIcon={<AddIcon size={14} />}
-                        onClick={() => void add(glance.keys[0]?.engine ?? installed[0])}
-                      >
-                        Add an account
-                      </Button>
+          {inventory && (
+            <section className="usage-section" aria-labelledby="usage-max">
+              <h3 className="usage-section__title" id="usage-max">
+                Get the most from your limits
+              </h3>
+              {glance.nudge && (
+                <div className="usage-nudge" data-testid="usage-nudge">
+                  <ZapIcon size={16} className="usage-nudge__icon" />
+                  <div className="usage-nudge__body">
+                    <p className="usage-nudge__text">{glance.nudge.text}</p>
+                    <p className="usage-nudge__question">{glance.nudge.question}</p>
+                    {glance.nudge.items.length > 0 && (
+                      <ul className="usage-nudge__items" aria-label="It would start">
+                        {glance.nudge.items.map((t) => (
+                          <li key={t}>{t}</li>
+                        ))}
+                        {glance.nudge.more > 0 && (
+                          <li className="usage-nudge__more">and {glance.nudge.more} more</li>
+                        )}
+                      </ul>
                     )}
-                    {glance.low.otherEngine && (
-                      <Button
-                        size="compact"
-                        variant="secondary"
-                        onClick={() =>
-                          void carryOn(
-                            glance.engines.find((e) => e.engine !== glance.low?.otherEngine)
-                              ?.engine ?? 'claude'
-                          )
-                        }
-                      >
-                        Carry on with {ENGINE_LABEL[glance.low.otherEngine]}
-                      </Button>
-                    )}
-                    {glance.low.waitUntil && (
-                      <span className="usage-bar__wait">{glance.low.waitUntil}</span>
+                    {!glance.nudge.empty && (
+                      <div className="usage-nudge__actions">
+                        <Button
+                          variant="strong"
+                          size="compact"
+                          disabled={busy}
+                          onClick={() => void spend()}
+                        >
+                          Give agents something to do
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
               )}
+              <SegmentedControl
+                aria-label="How agents use your limits"
+                value={inventory.mode}
+                size="default"
+                options={USAGE_MODES.map((m) => ({ value: m, label: USAGE_MODE_LABEL[m] }))}
+                onValueChange={(m) => void choose(m)}
+              />
+              <p className="usage-section__muted">{USAGE_MODE_DETAIL[inventory.mode]}</p>
+            </section>
+          )}
 
-              {inventory && (
-                <section className="usage-section" aria-labelledby="usage-max">
-                  <h3 className="usage-section__title" id="usage-max">
-                    Get the most from your limits
-                  </h3>
-                  {glance.nudge && (
-                    <div className="usage-nudge" data-testid="usage-nudge">
-                      <ZapIcon size={16} className="usage-nudge__icon" />
-                      <div className="usage-nudge__body">
-                        <p className="usage-nudge__text">{glance.nudge.text}</p>
-                        <p className="usage-nudge__question">{glance.nudge.question}</p>
-                        {glance.nudge.items.length > 0 && (
-                          <ul className="usage-nudge__items" aria-label="It would start">
-                            {glance.nudge.items.map((t) => (
-                              <li key={t}>{t}</li>
-                            ))}
-                            {glance.nudge.more > 0 && (
-                              <li className="usage-nudge__more">and {glance.nudge.more} more</li>
-                            )}
-                          </ul>
-                        )}
-                        {!glance.nudge.empty && (
-                          <div className="usage-nudge__actions">
-                            <Button
-                              variant="strong"
-                              size="compact"
-                              disabled={busy}
-                              onClick={() => void spend()}
-                            >
-                              Give agents something to do
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  <SegmentedControl
-                    aria-label="How agents use your limits"
-                    value={inventory.mode}
-                    size="default"
-                    options={USAGE_MODES.map((m) => ({ value: m, label: USAGE_MODE_LABEL[m] }))}
-                    onValueChange={(m) => void choose(m)}
-                  />
-                  <p className="usage-section__muted">{USAGE_MODE_DETAIL[inventory.mode]}</p>
-                </section>
-              )}
+          {glance.engines.map((e) => (
+            <EngineStack
+              key={e.engine}
+              engine={e}
+              several={glance.engines.length > 1}
+              onReorder={(ids) => void attempt(() => reorderUsageAccounts(e.engine, ids))}
+              onUse={(id) => void attempt(() => putAccountFirst(e.engine, id))}
+              onSignIn={(id) => signIn(e.engine, id)}
+              onRename={(id, name) => attempt(() => renameUsageAccount(e.engine, id, name))}
+              onRemove={(id) => void remove(e.engine, id)}
+            />
+          ))}
 
-              {glance.engines.map((e) => (
-                <EngineStack
-                  key={e.engine}
-                  engine={e}
-                  several={glance.engines.length > 1}
-                  onReorder={(ids) => void attempt(() => reorderUsageAccounts(e.engine, ids))}
-                  onUse={(id) => void attempt(() => putAccountFirst(e.engine, id))}
-                  onSignIn={(id) => signIn(e.engine, id)}
-                  onRename={(id, name) => attempt(() => renameUsageAccount(e.engine, id, name))}
-                  onRemove={(id) => void remove(e.engine, id)}
-                />
+          {installed.length > 0 && (
+            <div className="usage-add">
+              <div className="usage-add__buttons">
+                {installed.map((engine) => (
+                  <Button
+                    key={engine}
+                    variant="secondary"
+                    leftIcon={<AddIcon size={14} />}
+                    onClick={() => void add(engine)}
+                    data-add-account={engine}
+                  >
+                    Add a {ENGINE_LABEL[engine]} account
+                  </Button>
+                ))}
+              </div>
+              <p className="usage-section__muted">{ADD_ACCOUNT_WHY}</p>
+            </div>
+          )}
+
+          {installed.length > 0 && <AgentsCrossover installed={installed} now={now} />}
+          {inventory && <SpareList inventory={inventory} onChanged={reload} />}
+
+          {inventory && inventory.local.length > 0 && (
+            <section className="usage-section" aria-labelledby="usage-local">
+              <h3 className="usage-section__title" id="usage-local">
+                Other compute on this Mac
+              </h3>
+              <p className="usage-section__muted">
+                Detected here. Agents don’t run on it; project terminals can.
+              </p>
+              <ul className="usage-section__list">
+                {inventory.local.map((l) => (
+                  <li key={l.name}>{localLine(l)}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {inventory &&
+            inventory.engines
+              .filter((e) => e.installed)
+              .map((e) => ({ id: e.id, line: estimateLine(e.perTurn) }))
+              .filter((e) => e.line !== null)
+              .map((e) => (
+                // An estimate from past runs, said as one; absent with too little history.
+                <p className="usage-section__muted" key={e.id} data-estimate={e.id}>
+                  {ENGINE_LABEL[e.id]}: {e.line}
+                </p>
               ))}
 
-              {installed.length > 0 && (
-                <div className="usage-add">
-                  <div className="usage-add__buttons">
-                    {installed.map((engine) => (
-                      <Button
-                        key={engine}
-                        variant="secondary"
-                        leftIcon={<AddIcon size={14} />}
-                        onClick={() => void add(engine)}
-                        data-add-account={engine}
-                      >
-                        Add a {ENGINE_LABEL[engine]} account
-                      </Button>
-                    ))}
-                  </div>
-                  <p className="usage-section__muted">{ADD_ACCOUNT_WHY}</p>
-                </div>
-              )}
-
-              {installed.length > 0 && <AgentsCrossover installed={installed} now={now} />}
-              {inventory && <SpareList inventory={inventory} onChanged={reload} />}
-
-              {inventory && inventory.local.length > 0 && (
-                <section className="usage-section" aria-labelledby="usage-local">
-                  <h3 className="usage-section__title" id="usage-local">
-                    Other compute on this Mac
-                  </h3>
-                  <p className="usage-section__muted">
-                    Detected here. Agents don’t run on it; project terminals can.
-                  </p>
-                  <ul className="usage-section__list">
-                    {inventory.local.map((l) => (
-                      <li key={l.name}>{localLine(l)}</li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              <p className="usage-section__muted usage-view__foot">
-                As each account last reported it. Use of the same plan anywhere else counts too.
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-      {signingIn && <AccountSignIn account={signingIn} onDone={() => setSigningIn(null)} />}
+          <p className="usage-section__muted usage-view__foot">
+            As each account last reported it. Use of the same plan anywhere else counts too.
+          </p>
+        </>
+      )}
+      {signingIn && (
+        <AccountSignIn
+          account={signingIn}
+          onDone={() => {
+            setSigningIn(null);
+            reload();
+          }}
+        />
+      )}
       {macSignIn && (
         <EngineSignInModal engine={macSignIn} step="sign-in" onClose={() => setMacSignIn(null)} />
       )}
-    </section>
+    </div>
   );
 }
 

@@ -14,8 +14,8 @@
  *   what agents can reach (`AgentTeamPolicySettings`, `agents/policy.rs`),
  *   each agent's independence beyond its level (`OnItsOwnTeamSettings`,
  *   `agents/on_its_own.rs`), and admins (`AgentAdminSettings`).
- * - **Accounts & usage** (`AccountsPage`): a slot for the usage and accounts
- *   groups (`AgentsUsage`, `AgentAccounts`), whose content is their own.
+ * - **Accounts & usage** (`AccountsPage`): the Usage view's own panel
+ *   (`AgentsUsageView` `UsagePanel`), the one rendering of usage and accounts.
  * - **Phone** (`PhonePage`): the phone app and other assistants.
  * - **Notifications** (`NotificationsPage`): what notifies, quiet hours
  *   (`agents/quiet.rs`), the morning brief
@@ -31,8 +31,7 @@
 import { Button } from '../primitives/Button';
 import { AgentsDesktopSettings } from './AgentsDesktopSettings';
 import { AgentDefaultsSettings } from './AgentDefaultsSettings';
-import { AgentAccounts } from './AgentAccounts';
-import { AgentUsageSettings } from './AgentsUsage';
+import { UsagePanel } from './AgentsUsageView';
 import { AgentIndependenceSettings } from './AgentIndependenceSettings';
 import { DeclinedAppsSettings } from './DeclinedAppsSettings';
 import { AgentsDiskSettings } from './AgentsDiskSettings';
@@ -170,8 +169,9 @@ export function IndependencePage() {
 }
 
 /**
- * Usage and accounts: a slot. What's inside is the usage and accounts
- * groups' own (`AgentsUsage`, `AgentAccounts`); this page only places them.
+ * Usage and accounts: the Usage view's own rendering (`UsagePanel`), not a
+ * second one, so the two can never disagree about a reading, a name or the
+ * order.
  */
 export function AccountsPage() {
   const engines = useAgentsSelector(selectEngines);
@@ -181,12 +181,7 @@ export function AccountsPage() {
     <div className="agents-settings">
       {any && (
         <SectionBoundary name="usage">
-          <AgentUsageSettings />
-        </SectionBoundary>
-      )}
-      {any && (
-        <SectionBoundary name="accounts">
-          <AgentAccounts engines={engines} />
+          <UsagePanel inSettings />
         </SectionBoundary>
       )}
       {loaded && !any && (

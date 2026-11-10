@@ -1,69 +1,38 @@
 /**
- * Settings → Agents → Usage, and What's in flight's spare-capacity line.
+ * The usage inventory, kept current (`useUsageInventory`), the
+ * spare-capacity list (`SpareList`, in the Usage view), and What's in
+ * flight's spare-capacity line (`AgentsSpareNote`).
  *
- * - **How agents use your limits**: Normal (default, never throttles), Save
- *   my limits, or Use it all before reset (`agents::usage_plan`).
- * - **When every account of an engine is out**: ask first, carry on with
- *   the other engine, or wait for the reset (`AgentsCrossover`).
- * - **What you have**: each account with what its engine last reported (a
- *   reading, with its age) or "No reading yet"; each engine's average turn
- *   here as an *estimate* from past runs, absent with too little history;
- *   under an account, the Mac's pace estimate for a window that would run
- *   out before its reset ("5-hour: At this pace you'll hit the limit…"),
- *   with what it rests on;
- *   other compute detected on this Mac.
- * - **Spare-capacity list**: work to do when capacity would otherwise
- *   expire. Users add here; agents add with `add_spare_work`.
+ * The list is work to do when capacity would otherwise expire. Users add
+ * here; agents add with `add_spare_work`. Every row is a Line; nothing shown
+ * that wasn't read or measured.
  *
- * Every row is a Line; nothing shown that wasn't read or measured.
+ * Usage and accounts themselves have one rendering, the Usage view's
+ * (`AgentsUsageView` `UsagePanel`), which Settings → Accounts & usage mounts too.
  *
  * @module components/agents/AgentsUsage
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
-import { SegmentedControl } from '../primitives/SegmentedControl';
 import { TextField } from '../primitives/TextField';
 import { CloseIcon } from '../icons';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { AGENT_EVENTS, ENGINE_LABEL } from '../../lib/agents';
-import { takeSettingsSectionRequest } from '../../lib/settings';
-import { ComputeTotal } from './AgentsCompute';
-import { AgentsCrossover } from './AgentsCrossover';
+import { AGENT_EVENTS } from '../../lib/agents';
 import {
-  USAGE_MODES,
-  USAGE_MODE_DETAIL,
-  USAGE_MODE_LABEL,
-  accountTags,
-  accountUsage,
   addSpareItem,
-  computeView,
-  estimateLine,
   getUsageInventory,
   glanceUsageInventory,
-  localLine,
   onUsagePlanChanged,
-  paceLine,
   removeSpareItem,
-  setUsageMode,
   spareLine,
-  windowName,
-  type UsageAccountLine,
   type UsageInventory,
-  type UsageMode,
 } from '../../lib/agentsUsage';
-
-/** "5-hour", "Weekly": which of the account's windows a pace line is for. */
-const windowLabel = (a: UsageAccountLine, kind: string) => {
-  const w = a.windows.find((x) => x.kind === kind);
-  const name = windowName(w ?? { kind });
-  return name.charAt(0).toUpperCase() + name.slice(1);
-};
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
 
@@ -213,155 +182,5 @@ export function SpareList({
         </Button>
       </form>
     </div>
-  );
-}
-
-export function AgentUsageSettings() {
-  const { showToast } = useOptionalToast();
-  const { inventory, now, reload } = useUsageInventory();
-  const ref = useRef<HTMLElement>(null);
-  const ready = inventory !== null;
-  // ⌘K "Usage limits and spare capacity…": shown, not left below the fold.
-  useEffect(() => {
-    if (ready && takeSettingsSectionRequest('agent-usage')) {
-      ref.current?.scrollIntoView?.({ block: 'start' });
-    }
-  }, [ready]);
-  if (!inventory) return null;
-  const choose = async (mode: UsageMode) => {
-    try {
-      await setUsageMode(mode);
-      reload();
-    } catch (e) {
-      showToast(say(e), 'error');
-    }
-  };
-  const engines = inventory.engines.filter((e) => e.installed);
-  const spare = spareLine(inventory, now);
-  const total = computeView(inventory, now);
-  const estimates = engines
-    .map((e) => ({ id: e.id, line: estimateLine(e.perTurn) }))
-    .filter((e): e is { id: typeof e.id; line: string } => e.line !== null);
-
-  return (
-    <section
-      className="settings-group agents-usage"
-      aria-labelledby="agents-settings-usage"
-      ref={ref}
-    >
-      <h3 className="settings-group__title" id="agents-settings-usage">
-        Usage
-      </h3>
-      <div className="agents-usage__block">
-        <span className="agents-usage__heading">How agents use your limits</span>
-        <SegmentedControl
-          aria-label="How agents use your limits"
-          value={inventory.mode}
-          size="default"
-          options={USAGE_MODES.map((m) => ({ value: m, label: USAGE_MODE_LABEL[m] }))}
-          onValueChange={(m) => void choose(m)}
-        />
-        <span className="agents-usage__muted">{USAGE_MODE_DETAIL[inventory.mode]}</span>
-      </div>
-
-      <AgentsCrossover installed={engines.map((e) => e.id)} now={now} />
-
-      {engines.length > 0 && total && (
-        <div className="agents-usage__block">
-          <span className="agents-usage__heading">What you have</span>
-          <ComputeTotal view={total} />
-          {estimates.map((e) => (
-            <span className="agents-usage__muted" key={e.id}>
-              {ENGINE_LABEL[e.id]}: {e.line}
-            </span>
-          ))}
-          {spare && (
-            <span className="agents-usage-spare" title={spare.detail}>
-              {spare.text}
-            </span>
-          )}
-          <span className="agents-usage__muted">
-            As each account last reported it. Use of the same plan anywhere else counts too.
-          </span>
-        </div>
-      )}
-
-      {engines.length > 0 && !total && (
-        <div className="agents-usage__block">
-          <span className="agents-usage__heading">What you have</span>
-          <span className="agents-usage__muted">
-            Limits as each engine last reported them. Use elsewhere counts too.
-          </span>
-          {engines.map((engine) => {
-            const est = estimateLine(engine.perTurn);
-            return (
-              <ul className="agents-usage__list" key={engine.id} data-engine={engine.id}>
-                {inventory.accounts
-                  .filter((a) => a.engine === engine.id)
-                  .map((a) => {
-                    const state = accountUsage(a, now);
-                    const tags = accountTags(a);
-                    return (
-                      <li className="agents-usage__line" key={a.id} data-tone={state.tone}>
-                        <div className="agents-usage__info">
-                          <span className="agents-usage__name">
-                            {ENGINE_LABEL[engine.id]} · {a.name}
-                          </span>
-                          <span className="agents-usage__state">{state.text}</span>
-                          {(a.out ? [] : (a.pace ?? [])).map((p) => {
-                            const pace = paceLine(p, now);
-                            return (
-                              pace && (
-                                <span
-                                  className="agents-usage__pace"
-                                  key={p.kind}
-                                  title={pace.basis}
-                                >
-                                  {windowLabel(a, p.kind)}: {pace.text} · {pace.basis}
-                                </span>
-                              )
-                            );
-                          })}
-                          {tags.length > 0 && (
-                            <span className="agents-usage__muted">{tags.join(' · ')}</span>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                {est && (
-                  <li className="agents-usage__line agents-usage__line--estimate">
-                    <span className="agents-usage__muted">{est}</span>
-                  </li>
-                )}
-              </ul>
-            );
-          })}
-          {spare && (
-            <span className="agents-usage-spare" title={spare.detail}>
-              {spare.text}
-            </span>
-          )}
-        </div>
-      )}
-
-      {inventory.local.length > 0 && (
-        <div className="agents-usage__block">
-          <span className="agents-usage__heading">Other compute on this Mac</span>
-          <span className="agents-usage__muted">
-            Detected here. Agents don’t run on it; project terminals can.
-          </span>
-          <ul className="agents-usage__list">
-            {inventory.local.map((l) => (
-              <li className="agents-usage__line" key={l.name}>
-                <span className="agents-usage__name">{localLine(l)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <SpareList inventory={inventory} onChanged={reload} />
-    </section>
   );
 }

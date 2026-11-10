@@ -14,11 +14,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AgentEngine } from './agents';
-import { ENGINE_LABEL } from './agents';
 import type { UsageAccount } from '../../packages/companion-protocol/src/model';
-import { accountState } from '../../packages/companion-protocol/src/accounts';
-import { planLabel } from '../../packages/companion-protocol/src/usage';
-import { readDay } from '../../packages/companion-protocol/src/quota';
 
 /** One shape on the desk and the phone (`agents::wallet::AccountView`). */
 export type {
@@ -91,46 +87,6 @@ export const onUsageAccountsChanged = (fn: () => void): Promise<UnlistenFn> =>
 /** One engine's accounts, in their order. */
 export function accountsOf(all: UsageAccount[], engine: AgentEngine): UsageAccount[] {
   return all.filter((a) => a.engine === engine);
-}
-
-/** `ids` with the one at `from` moved by `by` (−1 up, +1 down), or null at an end. */
-export function moved(ids: string[], from: number, by: -1 | 1): string[] | null {
-  const to = from + by;
-  if (from < 0 || from >= ids.length || to < 0 || to >= ids.length) return null;
-  const next = [...ids];
-  [next[from], next[to]] = [next[to], next[from]];
-  return next;
-}
-
-/** The account's one-line state, worded once for the desk and the phone. */
-export { accountState } from '../../packages/companion-protocol/src/accounts';
-
-/**
- * The row's second line, in parts so the email is what truncates: the state
- * ("Signed in", "Not signed in", "Out of usage until …"), who it is signed
- * in as and its plan, each only when the engine reported it, and only while
- * it is signed in; then a past limit (last limit Mon).
- */
-export function accountDetail(
-  a: UsageAccount,
-  now = Date.now()
-): { state: string; email?: string; plan?: string; note?: string } {
-  if (!a.signedIn) return { state: accountState({ ...a, email: undefined }, now) };
-  return {
-    // Out now says so with its reset; otherwise "Ready", as the popover and
-    // the phone say it (a past limit goes last, in `note`).
-    state: a.out ? accountState({ ...a, email: undefined }, now) : 'Ready',
-    email: a.email,
-    plan: a.plan ? planLabel(a.plan) : undefined,
-    note: !a.out && a.limit ? `last limit ${readDay(a.limit.at, now)}` : undefined,
-  };
-}
-
-/** What the row is called, in its tooltip. */
-export function accountKind(a: UsageAccount): string {
-  return a.thisMac
-    ? `This Mac’s own ${ENGINE_LABEL[a.engine]} sign-in`
-    : `Added here · its own ${ENGINE_LABEL[a.engine]} sign-in`;
 }
 
 /** A name for a new account that isn't taken yet. */

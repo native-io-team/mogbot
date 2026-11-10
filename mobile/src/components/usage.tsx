@@ -1,8 +1,10 @@
 /**
- * The chat header's usage ring (the current 5-hour window, as the engine
- * reported it) and the bars the Usage sheet draws, with the Mac's pace
- * estimate under a bar when it sent one. Figures from
- * lib/usageSheet.ts; colours from the palette, light and dark.
+ * The chat header's usage ring (what is left of the current 5-hour window,
+ * as the engine reported it) and the bars the Usage sheet draws from an
+ * older Mac, with the Mac's pace estimate under a bar when it sent one.
+ * Every limit is said and drawn as what is left, as the stack says it; an
+ * estimate is secondary ink, never amber (amber means "needs you"). Figures
+ * from lib/usageSheet.ts; colours from the palette, light and dark.
  */
 
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -36,11 +38,12 @@ export function UsageRing({
   const styles = useStyles();
   const r = (RING - STROKE) / 2;
   const length = 2 * Math.PI * r;
-  const shown = Math.max(0, Math.min(100, percent));
+  // Filled to what is left, as every usage figure is said.
+  const shown = 100 - Math.max(0, Math.min(100, percent));
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Usage: ${shown}% of the 5-hour limit`}
+      accessibilityLabel={`Usage: ${shown}% of the 5-hour limit left`}
       accessibilityHint="Context, plan limits and every account"
       hitSlop={space.sm}
       onPress={onPress}
@@ -72,7 +75,7 @@ export function UsageRing({
   );
 }
 
-/** A thin bar: the share used, in its tone. */
+/** A thin bar filled to `percent`, in its tone. */
 export function UsageBar({ percent, tone }: { percent: number; tone: UsageTone }) {
   const colors = useColors();
   const styles = useStyles();
@@ -91,15 +94,21 @@ export function UsageBar({ percent, tone }: { percent: number; tone: UsageTone }
   );
 }
 
-/** "5-hour limit  38%", its bar, and "Resets at 3:20 PM". */
+/**
+ * A limit: "5-hour limit  62% left", its bar filled to what is left, and
+ * "Resets at 3:20 PM". With `title`, the conversation's context, said as
+ * its own label ("32% used": a conversation fills, a limit runs down).
+ */
 export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }) {
   const colors = useColors();
   const styles = useStyles();
+  const left = 100 - meter.percent;
+  const figure = title ? meter.label : `${left}% left`;
   return (
     <View
       style={styles.meter}
       accessible
-      accessibilityLabel={`${title ?? meter.label}: ${meter.percent}%. ${meter.detail}${
+      accessibilityLabel={`${title ?? meter.label}: ${figure}. ${meter.detail}${
         meter.pace ? `. ${meter.pace.text}. ${meter.pace.basis}` : ''
       }`}
     >
@@ -111,16 +120,16 @@ export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }
           variant="small"
           color={meter.tone === 'calm' ? colors.textSecondary : inkOf(colors, meter.tone)}
         >
-          {title ? meter.label : `${meter.percent}%`}
+          {figure}
         </T>
       </View>
-      <UsageBar percent={meter.percent} tone={meter.tone} />
+      <UsageBar percent={title ? meter.percent : left} tone={meter.tone} />
       <T variant="small" color={colors.textSecondary}>
         {meter.detail}
       </T>
       {meter.pace && (
         <View style={styles.pace}>
-          <T variant="small" color={colors.accentWarning}>
+          <T variant="small" color={colors.textSecondary}>
             {meter.pace.text}
           </T>
           <T variant="small" color={colors.textMuted}>
@@ -156,7 +165,7 @@ export function ComputeSummary({ view }: { view: ComputeView }) {
       )}
       {view.estimate && (
         <View style={styles.pace}>
-          <T variant="small" color={colors.accentWarning}>
+          <T variant="small" color={colors.textSecondary}>
             {view.estimate.text}
           </T>
           <T variant="small" color={colors.textMuted}>

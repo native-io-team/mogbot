@@ -34,7 +34,10 @@ import {
   type UsageAccount,
 } from '../../lib/agentAccounts';
 import { usageGlance, type UsageGlance } from '../../lib/agentsUsage';
-import type { WorkingLine } from '../../../packages/companion-protocol/src/accountSwitcher';
+import {
+  ranOnName,
+  type WorkingLine,
+} from '../../../packages/companion-protocol/src/accountSwitcher';
 import type { StatusTone } from '../primitives/StatusPill';
 
 const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
@@ -193,10 +196,12 @@ export function AccountSwitcher({
 export function AgentAccountChip({ agent }: { agent: Agent }) {
   if (!agent.ranOn) return null;
   const only = agent.account === agent.ranOn.id;
+  // As its key is named in Usage: never "This Mac".
+  const name = ranOnName(agent);
   const Icon = ENGINE_ICON[agent.engine];
   const tip = only
-    ? `${agent.name} runs only on ${agent.ranOn.name}. Change it in Runs on, in the … menu.`
-    : `${agent.name}’s last turn ran on ${agent.ranOn.name}. Show usage`;
+    ? `${agent.name} runs only on ${name}. Change it in Runs on, in the … menu.`
+    : `${agent.name}’s last turn ran on ${name}. Show usage`;
   return (
     <Tooltip content={tip}>
       <Button
@@ -209,7 +214,7 @@ export function AgentAccountChip({ agent }: { agent: Agent }) {
         aria-label={tip}
         data-testid="agent-account-chip"
       >
-        {agent.ranOn.name}
+        {name}
         {only && <span className="agent-chat__project-copy">· only</span>}
       </Button>
     </Tooltip>

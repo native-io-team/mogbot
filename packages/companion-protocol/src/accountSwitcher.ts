@@ -14,9 +14,15 @@
  * finishes on its own account, and an agent set to one account stays on it.
  */
 
-import type { AgentEngine, QuotaWindow, UsageAccount, UsageInventory } from './model';
+import type {
+  AgentEngine,
+  QuotaWindow,
+  UsageAccount,
+  UsageAccountLine,
+  UsageInventory,
+} from './model';
 import { QUOTA_WARN_PERCENT, resetPhrase } from './quota';
-import { planLabel, type UsageTone } from './usage';
+import { isPlaceName, planLabel, type UsageTone } from './usage';
 import { awayRoom, type AwayState } from './crossover';
 
 export const ACCOUNT_ENGINE_LABEL: Record<AgentEngine, string> = {
@@ -29,7 +35,47 @@ export const ADD_ACCOUNT_WHY =
   'When one account runs out of usage, agents carry on with the next, so nothing stops.';
 
 /** Where the phone sends anything it can't do itself. */
-export const ADD_ON_MAC = 'Add or sign in to accounts on your Mac: Settings → Agents → Accounts.';
+export const ADD_ON_MAC = 'Add or sign in to accounts on your Mac: Agents → Usage.';
+
+/** A Claude organization named after its owner by default ("Sam’s Organization") says nothing new. */
+const DEFAULT_ORG = /['’]s Organization$/;
+
+/** Whose plan it is, for a name made from it: "Claude Max", "ChatGPT Plus". */
+const PLAN_OWNER: Record<AgentEngine, string> = { claude: 'Claude', codex: 'ChatGPT' };
+
+const capital = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`;
+
+/**
+ * An account's name, the same on the desk and the phone: the name the user
+ * gave it; else who it is signed in as (the email); else its organization;
+ * else its plan ("Claude Max"); else "Claude Code account". Never "This
+ * Mac": that is where it is signed in, said in its detail, not whose it is.
+ */
+export function accountLabel(
+  a: Pick<UsageAccount, 'engine' | 'name' | 'named' | 'email' | 'plan'>,
+  line?: Pick<UsageAccountLine, 'orgName' | 'plan'> | null
+): string {
+  const given = a.name.trim();
+  const place = isPlaceName(given);
+  // An older Mac doesn't say whether it was named: any name but a place's was.
+  if (given !== '' && !place && (a.named ?? true)) return given;
+  if (a.email) return a.email;
+  const org = line?.orgName?.trim();
+  if (org && !DEFAULT_ORG.test(org)) return org;
+  const plan = a.plan ?? line?.plan;
+  if (plan) return `${PLAN_OWNER[a.engine]} ${capital(plan)}`;
+  return `${ACCOUNT_ENGINE_LABEL[a.engine]} account`;
+}
+
+/**
+ * The account an agent's last turn ran on (`Agent.ranOn`), named as its
+ * key is: the Mac sends its name for it, which may be a place.
+ */
+export function ranOnName(agent: { engine?: AgentEngine; ranOn?: { name: string } }): string {
+  if (!agent.ranOn) return '';
+  if (agent.engine) return accountLabel({ engine: agent.engine, name: agent.ranOn.name });
+  return isPlaceName(agent.ranOn.name) ? 'this Mac’s own sign-in' : agent.ranOn.name;
+}
 
 /** One limit's room: "62% left", with its reset. */
 export interface RoomLimit {
@@ -128,13 +174,13 @@ function stateOf(
   return { state: inUse ? 'In use' : 'Ready', tone: 'ok' };
 }
 
-function detailOf(a: UsageAccount): string[] {
+function detailOf(a: UsageAccount, name: string): string[] {
   const out: string[] = [];
-  // The name is the email when nobody named it: never twice.
-  if (a.email && a.email !== a.name) out.push(a.email);
-  if (a.plan) out.push(planLabel(a.plan));
-  // "Signed in on this Mac" already says so.
-  if (a.thisMac && a.name !== 'Signed in on this Mac') out.push('this Mac’s own sign-in');
+  // The name is the email or the plan when nobody named it: never twice.
+  if (a.email && a.email !== name) out.push(a.email);
+  if (a.plan && !name.endsWith(` ${capital(a.plan)}`)) out.push(planLabel(a.plan));
+  // Where it is signed in: a detail, never its name.
+  if (a.thisMac) out.push('this Mac’s own sign-in');
   return out;
 }
 
@@ -165,12 +211,13 @@ export function switcherView(
         const inUse = next?.id === a.id;
         const line = inventory?.accounts.find((l) => l.engine === engine && l.id === a.id);
         const { state, tone } = stateOf(a, inUse, now);
+        const name = accountLabel(a, line);
         return {
           key: `${engine}:${a.id}`,
           engine,
           id: a.id,
-          name: a.name,
-          detail: detailOf(a),
+          name,
+          detail: detailOf(a, name),
           inUse,
           state,
           tone,

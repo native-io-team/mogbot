@@ -412,7 +412,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...pair(
     'three',
     'three accounts',
-    'Three segments in order, the first (in use) in full ink, the others quieter; under them each name and its room. Three key cards with grips and 1, 2, 3 keycaps: In use, Next, Ready. The first has an amber pace line (an estimate, with what it rests on). Work shows “Northwind”. Each card that isn’t in use has “Use this one now”.',
+    'Three segments in order, the first (in use) in full ink, the others quieter; under them each name and its room. Three key cards with grips and 1, 2, 3 keycaps: In use, Next, Ready. The first has a pace line in secondary ink, never amber (an estimate, with what it rests on). Work shows “Northwind”. Each card that isn’t in use has “Use this one now”.',
     THREE
   ),
   ...pair(

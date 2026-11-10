@@ -163,6 +163,62 @@ describe('usageGlance', () => {
     );
     expect(g.headline).toMatch(/^Runs out ~.*, 3 days before reset$/);
     expect(g.estimate).toBe('Estimate from 9 readings across 2 accounts');
+    // An estimate is information, not "needs you": never the warning tone.
+    expect(g.tone).toBe('calm');
+  });
+
+  it('a pace estimate never turns a limit amber; only nearly out does', () => {
+    const pace = (used: number) =>
+      line('default', {
+        windows: [week(used, 5 * 24 * H)],
+        pace: [
+          {
+            kind: 'seven_day',
+            estimate: true,
+            reachesAt: NOW + 24 * H,
+            resetsAt: NOW + 5 * 24 * H,
+            readings: 6,
+            spanMinutes: 180,
+          },
+        ],
+      });
+    const calm = usageGlance([acct('default')], inv([pace(40)]), { now: NOW }).keys[0];
+    expect(calm.limits[0].pace?.text).toMatch(/^At this pace it runs out /);
+    expect(calm.limits[0].tone).toBe('calm');
+    expect(calm.tone).toBe('calm');
+    const low = usageGlance([acct('default')], inv([pace(95)]), { now: NOW }).keys[0];
+    expect(low.limits[0].tone).toBe('warning');
+  });
+
+  it('never names an account "This Mac": its email, else its plan, else the engine', () => {
+    const named = (a: Partial<UsageAccount>, l: Partial<UsageAccountLine> = {}) =>
+      usageGlance([acct('default', a)], inv([line('default', l)]), { now: NOW }).keys[0];
+    expect(named({ name: 'This Mac' }).name).toBe('Claude Code account');
+    expect(named({ name: 'Signed in on this Mac', named: false }).name).toBe('Claude Code account');
+    expect(named({ name: 'This Mac', email: 'sam@example.com' }).name).toBe('sam@example.com');
+    expect(named({ name: 'This Mac', plan: 'max' }).name).toBe('Claude Max');
+    expect(named({ name: 'This Mac' }, { orgName: 'Acme' }).name).toBe('Acme');
+    expect(named({ name: 'This Mac' }, { orgName: 'Sam’s Organization' }).name).toBe(
+      'Claude Code account'
+    );
+    // What the user named it wins; where it's signed in stays a detail.
+    const work = named({ name: 'Work', named: true, email: 'sam@example.com', plan: 'max' });
+    expect(work.name).toBe('Work');
+    expect(work.detail).toEqual(['Max plan', 'sam@example.com', 'this Mac’s own sign-in']);
+    // The plan isn't said twice when it is the name.
+    expect(named({ name: 'This Mac', plan: 'max' }).detail).toEqual(['this Mac’s own sign-in']);
+  });
+
+  it('a second sign-in names the first by its key’s name, not the Mac’s "This Mac"', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'This Mac', email: 'sam@example.com' }), acct('p', { name: 'P' })],
+      inv([
+        line('default', { name: 'This Mac', windows: [week(22)] }),
+        line('p', { windows: [week(21)], sameAs: 'This Mac' }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.keys[1].stateLabel).toBe('Same account as sam@example.com');
   });
 
   it('a run-out within the hour says "in about" once, never "~in about"', () => {
@@ -278,7 +334,7 @@ describe('where did my usage go', () => {
       ],
       NOW
     );
-    expect(lines[0].title).toBe('Weekly 32% → 67% used');
+    expect(lines[0].title).toBe('Weekly 68% → 33% left');
     expect(lines[0].elsewhere).toMatch(/^Nothing these agents ran explains this/);
     expect(lines[1].runs).toEqual(['Riley: Morning brief · 3 turns · 1.2M tokens']);
     expect(lines[1].elsewhere).toBeNull();

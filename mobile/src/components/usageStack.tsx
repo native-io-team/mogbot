@@ -4,6 +4,11 @@
  * as one segmented meter (each account a segment, in order, filled to what
  * its tighter limit has left), the soonest reset, and each account as a
  * card with its limits, who used it this week and "Where did my usage go".
+ * `GlanceRow` is the Agents list's line, the desk sidebar's row on the phone.
+ *
+ * Each account is named in full under the meter, one line each, never cut
+ * to a stub. An estimate (a pace line, "Runs out ~Thu") is secondary ink:
+ * amber means "needs you", and only nearly out is that.
  *
  * Only what the Mac served: an account with no reading is an empty, outlined
  * segment, never a full one; a second sign-in of the same account holds
@@ -13,10 +18,10 @@
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import type { StackKey, UsageGlance } from '@shipstudio/companion-protocol';
+import { LOW_LEFT, type StackKey, type UsageGlance } from '@shipstudio/companion-protocol';
 import { makeStyles, useColors } from '../lib/appearance';
-import { depthOf, PRESSED, radius, space, type Palette } from '../lib/theme';
-import { StatusPill, T } from './ui';
+import { depthOf, iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
+import { Icon, StatusPill, T } from './ui';
 
 const fillOf = (colors: Palette, k: StackKey) =>
   k.tone === 'warning'
@@ -61,6 +66,56 @@ export function StackMeter({ glance, tall = false }: { glance: UsageGlance; tall
   );
 }
 
+/** What a key has left, in the legend's words. */
+function roomWord(k: StackKey): string {
+  if (k.state === 'same') return 'Adds no room';
+  if (k.left === null) return k.signedIn ? 'No reading' : 'Not signed in';
+  return `${k.left}% left`;
+}
+
+/**
+ * The Agents list's usage line, as the desk sidebar's row says it: the
+ * headline, the stack as a thin meter, and the count with the soonest
+ * reset. Opens Usage.
+ */
+export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
+  if (glance.keys.length === 0) return null;
+  const label = [glance.headline, glance.estimate ? '(estimate)' : null, glance.summary]
+    .filter(Boolean)
+    .join('. ');
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Usage. ${label}`}
+      accessibilityHint="Every account, its limits and where its usage went"
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && PRESSED]}
+    >
+      <T
+        variant="small"
+        color={glance.tone === 'calm' ? colors.textPrimary : colors.accentWarning}
+        numberOfLines={1}
+      >
+        {glance.headline}
+        {glance.estimate ? (
+          <T variant="small" color={colors.textMuted}>
+            {' '}
+            · est.
+          </T>
+        ) : null}
+      </T>
+      <StackMeter glance={glance} />
+      {!!glance.summary && (
+        <T variant="caption" color={colors.textMuted} numberOfLines={1}>
+          {glance.summary}
+        </T>
+      )}
+    </Pressable>
+  );
+}
+
 /** The answer: one line, the meter with each account named, and the next reset. */
 export function GlanceCard({ glance }: { glance: UsageGlance }) {
   const colors = useColors();
@@ -77,20 +132,19 @@ export function GlanceCard({ glance }: { glance: UsageGlance }) {
         </T>
       )}
       <StackMeter glance={glance} tall />
-      <View style={styles.labels}>
+      {/* A legend, one account a line: the full width for its name, so an
+          email reads whole rather than as "Signed in on t…". */}
+      <View style={styles.legend}>
         {glance.keys.map((k) => (
-          <View key={k.key} style={styles.label}>
-            <T variant="caption" color={colors.textPrimary} numberOfLines={1}>
+          <View key={k.key} style={styles.legendRow}>
+            <T variant="caption" color={colors.textMuted} style={styles.legendPlace}>
+              {String(k.position)}
+            </T>
+            <T variant="small" color={colors.textPrimary} style={styles.grow} numberOfLines={1}>
               {k.name}
             </T>
-            <T variant="caption" color={colors.textMuted} numberOfLines={1}>
-              {k.state === 'same'
-                ? 'Adds no room'
-                : k.left === null
-                  ? k.signedIn
-                    ? 'No reading'
-                    : 'Not signed in'
-                  : `${k.left}% left`}
+            <T variant="small" color={colors.textMuted}>
+              {roomWord(k)}
             </T>
           </View>
         ))}
@@ -185,9 +239,19 @@ export function KeyCard({ k }: { k: StackKey }) {
             </T>
           )}
           {l.pace && (
-            <T variant="caption" color={colors.accentWarning}>
-              {l.pace.text} · {l.pace.basis}
-            </T>
+            // An estimate: secondary ink, with a small mark only when little is left.
+            <View style={styles.pace}>
+              {l.left <= LOW_LEFT && (
+                <Icon
+                  name="exclamationmark.triangle"
+                  size={iconSize.inline}
+                  color={colors.accentWarning}
+                />
+              )}
+              <T variant="caption" color={colors.textSecondary} style={styles.grow}>
+                {l.pace.text} · {l.pace.basis}
+              </T>
+            </View>
           )}
         </View>
       ))}
@@ -264,8 +328,12 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.borderStrong,
   },
   fill: { height: '100%', borderRadius: radius.pill },
-  labels: { flexDirection: 'row', gap: space['3xs'] },
-  label: { flex: 1, minWidth: 0 },
+  legend: { gap: space['2xs'] },
+  legendRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
+  legendPlace: { minWidth: space.md },
+  grow: { flex: 1, minWidth: 0 },
+  pace: { flexDirection: 'row', alignItems: 'center', gap: space['2xs'] },
+  row: { gap: space['2xs'] },
   card: {
     gap: space.sm,
     padding: space.lg,

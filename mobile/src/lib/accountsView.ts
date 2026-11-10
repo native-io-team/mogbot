@@ -4,7 +4,12 @@
  * session, and so the chat header can use them.
  */
 
-import type { Agent, AgentEngine, UsageAccount } from '@shipstudio/companion-protocol';
+import {
+  ranOnName,
+  type Agent,
+  type AgentEngine,
+  type UsageAccount,
+} from '@shipstudio/companion-protocol';
 
 /** `accounts` with one engine's put in the order of `ids`; the other engine's untouched. */
 export function reordered(
@@ -40,8 +45,11 @@ export { runsOnDetail } from '@shipstudio/companion-protocol';
  * Under the name: its role, and the account its last turn ran on (only
  * while its engine has more than one, as the Mac sends `ranOn`).
  */
-export function headerSubtitle(agent: Pick<Agent, 'role' | 'ranOn'>): string {
-  const on = agent.ranOn ? `on ${agent.ranOn.name}` : '';
+type Subtitled = Pick<Agent, 'role' | 'ranOn'> & { engine?: AgentEngine };
+
+export function headerSubtitle(agent: Subtitled): string {
+  // Named as its key is in Usage (`ranOnName`), never "This Mac".
+  const on = agent.ranOn ? `on ${ranOnName(agent)}` : '';
   if (!agent.role) return on ? on.charAt(0).toUpperCase() + on.slice(1) : '';
   return on ? `${agent.role} · ${on}` : agent.role;
 }
@@ -50,7 +58,7 @@ export function headerSubtitle(agent: Pick<Agent, 'role' | 'ranOn'>): string {
  * The subtitle in two parts, so the header can let the role give way
  * first: the account is the news, and "Design system · on sam@ex…" hid it.
  */
-export function headerSubtitleParts(agent: Pick<Agent, 'role' | 'ranOn'>): {
+export function headerSubtitleParts(agent: Subtitled): {
   role: string;
   on: string;
 } {
@@ -58,7 +66,7 @@ export function headerSubtitleParts(agent: Pick<Agent, 'role' | 'ranOn'>): {
   if (!agent.ranOn || !agent.role)
     return { role: agent.ranOn ? '' : whole, on: agent.ranOn ? whole : '' };
   // A no-break space: a leading plain one is dropped where the two parts meet.
-  const on = `\u00a0· on ${agent.ranOn.name}`;
+  const on = `\u00a0· on ${ranOnName(agent)}`;
   return { role: agent.role, on };
 }
 

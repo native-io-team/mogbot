@@ -996,9 +996,11 @@ function Header({ agent }: { agent: Agent }) {
   const fit = `${whole.role}|${whole.on}|${width}|${fontScale}|${type.caption}`;
   const [cutAt, setCutAt] = useState<string | null>(null);
   const roleCut = cutAt === fit;
-  const parts = roleCut ? headerSubtitleParts({ role: '', ranOn: agent.ranOn }) : whole;
+  const parts = roleCut
+    ? headerSubtitleParts({ role: '', ranOn: agent.ranOn, engine: agent.engine })
+    : whole;
   const subtitle = roleCut
-    ? headerSubtitle({ role: '', ranOn: agent.ranOn })
+    ? headerSubtitle({ role: '', ranOn: agent.ranOn, engine: agent.engine })
     : headerSubtitle(agent);
   return (
     <View style={[styles.header, { maxWidth: Math.min(260, width - HEADER_RESERVED) }]}>

@@ -11,7 +11,6 @@ import { IndependenceSetting } from '../components/IndependenceSetting';
 import { MorningBriefSetting } from '../components/MorningBriefSetting';
 import { QuietHoursSetting } from '../components/QuietHoursSetting';
 import { formatDate } from '../lib/agents';
-import { useQuotaLines } from '../lib/quota';
 import { useAccounts } from '../lib/accounts';
 import { AccountsSections } from '../components/accounts';
 import { useUsageRows } from '../lib/usagePlan';
@@ -140,7 +139,6 @@ export default function Settings() {
       ]
     );
 
-  const quota = useQuotaLines();
   const accounts = useAccounts();
   const usage = useUsageRows();
   const { version, build } = appInfo();
@@ -182,21 +180,6 @@ export default function Settings() {
       )}
 
       <AccountsSections state={accounts} />
-
-      {quota.length > 0 && (
-        <Section title="Plan usage">
-          {quota.map((line, i) => (
-            <Row
-              key={line.engine}
-              label={line.text}
-              detail={line.detail}
-              // Amber from 90% and at the limit, as on the agents list.
-              warning={line.tone !== 'calm'}
-              last={i === quota.length - 1}
-            />
-          ))}
-        </Section>
-      )}
 
       {usage.length > 0 && (
         <Section title="Usage" footer={USAGE_FOOTER}>
