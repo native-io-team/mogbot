@@ -657,6 +657,13 @@ pub fn phone_overview(mut overview: Value) -> Value {
                 if let Some(t) = fields.get_mut("takeover").and_then(Value::as_object_mut) {
                     t.remove("ptySession");
                 }
+                // Other conversations' engine sessions stay on the Mac too.
+                if let Some(c) = fields
+                    .get_mut("conversations")
+                    .and_then(Value::as_object_mut)
+                {
+                    c.remove("parked");
+                }
                 split_watches(fields);
             }
         }
