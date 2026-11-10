@@ -1485,7 +1485,7 @@ const LIVE = [
       await sleep(500);
     },
     check:
-      'Working, with words: “Ops reads it when this turn ends” full width over the field from its left edge, Send now at its right; in the field the mic, Stop and Send',
+      'Working, with words: “Ops reads it when it’s done with this one” full width over the field from its left edge, Send now at its right; in the field the mic, Stop and Send',
     after: clearField,
   },
   {
@@ -2567,7 +2567,7 @@ const ENGINE = [
     ready: 'Ops',
     act: openControls,
     check:
-      'Ops is mid-turn: the sheet says to change the model and effort when this turn ends, their rows dimmed; the level stays open',
+      'Ops is working: the sheet says to change the model and effort once it’s done with this, their rows dimmed; the level stays open',
     pages: 2,
     after: closeAndClear,
   },

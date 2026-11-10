@@ -130,7 +130,7 @@ describe('Agent controls', () => {
   it('while a turn runs: model and effort locked, with why; the level open', async () => {
     mockState.overview.agents = [{ ...designer, status: { state: 'working' } }];
     await sheet();
-    expect(screen.getByText(/when this turn ends/)).toBeTruthy();
+    expect(screen.getByText(/once it’s done with this/)).toBeTruthy();
     await act(async () => {
       fireEvent.press(screen.getByText('Medium'));
     });

@@ -83,6 +83,9 @@ export const MODEL_MEANS = 'the AI it thinks with';
 
 // --- Routine lines ----------------------------------------------------------
 
+/** "Routine", said once where someone first meets one (a drafted agent's review). */
+export const ROUTINES_MEANS = 'What it does on its own, on a schedule or when something happens.';
+
 /**
  * The head of a routine's line in the chat: "Routine" (repeating) or
  * "Scheduled" (one time), then what fired it, "run now", or that it was

@@ -105,9 +105,9 @@ describe('the message field', () => {
     await act(async () => {
       await fireEvent.changeText(screen.getByLabelText('Message Ops'), 'and then the summary');
     });
-    expect(screen.getByText('Ops reads it when this turn ends')).toBeTruthy();
+    expect(screen.getByText('Ops reads it when it’s done with this one')).toBeTruthy();
     expect(screen.getByLabelText('Send now: interrupt Ops and send')).toBeTruthy();
-    expect(screen.getByLabelText('Queue: Ops reads it when this turn ends')).toBeTruthy();
+    expect(screen.getByLabelText('Queue: Ops reads it when it’s done with this one')).toBeTruthy();
     expect(screen.getByLabelText('Dictate')).toBeTruthy();
   });
 });

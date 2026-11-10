@@ -78,7 +78,7 @@ export function agentKeyState(
  * usage until 3:00 PM", "Codex is signed out", "<reason> · didn't finish".
  */
 export function failureLine(failure: Failure, preview: string | null, engine?: string): string {
-  return sharedFailureLine(failure, preview, engine ?? 'Its engine');
+  return sharedFailureLine(failure, preview, engine ?? 'Its AI app');
 }
 
 /**

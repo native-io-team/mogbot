@@ -569,7 +569,7 @@ export function LiveStep({
           {quiet && (
             <TextAction
               title="Stop"
-              hint="Stops this turn"
+              hint="Stops what it’s doing"
               busy={busy === 'stop'}
               onPress={() => void stopTurn()}
             />
