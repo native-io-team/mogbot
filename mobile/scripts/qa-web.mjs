@@ -725,7 +725,9 @@ const scrollToText = (text) => async (page) => {
   await page.eval(FIND_SCROLLER);
   for (let i = 0; i < 16; i++) {
     const seen = await page.eval(`(() => {
-      const el = [...document.querySelectorAll('body *')].filter((e) => e.innerText?.trim() === ${JSON.stringify(text)}).pop();
+      // Any case: section labels went from small capitals to sentence case.
+      const want = ${JSON.stringify(text.toLowerCase())};
+      const el = [...document.querySelectorAll('body *')].filter((e) => e.innerText?.trim().toLowerCase() === want).pop();
       if (!el) return false;
       el.scrollIntoView({ block: 'center' });
       return true;
@@ -794,8 +796,8 @@ const PROBE = [
   },
   {
     name: 'probe-needs-you-failures',
-    route: '/needs',
-    ready: 'Needs you',
+    route: '/catch-up',
+    ready: 'Catch up',
     act: () => sleep(1500),
     pages: 3,
     check:
@@ -832,8 +834,8 @@ const PROBE = [
   ...[
     {
       name: 'probe-needs-you-largest',
-      to: '/needs',
-      ready: 'Needs you',
+      to: '/catch-up',
+      ready: 'Catch up',
       pages: 2,
       check:
         'Needs you at Largest: names, titles and lines wrap with nothing cut through; Deny · Allow and Review whole, never squeezed into one line',
@@ -845,6 +847,37 @@ const PROBE = [
       pages: 2,
       check:
         'The risky request at Largest: the command wraps, the warning icon beside the title, Deny and Allow side by side or stacked, each label whole',
+    },
+    // Tonight's new cards at the largest size.
+    {
+      name: 'probe-crossover-largest',
+      to: '/chat/ledger',
+      ready: 'Carry on with Claude Code',
+      pages: 2,
+      check:
+        'The crossover card at Largest: the question and its paragraph wrap (scrolling inside the card when it can’t fit), Wait · Just this time · Always a row each inside the card’s edges',
+    },
+    {
+      name: 'probe-step-in-largest',
+      to: '/chat/browse',
+      ready: 'needs you in its browser',
+      check: 'The step-in card at Largest: title and lines wrap, Not now · Step in whole',
+    },
+    {
+      name: 'probe-agents-largest',
+      to: '/agents',
+      ready: 'Chief of Staff',
+      pages: 2,
+      check:
+        'Agents at Largest: the usage glance’s figure and refill chip whole (wrapping, never cut through), rows stacked with name over line',
+    },
+    {
+      name: 'probe-usage-largest',
+      to: '/usage',
+      ready: 'Usage',
+      pages: 3,
+      check:
+        'Usage at Largest: the headline, the next refill, each account row’s figure and chip whole; the controls’ labels flush with the choice',
     },
   ].map(({ to, ready, ...shot }) => ({
     ...shot,
@@ -1744,23 +1777,13 @@ const LIVE = [
       'The icon sheet over the agent: Icon and Done, the agent’s key at 112pt, the search reading “money”, category chips (All, Featured, Accessibility…), “N for “money””, then a grid of small keys in the agent’s colourway: the Money legend first, then Lucide’s banknote, coins, currency, wallet, dollar sign…',
   },
   {
-    name: 'agent-sheet-level',
-    route: '/agent/fin',
-    ready: 'Finance',
-    act: async (page) => {
-      await page.clickText('How much it does on its own');
-      await sleep(600);
-    },
-    check:
-      'Finance’s sheet with its own level: the choice sheet titled “How much it does on its own”, “Same as team (Steady)” first, then Careful, Steady, Bold, Unleashed, and Cancel',
-  },
-  {
     name: 'agent-sheet-level-row',
     route: '/agent/fin',
     ready: 'Finance',
-    act: scrollToText('How much it does on its own'),
+    // The slider's end label: “Independence” is also a row of What it can do.
+    act: scrollToText('Asks a lot'),
     check:
-      'The row “How much it does on its own”, value “Careful”, with its one line under it, above the Admin switch',
+      'Finance’s own level: the row “Independence” with the four-stop slider on Careful (Careful, Steady, Bold, Unleashed) and “Use the team’s (Steady)”, above the Admin switch',
   },
   {
     name: 'agent-sheet-chief',
@@ -1864,15 +1887,15 @@ const LIVE = [
   {
     name: 'on-its-own',
     route: '/on-its-own?id=fin',
-    ready: 'What can Finance do on its own?',
+    ready: 'Finance’s independence',
     pages: 3,
     check:
-      'What can Finance do on its own?: a quiet box “Unleashed · its own level” and its line; ALWAYS ASKS (money, passwords, deleting; exact words); WITHOUT ASKING, BEYOND ITS LEVEL in sections: Rules (Run npm test, Run pnpm build with the quote, Run ls for every agent) each with Remove; Plans you OK’d with Take back; Apps (Gmail with Remove and Read only); Browser with Turn off; Team and accounts (admin Turn off, Slack Ask first, the Work account with no button). Quiet text buttons, never the accent; the foot line',
+      'Finance’s independence: a quiet box “Unleashed · its own level” and its line; ALWAYS ASKS (money, passwords, deleting; exact words); WITHOUT ASKING, BEYOND ITS LEVEL in sections: Rules (Run npm test, Run pnpm build with the quote, Run ls for every agent) each with Remove; Plans you OK’d with Take back; Apps (Gmail with Remove and Read only); Browser with Turn off; Team and accounts (admin Turn off, Slack Ask first, the Work account with no button). Quiet text buttons, never the accent; the foot line',
   },
   {
     name: 'on-its-own-narrowed',
     route: '/on-its-own?id=site',
-    ready: 'What can Acme Site do on its own?',
+    ready: 'Acme Site’s independence',
     act: async (page) => {
       // The mock keeps what was taken away, so the second theme finds it gone already.
       await page.clickLabel('Read only').catch(() => {});
@@ -1884,7 +1907,7 @@ const LIVE = [
   {
     name: 'on-its-own-team',
     route: '/on-its-own',
-    ready: 'What your agents do on their own',
+    ready: 'Each agent’s independence',
     pages: 2,
     check:
       'The team: Bold in a quiet box with its line and the always-asks line; RULES FOR EVERY AGENT (Run ls, Remove); AGENTS, one row each with its level and how much stands beyond it, each opening its own list',
@@ -1894,7 +1917,7 @@ const LIVE = [
     route: '/agent/fin',
     ready: 'Finance',
     check:
-      'Finance’s sheet: “What it does on its own” with a shield, among Instructions, Memory and Files',
+      'Finance’s sheet: “Without asking, beyond its level” with a shield, among Instructions, Memory and Files',
   },
   {
     name: 'settings-apps',
@@ -3721,7 +3744,15 @@ async function main() {
 
   if (phase('first-run')) {
     await startMock('--solo');
+    // A Mac just set up has no history: drop the offline copy earlier phases
+    // saved for this same Mac, or the Chief's chat opens on their lines and
+    // its first-run ideas (shown only on an empty chat) never appear. Before
+    // the app's code runs: the open app writes its copy again as it unloads.
+    const { identifier } = await page.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `Object.keys(localStorage).filter((k) => /cache-.*\\.json$/.test(k)).forEach((k) => localStorage.removeItem(k))`,
+    });
     await page.goto(`${WEB}/agents`);
+    await page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier });
     await sleep(4000);
     await each(FIRST_RUN);
   }
