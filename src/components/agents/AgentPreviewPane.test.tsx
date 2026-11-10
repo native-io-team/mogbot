@@ -362,22 +362,30 @@ describe('a site that stopped by itself', () => {
   });
 
   it('with no agent owning it, the workspace line stays', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    pane();
-    // A beat to hear who owns it, without a call to action meanwhile. Under
-    // a loaded machine the real clock can pass the beat before the first
-    // look, so either wording counts here; the exact one is checked below.
-    expect(await screen.findByText(/^The site stopped running\./)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Ask / })).toBeNull();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_500);
-    });
-    expect(
-      await screen.findByText(
-        'The site stopped running. The workspace shows why and can start it again.'
-      )
-    ).toBeTruthy();
-    vi.useRealTimers();
+    // The clock is fully fake and never moves on its own: with
+    // shouldAdvanceTime the real clock could pass the beat before the first
+    // look on a loaded machine. Nothing below waits on a timer (no findBy*,
+    // whose polling would need the faked clock); promises are flushed by act.
+    vi.useFakeTimers();
+    try {
+      pane();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      // A beat to hear who owns it, without a call to action meanwhile.
+      expect(screen.getByText('The site stopped running.')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Ask / })).toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_500);
+      });
+      expect(
+        screen.getByText(
+          'The site stopped running. The workspace shows why and can start it again.'
+        )
+      ).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('the frame comes back once the server is up again', async () => {
