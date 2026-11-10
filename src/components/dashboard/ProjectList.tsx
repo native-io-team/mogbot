@@ -796,11 +796,12 @@ export function ProjectList({
                 Remove <strong>{removeConfirm.name}</strong> from your projects?
               </>
             }
-            hint="Your project folder and files will stay on this Mac. You can add it back later with Import project, Local folder."
+            hint="Its folder and files stay on this Mac. To bring it back: Import, then Local folder."
             loading={removing}
             confirmLabel="Remove from projects"
             loadingLabel="Removing…"
-            confirmVariant="primary"
+            // An answer, not the recommended next step: neutral, as on every card.
+            confirmVariant="strong"
             onCancel={() => setRemoveConfirm(null)}
             onConfirm={() => void handleRemoveFromApp(removeConfirm)}
           />
