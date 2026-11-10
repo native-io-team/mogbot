@@ -373,3 +373,113 @@ fn one_question_per_message() {
     .unwrap_err();
     assert!(e.contains("One question per message"), "{e}");
 }
+
+/// Every engine's event for a `show` call reads as one (`is_call`), and
+/// nothing else does: the runner folds the words after it only once it has
+/// read that call, whichever engine wrote them.
+#[test]
+fn a_show_call_is_recognised_from_every_engines_events() {
+    use super::super::codex_app::{self, Out};
+    use super::super::opencode;
+    use super::super::stream::{claude_steps, Step};
+    use super::super::work::Action;
+    let args =
+        json!({ "blocks": [{ "kind": "choices", "question": "Which?", "options": ["A", "B"] }] });
+    let actions = |steps: Vec<Step>| -> Vec<Action> {
+        steps
+            .into_iter()
+            .filter_map(|s| match s {
+                Step::Action(a) => Some(a),
+                _ => None,
+            })
+            .collect()
+    };
+    let from_out = |out: Vec<Out>| -> Vec<Action> {
+        actions(
+            out.into_iter()
+                .filter_map(|o| match o {
+                    Out::Step(s) => Some(s),
+                    _ => None,
+                })
+                .collect(),
+        )
+    };
+
+    // Claude Code: an assistant tool_use.
+    let claude = actions(claude_steps(
+        &json!({ "type": "assistant", "message": { "content": [
+            { "type": "tool_use", "id": "t1", "name": "mcp__app__show", "input": args }
+        ]}}),
+        0,
+    ));
+    // Codex on exec: the item as it starts.
+    let exec = actions(super::super::codex::steps(
+        &json!({ "type": "item.started", "item": {
+            "id": "i1", "type": "mcp_tool_call", "server": "app", "tool": "show",
+            "arguments": args, "status": "in_progress"
+        }}),
+    ));
+    // Codex on app-server.
+    let (mut app, _) =
+        codex_app::Conversation::new(None, std::path::Path::new("/h/a"), None, "", "go", true);
+    app.on_message(&json!({ "id": 2, "result": { "thread": { "id": "t1" } } }));
+    app.on_message(&json!({ "id": 3, "result": { "turn": { "id": "u1" } } }));
+    let app_server = from_out(
+        app.on_message(&json!({ "method": "item/started", "params": {
+            "threadId": "t1", "turnId": "u1",
+            "item": { "id": "i1", "type": "mcpToolCall", "server": "app", "tool": "show",
+                      "arguments": args, "status": "inProgress" }
+        }})),
+    );
+    // OpenCode: `app_show`, named by its first update, whole once it runs.
+    let (mut oc, _) = opencode::Conversation::new(
+        None,
+        std::path::Path::new("/h/agent"),
+        "go",
+        &[opencode::McpServer {
+            name: "app".into(),
+            url: "http://127.0.0.1:1/mcp/agent".into(),
+        }],
+        "s",
+        opencode::Scope {
+            writable: vec!["/h/agent".into()],
+            read_only: Vec::new(),
+        },
+    );
+    oc.on_message(&json!({ "jsonrpc": "2.0", "id": 1, "result": {} }));
+    oc.on_message(&json!({ "jsonrpc": "2.0", "id": 2, "result": { "sessionId": "ses_1" } }));
+    let update = |u: Value| {
+        json!({ "jsonrpc": "2.0", "method": "session/update",
+                "params": { "sessionId": "ses_1", "update": u } })
+    };
+    let mut open_code = from_out(oc.on_message(&update(json!({
+        "sessionUpdate": "tool_call", "toolCallId": "c1", "title": "app_show",
+        "kind": "other", "status": "pending", "rawInput": {}
+    }))));
+    open_code.extend(from_out(oc.on_message(&update(json!({
+        "sessionUpdate": "tool_call_update", "toolCallId": "c1", "title": "app_show",
+        "kind": "other", "status": "in_progress", "rawInput": args
+    })))));
+
+    for (engine, got) in [
+        ("Claude Code", claude),
+        ("Codex exec", exec),
+        ("Codex app-server", app_server),
+        ("OpenCode", open_code),
+    ] {
+        assert_eq!(got.len(), 1, "{engine}: {got:?}");
+        assert!(is_call(&got[0]), "{engine}: {:?}", got[0].exact);
+    }
+
+    // Anything else isn't: another of the app's tools, a command naming it.
+    let other = actions(claude_steps(
+        &json!({ "type": "assistant", "message": { "content": [
+            { "type": "tool_use", "id": "t2", "name": "mcp__app__share_result", "input": {} },
+            { "type": "tool_use", "id": "t3", "name": "Bash",
+              "input": { "command": "echo mcp__app__show" } }
+        ]}}),
+        0,
+    ));
+    assert_eq!(other.len(), 2);
+    assert!(other.iter().all(|a| !is_call(a)), "{other:?}");
+}

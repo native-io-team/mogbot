@@ -6643,7 +6643,13 @@ question ("Tap a fruit above"), and again ("I put up a table with…") with
 the receipt saying to end the turn with no more text. So once a live turn's
 `show` asks (`blocks::asks`, `runner::note_blocks_asked`), the turn's
 further words go in "What it did" as notes and the question stays the
-chat's last word; the scenario `blocks` holds this.
+chat's last word; the scenario `blocks` holds this. Only words read after
+the `show` call itself fold (`blocks::is_call`, recognised from each
+engine's own event: Claude Code's `tool_use`, Codex's `mcp_tool_call` /
+`mcpToolCall`, OpenCode's `app_show`): the bridge hears the call as soon as
+the engine makes it, maybe before the runner has read what the engine wrote
+just before, and that is the chat's. The `parity-*` scenarios hold it on
+every engine.
 
 Harness: `agents-blocks-*` (numbers, a chart's tooltip, a sorted table, more
 charts, deciding, a form left empty, progress, answered, outside text).
@@ -7149,9 +7155,18 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
   `src-tauri/examples/agents_fake/main.rs` drives the real runner, store,
   agent bridge, approval broker, wallet and MCP tools through the same
   Tauri commands the UI calls, with `scripts/fake-engine/fake_claude.py`
-  first on PATH as `claude` (and, linked as `codex`, as Codex's `exec`
-  driver: `SHIPSTUDIO_AGENTS_CODEX_EXEC`; linked as `opencode`, as
-  `opencode acp`). The `opencode` scenario runs an OpenCode agent through
+  first on PATH as `claude` (and, linked as `codex`, as Codex's
+  `app-server`, or its `exec` driver while `SHIPSTUDIO_AGENTS_CODEX_EXEC` is
+  set, as it is for every scenario but `parity-codex-app`; linked as
+  `opencode`, as `opencode acp`). The `parity-claude`, `parity-codex-app`,
+  `parity-codex-exec` and `parity-opencode` scenarios run the same checks on
+  each: `show` served through the engine's own MCP config and kept, its
+  receipt reaching the engine, words after an asking `show` in "What it
+  did" (their draft withdrawn) and words before it in the chat; the same
+  Bash card and Allow, or `asks: false` said for exec; Steady and Bold
+  deciding through `mcp::decide`; a result card; `usage_overview`; tokens
+  counted with no price the engine didn't report; two conversations each
+  resuming its own session; Codex's plan limits read. The `opencode` scenario runs an OpenCode agent through
   it: a command that asks and runs on Allow, a bridge tool, the reply
   streamed, the session resumed, a denied command that never runs and the
   note after it, a crash and an error each ending in a line, a lost session

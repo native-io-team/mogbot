@@ -1576,6 +1576,21 @@ pub fn receipt(set: &BlockSet) -> String {
     s
 }
 
+/// Whether a step of the turn's timeline is a call to [`TOOL`], as each
+/// engine's events name it: Claude Code's `tool_use`, Codex's
+/// `mcp_tool_call` / `mcpToolCall` and OpenCode's `app_show` all become
+/// `mcp__app__show` with its input (`exact`). The runner folds words only
+/// once it has read this call: the bridge hears the call as soon as the
+/// engine makes it, maybe before the runner has read the words the engine
+/// wrote first, and those are the chat's.
+pub fn is_call(action: &super::work::Action) -> bool {
+    let name = format!("mcp__{}__{TOOL}", super::prompts::SERVER_KEY);
+    action
+        .exact
+        .as_deref()
+        .is_some_and(|e| e == name || e.starts_with(&format!("{name} ")))
+}
+
 #[cfg(test)]
 #[path = "blocks_tests.rs"]
 mod tests;
