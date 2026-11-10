@@ -7,7 +7,10 @@
  * @module components/agents/AgentsBoard
  */
 
-import { KEY_STATE_LABEL } from '../../../packages/companion-protocol/src/agentKeys';
+import {
+  KEY_STATE_LABEL,
+  keyAccessibleName,
+} from '../../../packages/companion-protocol/src/agentKeys';
 import { agentKeyState, type Agent } from '../../lib/agents';
 import { AgentKey } from './AgentKey';
 
@@ -31,7 +34,7 @@ export function AgentsBoard({ agents, onOpenAgent, onNewAgent }: AgentsBoardProp
               type="button"
               className="agents-board__key"
               onClick={() => onOpenAgent(agent.id)}
-              aria-label={`${agent.name}, ${KEY_STATE_LABEL[state]}`}
+              aria-label={keyAccessibleName(agent.name, state)}
               data-agent-id={agent.id}
             >
               <AgentKey
