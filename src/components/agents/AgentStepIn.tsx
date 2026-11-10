@@ -89,13 +89,7 @@ export function StepInCard({
         icon={<GlobeIcon size={14} />}
         title={approval.title}
         source={stepInSource(card)}
-        note={
-          !pending
-            ? undefined
-            : inNow
-              ? stepInNowNote(card.onPhone)
-              : STEP_IN_NOTE
-        }
+        note={!pending ? undefined : inNow ? stepInNowNote(card.onPhone) : STEP_IN_NOTE}
         actions={
           !pending ? undefined : inNow ? (
             <>
@@ -150,6 +144,8 @@ export function StepInCard({
   );
 }
 
+const activeStepInId = (messages: readonly AgentMessage[]) => activeStepIn(messages)?.requestId;
+
 /**
  * The bar above the composer while you're in this agent's browser, and the
  * ⌘K command that hands it back.
@@ -165,10 +161,12 @@ export function StepInBar({
   now?: number;
 }) {
   const active = activeStepIn(messages);
-  const requestId = active?.requestId;
   // Read before any hook, so nothing after them touches `active`.
   const detail = active?.stepIn ? stepInBarDetail(active.stepIn, now) : null;
   const onPhone = active?.stepIn?.onPhone;
+  // Its own read, not `active`'s field: the compiler counts `active` as
+  // possibly changed by the calls above and would drop `handBack`'s memo.
+  const requestId = activeStepInId(messages);
   const { busy, run } = useStepInAction();
   const handBack = useCallback(() => {
     if (requestId) void run(() => handBackAgentBrowser(agent.id, requestId));
