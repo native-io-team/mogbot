@@ -193,7 +193,7 @@ const TOOLS: &[Tool] = &[
                 "role": { "type": "string", "description": "One line: what this agent is responsible for. Required unless you use a template." },
                 "instructions": { "type": "string", "description": "A briefing, as if for a new hire: context, standing rules, who's who, where things live. Required unless you use a template; with one, what you know about the user, added to its briefing." },
                 "colorway": { "type": "string", "enum": super::keys::colorways(), "description": "Optional: its key's colour. Left out, the one fewest on the team wear." },
-                "icon": { "type": "string", "enum": super::keys::icons(), "description": "Optional: the legend on its key. Left out, one read from its name and role." },
+                "icon": { "type": "string", "description": format!("Optional: the legend on its key. Left out, one read from its name and role. {}", super::keys::icon_hint()) },
                 "key": { "type": "string", "description": "Optional: the keyboard key (one letter or digit) that jumps to it. Left out, the first free letter of its name." },
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
                 "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
@@ -241,7 +241,7 @@ const TOOLS: &[Tool] = &[
                 "muted": { "type": "boolean" },
                 "account": { "type": "string", "description": "Runs on: an account's name or id, or \"any\"." },
                 "colorway": { "type": "string", "enum": super::keys::colorways() },
-                "icon": { "type": "string", "enum": super::keys::icons() },
+                "icon": { "type": "string", "description": super::keys::icon_hint() },
                 "key": { "type": "string", "description": "One letter or digit." }
             },
             "required": ["agent"]

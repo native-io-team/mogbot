@@ -40,11 +40,65 @@ struct ColorCase {
 }
 
 #[derive(Deserialize)]
+struct FindCase {
+    query: String,
+    icon: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct Cases {
     icons: Vec<IconCase>,
     #[serde(rename = "boundKeys")]
     bound_keys: Vec<KeyCase>,
     colors: Vec<ColorCase>,
+    find: Vec<FindCase>,
+}
+
+#[test]
+fn a_word_finds_the_icon_the_picker_puts_first() {
+    for case in cases().find {
+        assert_eq!(
+            keys::find_icon(&case.query, 1).into_iter().next(),
+            case.icon,
+            "{}",
+            case.query
+        );
+    }
+    // Ids are themselves; a pack icon's bare name is its id.
+    assert_eq!(keys::find_icon("lucide:dog", 3)[0], "lucide:dog");
+    assert_eq!(
+        keys::find_icon("badge-dollar-sign", 1),
+        vec!["lucide:badge-dollar-sign"]
+    );
+    assert_eq!(keys::find_icon("money", 5).len(), 5);
+}
+
+#[test]
+fn the_pack_is_the_one_the_clients_draw() {
+    let (said, read) = keys::pack_count();
+    assert_eq!(
+        said, read,
+        "agent-keys.json's pack.count and the index disagree"
+    );
+    assert!(read > 1500);
+    assert!(keys::is_icon("lucide:wallet") && keys::is_icon("star"));
+    assert!(!keys::is_icon("lucide:not-an-icon") && !keys::is_icon("wallet"));
+    assert_eq!(
+        keys::icon_name("lucide:badge-dollar-sign"),
+        "Badge dollar sign"
+    );
+    // A word from chat becomes the best match, named in the line.
+    let team = vec![agent("a", "Finance", "amber")];
+    let change = KeyChange::checked(Some(&team[0]), &team, None, Some("invoice"), None).unwrap();
+    assert_eq!(change.icon.as_deref(), Some("lucide:receipt"));
+    assert_eq!(
+        change.line().as_deref(),
+        Some("now with the Receipt legend")
+    );
+    // Every new colourway is told apart from the eight and carries an old colour.
+    for c in ["brick", "plum", "navy", "forest", "sky", "lilac"] {
+        assert!(keys::is_colorway(c), "{c}");
+    }
 }
 
 fn cases() -> Cases {
@@ -85,7 +139,7 @@ fn the_shared_cases_hold_on_the_mac() {
     for c in keys::colorways() {
         assert!(store::COLORS.contains(&keys::legacy_color_for(c).as_str()));
     }
-    assert_eq!(keys::colorways().len(), 8);
+    assert_eq!(keys::colorways().len(), 14);
     assert!(keys::icons().len() >= 20);
 }
 
@@ -116,7 +170,7 @@ fn a_team_saved_before_keys_gets_one_each_chief_first() {
             ("teal", "globe", "L"),
             ("mustard", "money", "F"),
             ("putty", "star", "C"),
-            ("blue", "money", "I"),
+            ("plum", "money", "I"),
         ]
     );
     // Nothing changes the second time.
@@ -146,9 +200,9 @@ fn a_key_change_is_checked_against_the_team() {
             .contains("blue, orange, putty")
     );
     assert!(
-        KeyChange::checked(Some(&hiring), &team, None, Some("unicorn"), None)
+        KeyChange::checked(Some(&hiring), &team, None, Some("zzqx"), None)
             .unwrap_err()
-            .contains("There's no icon")
+            .contains("No icon fits")
     );
     let change = KeyChange::checked(
         Some(&hiring),
@@ -204,7 +258,7 @@ fn keys_round_trip_and_an_agent_without_them_reads_as_before() {
     let mut b = a.clone();
     keys::fill(std::slice::from_mut(&mut b));
     let v = serde_json::to_value(&b).unwrap();
-    assert_eq!(v["colorway"], json!("orange"));
+    assert_eq!(v["colorway"], json!("brick"));
     assert_eq!(v["icon"], json!("people"));
     assert_eq!(v["boundKey"], json!("H"));
     let round: Agent = serde_json::from_value(v).unwrap();
