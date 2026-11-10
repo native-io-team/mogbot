@@ -354,15 +354,15 @@ pub const MAC_FEATURE_LOGINS: &str = "logins";
 /// (`agents.loginPhoneBegin|loginPhoneFinish`, `onPhone`; `agents/login_relay.rs`).
 pub const MAC_FEATURE_LOGINS_PHONE: &str = "logins.phone";
 
-/// `welcome.features`: agents carry `avatar` (a shape and a face), and
-/// `agents.create` / `agents.update` take `avatar` (and `agents.update`
-/// `color`) from the phone (`agents::store::AgentLook`).
+/// `welcome.features`: `agents.update` takes `color` from the phone. Older
+/// phones also send `avatar` (a shape and a face from before keys) with
+/// `agents.create` / `agents.update`: accepted and ignored, since nothing
+/// draws one now, and agents no longer carry one.
 pub const MAC_FEATURE_LOOKS: &str = "agents.looks";
 
-/// `welcome.features`: looks are key caps (`agents::store::AVATAR_SHAPES`:
-/// circle, squircle, diamond, hexagon; four faces; `finish`). A phone shows
-/// its look picker only to a Mac that lists this, so it never offers an
-/// older Mac a key it would refuse.
+/// `welcome.features`: kept for phones from before keys, which open their
+/// look sheet (its colour) only on a Mac that lists this. The shape, face
+/// and finish they send with it are accepted and ignored.
 pub const MAC_FEATURE_KEYCAPS: &str = "agents.keycaps";
 
 /// `welcome.features`: agents carry their key (`colorway`, `icon`,

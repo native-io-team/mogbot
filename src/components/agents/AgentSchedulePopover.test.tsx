@@ -1,15 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { clearMocks, mockIPC as mockCommands } from '@tauri-apps/api/mocks';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import type { Agent, CheckIn } from '../../lib/agents';
+
+/** Commands, and the store's event listeners (it reads the agent's conversations). */
+const mockIPC = (handler: Parameters<typeof mockCommands>[0]) =>
+  mockCommands(handler, { shouldMockEvents: true });
 
 vi.mock('../../lib/agentsStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agentsStore')>()),
   refreshAgents: () => Promise.resolve(),
 }));
 
-afterEach(() => clearMocks());
+afterEach(() => {
+  cleanup();
+  clearMocks();
+});
 
 const COVERAGE =
   'Covers the 300 most recently updated of 412 assigned; an older one that changes may start work as if new.';
@@ -201,5 +208,59 @@ describe('AgentSchedulePopover', () => {
     expect(calls.some((c) => c.cmd === 'agents_schedule_cancel')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(calls.some((c) => c.cmd === 'agents_schedule_cancel')).toBe(true));
+  });
+
+  it('says which conversation a routine runs in, and moves it to another', async () => {
+    const view = (id: string, title: string, at: number) => ({
+      id,
+      title,
+      named: false,
+      createdAt: at,
+      lastActivityAt: at,
+      current: id === 'c2',
+      loaded: false,
+      waiting: 0,
+    });
+    let routines: Record<string, string> = { d1: 'c2' };
+    const list = () => ({
+      agentId: 'a1',
+      current: 'c2',
+      items: [view('c2', 'Launch plan', 3), view('first', 'Fix the login page', 1)],
+      routines,
+    });
+    const calls: { cmd: string; args: Record<string, unknown> }[] = [];
+    mockIPC((cmd, args) => {
+      calls.push({ cmd, args: args as Record<string, unknown> });
+      if (cmd === 'agents_conversations') return list();
+      if (cmd === 'agents_conversation_routine') {
+        routines = {};
+        return list();
+      }
+      return null;
+    });
+    const daily = {
+      id: 'd1',
+      note: 'Draft my day',
+      repeat: { kind: 'daily', days: [], hour: 9, minute: 0 },
+      nextAt: Date.now() + 86_400_000,
+      createdAt: 0,
+      paused: false,
+    } as unknown as CheckIn;
+    const agent = { id: 'a1', name: 'Finance', checkIns: [daily] } as Agent;
+    render(<AgentSchedulePopover agent={agent} open onOpenChange={vi.fn()} />);
+    expect(await screen.findByText('In “Launch plan”')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'More for “Draft my day”' }));
+    // Only the others are offered.
+    expect(screen.queryByRole('menuitem', { name: 'Launch plan' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Fix the login page' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === 'agents_conversation_routine')?.args).toMatchObject({
+        agentId: 'a1',
+        routineId: 'd1',
+        conversationId: 'first',
+      })
+    );
+    expect(await screen.findByText('In “Fix the login page”')).toBeVisible();
   });
 });

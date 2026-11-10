@@ -74,11 +74,12 @@ import {
   loadLatest,
   loadOlder,
   loadUntil,
+  openConversation,
   send,
   setOpenChat,
 } from '../lib/session';
 import { useAccent } from '../lib/accent';
-import { chatKeyFor, conversationsOffered } from '../lib/conversations';
+import { chatKeyFor, conversationsOffered, jumpStep } from '../lib/conversations';
 import { ConversationSwitch } from './ConversationSwitch';
 import { useApp } from '../lib/store';
 import { SETUP_KEY, chatItems, isRowFor, sentAt, withSetupCard, type Item } from '../lib/timeline';
@@ -203,12 +204,15 @@ function PinnedQuestion({
 export function ChatView({
   id,
   at,
+  conversation,
   compose = false,
   embedded = false,
   notice,
 }: {
   id: string;
   at?: string;
+  /** The conversation `at` was said in: opened first when another is on screen. */
+  conversation?: string;
   /** Said once, as the chat opens (what a share couldn't attach). */
   notice?: string;
   /** Opened to write (the "New message" quick action): the field has the keyboard. */
@@ -402,12 +406,25 @@ export function ChatView({
     list.current?.scrollToOffset({ offset: endOffset(insetTop.current), animated });
   }, []);
 
+  // A search hit: its conversation first (once: switching away after stays
+  // switched), then paged in from that conversation's chat, once.
+  const switchedFor = useRef<string | null>(null);
+  const landedOn = useRef<string | null>(null);
   useEffect(() => {
-    if (!at || !connected) return;
+    if (!at || !connected || landedOn.current === at) return;
+    const step = jumpStep(id, conversation, viewing, offered);
+    if (step.kind === 'wait') return;
+    if (step.kind === 'switch') {
+      if (switchedFor.current === at) return;
+      switchedFor.current = at;
+      openConversation(id, step.to).catch((e: unknown) => showError(describeError(e)));
+      return;
+    }
     let live = true;
-    loadUntil(id, at).then(
+    loadUntil(step.key, at).then(
       (found) => {
         if (!live) return;
+        landedOn.current = at;
         if (found) setTarget(at);
         else showError('That message is too far back to open here.');
       },
@@ -416,7 +433,7 @@ export function ChatView({
     return () => {
       live = false;
     };
-  }, [at, id, connected, showError]);
+  }, [at, id, conversation, viewing, offered, connected, showError]);
 
   // A new card that asks, landing while you're at or near the newest line:
   // its answers come into view (inverted list: viewPosition 0 puts the card's

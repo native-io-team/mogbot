@@ -234,7 +234,6 @@ fn the_user_writing_first_folds_it_into_their_turn() {
         role: "Mail".into(),
         instructions: "Reads the inbox.".into(),
         shape: None,
-        avatar: None,
         color: None,
         is_main: false,
     })

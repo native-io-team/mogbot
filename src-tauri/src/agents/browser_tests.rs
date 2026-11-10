@@ -309,7 +309,6 @@ fn the_switch_starts_off_and_an_old_browser_choice_keeps_it_on() {
             role: String::new(),
             instructions: String::new(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         })

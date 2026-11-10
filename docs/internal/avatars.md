@@ -2,8 +2,13 @@
 
 > **Superseded by agent keys** ([agent-keys.md](agent-keys.md)) on the desk and the phone:
 > `AgentKey.tsx` on both, the shared `agentKeys.ts`. The files named below, the shared
-> `avatar.ts` included, are gone. The Mac still keeps an agent's look (`agents::store::AgentLook`)
-> for older clients and the Chief's `update_agent`; nothing draws it. Kept as history.
+> `avatar.ts` included, are gone, and so is the look itself: the Mac no longer keeps, serves or
+> changes one (`agents::store::AgentLook` and the Chief's `shape` / `face` / `finish` are gone). A
+> registry that still holds an `avatar` reads as before and drops it on the next save
+> (`store::OLD_LOOK`); an older phone's `avatar` on `agents.create` / `agents.update` is accepted
+> and ignored, and the Mac still lists `agents.looks` and `agents.keycaps` so such a phone keeps
+> its colour picker (`avatar_tests.rs`, `router.rs`
+> `an_older_phone_sending_a_look_is_accepted_and_the_look_ignored`). Kept as history.
 
 Each agent is a key cap in its own colour: one of four even shapes, raised like a key on a
 keyboard, with a small face on its top. When it moves, it says what the agent is doing. The

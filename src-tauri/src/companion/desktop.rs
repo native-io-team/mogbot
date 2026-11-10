@@ -327,6 +327,23 @@ impl Backend for DesktopBackend {
         )
     }
 
+    async fn conversation_routine(
+        &self,
+        agent_id: &str,
+        routine_id: &str,
+        id: &str,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_routine(
+                self.app.clone(),
+                agent_id.to_string(),
+                routine_id.to_string(),
+                id.to_string(),
+            )
+            .await?,
+        )
+    }
+
     async fn stop(&self, agent_id: &str) -> Result<bool, CommandError> {
         cmd::agents_stop(self.app.clone(), agent_id.to_string()).await
     }
@@ -471,7 +488,6 @@ impl Backend for DesktopBackend {
         let input = cmd::CreateAgentInput {
             name: input.name,
             shape: None,
-            avatar: input.avatar,
             color: Some(color),
             colorway: input.colorway,
             icon: input.icon,
@@ -519,7 +535,6 @@ impl Backend for DesktopBackend {
         let input = cmd::UpdateAgentInput {
             name: None,
             shape: None,
-            avatar: toggles.avatar,
             color: toggles.color.map(|c| c.trim().to_string()),
             colorway: toggles.colorway,
             icon: toggles.icon,

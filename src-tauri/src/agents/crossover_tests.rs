@@ -336,7 +336,6 @@ fn the_conversation_is_carried_over_by_recap_and_told_on_the_way_back() {
             role: String::new(),
             instructions: "Be brief.".into(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         })
@@ -622,7 +621,6 @@ fn review_only_the_answer_that_closes_the_card_counts() {
             role: String::new(),
             instructions: String::new(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         })

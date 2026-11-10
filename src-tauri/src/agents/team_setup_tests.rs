@@ -16,7 +16,6 @@ fn agent(name: &str) -> store::Agent {
         role: format!("{name}'s work"),
         instructions: format!("{name} does things."),
         shape: None,
-        avatar: None,
         color: None,
         is_main: false,
     })

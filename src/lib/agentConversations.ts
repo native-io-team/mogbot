@@ -27,6 +27,7 @@ export {
   filterConversations,
   othersWaiting,
   routineConversationLine,
+  routineMoveChoices,
   type ConversationView,
   type Conversations,
 } from '../../packages/companion-protocol/src/conversations';
@@ -69,3 +70,6 @@ export const selectConversation = (agentId: string, conversationId: string) =>
   invoke<Conversations>('agents_conversation_select', { agentId, conversationId });
 export const renameConversation = (agentId: string, conversationId: string, title: string) =>
   invoke<Conversations>('agents_conversation_rename', { agentId, conversationId, title });
+/** Move a routine to another of the agent's conversations: it fires there from its next run. */
+export const moveRoutine = (agentId: string, routineId: string, conversationId: string) =>
+  invoke<Conversations>('agents_conversation_routine', { agentId, routineId, conversationId });

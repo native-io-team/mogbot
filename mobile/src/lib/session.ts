@@ -861,6 +861,13 @@ export async function newConversation(agentId: string) {
   setApp((s) => ({ viewing: { ...s.viewing, [agentId]: list.current } }));
 }
 
+/** Run a routine in another of the agent's conversations, from its next run. */
+export async function moveRoutine(agentId: string, routineId: string, conversation: string) {
+  setConversations(
+    await call('agents.conversationRoutine', { agentId, routineId, conversationId: conversation })
+  );
+}
+
 /** Name one; empty gives it back to its first message. */
 export async function renameConversation(agentId: string, conversation: string, title: string) {
   setConversations(
@@ -946,15 +953,17 @@ export async function fetchPath(agentId: string, path: string) {
 export const search = (query: string) => call('agents.search', { query });
 
 /**
- * Page a chat back until `messageId` is loaded, for a search hit. Gives up
- * after `maxPages` pages; resolves whether it was found.
+ * Page a chat back until `messageId` is loaded, for a search hit. `key` is
+ * the chat it reads from: a conversation's (`conversationKey`) on a Mac that
+ * keeps several, else the agent's. Gives up after `maxPages` pages; resolves
+ * whether it was found.
  */
-export async function loadUntil(agentId: string, messageId: string, maxPages = 40) {
-  const has = () => getApp().chats[agentId]?.messages.some((m) => m.id === messageId) ?? false;
-  if (!getApp().chats[agentId]?.loaded) await loadLatest(agentId);
+export async function loadUntil(key: string, messageId: string, maxPages = 40) {
+  const has = () => getApp().chats[key]?.messages.some((m) => m.id === messageId) ?? false;
+  if (!getApp().chats[key]?.loaded) await loadLatest(key);
   for (let i = 0; i < maxPages && !has(); i++) {
-    if (!getApp().chats[agentId]?.more) break;
-    await loadOlder(agentId);
+    if (!getApp().chats[key]?.more) break;
+    await loadOlder(key);
   }
   return has();
 }

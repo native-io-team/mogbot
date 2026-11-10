@@ -48,17 +48,6 @@ export interface PlanCard {
   actions: PlanAction[];
   why?: string;
 }
-/**
- * A look from before keys (`agents::store::AgentLook`): a shape, a face and
- * a finish. The Mac still keeps it, and older clients send it; nothing here
- * draws it any more (agents are keys, `agentKeys.ts`).
- */
-export interface AgentLook {
-  shape: string;
-  face: string;
-  finish?: string;
-}
-
 export interface AgentStatus {
   state: 'idle' | 'working' | 'waiting';
   activity: string | null;
@@ -188,8 +177,6 @@ export interface Agent {
   name: string;
   role: string;
   shape: number;
-  /** Its look from before keys, as the Mac keeps it. Nothing draws it. */
-  avatar?: AgentLook;
   /**
    * Its key (docs/internal/agent-keys.md): a colourway, a legend and the
    * keyboard key it's bound to. Older Macs omit them: `keyLookFor` draws
@@ -1660,7 +1647,6 @@ export interface SharedFile extends Attachment {
 export interface NewAgentInput {
   name: string;
   shape?: number;
-  avatar?: AgentLook;
   color?: string;
   /** Its key's colourway, legend and bound key (agentKeys.ts); older Macs ignore them. */
   colorway?: string;
@@ -1696,7 +1682,6 @@ export interface RoleTemplateSummary {
 export interface UpdateAgentInput {
   name?: string;
   shape?: number;
-  avatar?: AgentLook;
   color?: string;
   /** Its key's colourway, legend and bound key (agentKeys.ts); older Macs ignore them. */
   colorway?: string;
@@ -1733,6 +1718,8 @@ export interface SearchHit {
   /** Said in a room: the hit opens the room. `agent*` is who said it (empty for the user's line). */
   roomId?: string;
   roomName?: string;
+  /** The agent's conversation it was said in: the hit opens it first. Absent for a room's line, or from an older Mac. */
+  conversation?: string;
 }
 
 export interface UsageTotals {

@@ -141,7 +141,6 @@ impl H {
             role: role.into(),
             instructions: instructions.into(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         })
@@ -173,6 +172,8 @@ impl H {
             None,
             None,
             None,
+            None,
+            // Where the user is (`conversations::current`).
             None,
         )
         .await

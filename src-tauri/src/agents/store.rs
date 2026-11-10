@@ -32,214 +32,15 @@ use crate::errors::CommandError;
 pub const COLORS: &[&str] = &[
     "white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray",
 ];
+/// The key an agent's look from before keys was saved under (a shape, a
+/// face and a finish). Read and dropped (`Registry::from_value`); an older
+/// phone may still send it to `agents.create` / `agents.update`, where it is
+/// accepted and ignored.
+pub const OLD_LOOK: &str = "avatar";
+
 /// The legacy face index (`shape`), from before avatars were a shape and a
 /// face. Still written, so an older build reads the registry; nothing draws it.
 pub const SHAPE_COUNT: u8 = 14;
-
-/// The avatar's shapes, faces and finishes, as keys. Kept beside each agent's
-/// key (`keys`) for older clients and the Chief's `update_agent`; the clients
-/// draw keys now (docs/internal/agent-keys.md), so nothing draws these.
-pub const AVATAR_SHAPES: &[&str] = &["circle", "squircle", "diamond", "hexagon"];
-pub const AVATAR_FACES: &[&str] = &["dots", "smile", "debossed", "monogram"];
-pub const AVATAR_FINISHES: &[&str] = &["keycap", "embossed"];
-/// The face every default wears.
-pub const DEFAULT_FACE: &str = "dots";
-
-/// The previous system's keys, each to its nearest now. A look saved under
-/// it reads as its nearest; nothing is rewritten on disk, so an older build
-/// still reads what it wrote.
-pub const LEGACY_SHAPES: &[(&str, &str)] = &[
-    ("rounded", "squircle"),
-    ("pill", "circle"),
-    ("drop", "circle"),
-    ("cookie", "circle"),
-    ("arch", "squircle"),
-];
-pub const LEGACY_FACES: &[(&str, &str)] = &[
-    ("calm", "smile"),
-    ("cheerful", "smile"),
-    ("curious", "smile"),
-    ("focused", "smile"),
-    ("sleepy", "smile"),
-    ("wink", "smile"),
-    ("determined", "smile"),
-    ("bright", "smile"),
-    ("quiet", "dots"),
-    ("content", "dots"),
-];
-
-fn key_in(
-    key: &str,
-    keys: &'static [&'static str],
-    legacy: &'static [(&'static str, &'static str)],
-) -> Option<&'static str> {
-    keys.iter().copied().find(|k| *k == key).or_else(|| {
-        legacy
-            .iter()
-            .find(|(old, _)| *old == key)
-            .map(|(_, now)| *now)
-    })
-}
-
-/// A stored shape key, migrated: this system's, the nearest for an old one.
-pub fn shape_key(key: &str) -> Option<&'static str> {
-    key_in(key, AVATAR_SHAPES, LEGACY_SHAPES)
-}
-pub fn face_key(key: &str) -> Option<&'static str> {
-    key_in(key, AVATAR_FACES, LEGACY_FACES)
-}
-fn finish_key(key: &str) -> Option<&'static str> {
-    key_in(key, AVATAR_FINISHES, &[])
-}
-
-/// What an agent chose to look like. `None` on the agent: the clients derive
-/// one from its id, so an agent made before avatars never changes.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AgentLook {
-    pub shape: String,
-    pub face: String,
-    /// `keycap` or `embossed`. Absent: a key cap (and what older builds wrote).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub finish: Option<String>,
-}
-
-impl AgentLook {
-    /// A look with keys this build draws (an old key becomes its nearest), or why not.
-    pub fn checked(shape: &str, face: &str) -> Result<AgentLook, String> {
-        Self::checked_with(shape, face, None)
-    }
-
-    pub fn checked_with(
-        shape: &str,
-        face: &str,
-        finish: Option<&str>,
-    ) -> Result<AgentLook, String> {
-        let shape = shape.trim().to_ascii_lowercase();
-        let face = face.trim().to_ascii_lowercase();
-        let Some(shape_now) = shape_key(&shape) else {
-            return Err(format!(
-                "There's no shape called \"{shape}\": {}.",
-                AVATAR_SHAPES.join(", ")
-            ));
-        };
-        let Some(face_now) = face_key(&face) else {
-            return Err(format!(
-                "There's no face called \"{face}\": {}.",
-                AVATAR_FACES.join(", ")
-            ));
-        };
-        let finish = match finish.map(|f| f.trim().to_ascii_lowercase()) {
-            None => None,
-            Some(f) => match finish_key(&f) {
-                // A key cap is the default: stored as nothing, as before.
-                Some("keycap") => None,
-                Some(k) => Some(k.to_string()),
-                None => {
-                    return Err(format!(
-                        "There's no finish called \"{f}\": {}.",
-                        AVATAR_FINISHES.join(", ")
-                    ))
-                }
-            },
-        };
-        Ok(AgentLook {
-            shape: shape_now.into(),
-            face: face_now.into(),
-            finish,
-        })
-    }
-
-    /// The same look in this system's keys, or `None` for one it can't draw.
-    pub fn normalized(self) -> Option<AgentLook> {
-        Self::checked_with(&self.shape, &self.face, self.finish.as_deref()).ok()
-    }
-
-    pub fn is_valid(&self) -> bool {
-        self.clone().normalized().is_some()
-    }
-
-    /// The Chief's default.
-    pub const CHIEF_SHAPE: &'static str = "squircle";
-    pub const CHIEF_FACE: &'static str = DEFAULT_FACE;
-
-    /// What older clients derived for an agent with no choice saved (FNV-1a
-    /// of the id picks a shape, never the Chief's; every default has dot eyes).
-    pub fn default_for(id: &str, is_main: bool) -> AgentLook {
-        if is_main {
-            return AgentLook {
-                shape: Self::CHIEF_SHAPE.into(),
-                face: Self::CHIEF_FACE.into(),
-                finish: None,
-            };
-        }
-        let mut h: u32 = 0x811c9dc5;
-        // UTF-16 code units, as JavaScript's `charCodeAt` sees the id.
-        for unit in id.encode_utf16() {
-            h ^= u32::from(unit);
-            h = h.wrapping_mul(0x01000193);
-        }
-        let shapes: Vec<&str> = AVATAR_SHAPES
-            .iter()
-            .copied()
-            .filter(|s| *s != Self::CHIEF_SHAPE)
-            .collect();
-        AgentLook {
-            shape: shapes[(h as usize) % shapes.len()].into(),
-            face: DEFAULT_FACE.into(),
-            finish: None,
-        }
-    }
-
-    /// The look an agent wears: its own choice (migrated), field by field, else its default.
-    pub fn of(agent: &Agent) -> AgentLook {
-        let fallback = Self::default_for(&agent.id, agent.is_main);
-        let chosen = agent.avatar.as_ref();
-        AgentLook {
-            shape: chosen
-                .and_then(|l| shape_key(&l.shape))
-                .map_or(fallback.shape, str::to_string),
-            face: chosen
-                .and_then(|l| face_key(&l.face))
-                .map_or(fallback.face, str::to_string),
-            finish: chosen
-                .and_then(|l| l.finish.as_deref())
-                .and_then(finish_key)
-                .filter(|f| *f != "keycap")
-                .map(str::to_string),
-        }
-    }
-
-    /// "a hexagon with dot eyes", "an embossed circle", as older clients said it.
-    pub fn describe(shape: Option<&str>, face: Option<&str>, finish: Option<&str>) -> String {
-        let embossed = finish == Some("embossed");
-        let face = face.map(|f| match f {
-            "dots" => "dot eyes",
-            "smile" => "eyes and a mouth",
-            "debossed" => "a debossed face",
-            "monogram" => "a monogram",
-            other => other,
-        });
-        let thing = match (shape, embossed) {
-            (Some(s), true) => format!("embossed {s}"),
-            (Some(s), false) => s.to_string(),
-            (None, true) => "embossed key".to_string(),
-            (None, false) => String::new(),
-        };
-        let article = |w: &str| {
-            if w.starts_with(['a', 'e', 'i', 'o', 'u']) {
-                "an"
-            } else {
-                "a"
-            }
-        };
-        match (thing.is_empty(), face) {
-            (false, Some(f)) => format!("{} {thing} with {f}", article(&thing)),
-            (false, None) => format!("{} {thing}", article(&thing)),
-            (true, Some(f)) => f.to_string(),
-            (true, None) => String::new(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -251,9 +52,6 @@ pub struct Agent {
     #[serde(default)]
     pub role: String,
     pub shape: u8,
-    /// Its avatar's shape and face (`AgentLook`). Absent: derived from its id.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub avatar: Option<AgentLook>,
     /// The old avatar colour key, kept beside its key's colourway (nearest)
     /// for clients that only read this.
     pub color: String,
@@ -803,7 +601,14 @@ impl Registry {
         };
         for entry in entries {
             match serde_json::from_value::<Agent>(entry.clone()) {
-                Ok(agent) => registry.agents.push(agent),
+                Ok(mut agent) => {
+                    // A look from before keys (a shape, a face, a finish):
+                    // nothing draws it any more, so it isn't kept or served.
+                    // Dropped on the next save; an older build that reads
+                    // the registry derives one from the id, as it always did.
+                    agent.extra.remove(OLD_LOOK);
+                    registry.agents.push(agent)
+                }
                 Err(e) => {
                     tracing::warn!("[Agents] keeping an agent entry this build can't read: {e}");
                     registry.unreadable.push(entry);
@@ -1223,7 +1028,6 @@ pub struct NewAgent {
     pub role: String,
     pub instructions: String,
     pub shape: Option<u8>,
-    pub avatar: Option<AgentLook>,
     pub color: Option<String>,
     pub is_main: bool,
 }
@@ -1369,7 +1173,6 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         name,
         role: new.role.trim().to_string(),
         shape,
-        avatar: new.avatar.and_then(AgentLook::normalized),
         color,
         colorway: Some(colorway),
         icon: None,
@@ -2795,7 +2598,6 @@ mod tests {
             role: "Does things".into(),
             instructions: "Be brief.".into(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         }

@@ -45,7 +45,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::sync::Mutex;
 
 use super::store::{self, Agent, AgentMessage, MessageKind};
 use crate::errors::CommandError;
@@ -220,9 +220,21 @@ struct List {
     /// routine not here is the first conversation's.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     routines: HashMap<String, String>,
+    /// Helper agent id → the conversation that last asked it something
+    /// (`note_asked`), at most [`MAX_ASKED`].
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    asked: HashMap<String, Asked>,
     /// Kept as written by a newer build.
     #[serde(flatten)]
     extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Where a request to another agent was asked from, and when.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct Asked {
+    conversation: String,
+    at: i64,
 }
 
 /// One conversation as the switcher shows it.
@@ -587,6 +599,38 @@ pub fn note_routine(agent_id: &str, routine_id: &str) {
     let _ = write(agent_id, &list);
 }
 
+/// The user moved a routine to another of the agent's conversations: its
+/// firing line and its turn go there from its next run.
+pub fn move_routine(
+    agent_id: &str,
+    routine_id: &str,
+    to: &str,
+) -> Result<Conversations, CommandError> {
+    let agent = store::get(agent_id)?;
+    if !agent.check_ins.iter().any(|c| c.id == routine_id) {
+        return Err(CommandError::expected("That routine isn't there any more."));
+    }
+    {
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut list = read(&agent)?;
+        if !list.items.iter().any(|c| c.id == to) {
+            return Err(CommandError::expected(
+                "That conversation isn't there any more.",
+            ));
+        }
+        list.routines
+            .retain(|r, _| agent.check_ins.iter().any(|c| &c.id == r));
+        // A routine not in the map is the first's: nothing to keep for it.
+        if to == FIRST {
+            list.routines.remove(routine_id);
+        } else {
+            list.routines.insert(routine_id.to_string(), to.to_string());
+        }
+        write(agent_id, &list)?;
+    }
+    list(agent_id)
+}
+
 /// The conversation a routine runs in: the one it was set up in, while
 /// that is still there; otherwise the first.
 pub fn routine_in(agent_id: &str, routine_id: &str) -> String {
@@ -603,34 +647,51 @@ pub fn routine_in(agent_id: &str, routine_id: &str) -> String {
 
 /* ---------------------------------------------- answers to where they were asked */
 
-/// (asker, helper) → the asker's conversation that asked the helper.
-static ASKED: LazyLock<Mutex<HashMap<(String, String), String>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Most helpers remembered per asker. Past it, the oldest ask is
+/// forgotten: its answer goes where the asker's engine is, as one from
+/// before this was kept did.
+pub const MAX_ASKED: usize = 64;
 
 /// `asker` sent `helper` a request: its answer belongs in the conversation
-/// the asker's turn is in now.
+/// the asker's turn is in now. Kept in the asker's `conversations.json`, one
+/// entry per helper (the latest ask), so an answer that lands after a
+/// restart still goes back where it was asked.
 pub fn note_asked(asker: &str, helper: &str) {
     let Ok(agent) = store::get(asker) else {
         return;
     };
-    let mut asked = ASKED.lock().unwrap_or_else(|e| e.into_inner());
-    if asked.len() > 1000 {
-        asked.clear();
-    }
-    asked.insert(
-        (asker.to_string(), helper.to_string()),
-        loaded(&agent).to_string(),
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let Ok(mut list) = read(&agent) else {
+        return;
+    };
+    list.asked.insert(
+        helper.to_string(),
+        Asked {
+            conversation: loaded(&agent).to_string(),
+            at: store::now_ms(),
+        },
     );
+    while list.asked.len() > MAX_ASKED {
+        let Some(oldest) = list
+            .asked
+            .iter()
+            .min_by_key(|(id, a)| (a.at, (*id).clone()))
+            .map(|(id, _)| id.clone())
+        else {
+            break;
+        };
+        list.asked.remove(&oldest);
+    }
+    let _ = write(asker, &list);
 }
 
-/// The conversation of `asker`'s that asked `helper` something, if it did
-/// since the app started. `None`: wherever the asker is now.
+/// The conversation of `asker`'s that last asked `helper` something, while
+/// it is still there. `None`: wherever the asker is now.
 pub fn asked_in(asker: &str, helper: &str) -> Option<String> {
-    ASKED
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(&(asker.to_string(), helper.to_string()))
-        .cloned()
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let list = read_raw(asker).ok().flatten()?;
+    let c = list.asked.get(helper)?.conversation.clone();
+    (c == FIRST || list.items.iter().any(|i| i.id == c)).then_some(c)
 }
 
 #[cfg(test)]

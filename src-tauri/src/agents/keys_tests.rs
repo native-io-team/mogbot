@@ -222,7 +222,6 @@ fn a_new_agent_gets_its_colours_nearest_colourway_its_icon_and_its_letter() {
             role: "Does things".into(),
             instructions: "Do them.".into(),
             shape: None,
-            avatar: None,
             color: color.map(Into::into),
             is_main: false,
         })

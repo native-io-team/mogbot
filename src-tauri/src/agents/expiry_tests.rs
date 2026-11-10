@@ -17,7 +17,6 @@ fn agent() -> store::Agent {
         role: "Looks things up".into(),
         instructions: "Be brief.".into(),
         shape: None,
-        avatar: None,
         color: None,
         is_main: false,
     })

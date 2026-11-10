@@ -121,7 +121,6 @@ fn a_recap_is_read_from_the_loaded_conversation_only() {
             role: "r".into(),
             instructions: "i".into(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         })

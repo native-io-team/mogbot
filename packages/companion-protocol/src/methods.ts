@@ -145,6 +145,14 @@ export interface Methods {
     result: Conversations;
   };
   /**
+   * Move a routine to another of the agent's conversations: it fires there
+   * from its next run. Newer Macs only: check `welcome.methods`.
+   */
+  'agents.conversationRoutine': {
+    params: { agentId: string; routineId: string; conversationId: string };
+    result: Conversations;
+  };
+  /**
    * `agents_turn_work`: what the turn ending on `messageId` did, steps and
    * all; null when nothing was kept (pruned). Only for a line its page sent
    * with `stepsOmitted`, so only ever asked of a Mac that serves it.
@@ -412,7 +420,6 @@ export interface Methods {
         | 'role'
         | 'color'
         | 'template'
-        | 'avatar'
         | 'instructions'
         | 'routines'
         | 'colorway'
@@ -434,7 +441,8 @@ export interface Methods {
   /**
    * From the phone, only the row's toggles (`pinned`, `muted`, `hidden`)
    * and `instructions` (at most 20,000 characters), and from a Mac listing
-   * `MAC_FEATURES.looks`, `avatar` and `color`, and from one listing
+   * `MAC_FEATURES.looks`, `color` (an older phone's `avatar`, a look from
+   * before keys, is accepted and ignored), and from one listing
    * `MAC_FEATURES.agentKeys`, `colorway`, `icon` and `boundKey` (a key
    * someone else has is refused, naming whose); any other field is refused
    * with `bad_params`. The name, role, model and project stay the desk's.

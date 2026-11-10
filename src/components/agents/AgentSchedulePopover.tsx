@@ -107,7 +107,13 @@ import {
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
 import { useQuotaLines } from './AgentsQuota';
-import { refreshAgents } from '../../lib/agentsStore';
+import {
+  moveRoutineTo,
+  refreshAgents,
+  refreshConversations,
+  useAgentsSelector,
+} from '../../lib/agentsStore';
+import { routineConversationLine, routineMoveChoices } from '../../lib/agentConversations';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
 
@@ -125,6 +131,7 @@ function firstRun(p: SchedulePreview): string {
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
+
 
 interface AgentSchedulePopoverProps {
   agent: Agent;
@@ -204,6 +211,11 @@ function ScheduleBody({
     items.length === 0 || startWhen ? 'new' : null
   );
   const editing = composing && composing !== 'new' ? composing : null;
+  // Which conversation each routine runs in, read once per opening.
+  const conversations = useAgentsSelector((s) => s.conversations[agent.id]);
+  useEffect(() => {
+    void refreshConversations(agent.id);
+  }, [agent.id]);
   /** A new routine's kind; an edit keeps the kind of the row. */
   const [newMode, setNewMode] = useState<'time' | 'when'>(startWhen ? 'when' : 'time');
   const mode = editing ? (editing.watch ? 'when' : 'time') : newMode;
@@ -250,6 +262,11 @@ function ScheduleBody({
             {editing ? 'Edit routine' : 'New routine'}
           </span>
         </div>
+        {editing && routineConversationLine(conversations, editing.id) && (
+          <p className="agent-schedule__place">
+            Runs {routineConversationLine(conversations, editing.id)}
+          </p>
+        )}
         {!editing && (
           <div className="agent-schedule__mode">
             <SegmentedControl
@@ -327,6 +344,9 @@ function ScheduleBody({
               }
               busy={busy}
               editing={editing?.id === c.id}
+              place={routineConversationLine(conversations, c.id)}
+              moveTo={routineMoveChoices(conversations, c.id)}
+              onMove={(to) => void run(() => moveRoutineTo(agent.id, c.id, to))}
               onRunNow={() =>
                 void run(async () => {
                   await runCheckInNow(agent.id, c.id);
@@ -689,6 +709,9 @@ function ScheduleRow({
   priced,
   busy,
   editing,
+  place,
+  moveTo,
+  onMove,
   onRunNow,
   onCheckNow,
   onEdit,
@@ -696,6 +719,11 @@ function ScheduleRow({
   onCancel,
 }: {
   item: CheckIn;
+  /** "In “Launch plan”": the conversation it runs in, when the agent has several. */
+  place: string | null;
+  /** The other conversations it could run in instead. */
+  moveTo: { id: string; title: string }[];
+  onMove: (conversation: string) => void;
   /** "$0.84 at API prices this week" or "96k tokens this week", when it ran on its own this week. */
   spent: string | null;
   /** `spent` is a price (Claude Code's), not a token count. */
@@ -768,6 +796,7 @@ function ScheduleRow({
           </>
         )}
         {!watch && <AgentStepsList item={item} afterNote />}
+        {place && <span className="agent-schedule__place">{place}</span>}
         {item.waiting && (
           <span className="agent-schedule__waiting">Waiting for your OK in the chat</span>
         )}
@@ -821,6 +850,17 @@ function ScheduleRow({
             <DropdownItem onSelect={onRunNow}>Run now</DropdownItem>
           )}
           <DropdownItem onSelect={onEdit}>Edit</DropdownItem>
+          {moveTo.length > 0 && (
+            <>
+              <DropdownDivider />
+              <p className="agent-model-menu__heading">Run it in</p>
+              {moveTo.map((c) => (
+                <DropdownItem key={c.id} onSelect={() => onMove(c.id)}>
+                  <span className="agent-model-menu__label">{c.title}</span>
+                </DropdownItem>
+              ))}
+            </>
+          )}
           <DropdownDivider />
           <DropdownItem variant="danger" onSelect={() => setConfirming(true)}>
             Delete…

@@ -63,7 +63,6 @@ pub(super) fn from_homes(root: &Path) -> Registry {
             name,
             role,
             shape: (index as u8 * 5 + 1) % SHAPE_COUNT,
-            avatar: None,
             color: if is_main {
                 "white".to_string()
             } else {

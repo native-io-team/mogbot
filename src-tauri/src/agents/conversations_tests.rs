@@ -17,7 +17,6 @@ fn agent(name: &str) -> Agent {
         role: "Does things".into(),
         instructions: "Be brief.".into(),
         shape: None,
-        avatar: None,
         color: None,
         is_main: false,
     })
@@ -376,8 +375,67 @@ fn an_answer_goes_back_to_the_conversation_that_asked() {
             swap(a, FIRST);
         })
         .unwrap();
-        assert_eq!(asked_in(&asker.id, &helper.id), Some(c));
+        assert_eq!(asked_in(&asker.id, &helper.id), Some(c.clone()));
         assert_eq!(asked_in(&helper.id, &asker.id), None);
+        // Kept on disk, not in memory: an answer after a restart still goes back.
+        let raw = std::fs::read_to_string(
+            store::agent_home(&asker.id)
+                .unwrap()
+                .join("conversations.json"),
+        )
+        .unwrap();
+        let saved: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(saved["asked"][&helper.id]["conversation"], c.as_str());
+        // Asked again from the first: the latest ask wins.
+        note_asked(&asker.id, &helper.id);
+        assert_eq!(asked_in(&asker.id, &helper.id).as_deref(), Some(FIRST));
+    });
+}
+
+#[test]
+fn what_was_asked_stays_small() {
+    scratch(|| {
+        let asker = agent("Busy");
+        for i in 0..(MAX_ASKED + 10) {
+            note_asked(&asker.id, &format!("helper-{i}"));
+        }
+        let raw = std::fs::read_to_string(
+            store::agent_home(&asker.id)
+                .unwrap()
+                .join("conversations.json"),
+        )
+        .unwrap();
+        let saved: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(saved["asked"].as_object().unwrap().len(), MAX_ASKED);
+        // The newest are kept.
+        let last = format!("helper-{}", MAX_ASKED + 9);
+        assert_eq!(asked_in(&asker.id, &last).as_deref(), Some(FIRST));
+    });
+}
+
+#[test]
+fn a_routine_can_be_moved_to_another_conversation() {
+    scratch(|| {
+        let a = agent("Mover");
+        let c = create(&a.id).unwrap().current;
+        store::update(&a.id, |a| {
+            a.check_ins.push(
+                serde_json::from_value(serde_json::json!({
+                    "id": "r1", "note": "Check mail", "nextAt": 1, "createdAt": 1
+                }))
+                .unwrap(),
+            );
+        })
+        .unwrap();
+        assert_eq!(routine_in(&a.id, "r1"), FIRST);
+        let moved = move_routine(&a.id, "r1", &c).unwrap();
+        assert_eq!(moved.routines.get("r1"), Some(&c));
+        assert_eq!(routine_in(&a.id, "r1"), c);
+        let back = move_routine(&a.id, "r1", FIRST).unwrap();
+        assert!(back.routines.get("r1").is_none());
+        assert_eq!(routine_in(&a.id, "r1"), FIRST);
+        assert!(move_routine(&a.id, "r1", "gone").is_err());
+        assert!(move_routine(&a.id, "nope", &c).is_err());
     });
 }
 

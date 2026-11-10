@@ -40,6 +40,7 @@ import {
   conversationOfKey,
   getConversations,
   lineConversation,
+  moveRoutine as moveRoutineOnMac,
   newConversation as createConversation,
   renameConversation as renameOnMac,
   selectConversation,
@@ -883,4 +884,13 @@ export async function renameConversation(
   title: string
 ): Promise<void> {
   setConversations(await renameOnMac(agentId, conversation, title));
+}
+
+/** Run a routine in another of the agent's conversations from its next run. */
+export async function moveRoutineTo(
+  agentId: string,
+  routineId: string,
+  conversation: string
+): Promise<void> {
+  setConversations(await moveRoutineOnMac(agentId, routineId, conversation));
 }

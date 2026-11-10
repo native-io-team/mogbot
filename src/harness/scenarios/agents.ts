@@ -1466,6 +1466,34 @@ const CONVERSATIONS = {
   agents_conversation_rename: () => several('acme', now),
 };
 
+/** The weekly metrics routine, set up in the first conversation. */
+const WEEKLY_METRICS = {
+  id: 'ci-weekly',
+  note: 'Send me the weekly metrics report.',
+  repeat: { kind: 'days', days: [1], hour: 9, minute: 0 },
+  nextAt: now + 3 * 24 * 60 * MIN,
+  createdAt: now - 3 * 24 * 60 * MIN,
+  paused: false,
+};
+
+/** A search hit in the first conversation, while the launch one is on screen. */
+const GUTTERS = ACME_CHAT.find((m) => m.text.includes('24px gutters'))!;
+const searchAcme = (args: Record<string, unknown>) =>
+  String(args.query).toLowerCase().includes('gutters')
+    ? [
+        {
+          agentId: 'acme',
+          agentName: 'Acme Site',
+          agentColor: 'orange',
+          messageId: GUTTERS.id,
+          ts: GUTTERS.ts,
+          kind: GUTTERS.kind,
+          snippet: 'Read both. The guidelines want 24px gutters on mobile, so the stacked cards use that.',
+          conversation: 'first',
+        },
+      ]
+    : [];
+
 const financeWith = (over: Record<string, unknown>) =>
   overview(TEAM.map((a) => (a.id === 'finance' ? { ...a, ...over } : a)));
 
@@ -3452,6 +3480,47 @@ export const agentsScenarios: Scenario[] = [
       { click: '[role="menuitem"]', text: 'Rename this conversation' },
     ],
     commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-conversations-search-hit',
+    title: 'Agents — a search hit in another conversation, opened',
+    looksRightWhen:
+      'Acme Site’s chat, now on its first conversation: the header’s conversation button reads “Set up the weekly metrics report” (no longer the launch email). The chat holds the pricing-cards conversation, scrolled so “Read both. The guidelines want 24px gutters on mobile…” sits mid-pane, ringed briefly. Nothing from the launch email conversation is in it.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__title',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { fill: '.agents-top-search input', value: 'gutters' },
+      { click: '.agents-search__hit:not(.agents-search__name-hit)' },
+    ],
+    commands: { ...CONVERSATIONS, agents_search: searchAcme },
+  },
+  {
+    id: 'agents-conversations-routines',
+    title: 'Agents — which conversation a routine runs in, and moving it',
+    looksRightWhen:
+      'Acme Site’s routines popover. The routine “Send me the weekly metrics report.” reads “Every Monday at 9:00 AM”, “Next: …”, then a quieter one-line “In “Set up the weekly metrics report””. Its … menu is open: Run now, Edit, a divider, the small heading “Run it in” over “Plan the November launch email”, “Chase the two overdue invoices” and “Draft the job post for a designer” (not the one it is in), a divider, then Delete….',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-schedule__place',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__scheduled' },
+      { click: '.agent-schedule__controls button[aria-label^="More for"]' },
+    ],
+    commands: {
+      ...CONVERSATIONS,
+      agents_overview: acmeWith({
+        status: status('idle'),
+        conversations: { loaded: 'c-launch' },
+        checkIns: [WEEKLY_METRICS],
+      }),
+      agents_schedule_preview: schedulePreview,
+      agents_usage: null,
+      agents_conversation_routine: (args: Record<string, unknown>) => ({
+        ...several('acme', now),
+        routines: { 'ci-weekly': String(args.conversationId) },
+      }),
+    },
   },
   {
     id: 'agents-conversations-one',

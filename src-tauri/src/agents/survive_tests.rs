@@ -272,7 +272,6 @@ fn a_log_torn_inside_a_character_still_opens() {
             role: "Does things".into(),
             instructions: "Be brief.".into(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         })

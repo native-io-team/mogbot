@@ -104,7 +104,6 @@ fn long_chat() -> String {
         role: "Runs the team".into(),
         instructions: "Be brief.".into(),
         shape: None,
-        avatar: None,
         color: None,
         is_main: false,
     })

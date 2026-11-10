@@ -58,3 +58,27 @@ export function chatKeyFor(
   if (!offered) return agentId;
   return viewing ? conversationKey(agentId, viewing) : null;
 }
+
+/**
+ * The next step in landing on a line (`at`, from a search hit) said in
+ * `conversation`: open that conversation first when another one is on
+ * screen, wait while it isn't known which one is, then page in the chat
+ * it reads from. Without a conversation (an older Mac's hit, a link) the
+ * line is looked for in the one on screen.
+ */
+export type JumpStep =
+  | { kind: 'switch'; to: string }
+  | { kind: 'wait' }
+  | { kind: 'load'; key: string };
+
+export function jumpStep(
+  agentId: string,
+  conversation: string | undefined,
+  viewing: string | undefined,
+  offered: boolean
+): JumpStep {
+  if (!offered) return { kind: 'load', key: agentId };
+  if (conversation && conversation !== viewing) return { kind: 'switch', to: conversation };
+  const key = chatKeyFor(agentId, viewing, offered);
+  return key ? { kind: 'load', key } : { kind: 'wait' };
+}
