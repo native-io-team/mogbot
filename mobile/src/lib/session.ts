@@ -548,6 +548,19 @@ export async function send(
 }
 
 /**
+ * A send that goes at most once for its `clientId` (a Siri request the
+ * system hands over again after the app died mid-way): one already waiting
+ * here is left alone, and the Mac returns the original for an id it has seen.
+ */
+export function sendOnce(agentId: string, text: string, clientId: string): Promise<void> {
+  if ((getApp().pending[agentId] ?? []).some((p) => p.clientId === clientId)) {
+    return Promise.resolve();
+  }
+  update((s) => addPending(s, { clientId, agentId, text, ts: Date.now(), failed: false }));
+  return send(agentId, text, false, clientId);
+}
+
+/**
  * Say something in a room, with an optimistic bubble, like `send`: the
  * `clientId` makes a retry safe, and offline it waits in the outbox. The
  * caller has already settled who answers (`answerers`): the Mac refuses a

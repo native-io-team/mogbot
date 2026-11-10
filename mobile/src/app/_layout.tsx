@@ -26,6 +26,7 @@ import { sheet, useStackOptions } from '../lib/navigation';
 import { RootAccent, useAccent } from '../lib/accent';
 import { AppearanceProvider, useTheme } from '../lib/appearance';
 import { ShareIntentBridge } from '../lib/shareIntent';
+import { SiriBridge } from '../lib/siriBridge';
 import { installCrashHandler, startCrashWatch } from '../lib/crash';
 
 // First, so a crash anywhere after this saves the drafts before the app ends.
@@ -130,6 +131,7 @@ function Screens() {
             </Stack>
             <MenuHost />
             <ShareIntentBridge />
+            <SiriBridge />
           </NavigationTheme>
         </RootAccent>
       </KeyboardProvider>

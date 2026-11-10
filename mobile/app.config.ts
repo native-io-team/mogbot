@@ -220,6 +220,11 @@ export default (): ExpoConfig => {
         { microphonePermission: MICROPHONE, speechRecognitionPermission: SPEECH },
       ],
       '@react-native-community/datetimepicker',
+      // Siri and Shortcuts: "Tell <app>…" (src/lib/siri.ts). The intents are
+      // Swift in app-intents/, compiled into the app target by inline modules
+      // (below), which Apple's metadata extraction needs. No entitlement: App
+      // Intents need none, so a free team's build carries them too.
+      'expo-app-intents',
       ...(shareExtension
         ? [
             [
@@ -240,7 +245,7 @@ export default (): ExpoConfig => {
           ]
         : []),
     ],
-    experiments: { typedRoutes: true },
+    experiments: { typedRoutes: true, inlineModules: { watchedDirectories: ['app-intents'] } },
     extra: {
       brand,
       official: Boolean(projectId) || storeBuild(),
