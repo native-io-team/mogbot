@@ -283,11 +283,13 @@ function rowWords(
     const at = back ? resetPhrase(back, now) : (soonest?.resetsAt ?? null);
     return { figure: OUT_OF_USAGE, refill: at ? `Refills ${at}` : null, count, needsYou };
   }
-  // The total across every account, as the Usage view's hero says it.
+  // The total across every account, as the Usage view's hero says it, and
+  // the accounts that figure is of: an account not read yet isn't in it, so
+  // "72% left · 4 accounts" would claim two it never counted.
   return {
     figure: total.counted > 1 ? total.figure : `${total.figure} ${total.across}`,
     refill: total.refill ? `Refills in ${total.refill.in}` : null,
-    count,
+    count: total.counted > 1 ? plural(total.counted, 'account') : null,
     needsYou,
   };
 }

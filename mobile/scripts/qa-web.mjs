@@ -3199,6 +3199,13 @@ async function main() {
     await sleep(4000);
     await each([
       {
+        name: 'usage-glance',
+        route: '/agents',
+        ready: 'Agents',
+        check:
+          'Under the Agents title, one compact card before the first row: "Usage" over "72% left · 2 accounts", a refill chip and a chevron at the right, then a bar of one segment per account, the fullest first, with gaps and rounded ends; air above and below, neutral ink',
+      },
+      {
         name: 'usage-total',
         route: '/usage',
         ready: 'Usage',

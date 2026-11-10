@@ -92,17 +92,59 @@ function SameNotes({ glance }: { glance: UsageGlance }) {
   );
 }
 
+/** When a limit refills, as the desk's chip: a refill mark and the countdown. */
+export function RefillChip({ text, label }: { text: string; label?: string }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View
+      style={styles.chip}
+      accessible={!!label}
+      accessibilityLabel={label}
+      importantForAccessibility={label ? 'yes' : 'no-hide-descendants'}
+    >
+      <Icon
+        name="arrow.clockwise"
+        size={iconSize.micro}
+        color={colors.textSecondary}
+        fallback={
+          <T variant="caption" color={colors.textSecondary}>
+            ⟳
+          </T>
+        }
+      />
+      <T
+        variant="caption"
+        color={colors.textSecondary}
+        numberOfLines={1}
+        maxFontSizeMultiplier={CHIP_SCALE}
+        style={styles.figure}
+      >
+        {text}
+      </T>
+    </View>
+  );
+}
+
+/** A chip's words grow with Dynamic Type only so far: they sit on a line with a figure. */
+const CHIP_SCALE = 1.6;
+
 /**
- * The Agents list's usage line, as the desk sidebar's row says it: the total
- * ("72% left · 2 accounts"), the total bar and "Refills in 2d 4h". Amber
- * only when the user must act. Opens Usage.
+ * The Agents list's usage glance, as the desk sidebar's row says it, as one
+ * compact card: "Usage", the total across every account ("72% left · 2
+ * accounts", `usageGlance.total`, never the account in use), the next refill
+ * as a chip, and the total bar under it, a segment per account, fullest
+ * first. Amber only when the user must act. Opens Usage.
  */
 export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   if (glance.keys.length === 0) return null;
-  const { row } = glance;
-  const count = glance.total.left !== null ? row.count : null;
+  const { row, total } = glance;
+  const count = total.left !== null ? row.count : null;
+  // Out everywhere, the refill is a moment ("Refills Sat 10:00 AM"); otherwise a countdown.
+  const out = glance.tone === 'limited';
+  const chip = out ? row.refill : total.refill ? total.refill.in : null;
   const label = `Usage: ${[row.figure, count, row.refill].filter(Boolean).join('. ')}`;
   return (
     <Pressable
@@ -110,30 +152,31 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
       accessibilityLabel={label}
       accessibilityHint="Every account, its limits and where its usage went"
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && PRESSED]}
+      style={({ pressed }) => [styles.glance, pressed && PRESSED]}
     >
-      <T
-        variant="small"
-        color={row.needsYou ? colors.accentWarning : colors.textPrimary}
-        numberOfLines={1}
-      >
-        <T variant="small" color={colors.textMuted}>
-          Usage{' '}
-        </T>
-        {row.figure}
-        {count && (
-          <T variant="small" color={colors.textMuted}>
-            {' '}
-            · {count}
+      <View style={styles.glanceHead}>
+        <View style={styles.grow}>
+          <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={CHIP_SCALE}>
+            Usage
           </T>
-        )}
-      </T>
-      {glance.total.segments.length > 0 && <TotalBar total={glance.total} />}
-      {!!row.refill && (
-        <T variant="caption" color={colors.textMuted} numberOfLines={1}>
-          {row.refill}
-        </T>
-      )}
+          <T
+            variant="headline"
+            color={row.needsYou ? colors.accentWarning : colors.textStrong}
+            numberOfLines={1}
+          >
+            {row.figure}
+            {count && (
+              <T variant="small" color={colors.textMuted}>
+                {' '}
+                · {count}
+              </T>
+            )}
+          </T>
+        </View>
+        {!!chip && <RefillChip text={chip} />}
+        <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
+      </View>
+      {total.segments.length > 0 && <TotalBar total={total} />}
     </Pressable>
   );
 }
@@ -539,7 +582,18 @@ export function KeyCard({
 }
 
 const useStyles = makeStyles((colors) => ({
-  track: { flexDirection: 'row', gap: space['2xs'] },
+  track: { flexDirection: 'row', gap: space.xs },
+  glance: {
+    gap: space.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    backgroundColor: colors.surfacePanel,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.cardBorder,
+    boxShadow: depthOf(colors).card,
+  },
+  glanceHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   answer: { gap: space.xs },
   legendRow: {
     flexDirection: 'row',
@@ -549,7 +603,12 @@ const useStyles = makeStyles((colors) => ({
   },
   figure: { fontVariant: ['tabular-nums'] },
   chip: {
-    paddingHorizontal: space.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: space['2xs'],
     borderRadius: radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderDefault,
@@ -590,7 +649,7 @@ const useStyles = makeStyles((colors) => ({
   numNarrow: { width: space['2xl'] * 2, textAlign: 'right', fontVariant: ['tabular-nums'] },
   seg: {
     flex: 1,
-    height: space.xs,
+    height: space.tight,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceControl,
     overflow: 'hidden',
@@ -606,7 +665,6 @@ const useStyles = makeStyles((colors) => ({
   legend: { gap: space['3xs'] },
   grow: { flex: 1, minWidth: 0 },
   pace: { flexDirection: 'row', alignItems: 'center', gap: space['2xs'] },
-  row: { gap: space['2xs'] },
   card: {
     gap: space.sm,
     padding: space.lg,
