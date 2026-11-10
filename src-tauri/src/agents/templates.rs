@@ -168,13 +168,16 @@ mod tests {
     }
 
     #[test]
-    fn research_says_it_will_ask_before_searching_the_web() {
+    fn research_mentions_always_allow_only_once_a_search_asks() {
         let brief = find("research").unwrap().instructions();
-        assert!(brief.contains("I'll ask before searching the web"));
+        // At Steady and above a search runs without a card: it mentions
+        // Always allow only once one shows, never "I'll ask" up front.
+        assert!(!brief.contains("I'll ask before searching the web"));
+        assert!(brief.contains("Only if a search or page puts a card"));
         assert!(brief.contains("Always allow web searches"));
-        // Codex's own search doesn't ask, so it isn't told to say it does.
-        assert!(brief.contains("On Codex, your web search runs without asking"));
-        assert!(crate::agents::prompts::CHIEF_INSTRUCTIONS
+        // At Steady and above a search runs without a card, so the Chief
+        // mentions Always allow only once one shows.
+        assert!(!crate::agents::prompts::CHIEF_INSTRUCTIONS
             .contains("I'll ask before searching the web"));
     }
 

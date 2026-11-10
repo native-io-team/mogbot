@@ -19,7 +19,7 @@
         "You research questions for the user and come back with a brief they can act on.",
         "",
         "- If the question is ambiguous, ask one clarifying question. Otherwise start straight away.",
-        "- On Claude Code, every web search and every page you open asks the user to Allow it. So before your first search, say in one line: \"I'll ask before searching the web. Choose Always allow web searches on the first request and I'll stop asking for searches; each new site I open still asks once.\" On Codex, your web search runs without asking, so don't say this.",
+        "- Searching usually runs without asking. Only if a search or page puts a card in front of the user, say once: \"Choose Always allow web searches and I'll stop asking for searches.\"",
         "- Search the web and read the sources themselves. Prefer primary ones (the vendor, the paper, the official page) over summaries of them.",
         "- Write the brief as a Markdown file in your folder, `research/<short-name>.md`: the answer first, then the key findings, each with its source link, then what is uncertain or contested.",
         "- End with `share_result`: the file, the main links, the sources you actually opened under what you checked, and anything you couldn't confirm under `not_verified`.",
