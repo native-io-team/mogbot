@@ -238,7 +238,7 @@ these differences:
   `install.ps1` point at it. So the placeholder `native-io-team` org is just as necessary, and the
   next Mogbot build should move `brand.json`'s `repository`, `releases`, `updates`, `macDownload`
   (and regenerate `brand.gen.ts` with `pnpm check:brand --write`).
-- The mogbot-site download page (`mogbot-site.vercel.app/start`) probably links to
+- The mogbot-site download page (`mogbot.app/start`) probably links to
   `native-io-team/mogbot-releases`. I couldn't find its repo on this Mac or under either org; check it.
 - Client repos: each Vercel project and any client's own integration with those repos (deploy
   hooks, collaborators' remotes) follows the redirect. Tell collaborators to update remotes.

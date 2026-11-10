@@ -191,7 +191,7 @@ tests that read doc paths. Run `pnpm check:all` after the move.
 
 | File | State after this pass |
 | --- | --- |
-| `README.md` | Already written for the public: what it is, screenshots (`docs/images/readme/`), build from source, contributing, licence. **Changed**: a Download section leading with <https://mogbot-site.vercel.app/start> (HTTP 200 checked) and the releases repo, and Status no longer claims "no signed download, no TestFlight, no update feed" (`brand.json` now sets all three) |
+| `README.md` | Already written for the public: what it is, screenshots (`docs/images/readme/`), build from source, contributing, licence. **Changed**: a Download section leading with <https://mogbot.app/start> (HTTP 200 checked) and the releases repo, and Status no longer claims "no signed download, no TestFlight, no update feed" (`brand.json` now sets all three) |
 | `CONTRIBUTING.md` | Exists, 500 lines, Mogbot-aware. Optional: add the DCO line |
 | `SECURITY.md` | **Rewritten** for Mogbot. Contact juliangalluzzois@gmail.com, GitHub private reporting once public, Mogbot logs path, scope covering the approval broker, phone pairing, Remote Access and the Chrome extension. It previously pointed at Ship Studio's advisories and Windows paths |
 | `CODE_OF_CONDUCT.md` | **Rewritten**: no Ship Studio name, no Ship Studio community Slack, email contact |
@@ -224,9 +224,9 @@ since renaming touches workspace references.
 | `links.securityAdvisories` | null | `https://github.com/native-io-team/mogbot/security/advisories/new` |
 | `links.discussions` | null | The repo's Discussions URL, once Discussions is enabled |
 | `links.companionSource` | null (a downloaded `.app` can't build the phone app) | This repo's git URL |
-| `links.website` | null | `https://mogbot-site.vercel.app` (or the final domain) |
+| `links.website` | null | `https://mogbot.app` (or the final domain) |
 | `links.community` | null | Only if there is a community space |
-| `links.macDownload` | `https://github.com/native-io-team/mogbot-releases` | Consider `https://mogbot-site.vercel.app/start` |
+| `links.macDownload` | `https://github.com/native-io-team/mogbot-releases` | Consider `https://mogbot.app/start` |
 | `links.starterRepoBase` | `https://github.com/ship-studio` | **Tied to the org rename** (see `org-rename-plan-2026-11-10.md`): starters clone from the Ship Studio org |
 | `repository` | `https://github.com/native-io-team/mogbot` | Unchanged, unless Mogbot moves org |
 

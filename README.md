@@ -107,7 +107,7 @@ Mac proves it's yours. Nothing passes through our servers.
 
 ## Download
 
-**[Get it for your Mac](https://mogbot-site.vercel.app/start)**, and the phone
+**[Get it for your Mac](https://mogbot.app/start)**, and the phone
 app from the same page (a public TestFlight beta for iPhone). Release builds
 are also on [GitHub Releases](https://github.com/native-io-team/mogbot-releases/releases).
 
