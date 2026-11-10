@@ -297,7 +297,7 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
           }
           if (!mounted) return;
           if (resolved === null) {
-            const message = `${command}: not found — it doesn't appear to be installed on this computer.`;
+            const message = `${command}: not found — it doesn't appear to be installed on this Mac.`;
             logger.warn('[OnboardingTerminal] Binary not found — skipping spawn', { command });
             terminalRef.current?.write(
               `\r\n\x1b[31m${message}\x1b[0m\r\n` +

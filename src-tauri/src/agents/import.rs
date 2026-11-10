@@ -415,10 +415,10 @@ mod tests {
             .iter()
             .map(|r| (r.agent.as_str(), r.detail.as_str()))
             .collect();
-        assert_eq!(set[0], ("Finance", "every weekday at 09:00"));
+        assert_eq!(set[0], ("Finance", "every weekday at 9:00 AM"));
         assert_eq!(set[1], ("Finance", "every 2 hours"));
         assert!(set[2].1.starts_with("once, "), "{}", set[2].1);
-        assert_eq!(set[3], ("Chief of Staff", "every day at 07:30"));
+        assert_eq!(set[3], ("Chief of Staff", "every day at 7:30 AM"));
         assert_eq!(set.len(), 4);
 
         let refused: Vec<(&str, &str)> = summary
@@ -452,7 +452,7 @@ mod tests {
         assert_eq!(store::find("Finance").unwrap().unwrap().check_ins.len(), 3);
         assert_eq!(
             again.routines_set[0].detail,
-            "every weekday at 09:00 (already set)"
+            "every weekday at 9:00 AM (already set)"
         );
         assert_eq!(again.routines_refused.len(), 3);
 
@@ -552,8 +552,8 @@ mod tests {
             .map(|o| o.detail.as_str())
             .collect();
         assert!(
-            said.contains(&"every month on the last Friday at 16:00")
-                && said.contains(&"every 3 months on the 15th at 09:00 (Jan, Apr, Jul and Oct)"),
+            said.contains(&"every month on the last Friday at 4:00 PM")
+                && said.contains(&"every 3 months on the 15th at 9:00 AM (Jan, Apr, Jul and Oct)"),
             "{said:?}"
         );
         store::set_root_for_tests(None);

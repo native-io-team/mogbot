@@ -52,6 +52,15 @@
   cursor: pointer;
 }
 
+.agent-editor__look-toggle[data-open] {
+  align-items: center;
+  justify-content: center;
+  width: var(--agent-key-size-md);
+  height: var(--agent-key-size-md);
+  color: var(--text-secondary);
+  background: var(--surface-control);
+}
+
 .agent-editor__look-toggle:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);

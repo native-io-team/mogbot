@@ -121,7 +121,7 @@ export default function Usage() {
         </SheetTitle>
 
         {context && (
-          <Section title="Context">
+          <Section title="Conversation length">
             <View style={styles.block}>
               <MeterRow
                 meter={context}

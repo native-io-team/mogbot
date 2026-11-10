@@ -79,6 +79,9 @@ pub struct AgentsOverview {
     pub independence: agents::independence::Level,
     /// Whether "bring your agents from another assistant?" was answered.
     pub import_choice: agents::import_choice::Choice,
+    /// This Mac shows a 24-hour clock (`agents::clock`), so the desk and the
+    /// phone write times the way the Mac's own sentences do.
+    pub hour24: bool,
 }
 
 /// Store work (file reads and writes) on a blocking thread, off the async
@@ -131,6 +134,7 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
         defaults,
         independence: agents::independence::level(),
         import_choice: agents::import_choice::choice(),
+        hour24: agents::clock::hour24(),
     })
 }
 
@@ -1283,8 +1287,8 @@ pub async fn agents_conversation_routine(
     conversation_id: String,
 ) -> Result<conversations::Conversations, CommandError> {
     let id = agent_id.clone();
-    let list = blocking(move || conversations::move_routine(&id, &routine_id, &conversation_id))
-        .await?;
+    let list =
+        blocking(move || conversations::move_routine(&id, &routine_id, &conversation_id)).await?;
     let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
     Ok(list)
 }

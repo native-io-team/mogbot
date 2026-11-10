@@ -12,7 +12,12 @@ vi.mock('../../lib/companion', async (importOriginal) => {
   return { ...actual, getPhoneStatus };
 });
 
-import { ChiefPhoneOffer, PHONE_OFFER_KEY, reachedFirstResult } from './ChiefPhoneOffer';
+import {
+  ChiefPhoneOffer,
+  PHONE_OFFER_KEY,
+  PHONE_OFFER_NOTE,
+  reachedFirstResult,
+} from './ChiefPhoneOffer';
 
 const msg = (kind: AgentMessage['kind'], id: string): AgentMessage => ({
   id,
@@ -47,6 +52,11 @@ describe('reachedFirstResult', () => {
 });
 
 describe('ChiefPhoneOffer', () => {
+  it('doesn’t promise ten minutes while there is no App Store app', () => {
+    expect(PHONE_OFFER_NOTE).not.toMatch(/^.*About ten minutes\.$/);
+    expect(PHONE_OFFER_NOTE).toMatch(/no App Store app yet/);
+  });
+
   beforeEach(() => {
     localStorage.clear();
     getPhoneStatus.mockReset().mockResolvedValue({ devices: [] });

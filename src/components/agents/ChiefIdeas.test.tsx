@@ -37,13 +37,13 @@ describe('the Chief’s ideas: the catalogue', () => {
   });
 
   it('what reaches others or the repo waits for the user', () => {
-    for (const id of ['ship-fixes', 'client-brief', 'inbox']) {
+    for (const id of ['ship-fixes', 'client-brief', 'inbox', 'invoices']) {
       expect(findIdea(id)?.text).toMatch(/without (me|my Allow)/);
     }
   });
 
   it('says up front when it needs something set up, and that the Chief does it', () => {
-    for (const id of ['ship-fixes', 'inbox']) {
+    for (const id of ['ship-fixes', 'inbox', 'invoices']) {
       expect(findIdea(id)?.what).toMatch(/Your Chief helps you connect/);
     }
   });
@@ -53,6 +53,15 @@ describe('the Chief’s ideas: the catalogue', () => {
     expect(launch.text).toMatch(/in a room/);
     expect(launch.what).toMatch(/in a room with your Chief/);
     expect(launch.what).not.toMatch(/Put them in a room/);
+  });
+
+  it('speaks to people who aren’t developers: no jargon on a chip, and work beyond code', () => {
+    for (const chip of CHIEF_CHIPS) {
+      expect(chip.label).not.toMatch(/triage|crew|repo|deploy|GitHub/i);
+    }
+    // A small business and a student each find their first job in the gallery.
+    expect(findIdea('invoices')?.label).toMatch(/invoices/i);
+    expect(findIdea('research')?.label).toMatch(/research/i);
   });
 
   it('is name-free', () => {

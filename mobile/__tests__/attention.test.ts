@@ -110,6 +110,13 @@ describe('attention', () => {
         detail: '@@ -18,3 +18,3 @@\n-  <h1>Old</h1>\n+  <h1>New</h1>',
       })
     ).toBe('Wants to edit Hero.tsx');
+    // A newer Mac's plain title reads the same on the row.
+    expect(
+      askingLine({
+        title: 'Edit Hero.tsx?',
+        detail: '@@ -18,3 +18,3 @@\n-  <h1>Old</h1>\n+  <h1>New</h1>',
+      })
+    ).toBe('Wants to edit Hero.tsx');
     expect(
       askingLine({ title: 'Edit a file', detail: '--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@' })
     ).toBe('Edit a file');

@@ -1,5 +1,5 @@
 /**
- * "Bring your agents from another assistant?" — asked once, at the top of
+ * "Already have agents in another assistant?" — asked once, at the top of
  * the phone's home, for an install that never answered it. The answer is
  * the Mac's (`agents.overview`'s `importChoice`, set with
  * `agents.setImportChoice`), so the desk and the phone stop asking
@@ -10,6 +10,11 @@
  */
 
 import { useRouter } from 'expo-router';
+import {
+  IMPORT_CHOICE_BRING,
+  IMPORT_CHOICE_NOTE,
+  IMPORT_CHOICE_TITLE,
+} from '@shipstudio/companion-protocol';
 import { useState } from 'react';
 import { Card, ACTION } from './surfaces';
 import { Button } from './ui';
@@ -42,15 +47,13 @@ export function ImportChoiceCard() {
   return (
     <Card
       icon="square.and.arrow.down"
-      title="Bring your agents from another assistant?"
-      note={
-        error ?? 'From Grok, ChatGPT, Claude or anything else. Nothing is created until you say so.'
-      }
+      title={IMPORT_CHOICE_TITLE}
+      note={error ?? IMPORT_CHOICE_NOTE}
       testID="import-choice-card"
       actions={
         <>
           <Button
-            title="No thanks"
+            title="Start fresh"
             variant="outline"
             busy={busy}
             disabled={busy}
@@ -58,7 +61,7 @@ export function ImportChoiceCard() {
             style={ACTION}
           />
           <Button
-            title="Bring my agents"
+            title={IMPORT_CHOICE_BRING}
             variant="answer"
             disabled={busy}
             onPress={() => router.push('/import')}

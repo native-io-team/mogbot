@@ -193,7 +193,17 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
             <p className="usage-hero__eyebrow">
               {glance.keys.length === 1 ? 'Your account' : 'Your accounts, together'}
             </p>
-            <h2 className="usage-hero__headline">{glance.headline}</h2>
+            {glance.unread ? (
+              // Nothing read yet: the account, and one quiet line. Display size is for a reading.
+              <>
+                <h2 className="usage-hero__name">
+                  {glance.keys.length === 1 ? glance.keys[0].name : glance.summary}
+                </h2>
+                <p className="usage-hero__reset">No usage reading yet.</p>
+              </>
+            ) : (
+              <h2 className="usage-hero__headline">{glance.headline}</h2>
+            )}
             {glance.estimate && (
               <p className="usage-hero__estimate">{glance.estimate}. An estimate, not a reading.</p>
             )}

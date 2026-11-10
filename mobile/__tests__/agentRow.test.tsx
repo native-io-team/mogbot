@@ -140,16 +140,11 @@ describe('AgentRow', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('drops a role squeezed past reading, and keeps one with room', async () => {
+  it('leaves the role off the row: cut beside the name it said nothing', async () => {
     const fin = agent({ id: 'fin', name: 'Finance', role: 'Invoices and spend', unread: 0 });
     await render(<AgentRow agent={fin} caps={full} live onAction={jest.fn()} />);
-    const layout = (w: number) => ({ nativeEvent: { layout: { width: w, height: 16 } } });
-    await fireEvent(screen.getByText('Invoices and spend'), 'layout', layout(400));
-    expect(screen.getByText('Invoices and spend')).toBeTruthy();
-    // "Invo…": gone, rather than a stub.
-    await fireEvent(screen.getByText('Invoices and spend'), 'layout', layout(30));
     expect(screen.queryByText('Invoices and spend')).toBeNull();
-    // The name still reads, and the row still opens the chat.
+    // The name reads, and the row still opens the chat.
     await fireEvent.press(screen.getByRole('button', { name: /^Finance\./ }));
     expect(mockNavigate).toHaveBeenCalledTimes(1);
   });

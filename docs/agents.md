@@ -35,7 +35,7 @@ top of the agent list, shown only while an agent waits on you (a request, or a
 turn that didn't finish; the same set ⌘J visits), and from ⌘K. A usage limit
 is not waiting on you — it resets by itself — so it isn't counted: What's in
 flight lists it under **Paused**, and in a chat it is a quiet centred line
-with "Retry at 4:45 AM" (and a quiet "Try anyway", since the limit may have
+with "Retry at 4:45 AM" (and a quiet "Try now", since the limit may have
 lifted early), not a tinted box. There is no
 icon for it: an unlabeled one was three names for one place. Its foot has the Phone row (the companion
 app: pair, or which phone is connected); remote access, for driving the app
@@ -54,7 +54,7 @@ user answers, on the desk or the phone. Three starters and **More ideas…**,
 from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
 with one blank at its end; none sends by itself.
 
-The chips are **Brief me every morning…**, **Run an inbox triage crew…** and
+The chips are **Brief me every morning…**, **Sort my inbox, draft replies…** and
 **Run my launch as a team…**: one per group, recognisable to someone who
 isn't a developer, and two of them need nothing set up, so the first result
 can land in the first minutes (the morning brief asks for its first one
@@ -81,9 +81,14 @@ asks for GitHub before showing anything; they are in the gallery.
   your team…"), grouped On a schedule / When something happens / Agents
   together: watch competitors weekly (researcher + analyst, one brief), babysit
   errors hourly (reproduce, fix in a copy, a card to keep; one line when
-  nothing broke, since a routine always leaves its line), an inbox triage
-  crew (sorter + drafter through the user's email app; sending is always an
-  Allow card), and two agents arguing it out. Its foot links Ready-made
+  nothing broke, since a routine always leaves its line), chase unpaid
+  invoices every Monday (finder + reminder drafter, one card, nothing sent
+  without Allow), sort the inbox and draft replies (sorter + drafter through
+  the user's email app; sending is always an Allow card), research it and
+  write it up (researcher + writer, every source linked, a weekly update),
+  and two agents arguing it out. Invoices and research were added after a
+  beginner walk-through (docs/internal/persona-beginners-2026-11-09.md):
+  a small-business owner and a student found nothing that was theirs. Its foot links Ready-made
   agents and the Phone panel.
 
 **Setup is step one, never a dead end.** An idea may need what this Mac
@@ -460,8 +465,14 @@ all of them, so whatever it remembers in one it knows in the others.
   on, and where a message sent without naming one goes). Absent, the list is
   the first conversation alone, titled from the first thing the user said in
   it. A conversation is named by the first message the user sends in it
-  (`title_from`: first line, quotes stripped, 60 characters at a word) until
-  they rename it; renaming to nothing gives it back to its first message. At
+  (`conversation_title::auto_title`, no model call: the first sentence of its
+  first own line, without Markdown, quotes or openers like "can you" and
+  "please", sentence case, at most 40 characters cut at a word, no trailing
+  punctuation) until they rename it; renaming to nothing gives it back to its
+  first message. An automatic title an older build stored is tidied the same
+  way on read, and the desk and phone tidy one from an older Mac
+  (`conversationAutoTitle`; both held to `conversation-title-cases.json`). A
+  typed name is shown as typed (up to 60 characters). At
   most 200 per agent (refused past that; nothing is ever dropped).
 - **Sessions.** The agent's own session fields (`session_id`, `new_engine`,
   `context`, its session on the other engine while `away`) belong to the
@@ -1244,9 +1255,10 @@ thing:
 
 | Surface | Where "needs you" shows | Not also |
 | --- | --- | --- |
-| Sidebar | The bell beside the sidebar toggle counts it (`InFlightBell`, the amber pill wash), named **Needs you** as the phone's tab is ("Needs you · 2"); it opens What's in flight, whose first section is Needs you. Each waiting agent's row says it once, in its **Needs your OK** pill | No "Needs your OK · N" row in the list; no amber dot at the row's right |
+| Sidebar | The bell beside the sidebar toggle counts it (`InFlightBell`, the amber pill wash), named **Needs you** ("Needs you · 2"); it opens What's in flight, whose first section is Needs you. Each waiting agent's row says it once, in its **Needs your OK** pill | No "Needs your OK · N" row in the list; no amber dot at the row's right |
 | Open chat | The card itself in its own chat; in any other chat the requests bar above the composer | Not in the header |
 | What's in flight | Its row under Needs you, with the cards answerable in place | |
+| Phone | The **Catch up** tab, its badge counting its rows (cards, not agents); the app opens there when anything waits (docs/mobile.md, "Catch up") | No bar for it on Agents; each waiting row keeps only its own label |
 
 The sidebar's right-hand column has one meaning: **unread** (the dot), with
 the working spinner as its only other mark. A row's state (waiting on you,
@@ -3463,7 +3475,7 @@ review card in the Chief's chat, and the user imports what they keep
 
 **Asked once, then in the background.** Onboarding no longer asks: it
 ends on the Chief's greeting, and under the greeting and its starters one
-card asks "Bring your agents from another assistant?" (`ImportChoiceCard`;
+card asks "Already have agents in another assistant?" (`ImportChoiceCard`;
 at the top of the chat once there is a conversation), as does the phone's
 home, once. The answer is the Mac's
 (`agents::import_choice`, `import-choice.json` beside the agents; carried on
@@ -5264,7 +5276,8 @@ Agents run inside the app, so staying alive, and being reachable while
 the window is closed, is part of the product.
 
 **Menu-bar icon.** A monochrome template image (`src-tauri/icons/tray/*.svg`,
-rasterised by `pnpm icons:tray`): a placeholder ring (until real branding), with a dot while
+drawn by `pnpm icons:build`, re-rasterised by `pnpm icons:tray`): the mark (the M on its own,
+on a pixel grid), with a dot while
 anything needs you. The menu is a pure function of the agents and their live
 status (`tray::menu_model`), rebuilt at most every 300ms on `agents://status`
 and `agents://registry`:

@@ -167,7 +167,7 @@
     {
       "path": "src/styles/components/text-button.css",
       "token": "--space-02",
-      "count": 2,
+      "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {

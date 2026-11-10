@@ -252,7 +252,7 @@ export function InFlightBell({
   current: boolean;
   onOpen: () => void;
 }) {
-  // "Needs you", as the phone's tab says it: what the bell counts. The view
+  // "Needs you": what the bell counts (the phone's place for it is Catch up). The view
   // it opens leads with its Needs you section (What's in flight is the rest).
   const label = count > 0 ? `Needs you · ${count}` : 'Needs you · nothing right now';
   return (

@@ -37,3 +37,26 @@ export function fitMenu(
       : other;
   return { side, maxHeight: Math.max(0, Math.floor(room[side])) };
 }
+
+/**
+ * Where a portalled menu sits across the window: against the trigger's edge
+ * asked for while the menu fits there, else against its other edge (a menu
+ * from a trigger near the right edge lines up with the trigger's right), and
+ * held `MENU_EDGE` inside the window when neither fits. Answers the one
+ * inline edge to set, so a menu whose width changes stays put on that edge.
+ */
+export function fitMenuX(
+  trigger: { left: number; right: number },
+  viewportWidth: number,
+  menuWidth: number,
+  preferred: 'left' | 'right'
+): { left: number } | { right: number } {
+  const fitsFromLeft = trigger.left + menuWidth <= viewportWidth - MENU_EDGE;
+  const fitsFromRight = trigger.right - menuWidth >= MENU_EDGE;
+  const fromLeft = { left: Math.max(MENU_EDGE, trigger.left) };
+  const fromRight = { right: Math.max(MENU_EDGE, viewportWidth - trigger.right) };
+  if (preferred === 'left' ? fitsFromLeft : !fitsFromRight && fitsFromLeft) return fromLeft;
+  if (fitsFromRight) return fromRight;
+  // Wider than either side allows: as far left as keeps its right edge in.
+  return { left: Math.max(MENU_EDGE, viewportWidth - MENU_EDGE - menuWidth) };
+}

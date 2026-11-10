@@ -63,6 +63,13 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
     group: 'schedule',
   },
   {
+    id: 'invoices',
+    label: 'Chase unpaid invoices',
+    what: 'Every Monday an agent finds what’s overdue and another drafts a polite reminder for each. You get one card with the list and the drafts, and nothing is sent without your Allow. Your Chief helps you connect where your invoices live first.',
+    text: 'Every Monday at 9am, have one agent check which of my invoices are overdue and another draft a polite reminder for each, then send me one card with the list and the drafts. Nothing is sent without my Allow. My invoices are in: ',
+    group: 'schedule',
+  },
+  {
     id: 'errors',
     label: 'Babysit my errors',
     what: 'Every hour an agent checks a project for new errors, reproduces what broke and fixes it in its own copy, for you to keep or discard. When nothing broke, it says so in a line.',
@@ -78,7 +85,7 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
   },
   {
     id: 'inbox',
-    label: 'Run an inbox triage crew',
+    label: 'Sort my inbox, draft replies',
     what: 'One agent sorts new email, another drafts the replies worth sending, and nothing is sent without your Allow. Your Chief helps you connect your email first.',
     text: 'Set up an inbox crew: through the day, one agent sorts my new email into needs me, can wait and ignore, and another drafts replies to the ones that need me. Nothing is sent without my Allow. My email is in: ',
     group: 'trigger',
@@ -88,6 +95,13 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
     label: 'Run my launch as a team',
     what: 'A strategist, a writer and a builder in a room with your Chief, so you talk to the whole team at once, a standup from them every weekday at 9am, and your Chief keeping the plan.',
     text: 'Run my launch as a team: create a strategist, a writer and a builder, put them and yourself in a room so I can talk to everyone at once, keep the plan yourself in a file, and every weekday at 9am collect a standup from each of them and send me one summary with what’s blocked and what needs me. The launch: ',
+    group: 'together',
+  },
+  {
+    id: 'research',
+    label: 'Research it and write it up',
+    what: 'A researcher gathers sources and a writer turns them into a clear draft with every source linked. Each week it looks for anything new and tells you what changed.',
+    text: 'Have a researcher dig into this and collect good sources, and a writer turn them into a clear draft with every source linked. Then every week, look for new sources, update the draft and tell me what changed. The topic: ',
     group: 'together',
   },
   {

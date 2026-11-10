@@ -130,31 +130,52 @@ fn the_cards_say_what_it_wants_and_what_allow_gives() {
     let what = describe(def("messages_send"), &op, &tz());
     // A send shows the exact words.
     assert!(what.contains("“Running 10 minutes late”"), "{what}");
-    assert!(what.contains("+15551234567"), "{what}");
+    // The number as people write it.
+    assert!(what.contains("+1 (555) 123-4567"), "{what}");
 
-    let (title, body) = card(
+    let c = card(
         Step::Grant(Access::Read),
         "Recruiter",
         App::Calendar,
         "read x",
     );
-    assert_eq!(title, "Allow Recruiter to read your Calendar?");
-    assert!(body.contains("asks you first") && body.contains("What it can reach"));
-    let (title, body) = card(Step::Grant(Access::Full), "Recruiter", App::Messages, &what);
-    assert_eq!(title, "Allow Recruiter to use your Messages?");
-    assert!(
-        body.starts_with("It wants to send +15551234567 this message"),
-        "{body}"
+    assert_eq!(c.title, "Allow Recruiter to read your Calendar?");
+    assert_eq!(
+        c.summary,
+        "It wants to read x.\n\nAllow lets Recruiter read your Calendar from now on."
     );
-    assert!(body.contains("Allow does this now"));
-    let (title, body) = card(
+    // How it works goes behind Details, not on the card.
+    assert!(c.more.contains("asks you first") && c.more.contains("What it can reach"));
+    let c = card(Step::Grant(Access::Full), "Recruiter", App::Messages, &what);
+    assert_eq!(c.title, "Allow Recruiter to use your Messages?");
+    assert!(
+        c.summary
+            .starts_with("It wants to send +1 (555) 123-4567 this message"),
+        "{}",
+        c.summary
+    );
+    assert!(c
+        .summary
+        .ends_with("Allow sends it and lets Recruiter read your Messages from now on."));
+    assert!(!c.summary.contains("macOS"));
+    let c = card(
         Step::Once,
         "Recruiter",
         App::Notes,
         "read one of your notes",
     );
-    assert_eq!(title, "Let Recruiter use your Notes?");
-    assert!(body.contains("outside this app") && body.contains("doesn't give it"));
+    assert_eq!(c.title, "Let Recruiter use your Notes?");
+    assert!(c.more.contains("outside this app") && c.more.contains("doesn't give it"));
+}
+
+#[test]
+fn phone_numbers_read_the_way_people_write_them() {
+    assert_eq!(display_handle("+15551234567"), "+1 (555) 123-4567");
+    assert_eq!(display_handle("5551234567"), "(555) 123-4567");
+    assert_eq!(display_handle("+447700900123"), "+447700900123");
+    assert_eq!(display_handle("sam@example.com"), "sam@example.com");
+    assert_eq!(display_handle("+1 (555) 123-4567"), "+1 (555) 123-4567");
+    assert_eq!(display_handle("Family"), "Family");
 }
 
 /* ------------------------------------------------------------ input */

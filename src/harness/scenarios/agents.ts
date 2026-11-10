@@ -14,7 +14,7 @@ export const MIN = 60_000;
 const DEMO_HOME = '/harness/agents-demo';
 export const now = Date.now();
 
-/** Tomorrow at a local wall-clock time, so fixtures agree with their own "at 09:00". */
+/** Tomorrow at a local wall-clock time, so fixtures agree with their own "at 9:00 AM". */
 const tomorrowAt = (hour: number, minute = 0) => {
   const d = new Date(now);
   d.setDate(d.getDate() + 1);
@@ -194,7 +194,7 @@ const OTHER_APP_PREVIEW = {
       plan: 'merge',
       messages: 214,
       memory: ['Lives in Lisbon', 'Has two cats', 'Prefers short replies'],
-      routines: [{ schedule: 'every weekday at 08:00', what: 'Brief me on the day.' }],
+      routines: [{ schedule: 'every weekday at 8:00 AM', what: 'Brief me on the day.' }],
       rules: ['npm test'],
     }),
     otherAgent('f1', 'Finance', 'Tracks spending and chases invoices', 'green', {
@@ -203,14 +203,14 @@ const OTHER_APP_PREVIEW = {
       memory: ['Accountant is Sam', 'Invoices go out on the 1st', 'Reports in EUR'],
       routines: [
         { schedule: 'every 2 hours', what: 'Check for new invoices.' },
-        { schedule: 'every Monday at 09:00', what: 'Send me last week’s spending.' },
+        { schedule: 'every Monday at 9:00 AM', what: 'Send me last week’s spending.' },
       ],
       secrets: ['Stripe key', 'Bank login'],
       rules: ['git push', 'example-bank.com'],
       project: '/Users/you/ShipStudio/books',
     }),
     otherAgent('t1', 'Travel', 'Plans trips and keeps bookings straight', 'blue', {
-      routines: [{ schedule: 'every Friday at 17:00', what: 'Check next week’s flights.' }],
+      routines: [{ schedule: 'every Friday at 5:00 PM', what: 'Check next week’s flights.' }],
     }),
     otherAgent('r1', 'Research', 'Reads so you don’t have to', 'purple', {
       plan: 'imported',
@@ -442,7 +442,7 @@ export const REVIEW = {
         {
           when: 'every weekday at 9am',
           what: 'Check for new invoices',
-          schedule: 'every weekday at 09:00',
+          schedule: 'every weekday at 9:00 AM',
         },
       ],
       logins: [
@@ -480,7 +480,7 @@ export const REVIEW = {
         {
           when: 'every friday at 5pm',
           what: 'Check next week’s flights',
-          schedule: 'every Friday at 17:00',
+          schedule: 'every Friday at 5:00 PM',
         },
       ],
       logins: [],
@@ -499,7 +499,7 @@ export const PLAYBACK = [
       { kind: 'job', text: 'My job: tracks spending and chases invoices' },
       {
         kind: 'routine',
-        text: 'Every weekday at 09:00: Check for new invoices (arrives paused: you switch it on)',
+        text: 'Every weekday at 9:00 AM: Check for new invoices (arrives paused: you switch it on)',
       },
       {
         kind: 'watch',
@@ -526,7 +526,7 @@ export const PLAYBACK = [
       { kind: 'job', text: 'My job: trips and bookings' },
       {
         kind: 'routine',
-        text: 'Every Friday at 17:00: Check next week’s flights (arrives paused: you switch it on)',
+        text: 'Every Friday at 5:00 PM: Check next week’s flights (arrives paused: you switch it on)',
       },
       { kind: 'keep', text: 'I’ll keep in mind: Passport renewal due March' },
       { kind: 'keep', text: 'I’ll keep in mind: Loyalty with TAP' },
@@ -615,7 +615,7 @@ export const HANDOFF_CARD = () =>
 
 /** A Slack ask, its answer, and the card holding the reply's exact words (fictional). */
 const SLACK_REPLY_TEXT =
-  'Drafted. Launch is Friday at 10:00; Sam owns the checklist and the post goes out at 10:30.';
+  'Drafted. Launch is Friday at 10:00 AM; Sam owns the checklist and the post goes out at 10:30 AM.';
 export const SLACK_CHAT = [
   msg('user', 'draft the launch note for #launch from the doc Sam shared', 6, {
     via: { source: 'slack', place: '#launch' },
@@ -973,7 +973,7 @@ const schedulePreview = (args: Record<string, unknown>) => {
     const [, y, m, d, h, min] = once.map(Number);
     return { nextAt: new Date(y, m - 1, d, h, min).getTime(), repeat: null };
   }
-  // "every 3 months on the last friday at 09:00": the last Friday of next month, as a stand-in.
+  // "every 3 months on the last friday at 9:00 AM": the last Friday of next month, as a stand-in.
   const monthly = /^every (?:month|(\d+) months) on (.+) at (\d{2}):(\d{2})/.exec(when);
   if (monthly) {
     const months = Number(monthly[1] ?? 1);
@@ -1488,7 +1488,8 @@ const searchAcme = (args: Record<string, unknown>) =>
           messageId: GUTTERS.id,
           ts: GUTTERS.ts,
           kind: GUTTERS.kind,
-          snippet: 'Read both. The guidelines want 24px gutters on mobile, so the stacked cards use that.',
+          snippet:
+            'Read both. The guidelines want 24px gutters on mobile, so the stacked cards use that.',
           conversation: 'first',
         },
       ]
@@ -2775,7 +2776,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-first-run',
     title: 'Agents — first open: the Chief of Staff says hello',
     looksRightWhen:
-      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Run an inbox triage crew, Run my launch as a team), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
+      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Sort my inbox, draft replies, Run my launch as a team), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
     command: 'agents.open',
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
@@ -3238,7 +3239,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-choice',
     title: 'Agents — an install that never decided about importing',
     looksRightWhen:
-      'At the top of the Chief’s chat, one calm card: a download icon, “Bring your agents from another assistant?”, one muted line (Grok, ChatGPT, Claude…; nothing is created until you say so), then “No thanks, start fresh” and a neutral “Bring my agents” on the right. The sidebar has New agent and no Import agents row.',
+      'At the top of the Chief’s chat, one calm card: a download icon, “Already have agents in another assistant?”, one muted line (Grok, ChatGPT, Claude…; nothing is created until you say so), then “No thanks, start fresh” and a neutral “Bring my agents” on the right. The sidebar has New agent and no Import agents row.',
     openSelector: AGENTS_TAB,
     requires: '[data-testid="agent-import-choice"]',
     commands: {
@@ -3437,11 +3438,46 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-conversations',
     title: 'Agents — several conversations with one agent, the switcher open',
     looksRightWhen:
-      'Acme Site’s chat. Beside its name in the header, a quiet button with a speech-bubble icon, “Plan the November launch email” (cut with … if it must) and an amber dot. Open under it, a menu: a search field, “New conversation” with a plus, a divider, the small heading “Conversations · memory is shared by all of them”, then four rows newest first: the launch email (a check, “4m ago”), “Chase the two overdue invoices” (“Needs your OK” and an amber dot), “Set up the weekly metrics report” (“3d ago”), “Draft the job post for a designer” (“6d ago”); then a divider and “Rename this conversation…” with a pencil. The chat shows only the launch conversation’s lines.',
+      'Acme Site’s chat. Beside its name in the header, a quiet button with a speech-bubble icon, “Plan the November launch email” (cut with … if it must) and an amber dot. Open under it, a menu: a search field, “New conversation” with a plus, a divider, the small heading “Recent”, then four rows newest first: the launch email on the selected fill in ordinary text colour (never accent), a check, “4m ago”, “Chase the two overdue invoices” (“Needs your OK” and an amber dot), “Set up the weekly metrics report” (“3d ago”), “Draft the job post for a designer” (“6d ago”); then a divider and “Rename this conversation…” with a pencil. The chat shows only the launch conversation’s lines.',
     openSelector: AGENTS_TAB,
     requires: '.agent-conversations__menu',
     steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-conversations__trigger' }],
     commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-conversations-narrow',
+    title: 'Agents — the conversation switcher open in a narrow window',
+    looksRightWhen:
+      'A 900px window. The conversation menu is open under its button and wholly inside the window: about 320px wide, its right edge in line with the button’s (or held 8px in from the window’s edge), the search field and every row whole, nothing clipped at the right.',
+    viewport: { width: 900, height: 800 },
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__menu',
+    steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-conversations__trigger' }],
+    commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-conversations-one-open',
+    title: 'Agents — one conversation, its menu open near the window’s right edge',
+    looksRightWhen:
+      'A 900px window. The header’s button is only the speech-bubble icon and chevron, beside Usage. Its menu is open and wholly inside the window, its right edge in line with the button’s: the search field, New conversation, “Recent”, then one row “I kind of like B with a hint of A” (sentence case, not the raw first message) on the selected fill in ordinary text colour with a check, then Rename this conversation….',
+    viewport: { width: 900, height: 800 },
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__menu',
+    steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-conversations__trigger' }],
+    commands: {
+      agents_overview: acmeWith(ACME_FULL),
+      agents_messages: messagesFor,
+      // As a Mac on an older build named it: the raw first line, clipped.
+      agents_conversations: (args: Record<string, unknown>) => {
+        const list = onlyFirst(args);
+        list.items[0] = {
+          ...list.items[0],
+          title: 'I Kind of like B with a hint of A. L…',
+          lastActivityAt: now - 4 * 60_000,
+        };
+        return list;
+      },
+    },
   },
   {
     id: 'agents-conversations-header',
@@ -3471,7 +3507,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-conversations-rename',
     title: 'Agents — renaming a conversation',
     looksRightWhen:
-      'A small dialog “Rename conversation”: a text field holding “Plan the November launch email” (selected), under it “Leave it empty to name it by its first message again.”, then Cancel and Rename on the right.',
+      'A small dialog “Rename conversation”: clear space under its header rule, then a text field holding “Plan the November launch email” (selected), under it “Leave it empty to name it by its first message again.”, then Cancel and Rename on the right.',
     openSelector: AGENTS_TAB,
     requires: '.agent-conversations__rename-form',
     steps: [

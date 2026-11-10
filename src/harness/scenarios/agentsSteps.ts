@@ -21,15 +21,15 @@ const DRAFT = {
     'You write the user’s weekly report every Friday from their notes folder and calendar.\n\n- Lead with what shipped, then what’s blocked and who can unblock it.\n- Keep it under 200 words; link to sources, never paste them.\n- Never post or send anything until the user has OK’d the draft.',
   routines: [
     {
-      when: 'every friday at 16:00',
+      when: 'every friday at 4:00 PM',
       note: 'Draft this week’s report from the notes folder and my calendar',
       then: [{ text: 'Post it to #team on Slack', askFirst: true }],
-      readsAs: 'every friday at 16:00',
+      readsAs: 'every friday at 4:00 PM',
     },
     {
       when: 'every monday at 9am',
       note: 'List what slipped last week and ask me what to carry over',
-      readsAs: 'every monday at 09:00',
+      readsAs: 'every monday at 9:00 AM',
     },
   ],
   apps: ['Slack', 'Google Calendar'],
@@ -118,7 +118,7 @@ export const agentsStepsScenarios: Scenario[] = [
     id: 'agents-describe-drafted',
     title: 'Agents — a drafted agent, one review before Create',
     looksRightWhen:
-      'After Draft it: a muted “Drafted from your description. Check it, then Create.” with Start over; the name “Weekly Report” on a teal badge, its role and briefing filled in and editable; then Routines as one bordered list: “every friday at 16:00” with its two steps numbered, the second “After your OK · Post it to #team on Slack”, and “every monday at 09:00”, both ticked; then one muted line “Uses Slack and Google Calendar. It asks you to connect them…”. No accent but the badge and Create.',
+      'After Draft it: a muted “Drafted from your description. Check it, then Create.” with Start over; the name “Weekly Report” on a teal badge, its role and briefing filled in and editable; then Routines as one bordered list: “every friday at 4:00 PM” with its two steps numbered, the second “After your OK · Post it to #team on Slack”, and “every monday at 9:00 AM”, both ticked; then one muted line “Uses Slack and Google Calendar. It asks you to connect them…”. No accent but the badge and Create.',
     openSelector: AGENTS_TAB,
     requires: '.agent-draft__routines',
     clipSelector: '.agent-editor',
@@ -152,7 +152,7 @@ export const agentsStepsScenarios: Scenario[] = [
     id: 'agents-steps-editor',
     title: 'Agents — editing a routine’s steps',
     looksRightWhen:
-      'The routine picker with When set to Weekly · Fri at 16:00, What filled, and under it step 2 as a row: a muted “2”, the step’s words, a “Your OK first” checkbox ticked and a quiet ✕; then “Add a step”. The echo says “2 steps · your OK before step 2”.',
+      'The routine picker with When set to Weekly · Fri at 4:00 PM, What filled, and under it step 2 as a row: a muted “2”, the step’s words, a “Your OK first” checkbox ticked and a quiet ✕; then “Add a step”. The echo says “2 steps · your OK before step 2”.',
     openSelector: AGENTS_TAB,
     requires: '.agent-steps__row',
     clipSelector: '.agent-schedule',

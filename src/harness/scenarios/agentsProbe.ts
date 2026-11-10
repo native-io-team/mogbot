@@ -420,7 +420,7 @@ export const agentsProbeScenarios: Scenario[] = [
         color: 'green',
         instructions: 'Remind the user to water the plants.',
         routines: [
-          { when: 'every day at 8am', note: 'Check the forecast', readsAs: 'every day at 08:00' },
+          { when: 'every day at 8am', note: 'Check the forecast', readsAs: 'every day at 8:00 AM' },
           {
             when: 'whenever it is dry',
             note: 'Remind me to water the plants',

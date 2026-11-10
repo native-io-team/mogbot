@@ -96,7 +96,7 @@ describe('usage accounts, on the phone', () => {
     await fireEvent.press(screen.getByLabelText('Try sam@example.com later'));
     expect(s.move).toHaveBeenCalledWith('claude', 0, 1);
     expect(screen.getByText(/Add or sign in to accounts on your Mac/)).toBeTruthy();
-    expect(screen.getByText('CLAUDE CODE ACCOUNTS')).toBeTruthy();
+    expect(screen.getByText('Claude Code accounts')).toBeTruthy();
   });
 
   it('an older Mac that can’t take a swap shows the list without the controls', async () => {

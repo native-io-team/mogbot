@@ -62,7 +62,7 @@ const CREATE_FLOW_EXIT_MESSAGES: Record<number, string> = {
   // problem (issue #841). describeProcessError recognizes the specific
   // filesystem/ownership causes before this; this is the honest fallback for
   // everything it couldn't name.
-  128: "The template couldn't be downloaded — git stopped with a fatal error. Check that your projects folder is on a connected, writable drive and that this computer can reach github.com, then try again.",
+  128: "The template couldn't be downloaded — git stopped with a fatal error. Check that your projects folder is on a connected, writable drive and that this Mac can reach github.com, then try again.",
 };
 
 /** Grouping for the template picker, so the grid isn't an undifferentiated list. */

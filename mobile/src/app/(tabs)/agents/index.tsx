@@ -194,7 +194,7 @@ export default function Agents() {
     // A Mac that removed this phone shows nothing of its agents: only the way back.
     if (!overview || removed) return [];
     // The Chief first, always; pinned; the rest (lib/home). What waits on you is
-    // the Needs you tab's, counted on its badge: no bar for it here too.
+    // the Catch up tab's, counted on its badge: no bar for it here too.
     const home = buildHome(overview.agents, live ? teamSetup : null);
     const out: Row[] = [];
     const add = (a: Agent) =>
@@ -486,7 +486,7 @@ function SectionHeader({
         maxFontSizeMultiplier={chromeScale}
         accessibilityRole="header"
       >
-        {label.toUpperCase()}
+        {label}
       </T>
       {action}
     </View>
@@ -597,7 +597,7 @@ const useStyles = makeStyles((colors) => ({
     paddingTop: space.lg,
     paddingBottom: space.xs,
   },
-  sectionLabel: { flex: 1, letterSpacing: 0.4 },
+  sectionLabel: { flex: 1 },
   sectionNext: { paddingTop: space.xl },
   quota: { paddingHorizontal: space.lg, paddingTop: space.md },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },

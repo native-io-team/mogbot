@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Rasterise the menu-bar icon sources (`src-tauri/icons/tray/*.svg`) into the
+ * Rasterise the menu-bar icon sources (`src-tauri/icons/tray/*.svg`, written by
+ * `scripts/build-icons.mjs`, which also rasterises them) into the
  * PNGs the backend embeds (`agents/tray.rs`).
  *
  * macOS draws a menu-bar icon 18pt tall, so each source is drawn at 36×36 for

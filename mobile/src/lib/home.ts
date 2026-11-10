@@ -4,7 +4,7 @@
  * Agents still being set up after an import are quiet: their logins and
  * hellos are the setup checklist's, in the Chief's chat, as on the desk.
  *
- * No bar for what waits on you: that is said once, by the Needs you tab's
+ * No bar for what waits on you: that is said once, by the Catch up tab's
  * count, and acted on there (docs/agents.md, "Needs you: one place per
  * surface"). A waiting agent's row keeps its own label (its pill), as the
  * desk sidebar's does.
@@ -54,5 +54,5 @@ export function buildHome(agents: Agent[], setup: TeamSetupView | null | undefin
   return { chief, pinned, rest, hidden, quiet };
 }
 
-/** "Setting up your team", as Needs you and Catch up both say it. */
+/** "Setting up your team", as Catch up and One at a time both say it. */
 export const SETUP_TITLE = 'Finish setting up your team';

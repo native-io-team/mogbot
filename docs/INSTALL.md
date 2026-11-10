@@ -11,6 +11,12 @@ to expect.
 
 1. Open this folder in **Claude Code** or **Codex** and say: *"Set this up on my
    Mac and phone. Follow docs/INSTALL.md."*
+   Never used either? Install the Claude desktop app
+   ([claude.ai/download](https://claude.ai/download)) and open its **Code**
+   tab, or the Codex app, sign in, and say: *"Download
+   https://github.com/native-io-team/mogbot into a folder in my home folder,
+   then set it up on my Mac and phone. Follow docs/INSTALL.md."* You won't
+   type any commands yourself.
 2. The agent installs the tools and builds the app (the first build takes
    10–25 minutes). It stops and asks you to do the things only you can do:
    type your Mac password, sign in in your browser, install apps on your
@@ -670,9 +676,11 @@ closed, agents report the browser as not connected.
 ### Step 18. First run choices
 
 **HUMAN:** *"Two things worth knowing. **How independent your agents are**:
-the app asked you once (Careful, Steady, Bold). You
-can change it any time by telling your Chief. Whatever you pick, anything that spends money, sends as you,
-publishes or deletes still asks you first. **Your team**: the Chief of Staff
+by default they work on this Mac on their own and ask before anything
+leaves it (sending, posting, spending). You can change it any time by
+telling your Chief ("ask me less", "ask me more") or in Settings →
+Independence. Even at the most independent setting, spending money,
+logins and deleting for good still ask you first. **Your team**: the Chief of Staff
 creates, changes and removes the other agents for you, and you can change an
 agent's instructions or routines just by asking in the chat. The Chief is also
 the team's **admin**: it can OK other agents' everyday local work for you, and
@@ -685,8 +693,8 @@ There's nothing to check here. Don't change these settings for the human.
 ### Step 19. Bring agents from Grok Bot or another assistant (optional)
 
 Only if the human already has agents in Grok Bot (or another assistant that
-can add an MCP connector). Otherwise: **Start fresh** on the app's last
-screen. Either way it's asked once; later, import is in ⌘K → Import agents,
+can add an MCP connector). Otherwise: **No thanks, start fresh** on the
+card under the Chief's first message. Either way it's asked once; later, import is in ⌘K → Import agents,
 Settings → Agents → Import, or the phone's ⋯ menu.
 
 **HUMAN:** *"The app's last screen asks **'You're ready. Bring your agents

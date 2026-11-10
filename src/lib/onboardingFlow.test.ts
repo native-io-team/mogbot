@@ -121,6 +121,19 @@ describe('the engine screens', () => {
     expect(fail.fix).toMatch(/Try again/);
   });
 
+  it('a network failure asks to check the Mac is online, not to reopen the app', () => {
+    const offline = failed(
+      engineItemCheck(
+        item('claude', 'error', 'Couldn’t reach the download server (network timeout).'),
+        false
+      )!
+    );
+    expect(offline.fix).toMatch(/^Check this Mac is online/);
+    expect(offline.fix).not.toMatch(/reopen/);
+    const other = failed(engineItemCheck(item('codex', 'error', 'npm failed'), false)!);
+    expect(other.fix).toMatch(/reopen the app/);
+  });
+
   it('a window closed before it finished says so, never a silent screen', () => {
     // Not started yet: no line at all, just the big button.
     expect(engineItemCheck(item('codex_auth', 'not_installed'), true, false)).toBeNull();

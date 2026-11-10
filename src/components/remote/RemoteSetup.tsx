@@ -1,7 +1,7 @@
 /**
  * First-time setup, as five steps that each finish on something real.
  *
- * 1. **This computer has to stay on** — first, and acknowledged, because it
+ * 1. **This Mac has to stay on** — first, and acknowledged, because it
  *    is the thing people would otherwise find out from their phone.
  * 2. **A private link** — Tailscale, then the Funnel. Done when Tailscale
  *    confirms it, not when we asked.
@@ -58,8 +58,8 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
     stayOn: (
       <>
         <p className="remote-lede">
-          Your assistant doesn’t run your agents — this computer does. If it sleeps, shuts down,
-          loses Wi-Fi, or the app quits, your assistant can’t reach it, and{' '}
+          Your assistant doesn’t run your agents — this Mac does. If it sleeps, shuts down, loses
+          Wi-Fi, or the app quits, your assistant can’t reach it, and{' '}
           <strong>nothing can wake it up from your phone</strong>.
         </p>
         <ReadinessList ctl={ctl} />

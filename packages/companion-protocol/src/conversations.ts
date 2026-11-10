@@ -6,10 +6,13 @@
  */
 
 import type { ContextFill } from './model';
+import { conversationAutoTitle } from './conversationTitle';
+
+export { conversationAutoTitle, CONVERSATION_AUTO_TITLE_CHARS } from './conversationTitle';
 
 /** The first conversation's id: the chat every agent already had. */
 export const FIRST_CONVERSATION = 'first';
-/** Longest title, as the Mac holds it (`conversations::TITLE_CHARS`). */
+/** Longest title the user may type, as the Mac holds it (`conversations::TITLE_CHARS`). */
 export const CONVERSATION_TITLE_CHARS = 60;
 
 /** One conversation as the switcher shows it (`conversations::ConversationView`). */
@@ -47,9 +50,16 @@ export function conversationOf(message: { conversation?: string | null }): strin
   return message.conversation || FIRST_CONVERSATION;
 }
 
-/** What a conversation is called: its title, or the plain words for one with nothing said yet. */
-export function conversationTitle(c: Pick<ConversationView, 'title' | 'id'> | undefined): string {
-  const title = c?.title.trim();
+/**
+ * What a conversation is called: its title, or the plain words for one with
+ * nothing said yet. An automatic title is tidied (`conversationAutoTitle`), in
+ * case the Mac is on a build that sent the whole first line; a name the user
+ * typed is shown as typed.
+ */
+export function conversationTitle(
+  c: (Pick<ConversationView, 'title' | 'id'> & { named?: boolean }) | undefined
+): string {
+  const title = c?.named ? c.title.trim() : conversationAutoTitle(c?.title ?? '');
   if (title) return title;
   return c?.id === FIRST_CONVERSATION ? 'First conversation' : 'New conversation';
 }

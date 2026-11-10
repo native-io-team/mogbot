@@ -188,8 +188,10 @@ describe('the key', () => {
     expect(screen.queryByTestId('agent-key-socket-new', hidden)).toBeNull();
   });
 
-  it('is an empty socket for a new agent', async () => {
+  it('is the site’s empty socket for a new agent: a neutral stem, no cap', async () => {
     await render(<AgentKey state="new" size={keySize.xl} />);
     expect(screen.getByTestId('agent-key-socket-new', hidden)).toBeTruthy();
+    expect(screen.getByTestId('agent-key-stem', hidden)).toBeTruthy();
+    expect(screen.queryByTestId('agent-key-depth', hidden)).toBeNull();
   });
 });

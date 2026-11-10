@@ -56,7 +56,7 @@ describe('Home: the Chief first, then pinned, then the rest', () => {
     expect(nextNeedsYou([chief, ...team], {}, home.quiet)).toBeNull();
   });
 
-  it('no bar for what waits on you: the Needs you tab says it, once', () => {
+  it('no bar for what waits on you: the Catch up tab says it, once', () => {
     const designer = a('Designer', { lastActivityAt: 50, ...waiting });
     const home = buildHome([chief, designer], null);
     expect(home).not.toHaveProperty('bar');

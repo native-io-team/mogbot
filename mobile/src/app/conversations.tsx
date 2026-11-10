@@ -88,7 +88,9 @@ function ConversationsSheet() {
       ? 'Needs your OK'
       : c.id === working
         ? 'Working'
-        : formatAgo(c.lastActivityAt, now);
+        : c.lastActivityAt > 0
+          ? formatAgo(c.lastActivityAt, now)
+          : undefined;
 
   return (
     <SheetPage>
@@ -108,7 +110,9 @@ function ConversationsSheet() {
         <View style={styles.list}>
           <Row
             label="New conversation"
-            leading={<Icon name="plus" size={iconSize.body} color={accent.accent} />}
+            // Neutral, and no chevron: it makes one here, it doesn't go anywhere.
+            leading={<Icon name="plus" size={iconSize.body} color={colors.textStrong} />}
+            trailing={<View />}
             onPress={() => run(() => newConversation(id))}
             disabled={!connected || busy}
             detail={connected ? undefined : 'Available once your Mac is connected'}
@@ -141,7 +145,7 @@ function ConversationsSheet() {
               warning={c.waiting > 0}
               trailing={
                 c.id === viewing ? (
-                  <Icon name="checkmark" size={iconSize.body} color={accent.accent} />
+                  <Icon name="checkmark" size={iconSize.body} color={colors.textStrong} />
                 ) : undefined
               }
               onPress={() => run(() => openConversation(id, c.id))}
@@ -157,7 +161,7 @@ function ConversationsSheet() {
               variant="ghost"
               size="compact"
               disabled={!connected}
-              onPress={() => setRenaming(current.title)}
+              onPress={() => setRenaming(current.title ? conversationTitle(current) : '')}
             />
           ) : (
             <View style={styles.rename}>

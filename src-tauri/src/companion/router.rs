@@ -2187,8 +2187,10 @@ async fn run(
         }
         "agents.conversationRoutine" => {
             let p: ConversationRoutineParams = parse(params)?;
-            Ok(b.conversation_routine(&p.agent_id, &p.routine_id, &p.conversation_id)
-                .await?)
+            Ok(
+                b.conversation_routine(&p.agent_id, &p.routine_id, &p.conversation_id)
+                    .await?,
+            )
         }
         "agents.startFresh" => {
             let p: AgentParam = parse(params)?;
@@ -3875,7 +3877,7 @@ mod tests {
             .iter()
             .any(|(_, m, detail, ok)| m == "agents.setMorningBrief"
                 && *ok
-                && detail == "morning brief: 07:30"));
+                && detail == "morning brief: 7:30 AM"));
         assert!(audited
             .iter()
             .any(|(_, m, detail, ok)| m == "agents.setMorningBrief"

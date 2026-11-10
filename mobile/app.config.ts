@@ -165,7 +165,7 @@ export default (): ExpoConfig => {
     version: APP_VERSION,
     // Landscape and iPad: the Agents list and a chat sit side by side when there's room.
     orientation: 'default',
-    // Placeholder: a black tile with a white ring, until real branding lands.
+    // The mark on a Graphite key, full bleed (scripts/build-icons.mjs draws every icon here).
     icon: './assets/icon.png',
     web: { favicon: './assets/favicon.png' },
     userInterfaceStyle: 'automatic',
@@ -176,8 +176,8 @@ export default (): ExpoConfig => {
       : { enabled: false },
     ios: {
       bundleIdentifier: bundleId,
-      // iOS 18+ Home Screen appearances: the ring alone on the system's own
-      // dark or tinted plate (made from icon.png; placeholder art, unbranded).
+      // iOS 18+ Home Screen appearances: the mark alone on the system's own
+      // dark or tinted plate.
       icon: {
         light: './assets/icon.png',
         dark: './assets/icon-dark.png',
@@ -231,7 +231,7 @@ export default (): ExpoConfig => {
           recordAudioAndroid: true,
         },
       ],
-      // Placeholder art (assets/*.png are generated, neutral, unbranded) until real branding lands.
+      // The mark in white (assets/*.png are drawn by scripts/build-icons.mjs).
       [
         'expo-notifications',
         {

@@ -81,7 +81,9 @@ export function AgentReach({ agent }: { agent: Agent }) {
                     {c.account !== c.title ? ` · ${c.account}` : ''}
                   </span>
                   <span className="agent-secrets__meta">
-                    {accessLabel(c.access)} · {c.kept}
+                    {accessLabel(c.access)}
+                    {/* The title already says "This Mac"; how macOS asks is said once, below. */}
+                    {c.macApp ? '' : ` · ${c.kept}`}
                     {c.lastUsedAt ? ` · used ${formatAgo(c.lastUsedAt, now)}` : ''}
                   </span>
                   {c.needsSignIn && (
@@ -100,6 +102,11 @@ export function AgentReach({ agent }: { agent: Agent }) {
               </li>
             ))}
           </ul>
+          {reach.connections.some((c) => c.macApp) && (
+            <p className="agent-editor__hint">
+              This Mac’s own apps: macOS asks once, in System Settings → Privacy &amp; Security.
+            </p>
+          )}
         </section>
       )}
       {reach?.browser && (

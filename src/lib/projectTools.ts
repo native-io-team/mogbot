@@ -2,7 +2,7 @@
  * Project tools, asked for in context.
  *
  * Onboarding asks only for an agent engine. The tools a project needs on
- * this computer are asked for the first time work becomes a project:
+ * this Mac are asked for the first time work becomes a project:
  * creating or importing one runs through `useProjectToolsGate`, which opens
  * "Set up project tools" when something is missing and carries on with what
  * the user was doing once the app's own checks pass.
@@ -190,7 +190,7 @@ export const PROJECT_TOOLS_NEEDED_EVENT = 'project-tools-needed';
 
 /**
  * An agent (the Chief, or an assistant over Remote Access) tried to make a
- * project and this computer is missing what it needs: open "Set up project
+ * project and this Mac is missing what it needs: open "Set up project
  * tools" here so the person can fix it in one click. Mounted once per window;
  * the backend sends it to the main window only.
  */

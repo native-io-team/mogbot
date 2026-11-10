@@ -149,7 +149,7 @@ function AsOf() {
   if (!asOf) return null;
   return (
     <T variant="caption" color={colors.textMuted} style={styles.asOf} accessibilityRole="header">
-      {`Projects · as of ${formatAgo(asOf)}`.toUpperCase()}
+      {`Projects · as of ${formatAgo(asOf)}`}
     </T>
   );
 }

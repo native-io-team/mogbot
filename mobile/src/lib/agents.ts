@@ -25,7 +25,12 @@ import {
   tokenCount,
   workingRowLine,
 } from '@shipstudio/companion-protocol';
-import { crossoverOutcome, previewText, stepInOutcome } from '@shipstudio/companion-protocol';
+import {
+  formatClock as clockOf,
+  crossoverOutcome,
+  previewText,
+  stepInOutcome,
+} from '@shipstudio/companion-protocol';
 import { drivenLine } from './bars';
 import { diffLineKind } from './diff';
 import { ENGINE_DEFAULT } from './newAgentDefaults';
@@ -330,9 +335,8 @@ export function usageLine(t: UsageTotals, onPlan = false): string {
     .join(' · ');
 }
 
-export function formatClock(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
+/** "9:00 AM" / "09:00", as the Mac shows times (companion-protocol `clock`). */
+export const formatClock = (ts: number): string => clockOf(ts);
 
 /**
  * A project's task, named by what it was asked: the first line of its
@@ -660,6 +664,9 @@ export function askingLine(
   if (!diff && lines[0] && !json) return lines[0];
   const edit = /^do you want to make this edit to (.+?)\?*$/i.exec(approval.title.trim());
   if (edit) return `Wants to edit ${edit[1]}`;
+  // A newer Mac's title says it plainly ("Edit Hero.tsx?"): the row says who wants it.
+  const plain = /^(Edit|Create) (.+?)\?$/.exec(approval.title.trim());
+  if (plain) return `Wants to ${plain[1].toLowerCase()} ${plain[2]}`;
   return approval.title;
 }
 
@@ -669,7 +676,7 @@ type Chats = Record<string, { messages: AgentMessage[] } | undefined>;
  * "2 need you · 3 working", over the agents shown on Home. Needs-you is the
  * one number every surface shows (`needsYouCount`, companion-protocol's
  * attention.ts): the quick action, and the desk's sidebar, review bar and
- * Dock badge. The Needs you tab's badge counts its own rows instead
+ * Dock badge. The Catch up tab's badge counts its own rows instead
  * (`feedItems`), cards rather than agents, so it matches its list. It once counted only what
  * the saved chats showed answerable here, and said 14 beside Home's 13.
  */

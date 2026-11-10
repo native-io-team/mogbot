@@ -1,5 +1,5 @@
 /**
- * The Needs you feed (lib/needsYou.ts): every card across every agent,
+ * The Catch up feed (lib/needsYou.ts): every card across every agent,
  * most urgent first and newest first within, answered ones gone; and which
  * rows are answered in place (only what fits whole).
  */
@@ -110,6 +110,23 @@ describe('the feed', () => {
     // Counted on the Mac, not in the chat any more: the agent, until its chat says otherwise.
     expect(keys(items)).toEqual(['stuck:x']);
     expect(keys(feedItems([a('x')], { x: { messages: [answered] } }, null))).toEqual([]);
+  });
+
+  it('lists one import as one row: its newest waiting stage', () => {
+    const stage = (kind: string, talkId: string) => ({ connector: { kind, talkId } as never });
+    const chats = {
+      chief: {
+        messages: [
+          ask('consent', 'chief', 1, stage('consent', 't1')),
+          ask('playback', 'chief', 2, stage('playback', 't1')),
+          ask('review', 'chief', 3, stage('review', 't1')),
+          ask('other', 'chief', 4, stage('consent', 't2')),
+          ask('plain', 'chief', 5),
+        ],
+      },
+    };
+    const items = feedItems([a('chief', { pendingApprovals: 5 })], chats, null, true);
+    expect(keys(items)).toEqual(['ask:plain', 'ask:other', 'ask:review']);
   });
 
   it('lets a review card be answered here when this Mac allows it', () => {
