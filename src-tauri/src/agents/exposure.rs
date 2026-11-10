@@ -156,6 +156,9 @@ fn mark(agent_id: &str) -> bool {
     })
 }
 
+/// The tools of the ChatGPT apps connected to the user's Codex.
+const CODEX_APPS: &str = "mcp__codex_apps__";
+
 /// Whether a call reads content from outside this Mac. `page`: the page the
 /// browser call acts on, when known.
 pub fn reads_outside(tool: &str, input: &Value, page: Option<&str>) -> bool {
@@ -168,6 +171,9 @@ pub fn reads_outside(tool: &str, input: &Value, page: Option<&str>) -> bool {
         }
         // claude.ai connectors: mail, chat, documents from other people.
         _ if tool.starts_with("mcp__claude_ai_") => true,
+        // Codex's counterpart, the ChatGPT apps it serves as one MCP server
+        // (`codex_apps`, the name in the 0.166 binary).
+        _ if tool.starts_with(CODEX_APPS) => true,
         // A claude.ai artifact someone shared is a page from outside too.
         _ if super::autoallow::artifact_read(tool, input) == Some(true) => true,
         _ => false,
@@ -331,6 +337,7 @@ mod tests {
                 None,
             ),
             ("mcp__claude_ai_Gmail__search_threads", json!({}), None),
+            ("mcp__codex_apps__gmail_search_emails", json!({}), None),
             (
                 "mcp__claude-in-chrome__get_page_text",
                 json!({ "tabId": 1 }),
