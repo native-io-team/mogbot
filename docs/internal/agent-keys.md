@@ -63,10 +63,13 @@ The look and motion follow the marketing site's keys (`mogbot-site` `src/styles/
 - Touch: a key in something clickable lifts a hair on hover and goes down on press; pressing its bound key presses every key for that agent on screen for a beat (`pressAgentKeys`, `data-hit`).
 
 ### At a glance (the acceptance test)
-Working, free and needs-you must be countable without reading, at every size (112 board, 44 header/phone row, 30 list, 20 menu), in both themes, with motion stopped: working is pressed and warm-lit, free is at rest and unlit, needs-you is raised, amber and spilling light; paused is grey, faded and sunk, never mistaken for free or new. Check it with `harness-keys.html?only=squint` (twelve keys in mixed states with no words, every size) blurred or at half size.
+Working, free and needs-you must be countable without reading, at every size (112 board and the agent sheet, 44 phone agent row, 30 list row and phone chat header, 24 desk chat header, 20 menu and catch-up, 16 a line of text), in both themes, with motion stopped: working is pressed and warm-lit, free is at rest and unlit, needs-you is raised, amber and spilling light; paused is grey, faded and sunk, never mistaken for free or new. Check it with `harness-keys.html?only=squint` (twelve keys in mixed states with no words, every size) blurred or at half size.
 
 ### Motion budget
 Only opacity, translate/transform and the legend's filter animate. Only Working (breathing) and Needs your OK (pulse) loop; the socket fade-in and the seat drop run once. No timers per key (the bound-key press is one timer per press). Everything holds still in a hidden or background window and with Reduce Motion, where the states still differ statically.
+
+### One state, every surface
+A key shows its agent's state wherever it is drawn for that agent now: the sidebar, header, board, requests panel, Projects (the workspace's agents and "at work" lines, the project cards' team keys) and the phone's rows and Projects. An agent waiting on your OK is raised and amber in all of them, never drawn unlit or as working (`agentKeyState`, or `needsOk` from a line's `waiting`). A name, @mention or quote bar in the agent's colour takes the key's colourway (`--agents-ink-*` in agents.css, `keyColorways` face on the phone), not the older avatar colour, which remains only the accent.
 
 ## Independence
 Four pips on the front edge (the skirt band under the face), filled from the left: Careful 1, Steady 2, Bold 3, Unleashed 4. 112px (and other large sizes) only.

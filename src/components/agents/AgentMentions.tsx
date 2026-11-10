@@ -15,6 +15,7 @@ import { useCallback, useState, type KeyboardEvent, type RefObject } from 'react
 import { AgentKey } from './AgentKey';
 import { EVERYONE_ID } from '../../lib/agentRooms';
 import {
+  agentColorway,
   mentionAt,
   mentionCandidates,
   mentionRuns,
@@ -140,22 +141,23 @@ function MentionMenu({ candidates, active, onHover, onPick }: MentionMenuProps) 
   );
 }
 
-/** A line of your message with its @mentions tinted in each agent's colour. */
+/** A line of your message with its @mentions tinted in each agent's key colourway. */
 export function MentionText({
   text,
   mentions,
-  colorOf,
+  colorwayOf,
 }: {
   text: string;
   mentions?: AgentRef[];
-  colorOf: (id: string) => string | undefined;
+  /** The agent's key colourway (`agentColorway`). */
+  colorwayOf: (id: string) => string | undefined;
 }) {
   if (!mentions?.length) return <>{text}</>;
   return (
     <>
       {mentionRuns(text, mentions).map((run, i) =>
         run.mention ? (
-          <span key={i} className="agent-mention" data-color={colorOf(run.mention.id)}>
+          <span key={i} className="agent-mention" data-colorway={colorwayOf(run.mention.id)}>
             {run.text}
           </span>
         ) : (
@@ -177,7 +179,7 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&
  */
 export function tintMentionsIn(
   root: HTMLElement,
-  members: Pick<Agent, 'id' | 'name' | 'color'>[]
+  members: (Pick<Agent, 'id' | 'name' | 'color'> & Partial<Pick<Agent, 'colorway' | 'isMain'>>)[]
 ): number {
   const named = [...members]
     .filter((m) => m.name.trim())
@@ -210,7 +212,7 @@ export function tintMentionsIn(
       fragment.append(text.slice(last, at));
       const span = document.createElement('span');
       span.className = 'agent-mention';
-      span.dataset.color = member.color;
+      span.dataset.colorway = agentColorway(member);
       span.textContent = text.slice(at, at + 1 + match[2].length);
       fragment.append(span);
       last = at + 1 + match[2].length;

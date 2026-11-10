@@ -52,6 +52,8 @@ import { AgentKey } from './AgentKey';
 import { ConversationBar } from './AgentCard';
 import { ApprovalCard } from './AgentChatItems';
 import {
+  agentKeyState,
+  agentColorway,
   answerApproval,
   needsYou,
   promptAnswer,
@@ -510,7 +512,11 @@ function Group({
   const cardsId = useId();
   const waiting = group.pending + older > 0;
   return (
-    <div className="agent-requests-panel__group" data-color={agent.color}>
+    <div
+      className="agent-requests-panel__group"
+      data-color={agent.color}
+      data-colorway={agentColorway(agent)}
+    >
       <div className="agent-requests-panel__row">
         <button
           type="button"
@@ -520,7 +526,13 @@ function Group({
           aria-controls={expanded ? cardsId : undefined}
           onClick={onToggle}
         >
-          <AgentKey id={agent.id} name={agent.name} color={agent.color} size="md" />
+          <AgentKey
+            id={agent.id}
+            name={agent.name}
+            color={agent.color}
+            state={agentKeyState(agent)}
+            size="md"
+          />
           <span className="agent-requests-panel__text">
             <span className="agent-requests-panel__name">{agent.name}</span>
             <span className="agent-requests-panel__line" data-state={waiting ? 'waiting' : 'done'}>

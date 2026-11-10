@@ -32,7 +32,7 @@ import { DemoCard } from '../../../components/DemoCard';
 import { SessionState, useTaskName } from '../../../components/session';
 import { choose } from '../../../components/menu';
 import { Button, Icon, useRipple, T } from '../../../components/ui';
-import { formatAgo, workingLine } from '../../../lib/agents';
+import { agentKeyState, formatAgo, workingLine } from '../../../lib/agents';
 import { AgentKey } from '../../../components/AgentKey';
 import { haptic } from '../../../lib/haptics';
 import { canCall, describeError, previewScreenshot, refreshProjects } from '../../../lib/session';
@@ -274,7 +274,13 @@ function AgentAtWorkRow({ agent, first }: { agent: Agent; first: boolean }) {
         pressed && { backgroundColor: colors.surfaceControl },
       ]}
     >
-      <AgentKey id={agent.id} name={agent.name} color={agent.color} size={keySize.sm} />
+      <AgentKey
+        id={agent.id}
+        name={agent.name}
+        color={agent.color}
+        state={agentKeyState(agent)}
+        size={keySize.sm}
+      />
       <View style={styles.sessionText}>
         <T variant="subhead" color={colors.textStrong} numberOfLines={1}>
           {agent.name}

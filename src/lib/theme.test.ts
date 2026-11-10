@@ -22,6 +22,7 @@ import {
   relativeLuminance,
 } from './accent';
 import { AGENT_COLORS } from './agents';
+import { COLORWAYS as KEY_COLORWAYS } from '../../packages/companion-protocol/src/agentKeys';
 
 const AGENT_COLORS_FOR_TESTS = [...AGENT_COLORS];
 import { terminalTheme } from '../components/terminal/terminalTheme';
@@ -528,6 +529,31 @@ describe('a speaker’s name in its agent’s colour', () => {
       for (const bg of ['--surface-app', '--surface-panel']) {
         const r = contrastRatio(parseHex(ink)!, parseHex(resolveHex(bg, theme))!);
         expect([key, bg, r >= AA_TEXT]).toEqual([key, bg, true]);
+      }
+    }
+  });
+
+  // A name or @mention takes its key's colourway (`--agents-ink-*`) wherever
+  // the colourway is known; each must clear AA the same way.
+  const inkOf = (id: string, theme: 'dark' | 'light') => {
+    const light = /:root\[data-theme='light'\]\s*\{([^}]*)\}/.exec(agents)?.[1] ?? '';
+    const re = new RegExp(`--agents-ink-${id}:\\s*(#[0-9a-f]{6})`, 'i');
+    const own = theme === 'light' ? re.exec(light) : null;
+    const base = re.exec(agents);
+    expect(base, `--agents-ink-${id}`).toBeTruthy();
+    return (own?.[1] ?? base![1]).toLowerCase();
+  };
+
+  it.each(['dark', 'light'] as const)('every colourway clears AA too (%s)', (theme) => {
+    const text = resolveHex('--text-primary', theme);
+    for (const { id } of KEY_COLORWAYS) {
+      expect(agents).toContain(
+        `[data-colorway='${id}'] {\n  --agents-tint: var(--agents-ink-${id});`
+      );
+      const ink = mixHex(inkOf(id, theme), text, 1 - share(theme));
+      for (const bg of ['--surface-app', '--surface-panel']) {
+        const r = contrastRatio(parseHex(ink)!, parseHex(resolveHex(bg, theme))!);
+        expect([id, bg, r >= AA_TEXT]).toEqual([id, bg, true]);
       }
     }
   });

@@ -196,6 +196,23 @@ describe('an agent from an older Mac', () => {
     expect(keyLookFor({ name: 'X', icon: 'lucide:wallet' }).icon).toBe('lucide:wallet');
     expect(keyLookFor({ name: 'X', icon: 'lucide:Wallet!' }).icon).toBe('grid');
   });
+
+  it("gives a Chief with no colourway the mark on Graphite, as the Mac's fill does", () => {
+    expect(keyLookFor({ name: 'Chief of Staff', color: 'white', isMain: true })).toMatchObject({
+      colorway: CHIEF_COLORWAY,
+      icon: CHIEF_ICON,
+    });
+    // A colour the user chose still gives its nearest colourway.
+    expect(keyLookFor({ name: 'Chief of Staff', color: 'red', isMain: true }).colorway).toBe(
+      'brick'
+    );
+    // Anyone else in white keeps Putty, and a chosen colourway is kept.
+    expect(keyLookFor({ name: 'Notes', color: 'white' }).colorway).toBe('putty');
+    expect(
+      keyLookFor({ name: 'Chief of Staff', color: 'white', colorway: 'putty', isMain: true })
+        .colorway
+    ).toBe('putty');
+  });
 });
 
 describe('states and pips', () => {

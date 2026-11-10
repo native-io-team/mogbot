@@ -37,7 +37,7 @@
 
 .notification-setting-title {
   font-size: var(--font-size-subhead);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
   color: var(--text-primary);
 }
 
@@ -47,11 +47,12 @@
   margin-top: 2px;
 }
 
-/* Toggle Switch */
+/* Toggle switch: the same switch as Settings (settings.css .settings-toggle),
+   one geometry and one off state from the --switch-* contract. */
 .notification-toggle {
   position: relative;
-  width: 40px;
-  height: 22px;
+  width: var(--switch-width);
+  height: var(--switch-height);
   flex-shrink: 0;
 }
 
@@ -65,28 +66,27 @@
   position: absolute;
   cursor: pointer;
   inset: 0;
-  background: var(--surface-control);
-  border: 1px solid var(--border-default);
-  border-radius: 11px;
+  background: var(--switch-off-track);
+  border: var(--border-width-default) solid var(--switch-off-track-border);
+  border-radius: var(--radius-pill);
   transition:
-    background-color 0.2s,
-    color 0.2s,
-    border-color 0.2s;
+    background-color var(--transition-interaction),
+    border-color var(--transition-interaction);
 }
 
 .notification-toggle-slider::before {
   position: absolute;
   content: '';
-  height: 16px;
-  width: 16px;
-  left: 2px;
-  top: 2px;
-  background: var(--text-secondary);
+  height: var(--switch-knob);
+  width: var(--switch-knob);
+  left: var(--switch-inset);
+  top: var(--switch-inset);
+  background: var(--switch-off-knob);
+  box-shadow: var(--switch-knob-shadow);
   border-radius: var(--radius-full);
   transition:
-    background-color 0.2s,
-    color 0.2s,
-    border-color 0.2s;
+    transform var(--transition-interaction),
+    background-color var(--transition-interaction);
 }
 
 .notification-toggle input:checked + .notification-toggle-slider {
@@ -95,7 +95,7 @@
 }
 
 .notification-toggle input:checked + .notification-toggle-slider::before {
-  transform: translateX(18px);
+  transform: translateX(var(--switch-travel));
   background: var(--text-on-accent);
 }
 

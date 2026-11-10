@@ -16,7 +16,7 @@
 
 .empty-state-title {
   font-size: var(--font-size-h4);
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
   letter-spacing: var(--tracking-title);
   color: var(--text-primary);
 }

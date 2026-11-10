@@ -61,6 +61,17 @@ describe('projectTeam', () => {
     expect(team?.text).toBe('Acme Site · Running the build');
   });
 
+  it('marks an agent at work that waits on your OK, so its key is raised and amber', () => {
+    const team = projectTeam(
+      [agent('a', 'Acme Site', { status: working('Editing Hero.tsx'), pendingApprovals: 1 })],
+      SITE,
+      0
+    );
+    expect(team?.members.map((m) => [m.name, m.working, m.waiting])).toEqual([
+      ['Acme Site', true, true],
+    ]);
+  });
+
   it('leaves out hidden agents and other folders', () => {
     expect(
       projectTeam(
