@@ -524,7 +524,7 @@ async function prePairShots(page, d) {
       await capture(page, `pair-unreachable-${theme}`, {
         route: '/pair?d=… (Mac never answers)',
         check:
-          '“Can’t reach <Mac>”, the host, what to check (Tailscale on, same account), Open Tailscale and Try again',
+          '“Can’t reach <Mac>”, “Check these, then try again.”, then three rows with a dot each: the Mac awake with the app open (can’t tell), Tailscale on with the same account (Open Tailscale), this phone paired (not yet); no host or port anywhere until Details is opened; Try again and Back',
         theme,
       });
     }
@@ -2104,7 +2104,7 @@ const OFFLINE_CACHED = [
     name: 'offline-connection',
     route: '/connection',
     settle: 3000,
-    check: 'What is wrong, layer by layer',
+    check: 'Check these first: three rows (Mac awake and app open, Tailscale on, paired: Yes), each with its fix; Details folded; no host in the first lines',
   },
 ];
 

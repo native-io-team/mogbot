@@ -312,10 +312,19 @@ CA and no trust-on-first-use.
    connection if that ran out (a first request over a DERP relay, or a
    phone whose Tailscale is waking on demand, can be slow but working; a
    fast failure isn't retried), and is then diagnosed
-   (`diagnose`: a `*.ts.net` name that doesn't resolve is "this phone isn't
-   on your Mac's tailnet", anything else "can't reach *Mac*"), each naming
-   the host and the checks: Tailscale connected here, signed in to the same
-   account as the Mac. The pairing request keeps the desk's 120 s plus 15
+   (`diagnose`: a `*.ts.net` name that doesn't resolve means Tailscale is
+   off here, anything else that nothing answered). Either way the screen is
+   "Can't reach *Mac*" and a three-line checklist (`lib/reachChecklist.ts`,
+   `components/ReachChecklist.tsx`): the Mac awake with the app open (always
+   "can't tell": asleep and closed look the same), Tailscale on with the same
+   account on both (wrong when the name didn't resolve, the phone is offline
+   or Tailscale isn't installed, asked again whenever the app comes back to
+   the front; Open or Get Tailscale), and this phone paired (not yet). Each
+   row says what the phone sees and its one fix; the host is folded under
+   Details, never the first line, because a beginner read "Nothing answered
+   at localhost:50898" as the problem. The Connection sheet leads with the
+   same checklist while a paired phone's Mac is quiet, the layers folded
+   under it. The pairing request keeps the desk's 120 s plus 15
    (`PAIR_TIMEOUT_MS`), then says "No answer from *Mac*" rather than
    waiting forever.
 
