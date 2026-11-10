@@ -228,7 +228,9 @@
   border-radius: var(--radius-control);
   border: 1px solid var(--border-default);
   background: var(--surface-panel);
-  box-shadow: var(--shadow-md);
+  /* Inside the terminal, which clips, a spacing step from its edges: only a
+     shadow that reaches no further than that is drawn whole. */
+  box-shadow: var(--shadow-sm);
   font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
 }

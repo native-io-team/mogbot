@@ -1163,7 +1163,10 @@
   background: var(--surface-panel);
   border: var(--border-width-default) solid var(--border-default);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-lg);
+  /* It floats a spacing step inside the preview, which clips: a shadow that
+     reaches further than that inset was cut flat along the foot and sides.
+     The border carries the edge; the small shadow fits the inset. */
+  box-shadow: var(--shadow-sm);
   z-index: var(--z-floating-panel);
 }
 
