@@ -16,6 +16,7 @@
 import {
   SUPPORTED,
   boundKeyFor,
+  distinctColorway,
   keyLookFor,
   type Agent,
   type AgentMessage,
@@ -121,11 +122,18 @@ const base =
     ...extra,
   });
 
-/** Each its key, as the Mac fills one in: a free letter of its name, the Chief first. */
+/**
+ * Each its key, as the Mac fills one in: a free letter of its name, the Chief
+ * first, and a colourway no one else wears with the same icon.
+ */
 function withKeys(agents: Agent[]): Agent[] {
   const used: string[] = [];
+  const worn: [string, string][] = [];
   return agents.map((a) => {
-    const { colorway, icon } = keyLookFor(a);
+    const look = keyLookFor(a);
+    const icon = look.icon;
+    const colorway = a.colorway ? look.colorway : distinctColorway(look.colorway, icon, worn);
+    worn.push([colorway, icon]);
     const boundKey = boundKeyFor(a.name, used) ?? undefined;
     if (boundKey) used.push(boundKey);
     return { ...a, colorway, icon, boundKey };

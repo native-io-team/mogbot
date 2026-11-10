@@ -1357,8 +1357,24 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
     let index = registry.agents.len();
     // Its colour as before (one asked for, else spread across the palette,
     // which import previews predict), and its key's colourway the nearest.
-    let color = color_for(new.color.as_deref(), index);
-    let colorway = super::keys::colorway_for_color(&color);
+    let mut color = color_for(new.color.as_deref(), index);
+    let mut colorway = super::keys::colorway_for_color(&color);
+    // Its icon from its name and role, now, and (unless a colour was asked
+    // for) a colourway no one on the team wears with that icon, so two
+    // agents never get the same key.
+    let icon = super::keys::icon_for(&name, new.role.trim(), new.is_main);
+    if new.color.is_none() {
+        let worn: Vec<(&str, &str)> = registry
+            .agents
+            .iter()
+            .filter_map(|a| Some((a.colorway.as_deref()?, a.icon.as_deref()?)))
+            .collect();
+        let distinct = super::keys::distinct_colorway(&colorway, &icon, worn.iter().copied());
+        if distinct != colorway {
+            color = super::keys::legacy_color_for(&distinct);
+            colorway = distinct;
+        }
+    }
     let shape = new
         .shape
         .filter(|s| *s < SHAPE_COUNT)
@@ -1372,7 +1388,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         avatar: new.avatar.and_then(AgentLook::normalized),
         color,
         colorway: Some(colorway),
-        icon: None,
+        icon: Some(icon),
         bound_key: None,
         is_main: new.is_main,
         // The one agent you're told to talk to stays put at the top; unpinnable.
