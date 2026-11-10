@@ -809,12 +809,7 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
     // Chrome whenever it's connected, on any engine and any account; Claude
     // in Chrome only as the fallback; never for outside text.
     let now = super::chrome_route::for_turn(agent, outside);
-    let route = now.route;
-    let user_chrome = route == super::chrome_route::Route::YourChrome;
-    let mut access = TurnAccess {
-        browser: route == super::chrome_route::Route::ClaudeInChrome,
-        ..Default::default()
-    };
+    let mut access = TurnAccess::default();
     let mut lines = Vec::new();
     for c in &all {
         let grant = c.grant_for(&agent.id);
@@ -877,48 +872,61 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
             url: crate::agent_browser::tools::url(port),
         });
     }
-    // The user's own Chrome through the app's extension, for either engine:
-    // the Settings switch, a Chrome answering, the agent's browser grant,
-    // never outside text. It replaces Claude in Chrome for this turn (no
-    // `--chrome`, and its tools kept from the turn), so a turn never holds
-    // two ways into the same Chrome and an account switch never needs the
-    // Claude extension signed in again.
-    if user_chrome {
-        access.servers.push(TurnServer {
-            key: crate::user_chrome::tools::SERVER_KEY.to_string(),
-            url: crate::user_chrome::tools::url(port),
-        });
-        access.browser = false;
-        if agent.engine == super::engine::Engine::Claude {
-            let block = super::chrome_route::CLAUDE_IN_CHROME_BLOCK.to_string();
-            if !access.blocked.contains(&block) {
-                access.blocked.push(block);
-            }
-        }
-    }
     if !lines.is_empty() {
         access.prompt = format!(
             "### Apps you're signed in to\n\nThrough the user's own sign-in, for this agent:\n\n{}\n\nTools that read go straight through. Anything that sends, posts, changes or pays asks the user on a card first; a read-only grant refuses it.",
             lines.join("\n")
         );
     }
-    if user_chrome {
+    lay_in_chrome(&mut access, now, agent.engine, port);
+    access
+}
+
+/// The turn's way into the user's Chrome (`chrome_route`'s `now`), laid
+/// into what it gets, for `engine`. Pure; the one place the route becomes
+/// servers, flags and words, whichever account the turn runs on (the
+/// account isn't an input: a turn moved to another account by the wallet
+/// gets exactly this, `chrome_route_turn_tests.rs`).
+///
+/// - **Your Chrome**, for every engine: the `user_chrome` server, no
+///   `--chrome` (Claude Code then runs `--no-chrome`), Claude in Chrome's
+///   tools kept from a Claude Code turn, and the prompt saying to use these
+///   wherever it's told to use Claude in Chrome. A turn never holds two ways
+///   into the same Chrome, and an account switch never needs the Claude
+///   extension signed in again.
+/// - **Claude in Chrome**: `--chrome` (`browser`).
+/// - **None, Claude in Chrome down**: `--no-chrome`, and told why, so it
+///   neither calls tools it hasn't got nor sends the user to fix them.
+pub fn lay_in_chrome(
+    access: &mut TurnAccess,
+    now: super::chrome_route::Now,
+    engine: super::engine::Engine,
+    port: u16,
+) {
+    use super::chrome_route::{Route, Why};
+    access.browser = now.route == Route::ClaudeInChrome;
+    if now.route == Route::YourChrome {
+        access.servers.push(TurnServer {
+            key: crate::user_chrome::tools::SERVER_KEY.to_string(),
+            url: crate::user_chrome::tools::url(port),
+        });
+        if engine == super::engine::Engine::Claude {
+            let block = super::chrome_route::CLAUDE_IN_CHROME_BLOCK.to_string();
+            if !access.blocked.contains(&block) {
+                access.blocked.push(block);
+            }
+        }
         if !access.prompt.is_empty() {
             access.prompt.push_str("\n\n");
         }
         access.prompt.push_str(USER_CHROME_PROMPT);
     }
-    // It would have had Claude in Chrome, but no browser answers it
-    // (`chrome_health`): it runs `--no-chrome` and is told why, so it
-    // neither calls tools it hasn't got nor sends the user to fix them.
-    let chrome_down = now.why == super::chrome_route::Why::ClaudeInChromeDown;
-    if chrome_down {
+    if now.why == Why::ClaudeInChromeDown {
         if !access.prompt.is_empty() {
             access.prompt.push_str("\n\n");
         }
         access.prompt.push_str(CHROME_DOWN_PROMPT);
     }
-    access
 }
 
 /// What a turn is told when Claude in Chrome isn't answering this turn.

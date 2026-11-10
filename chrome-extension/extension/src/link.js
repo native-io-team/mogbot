@@ -143,18 +143,26 @@ export class Link {
         this.setState('connected');
         return;
       case 'unavailable':
-        // The host is about to exit; the alarm brings the link back once
-        // the app is open.
-        this.setState(msg.reason === 'app_not_running' ? 'app_not_running' : 'refused', msg.reason);
-        this.attempt = BACKOFF_MS.length;
+        // The host is about to exit. The app away: keep climbing the same
+        // ladder (an app restarting is back in seconds, and the quick steps
+        // catch it while this worker is still awake), then the alarm. The
+        // host refused: the slow end, nothing quick will change that.
+        if (msg.reason === 'app_not_running') {
+          this.setState('app_not_running', msg.reason);
+        } else {
+          this.setState('refused', msg.reason);
+          this.attempt = BACKOFF_MS.length;
+        }
         return;
       case 'bye':
         if (msg.reason === 'version') this.disconnect('update_needed');
         else if (msg.reason === 'off') this.disconnect('stopped');
         else if (msg.reason === 'quit') {
-          // The app is quitting: back as soon as it is (the slow end of
-          // the backoff, then the alarm).
-          this.attempt = BACKOFF_MS.length - 1;
+          // The app is quitting, most often to start again (an update, a
+          // rebuild): from the quick end of the backoff, so the link is back
+          // seconds after the app is, then the alarm if it stays away.
+          // (The slow end here left it 30 s behind every restart.)
+          this.attempt = 0;
           this.setState('app_not_running');
         } else if (msg.reason === 'replaced') {
           // A newer link from this same profile took over: this port is the

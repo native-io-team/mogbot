@@ -205,6 +205,57 @@
   display: contents;
 }
 
+/* Settings → Chrome: numbered steps, each a row that ticks by itself. The
+   marker is status (done is success), never the accent; the step to do now
+   is told by its ink and its buttons, not a colour. */
+.user-chrome-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-chrome-step__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.user-chrome-step__mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; /* css-ok: step marker size, a step under the label's line */
+  height: 18px; /* css-ok: step marker size */
+  border-radius: var(--radius-pill);
+  border: var(--border-width-default) solid var(--border-default);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.user-chrome-step--current .user-chrome-step__mark {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.user-chrome-step__mark--done {
+  border-color: transparent;
+  background: rgba(var(--accent-success-rgb), 0.16);
+  color: var(--accent-success);
+}
+
+.user-chrome-step--done .settings-row-label {
+  color: var(--text-secondary);
+}
+
+.user-chrome-step:not(.user-chrome-step--done):not(.user-chrome-step--current) .settings-row-label {
+  color: var(--text-muted);
+}
+
 /* Projects folder row (stacked: label/description/path above the actions) */
 .settings-row--stacked {
   flex-direction: column;

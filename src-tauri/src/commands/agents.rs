@@ -3675,7 +3675,11 @@ pub async fn agents_user_chrome_set_enabled(
     crate::user_chrome::set_enabled(on).await
 }
 
-/// Show the extension's folder in Finder, for Chrome's "Load unpacked".
+/// Show the extension's folder in Finder, for Chrome's "Load unpacked": the
+/// folder itself selected in its parent, so it can be dragged straight onto
+/// Chrome's extensions page (which, in Developer mode, loads a dropped
+/// folder as Load unpacked does). It's under ~/Library, which Chrome's file
+/// picker hides, so dragging or pasting the path is the easy way.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_user_chrome_show_extension() -> Result<(), CommandError> {
@@ -3686,7 +3690,7 @@ pub async fn agents_user_chrome_show_extension() -> Result<(), CommandError> {
         ));
     }
     let mut cmd = tokio::process::Command::new("open");
-    cmd.arg("-R").arg(dir.join("manifest.json"));
+    cmd.arg("-R").arg(&dir);
     crate::external_command::run_with_timeout(cmd, "open -R", 10)
         .await
         .map(|_| ())

@@ -228,11 +228,21 @@ test('backoff: quick retries, the app away, the host missing, a version gap', as
   await tick();
   assert.equal(l.state, 'app_not_running');
   port.onDisconnect.fire();
-  assert.equal(timers.at(-1).ms, BACKOFF_MS.at(-1), 'the slow end while the app is away');
+  assert.equal(timers.at(-1).ms, BACKOFF_MS[1], 'the app away: the next step, not the slow end');
+  // It stays away: the ladder climbs to the slow end and stays there.
+  for (let i = 0; i < BACKOFF_MS.length + 2; i++) {
+    timers.at(-1).f();
+    await tick();
+    const p = chrome.runtime.ports.at(-1);
+    p.onMessage.fire({ t: 'unavailable', reason: 'app_not_running' });
+    await tick();
+    p.onDisconnect.fire();
+  }
+  assert.equal(timers.at(-1).ms, BACKOFF_MS.at(-1), 'the slow end while the app stays away');
   timers.at(-1).f();
   await tick();
   // The host isn't installed.
-  port = chrome.runtime.ports[2];
+  port = chrome.runtime.ports.at(-1);
   chrome.runtime.lastError = { message: 'Specified native messaging host not found.' };
   port.onDisconnect.fire();
   chrome.runtime.lastError = undefined;
@@ -240,7 +250,7 @@ test('backoff: quick retries, the app away, the host missing, a version gap', as
   timers.at(-1).f();
   await tick();
   // An app that speaks another version: stop until the alarm or an update.
-  port = chrome.runtime.ports[3];
+  port = chrome.runtime.ports.at(-1);
   const before = timers.length;
   port.onMessage.fire({ t: 'bye', reason: 'version' });
   await tick();
@@ -248,9 +258,59 @@ test('backoff: quick retries, the app away, the host missing, a version gap', as
   assert.equal(l.state, 'update_needed');
   assert.equal(timers.length, before, 'no retry loop on a version gap');
   // The alarm still brings it back to try.
+  const ports = chrome.runtime.ports.length;
   l.wake();
   await tick();
-  assert.equal(chrome.runtime.ports.length, 5);
+  assert.equal(chrome.runtime.ports.length, ports + 1);
+});
+
+test('the app restarting: the link is back within seconds, not at the slow end', async () => {
+  const { chrome } = fakeChrome();
+  const { l, timers } = link(chrome);
+  await l.connect();
+  let port = chrome.runtime.ports[0];
+  port.onMessage.fire({ t: 'welcome', v: PROTOCOL, app_version: '1' });
+  await tick();
+  assert.equal(l.state, 'connected');
+  // The app quits (to start again): it says so, then its host exits.
+  port.onMessage.fire({ t: 'bye', reason: 'quit' });
+  await tick();
+  assert.equal(l.state, 'app_not_running');
+  port.onDisconnect.fire();
+  assert.equal(timers.at(-1).ms, BACKOFF_MS[0]);
+  // Not back yet on the first try, nor the second.
+  let waited = 0;
+  for (let i = 0; i < 2; i++) {
+    waited += timers.at(-1).ms;
+    timers.at(-1).f();
+    await tick();
+    port = chrome.runtime.ports.at(-1);
+    port.onMessage.fire({ t: 'unavailable', reason: 'app_not_running' });
+    await tick();
+    port.onDisconnect.fire();
+  }
+  // Back on the third: connected again.
+  waited += timers.at(-1).ms;
+  timers.at(-1).f();
+  await tick();
+  port = chrome.runtime.ports.at(-1);
+  port.onMessage.fire({ t: 'welcome', v: PROTOCOL, app_version: '1' });
+  await tick();
+  assert.equal(l.state, 'connected');
+  // An MV3 worker with no port lives about 30 s: every quick step fits.
+  assert.ok(waited < 30000, `waited ${waited} ms`);
+});
+
+test('a host that refuses goes straight to the slow end', async () => {
+  const { chrome } = fakeChrome();
+  const { l, timers } = link(chrome);
+  await l.connect();
+  const port = chrome.runtime.ports[0];
+  port.onMessage.fire({ t: 'unavailable', reason: 'refused' });
+  await tick();
+  assert.equal(l.state, 'refused');
+  port.onDisconnect.fire();
+  assert.equal(timers.at(-1).ms, BACKOFF_MS.at(-1));
 });
 
 test('a stale port (replaced) is ignored', async () => {

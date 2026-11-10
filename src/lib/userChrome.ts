@@ -31,6 +31,8 @@ export interface UserChromeStatus {
   error?: string | null;
   chromeInstalled: boolean;
   host: HostState;
+  /** Where each setup step stands, read from the Mac and Chrome's own records. */
+  steps: UserChromeSteps;
   /** The folder for Chrome's "Load unpacked". */
   extensionDir?: string | null;
   extensionVersion?: string | null;
@@ -120,7 +122,7 @@ export function userChromeLine(s: UserChromeStatus | null): string {
   if (s.browsers.length > 1) {
     return `On. Agents can use ${s.browsers.length} of your Chrome profiles, in tabs of their own.`;
   }
-  return 'On. Add the extension to Chrome, then keep Chrome open.';
+  return 'On. Do the steps below, each ticks Done by itself, then keep Chrome open.';
 }
 
 /** "Chrome can find this app" row. */
@@ -129,9 +131,9 @@ export function hostLine(host: HostState): string {
     case 'current':
       return 'Done. Chrome can reach this app.';
     case 'stale':
-      return 'Not done yet: the app moved since Chrome was told where it is. Turn Your Chrome off and on.';
+      return 'Not done yet: the app moved since Chrome was told where it is. Press Set it up again.';
     default:
-      return 'Not done yet. Turn Your Chrome off and on to set it up.';
+      return 'Not done yet. Press Set it up again.';
   }
 }
 
@@ -142,6 +144,104 @@ export function extensionLine(s: UserChromeStatus): string {
     return 'Not done yet. Add it from the Chrome Web Store, then press Enable when Chrome asks.';
   }
   return 'Not done yet. In Chrome’s extensions page turn on Developer mode, press Load unpacked, and choose this folder (copy its path, then ⇧⌘G in the picker). This turns to Connected by itself.';
+}
+
+/* ------------------------------------------------------ the setup, in steps */
+
+/** Mirrors `user_chrome::setup::Steps`: every field a real check. */
+export interface UserChromeSteps {
+  chrome: boolean;
+  host: boolean;
+  files: boolean;
+  /** A profile with Developer mode on (a personal one first). */
+  developerMode: string | null;
+  /** The profile the extension is in. */
+  loadedIn: string | null;
+  /** In Chrome, but turned off there. */
+  turnedOff: boolean;
+  /** Loaded from another folder than the app's. */
+  otherFolder: boolean;
+  connected: boolean;
+}
+
+export type SetupStepId = 'chrome' | 'host' | 'developerMode' | 'load' | 'connect';
+
+export interface SetupStep {
+  id: SetupStepId;
+  title: string;
+  done: boolean;
+  /** "Done…" or "Not done yet…" with the one thing to do. */
+  line: string;
+}
+
+/**
+ * The steps from turning it on to Connected, in the order the user does
+ * them, each ticking Done from what the app read (never from a click).
+ * Chrome writes Developer mode and the extension's record a few seconds
+ * after the change, so those two can tick a moment late; a later step done
+ * counts for the earlier ones (an extension can't load without Developer
+ * mode). Only while it's on and Load unpacked is the way in.
+ */
+export function setupSteps(s: UserChromeStatus): SetupStep[] {
+  const st = s.steps;
+  const connected = st.connected || s.browsers.length > 0;
+  const loaded = connected || (!!st.loadedIn && !st.turnedOff);
+  const devMode = loaded || !!st.loadedIn || !!st.developerMode;
+  const steps: SetupStep[] = [];
+  if (!s.chromeInstalled) {
+    steps.push({
+      id: 'chrome',
+      title: 'Install Google Chrome',
+      done: false,
+      line: 'Not done yet. Install Google Chrome on this Mac, then come back here.',
+    });
+  }
+  steps.push({
+    id: 'host',
+    title: 'Chrome can reach this app',
+    done: s.host === 'current' && !s.error,
+    line: s.error
+      ? `Not done yet: it couldn’t start (${s.error.trim().replace(/[.!]+$/, '')}). Press Set it up again.`
+      : hostLine(s.host),
+  });
+  steps.push({
+    id: 'developerMode',
+    title: 'Turn on Developer mode in Chrome',
+    done: devMode,
+    line: devMode
+      ? st.developerMode
+        ? `Done, in “${st.developerMode}”.`
+        : 'Done.'
+      : 'Not done yet. Open Chrome’s extensions page and turn on Developer mode, the switch at the top right.',
+  });
+  steps.push({
+    id: 'load',
+    title: 'Add the app’s extension',
+    done: loaded,
+    line: loaded
+      ? st.loadedIn
+        ? `Done, in “${st.loadedIn}”.${st.otherFolder ? ' It was loaded from another folder, so app updates won’t reach it: remove it and load the app’s folder instead.' : ''}`
+        : 'Done.'
+      : st.turnedOff
+        ? `Not done yet: it’s in “${st.loadedIn}” but turned off. Turn it on in Chrome’s extensions page.`
+        : 'Not done yet. Drag the app’s folder from Finder onto the extensions page. Or press Load unpacked, then ⇧⌘G, paste the folder’s path and press Select.',
+  });
+  steps.push({
+    id: 'connect',
+    title: 'Extension connected',
+    done: connected,
+    line: connected
+      ? 'Done. Agents use it from their next message.'
+      : loaded
+        ? 'Not done yet: waiting for the extension to reach the app. If it hasn’t in a minute, click the extension’s icon in Chrome and press Try again.'
+        : 'Not done yet. This ticks by itself once the extension is added.',
+  });
+  return steps;
+}
+
+/** The step to do now: the first one not done, or `null` when all are. */
+export function currentStep(steps: SetupStep[]): SetupStep | null {
+  return steps.find((x) => !x.done) ?? null;
 }
 
 /** A connected profile, in words. */

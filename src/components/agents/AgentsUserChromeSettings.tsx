@@ -7,8 +7,9 @@
  * @module components/agents/AgentsUserChromeSettings
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { CheckIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { Row, Toggle } from './AgentSettingsRows';
@@ -23,21 +24,35 @@ import {
   USER_CHROME_TITLE,
   addUserChromeFromStore,
   browserLabel,
+  currentStep,
   extensionLine,
   getUserChromeStatus,
-  hostLine,
   managedAdvice,
   openChromeExtensionsPage,
   openChromeProfile,
   PERSONAL_PROFILE_STEPS,
   routeLine,
   setUserChromeEnabled,
+  setupSteps,
   showUserChromeExtension,
   userChromeLine,
+  type SetupStepId,
   type UserChromeStatus,
 } from '../../lib/userChrome';
 
 type Act = { kind: 'read' } | { kind: 'switch'; on: boolean };
+
+/** A step's number, or a tick once it's done. */
+function StepMark({ n, done }: { n?: number; done: boolean }) {
+  return (
+    <span
+      className={`user-chrome-step__mark${done ? ' user-chrome-step__mark--done' : ''}`}
+      aria-label={done ? 'Done' : `Step ${n}`}
+    >
+      {done ? <CheckIcon size={12} /> : n}
+    </span>
+  );
+}
 
 const act = (a: Act): Promise<UserChromeStatus> =>
   a.kind === 'switch' ? setUserChromeEnabled(a.on) : getUserChromeStatus();
@@ -123,6 +138,53 @@ export function AgentsUserChromeSettings() {
     [showToast]
   );
 
+  const steps = status?.enabled ? setupSteps(status) : [];
+  const current = currentStep(steps);
+  // Only the step to do now carries buttons; the rest are a line each.
+  const stepActions = (id: SetupStepId): ReactNode => {
+    if (!status) return null;
+    const openPage = (
+      <Button
+        key="open"
+        variant={id === 'developerMode' ? 'default' : 'secondary'}
+        onClick={tryIt(openChromeExtensionsPage)}
+      >
+        Open Chrome’s extensions
+      </Button>
+    );
+    switch (id) {
+      case 'host':
+        return (
+          <span className="settings-row-actions">
+            <Button variant="secondary" onClick={() => run({ kind: 'switch', on: true })}>
+              Set it up again
+            </Button>
+          </span>
+        );
+      case 'developerMode':
+        return <span className="settings-row-actions">{openPage}</span>;
+      case 'load':
+        if (status.steps.turnedOff) return <span className="settings-row-actions">{openPage}</span>;
+        return (
+          <span className="settings-row-actions">
+            {status.extensionDir && (
+              <>
+                <Button variant="default" onClick={tryIt(showUserChromeExtension)}>
+                  Show the folder in Finder
+                </Button>
+                <Button variant="secondary" onClick={() => void copy(status.extensionDir!)}>
+                  {isCopied ? 'Copied' : 'Copy folder path'}
+                </Button>
+              </>
+            )}
+            {openPage}
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
   if (status && !status.supported) return null;
   return (
     <section ref={ref} className="settings-group" aria-labelledby="agents-settings-user-chrome">
@@ -138,16 +200,9 @@ export function AgentsUserChromeSettings() {
           />
         </Row>
         {status?.route && <Row label="Agents use now" description={routeLine(status.route)} />}
-        {status?.enabled && (
+        {status?.enabled && status.browsers.length === 0 && !status.webStoreUrl && (
           <div className="settings-row-steps" data-testid="user-chrome-steps">
-            {!status.chromeInstalled && (
-              <Row
-                label="Google Chrome"
-                description="Not done yet. Install Google Chrome on this Mac first."
-              />
-            )}
-            <Row label="Chrome can reach this app" description={hostLine(status.host)} />
-            {status.browsers.length === 0 && !status.webStoreUrl && advice && (
+            {advice && (
               <Row
                 label="Chrome is managed by your work"
                 description={
@@ -169,49 +224,64 @@ export function AgentsUserChromeSettings() {
                 )}
               </Row>
             )}
-            <Row
-              label="Add the extension to Chrome"
-              description={extensionLine(status)}
-              stacked={status.browsers.length === 0 && !status.webStoreUrl}
-            >
-              {status.browsers.length === 0 &&
-                (status.webStoreUrl ? (
-                  <Button variant="secondary" onClick={tryIt(addUserChromeFromStore)}>
-                    Add to Chrome…
-                  </Button>
-                ) : (
-                  <span className="settings-row-actions">
-                    <Button variant="secondary" onClick={tryIt(openChromeExtensionsPage)}>
-                      Open Chrome’s extensions
-                    </Button>
-                    {status.extensionDir && (
-                      <>
-                        <Button variant="secondary" onClick={() => void copy(status.extensionDir!)}>
-                          {isCopied ? 'Copied' : 'Copy folder path'}
-                        </Button>
-                        <Button variant="secondary" onClick={tryIt(showUserChromeExtension)}>
-                          Show the folder
-                        </Button>
-                      </>
-                    )}
-                  </span>
-                ))}
-            </Row>
-            {status.browsers.length === 0 && !status.webStoreUrl && !advice && (
+            <ol className="user-chrome-steps" aria-label="Steps to connect your Chrome">
+              {steps.map((step, i) => {
+                const now = step === current;
+                const actions = now ? stepActions(step.id) : null;
+                return (
+                  <li
+                    key={step.id}
+                    className={`user-chrome-step${step.done ? ' user-chrome-step--done' : ''}${now ? ' user-chrome-step--current' : ''}`}
+                    data-step={step.id}
+                    aria-current={now ? 'step' : undefined}
+                  >
+                    <Row
+                      label={
+                        <span className="user-chrome-step__title">
+                          <StepMark n={i + 1} done={step.done} />
+                          {step.title}
+                        </span>
+                      }
+                      description={step.line}
+                      stacked={!!actions}
+                    >
+                      {actions}
+                    </Row>
+                  </li>
+                );
+              })}
+            </ol>
+            {!advice && current && current.id !== 'connect' && (
               <p className="settings-row-description">
                 <TextButton onClick={() => setReported(true)}>
                   Developer mode greyed out in Chrome?
                 </TextButton>
               </p>
             )}
+          </div>
+        )}
+        {status?.enabled && status.browsers.length === 0 && status.webStoreUrl && (
+          <Row label="Add the extension to Chrome" description={extensionLine(status)}>
+            <Button variant="secondary" onClick={tryIt(addUserChromeFromStore)}>
+              Add to Chrome…
+            </Button>
+          </Row>
+        )}
+        {status?.enabled && status.browsers.length > 0 && (
+          <div className="settings-row-steps" data-testid="user-chrome-connected">
             {status.browsers.map((b, i) => (
               <Row
                 key={b.profileId}
-                label={browserLabel(b, i)}
+                label={
+                  <span className="user-chrome-step__title">
+                    <StepMark done />
+                    {browserLabel(b, i)}
+                  </span>
+                }
                 description={
                   status.updateNeeded
                     ? `Connected (extension ${b.extensionVersion}; this app ships a newer one: reload it in Chrome’s extensions page).`
-                    : `Connected (extension ${b.extensionVersion}).`
+                    : `Connected (extension ${b.extensionVersion}). Agents use it from their next message.`
                 }
               />
             ))}

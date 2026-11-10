@@ -5715,7 +5715,8 @@ async fn run_turn(
     // signed in to that account's claude.ai, not the user's: the same
     // server, run as this Mac's sign-in, under another name
     // (`account_reach`, "Claude in Chrome").
-    let chrome_as_this_mac = engine == Engine::Claude && access.browser && !account.is_this_mac();
+    let chrome_as_this_mac =
+        super::account_reach::chrome_as_this_mac(engine, access.browser, account.is_this_mac());
     let mut claude_servers = access.claude_servers(turn.secret());
     if chrome_as_this_mac {
         access.browser = false;
