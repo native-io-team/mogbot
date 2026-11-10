@@ -134,9 +134,12 @@ any past default, so stale guidance isn't merged in as the user's.
 
 Research runs on the engine's own tools and account. On
 Claude Code every web search and every page opened is a tool call the
-approval broker asks about, so a first research turn can raise several
-Allow cards. The Chief and the Research assistant are told to say so
-before they start ("I'll ask before searching the web"), and a search's
+approval broker decides. At Steady and above they are reads
+(`autoallow`) and run without a card; at Careful a first research turn
+can raise several. The Chief and the Research assistant used to warn
+"I'll ask before searching the web" up front, which was false at the
+default level (seen live: the Chief told a new user each 8am run would
+ask); now they mention Always allow only once a search has shown a card. A search's
 card offers **Always allow web searches** (a `Tool` rule on `WebSearch`,
 `permissions::suggest`); a page's card offers its one host, so each new
 site still asks once. On Codex, web search is Codex's own built-in tool
@@ -639,7 +642,7 @@ characters, a Codex agent's 12,619, the Chief's 16,003 before its team list
 (budgets 12,500 / 13,100 / 16,600). The agents' browser in "Getting access"
 took them to 12,697 / 13,262 / 16,646 after trims elsewhere (the repeated
 "don't mention servers or ports", the password paragraph the Secrets section
-already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Blocks' one line ("Show, don't describe", `show`) took the budgets to 13,500 / 14,100 / 17,500. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. The Chief's draft-first line ("Asked to make one? Draft it in one reply ending “Make it?”") went in within the Chief’s (17,245 of 17,250) by trimming its delegate, `project` and `read_agent` bullets: live on Haiku, the tool description alone didn't hold against "do it, don't ask", and a first message asking for an agent was built at once. Measured with Claude Code (Haiku 5.5,
+already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Blocks' one line ("Show, don't describe", `show`) took the budgets to 13,500 / 14,100 / 17,500. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. The Chief's draft-first line ("Asked to make one? Draft it in one reply ending “Make it?”") went in within the Chief’s (17,245 of 17,250) by trimming its delegate, `project` and `read_agent` bullets: live on Haiku, the tool description alone didn't hold against "do it, don't ask", and a first message asking for an agent was built at once. A review of the Chief as a whole (2026-11-10, live on Claude Code with `agents_fake real-chief`) folded its two create-agent bullets into one (standing or recurring work gets an agent that owns it, drafted once with its routines ending “Make it?”, its first run started on yes), replaced "No tables unless asked", which contradicted `show`, said that a `show`'s text and a result card are the reply and aren't repeated, and gave the user's word for a limit coming back ("refill"): 13,477 / 14,062 / 17,175, within the same budgets. The Chief's default instructions lost the up-front "I'll ask before searching the web" (false at Steady, where searches run without a card) and the draft-first sentence the prompt already has (3,712 → 2,820 characters). Measured with Claude Code (Haiku 5.5,
 `--append-system-prompt-file`, input tokens over a bare run): on the base
 this work started from, 3,347 tokens before and 3,269 after for a plain agent
 (4,583 → 4,505 for the Chief), while gaining the paragraph above; with

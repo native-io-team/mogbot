@@ -7,7 +7,8 @@ use super::*;
 
 /// A plain agent on Claude Code: 12,054 characters when this was set
 /// (3,827 tokens as Claude Code counted it); 12,697 with the agents' browser
-/// in "Getting access", after trimming elsewhere.
+/// in "Getting access", after trimming elsewhere; 13,477 after the Chief
+/// review (Codex 14,062, the Chief 17,175).
 const PLAIN_BUDGET: usize = 13_500;
 /// The same agent on Codex (its sandbox section): 13,262.
 const CODEX_BUDGET: usize = 14_100;
@@ -50,6 +51,19 @@ fn the_app_owned_system_prompt_stays_within_its_budget() {
     assert!(chief.contains("Never write that the user approved unless you quote their message"));
     assert!(chief.contains("on an `ask_plan` card with the exact text"));
     assert!(!plain.contains("unless you quote their message"));
+    // "A daily AI news summary at 8am": recurring work gets an agent that
+    // owns it, drafted once, its first run started on yes. Live, the Chief
+    // kept the routine itself and wrote four paragraphs repeating its card.
+    assert!(chief.contains("gets an agent that owns it"));
+    assert!(chief.contains("`first_task` to run the first one now"));
+    // Tables are `show`'s, a card or a `show` is the reply, and the user's
+    // word for a limit coming back is "refill".
+    for p in [&plain, &chief] {
+        assert!(!p.contains("No tables unless asked"));
+        assert!(p.contains("never the card again"));
+        assert!(p.contains("Its `text` is the reply: don't repeat it."));
+        assert!(p.contains("to the user they \"refill\""));
+    }
     for (name, prompt, budget) in [
         ("plain", &plain, PLAIN_BUDGET),
         ("codex", &codex, CODEX_BUDGET),
