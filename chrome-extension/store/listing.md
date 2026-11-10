@@ -7,8 +7,8 @@ which then goes into `brand.json` as `chromeExtension.webStoreId`).
 Icon: `icons/icon-128.png` (from `store/icon.svg`). Screenshot
 `store/assets/screenshot-1280x800.png` and small promo tile
 `store/assets/promo-440x280.png`, rendered from the `.html` beside them with
-headless Chrome (`--window-size` to the image's size). Still needed: the
-hosted privacy policy URL (`privacy.md`'s answers, on the site).
+headless Chrome (`--window-size` to the image's size). Privacy policy:
+https://mogbot.app/privacy/chrome-extension (`privacy.md`'s two sections).
 
 ## Name
 
