@@ -65,6 +65,9 @@
 
 .toast-message {
   flex: 1;
+  /* Its own line height: it inherited 1, so descenders overflowed the box by
+     2px and every toast was a keyboard-unreachable scroll region (axe). */
+  line-height: var(--line-height-medium);
   /* Long error payloads (multi-line stderr) scroll instead of clipping. */
   max-height: 40vh;
   overflow-y: auto;

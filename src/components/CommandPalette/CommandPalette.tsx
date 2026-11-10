@@ -246,7 +246,9 @@ export function CommandPalette({
             ref={listRef}
           >
             {layout.empty && (
-              <div className="command-palette-empty" role="status">
+              // A group, not a status: a listbox may hold only options and
+              // groups (axe aria-required-children). It still announces itself.
+              <div className="command-palette-empty" role="group" aria-live="polite">
                 {layout.empty.kind === 'nothing' ? (
                   'Nothing to run here yet.'
                 ) : layout.empty.elsewhere > 0 ? (
