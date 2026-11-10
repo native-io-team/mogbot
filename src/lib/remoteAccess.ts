@@ -52,6 +52,15 @@ export interface PublishProgress {
   gaveUp: boolean;
 }
 
+export type FunnelProblemKind =
+  | 'httpsOff'
+  | 'funnelNotAllowed'
+  | 'portNotAllowed'
+  | 'portsInUse'
+  | 'timedOut'
+  | 'notConnected'
+  | 'other';
+
 export type Reachability =
   | { state: 'reachable' }
   | { state: 'noPublicDns' }
@@ -64,7 +73,17 @@ export interface RemoteAccessStatus {
   tailscale: TailscaleState;
   funnelOn: boolean;
   funnelApprovalUrl: string | null;
+  /** What the approval link switches on: HTTPS certificates or Funnel. */
+  funnelApprovalKind?: 'https' | 'funnel' | null;
   funnelError: string | null;
+  /** `funnelError` sorted into one cause (tailscale.rs, `classify_funnel_failure`). */
+  funnelProblem?: { kind: FunnelProblemKind } | null;
+  /**
+   * Tailscale's own `BackendState` (`Stopped`, `NeedsLogin`, `Running`…), or
+   * `NotRunning` when the Tailscale app isn't running: tells "switched off"
+   * from "signed out" from "not open", which `tailscale.state` doesn't.
+   */
+  tailscaleBackend?: string | null;
   /** The link with its secret masked; present once Tailscale confirms the Funnel. */
   linkMasked: string | null;
   /**
@@ -107,6 +126,10 @@ export interface AuditEntry {
 
 export const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download/mac';
 export const TAILSCALE_MACHINES_URL = 'https://login.tailscale.com/admin/machines';
+/** Admin console → DNS, where "HTTPS Certificates" is switched on. */
+export const TAILSCALE_DNS_URL = 'https://login.tailscale.com/admin/dns';
+/** Admin console → Access controls, where the `funnel` node attribute lives. */
+export const TAILSCALE_ACLS_URL = 'https://login.tailscale.com/admin/acls/file';
 
 export const getRemoteAccessStatus = () => invoke<RemoteAccessStatus>('get_remote_access_status');
 export const getRemoteAccessBrief = () => invoke<RemoteAccessBrief>('get_remote_access_brief');
@@ -268,12 +291,16 @@ export type ConnectionStep =
   | { kind: 'unsupported' }
   | { kind: 'installTailscale' }
   | { kind: 'signInTailscale' }
+  /** Installed and signed in, but switched off in its menu. */
+  | { kind: 'tailscaleOff' }
+  /** The Tailscale app isn't running at all. */
+  | { kind: 'openTailscale' }
   | { kind: 'tailscaleProblem'; detail: string }
   | { kind: 'off' }
   /** On, but the app's server isn't running (it stopped, or never came back). */
   | { kind: 'serverStopped' }
-  | { kind: 'approveFunnel'; url: string }
-  | { kind: 'funnelFailed'; detail: string }
+  | { kind: 'approveFunnel'; url: string; approves: 'https' | 'funnel' }
+  | { kind: 'funnelFailed'; detail: string; problem: FunnelProblemKind }
   | { kind: 'starting' }
   /** Funnel is on, but the internet can't find this Mac yet. */
   | { kind: 'publishing'; linkMasked: string; stage: PublishStage; minutes: number }
@@ -303,6 +330,8 @@ export function connectionStep(s: RemoteAccessStatus, now: number = 0): Connecti
     case 'notInstalled':
       return { kind: 'installTailscale' };
     case 'needsLogin':
+      if (s.tailscaleBackend === 'Stopped') return { kind: 'tailscaleOff' };
+      if (s.tailscaleBackend === 'NotRunning') return { kind: 'openTailscale' };
       return { kind: 'signInTailscale' };
     case 'unknown':
       return { kind: 'tailscaleProblem', detail: s.tailscale.detail };
@@ -328,9 +357,337 @@ export function connectionStep(s: RemoteAccessStatus, now: number = 0): Connecti
       minutes,
     };
   }
-  if (s.funnelApprovalUrl) return { kind: 'approveFunnel', url: s.funnelApprovalUrl };
-  if (s.funnelError) return { kind: 'funnelFailed', detail: s.funnelError };
+  if (s.funnelApprovalUrl) {
+    return {
+      kind: 'approveFunnel',
+      url: s.funnelApprovalUrl,
+      approves: s.funnelApprovalKind === 'https' ? 'https' : 'funnel',
+    };
+  }
+  if (s.funnelError) {
+    return {
+      kind: 'funnelFailed',
+      detail: s.funnelError,
+      problem: s.funnelProblem?.kind ?? 'other',
+    };
+  }
   return { kind: 'starting' };
+}
+
+// ============================================================================
+// Problems — every way step 2 of onboarding can fail, as one line + one fix
+// ============================================================================
+
+/** What the one fix does when pressed. */
+export type RemoteFixAction =
+  | { kind: 'openUrl'; label: string; url: string }
+  | { kind: 'recheck'; label: string }
+  | { kind: 'turnOn'; label: string }
+  | { kind: 'republish'; label: string }
+  | { kind: 'copyLink'; label: string };
+
+export type RemoteProblemId =
+  | 'unsupported'
+  | 'tailscaleMissing'
+  | 'tailscaleNotRunning'
+  | 'tailscaleOff'
+  | 'tailscaleSignedOut'
+  | 'tailscaleUnreadable'
+  | 'remoteOff'
+  | 'serverStopped'
+  | 'httpsNeedsApproval'
+  | 'funnelNeedsApproval'
+  | 'httpsOff'
+  | 'funnelNotAllowed'
+  | 'funnelPortNotAllowed'
+  | 'funnelPortsInUse'
+  | 'funnelTimedOut'
+  | 'funnelFailed'
+  | 'publishing'
+  | 'publishStuck'
+  | 'cantCheckFromHere'
+  | 'unreachable'
+  | 'notThisApp'
+  | 'noAssistantYet';
+
+/**
+ * One state of Remote Access that needs the user, as the onboarding
+ * screens show it: `line` says what's wrong in plain words, `fix` the one
+ * thing to do, and `action` the button that does it (or opens where it's
+ * done). `waiting` marks states that clear by themselves (nothing is wrong,
+ * it just isn't there yet).
+ */
+export interface RemoteProblem {
+  id: RemoteProblemId;
+  line: string;
+  fix: string;
+  action: RemoteFixAction;
+  waiting?: boolean;
+}
+
+const recheck: RemoteFixAction = { kind: 'recheck', label: 'Check again' };
+
+/**
+ * The one problem standing between this status and a working connection,
+ * or null when an assistant can reach this Mac and one already has.
+ * Derived from `connectionStep`, so the setup modal and the onboarding
+ * screens can never disagree. Documented in docs/remote-access.md,
+ * "Failure states".
+ */
+export function remoteProblem(s: RemoteAccessStatus, now: number = 0): RemoteProblem | null {
+  const step = connectionStep(s, now);
+  switch (step.kind) {
+    case 'unsupported':
+      return {
+        id: 'unsupported',
+        line: 'Remote access only works on a Mac.',
+        fix: 'Use an export or paste a reply to bring your agents over instead.',
+        action: recheck,
+      };
+    case 'installTailscale':
+      return {
+        id: 'tailscaleMissing',
+        line: 'Tailscale isn’t on this Mac yet. It gives this Mac its private link.',
+        fix: 'Install Tailscale (free), open it, and sign in.',
+        action: { kind: 'openUrl', label: 'Get Tailscale', url: TAILSCALE_DOWNLOAD_URL },
+      };
+    case 'openTailscale':
+      return {
+        id: 'tailscaleNotRunning',
+        line: 'Tailscale is installed but isn’t open.',
+        fix: 'Open Tailscale from Applications, then check again.',
+        action: recheck,
+      };
+    case 'tailscaleOff':
+      return {
+        id: 'tailscaleOff',
+        line: 'Tailscale is switched off.',
+        fix: 'Click Tailscale in the menu bar and switch it on.',
+        action: recheck,
+      };
+    case 'signInTailscale':
+      return {
+        id: 'tailscaleSignedOut',
+        line: 'Tailscale is signed out.',
+        fix: 'Click Tailscale in the menu bar and sign in.',
+        action: recheck,
+      };
+    case 'tailscaleProblem':
+      return {
+        id: 'tailscaleUnreadable',
+        line: `Tailscale gave an answer the app couldn’t read: ${step.detail}`,
+        fix: 'Quit and reopen Tailscale, then check again.',
+        action: recheck,
+      };
+    case 'off':
+      return {
+        id: 'remoteOff',
+        line: 'Remote access is off.',
+        fix: 'Turn it on to give this Mac its link.',
+        action: { kind: 'turnOn', label: 'Turn on remote access' },
+      };
+    case 'serverStopped':
+      return {
+        id: 'serverStopped',
+        line: 'The link is set up, but the app’s side of it stopped.',
+        fix: 'Start it again.',
+        action: { kind: 'turnOn', label: 'Start it again' },
+      };
+    case 'approveFunnel':
+      return step.approves === 'https'
+        ? {
+            id: 'httpsNeedsApproval',
+            line: 'Your Tailscale account needs HTTPS turned on, once, for a private link.',
+            fix: 'Open the page, allow it, then come back. If it says only an admin can, ask whoever runs your Tailscale.',
+            action: { kind: 'openUrl', label: 'Allow in Tailscale', url: step.url },
+          }
+        : {
+            id: 'funnelNeedsApproval',
+            line: 'Tailscale needs your OK, once, to make this Mac’s link reachable (it calls this Funnel).',
+            fix: 'Open the page, allow it, then come back. If it says only an admin can, ask whoever runs your Tailscale.',
+            action: { kind: 'openUrl', label: 'Allow in Tailscale', url: step.url },
+          };
+    case 'funnelFailed':
+      switch (step.problem) {
+        case 'httpsOff':
+          return {
+            id: 'httpsOff',
+            line: 'HTTPS certificates are off in your Tailscale account, and the link needs them.',
+            fix: 'In Tailscale’s DNS settings, press Enable HTTPS, then try again.',
+            action: { kind: 'openUrl', label: 'Open DNS settings', url: TAILSCALE_DNS_URL },
+          };
+        case 'funnelNotAllowed':
+          return {
+            id: 'funnelNotAllowed',
+            line: 'Your Tailscale account doesn’t allow Funnel for this Mac.',
+            fix: 'In Access controls, add the “funnel” attribute for this Mac (an admin has to), then try again.',
+            action: { kind: 'openUrl', label: 'Open Access controls', url: TAILSCALE_ACLS_URL },
+          };
+        case 'portNotAllowed':
+          return {
+            id: 'funnelPortNotAllowed',
+            line: 'Your Tailscale account allows Funnel, but not on port 443.',
+            fix: 'In Access controls, let the “funnel” attribute use port 443, then try again.',
+            action: { kind: 'openUrl', label: 'Open Access controls', url: TAILSCALE_ACLS_URL },
+          };
+        case 'portsInUse':
+          return {
+            id: 'funnelPortsInUse',
+            line: 'Something else on this Mac is shared privately on Tailscale, and turning the link on would make it public.',
+            fix: 'Stop that other share (tailscale serve) on port 443, 8443 or 10000, then try again.',
+            action: { kind: 'turnOn', label: 'Try again' },
+          };
+        case 'timedOut':
+          return {
+            id: 'funnelTimedOut',
+            line: 'Tailscale didn’t answer in time.',
+            fix: 'Check Tailscale is open and connected in the menu bar, then try again.',
+            action: { kind: 'turnOn', label: 'Try again' },
+          };
+        case 'notConnected':
+          return {
+            id: 'tailscaleSignedOut',
+            line: 'Tailscale wasn’t connected when the link was turned on.',
+            fix: 'Connect Tailscale from the menu bar, then try again.',
+            action: { kind: 'turnOn', label: 'Try again' },
+          };
+        default:
+          return {
+            id: 'funnelFailed',
+            line: `Tailscale couldn’t make the link: ${step.detail}`,
+            fix: 'Try again. If it says the same, open Tailscale and check it’s connected.',
+            action: { kind: 'turnOn', label: 'Try again' },
+          };
+      }
+    case 'starting':
+      return {
+        id: 'publishing',
+        line: 'Waiting for Tailscale to confirm the link.',
+        fix: 'Nothing to do; this takes a few seconds.',
+        action: recheck,
+        waiting: true,
+      };
+    case 'publishing':
+      return step.stage === 'stuck'
+        ? {
+            id: 'publishStuck',
+            line: `Tailscale still hasn’t made the link public (${step.minutes} min).`,
+            fix: 'Ask Tailscale again.',
+            action: { kind: 'republish', label: 'Ask Tailscale again' },
+          }
+        : {
+            id: 'publishing',
+            line: 'Tailscale is making the link public. Usually a minute or two.',
+            fix: 'You can add the link to your assistant now; it starts working by itself.',
+            action: { kind: 'copyLink', label: 'Copy link' },
+            waiting: true,
+          };
+    case 'unreachable': {
+      const d = step.detail;
+      if (/^public DNS lookup failed/i.test(d)) {
+        return {
+          id: 'cantCheckFromHere',
+          line: 'The app couldn’t check the link: this Mac couldn’t reach the internet.',
+          fix: 'Check this Mac is online, then check again.',
+          action: recheck,
+        };
+      }
+      if (/not this app/i.test(d)) {
+        return {
+          id: 'notThisApp',
+          line: 'Something else answers at this Mac’s public address.',
+          fix: 'Ask Tailscale again so the link points here.',
+          action: { kind: 'republish', label: 'Ask Tailscale again' },
+        };
+      }
+      return {
+        id: 'unreachable',
+        line: 'The link is set up, but a request from the internet didn’t get through yet.',
+        fix: 'Ask Tailscale again; if it still fails, check Tailscale is connected.',
+        action: { kind: 'republish', label: 'Ask Tailscale again' },
+      };
+    }
+    case 'ready':
+      if (s.everConnected) return null;
+      return {
+        id: 'noAssistantYet',
+        line: 'The link works. No assistant has connected with it yet.',
+        fix: 'Copy the link, add it to your assistant as a custom connector, and ask it something.',
+        action: { kind: 'copyLink', label: 'Copy link' },
+        waiting: true,
+      };
+  }
+}
+
+// ============================================================================
+// Connecting an assistant — what to paste where
+// ============================================================================
+
+export type AssistantId = 'claude' | 'chatgpt' | 'grok' | 'other';
+
+export interface AssistantGuide {
+  id: AssistantId;
+  name: string;
+  /** The steps, in the assistant's own words for its menus. */
+  steps: string[];
+  /** One line on what plan or role it needs, when it needs one. */
+  needs?: string;
+  /** Where to start, when there is a page for it. */
+  url?: string;
+}
+
+/**
+ * Where to paste the link in each assistant, checked against each one's own
+ * help pages on 2026-11-10 (docs/internal/import-remote-reliability-2026-11-10.md
+ * says what was and wasn't confirmed). Menus move: each guide names the
+ * setting so it can be searched for when a label changes. The link is
+ * pasted only into the connector's URL field, never into a chat.
+ */
+export function assistantGuides(appName: string): AssistantGuide[] {
+  return [
+    {
+      id: 'claude',
+      name: 'Claude',
+      needs:
+        'Any plan (Free allows one custom connector). On Team and Enterprise an owner adds it.',
+      steps: [
+        'Go to Customize → Connectors, press + Add, then Add custom connector.',
+        `Name it ${appName}, paste the link as the remote MCP server URL, and press Continue.`,
+        'For authentication choose No sign in (the link carries its own key), then Add.',
+        'In a chat, press + → Connectors and switch it on.',
+      ],
+    },
+    {
+      id: 'chatgpt',
+      name: 'ChatGPT',
+      needs:
+        'On the web, with Developer mode (Plus, Pro, Business, Enterprise, Edu; on Business and Enterprise an admin turns it on).',
+      steps: [
+        'Settings → Apps → Advanced settings: switch on Developer mode.',
+        `Back in Apps press Create app. Name it ${appName} and paste the link as the MCP server URL.`,
+        'For authentication choose No authentication, tick that you trust it, and press Create.',
+        'In a chat, press + → Developer mode and pick it.',
+      ],
+    },
+    {
+      id: 'grok',
+      name: 'Grok',
+      url: 'https://grok.com/connectors',
+      steps: [
+        'Go to grok.com/connectors, press New Connector, then Custom.',
+        `Name it ${appName} and paste the link as the server URL. It needs no sign-in.`,
+        'Ask Grok something about your agents to check it connected.',
+      ],
+    },
+    {
+      id: 'other',
+      name: 'Another assistant',
+      steps: [
+        'Find where it adds a custom connector (it may say MCP server, remote MCP or integration).',
+        `Name it ${appName} and paste the link as its URL. Choose no sign-in if asked.`,
+      ],
+    },
+  ];
 }
 
 // ============================================================================

@@ -752,7 +752,7 @@ pub fn to_review(e: &Export, chief: &str) -> (Review, Vec<String>, usize) {
                     .any(|q| review::same_name(&q.name, &p.name)) =>
             {
                 refused.push(format!(
-                    "{}: another agent in it has a name that looks the same.",
+                    "{}: another agent in it has a name that looks the same. Only the first is on the card; rename this one where it came from and import it again.",
                     p.name
                 ))
             }
@@ -924,6 +924,30 @@ fn source_name(e: &Export) -> String {
     super::connector::clean_source(&e.source, &chief_name()).unwrap_or(fallback)
 }
 
+/// Whether a review card from an export, for the same agents from the same
+/// source, is still waiting on an answer. Same agents: the same names with
+/// the same instructions, in any order, and the same notes for the Chief.
+pub(crate) fn already_waiting(pending: &[store::Approval], source: &str, review: &Review) -> bool {
+    let shape = |r: &Review| {
+        let mut agents: Vec<(String, String)> = r
+            .proposals
+            .iter()
+            .map(|p| (p.name.to_lowercase(), p.instructions.clone()))
+            .collect();
+        agents.sort();
+        (agents, r.chief_notes.clone())
+    };
+    let wanted = shape(review);
+    pending.iter().any(|a| {
+        a.connector.as_ref().is_some_and(|c| {
+            c.kind == review::CardKind::Review
+                && is_export_card(&c.talk_id)
+                && c.source.eq_ignore_ascii_case(source)
+                && c.review.as_ref().is_some_and(|r| shape(r) == wanted)
+        })
+    })
+}
+
 /// Where the card went.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -951,6 +975,16 @@ pub fn post(app: &AppHandle, e: &Export) -> Result<Posted, CommandError> {
     }
     let source = source_name(e);
     let review = review::with_arrival(review::with_clashes(review), &source);
+    // The same export picked or pasted again while its card is still up
+    // would be a second card for the same agents, and importing both makes
+    // "Finance" and "Finance (from Grok)". Say where the first one is.
+    let pending = store::pending_approvals(&chief.id).unwrap_or_default();
+    if already_waiting(&pending, &source, &review) {
+        return Err(CommandError::expected(format!(
+            "This is already waiting for your review in {}'s chat. Answer that card first (Import or Don't import), then bring it in again if you need to.",
+            chief.name
+        )));
+    }
     let agents = review.proposals.len();
     let talk_id = format!("{TALK_PREFIX}{}", store::new_id());
     let request_id = super::connector::post_review_card(app, &chief.id, &talk_id, &source, review)
@@ -990,3 +1024,7 @@ pub fn post(app: &AppHandle, e: &Export) -> Result<Posted, CommandError> {
 #[cfg(test)]
 #[path = "import_export_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "import_adversarial_tests.rs"]
+mod adversarial_tests;

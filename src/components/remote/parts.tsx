@@ -14,6 +14,7 @@ import { useState, type FormEvent } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../primitives/Button';
 import { Checkbox } from '../primitives/Checkbox';
+import { SegmentedControl } from '../primitives/SegmentedControl';
 import { Spinner } from '../primitives/Spinner';
 import { TextField } from '../primitives/TextField';
 import { CopyIcon, ExternalLinkIcon, SuccessIcon, WarningIcon } from '@/components/icons';
@@ -22,6 +23,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import type { DashboardProject } from '../../lib/project';
 import {
   agoText,
+  assistantGuides,
   clearRemotePushPin,
   connectionStep,
   copyRemoteLink,
@@ -29,6 +31,7 @@ import {
   getRemoteAccessStatus,
   pinProblem,
   readinessItems,
+  remoteProblem,
   republishRemoteLink,
   resetRemoteLink,
   setLidClosedMode,
@@ -36,8 +39,10 @@ import {
   setRemoteAccessEnabled,
   setRemotePushPin,
   TAILSCALE_DOWNLOAD_URL,
+  type AssistantId,
   type AuditEntry,
   type RemoteAccessStatus,
+  type RemoteProblem,
 } from '../../lib/remoteAccess';
 
 export const errMsg = (err: unknown) => formatCommandError(asCommandError(err));
@@ -118,6 +123,91 @@ export function ReadinessList({ ctl }: { ctl: RemoteCtl }) {
 // Connection
 // ============================================================================
 
+/**
+ * A `remoteProblem` as the modal shows it: the line, the fix, and the one
+ * button. Onboarding screens can render the same object their own way.
+ */
+function ProblemPanel({ ctl, problem }: { ctl: RemoteCtl; problem: RemoteProblem }) {
+  const { busy, act } = ctl;
+  const { showToast } = useOptionalToast();
+  const a = problem.action;
+  const button = (() => {
+    switch (a.kind) {
+      case 'openUrl':
+        return (
+          <Button
+            variant="primary"
+            rightIcon={<ExternalLinkIcon size={14} />}
+            onClick={() => void openUrl(a.url)}
+          >
+            {a.label}
+          </Button>
+        );
+      case 'turnOn':
+        return (
+          <Button
+            variant="primary"
+            {...busyProps(busy, 'enable')}
+            onClick={() => void act('enable', () => setRemoteAccessEnabled(true))}
+          >
+            {a.label}
+          </Button>
+        );
+      case 'republish':
+        return (
+          <Button
+            variant="secondary"
+            {...busyProps(busy, 'republish')}
+            onClick={() => void act('republish', republishRemoteLink)}
+          >
+            {a.label}
+          </Button>
+        );
+      case 'copyLink':
+        return (
+          <Button
+            variant="secondary"
+            leftIcon={<CopyIcon size={14} />}
+            onClick={() => {
+              copyRemoteLink().catch((e: unknown) => showToast(errMsg(e), 'error'));
+            }}
+          >
+            {a.label}
+          </Button>
+        );
+      case 'recheck':
+        return (
+          <Button
+            variant="secondary"
+            {...busyProps(busy, 'check')}
+            onClick={() => void act('check', getRemoteAccessStatus)}
+          >
+            {a.label}
+          </Button>
+        );
+    }
+  })();
+  return (
+    <>
+      <p className={problem.waiting ? 'remote-note' : 'remote-error'} data-problem={problem.id}>
+        {problem.line} {problem.fix}
+      </p>
+      <div className="remote-actions">
+        {button}
+        {a.kind === 'openUrl' && (
+          <Button
+            variant="secondary"
+            {...busyProps(busy, 'enable')}
+            onClick={() => void act('enable', () => setRemoteAccessEnabled(true))}
+          >
+            Try again
+          </Button>
+        )}
+      </div>
+    </>
+  );
+}
+
 /** Everything between "no Tailscale" and "the link is live". */
 export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
   const { status, busy, act } = ctl;
@@ -170,6 +260,11 @@ export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
           </div>
         </>
       );
+    case 'tailscaleOff':
+    case 'openTailscale': {
+      const problem = remoteProblem(status, ctl.now);
+      return problem ? <ProblemPanel ctl={ctl} problem={problem} /> : null;
+    }
     case 'tailscaleProblem':
       return (
         <>
@@ -225,12 +320,12 @@ export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
           </div>
         </>
       );
-    case 'approveFunnel':
+    case 'approveFunnel': {
+      const problem = remoteProblem(status, ctl.now);
       return (
         <>
-          <p className="remote-note">
-            Tailscale needs your OK, once, before this Mac can have a public link. Tailscale calls
-            this Funnel.
+          <p className="remote-note" data-problem={problem?.id}>
+            {problem?.line} {problem?.fix}
           </p>
           <div className="remote-actions">
             <Button
@@ -246,17 +341,11 @@ export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
           </div>
         </>
       );
-    case 'funnelFailed':
-      return (
-        <>
-          <p className="remote-error">Couldn’t publish the link: {step.detail}</p>
-          <div className="remote-actions">
-            <Button variant="secondary" {...busyProps(busy, 'enable')} onClick={turnOn}>
-              Try again
-            </Button>
-          </div>
-        </>
-      );
+    }
+    case 'funnelFailed': {
+      const problem = remoteProblem(status, ctl.now);
+      return problem ? <ProblemPanel ctl={ctl} problem={problem} /> : null;
+    }
     case 'starting':
       return (
         <div className="remote-waiting">
@@ -637,5 +726,52 @@ export function ActivityList({ entries, now }: { entries: AuditEntry[]; now: num
         </li>
       ))}
     </ul>
+  );
+}
+
+// ============================================================================
+// Connecting an assistant
+// ============================================================================
+
+/**
+ * Exactly what to paste where, for the assistant the user picks
+ * (`assistantGuides`). The link itself is copied by the link row above.
+ */
+export function AssistantSteps({ appName }: { appName: string }) {
+  const guides = assistantGuides(appName);
+  const [which, setWhich] = useState<AssistantId>('claude');
+  const guide = guides.find((g) => g.id === which) ?? guides[0];
+  return (
+    <div className="remote-assistant" data-testid="remote-assistant-steps">
+      <SegmentedControl
+        aria-label="Your assistant"
+        size="compact"
+        value={guide.id}
+        options={guides.map((g) => ({ value: g.id, label: g.name }))}
+        onValueChange={setWhich}
+      />
+      <ol className="remote-steps-mini">
+        <li>Copy the link.</li>
+        {guide.steps.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+        <li>
+          Ask it: <em>“What are my agents doing?”</em>
+        </li>
+      </ol>
+      {guide.needs && <p className="remote-note">{guide.needs}</p>}
+      {guide.url && (
+        <div className="remote-actions">
+          <Button
+            variant="secondary"
+            size="compact"
+            rightIcon={<ExternalLinkIcon size={14} />}
+            onClick={() => void openUrl(guide.url as string)}
+          >
+            Open {guide.name}’s connectors
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

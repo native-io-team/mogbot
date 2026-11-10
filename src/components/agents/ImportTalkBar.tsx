@@ -16,7 +16,8 @@ import { Button } from '../primitives/Button';
 import { TypingDots } from '../primitives/TypingDots';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { stopImportTalk, talkIsLive, type ImportTalk } from '../../lib/agents';
+import { importQuietMinutes, stopImportTalk, talkIsLive, type ImportTalk } from '../../lib/agents';
+import { useNow } from '../../hooks/useNow';
 import { ConversationBar } from './AgentCard';
 import { plural } from './ImportParts';
 import { useImportGate } from './ImportConnectorPanel';
@@ -41,11 +42,27 @@ export function importCounts(talk: ImportTalk): string | null {
  * which can't see your chats is said once, by the note in the chat, not again
  * here.
  */
-export function barLines(talk: ImportTalk): {
+export function barLines(
+  talk: ImportTalk,
+  now = 0
+): {
   title: string;
   detail?: string;
   counts?: string | null;
+  /** The other assistant has the ball and hasn't come back. */
+  quiet?: boolean;
 } {
+  const quiet = now ? importQuietMinutes(talk, now) : null;
+  if (quiet !== null) {
+    // Most often its chat turn ended (or its tool call timed out) and it
+    // stopped calling back: only the user can nudge it.
+    return {
+      title: `Import from ${talk.source} · waiting on ${talk.source}`,
+      detail: `Nothing from ${talk.source} for ${quiet} min. In ${talk.source}, say “carry on with the import”.`,
+      counts: importCounts(talk),
+      quiet: true,
+    };
+  }
   switch (talk.state) {
     case 'awaiting_consent':
       return {
@@ -70,10 +87,16 @@ export function barLines(talk: ImportTalk): {
 export function ImportTalkBar() {
   const { talk } = useImportGate();
   const { showToast } = useOptionalToast();
+  // Once a minute while an interview runs, so "waiting on Grok" appears
+  // without an event (nothing happens: that's the point).
+  const now = useNow(talk?.state === 'interviewing', 60_000);
   if (!talkIsLive(talk)) return null;
-  const { title, detail, counts } = barLines(talk);
+  const { title, detail, counts, quiet } = barLines(talk, now);
   const waiting =
-    talk.state === 'awaiting_consent' || talk.state === 'playback' || talk.state === 'review';
+    quiet ||
+    talk.state === 'awaiting_consent' ||
+    talk.state === 'playback' ||
+    talk.state === 'review';
   return (
     <ConversationBar
       state={waiting ? 'waiting' : 'active'}

@@ -219,6 +219,17 @@
   margin: 0;
 }
 
+.remote-assistant {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.remote-assistant > .remote-steps-mini {
+  margin: 0;
+}
+
 .remote-steps-mini {
   margin: var(--spacing-md) 0 0;
   padding-left: var(--spacing-lg);

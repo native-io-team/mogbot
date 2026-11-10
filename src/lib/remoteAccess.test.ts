@@ -9,7 +9,11 @@ import {
   liveState,
   pinProblem,
   readinessItems,
+  remoteProblem,
+  assistantGuides,
   setupSteps,
+  TAILSCALE_ACLS_URL,
+  TAILSCALE_DNS_URL,
   type RemoteAccessStatus,
   type SetupChoices,
 } from './remoteAccess';
@@ -119,11 +123,120 @@ describe('connectionStep', () => {
       connectionStep(
         status({ linkMasked: null, funnelApprovalUrl: 'https://login.tailscale.com/f/x' })
       )
-    ).toEqual({ kind: 'approveFunnel', url: 'https://login.tailscale.com/f/x' });
+    ).toEqual({
+      kind: 'approveFunnel',
+      url: 'https://login.tailscale.com/f/x',
+      approves: 'funnel',
+    });
     expect(connectionStep(status({ linkMasked: null, funnelError: 'boom' }))).toEqual({
       kind: 'funnelFailed',
       detail: 'boom',
+      problem: 'other',
     });
+  });
+
+  it('tells switched off and not open apart from signed out', () => {
+    const ts = { state: 'needsLogin' } as const;
+    expect(connectionStep(status({ tailscale: ts, tailscaleBackend: 'Stopped' })).kind).toBe(
+      'tailscaleOff'
+    );
+    expect(connectionStep(status({ tailscale: ts, tailscaleBackend: 'NotRunning' })).kind).toBe(
+      'openTailscale'
+    );
+    expect(connectionStep(status({ tailscale: ts, tailscaleBackend: 'NeedsLogin' })).kind).toBe(
+      'signInTailscale'
+    );
+  });
+});
+
+describe('remoteProblem', () => {
+  const failed = (kind: NonNullable<RemoteAccessStatus['funnelProblem']>['kind']) =>
+    remoteProblem(status({ linkMasked: null, funnelError: 'x', funnelProblem: { kind } }));
+
+  it('gives every failure one line, one fix and one action', () => {
+    const cases: [Partial<RemoteAccessStatus>, string][] = [
+      [{ supported: false }, 'unsupported'],
+      [{ tailscale: { state: 'notInstalled' } }, 'tailscaleMissing'],
+      [
+        { tailscale: { state: 'needsLogin' }, tailscaleBackend: 'NotRunning' },
+        'tailscaleNotRunning',
+      ],
+      [{ tailscale: { state: 'needsLogin' }, tailscaleBackend: 'Stopped' }, 'tailscaleOff'],
+      [{ tailscale: { state: 'needsLogin' } }, 'tailscaleSignedOut'],
+      [{ tailscale: { state: 'unknown', detail: '???' } }, 'tailscaleUnreadable'],
+      [{ enabled: false, linkMasked: null }, 'remoteOff'],
+      [{ serverRunning: false }, 'serverStopped'],
+      [
+        {
+          linkMasked: null,
+          funnelApprovalUrl: 'https://login.tailscale.com/f/serve?node=n',
+          funnelApprovalKind: 'https',
+        },
+        'httpsNeedsApproval',
+      ],
+      [
+        { linkMasked: null, funnelApprovalUrl: 'https://login.tailscale.com/f/funnel?node=n' },
+        'funnelNeedsApproval',
+      ],
+      [{ linkMasked: null }, 'publishing'],
+      [{ reachability: { state: 'noPublicDns' } }, 'publishing'],
+      [
+        {
+          reachability: { state: 'noPublicDns' },
+          publish: { sinceMs: 0, autoRetried: true, gaveUp: true },
+        },
+        'publishStuck',
+      ],
+      [
+        { reachability: { state: 'unreachable', detail: 'public DNS lookup failed: offline' } },
+        'cantCheckFromHere',
+      ],
+      [
+        {
+          reachability: {
+            state: 'unreachable',
+            detail: 'Something answered at this address, but not this app.',
+          },
+        },
+        'notThisApp',
+      ],
+      [{ reachability: { state: 'unreachable', detail: 'Couldn’t reach' } }, 'unreachable'],
+      [{}, 'noAssistantYet'],
+    ];
+    for (const [over, id] of cases) {
+      const p = remoteProblem(status(over));
+      expect(p?.id, JSON.stringify(over)).toBe(id);
+      expect(p?.line.length).toBeGreaterThan(0);
+      expect(p?.fix.length).toBeGreaterThan(0);
+      expect(p?.line).not.toMatch(/\n/);
+    }
+    expect(failed('httpsOff')?.id).toBe('httpsOff');
+    expect(failed('httpsOff')?.action).toMatchObject({ kind: 'openUrl', url: TAILSCALE_DNS_URL });
+    expect(failed('funnelNotAllowed')?.action).toMatchObject({ url: TAILSCALE_ACLS_URL });
+    expect(failed('portNotAllowed')?.id).toBe('funnelPortNotAllowed');
+    expect(failed('portsInUse')?.id).toBe('funnelPortsInUse');
+    expect(failed('timedOut')?.id).toBe('funnelTimedOut');
+    expect(failed('other')?.line).toContain('x');
+  });
+
+  it('is nothing once the link works and an assistant has used it', () => {
+    expect(remoteProblem(status({ everConnected: true }))).toBeNull();
+  });
+});
+
+describe('assistantGuides', () => {
+  it('says where to paste the link in each assistant, and never into a chat', () => {
+    const guides = assistantGuides('Mogbot');
+    expect(guides.map((g) => g.id)).toEqual(['claude', 'chatgpt', 'grok', 'other']);
+    for (const g of guides) {
+      expect(g.steps.join(' ')).toContain('Mogbot');
+      expect(g.steps.join(' ')).not.toMatch(/paste it into the chat/i);
+    }
+    expect(guides[0].steps.join(' ')).toMatch(/Add custom connector/);
+    expect(guides[0].steps.join(' ')).toMatch(/No sign in/);
+    expect(guides[1].steps.join(' ')).toMatch(/Developer mode/);
+    expect(guides[1].steps.join(' ')).toMatch(/No authentication/);
+    expect(guides[2].url).toBe('https://grok.com/connectors');
   });
 });
 

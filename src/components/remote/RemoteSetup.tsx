@@ -27,7 +27,14 @@ import {
   type SetupChoices,
   type SetupStepId,
 } from '../../lib/remoteAccess';
-import { ConnectionPanel, PinForm, ProjectPicker, ReadinessList, type RemoteCtl } from './parts';
+import {
+  AssistantSteps,
+  ConnectionPanel,
+  PinForm,
+  ProjectPicker,
+  ReadinessList,
+  type RemoteCtl,
+} from './parts';
 
 interface Props {
   ctl: RemoteCtl;
@@ -121,17 +128,7 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
     assistant: (
       <>
         <ConnectionPanel ctl={ctl} />
-        <ol className="remote-steps-mini">
-          <li>Copy the link.</li>
-          <li>
-            In your AI assistant, add a custom connector (it may say MCP), name it{' '}
-            <strong>{BRAND.name}</strong>, and paste the link. Grok, Claude, ChatGPT and Cursor all
-            have one — any assistant that takes custom connectors works.
-          </li>
-          <li>
-            Ask it: <em>“What are my agents doing?”</em>
-          </li>
-        </ol>
+        <AssistantSteps appName={BRAND.name} />
         {status.reachability?.state === 'reachable' && (
           <div className="remote-waiting">
             <Spinner size="sm" /> Waiting for your assistant to connect…

@@ -27,7 +27,15 @@ pub struct RemoteAccessStatus {
     /// Confirmed from `tailscale funnel status`, not from our own command.
     pub funnel_on: bool,
     pub funnel_approval_url: Option<String>,
+    /// What the approval link switches on: `https` (certificates) or `funnel`.
+    pub funnel_approval_kind: Option<&'static str>,
     pub funnel_error: Option<String>,
+    /// `funnel_error` sorted into one cause, for one line and one fix.
+    pub funnel_problem: Option<tailscale::FunnelProblem>,
+    /// Tailscale's own `BackendState` (`Stopped`, `NeedsLogin`, `Running`…),
+    /// or `NotRunning` when the Tailscale app itself isn't running: what
+    /// tells "switched off" from "signed out" from "not open".
+    pub tailscale_backend: Option<String>,
     /// The link with its secret masked, present only when the Funnel is
     /// confirmed on. The real link is only ever copied, never returned.
     pub link_masked: Option<String>,
@@ -49,7 +57,34 @@ pub struct RemoteAccessStatus {
 }
 
 fn connector_url(dns_name: &str, token: &str) -> String {
-    format!("https://{dns_name}{}/mcp/{token}", tailscale::MOUNT_PATH)
+    format!(
+        "https://{}{}/mcp/{token}",
+        tailscale::public_authority(dns_name),
+        tailscale::MOUNT_PATH
+    )
+}
+
+/// What Tailscale said `--bg` would do but its config doesn't show.
+const NOT_CONFIRMED: &str =
+    "Tailscale said yes, but its settings don't show the link. Try turning it on again.";
+
+/// The approval link and the error to show, from the last Funnel attempt
+/// and what Tailscale's config shows now.
+fn funnel_report(
+    funnel_on: bool,
+    enabled: bool,
+    last: Option<tailscale::FunnelOutcome>,
+) -> (Option<String>, Option<String>) {
+    match (funnel_on, last) {
+        (false, Some(tailscale::FunnelOutcome::NeedsApproval { url })) => (Some(url), None),
+        (false, Some(tailscale::FunnelOutcome::Failed { detail })) => (None, Some(detail)),
+        // Exit zero, nothing in the config: never "Waiting for Tailscale…"
+        // forever.
+        (false, Some(tailscale::FunnelOutcome::On)) if enabled => {
+            (None, Some(NOT_CONFIRMED.to_string()))
+        }
+        _ => (None, None),
+    }
 }
 
 fn mask(dns_name: &str, token: &str) -> String {
@@ -61,7 +96,7 @@ fn mask(dns_name: &str, token: &str) -> String {
 
 async fn build_status() -> RemoteAccessStatus {
     let config = remote_access::read_config();
-    let ts = tailscale::status().await;
+    let (ts, tailscale_backend) = tailscale::status_with_backend().await;
     let port = remote_access::running_port();
     let funnel_on = match (&ts, port) {
         (tailscale::TailscaleState::Connected { dns_name, .. }, Some(port)) => {
@@ -82,11 +117,11 @@ async fn build_status() -> RemoteAccessStatus {
             *l = None;
         }
     }
-    let (funnel_approval_url, funnel_error) = match (funnel_on, last) {
-        (false, Some(tailscale::FunnelOutcome::NeedsApproval { url })) => (Some(url), None),
-        (false, Some(tailscale::FunnelOutcome::Failed { detail })) => (None, Some(detail)),
-        _ => (None, None),
-    };
+    let (funnel_approval_url, funnel_error) = funnel_report(funnel_on, config.enabled, last);
+    let funnel_problem = funnel_error
+        .as_deref()
+        .map(tailscale::classify_funnel_failure);
+    let funnel_approval_kind = funnel_approval_url.as_deref().map(tailscale::approval_kind);
     RemoteAccessStatus {
         supported: cfg!(target_os = "macos"),
         enabled: config.enabled,
@@ -94,7 +129,10 @@ async fn build_status() -> RemoteAccessStatus {
         tailscale: ts,
         funnel_on,
         funnel_approval_url,
+        funnel_approval_kind,
         funnel_error,
+        funnel_problem,
+        tailscale_backend,
         link_masked,
         reachability,
         publish: remote_access::publish_progress(),
@@ -365,6 +403,36 @@ mod tests {
         assert_eq!(
             connector_url("m.t.ts.net", "abc"),
             format!("https://m.t.ts.net{}/mcp/abc", tailscale::MOUNT_PATH)
+        );
+    }
+
+    #[test]
+    fn a_funnel_that_said_yes_but_isnt_there_is_an_error_not_a_wait() {
+        use tailscale::FunnelOutcome as F;
+        assert_eq!(
+            funnel_report(false, true, Some(F::On)),
+            (None, Some(NOT_CONFIRMED.to_string()))
+        );
+        // Off by choice, or confirmed on: nothing to report.
+        assert_eq!(funnel_report(false, false, Some(F::On)), (None, None));
+        assert_eq!(funnel_report(true, true, Some(F::On)), (None, None));
+        assert_eq!(
+            funnel_report(
+                false,
+                true,
+                Some(F::NeedsApproval {
+                    url: "https://login.tailscale.com/f/funnel?node=n".into()
+                })
+            ),
+            (
+                Some("https://login.tailscale.com/f/funnel?node=n".into()),
+                None
+            )
+        );
+        assert_eq!(
+            funnel_report(true, true, Some(F::Failed { detail: "x".into() })),
+            (None, None),
+            "a failure Tailscale has since got past is stale"
         );
     }
 }
