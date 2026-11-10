@@ -217,7 +217,8 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  color: var(--text-faint);
+  /* Its words are read (AA), so muted, not faint: faint is decoration only. */
+  color: var(--text-muted);
   margin-bottom: var(--dashboard-section-gap);
 }
 
