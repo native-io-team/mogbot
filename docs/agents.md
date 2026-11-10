@@ -5501,7 +5501,7 @@ a new agent starts on when nobody picked, saved in the app's settings
   Claude Code when ready, else the first engine that is
   (`engine::default_for`).
 - **Model on Claude Code / Model on Codex** — one row per installed engine:
-  "Engine's default" (no `--model`) and only the models that engine itself
+  "Default" (no `--model`) and only the models that engine itself
   reports or accepts: Claude Code's aliases (said by what they're for, the
   alias beside it), Codex's `models_cache.json`. An engine that lists none
   has no menu, just "Codex hasn't listed its models, so new agents use its
@@ -5690,7 +5690,7 @@ time. The e2e Codex scenarios run on the account when one is signed in.
   to another engine resets the setting along with its model.
   One-time check-ins, including "Retry at", run on the agent's own model
   (`store::Agent::routine_model`).
-- **Model.** Said by what it's for — Default / Most capable / Balanced /
+- **Model.** Said by what it's for — Default / Smartest / Balanced /
   Fastest — with Claude Code's own name (Opus / Sonnet / Haiku) in small
   text beside it; passed as `--model` from the next turn. Set it when creating
   the agent (it starts on the default for its engine, Settings → Agents),
@@ -5699,7 +5699,7 @@ time. The e2e Codex scenarios run on the account when one is signed in.
   what it's doing, never the engine. Only Claude Code's own aliases are accepted, and the backend
   enforces that too. Default means no `--model`, so whatever Claude Code
   defaults to.
-- **Effort.** How hard its conversation turns think: Engine's default, Low,
+- **Effort.** How hard its conversation turns think: Default, Low,
   Medium or High (`store::EFFORTS`, the three both engines take), in the
   same … menu and on the phone's Agent controls. Claude Code gets
   `--effort <level>` (2.1.319 also takes `xhigh` and `max`); `codex exec`

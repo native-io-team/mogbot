@@ -683,7 +683,7 @@ request, the diff and the photo viewer push over them. At
 - **Settings.** The paired Mac, plan usage, what new agents start on, alerts
   (with their limits), haptics, updates, about. **New agents start on** lists
   the Mac's engines (one not installed or signed in is dimmed, saying which),
-  and a **Model on …** section per installed engine offers "Engine's default"
+  and a **Model on …** section per installed engine offers "Default"
   and only the models that engine listed (`lib/newAgentDefaults.ts`). Read
   from the overview's `defaults`; a tap sends `agents.setDefaults`, which the
   Mac checks as the desk does (a ready engine, a model it lists), audits
@@ -1061,7 +1061,7 @@ The phone can start work as well as answer it. Each piece is gated by
   (the engine's models by name, what each is for under it, "Engine's
   default" saying which model that is now; then "Switch to …" for each other
   ready engine, which keeps the conversation), on a Mac listing
-  `agents.engine`; **Effort** (Engine's default, Low, Medium, High) on one
+  `agents.engine`; **Effort** (Default, Low, Medium, High) on one
   listing `agents.effort`; **How much it does on its own** ("Same as team"
   and the four levels, `agents.setAgentIndependence`; going past the team's
   level asks first, with what it then does and what still asks); **Usage**,
