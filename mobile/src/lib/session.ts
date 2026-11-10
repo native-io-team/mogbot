@@ -1344,13 +1344,14 @@ function watchAttention() {
   if (watchingAttention) return;
   watchingAttention = true;
   useApp.subscribe((s, prev) => {
-    if (s.overview === prev.overview && s.link === prev.link) return;
+    if (s.overview === prev.overview && s.link === prev.link && s.teamSetup === prev.teamSetup)
+      return;
     // Times read the Mac's way (it writes routine times into sentences itself).
     setClockHour24(s.overview?.hour24);
     const refused = s.link.kind === 'refused';
     // The demo's count is samples; the icon outlives it, so it never shows one.
     const demo = isDemo(s.credentials);
-    void setBadge(refused || demo || !s.overview ? 0 : badgeCount(s.overview.agents));
+    void setBadge(refused || demo || !s.overview ? 0 : badgeCount(s.overview.agents, s.teamSetup));
     if (!s.overview || !prev.overview) return;
     for (const a of s.overview.agents) {
       const was = prev.overview.agents.find((b) => b.id === a.id);

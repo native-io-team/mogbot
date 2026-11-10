@@ -5,16 +5,17 @@
  *   thread id the push relay sets), on an Android channel per urgency;
  * - taken back once handled: an approval answered here or at the desk, or
  *   a chat read on either side, removes what it was about, local or pushed;
- * - the app icon's badge is the desk's own count (`notify::badge_count`:
- *   unread plus approvals waiting, hidden agents left out), so the icon and
- *   the Mac's Dock never disagree;
+ * - the app icon's badge is how many agents need you (`needsYouCount`, the
+ *   rule the Mac's Dock badge, `notify::badge_now`, and every other count
+ *   share), so the icon and the Dock never disagree;
  * - Forget this Mac clears all of it.
  *
  * Notification Center calls fail quietly: a stale banner is a nuisance, a
  * crash on a background tick is worse.
  */
 
-import type { Agent, Alert } from '@shipstudio/companion-protocol';
+import type { Agent, Alert, TeamSetupView } from '@shipstudio/companion-protocol';
+import { needsYouCount } from '@shipstudio/companion-protocol';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
@@ -50,9 +51,13 @@ export function targetOf(request: Notifications.NotificationRequest | undefined)
 
 const isApproval = (t: Target) => t.kind === 'approval' || t.kind === 'needs_you';
 
-/** The desk's badge rule: unread plus approvals waiting, for every agent not hidden. */
-export const badgeCount = (agents: Agent[]) =>
-  agents.filter((a) => !a.hidden).reduce((n, a) => n + a.unread + (a.pendingApprovals ?? 0), 0);
+/**
+ * The icon's badge: how many agents need you, as the Dock, Home's bar and
+ * the tab badge count it. It once added unread replies and every open card,
+ * and said 7 beside the Dock's 2.
+ */
+export const badgeCount = (agents: Agent[], setup?: TeamSetupView | null) =>
+  needsYouCount(agents, setup);
 
 const CHANNEL = { needsYou: 'needs-you', replies: 'replies' } as const;
 
