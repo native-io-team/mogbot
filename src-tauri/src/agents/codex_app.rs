@@ -624,7 +624,13 @@ impl Conversation {
                     .map(String::as_str)
                     .or_else(|| str_at(params, "/grantRoot"))
                     .unwrap_or("");
-                let call = ("Edit".to_string(), json!({ "file_path": path }));
+                // A patch can touch several files: each is judged on its own
+                // (`file_paths`), never only the first.
+                let mut input = json!({ "file_path": path });
+                if paths.len() > 1 {
+                    input["file_paths"] = json!(paths);
+                }
+                let call = ("Edit".to_string(), input);
                 vec![ask(
                     Some(call),
                     None,
@@ -827,10 +833,14 @@ pub async fn answer(app: &AppHandle, agent_id: &str, turn: u64, ask: Ask) -> Vec
         return vec![reply(&ask.deny)];
     };
     if let Some((tool, input)) = &ask.call {
-        return match mcp::decide(app, &agent, tool, input, ask.why.as_deref()).await {
-            Decision::Allow => vec![reply(&ask.allow)],
-            Decision::Deny(message) => refused(message),
-        };
+        for (tool, input) in each_file(tool, input) {
+            if let Decision::Deny(message) =
+                mcp::decide(app, &agent, &tool, &input, ask.why.as_deref()).await
+            {
+                return refused(message);
+            }
+        }
+        return vec![reply(&ask.allow)];
     }
     let (title, mut detail) = ask.card.clone().unwrap_or_default();
     if let Some(why) = ask.why.as_deref().map(str::trim).filter(|w| !w.is_empty()) {
@@ -842,6 +852,27 @@ pub async fn answer(app: &AppHandle, agent_id: &str, turn: u64, ask: Ask) -> Vec
         // Unanswered: the card expired (`agents/expiry.rs`).
         mcp::Answer::NotYet => refused(super::expiry::TOLD.to_string()),
     }
+}
+
+/// A call as the broker judges it: a patch touching several files is one
+/// `Edit` per file, so a level, plan or rule that would answer for the first
+/// one doesn't answer for the rest (`~/.zshrc` beside a project file).
+fn each_file(tool: &str, input: &Value) -> Vec<(String, Value)> {
+    let many: Vec<&str> = input
+        .get("file_paths")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    if tool != "Edit" || many.len() < 2 {
+        return vec![(tool.to_string(), input.clone())];
+    }
+    let mut seen = std::collections::HashSet::new();
+    many.into_iter()
+        .filter(|p| seen.insert(*p))
+        .map(|p| ("Edit".to_string(), json!({ "file_path": p })))
+        .collect()
 }
 
 /// Stand-in Codex binaries for tests that need [`available`] to answer.
@@ -1277,6 +1308,34 @@ mod tests {
         assert_eq!(
             ask.call,
             Some(("Edit".into(), json!({ "file_path": "/etc/hosts" })))
+        );
+        // A patch over several files: every one is judged, not just the first.
+        c.on_message(
+            &json!({ "method": "item/started", "params": { "threadId": "t1", "item": {
+            "type": "fileChange", "id": "f2", "changes": [
+                { "path": "/h/a/notes.md", "kind": "update", "diff": "" },
+                { "path": "/Users/fictional/.zshrc", "kind": "update", "diff": "" }
+            ], "status": "inProgress" } } }),
+        );
+        let out = c.on_message(
+            &json!({ "method": "item/fileChange/requestApproval", "id": 7, "params": {
+            "threadId": "t1", "turnId": "u1", "itemId": "f2", "startedAtMs": 0 } }),
+        );
+        let Out::Ask(ask) = &out[0] else { panic!() };
+        let (tool, input) = ask.call.clone().unwrap();
+        assert_eq!(
+            super::each_file(&tool, &input),
+            vec![
+                ("Edit".to_string(), json!({ "file_path": "/h/a/notes.md" })),
+                (
+                    "Edit".to_string(),
+                    json!({ "file_path": "/Users/fictional/.zshrc" })
+                ),
+            ]
+        );
+        assert_eq!(
+            super::each_file("Edit", &json!({ "file_path": "/etc/hosts" })),
+            vec![("Edit".to_string(), json!({ "file_path": "/etc/hosts" }))]
         );
         let out = c.on_message(&json!({ "method": "item/permissions/requestApproval", "id": 6, "params": {
             "threadId": "t1", "turnId": "u1", "itemId": "x", "environmentId": null, "startedAtMs": 0, "cwd": "/h/a",
