@@ -472,19 +472,26 @@ request, the diff and the photo viewer push over them. At
   Chief of Staff".
 - **Needs you** (`app/(tabs)/needs/index.tsx`, `lib/needsYou.ts`), the first
   tab and the phone's one place for everything waiting on you, across every
-  agent; the tab carries the one count (the same number as the desk's and
-  Home's). Each row is the agent, what it asks and when: approvals, plans,
+  agent; the tab carries the one count: its rows (`feedItems(...).length`),
+  so cards, not agents, and always the number the list shows. Home has no
+  bar for it: a waiting agent's row keeps only its own label, as the desk's
+  sidebar row does (docs/agents.md, "Needs you: one place per surface"). Each row is the agent, what it asks and when: approvals, plans,
   "OK to go on?", keys, logins, a session's question, changes in a task copy
   waiting on Keep or Discard, a turn only you can fix, setting up your team,
   and an import only the Mac can review. What blocks an agent first, then the
-  rest; newest first within each. A short plain request is answered on its
-  row (Deny · Allow, the same 400 ms arming); anything that doesn't fit whole
-  (`fitsWhole`: over 160 characters or 3 lines, a plan over 3 steps) has
-  **Review**, which opens it in full first; the rest open where they're
-  answered. Answered cards leave by themselves, here or at the desk. The
+  rest; newest first within each. A short plain request the Mac marked
+  low-risk is answered on its row (Deny · Allow, the same 400 ms arming;
+  `answersInPlace`). Anything risky (`approval.risk: 'high'`, decided on the
+  Mac by `mcp::risk_of` from Bold's floor: deleting for good, money,
+  credentials, `sudo`, pushing, publishing, sending, system files; plans and
+  push cards too) wears the warning icon and has **Review**, and so does a
+  card the Mac didn't classify (an older Mac, a card from before) and one
+  that doesn't fit whole (`fitsWhole`: over 160 characters or 3 lines, a
+  plan over 3 steps). Review opens it in full, where a risky Allow is in the
+  danger style. The phone never works risk out from a command's words. The
+  rest open where they're answered. Answered cards leave by themselves, here or at the desk. The
   chats the cards live in are loaded as the tab opens. **One at a time**
-  (with two or more) opens Catch up. Home's "N agents need your OK" bar and a
-  pushed "needs you" open this tab.
+  (with two or more) opens Catch up. A pushed "needs you" opens this tab.
 - **Request** (`app/request.tsx`, `/request?agent=&id=`): one card in full,
   from a feed row, a tapped approval notification or Review on the Lock
   Screen. Nothing capped (`ApprovalCard`'s `full`): a long command line by
@@ -763,7 +770,14 @@ The phone can start work as well as answer it. Each piece is gated by
   **Stop import** is `agents.import.stop`.
 
 - **New agent** (the pencil on Agents, or the empty list's button;
-  `app/new-agent.tsx`). One question, "What should it do?", then an optional
+  `app/new-agent.tsx`). On a Mac listing `MAC_FEATURES.draft` it opens as
+  the desk's dialog does, describe-first: "Describe the agent you want", one
+  big box and **Draft it** alone, with "Its name, briefing and routines, for
+  you to check before anything is made." under it, then the other ways in as
+  quiet links in the desk's words: "Or fill it in yourself, start from
+  <ready-made agents>, or ask your Chief of Staff." Fill it in yourself (or
+  a ready-made agent) shows the form, with "Or describe it instead" back to
+  the box. The form: "What should it do?", then an optional
   name and colour. With no name, one comes from what you wrote ("Keeps my
   inbox down to what matters" → "Inbox", made unique against the team;
   `lib/newAgent.ts`): it's the field's placeholder and the Create button's
@@ -771,13 +785,12 @@ The phone can start work as well as answer it. Each piece is gated by
   nobody wears, as the desk's editor does. `agents.create` calls the desk's
   own `agents_create` with no engine or model, so it starts on the defaults
   for new agents (Settings → Agents, falling back to the first ready engine
-  when the chosen one isn't). On a Mac listing `MAC_FEATURES.draft`, **Draft
-  the rest** under "What should it do?" asks the Mac to draft the agent
+  when the chosen one isn't). **Draft it** asks the Mac to draft the agent
   (`agents.draft`, see docs/agents.md, "Describe the agent you want"): the
   draft fills the name and colour and adds a review (`components/draftReview.tsx`:
   "What it knows" to edit, a switch per routine, the apps line), and Create
-  sends the reviewed `instructions` and kept `routines`; "Start over" puts
-  your words back. The routine sheet's **Then…** adds steps
+  sends the reviewed `instructions` and kept `routines`; "Start over" goes
+  back to the box with your words in it. The routine sheet's **Then…** adds steps
   (`components/stepsEditor.tsx`) on a Mac listing `MAC_FEATURES.steps`, and an
   "OK to go on?" card answers Stop here / Go ahead (`components/gateBody.tsx`).
   Otherwise the phone can't set the engine, model,
@@ -788,7 +801,8 @@ The phone can start work as well as answer it. Each piece is gated by
   a phone can make at most 10 agents a minute (refused with `rate_limited`). The create is audited as `create <name> — <role>`,
   and a retry with the same `clientId` returns the first agent. Once the
   overview has it, its chat opens with the composer up.
-  **Ask your Chief of Staff instead** writes the request into the Chief's
+  **Ask your Chief of Staff to set it up** (on the form; "ask your Chief of
+  Staff" on the describe page) writes the request into the Chief's
   draft ("Can you set up a new agent? What it's for: …") for you to read and
   send. On a Mac without `agents.create`, that is all the sheet offers.
 - **Routines** (`app/schedule.tsx`). A picker instead of the "when: what"
@@ -1166,13 +1180,14 @@ Settings says plainly what arrives when.
 **Answering from the Lock Screen** (`lib/actionable.ts`). An approval the Mac
 alerts for (above), or with an older Mac a new card the phone hears in the
 background (`agents.message`, after catch-up, not muted or hidden), is posted
-as a local notification with the card's words. A card
-whose whole content fits and has a plain pair of answers gets them as
-buttons (Deny · Allow, or its own words: Stop here · Go ahead, Not now ·
+as a local notification with the card's words. A card the Mac marked
+low-risk (`approval.risk: 'low'`) whose whole content fits and has a plain
+pair of answers gets them as buttons (Deny · Allow, or its own words: Stop here · Go ahead, Not now ·
 Check again, Ignore · Save to memory); everything else gets **Review**,
 which opens it in full: keys, logins, a session's question, step-in,
-three-way and import cards always, and any card where something was
-redacted. Rules:
+three-way and import cards always, anything risky or unclassified
+(`approval.risk`, decided on the Mac; never re-derived from the words), and
+any card where something was redacted. Rules:
 
 - **Allow needs the phone unlocked.** Every card that reaches the phone is
   above the user's independence level (the rest were answered for them), so

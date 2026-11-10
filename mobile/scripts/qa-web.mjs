@@ -775,7 +775,15 @@ const PROBE = [
     act: () => sleep(1500),
     pages: 2,
     check:
-      'Needs you: short plain requests (Deploys, Temp Helper) answered on the row with Deny · Allow; the 19-line script says Review; step-in and crossover open',
+      'Needs you: risky requests (Temp Helper’s delete, Deploys’ production deploy) wear the warning icon and say Review, never Allow on the row; only short low-risk ones are answered in place; the 19-line script says Review; step-in and crossover open',
+  },
+  {
+    name: 'probe-request-risky',
+    route: '/request?agent=doomed&id=doomed_001',
+    ready: 'Request',
+    act: () => sleep(1200),
+    check:
+      'A request the Mac marked risky, in full: the warning icon on the card, “rm -r ~/Exports/2024”, Deny outlined and Allow in the danger style (never the neutral answer)',
   },
   {
     name: 'probe-request-long',
@@ -917,7 +925,8 @@ const LIVE = [
     name: 'agents',
     route: '/agents',
     ready: 'Chief of Staff',
-    check: 'Needs you, then Chief and pinned, then by activity; each row says what needs the OK',
+    check:
+      'Chief and pinned, then by activity, what needs you first; no “N agents need your OK” bar (the Needs you tab counts it); each waiting row keeps only its own label',
   },
   {
     name: 'projects',
@@ -932,7 +941,7 @@ const LIVE = [
     ready: 'Needs you',
     act: () => sleep(1500),
     check:
-      'Needs you: every waiting card across agents, newest first; short ones Deny · Allow (neutral), long ones Review, keys/logins their own action',
+      'Needs you: every waiting card across agents, newest first; the tab badge is the number of rows; short low-risk ones Deny · Allow (neutral), risky or long ones Review, keys/logins their own action',
   },
   {
     name: 'catchup-first',
@@ -1611,21 +1620,38 @@ const LIVE = [
     check:
       'Monthly picked: one more chip in How often, then Every month / Every 3 months and one “On the [1st] [day]” row like the time row; the echo says “Every month on the 1st at 9:00 AM”, and the Mac confirms the first run',
   },
-  { name: 'new-agent', route: '/new-agent', check: 'New agent' },
+  {
+    name: 'new-agent',
+    route: '/new-agent',
+    ready: 'Draft it',
+    check:
+      'New agent opens describe-first, as on the desk: “Describe the agent you want”, one big box, Draft it alone (neutral, off until there is a sentence), its one-line hint, then “Or fill it in yourself, start from …, or ask your Chief of Staff.” as quiet links. No name, colours or shapes yet.',
+  },
+  {
+    name: 'new-agent-form',
+    route: '/new-agent',
+    ready: 'fill it in yourself',
+    act: async (page) => {
+      await page.clickText('fill it in yourself');
+      await sleep(500);
+    },
+    check:
+      'After “fill it in yourself”: the form (What should it do?, name, colour), “Or describe it instead” back to the box, Create, and “Ask your Chief of Staff to set it up”.',
+  },
   {
     name: 'new-agent-drafted',
     route: '/new-agent',
-    ready: 'Draft the rest',
+    ready: 'Draft it',
     act: async (page) => {
       await page.type(
         'Every Friday at 4, write my weekly report from my notes and post it to #team once I OK it.'
       );
       await sleep(300);
-      await page.clickText('Draft the rest');
+      await page.clickText('Draft it');
       await sleep(1200);
     },
     check:
-      'After Draft the rest: the drafted role in the field, “Drafted from what you wrote” with Start over, the name and colour filled; then “What it knows” (the briefing, editable), Routines as one group with a switch per routine (steps numbered, “After your OK: Post the brief…”), and one muted line on the apps it will ask for. Create says the name.',
+      'After Draft it: the drafted role in the field, “Drafted from what you wrote” with Start over, the name and colour filled; then “What it knows” (the briefing, editable), Routines as one group with a switch per routine (steps numbered, “After your OK: Post the brief…”), and one muted line on the apps it will ask for. Create says the name.',
   },
   {
     name: 'schedule-steps',

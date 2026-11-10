@@ -8,13 +8,16 @@
  * ready-made agents: one fills in what it does, its name and colour, and the
  * Mac gives it that template's briefing.
  *
- * On a Mac that drafts (`MAC_FEATURES.draft`), "What should it do?" takes a
- * sentence or two and **Draft the rest** asks the Mac for the whole agent:
- * name, colour, briefing, routines (each as the Mac's grammar read it) and
- * the apps it will need. The draft fills the same fields, and one review
- * below them (`DraftReview`) shows the briefing to edit and each routine to
- * keep or leave; Create makes it with what's kept. "Start over" puts your
- * words back.
+ * On a Mac that drafts (`MAC_FEATURES.draft`) it opens as the desk's New
+ * agent does: "Describe the agent you want", one big box and **Draft it**
+ * alone (`DescribeFirst`), with the other ways in as quiet links under it:
+ * fill it in yourself, start from a ready-made agent, or ask your Chief of
+ * Staff. Draft it asks the Mac for the whole agent: name, colour, briefing,
+ * routines (each as the Mac's grammar read it) and the apps it will need.
+ * The draft fills the form's fields, and one review below them
+ * (`DraftReview`) shows the briefing to edit and each routine to keep or
+ * leave; Create makes it with what's kept. "Start over" goes back to the
+ * box with your words in it. The words are the desk's (`AgentDescribe`).
  *
  * Or hand it to the Chief of Staff: your request goes into the Chief's
  * composer, for you to read and send. That's also all an older Mac offers,
@@ -24,6 +27,7 @@
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import {
+  DESCRIBE_PLACEHOLDER,
   freeLook,
   keptRoutines,
   openingOf,
@@ -35,7 +39,7 @@ import {
   type RoleTemplateSummary,
 } from '@shipstudio/companion-protocol';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
 import { DraftReview } from '../components/draftReview';
 import { Chip, ChipRow, ColorSwatches, LookChoices } from '../components/pickers';
@@ -109,10 +113,15 @@ export default function NewAgent() {
   const [instructions, setInstructions] = useState('');
   const [kept, setKept] = useState<boolean[]>([]);
   const [drafting, setDrafting] = useState(false);
+  // It opens on the one box; the form shows once there's a draft, a
+  // ready-made agent picked, or "fill it in yourself" (as on the desk).
+  const [description, setDescription] = useState('');
+  const [manual, setManual] = useState(false);
+  const describing = canDraft && canCreate && !draft && !manual;
 
   const draftIt = () => {
-    const words = role.trim();
-    if (!words || drafting || !connected) return;
+    const words = description.trim();
+    if (words.length < DRAFT_MIN || drafting || !connected) return;
     setDrafting(true);
     setError(null);
     haptic.light();
@@ -135,12 +144,15 @@ export default function NewAgent() {
       .finally(() => setDrafting(false));
   };
 
+  /** Back to the one box, with what was written in it. */
   const startOver = () => {
-    setRole(described);
+    setDescription(described);
+    setRole('');
     setName('');
     setDraft(null);
     setInstructions('');
     setKept([]);
+    setManual(false);
     haptic.select();
   };
 
@@ -197,10 +209,36 @@ export default function NewAgent() {
 
   const askChief = () => {
     if (!chief) return;
-    setComposer(chief.id, { text: chiefRequest(role, name) });
+    setComposer(chief.id, { text: chiefRequest(describing ? description : role, name) });
     haptic.select();
     router.replace({ pathname: '/chat/[id]', params: { id: chief.id, compose: '1' } });
   };
+
+  if (describing) {
+    return (
+      <DescribeFirst
+        text={description}
+        onText={setDescription}
+        drafting={drafting}
+        connected={connected}
+        macName={macName}
+        error={error}
+        onDraft={draftIt}
+        onFillIn={() => {
+          haptic.select();
+          setManual(true);
+        }}
+        templates={templates}
+        onTemplate={(t) => {
+          haptic.select();
+          startFrom(t);
+          setManual(true);
+        }}
+        onAskChief={chief ? askChief : undefined}
+        chiefName={chief?.name}
+      />
+    );
+  }
 
   return (
     <SheetPage>
@@ -252,11 +290,7 @@ export default function NewAgent() {
             value={role}
             onChangeText={(t) => setRole(t.replace(/\n/g, ' '))}
             maxLength={MAX_ROLE}
-            placeholder={
-              canDraft && canCreate
-                ? 'Describe it: what it does, when, and where its work goes'
-                : 'Keeps my inbox down to what matters'
-            }
+            placeholder="Keeps my inbox down to what matters"
             placeholderTextColor={colors.textMuted}
             style={[styles.input, styles.roleInput]}
             selectionColor={accent.accent}
@@ -267,25 +301,23 @@ export default function NewAgent() {
             accessibilityLabel="What should it do?"
           />
           {canDraft && canCreate && !draft && (
+            // The way back to the one box (what's typed here stays).
             <View style={styles.draftRow}>
               <Button
-                title={drafting ? 'Drafting…' : 'Draft the rest'}
-                variant="outline"
+                title="Or describe it instead"
+                variant="ghost"
                 size="compact"
-                busy={drafting}
-                disabled={!role.trim() || !connected || drafting}
-                onPress={draftIt}
-                accessibilityHint={`${macName} drafts its name, briefing and routines for you to check`}
+                onPress={() => {
+                  haptic.select();
+                  setManual(false);
+                }}
               />
-              <T variant="caption" color={colors.textMuted} style={styles.draftHint}>
-                Name, briefing and routines, for you to check.
-              </T>
             </View>
           )}
           {draft && (
             <View style={styles.draftRow}>
               <T variant="caption" color={colors.textMuted} style={styles.draftHint}>
-                Drafted from what you wrote. Check it, then create.
+                Drafted from your description. Check it, then Create.
               </T>
               <Button title="Start over" variant="ghost" size="compact" onPress={startOver} />
             </View>
@@ -360,9 +392,9 @@ export default function NewAgent() {
               />
             </AccentProvider>
           )}
-          {chief && (
+          {chief && !draft && (
             <Button
-              title={`Ask ${chief.name} instead`}
+              title="Ask your Chief of Staff to set it up"
               variant={canCreate ? 'ghost' : 'primary'}
               size={canCreate ? 'default' : 'large'}
               onPress={askChief}
@@ -379,6 +411,143 @@ export default function NewAgent() {
     </SheetPage>
   );
 }
+
+/** Shorter than this isn't enough to draft from (the desk's rule). */
+const DRAFT_MIN = 8;
+
+/**
+ * "Describe the agent you want": the page New agent opens on when the Mac
+ * drafts. The box and Draft it alone; the other ways in quiet under it, in
+ * the desk's words ("Or fill it in yourself, start from Research, …, or ask
+ * your Chief of Staff.").
+ */
+function DescribeFirst({
+  text,
+  onText,
+  drafting,
+  connected,
+  macName,
+  error,
+  onDraft,
+  onFillIn,
+  templates,
+  onTemplate,
+  onAskChief,
+  chiefName,
+}: {
+  text: string;
+  onText: (t: string) => void;
+  drafting: boolean;
+  connected: boolean;
+  macName: string;
+  error: string | null;
+  onDraft: () => void;
+  onFillIn: () => void;
+  templates: RoleTemplateSummary[];
+  onTemplate: (t: RoleTemplateSummary) => void;
+  onAskChief?: () => void;
+  chiefName?: string;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
+  const accent = useAccent();
+  const ready = text.trim().length >= DRAFT_MIN && connected && !drafting;
+  const link = (label: string, onPress: () => void, hint?: string) => (
+    <Text
+      onPress={onPress}
+      accessibilityRole="link"
+      accessibilityHint={hint}
+      style={styles.link}
+      suppressHighlighting={false}
+    >
+      {label}
+    </Text>
+  );
+  return (
+    <SheetPage>
+      <ScrollView
+        contentContainerStyle={styles.root}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+      >
+        <SheetTitle>New agent</SheetTitle>
+        <View style={styles.field}>
+          <T variant="subhead" color={colors.textPrimary} nativeID="describe-label">
+            Describe the agent you want
+          </T>
+          <TextInput
+            autoFocus
+            multiline
+            value={text}
+            onChangeText={onText}
+            maxLength={DESCRIBE_MAX}
+            placeholder={DESCRIBE_PLACEHOLDER}
+            placeholderTextColor={colors.textMuted}
+            style={[styles.input, styles.describeInput]}
+            selectionColor={accent.accent}
+            keyboardAppearance={appearance}
+            editable={!drafting}
+            accessibilityLabelledBy="describe-label"
+            accessibilityLabel="Describe the agent you want"
+          />
+        </View>
+        <View style={styles.actions}>
+          {/* The page's one strong button: neutral, never the agent's colour. */}
+          <Button
+            title={drafting ? 'Drafting…' : 'Draft it'}
+            variant="answer"
+            size="large"
+            busy={drafting}
+            disabled={!ready}
+            onPress={onDraft}
+            accessibilityHint={`${macName} drafts its name, briefing and routines for you to check`}
+          />
+          <T variant="caption" color={colors.textMuted}>
+            {drafting
+              ? 'Writing its name, briefing and routines. This takes a little while.'
+              : 'Its name, briefing and routines, for you to check before anything is made.'}
+          </T>
+        </View>
+        {error && (
+          <T variant="small" color={colors.accentErrorLight} accessibilityLiveRegion="polite">
+            {error}
+          </T>
+        )}
+        {!connected && (
+          <T variant="caption" color={colors.textSecondary}>
+            Drafting an agent needs {macName}.
+          </T>
+        )}
+        {/* The other ways in, quiet: describing is the one this page leads with. */}
+        <T variant="small" color={colors.textSecondary} testID="other-ways">
+          Or {link('fill it in yourself', onFillIn)}
+          {templates.length > 0 && ', start from '}
+          {templates.map((t, i) => (
+            <Text key={t.id}>
+              {i > 0 && (i === templates.length - 1 ? ' or ' : ', ')}
+              {link(t.name, () => onTemplate(t), t.title)}
+            </Text>
+          ))}
+          {onAskChief && (
+            <>
+              {', or '}
+              {link(
+                'ask your Chief of Staff',
+                onAskChief,
+                chiefName ? `Writes your request in ${chiefName}’s chat for you to send` : undefined
+              )}
+            </>
+          )}
+          .
+        </T>
+      </ScrollView>
+    </SheetPage>
+  );
+}
+
+/** As long as the desk's box takes. */
+const DESCRIBE_MAX = 4000;
 
 /**
  * The engine a new agent goes on, as the Mac picks it: its defaults for new
@@ -412,6 +581,8 @@ const useStyles = makeStyles((colors) => ({
     paddingVertical: space.md,
   },
   roleInput: { minHeight: 88, textAlignVertical: 'top' },
+  describeInput: { minHeight: 160, textAlignVertical: 'top' },
+  link: { color: colors.textStrong, textDecorationLine: 'underline' },
   nameInput: { flex: 1, minHeight: 48 },
   identity: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   actions: { gap: space.sm },
