@@ -77,6 +77,18 @@ import { ProjectThumbnailInput } from './ProjectThumbnailInput';
 import type { ProjectViewMode } from './ProjectGridView';
 import { projectTeam } from './ProjectTeam';
 import { openAgentChat, useAgentsAtWork } from '../workspace/useProjectAgents';
+import { useAgentsSelector } from '../../lib/agentsStore';
+import { composerDraft, setComposerDraft } from '../../lib/composerDraft';
+import type { AgentsState } from '../../lib/agentsStore';
+
+/** The Chief's id and name, or null before the team is read. */
+const selectChief = (s: AgentsState) => {
+  const chief = s.agents.find((a) => a.isMain);
+  return chief ? `${chief.id}\t${chief.name}` : null;
+};
+
+/** What the empty dashboard's "Ask the Chief" puts in its message box (never sent). */
+const ASK_FOR_PROJECT = 'Make me a new site or app: ';
 
 /** Basic project info for selection callback */
 interface Project {
@@ -565,6 +577,20 @@ export function ProjectList({
     [onGoAgents]
   );
 
+  const chiefKey = useAgentsSelector(selectChief);
+  const chief = useMemo(() => {
+    if (!chiefKey || !onGoAgents) return null;
+    const [id, name] = chiefKey.split('\t');
+    return {
+      name,
+      ask: () => {
+        // Start the sentence for them; anything they'd already typed stays.
+        if (!composerDraft(id).trim()) setComposerDraft(id, ASK_FOR_PROJECT);
+        openAgentChat(onGoAgents, id);
+      },
+    };
+  }, [chiefKey, onGoAgents]);
+
   const totalCount = currentFolderId
     ? filteredProjects.length
     : filteredFolders.length + filteredProjects.length;
@@ -659,6 +685,7 @@ export function ProjectList({
                 onCreateProject={onCreateProject}
                 teamFor={teamFor}
                 onOpenAgent={handleOpenAgent}
+                chief={chief}
               />
             </>
           )}
