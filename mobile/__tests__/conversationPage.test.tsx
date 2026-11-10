@@ -160,11 +160,11 @@ describe('ConversationPage (phone)', () => {
     );
     const first = await render(view('working:a'));
     await screen.findByText('November budget');
-    first.unmount();
+    await first.unmount();
     const again = await render(view('working:a'));
     await act(async () => {});
     expect(pageReads()).toBe(1);
-    again.unmount();
+    await again.unmount();
     await render(view('idle:b'));
     await waitFor(() => expect(pageReads()).toBe(2));
     await act(async () => {});
