@@ -3,9 +3,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { AgentsUserChromeSettings } from './AgentsUserChromeSettings';
 import {
   USER_CHROME_CONNECTED,
+  currentStep,
   managedAdvice,
   routeLine,
   routeWhy,
+  setupSteps,
   userChromeLine,
   type ChromeProfile,
   type UserChromeStatus,
@@ -18,6 +20,17 @@ vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
   invoke,
 }));
 
+const STEPS = {
+  chrome: true,
+  host: true,
+  files: true,
+  developerMode: null,
+  loadedIn: null,
+  turnedOff: false,
+  otherFolder: false,
+  connected: false,
+};
+
 const status = (over: Partial<UserChromeStatus> = {}): UserChromeStatus => ({
   supported: true,
   enabled: true,
@@ -25,6 +38,8 @@ const status = (over: Partial<UserChromeStatus> = {}): UserChromeStatus => ({
   error: null,
   chromeInstalled: true,
   host: 'current',
+  // Developer mode on already: the extension step is the one to do.
+  steps: { ...STEPS, developerMode: 'Personal' },
   extensionDir: '/x',
   extensionVersion: '0.1.0',
   webStoreUrl: null,
@@ -103,11 +118,44 @@ describe('AgentsUserChromeSettings', () => {
   });
 
   it('shows the steps while on and nothing is connected', async () => {
-    invoke.mockResolvedValue(status({ chromeInstalled: false, host: 'missing' }));
+    invoke.mockResolvedValue(
+      status({ chromeInstalled: false, host: 'missing', steps: { ...STEPS, host: false } })
+    );
     render(<AgentsUserChromeSettings />);
-    expect(await screen.findByText(/Install Google Chrome on this Mac first/)).toBeTruthy();
-    expect(screen.getByText(/Turn Your Chrome off and on to set it up/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Open Chrome’s extensions' })).toBeTruthy();
+    expect(
+      await screen.findByText(/Install Google Chrome on this Mac, then come back/)
+    ).toBeTruthy();
+    expect(screen.getByText(/Press Set it up again/)).toBeTruthy();
+    // Installing Chrome comes first: no buttons for later steps yet.
+    expect(screen.queryByRole('button', { name: 'Open Chrome’s extensions' })).toBeNull();
+  });
+
+  it('numbers the steps and gives buttons only to the one to do now', async () => {
+    invoke.mockResolvedValue(status({ steps: STEPS }));
+    render(<AgentsUserChromeSettings />);
+    const list = await screen.findByRole('list', { name: 'Steps to connect your Chrome' });
+    const items = Array.from(list.querySelectorAll('li'));
+    expect(items.map((li) => li.getAttribute('data-step'))).toEqual([
+      'host',
+      'developerMode',
+      'load',
+      'connect',
+    ]);
+    expect(items[0].querySelector('[aria-label="Done"]')).toBeTruthy();
+    expect(items[1].getAttribute('aria-current')).toBe('step');
+    expect(items[1].querySelectorAll('button')).toHaveLength(1);
+    expect(items[2].querySelectorAll('button')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Chrome’s extensions' }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('agents_user_chrome_open_extensions_page')
+    );
+  });
+
+  it('shows the folder in Finder for dragging onto Chrome', async () => {
+    invoke.mockResolvedValue(status());
+    render(<AgentsUserChromeSettings />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Show the folder in Finder' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('agents_user_chrome_show_extension'));
   });
 
   it('copies the folder path for Load unpacked', async () => {
@@ -139,8 +187,9 @@ describe('AgentsUserChromeSettings', () => {
     );
     act(() => void window.dispatchEvent(new Event('focus')));
     await waitFor(() => expect(showToast).toHaveBeenCalledWith(USER_CHROME_CONNECTED, 'success'));
-    expect(screen.getByText('Done. The extension is connected.')).toBeTruthy();
+    expect(screen.getByText(/^Connected \(extension 0\.1\.0\)/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Copy folder path' })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Steps to connect your Chrome' })).toBeNull();
     // Once only.
     act(() => void window.dispatchEvent(new Event('focus')));
     await waitFor(() => expect(invoke.mock.calls.length).toBeGreaterThanOrEqual(3));
@@ -159,8 +208,55 @@ describe('AgentsUserChromeSettings', () => {
         <AgentsUserChromeSettings />
       </ToastContext.Provider>
     );
-    await screen.findByText('Done. The extension is connected.');
+    await screen.findByText(/^Connected \(extension 0\.1\.0\)/);
     expect(showToast).not.toHaveBeenCalled();
+  });
+});
+
+describe('setupSteps', () => {
+  const ids = (st: ReturnType<typeof setupSteps>) => st.filter((x) => x.done).map((x) => x.id);
+
+  it('ticks each step from what was read, never from a click', () => {
+    expect(ids(setupSteps(status({ steps: STEPS })))).toEqual(['host']);
+    expect(ids(setupSteps(status()))).toEqual(['host', 'developerMode']);
+    const loaded = setupSteps(
+      status({ steps: { ...STEPS, developerMode: 'Personal', loadedIn: 'Personal' } })
+    );
+    expect(ids(loaded)).toEqual(['host', 'developerMode', 'load']);
+    expect(currentStep(loaded)?.id).toBe('connect');
+    expect(currentStep(loaded)?.line).toMatch(/press Try again/);
+    const connected = setupSteps(
+      status({
+        browsers: [{ profileId: 'p', label: '', extensionVersion: '0.1.0', connectedAt: 1 }],
+      })
+    );
+    expect(currentStep(connected)).toBeNull();
+  });
+
+  it('a later step done counts for the earlier ones Chrome hasn’t written yet', () => {
+    // Chrome writes Developer mode a few seconds late; the extension can't
+    // be in Chrome without it.
+    const st = setupSteps(status({ steps: { ...STEPS, loadedIn: 'Personal' } }));
+    expect(st.find((x) => x.id === 'developerMode')?.done).toBe(true);
+  });
+
+  it('an extension turned off in Chrome is not done, and says how to fix it', () => {
+    const st = setupSteps(
+      status({
+        steps: { ...STEPS, developerMode: 'Personal', loadedIn: 'Personal', turnedOff: true },
+      })
+    );
+    expect(currentStep(st)?.id).toBe('load');
+    expect(currentStep(st)?.line).toBe(
+      'Not done yet: it’s in “Personal” but turned off. Turn it on in Chrome’s extensions page.'
+    );
+  });
+
+  it('a host that couldn’t start, or moved, is the step to do', () => {
+    expect(currentStep(setupSteps(status({ host: 'stale' })))?.id).toBe('host');
+    const err = currentStep(setupSteps(status({ error: 'Socket busy.' })));
+    expect(err?.id).toBe('host');
+    expect(err?.line).toBe('Not done yet: it couldn’t start (Socket busy). Press Set it up again.');
   });
 });
 
@@ -250,7 +346,7 @@ describe('a Chrome profile managed by work', () => {
       })
     );
     render(<AgentsUserChromeSettings />);
-    await screen.findByText('Done. The extension is connected.');
+    await screen.findByText(/^Connected \(extension 0\.1\.0\)/);
     expect(screen.queryByText('Chrome is managed by your work')).toBeNull();
   });
 });

@@ -150,3 +150,122 @@ fn the_extensions_page_opens_as_a_new_chrome_tab() {
     assert!(OPEN_EXTENSIONS_SCRIPT.contains("if (count of windows) is 0 then"));
     assert_eq!(OPEN_EXTENSIONS_SCRIPT.matches("chrome://").count(), 2);
 }
+
+/// The owner runs a development build from `~/Desktop/Projects/...`. Chrome
+/// starting a host there waits on macOS's folder prompt nobody sees, so the
+/// manifest names a copy in the app's own data folder instead; an app in
+/// /Applications is named as it is.
+#[test]
+fn a_binary_in_a_guarded_folder_is_started_from_a_copy() {
+    let home = Path::new("/Users/u");
+    let copies = Path::new("/Users/u/Library/Application Support/App/chrome-host");
+    for guarded_exe in [
+        "/Users/u/Desktop/Projects/mogbot/.claude/cargo-live/debug/mogbot",
+        "/Users/u/Documents/app/target/debug/mogbot",
+        "/Users/u/Downloads/target/release/mogbot",
+        "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/x/mogbot",
+    ] {
+        let exe = Path::new(guarded_exe);
+        assert!(guarded(exe, home), "{guarded_exe}");
+        assert_eq!(
+            host_exe_for(exe, Some(home), copies),
+            copies.join("mogbot"),
+            "{guarded_exe}"
+        );
+    }
+    for fine in [
+        "/Applications/Mogbot.app/Contents/MacOS/mogbot",
+        "/Users/u/Applications/Mogbot.app/Contents/MacOS/mogbot",
+        "/Users/u/src/mogbot/target/debug/mogbot",
+        // Not the Desktop folder, only a name that starts like it.
+        "/Users/u/DesktopApps/mogbot",
+    ] {
+        let exe = Path::new(fine);
+        assert!(!guarded(exe, home), "{fine}");
+        assert_eq!(host_exe_for(exe, Some(home), copies), exe, "{fine}");
+    }
+    // A signed app's own binary is never copied out of its bundle, even in a
+    // guarded folder (its signature and quarantine go with the bundle).
+    let bundled = Path::new("/Users/u/Downloads/Mogbot.app/Contents/MacOS/mogbot");
+    assert!(guarded(bundled, home) && in_app_bundle(bundled));
+    assert_eq!(host_exe_for(bundled, Some(home), copies), bundled);
+    assert!(!in_app_bundle(Path::new(
+        "/Users/u/Desktop/Projects/mogbot/.claude/cargo-live/debug/mogbot"
+    )));
+    // No home folder known: the binary itself.
+    let exe = Path::new("/Users/u/Desktop/mogbot");
+    assert_eq!(host_exe_for(exe, None, copies), exe);
+}
+
+#[test]
+fn the_copy_follows_the_binary_and_the_manifest_names_the_copy() {
+    let t = tempfile::tempdir().unwrap();
+    let udd = t.path().join("Chrome");
+    let exe = t.path().join("Desktop/checkout/debug/mogbot");
+    std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+    std::fs::write(&exe, b"build one").unwrap();
+    let target = t.path().join("support/chrome-host/mogbot");
+
+    assert_eq!(host_state_with(&udd, &exe, &target), HostState::Missing);
+    let named = prepare_host_with(&udd, &exe, &target).unwrap();
+    assert_eq!(named, target);
+    assert_eq!(std::fs::read(&target).unwrap(), b"build one");
+    let m: Value =
+        serde_json::from_slice(&std::fs::read(host_manifest_path(&udd)).unwrap()).unwrap();
+    assert_eq!(m["path"], target.to_string_lossy().as_ref());
+    assert_eq!(host_state_with(&udd, &exe, &target), HostState::Current);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&target).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755, "Chrome must be able to run it");
+    }
+
+    // A rebuild: the copy is out of date until the next start refreshes it.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(&exe, b"build two, longer").unwrap();
+    assert_eq!(host_state_with(&udd, &exe, &target), HostState::Stale);
+    prepare_host_with(&udd, &exe, &target).unwrap();
+    assert_eq!(std::fs::read(&target).unwrap(), b"build two, longer");
+    assert_eq!(host_state_with(&udd, &exe, &target), HostState::Current);
+
+    // The copy gone (someone cleaned the folder): not Current.
+    std::fs::remove_file(&target).unwrap();
+    assert_eq!(host_state_with(&udd, &exe, &target), HostState::Stale);
+
+    // An app Chrome can start as it is: no copy, the manifest names it.
+    let app = t
+        .path()
+        .join("Applications/Mogbot.app/Contents/MacOS/mogbot");
+    std::fs::create_dir_all(app.parent().unwrap()).unwrap();
+    std::fs::write(&app, b"x").unwrap();
+    prepare_host_with(&udd, &app, &app).unwrap();
+    assert_eq!(host_state_with(&udd, &app, &app), HostState::Current);
+}
+
+/// A development build changes the extension without bumping its version;
+/// the old check (versions only) left Chrome loading the old files.
+#[test]
+fn staging_follows_the_files_not_only_the_version() {
+    let src = tempfile::tempdir().unwrap();
+    std::fs::write(src.path().join("manifest.json"), r#"{"version":"1.0.0"}"#).unwrap();
+    std::fs::create_dir(src.path().join("src")).unwrap();
+    std::fs::write(src.path().join("src/link.js"), "one").unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let dest = out.path().join("ext");
+    assert!(needs_staging(src.path(), &dest));
+    stage_extension(src.path(), &dest).unwrap();
+    assert!(!needs_staging(src.path(), &dest));
+    // Same version, different file.
+    std::fs::write(src.path().join("src/link.js"), "two").unwrap();
+    assert!(needs_staging(src.path(), &dest));
+    stage_extension(src.path(), &dest).unwrap();
+    assert!(!needs_staging(src.path(), &dest));
+    // What staging skips doesn't count.
+    std::fs::write(src.path().join(".DS_Store"), "x").unwrap();
+    std::fs::write(src.path().join("notes.md"), "x").unwrap();
+    assert!(!needs_staging(src.path(), &dest));
+    // Nothing to stage from: nothing to do.
+    let empty = tempfile::tempdir().unwrap();
+    assert!(!needs_staging(empty.path(), &dest));
+}

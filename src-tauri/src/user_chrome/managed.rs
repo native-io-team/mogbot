@@ -31,7 +31,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 /// One Chrome profile, as Chrome lists it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     /// Its folder under Chrome's user data ("Default", "Profile 2").

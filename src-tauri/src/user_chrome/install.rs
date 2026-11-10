@@ -131,6 +131,150 @@ pub fn this_exe() -> Option<PathBuf> {
         .and_then(|p| p.canonicalize().ok())
 }
 
+/* ------------------------------------------------- where the host runs from */
+
+/// Folders macOS guards with a "would like to access" prompt (TCC). A host
+/// Chrome starts from one of these runs with Chrome as the responsible app
+/// and waits, silently, on a prompt nobody sees (observed in the end-to-end
+/// check): the extension stays on "connecting" for good. A development
+/// build lives in a checkout, usually under one of them (the owner's is
+/// under `~/Desktop`). Relative to the home folder.
+pub const GUARDED_HOME_FOLDERS: [&str; 4] = [
+    "Desktop",
+    "Documents",
+    "Downloads",
+    "Library/Mobile Documents",
+];
+
+/// `exe` sits where Chrome can't start it without a prompt: under one of
+/// [`GUARDED_HOME_FOLDERS`] of `home`. Pure.
+pub fn guarded(exe: &Path, home: &Path) -> bool {
+    GUARDED_HOME_FOLDERS
+        .iter()
+        .any(|f| exe.starts_with(home.join(f)))
+}
+
+/// Where the copy of the binary Chrome starts lives when it can't start the
+/// app's own ([`guarded`]): the app's data folder, which no prompt guards.
+pub fn host_copy_dir() -> PathBuf {
+    crate::brand::app_support_dir().join("chrome-host")
+}
+
+/// `exe` is an app bundle's own binary (`….app/Contents/MacOS/…`). A signed
+/// bundle's binary is never copied out of it: its signature seals the
+/// bundle, and a copy carries the download's quarantine with it, so the copy
+/// might not run at all. Pure.
+pub fn in_app_bundle(exe: &Path) -> bool {
+    let parts: Vec<&str> = exe
+        .components()
+        .filter_map(|c| c.as_os_str().to_str())
+        .collect();
+    parts
+        .windows(3)
+        .any(|w| w[0].ends_with(".app") && w[1] == "Contents" && w[2] == "MacOS")
+}
+
+/// The binary the host manifest names for `exe`: `exe` itself, or its copy
+/// in `copy_dir` when `exe` is a bare binary (a development build) in a
+/// guarded folder. Pure.
+pub fn host_exe_for(exe: &Path, home: Option<&Path>, copy_dir: &Path) -> PathBuf {
+    match (home, exe.file_name()) {
+        (Some(home), Some(name)) if guarded(exe, home) && !in_app_bundle(exe) => {
+            copy_dir.join(name)
+        }
+        _ => exe.to_path_buf(),
+    }
+}
+
+/// The binary Chrome is told to start, for this app's `exe`.
+pub fn host_exe(exe: &Path) -> PathBuf {
+    host_exe_for(exe, dirs::home_dir().as_deref(), &host_copy_dir())
+}
+
+/// What a copy was made from: the source's path, size and modified time.
+fn stamp_of(src: &Path) -> Option<String> {
+    let m = std::fs::metadata(src).ok()?;
+    let modified = m
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_nanos();
+    Some(format!("{}\n{}\n{}", src.display(), m.len(), modified))
+}
+
+fn stamp_path(dest: &Path) -> PathBuf {
+    dest.with_extension("source")
+}
+
+/// The copy at `dest` is of `src` as it is now.
+pub fn copy_current(src: &Path, dest: &Path) -> bool {
+    dest.is_file()
+        && stamp_of(src)
+            .is_some_and(|s| std::fs::read_to_string(stamp_path(dest)).is_ok_and(|have| have == s))
+}
+
+/// Copy `src` to `dest` unless the copy is already of `src` as it is now.
+/// A temporary file renamed over, so a host Chrome starts mid-copy is the
+/// old binary or the new one, never half. On APFS the copy is a clone: no
+/// time and no space, even at a development build's size.
+pub fn refresh_copy(src: &Path, dest: &Path) -> std::io::Result<()> {
+    if copy_current(src, dest) {
+        return Ok(());
+    }
+    if let Some(dir) = dest.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = dest.with_extension("copying");
+    let _ = std::fs::remove_file(&tmp);
+    std::fs::copy(src, &tmp)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
+    }
+    std::fs::rename(&tmp, dest)?;
+    if let Some(s) = stamp_of(src) {
+        std::fs::write(stamp_path(dest), s)?;
+    }
+    Ok(())
+}
+
+/// The host is set up for the app's `exe`: the manifest names the binary
+/// Chrome will start ([`host_exe`]), and that binary is there and current.
+pub fn host_state_for_app(user_data_dir: &Path, exe: &Path) -> HostState {
+    host_state_with(user_data_dir, exe, &host_exe(exe))
+}
+
+/// [`host_state_for_app`] with the binary Chrome starts given.
+pub fn host_state_with(user_data_dir: &Path, exe: &Path, target: &Path) -> HostState {
+    match host_state(user_data_dir, target) {
+        HostState::Current if target != exe && !copy_current(exe, target) => HostState::Stale,
+        s => s,
+    }
+}
+
+/// Make sure Chrome can start the host for the app's `exe`: the copy (when
+/// it's needed) and the manifest naming it.
+pub fn prepare_host(user_data_dir: &Path, exe: &Path) -> std::io::Result<PathBuf> {
+    prepare_host_with(user_data_dir, exe, &host_exe(exe))
+}
+
+/// [`prepare_host`] with the binary Chrome starts given.
+pub fn prepare_host_with(
+    user_data_dir: &Path,
+    exe: &Path,
+    target: &Path,
+) -> std::io::Result<PathBuf> {
+    if target != exe {
+        refresh_copy(exe, target)?;
+    }
+    if host_state(user_data_dir, target) != HostState::Current {
+        install_host(user_data_dir, target)?;
+    }
+    Ok(target.to_path_buf())
+}
+
 /* --------------------------------------------------------- extension */
 
 static RESOURCES: OnceLock<PathBuf> = OnceLock::new();
@@ -167,6 +311,61 @@ pub fn extension_version(dir: &Path) -> Option<String> {
     v["version"].as_str().map(str::to_string)
 }
 
+/// The files an extension is made of (what staging copies).
+fn staged_kind(path: &Path) -> bool {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    matches!(ext, "js" | "json" | "html" | "css" | "png" | "svg")
+}
+
+/// A fingerprint of the files [`stage_extension`] copies from `dir`, by path
+/// and content: the staged copy is refreshed whenever the shipped extension
+/// changes, not only its version (a development build changes files without
+/// bumping it, and the old check left Chrome loading yesterday's). `None`
+/// when there's no extension there.
+pub fn extension_fingerprint(dir: &Path) -> Option<String> {
+    use sha2::Digest as _;
+    fn walk(dir: &Path, rel: &str, files: &mut Vec<(String, PathBuf)>) -> std::io::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                continue;
+            }
+            let path = entry.path();
+            let rel = format!("{rel}/{name}");
+            let kind = entry.file_type()?;
+            if kind.is_dir() {
+                walk(&path, &rel, files)?;
+            } else if kind.is_file() && staged_kind(&path) {
+                files.push((rel, path));
+            }
+        }
+        Ok(())
+    }
+    if !dir.join("manifest.json").is_file() {
+        return None;
+    }
+    let mut files = Vec::new();
+    walk(dir, "", &mut files).ok()?;
+    files.sort();
+    let mut h = sha2::Sha256::new();
+    for (rel, path) in files {
+        h.update(rel.as_bytes());
+        h.update([0]);
+        h.update(std::fs::read(path).ok()?);
+        h.update([0]);
+    }
+    Some(hex::encode(h.finalize()))
+}
+
+/// The staged copy at `dest` isn't `src`'s files as they are now.
+pub fn needs_staging(src: &Path, dest: &Path) -> bool {
+    match extension_fingerprint(src) {
+        Some(want) => extension_fingerprint(dest).as_deref() != Some(want.as_str()),
+        None => false,
+    }
+}
+
 /// Copy the extension from `src` to `dest`, replacing what was there.
 /// Only the files an extension is made of are copied.
 pub fn stage_extension(src: &Path, dest: &Path) -> std::io::Result<()> {
@@ -191,11 +390,8 @@ fn copy_tree(src: &Path, dest: &Path) -> std::io::Result<()> {
         let kind = entry.file_type()?;
         if kind.is_dir() {
             copy_tree(&from, &to)?;
-        } else if kind.is_file() {
-            let ext = from.extension().and_then(|e| e.to_str()).unwrap_or("");
-            if matches!(ext, "js" | "json" | "html" | "css" | "png" | "svg") {
-                std::fs::copy(&from, &to)?;
-            }
+        } else if kind.is_file() && staged_kind(&from) {
+            std::fs::copy(&from, &to)?;
         }
     }
     Ok(())

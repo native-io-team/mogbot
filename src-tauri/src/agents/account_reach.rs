@@ -208,6 +208,15 @@ pub fn needs_auth_line(account: &str, agent: &str, apps: &[super::apps::App]) ->
 
 /* --------------------------------------------------------- Chrome */
 
+/// A turn reaches Claude in Chrome as this Mac's sign-in ([`chrome_server`]
+/// under [`CHROME_SERVER`], `--no-chrome`) instead of `--chrome`: only on
+/// Claude Code, only when its route is Claude in Chrome (`browser`), and
+/// only on an added account. A turn with Your Chrome has `browser` false,
+/// so it never gets this server, on any account. Pure.
+pub fn chrome_as_this_mac(engine: super::engine::Engine, browser: bool, this_mac: bool) -> bool {
+    engine == super::engine::Engine::Claude && browser && !this_mac
+}
+
 /// The `--mcp-config` entry that reaches the user's Chrome as this Mac's
 /// sign-in: Claude Code's own Claude in Chrome server, started with the
 /// account's variables taken away, so it resolves this Mac's login.

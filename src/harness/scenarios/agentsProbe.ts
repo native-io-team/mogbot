@@ -147,6 +147,17 @@ const linesChat = (args: Record<string, unknown>) => {
 
 /* ------------------------------------------------------------- Your Chrome */
 
+const STEPS = {
+  chrome: true,
+  host: true,
+  files: true,
+  developerMode: null,
+  loadedIn: null,
+  turnedOff: false,
+  otherFolder: false,
+  connected: false,
+};
+
 const chrome = (over: Record<string, unknown>) => ({
   supported: true,
   enabled: true,
@@ -154,6 +165,7 @@ const chrome = (over: Record<string, unknown>) => ({
   error: null,
   chromeInstalled: true,
   host: 'current',
+  steps: STEPS,
   extensionDir: '/Users/you/Library/Application Support/App/chrome-extension',
   extensionVersion: '0.2.0',
   webStoreUrl: null,
@@ -350,13 +362,13 @@ export const agentsProbeScenarios: Scenario[] = [
   chromeAt(
     'settings-agents-user-chrome-no-chrome',
     'on, Chrome not installed and the host not set up',
-    '“Google Chrome — Not done yet. Install Google Chrome on this Mac first.”, then “Chrome can reach this app — Not done yet. Turn Your Chrome off and on to set it up.”, then the extension row with its buttons.',
+    'Step 1 “Install Google Chrome — Not done yet. Install Google Chrome on this Mac, then come back here.” current, no buttons; 2 “Chrome can reach this app — Not done yet. Press Set it up again.”; then steps 3 to 5 muted, no buttons.',
     chrome({ chromeInstalled: false, host: 'missing' })
   ),
   chromeAt(
     'settings-agents-user-chrome-error',
     'on, but it couldn’t start',
-    'The line under the switch reads “On, but it couldn’t start: …” ending in one full stop, never two; the stale-host row says the app moved.',
+    'The line under the switch reads “On, but it couldn’t start: …” ending in one full stop, never two; step 1 “Chrome can reach this app” current, saying it couldn’t start, with one outlined button “Set it up again”.',
     chrome({ listening: false, error: 'The socket folder is not writable.', host: 'stale' })
   ),
   chromeAt(
@@ -396,6 +408,32 @@ export const agentsProbeScenarios: Scenario[] = [
     'on, with a Web Store listing',
     'The extension row says to add it from the Chrome Web Store and offers one button, “Add to Chrome…”.',
     chrome({ webStoreUrl: 'https://chromewebstore.google.com/detail/x' })
+  ),
+  chromeAt(
+    'settings-agents-user-chrome-step-devmode',
+    'just turned on: step 3, Developer mode',
+    'Four numbered steps. 1 ticked with a green tick: “Chrome can reach this app — Done. Chrome can reach this app.”. 2 “Turn on Developer mode in Chrome” in primary ink with its line and one neutral solid button “Open Chrome’s extensions” under it. 3 and 4 muted, a line each, no buttons. Nothing in the accent colour but the switch.',
+    chrome({})
+  ),
+  chromeAt(
+    'settings-agents-user-chrome-step-load',
+    'Developer mode on: step 4, add the extension',
+    'Step 2 ticked “Done, in “Personal”.”. Step 3 “Add the app’s extension” current: “Drag the app’s folder from Finder onto the extensions page. Or press Load unpacked, then ⇧⌘G…”, then three buttons wrapping, never cut off: “Show the folder in Finder” (neutral solid), “Copy folder path” and “Open Chrome’s extensions” (outlined).',
+    chrome({ steps: { ...STEPS, developerMode: 'Personal' } })
+  ),
+  chromeAt(
+    'settings-agents-user-chrome-step-waiting',
+    'the extension added: waiting for it to connect',
+    'Steps 1 to 3 ticked, 3 saying “Done, in “Personal”.”. Step 4 “Extension connected” current with “Not done yet: waiting for the extension to reach the app. If it hasn’t in a minute, click the extension’s icon in Chrome and press Try again.” and no buttons. No “Developer mode greyed out” link.',
+    chrome({ steps: { ...STEPS, developerMode: 'Personal', loadedIn: 'Personal' } })
+  ),
+  chromeAt(
+    'settings-agents-user-chrome-step-off',
+    'the extension added but turned off in Chrome',
+    'Step 3 current: “Not done yet: it’s in “Personal” but turned off. Turn it on in Chrome’s extensions page.” with one button, “Open Chrome’s extensions”.',
+    chrome({
+      steps: { ...STEPS, developerMode: 'Personal', loadedIn: 'Personal', turnedOff: true },
+    })
   ),
   {
     id: 'agents-probe-describe-error',

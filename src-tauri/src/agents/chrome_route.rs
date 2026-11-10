@@ -173,6 +173,10 @@ pub fn team() -> Now {
 pub const CLAUDE_IN_CHROME_BLOCK: &str = "mcp__claude-in-chrome";
 
 #[cfg(test)]
+#[path = "chrome_route_turn_tests.rs"]
+mod turn_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;

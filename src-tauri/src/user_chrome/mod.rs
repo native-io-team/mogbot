@@ -33,6 +33,7 @@ pub mod link;
 pub mod managed;
 pub mod protocol;
 pub mod settings;
+pub mod setup;
 pub mod tools;
 
 use serde::Serialize;
@@ -133,13 +134,15 @@ pub fn stop(reason: &str) {
 /// extension's files are staged (only once the user turned it on).
 fn prepare_install() -> std::io::Result<()> {
     if let (Some(udd), Some(exe)) = (install::chrome_user_data_dir(), install::this_exe()) {
-        if install::host_state(&udd, &exe) != install::HostState::Current {
-            install::install_host(&udd, &exe)?;
-        }
+        // A copy of the binary when this one sits where Chrome can't start
+        // it without a prompt (a development build under ~/Desktop).
+        install::prepare_host(&udd, &exe)?;
     }
     if let Some(src) = install::extension_source() {
         let dest = install::staged_extension_dir();
-        if install::extension_version(&dest) != install::extension_version(&src) {
+        // By content, not version: an extension changed without a version
+        // bump still reaches the folder Chrome loads.
+        if install::needs_staging(&src, &dest) {
             install::stage_extension(&src, &dest)?;
         }
     }
@@ -202,6 +205,9 @@ pub struct Status {
     /// Chrome is installed on this Mac.
     pub chrome_installed: bool,
     pub host: install::HostState,
+    /// Where each step of setting it up stands, read from the Mac and from
+    /// Chrome's own records (`setup`).
+    pub steps: setup::Steps,
     /// The folder to choose in Chrome's "Load unpacked".
     pub extension_dir: Option<String>,
     pub extension_version: Option<String>,
@@ -237,17 +243,44 @@ pub fn status() -> Status {
     let update_needed = shipped
         .as_deref()
         .is_some_and(|s| browsers.iter().any(|b| older(&b.extension_version, s)));
+    let udd = install::chrome_user_data_dir();
+    let host = match (&udd, install::this_exe()) {
+        (Some(udd), Some(exe)) => install::host_state_for_app(udd, &exe),
+        _ => install::HostState::Missing,
+    };
+    let chrome_installed = crate::agent_browser::chrome::find_chrome().is_some();
+    let management = managed::read();
+    let extension_dir = staged_ok.then(|| staged.to_string_lossy().into_owned());
+    // Each profile's Developer mode and whether the extension is in it, as
+    // Chrome recorded them (`setup`), so every step ticks from a real check.
+    let ids = auth::extension_ids();
+    let profiles: Vec<(managed::Profile, setup::ProfileSetup)> = management
+        .profiles
+        .iter()
+        .map(|p| {
+            let s = udd
+                .as_ref()
+                .map(|u| setup::read(&u.join(&p.dir), &ids))
+                .unwrap_or_default();
+            (p.clone(), s)
+        })
+        .collect();
+    let steps = setup::steps(
+        chrome_installed,
+        host == install::HostState::Current,
+        extension_dir.as_deref(),
+        &profiles,
+        !browsers.is_empty(),
+    );
     Status {
         supported: SUPPORTED,
         enabled,
         listening: listening(),
         error: LAST_ERROR.lock().unwrap_or_else(|e| e.into_inner()).clone(),
-        chrome_installed: crate::agent_browser::chrome::find_chrome().is_some(),
-        host: match (install::chrome_user_data_dir(), install::this_exe()) {
-            (Some(udd), Some(exe)) => install::host_state(&udd, &exe),
-            _ => install::HostState::Missing,
-        },
-        extension_dir: staged_ok.then(|| staged.to_string_lossy().into_owned()),
+        chrome_installed,
+        host,
+        steps,
+        extension_dir,
         extension_version: shipped,
         web_store_url: install::web_store_url(),
         extension_id: crate::brand::chrome::WEB_STORE_ID
@@ -255,7 +288,7 @@ pub fn status() -> Status {
             .to_string(),
         browsers,
         update_needed,
-        management: managed::read(),
+        management,
         route: crate::agents::chrome_route::team(),
     }
 }

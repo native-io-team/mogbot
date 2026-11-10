@@ -147,13 +147,66 @@ function, `chrome_route::decide`, picks per turn:
 3. **None**, with the reason (outside text, taken away from this agent, its
    settings, Codex without Your Chrome, Claude in Chrome down, nothing set up).
 
-`connections::for_turn` takes the route from it, so the turn and the words
-can't disagree; a test holds `decide` equal to `user_chrome::allowed` and
+`connections::for_turn` takes the route from it and lays it in through one
+pure function, `connections::lay_in_chrome`, so the turn and the words
+can't disagree; `chrome_route_turn_tests.rs` runs the runner's own pieces in
+its order (`wallet::choose` moving a turn from this Mac's account to an
+added one, `crossover::as_on`, `lay_in_chrome`,
+`account_reach::chrome_as_this_mac`, `Driver::args`) and holds that every
+such turn, on Claude Code, Codex (app-server and exec) and OpenCode, gets
+`mcp__user_chrome__*`, `--no-chrome` and Claude in Chrome's tools blocked,
+never the per-account stand-in; a test holds `decide` equal to `user_chrome::allowed` and
 `browser::allowed` over all 256 combinations of its inputs. The same
 `browser_gate` decides every call on either path. Settings → Chrome shows
 "Agents use now" with the team's route and why (`chrome_route::team`), and
 each agent's "What it can reach" names its own ("Chrome, through Your
 Chrome", and why), Codex agents included once Your Chrome is on.
+
+## First setup, step by step (`user_chrome/setup.rs`, `install.rs`)
+
+Settings → Chrome, once the switch is on, is a numbered list; each step
+ticks Done from a real check, never from a click, and only the step to do
+now has buttons:
+
+1. **Chrome can reach this app**: the host manifest names a binary that's
+   there (`install::host_state_for_app`). Button: Set it up again.
+2. **Developer mode**: `extensions.ui.developer_mode` in a profile's
+   `Secure Preferences` (or `Preferences`). Button: Open Chrome's extensions.
+3. **Add the app's extension**: `extensions.settings.<our id>` in a profile,
+   on unless `disable_reasons` is non-empty (a list on Chrome 157; a number,
+   or `state: 0`, on older builds). Buttons: Show the folder in Finder (the
+   folder selected, to drag onto the extensions page), Copy folder path (for
+   ⇧⌘G in Load unpacked's picker; the folder is under ~/Library, which the
+   picker hides), Open Chrome's extensions. Turned off in Chrome says so.
+4. **Extension connected**: a profile on the link. Then the steps fold into
+   one ticked row per profile, "Connected".
+
+Checked on Chrome 157 with a scratch `--user-data-dir` (CDP
+`Extensions.loadUnpacked`, `developerPrivate.updateProfileConfiguration`,
+`management.setEnabled(false)`): both keys are in `Secure Preferences`, and
+Chrome writes them about ten seconds after the change while it runs (not
+there at 5 s, there by 12 s), so a tick can lag. A later step done counts for
+an earlier one Chrome hasn't written yet. Not checked: dragging the folder
+onto the page (Chromium loads a dropped folder as unpacked in Developer
+mode; taken from its source, not tried).
+
+What would have broken a first run, and what does now:
+
+- **A development build's host never answers.** Chrome starting a binary
+  under `~/Desktop` (or Documents, Downloads, iCloud Drive) waits on macOS's
+  folder prompt with nobody to see it, so the extension sat on "connecting".
+  The owner runs `pnpm tauri dev` from `~/Desktop/Projects`. The manifest
+  now names a copy in the app's data folder (`chrome-host/`, an APFS clone,
+  refreshed when the binary's size or time changes). A signed `.app`'s own
+  binary is never copied out of its bundle (its seal and quarantine stay
+  with the bundle); one run from ~/Downloads would still hit the prompt, so
+  the app belongs in /Applications.
+- **A changed extension never reached Chrome.** Staging compared versions
+  only; it compares the files now (`extension_fingerprint`).
+- **An app restart left the link 30 s or more behind.** `bye quit` and
+  "app not running" jumped to the slow end of the backoff. They climb the
+  ladder from the start now (1, 2, 5, 10 s, all inside an MV3 worker's ~30 s
+  without a port), then the one-minute alarm.
 
 ## Work-managed Chrome profiles (`user_chrome/managed.rs`)
 
