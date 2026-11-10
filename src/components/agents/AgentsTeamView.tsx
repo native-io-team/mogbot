@@ -290,7 +290,7 @@ interface Held {
 interface AgentsTeamViewProps {
   onOpenAgent: (agentId: string) => void;
   /** Open a chat at one of its lines. */
-  onOpenMessage: (agentId: string, messageId: string) => void;
+  onOpenMessage: (agentId: string, messageId: string, conversation?: string) => void;
   /** The expired-login remedy on a failed turn. */
   /** Sign the agent's engine back in. */
   onSignIn: (engine: AgentEngine) => void;
@@ -314,9 +314,14 @@ export function AgentsTeamView({
   const roomName = (id: string | undefined) =>
     id ? rooms.find((r) => r.id === id)?.name : undefined;
   /** Where a line was said: its room when it was said in one, else the agent's chat. */
-  const openWhere = (agent: Agent, room: string | undefined, messageId?: string) => {
+  const openWhere = (
+    agent: Agent,
+    room: string | undefined,
+    messageId?: string,
+    conversation?: string
+  ) => {
     if (room && roomName(room)) onOpenAgent(roomKey(room));
-    else if (messageId) onOpenMessage(agent.id, messageId);
+    else if (messageId) onOpenMessage(agent.id, messageId, conversation);
     else onOpenAgent(agent.id);
   };
   const { showToast } = useOptionalToast();
@@ -748,7 +753,7 @@ export function AgentsTeamView({
                 line={replyPreview(message.text)}
                 meta={formatAgo(message.ts)}
                 arrived={isNewReply(message.id)}
-                onOpen={() => openWhere(agent, message.room, message.id)}
+                onOpen={() => openWhere(agent, message.room, message.id, message.conversation)}
               />
             ))}
           </Section>

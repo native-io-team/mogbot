@@ -327,6 +327,23 @@ impl Backend for DesktopBackend {
         )
     }
 
+    async fn conversation_routine(
+        &self,
+        agent_id: &str,
+        routine_id: &str,
+        id: &str,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_routine(
+                self.app.clone(),
+                agent_id.to_string(),
+                routine_id.to_string(),
+                id.to_string(),
+            )
+            .await?,
+        )
+    }
+
     async fn stop(&self, agent_id: &str) -> Result<bool, CommandError> {
         cmd::agents_stop(self.app.clone(), agent_id.to_string()).await
     }

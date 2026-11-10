@@ -584,6 +584,8 @@ pub struct Stub {
     pub fresh: Mutex<Vec<String>>,
     /// The agent's conversations: (id, title), the first first; and the current one.
     pub conversations: Mutex<(Vec<(String, String)>, String)>,
+    /// Routine id → the conversation it runs in, for routines not in the first.
+    pub routine_places: Mutex<Vec<(String, String)>>,
     /// What reached a session: `(session id, text or "key:<key>")`.
     pub typed: Mutex<Vec<(String, String)>>,
     /// Permission rules revoked, by id.
@@ -635,8 +637,12 @@ impl Stub {
             agent_id: AGENT.into(),
             current,
             items: views,
-            routines: [("ci_1".to_string(), "c2".to_string())]
-                .into_iter()
+            routines: self
+                .routine_places
+                .lock()
+                .unwrap()
+                .iter()
+                .cloned()
                 .collect(),
         })
         .unwrap()
@@ -676,6 +682,7 @@ impl Stub {
                 ],
                 "c2".into(),
             )),
+            routine_places: Mutex::new(vec![("ci_1".into(), "c2".into())]),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
             narrowed: Mutex::new(Vec::new()),
@@ -1191,6 +1198,28 @@ impl Backend for Stub {
                 ));
             };
             item.1 = title;
+        }
+        Ok(self.conversation_list())
+    }
+
+    async fn conversation_routine(
+        &self,
+        agent_id: &str,
+        routine_id: &str,
+        id: &str,
+    ) -> Result<Value, CommandError> {
+        self.conversations(agent_id).await?;
+        if !self.conversations.lock().unwrap().0.iter().any(|(c, _)| c == id) {
+            return Err(CommandError::expected(
+                "That conversation isn't there any more.",
+            ));
+        }
+        {
+            let mut places = self.routine_places.lock().unwrap();
+            places.retain(|(r, _)| r != routine_id);
+            if id != crate::agents::conversations::FIRST {
+                places.push((routine_id.to_string(), id.to_string()));
+            }
         }
         Ok(self.conversation_list())
     }
@@ -2201,6 +2230,7 @@ impl Backend for Stub {
                 snippet: m.text.clone(),
                 room_id: None,
                 room_name: None,
+                conversation: Some(crate::agents::conversations::of(m).to_string()),
             })
             .collect();
         Ok(serde_json::to_value(hits).unwrap())

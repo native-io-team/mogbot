@@ -158,7 +158,12 @@ export default function Search() {
               }
               router.push({
                 pathname: '/chat/[id]',
-                params: { id: item.agentId, at: item.messageId },
+                // Said in another of its conversations: the chat opens that one.
+                params: {
+                  id: item.agentId,
+                  at: item.messageId,
+                  ...(item.conversation ? { conversation: item.conversation } : {}),
+                },
               });
             }}
             style={({ pressed }) => [

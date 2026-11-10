@@ -3522,6 +3522,7 @@ export const agentsSearch = [
     "agentColor": "green",
     "agentId": "a1",
     "agentName": "Finance",
+    "conversation": "first",
     "kind": "changes",
     "messageId": "m28",
     "snippet": "Changed 1 file in a copy of site",
@@ -3531,6 +3532,7 @@ export const agentsSearch = [
     "agentColor": "green",
     "agentId": "a1",
     "agentName": "Finance",
+    "conversation": "first",
     "kind": "sent_to_agent",
     "messageId": "m03",
     "peerName": "Ops",
@@ -3541,6 +3543,7 @@ export const agentsSearch = [
     "agentColor": "green",
     "agentId": "a1",
     "agentName": "Finance",
+    "conversation": "first",
     "kind": "user",
     "messageId": "m01",
     "snippet": "@Ops can you file these?",
@@ -4061,6 +4064,40 @@ export const agentsConversationRename = {
     "ci_1": "c2"
   }
 } satisfies Result<'agents.conversationRename'>;
+export const agentsConversationRoutine = {
+  "agentId": "a1",
+  "current": "c2",
+  "items": [
+    {
+      "createdAt": 1762200001000,
+      "current": true,
+      "id": "c2",
+      "lastActivityAt": 1762290001000,
+      "loaded": true,
+      "named": true,
+      "preview": "On it",
+      "title": "Launch plan",
+      "waiting": 0
+    },
+    {
+      "context": {
+        "at": 1762290000000,
+        "model": "claude-opus-5-5",
+        "used": 64000,
+        "window": 200000
+      },
+      "createdAt": 1762200000000,
+      "current": false,
+      "id": "first",
+      "lastActivityAt": 1762290000000,
+      "loaded": false,
+      "named": false,
+      "title": "Fix the login page",
+      "waiting": 1
+    }
+  ],
+  "routines": {}
+} satisfies Result<'agents.conversationRoutine'>;
 export const agentsStartFresh = {
   "account": "a1work",
   "capabilities": {
@@ -4450,6 +4487,7 @@ export const frames = [
       "agents.conversationNew",
       "agents.conversationSelect",
       "agents.conversationRename",
+      "agents.conversationRoutine",
       "agents.create",
       "agents.draft",
       "agents.templates",

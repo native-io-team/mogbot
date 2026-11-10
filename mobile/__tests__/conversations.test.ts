@@ -3,6 +3,7 @@ import {
   filterConversations,
   othersWaiting,
   routineConversationLine,
+  routineMoveChoices,
   type Conversations,
   type WelcomeFrame,
 } from '@shipstudio/companion-protocol';
@@ -14,6 +15,7 @@ import {
   conversationKeyOf,
   conversationOfKey,
   conversationsOffered,
+  jumpStep,
 } from '../src/lib/conversations';
 import { applyEvent, emptySync, mergePage } from '../src/lib/sync';
 import { msg } from './helpers';
@@ -96,5 +98,36 @@ describe('the words for a conversation', () => {
     expect(routineConversationLine(list, 'ci_1')).toBe('In “Launch plan”');
     expect(routineConversationLine(list, 'other')).toBe('In “Fix the login page”');
     expect(routineConversationLine({ ...list, items: list.items.slice(0, 1) }, 'ci_1')).toBeNull();
+  });
+
+  it('offers a routine every other conversation to move to, none with only one', () => {
+    expect(routineMoveChoices(list, 'ci_1')).toEqual([{ id: 'first', title: 'Fix the login page' }]);
+    expect(routineMoveChoices(list, 'other')).toEqual([{ id: 'c2', title: 'Launch plan' }]);
+    expect(routineMoveChoices({ ...list, items: list.items.slice(0, 1) }, 'ci_1')).toEqual([]);
+    // Moved back to the first, the Mac keeps nothing for it.
+    expect((real.agentsConversationRoutine as Conversations).routines.ci_1).toBeUndefined();
+  });
+});
+
+describe('a search hit in another conversation', () => {
+  it('opens that conversation first, then pages in its own chat', () => {
+    expect(jumpStep('a1', 'c2', 'first', true)).toEqual({ kind: 'switch', to: 'c2' });
+    expect(jumpStep('a1', 'c2', undefined, true)).toEqual({ kind: 'switch', to: 'c2' });
+    expect(jumpStep('a1', 'c2', 'c2', true)).toEqual({
+      kind: 'load',
+      key: conversationKey('a1', 'c2'),
+    });
+  });
+
+  it('looks in the one on screen when the hit does not say, and waits until that is known', () => {
+    expect(jumpStep('a1', undefined, 'c3', true)).toEqual({
+      kind: 'load',
+      key: conversationKey('a1', 'c3'),
+    });
+    expect(jumpStep('a1', undefined, undefined, true)).toEqual({ kind: 'wait' });
+  });
+
+  it("reads the agent's one chat on a Mac without conversations", () => {
+    expect(jumpStep('a1', 'c2', undefined, false)).toEqual({ kind: 'load', key: 'a1' });
   });
 });

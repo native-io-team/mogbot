@@ -1283,6 +1283,23 @@ pub async fn agents_conversation_rename(
     Ok(list)
 }
 
+/// Move a routine to another of the agent's conversations: it fires there
+/// from its next run.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_conversation_routine(
+    app: AppHandle,
+    agent_id: String,
+    routine_id: String,
+    conversation_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let list = blocking(move || conversations::move_routine(&id, &routine_id, &conversation_id))
+        .await?;
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(list)
+}
+
 /// "Stop this step": end the command the agent is running and let its turn
 /// carry on (the engine sees the command end). Says what it did.
 #[tauri::command]

@@ -738,6 +738,18 @@ conversation per agent and the chat is as it was.
   when another waits on you (`ConversationSwitch`). The agent sheet's Start
   fresh is New conversation on such a Mac: no confirm, nothing waits, and it
   opens the chat.
+- **Search.** A hit carries the conversation it was said in
+  (`SearchHit.conversation`); the chat opens that conversation first
+  (`chat/[id]` `conversation`, `jumpStep`), then pages that conversation's
+  own chat back to the line (`loadUntil(key, …)`) and lights it up. It
+  switches once: moving to another conversation afterwards stays there. A
+  hit from an older Mac says no conversation and is looked for in the one
+  on screen.
+- **Routines.** With more than one conversation, each routine on the agent
+  sheet says which it runs in ("In “Launch plan”",
+  `routineConversationLine`), and its menu has "Run it in another
+  conversation" on a Mac that lists `agents.conversationRoutine` (the most
+  recent six, `routineMoveChoices`).
 
 ### Rooms
 

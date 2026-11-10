@@ -40,6 +40,11 @@ pub struct SearchHit {
     pub room_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub room_name: Option<String>,
+    /// The agent's conversation it was said in (`conversations::of`): the
+    /// hit opens that conversation before scrolling to it. Absent for a
+    /// room's line.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<String>,
 }
 
 /// The words of a query, lowercased. Empty when there's nothing to search for.
@@ -232,6 +237,7 @@ fn search_agent(
             snippet,
             room_id: None,
             room_name: None,
+            conversation: Some(super::conversations::of(message).to_string()),
         })
     })
 }
@@ -260,6 +266,7 @@ fn search_room(
             snippet,
             room_id: Some(room.id.clone()),
             room_name: Some(room.name.clone()),
+            conversation: None,
         })
     })
 }

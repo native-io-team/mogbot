@@ -70,6 +70,7 @@ pub const METHODS: &[&str] = &[
     "agents.conversationNew",
     "agents.conversationSelect",
     "agents.conversationRename",
+    "agents.conversationRoutine",
     "agents.create",
     "agents.draft",
     "agents.templates",
@@ -604,6 +605,14 @@ pub trait Backend: Send + Sync + 'static {
         agent_id: &str,
         id: &str,
         title: String,
+    ) -> Result<Value, CommandError>;
+    /// `agents_conversation_routine`: a routine moved to another
+    /// conversation; the list after.
+    async fn conversation_routine(
+        &self,
+        agent_id: &str,
+        routine_id: &str,
+        id: &str,
     ) -> Result<Value, CommandError>;
     async fn send(
         &self,
@@ -1151,6 +1160,14 @@ struct ConversationRenameParams {
     agent_id: String,
     conversation_id: String,
     title: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationRoutineParams {
+    agent_id: String,
+    routine_id: String,
+    conversation_id: String,
 }
 
 #[derive(Deserialize)]
@@ -1760,6 +1777,9 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             )
         }
         "agents.schedule.cancel" | "agents.schedule.runNow" => field("id").to_string(),
+        "agents.conversationRoutine" => {
+            format!("move {} to {}", field("routineId"), field("conversationId"))
+        }
         "agents.setDefaults" => {
             let said: Vec<String> = [
                 ("engine", "engine"),
@@ -2171,6 +2191,11 @@ async fn run(
                 b.conversation_rename(&p.agent_id, &p.conversation_id, p.title)
                     .await?,
             )
+        }
+        "agents.conversationRoutine" => {
+            let p: ConversationRoutineParams = parse(params)?;
+            Ok(b.conversation_routine(&p.agent_id, &p.routine_id, &p.conversation_id)
+                .await?)
         }
         "agents.startFresh" => {
             let p: AgentParam = parse(params)?;

@@ -145,6 +145,14 @@ export interface Methods {
     result: Conversations;
   };
   /**
+   * Move a routine to another of the agent's conversations: it fires there
+   * from its next run. Newer Macs only: check `welcome.methods`.
+   */
+  'agents.conversationRoutine': {
+    params: { agentId: string; routineId: string; conversationId: string };
+    result: Conversations;
+  };
+  /**
    * `agents_turn_work`: what the turn ending on `messageId` did, steps and
    * all; null when nothing was kept (pruned). Only for a line its page sent
    * with `stepsOmitted`, so only ever asked of a Mac that serves it.

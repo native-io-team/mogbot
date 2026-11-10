@@ -248,6 +248,21 @@
   color: var(--text-muted);
 }
 
+/* Which of the agent's conversations it runs in, when it has several: one
+   line, cut at the end (a title can be 60 characters). */
+.agent-schedule__place {
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+p.agent-schedule__place {
+  margin: 0;
+  padding: 0 var(--spacing-xs) var(--spacing-sm);
+}
+
 .agent-schedule__item[data-paused] .agent-schedule__note {
   color: var(--text-muted);
 }

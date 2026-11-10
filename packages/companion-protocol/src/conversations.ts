@@ -81,6 +81,26 @@ export function routineConversationLine(
   return c ? `In “${conversationTitle(c)}”` : null;
 }
 
+/** Most conversations offered when moving a routine: the latest ones. */
+export const ROUTINE_MOVE_CHOICES = 6;
+
+/**
+ * The conversations a routine could move to (`agents.conversationRoutine`):
+ * every one but its own, most recent first, at most `ROUTINE_MOVE_CHOICES`.
+ * None while the agent has only one.
+ */
+export function routineMoveChoices(
+  list: Conversations | null | undefined,
+  routineId: string
+): { id: string; title: string }[] {
+  if (!list || list.items.length < 2) return [];
+  const own = list.routines[routineId] ?? FIRST_CONVERSATION;
+  return list.items
+    .filter((c) => c.id !== own)
+    .slice(0, ROUTINE_MOVE_CHOICES)
+    .map((c) => ({ id: c.id, title: conversationTitle(c) }));
+}
+
 /**
  * What the switcher's button says beside the title: how many other
  * conversations wait on the user, if any ("2 others need you").

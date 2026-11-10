@@ -67,6 +67,7 @@ import {
   getAgentsSnapshot,
   loadMessages,
   loadRoomMessages,
+  openConversation,
   refreshAgents,
   refreshRooms,
   startConversation,
@@ -404,10 +405,20 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     return true;
   }, []);
 
-  const openMessage = useCallback((agentId: string, messageId: string) => {
-    setSelectedId(agentId);
-    setJump({ agentId, messageId });
-  }, []);
+  /**
+   * Open an agent's chat on one line. A line said in another of its
+   * conversations opens that conversation first, then scrolls to it.
+   */
+  const openMessage = useCallback(
+    (agentId: string, messageId: string, conversation?: string) => {
+      if (conversation && getAgentsSnapshot().viewing[agentId] !== conversation) {
+        void openConversation(agentId, conversation);
+      }
+      setSelectedId(agentId);
+      setJump({ agentId, messageId });
+    },
+    []
+  );
   const openHit = useCallback(
     (hit: SearchHit) => {
       setCurrentHit(hit.messageId);
@@ -415,7 +426,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
         setSelectedId(roomKey(hit.roomId));
         return;
       }
-      openMessage(hit.agentId, hit.messageId);
+      openMessage(hit.agentId, hit.messageId, hit.conversation);
     },
     [openMessage]
   );

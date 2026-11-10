@@ -487,11 +487,16 @@ all of them, so whatever it remembers in one it knows in the others.
   conversation on screen; `agents_send` / `agents.send` `conversation`; none
   named, `current`). Anything the turn or the app records goes to the loaded
   conversation, which is the turn's while one runs. Another agent's answer
-  goes back to the conversation that asked (`note_asked` / `asked_in`, in
-  memory: after a restart it goes where the asker is). A routine runs in the
-  conversation it was set up in (`note_routine`: the turn's when the agent set
-  it up, else where the user is; one made before conversations, the first's),
-  its firing line and its turn alike.
+  goes back to the conversation that asked (`note_asked` / `asked_in`), kept
+  in the asker's `conversations.json` (`asked`: helper → the conversation
+  that last asked it, at most `MAX_ASKED` = 64, oldest forgotten first), so
+  an answer that lands after a restart still goes back where it was asked;
+  one with nothing kept goes where the asker's engine is. A routine runs in
+  the conversation it was set up in (`note_routine`: the turn's when the
+  agent set it up, else where the user is; one made before conversations,
+  the first's), its firing line and its turn alike. The user can move it
+  (`agents_conversation_routine` / `agents.conversationRoutine`,
+  `move_routine`): it runs in the new one from its next firing.
 - **Safety is per conversation, because it is per turn.** Approvals, sealed
   outside text and take over are unchanged: a card is raised by a turn and
   stamped with its conversation, and a typed "yes" only answers a card in the
@@ -519,7 +524,14 @@ all of them, so whatever it remembers in one it knows in the others.
   the store under `conversationKey(agent, id)`; `messages[agentId]` stays every
   line, because What's in flight, the sidebar and the request bars read the
   agent's cards there. A reply streaming in another conversation isn't drawn
-  in this one; its working line says "in another conversation".
+  in this one; its working line says "in another conversation". A search hit
+  carries its conversation (`SearchHit.conversation`, absent for a room's
+  line): opening it opens that conversation, then scrolls to the line and
+  flashes it, as a hit in the one on screen does. The routines popover says
+  under each routine which conversation it runs in, once there are several
+  ("In “Launch plan”", `routineConversationLine`; the editor says it too),
+  and the row's menu has "Run it in" with the six most recent others
+  (`routineMoveChoices`).
 - **Phone.** See docs/mobile.md, "Conversations".
 
 **Context meter.** `agents/context.rs` stores one reading per agent

@@ -18,6 +18,8 @@ import {
   keyLookFor,
   MAC_FEATURES,
   onClaudePlan,
+  routineConversationLine,
+  routineMoveChoices,
   routineWeekLine,
   sortCheckIns,
   sumTotals,
@@ -62,7 +64,9 @@ import {
   call,
   canCall,
   describeError,
+  moveRoutine,
   readUsage,
+  refreshConversations,
   revokePermission,
   schedule,
   setAgentToggles,
@@ -106,6 +110,13 @@ function AgentSheet() {
       .join('')
   );
   const servesUsage = canCall('agents.usage', welcome);
+  // Which conversation each routine runs in, on a Mac that keeps several.
+  const conversations = useApp((s) => s.conversations[id]);
+  const servesConversations = canCall('agents.conversations', welcome);
+  const canMoveRoutines = canCall('agents.conversationRoutine', welcome);
+  useEffect(() => {
+    if (servesConversations && live) refreshConversations(id).catch(() => {});
+  }, [id, servesConversations, live]);
   useEffect(() => {
     if (!servesUsage || !live) return;
     let on = true;
@@ -368,6 +379,8 @@ function AgentSheet() {
                   agent={agent}
                   checkIn={c}
                   spent={routineWeekLine(usage?.routines?.find((r) => r.id === c.id)?.week, onPlan)}
+                  place={routineConversationLine(conversations, c.id)}
+                  moveTo={canMoveRoutines ? routineMoveChoices(conversations, c.id) : []}
                   last={i === checkIns.length - 1}
                   // Offline its menu's actions would all fail: it waits for the Mac.
                   enabled={canSchedule && live}
@@ -405,6 +418,8 @@ function CheckInRow({
   agent,
   checkIn: c,
   spent,
+  place,
+  moveTo,
   last,
   enabled,
   onError,
@@ -413,6 +428,10 @@ function CheckInRow({
   checkIn: CheckIn;
   /** "$0.84 at API prices this week" or "96k tokens this week", when it ran on its own this week (as its engine reported). */
   spent: string | null;
+  /** "In “Launch plan”": the conversation it runs in, when the agent has several. */
+  place: string | null;
+  /** The other conversations it could run in instead (a Mac that moves routines). */
+  moveTo: { id: string; title: string }[];
   last: boolean;
   enabled: boolean;
   onError: (text: string | null) => void;
@@ -440,6 +459,21 @@ function CheckInRow({
         label: 'Edit',
         run: () => router.push({ pathname: '/schedule', params: { agentId: agent.id, id: c.id } }),
       },
+      ...(moveTo.length > 0
+        ? [
+            {
+              label: 'Run it in another conversation',
+              run: () =>
+                choose(
+                  'Run it in',
+                  moveTo.map((to) => ({
+                    label: to.title,
+                    run: act(() => moveRoutine(agent.id, c.id, to.id)),
+                  }))
+                ),
+            },
+          ]
+        : []),
       {
         label: 'Cancel routine',
         destructive: true,
@@ -476,6 +510,11 @@ function CheckInRow({
           {describeCheckInTime(c, now)}
           {stepsLine(c) ? ` · ${stepsLine(c)}` : ''}
         </T>
+        {!!place && (
+          <T variant="caption" color={colors.textMuted} numberOfLines={1}>
+            {place}
+          </T>
+        )}
         {c.waiting && (
           <T variant="caption" color={colors.accentWarning}>
             Waiting for your OK in the chat

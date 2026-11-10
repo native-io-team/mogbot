@@ -1733,6 +1733,8 @@ export interface SearchHit {
   /** Said in a room: the hit opens the room. `agent*` is who said it (empty for the user's line). */
   roomId?: string;
   roomName?: string;
+  /** The agent's conversation it was said in: the hit opens it first. Absent for a room's line, or from an older Mac. */
+  conversation?: string;
 }
 
 export interface UsageTotals {
