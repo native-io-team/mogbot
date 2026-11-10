@@ -30,7 +30,9 @@ With none, it runs `$FAKE_ENGINE_DEFAULT` (the same JSON), else replies
 "ok". Steps:
 
   {"say": "text"}                 a reply (streamed). {session} {turn}
-                                  {account} {prompt_lines} are filled in.
+                                  {account} {prompt_lines} are filled in,
+                                  and {last_tool}: what the turn's last
+                                  tool of the app's said back (Claude only).
   {"slow": "text", "every": 0.2}  a reply streamed one word per `every` s.
   {"tool": "share_result", "args": {...}}   any tool of the app's server.
   {"volley": {"to": "B", "back": "A"}}   message_agent to B carrying
@@ -218,6 +220,7 @@ class Turn:
         self.msg = 0
         self.tool_n = 0
         self.replies = []
+        self.last_tool = ""
         self.cost = 0.0
 
     # ------------------------------------------------------------ output
@@ -265,7 +268,8 @@ class Turn:
         return (text.replace("{session}", self.session)
                     .replace("{turn}", str(turns))
                     .replace("{account}", account)
-                    .replace("{prompt_lines}", str(len(self.prompt.splitlines()))))
+                    .replace("{prompt_lines}", str(len(self.prompt.splitlines())))
+                    .replace("{last_tool}", self.last_tool))
 
     def tool_use(self, name, tool_input):
         self.tool_n += 1
@@ -341,6 +345,7 @@ class Turn:
     def mcp(self, tool, args):
         tid = self.tool_use("mcp__app__" + tool, args)
         text, is_error = self.bridge.call(tool, args)
+        self.last_tool = text
         self.tool_result(tid, text, is_error=is_error)
 
     def rate_limit(self, used):

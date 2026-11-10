@@ -592,6 +592,77 @@ async fn result_card(h: &H) -> Check {
     )
 }
 
+/// Knowing what the team did (`team_record`): Finance shares a result; a
+/// fresh turn for Writer is briefed with it in "The team now", checks the
+/// team with `team_lookup`, and answers from Finance's card instead of
+/// asking the user. Its step in "What it did" names what it found.
+async fn team_lookup(h: &H) -> Check {
+    let finance = h.agent("Finance");
+    h.send(
+        &finance.id,
+        &fake(json!([
+            {"tool": "share_result", "args": {
+                "title": "Q3 summary",
+                "summary": "Revenue 1.2m, up 12% on Q2.",
+                "checked": ["Totals tie to the ledger"],
+                "not_verified": ["VAT"]}},
+            {"say": "Q3 is on the card."}
+        ])),
+    )
+    .await?;
+    h.turn(&finance.id).await?;
+    no_errors(&finance.id)?;
+
+    let writer = h.agent("Writer");
+    h.send(
+        &writer.id,
+        &fake(json!([
+            {"tool": "team_lookup", "args": {"query": "Q3 revenue"}},
+            {"say": "From the team: {last_tool}"}
+        ])),
+    )
+    .await?;
+    h.turn(&writer.id).await?;
+    no_errors(&writer.id)?;
+    let reply = last_reply(&writer.id);
+    ensure(
+        reply.contains("Finance · result") && reply.contains("Revenue 1.2m, up 12% on Q2."),
+        format!("Writer didn't answer from Finance's card: {reply}"),
+    )?;
+    ensure(
+        reply.contains("It says it checked: Totals tie to the ledger"),
+        format!("the digest lost what Finance checked: {reply}"),
+    )?;
+    ensure(
+        approvals(&writer.id).is_empty(),
+        "Writer asked the user for something the team had",
+    )?;
+    let steps = timeline(&writer.id);
+    ensure(
+        steps
+            .iter()
+            .any(|(label, _)| label == "Checked the team: Finance's Q3 summary"),
+        format!("\"What it did\" doesn't name what it found: {steps:?}"),
+    )?;
+    let briefing = agents::briefing::latest(&writer.id).ok_or("no briefing kept")?;
+    let roster = briefing
+        .sections
+        .iter()
+        .find(|s| s.title == "The team now")
+        .ok_or_else(|| {
+            let titles: Vec<&str> = briefing.sections.iter().map(|s| s.title.as_str()).collect();
+            format!("no roster in the briefing: {titles:?}")
+        })?;
+    ensure(
+        roster.body.contains("- Finance:") && roster.body.contains("\"Q3 summary\", today"),
+        format!("roster: {}", roster.body),
+    )?;
+    ensure(
+        roster.body.chars().count() <= agents::team_record::ROSTER_CAP,
+        "roster over its cap",
+    )
+}
+
 /// Agent to agent: the Chief hands Scout work, Scout answers back, and a
 /// ping-pong stops at the hop cap.
 async fn delegation(h: &H) -> Check {
@@ -3122,6 +3193,7 @@ const ALL: &[&str] = &[
     "approvals",
     "plan",
     "result",
+    "team-lookup",
     "skills",
     "delegation",
     "failover",
@@ -3354,6 +3426,7 @@ fn main() {
                 "approvals" => approvals_scenario(&h).await,
                 "plan" => plan(&h).await,
                 "result" => result_card(&h).await,
+                "team-lookup" => team_lookup(&h).await,
                 "skills" => skills(&h).await,
                 "delegation" => delegation(&h).await,
                 "failover" => failover(&h).await,

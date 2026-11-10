@@ -188,6 +188,7 @@ pub mod survive;
 pub mod takeover;
 pub mod task;
 pub mod team_reach;
+pub mod team_record;
 pub mod team_setup;
 pub mod templates;
 pub mod tidy;
@@ -525,5 +526,7 @@ mod avatar_tests;
 mod brand_copy_tests;
 #[cfg(test)]
 mod keys_tests;
+#[cfg(test)]
+mod team_record_tests;
 #[cfg(test)]
 mod long_chat_tests;
