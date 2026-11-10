@@ -211,8 +211,8 @@ fn the_plan_is_played_back_in_plain_words_with_what_it_lacks() {
     assert_eq!(text("job"), ["My job: tracks spending and chases invoices"]);
     assert_eq!(text("routine").len(), 1);
     assert!(
-        text("routine")[0].starts_with("Every monday at 09:00")
-            || text("routine")[0].contains("09:00"),
+        text("routine")[0].starts_with("Every monday at 9:00 AM")
+            || text("routine")[0].contains("9:00 AM"),
         "{:?}",
         text("routine")
     );

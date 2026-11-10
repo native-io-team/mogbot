@@ -11,6 +11,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { formatClock } from '../../packages/companion-protocol/src/clock';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 export const SLACK_EVENT = 'agents-slack';
@@ -93,7 +94,7 @@ function checkedWhen(at: number, now: number): string {
   if (secs < 60) return 'just now';
   const mins = Math.round(secs / 60);
   if (mins < 60) return `${mins} min ago`;
-  return `at ${new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  return `at ${formatClock(at)}`;
 }
 
 /** "Your own DM, #launch and 2 more". */

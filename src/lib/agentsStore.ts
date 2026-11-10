@@ -16,6 +16,7 @@
  * @module lib/agentsStore
  */
 
+import { setClockHour24 } from '../../packages/companion-protocol/src/clock';
 import { useRef, useSyncExternalStore } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
@@ -121,6 +122,7 @@ export async function refreshAgents(): Promise<void> {
     const overview = await getAgentsOverview();
     if (mine < refreshLanded) return;
     refreshLanded = mine;
+    setClockHour24(overview.hour24);
     emit({
       ...state,
       agents: keepUnchanged(state.agents, readableAgents(overview.agents)),

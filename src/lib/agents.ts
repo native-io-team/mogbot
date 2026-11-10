@@ -6,6 +6,7 @@
 
 import type { AgentReachSettings, LoginRequest } from './agentLogins';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { formatClock as clockOf } from '../../packages/companion-protocol/src/clock';
 import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 import type {
@@ -476,6 +477,8 @@ export interface AgentsOverview {
   independence?: AgentIndependence;
   /** "Bring your agents from another assistant, or start fresh?" (`agents::import_choice`). */
   importChoice?: ImportChoice;
+  /** This Mac shows a 24-hour clock (`agents::clock`); every time the app writes follows it. */
+  hour24?: boolean;
 }
 
 /** Mirrors `agents::import_choice::Choice`. */
@@ -2030,7 +2033,8 @@ export {
  * one per call, which over a few hundred rows was the costliest part of a
  * chat render.
  */
-const CLOCK = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+/** The user's clock, as the Mac says (`clock.ts`). */
+const CLOCK = { format: clockOf };
 const SHORT_DAY = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
   month: 'short',

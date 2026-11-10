@@ -912,11 +912,13 @@ impl<Tz: TimeZone> HourMinute for DateTime<Tz> {
 
 /* ------------------------------------------------------------- describe */
 
+/// "9:00 AM" or "09:00", as this Mac shows times (`clock`). The grammar reads
+/// both back, so what an agent quotes from here still parses.
 fn clock_text(hour: u32, minute: u32) -> String {
-    format!("{hour:02}:{minute:02}")
+    super::clock::hm(hour, minute)
 }
 
-/// "every weekday at 09:00", "every Monday and Thursday at 08:30", "every 2 hours".
+/// "every weekday at 9:00 AM", "every Monday and Thursday at 08:30", "every 2 hours".
 pub fn describe(repeat: &Repeat) -> String {
     match repeat {
         Repeat::Every { minutes } if minutes % 60 == 0 => match minutes / 60 {
@@ -1033,7 +1035,12 @@ where
     Tz::Offset: std::fmt::Display,
 {
     match local(tz, ms) {
-        Some(t) => t.format("%a %-d %b %Y, %H:%M (UTC%:z)").to_string(),
+        Some(t) => format!(
+            "{}, {} (UTC{})",
+            t.format("%a %-d %b %Y"),
+            super::clock::of(&t),
+            t.format("%:z")
+        ),
         None => ms.to_string(),
     }
 }
@@ -2221,6 +2228,8 @@ mod tests {
 
     #[test]
     fn describes_routines_the_way_a_person_would() {
+        // A Mac set to a 24-hour clock; `reads_twelve_hour_and_round_trips` has the other.
+        crate::agents::clock::test_hour24(true);
         let d = |w: &str| describe(&parse(w, &Eastern, now()).unwrap().0.unwrap());
         assert_eq!(d("every weekday at 9:00"), "every weekday at 09:00");
         assert_eq!(d("every day at 9"), "every day at 09:00");
@@ -2231,6 +2240,38 @@ mod tests {
         );
         assert_eq!(d("every 2 hours"), "every 2 hours");
         assert_eq!(d("every 90 minutes"), "every 90 minutes");
+    }
+
+    #[test]
+    fn reads_twelve_hour_and_round_trips() {
+        // A Mac on a 12-hour clock reads "9:00 AM", as the desk and phone do,
+        // and what an agent quotes back from it parses to the same routine.
+        crate::agents::clock::test_hour24(false);
+        let r = |w: &str| parse(w, &Eastern, now()).unwrap().0.unwrap();
+        for (said, reads) in [
+            ("every weekday at 9:00", "every weekday at 9:00 AM"),
+            ("every day at 0:15", "every day at 12:15 AM"),
+            ("every sat, sun at 12", "every weekend day at 12:00 PM"),
+            (
+                "every mon and thu at 17:30",
+                "every Monday and Thursday at 5:30 PM",
+            ),
+            (
+                "every month on the last friday at 16:00",
+                "every month on the last Friday at 4:00 PM",
+            ),
+        ] {
+            let repeat = r(said);
+            assert_eq!(describe(&repeat), reads);
+            assert_eq!(r(reads), repeat, "{reads}");
+        }
+        assert!(format_time(&Eastern, at(2026, 11, 6, 14, 5)).contains("Fri 6 Nov 2026, 2:05 PM"));
+        crate::agents::clock::test_hour24(true);
+        assert_eq!(
+            describe(&r("every weekday at 9am")),
+            "every weekday at 09:00"
+        );
+        assert!(format_time(&Eastern, at(2026, 11, 6, 14, 5)).contains("Fri 6 Nov 2026, 14:05"));
     }
 
     #[test]
@@ -2504,9 +2545,9 @@ mod tests {
         };
         let prompt = wake_prompt(&Eastern, &firing, at(2026, 11, 3, 15, 0));
         assert!(prompt.starts_with("[Scheduled check-in you set: note x1]"));
-        assert!(prompt.contains("Mon 2 Nov 2026, 09:00 (UTC-05:00)"));
+        assert!(prompt.contains("Mon 2 Nov 2026, 9:00 AM (UTC-05:00)"));
         assert!(prompt.contains("late"));
-        assert!(prompt.contains("[Also missed, due Mon 2 Nov 2026, 10:00 (UTC-05:00): note x2]"));
+        assert!(prompt.contains("[Also missed, due Mon 2 Nov 2026, 10:00 AM (UTC-05:00): note x2]"));
     }
 
     /// The hourly sweep: nothing new may end with no post, and a question
@@ -2646,7 +2687,7 @@ mod tests {
         )
         .unwrap();
         assert!(
-            made.summary.contains("Fri 6 Nov 2026, 09:00 (UTC-05:00)"),
+            made.summary.contains("Fri 6 Nov 2026, 9:00 AM (UTC-05:00)"),
             "{}",
             made.summary
         );
@@ -2663,7 +2704,7 @@ mod tests {
             "a different time for the same note is a new one-off"
         );
         let routine = create_in(&Eastern, &agent.id, "every weekday at 9", "Brief", now()).unwrap();
-        assert!(routine.summary.contains("every weekday at 09:00"));
+        assert!(routine.summary.contains("every weekday at 9:00 AM"));
         assert!(routine
             .summary
             .contains("runs once when it reopens, marked late"));

@@ -440,6 +440,7 @@ pub fn overview() -> Value {
             defaults: defaults(),
             independence: crate::agents::independence::Level::GoHard,
             import_choice: crate::agents::import_choice::Choice::Undecided,
+            hour24: false,
         })
         .unwrap(),
     )

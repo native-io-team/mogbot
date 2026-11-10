@@ -330,9 +330,8 @@ export function usageLine(t: UsageTotals, onPlan = false): string {
     .join(' · ');
 }
 
-export function formatClock(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
+/** "9:00 AM" / "09:00", as the Mac shows times (companion-protocol `clock`). */
+export { formatClock } from '@shipstudio/companion-protocol';
 
 /**
  * A project's task, named by what it was asked: the first line of its

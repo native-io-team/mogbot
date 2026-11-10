@@ -34,14 +34,10 @@ import { loadMessages, refreshAgents, useAgentsSelector } from '../../lib/agents
 import { takeSettingsSectionRequest } from '../../lib/settings';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { clockFormat } from '../../../packages/companion-protocol/src/clock';
 
 const when = (ts: number) =>
-  new Date(ts).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  clockFormat({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(ts);
 
 function useAdminSwitch() {
   const { showToast } = useOptionalToast();

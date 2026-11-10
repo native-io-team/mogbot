@@ -618,6 +618,8 @@ export interface AgentsOverview {
    * Mac from before it sends none, and then the phone never asks.
    */
   importChoice?: ImportChoice;
+  /** This Mac shows a 24-hour clock (`agents::clock`). Older Macs never send it. */
+  hour24?: boolean;
 }
 
 /** Mirrors `agents::import_choice::Choice`. */
