@@ -136,7 +136,13 @@ a new one arrives with 48 open, the oldest stranger is closed to make room,
 and a socket that authenticated (or a pair request holding a live code) is
 never evicted, so a flood can't keep a paired phone out. Each source may
 have at most 4 sockets before their hello (`MAX_PREHELLO_PER_SOURCE`) and
-32 requests in flight (an open socket counts as one); 10 s for headers,
+32 requests in flight (an open socket counts as one). A paired socket's
+requests each run on the blocking pool with a 20 s deadline
+(`server::bounded`, `REQUEST_DEADLINE`), answered "Your Mac is busy" past
+it; at most 48 hold a thread at once across every socket, counting ones
+still running past their deadline (`MAX_IN_FLIGHT`), and the rest are
+answered busy at once, so no device can take the pool the whole app
+shares; 10 s for headers,
 10 s for the whole pair body, and no 30 s gap in an upload. Uploads go straight to disk with a running cap,
 never whole into memory. Thumbnails are refused (422) for images over
 40 MP by their own header, before decoding; two decode at a time, and the
