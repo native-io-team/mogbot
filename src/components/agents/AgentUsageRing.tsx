@@ -119,7 +119,7 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
           <SameNotes notes={glance.sameNotes} />
           {glance.soonest && (
             <span className="agent-usage__muted">
-              Next refill: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
+              Next reset: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
               {glance.soonest.resetsIn} ({glance.soonest.resetsAt})
             </span>
           )}

@@ -4801,7 +4801,7 @@ with the phone in `companion-protocol/src/usageGlance.ts`): the row at the
 sidebar's foot says the total across every account ("72% left · 2
 accounts"), draws the total bar (one segment per real account, most room
 first, each filled to what it adds; an account with no reading an empty
-dashed slot, never full) and the next refill ("Refills in 2d 4h"). It never
+dashed slot, never full) and the next reset ("Resets in 2d 4h"). It never
 asks for a reading itself (`agents_usage_overview` with `look: false`).
 
 **The total** (`usageGlance` `total`, `totalOf`; the owner's words: "an
@@ -4813,14 +4813,14 @@ guessed, and the words say "across 2 accounts" (or "across 2 Max accounts"
 when every one counted is on that plan). A second sign-in of an account
 already counted and an account with no reading add nothing ("1 account not
 read yet, not counted"); an account out of usage adds 0. The bar's
-segments run most room first, unread ones last; each says when it refills
+segments run most room first, unread ones last; each says when it resets
 (an out account: when it is back). Desk and phone compute it in the same
 function.
 
 **The Usage view** (`AgentsUsageView`, `USAGE_ID`; opened by that row, ⌘K
 "Usage and accounts…", "Switch account…", "Add an account…"). Two levels.
 *The overview*: the total as a hero ("72% left across 2 Max accounts",
-"Next refill in 2d 4h · sam@example.com, Thu 3:15 AM", the bar with each
+"Next reset in 2d 4h · sam@example.com, Thu 3:15 AM", the bar with each
 account named under its segment and opening it); a calm bar when every
 account is nearly out (add an account, carry on with the other engine when
 it has room, or "Wait until …"); "Accounts", one row each in the order work
@@ -4904,9 +4904,9 @@ weekly-reset samples: a reset that moved to another time of the week and
 stayed there is said as exactly that, naming nobody (`byReset`).
 
 **The sidebar row** says, in words anyone reads, what the agents can still
-do and when it refills (`usageGlance` `row`): the total ("72% left", or
+do and when it resets (`usageGlance` `row`): the total ("72% left", or
 "57% left this week" with one account), "2 accounts" only when there are,
-the total bar and "Refills in 2d 4h". Its corner dot shows only when the
+the total bar and "Resets in 2d 4h". Its corner dot shows only when the
 user must act or agents are out; the phone's Agents list says the same.
 
 **Where it went** (`agents/usage_story.rs`). Each turn's tokens are
@@ -5284,7 +5284,7 @@ never slow down for limits unless the user chose that.
   gone. The chat header's ring fills to what is left of the 5-hour window and
   its popover shows the same stack (`usageGlance`); the phone's Agents list
   shows the desk sidebar's glance (`GlanceRow`) as one compact card (the
-  total and how many accounts it is of, a refill chip, the total bar fullest
+  total and how many accounts it is of, a reset chip, the total bar fullest
   first), and its Settings the glance card above the accounts. The count
   beside the total is the accounts read (`total.counted`): one not read yet
   isn't in the figure, so it isn't counted beside it. The rules everywhere:

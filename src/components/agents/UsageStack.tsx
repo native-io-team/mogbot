@@ -109,7 +109,7 @@ export function TotalBar({
               {s.refill && (
                 <span
                   className="usage-chip"
-                  title={s.refillAt ? `Refills ${s.refillAt}` : undefined}
+                  title={s.refillAt ? `Resets ${s.refillAt}` : undefined}
                 >
                   <ResetIcon size={11} aria-hidden />
                   {s.refill}
@@ -197,7 +197,7 @@ export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
         data-unread={k.share === null || undefined}
         data-account={k.id}
         aria-label={`${k.position}. ${k.name}, ${roomWords(k)}, ${k.stateLabel}${
-          refill ? `, refills in ${refill}` : ''
+          refill ? `, resets in ${refill}` : ''
         }. Open`}
         onClick={onOpen}
       >
@@ -229,7 +229,7 @@ export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
         </span>
         <span className="usage-row__refill">
           {refill && (
-            <span className="usage-chip" title={`Refills ${k.refillLimit?.resetsAt ?? ''}`}>
+            <span className="usage-chip" title={`Resets ${k.refillLimit?.resetsAt ?? ''}`}>
               <ResetIcon size={11} aria-hidden />
               {refill}
             </span>
@@ -285,7 +285,7 @@ export function PaceBar({
 
 /**
  * One limit as a card: its name and countdown chip, the big figure, the
- * pace-marked bar, the time until it refills with the Mac's run-out
+ * pace-marked bar, the time until it resets with the Mac's run-out
  * estimate marked on it (labelled as one), and what that means in words.
  */
 export function LimitRow({ limit }: { limit: KeyLimit }) {
@@ -294,7 +294,7 @@ export function LimitRow({ limit }: { limit: KeyLimit }) {
       <div className="usage-key__limit-head">
         <span className="usage-key__limit-name">{limit.label}</span>
         {limit.countdown && (
-          <span className="usage-chip" title={`Refills ${limit.resetsAt ?? ''}`}>
+          <span className="usage-chip" title={`Resets ${limit.resetsAt ?? ''}`}>
             <ResetIcon size={11} aria-hidden />
             {limit.countdown}
           </span>
@@ -323,7 +323,7 @@ export function LimitRow({ limit }: { limit: KeyLimit }) {
           <span className="usage-key__timeline-ends" aria-hidden>
             <span>Now</span>
             <span>{limit.runOut.text} · estimate</span>
-            <span>Refills</span>
+            <span>Resets</span>
           </span>
         </span>
       )}
@@ -332,7 +332,7 @@ export function LimitRow({ limit }: { limit: KeyLimit }) {
           {limit.paceWord}
         </span>
       )}
-      {limit.resetsAt && <span className="usage-key__reset">Refills {limit.resetsAt}</span>}
+      {limit.resetsAt && <span className="usage-key__reset">Resets {limit.resetsAt}</span>}
       {limit.pace && (
         // An estimate: secondary ink, never amber; a small mark only when little is left.
         <span className="usage-key__pace" title={limit.pace.basis}>

@@ -635,11 +635,12 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-page',
     title: 'Settings — Accounts & usage, the whole page',
     looksRightWhen:
-      'Opened on the Accounts & usage page, in one tall shot: exactly the Usage view’s panel (hero, mode control, the keys, adding, crossover, spare-capacity list, estimates, other compute), one rendering, so its figures and names match the Usage view’s. Every limit says “N% left”. Both themes readable; nothing accent-coloured except chosen state.',
+      // Settings is a window capped at 760px tall now, so one tall shot of
+      // the page is gone: this is the window as it opens, the rest scrolls.
+      'Settings opened on Accounts & usage: the section list with Accounts & usage chosen, the page title and lead, then the Usage view’s own panel from the top (hero, the keys), one rendering, so its figures and names match the Usage view’s. Every limit says “N% left”. Both themes readable; nothing accent-coloured except chosen state.',
     command: 'settings.page.accounts',
     requires: '.usage-panel .usage-row',
-    clipSelector: '.agents-settings',
-    viewport: { width: 1280, height: 3000 },
+    clipSelector: '.settings-window',
     commands: {
       agents_overview: {
         ...overview(),

@@ -114,7 +114,7 @@ describe('usage at a glance, on the phone', () => {
     expect(
       screen.getByText(glance.total.refill!.in, { includeHiddenElements: true })
     ).toBeTruthy();
-    expect(screen.getByRole('button').props.accessibilityLabel).toMatch(/Refills in /);
+    expect(screen.getByRole('button').props.accessibilityLabel).toMatch(/Resets in /);
     expect(screen.queryByText('Plenty of room')).toBeNull();
     await fireEvent.press(screen.getByRole('button'));
     expect(onPress).toHaveBeenCalled();

@@ -396,7 +396,7 @@ describe('the row, in plain words', () => {
       { now: NOW }
     );
     expect(g.row.figure).toBe('57% left this week');
-    expect(g.row.refill).toMatch(/^Refills /);
+    expect(g.row.refill).toMatch(/^Resets /);
     expect(g.row.count).toBeNull();
     expect(g.row.needsYou).toBe(false);
   });
@@ -445,7 +445,7 @@ describe('every limit, against pace', () => {
     ).keys[0].limits[0];
     expect(under.evenLeft).toBe(50);
     expect(under.paceState).toBe('under');
-    expect(under.paceWord).toBe('Under pace — room to spare before it refills');
+    expect(under.paceWord).toBe('Under pace — room to spare before it resets');
     expect(under.countdown).toBe('3d 12h');
 
     const on = usageGlance(
@@ -455,7 +455,7 @@ describe('every limit, against pace', () => {
         now: NOW,
       }
     ).keys[0].limits[0];
-    expect(on.paceWord).toBe('On pace — lasts until it refills');
+    expect(on.paceWord).toBe('On pace — lasts until it resets');
   });
 
   it('a run-out is the Mac’s estimate, placed along the time left and said in words', () => {
@@ -482,7 +482,7 @@ describe('every limit, against pace', () => {
     expect(l.paceState).toBe('ahead');
     expect(l.runOut?.along).toBeCloseTo(1.5 / 3.5);
     expect(l.paceWord).toMatch(
-      /^Ahead of pace — at this rate it runs out .+, 2 days before it refills$/
+      /^Ahead of pace — at this rate it runs out .+, 2 days before it resets$/
     );
   });
 
@@ -599,7 +599,7 @@ describe('the total, across every account', () => {
     expect(g.total.refill).toMatchObject({ in: '2d 0h', account: 'sam@example.com' });
     expect(g.row.figure).toBe('72% left');
     expect(g.row.count).toBe('2 accounts');
-    expect(g.row.refill).toBe('Refills in 2d 0h');
+    expect(g.row.refill).toBe('Resets in 2d 0h');
   });
 
   it('names the plan when every account counted is on the same one', () => {

@@ -540,7 +540,7 @@ function trio(
       id: `usage-${id}-row`,
       title: `Usage — ${title} (the sidebar row)`,
       looksRightWhen:
-        'At the foot of the Agents sidebar: “Usage”, then the total (“72% left · 2 accounts”), the total bar (a segment per account, most room first) and “Refills in …”. Nothing accent-coloured; nothing wraps.',
+        'At the foot of the Agents sidebar: “Usage”, then the total (“72% left · 2 accounts”), the total bar (a segment per account, most room first) and “Resets in …”. Nothing accent-coloured; nothing wraps.',
       openSelector: AGENTS_TAB,
       requires: '[data-testid="account-switcher"]',
       clipSelector: '.workspace-sidebar-footer',
@@ -556,14 +556,14 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'two',
     'two accounts, 100% and 44%',
-    'The hero leads with the total: “All accounts”, a large “72% left across 2 Max accounts”, “Next refill in 2d 4h · sam@example.com, …”. One bar of two segments, Work (full) on the left, sam@example.com (44%) on the right, each with its name, “% left” and a refill chip under it. Then “Accounts” with “Add …” at the right, two rows in order (1 sam@example.com In use, 2 Work), figures aligned. Then “How agents use your limits”, a hugging three-option control and its one line.',
+    'The hero leads with the total: “All accounts”, a large “72% left across 2 Max accounts”, “Next reset in 2d 4h · sam@example.com, …”. One bar of two segments, Work (full) on the left, sam@example.com (44%) on the right, each with its name, “% left” and a refill chip under it. Then “Accounts” with “Add …” at the right, two rows in order (1 sam@example.com In use, 2 Work), figures aligned. Then “How agents use your limits”, a hugging three-option control and its one line.',
     TWO,
     { account: 'default', looksRightWhen: PAGE }
   ),
   ...trio(
     'one',
     'one account',
-    'The hero: “Usage”, “53% left this week”, “Next refill in …”, one full-width segment. One row. No “All accounts”.',
+    'The hero: “Usage”, “53% left this week”, “Next reset in …”, one full-width segment. One row. No “All accounts”.',
     ONE,
     { account: 'default', looksRightWhen: PAGE }
   ),
@@ -631,7 +631,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio('pace', 'every limit, against pace', 'Two segments, Work (88%) first.', PACE, {
     account: 'default',
     looksRightWhen:
-      'sam@example.com’s page: 5-hour, Weekly and “Weekly · Opus” cards. The weekly one is ahead of pace: a now → refills line with a dashed marker “Runs out ~tomorrow · estimate” and “Ahead of pace — …”.',
+      'sam@example.com’s page: 5-hour, Weekly and “Weekly · Opus” cards. The weekly one is ahead of pace: a now → resets line with a dashed marker “Runs out ~tomorrow · estimate” and “Ahead of pace — …”.',
   }),
   {
     id: 'usage-tokens',

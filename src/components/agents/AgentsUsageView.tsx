@@ -605,7 +605,7 @@ function TotalHero({
   const refill = out
     ? glance.row.refill
     : total.refill
-      ? `Next refill in ${total.refill.in}${
+      ? `Next reset in ${total.refill.in}${
           total.counted > 1 ? ` · ${total.refill.account}` : ''
         }, ${total.refill.at}`
       : null;

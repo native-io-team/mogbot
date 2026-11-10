@@ -571,10 +571,10 @@ request, the diff and the photo viewer push over them. At
 - **Usage** (`app/usage.tsx`, `app/usage-account.tsx`,
   `components/usageStack.tsx`), as the desk's Usage view says it
   (`usageGlance`, the same words and figures): the Agents list's glance (one
-  compact card: the total and how many accounts it is of, a refill chip, the
+  compact card: the total and how many accounts it is of, a reset chip, the
   total bar fullest first) and the ring left of ⓘ in a chat's header open it.
   Under a putty gauge key: this agent's context when its engine reported it,
-  then the total first ("72% left across 2 Max accounts", "Next refill in …",
+  then the total first ("72% left across 2 Max accounts", "Next reset in …",
   the bar with each account named under it), then **Accounts**, one list per
   engine in the order turns try them (keycap, name, plan, room, pill, refill
   chip). An account opens its own screen, the desk's account page: its place

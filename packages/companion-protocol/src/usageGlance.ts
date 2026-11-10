@@ -73,14 +73,14 @@ export interface KeyLimit {
   pace?: { text: string; basis: string };
   /** A per-model limit ("Weekly · Opus"): it stops only that model, so the key's room leaves it out. */
   model?: boolean;
-  /** "3d 12h" until it refills. */
+  /** "3d 12h" until it resets. */
   countdown?: string;
   /** When it refills, as the engine reported it (ms). */
   resetsAtMs?: number;
   /** What would be left now had it been spent evenly through the window (the pace marker), 0–100. */
   evenLeft?: number;
   paceState?: 'ahead' | 'on' | 'under';
-  /** "On pace — lasts until it refills", "Ahead of pace — at this rate it runs out Thu, 2 days before it refills". */
+  /** "On pace — lasts until it resets", "Ahead of pace — at this rate it runs out Thu, 2 days before it resets". */
   paceWord?: string;
   /** The Mac's estimate of when it runs out, before the reset: `along` the time left, 0 now to 1 the reset. */
   runOut?: { at: number; along: number; text: string };
@@ -183,7 +183,7 @@ export interface TotalSegment {
   refill: string | null;
   /** "Sat 10:00 AM". */
   refillAt: string | null;
-  /** "sam@example.com: 100% left, refills in 3d 12h". */
+  /** "sam@example.com: 100% left, resets in 3d 12h". */
   words: string;
 }
 
@@ -253,7 +253,7 @@ export interface SignInChangedNotice {
 export interface GlanceRowWords {
   /** "57% left this week", "57% left for now", "Out of usage", "Not read yet". */
   figure: string;
-  /** "Refills in 3d 12h" ("Refills Sat 10:00 AM" when out); absent when no reset was reported. */
+  /** "Resets in 3d 12h" ("Refills Sat 10:00 AM" when out); absent when no reset was reported. */
   refill: string | null;
   /** "2 accounts": only with more than one real account. */
   count: string | null;
@@ -294,14 +294,14 @@ function rowWords(
     // Out everywhere only when every account was read: one out and three
     // never read is not "out of usage", it's that one account (round 4).
     const figure = read.length < counted.length ? outOf(read) : OUT_OF_USAGE;
-    return { figure, refill: at ? `Refills ${at}` : null, count, needsYou };
+    return { figure, refill: at ? `Resets ${at}` : null, count, needsYou };
   }
   // The total across every account, as the Usage view's hero says it, and
   // the accounts that figure is of: an account not read yet isn't in it, so
   // "72% left · 4 accounts" would claim two it never counted.
   return {
     figure: total.counted > 1 ? total.figure : `${total.figure} ${total.across}`,
-    refill: total.refill ? `Refills in ${total.refill.in}` : null,
+    refill: total.refill ? `Resets in ${total.refill.in}` : null,
     count: total.counted > 1 ? plural(total.counted, 'account') : null,
     needsYou,
   };
@@ -458,14 +458,14 @@ function paceOf(
   let paceWord: string;
   if (runOut) {
     const early = Math.round((w.resetsAt - runOut.at) / DAY_MS);
-    const ahead = early >= 1 ? `${plural(early, 'day')} before it refills` : 'before it refills';
+    const ahead = early >= 1 ? `${plural(early, 'day')} before it resets` : 'before it resets';
     paceWord = `Ahead of pace — at this rate it runs out ${roughWhen(runOut.at, now)}, ${ahead}`;
   } else if (paceState === 'ahead') {
     paceWord = 'Ahead of pace — used faster than time has passed';
   } else if (paceState === 'under') {
-    paceWord = 'Under pace — room to spare before it refills';
+    paceWord = 'Under pace — room to spare before it resets';
   } else {
-    paceWord = 'On pace — lasts until it refills';
+    paceWord = 'On pace — lasts until it resets';
   }
   return { evenLeft, paceState, paceWord, ...(runOut ? { runOut } : {}) };
 }
@@ -719,7 +719,7 @@ export function totalOf(
       tone: k.tone,
       refill,
       refillAt: l?.resetsAt ?? null,
-      words: `${k.name}: ${room}${refill ? `, refills in ${refill}` : ''}`,
+      words: `${k.name}: ${room}${refill ? `, resets in ${refill}` : ''}`,
     };
   };
   // In the work order, as the list under it (round 4: the bar sorted by
