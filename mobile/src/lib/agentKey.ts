@@ -185,3 +185,14 @@ export const KEY_PULSE_LOW = G.needsOk.pulseLow;
 /** The slow breath of a working key's light. */
 export const KEY_BREATHE_MS = G.working.breatheMs;
 export const KEY_BREATHE_LOW = 0.5;
+
+/**
+ * A small key's Needs-your-OK keyline (the desk's `--agent-key-ask-keyline`):
+ * its depth shade taken part of the way to black, drawn just wider than the
+ * legend under it, so the amber parts from any face at list size.
+ */
+export function askKeyline(paint: KeyColors): string {
+  return mix(keyLit.black, paint.depth, G.needsOk.smallKeylineShade);
+}
+/** How far the keyline reaches either side of the legend's stroke, in grid units. */
+export const KEY_ASK_KEYLINE = G.needsOk.smallKeyline;
