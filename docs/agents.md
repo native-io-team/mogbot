@@ -6845,7 +6845,17 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
   agent bridge, approval broker, wallet and MCP tools through the same
   Tauri commands the UI calls, with `scripts/fake-engine/fake_claude.py`
   first on PATH as `claude` (and, linked as `codex`, as Codex's `exec`
-  driver: `SHIPSTUDIO_AGENTS_CODEX_EXEC`). The fake speaks Claude Code's
+  driver: `SHIPSTUDIO_AGENTS_CODEX_EXEC`; linked as `opencode`, as
+  `opencode acp`). The `opencode` scenario runs an OpenCode agent through
+  it: a command that asks and runs on Allow, a bridge tool, the reply
+  streamed, the session resumed, a denied command that never runs and the
+  note after it, a crash and an error each ending in a line, a lost session
+  replaced, and the bridge secret only in `session/new` (never argv, config
+  or environment). `AGENTS_FAKE_REAL_OPENCODE=1 scripts/agents-fake-e2e.sh
+  opencode-real` (not in the default run; network) does a turn on the real
+  `opencode` on PATH, under the run's throwaway HOME, on OpenCode's free
+  models: verified on 1.18.29, one card, the command ran, the reply came
+  back and the next turn resumed the session. The fake speaks Claude Code's
   stream-json as observed on 2.1.318 (init with its permission mode,
   streamed text, tool_use / tool_result, `rate_limit_event`, `result` with
   usage), calls the bridge's tools for real with the turn's bearer secret

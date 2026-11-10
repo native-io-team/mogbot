@@ -1258,6 +1258,68 @@ async fn opencode(h: &H) -> Check {
     )
 }
 
+/// Not in the default run: the real `opencode` on PATH (with
+/// `AGENTS_FAKE_REAL_OPENCODE=1`, so the fake isn't installed as it), under
+/// this run's throwaway HOME, on OpenCode's free models: a real model asks to
+/// run a command, the card is allowed, and its reply comes back in a session
+/// the next turn resumes. Needs the network.
+async fn opencode_real(h: &H) -> Check {
+    let a = h.agent("RealOpen");
+    store::update(&a.id, |a| a.engine = Engine::OpenCode).unwrap();
+    h.send(
+        &a.id,
+        "Run the shell command `echo opencode-real > real.txt` with your bash tool, then reply with just the word done.",
+    )
+    .await?;
+    // A real model may or may not ask first; any card that comes is allowed.
+    let start = Instant::now();
+    let mut answered = 0;
+    while runner::in_turn(&a.id) || start.elapsed() < Duration::from_secs(2) {
+        if start.elapsed() > Duration::from_secs(240) {
+            return Err("the real turn took over 4 minutes".into());
+        }
+        let cards = approvals(&a.id);
+        if cards.len() > answered {
+            let c = cards[answered].clone();
+            answer(h, &a.id, &c, true).await?;
+            answered += 1;
+        }
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let home = store::agent_home(&a.id).unwrap();
+    ensure(
+        std::fs::read_to_string(home.join("real.txt"))
+            .unwrap_or_default()
+            .contains("opencode-real"),
+        format!(
+            "the command didn't run (cards answered: {answered}); replies {:?}",
+            replies(&a.id)
+        ),
+    )?;
+    println!("      cards answered: {answered}");
+    let session = store::get(&a.id)
+        .unwrap()
+        .session_id
+        .ok_or("no session kept")?;
+    ensure(!last_reply(&a.id).is_empty(), "no reply")?;
+    h.send(&a.id, "What word did you reply with last time? One word.")
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        store::get(&a.id).unwrap().session_id.as_deref() == Some(session.as_str()),
+        "the session wasn't resumed",
+    )?;
+    println!(
+        "      real replies: {:?}; timeline: {:?}",
+        replies(&a.id),
+        timeline(&a.id)
+    );
+    Ok(())
+}
+
 /// Claude Code's `result` is in but the process stays alive (a background
 /// task it started): the turn is over, and the agent is idle soon after.
 async fn lingering(h: &H) -> Check {
@@ -2060,10 +2122,13 @@ fn install_fake(home: &Path) {
     let codex = bin.join("codex");
     let _ = std::fs::remove_file(&codex);
     std::os::unix::fs::symlink(&script, &codex).unwrap();
-    // OpenCode over `opencode acp`, the fake speaking ACP.
-    let opencode = bin.join("opencode");
-    let _ = std::fs::remove_file(&opencode);
-    std::os::unix::fs::symlink(&script, &opencode).unwrap();
+    // OpenCode over `opencode acp`, the fake speaking ACP (unless the real
+    // one is wanted: `opencode-real`).
+    if std::env::var_os("AGENTS_FAKE_REAL_OPENCODE").is_none() {
+        let opencode = bin.join("opencode");
+        let _ = std::fs::remove_file(&opencode);
+        std::os::unix::fs::symlink(&script, &opencode).unwrap();
+    }
     // Codex on `exec`, the driver the fake speaks (debug builds read this).
     std::env::set_var("SHIPSTUDIO_AGENTS_CODEX_EXEC", "1");
     std::env::set_var("CODEX_HOME", home.join(".codex"));
@@ -2133,6 +2198,7 @@ fn main() {
                 "interrupt" => interrupt(&h).await,
                 "codex" => codex(&h).await,
                 "opencode" => opencode(&h).await,
+                "opencode-real" => opencode_real(&h).await,
                 "lingering" => lingering(&h).await,
                 "rounds" => rounds(&h).await,
                 "garbage" => garbage(&h).await,

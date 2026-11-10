@@ -285,6 +285,7 @@ async fn draft(h: &H) -> Detail {
         engine: Some("claude".into()),
         claude_model: Some("haiku".into()),
         codex_model: None,
+        opencode_model: None,
     })
     .await
     .map_err(|e| format!("defaults: {e}"))?;
@@ -878,6 +879,7 @@ async fn haiku_defaults() -> Check {
         engine: Some("claude".into()),
         claude_model: Some("haiku".into()),
         codex_model: None,
+        opencode_model: None,
     })
     .await
     .map(|_| ())
