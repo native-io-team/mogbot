@@ -39,6 +39,7 @@ and left.
 | 11 | Low | OpenCode | user config | A user's own plugins, `OPENCODE_CONFIG_DIR`, remote/org config still load; a user server named `app_…` matches `app_*: allow` | Documented |
 | 12 | Low | Companion | (b) | Work past its deadline isn't stopped by a revoke | Documented |
 | 13 | Low | Watchdog | local | Hang files hold stacks and paths (no memory contents), are never rotated | Documented |
+| 14 | **High** | Broker, every engine | (d), (a) | Follow-up to #1. A write through a folder link reached the broker as the path as written; at Bold/Unleashed `go_hard` judged that text and allowed it (`proj/agents -> ~/Library/LaunchAgents`); the settings check (`policy::verdict`) allowed reads through a link in any project into `~/.ssh` at every level. Codex patch approvals were judged on their first file only | Fixed `bce66c0ff`, `022d625fe` |
 
 Nothing found for attacker (c): every new method is behind the companion's
 paired-socket auth (`router::dispatch` via `serve_frames`), and step-in
@@ -70,8 +71,74 @@ refused; a part that exists but can't be followed (dangling, looping) always
 asks. Test: `opencode_tests.rs`,
 `a_symlink_in_a_writable_folder_is_judged_by_where_it_points`.
 
-Not checked: whether Claude Code's own `acceptEdits` follows links the same
-way (out of tonight's scope; worth the same test against the real CLI).
+Claude Code and Codex: checked afterwards, see #14.
+
+---
+
+### 14. High: the broker judged a file call through a link by its text
+
+**Follow-up to #1: do Claude Code's and Codex's edits have the same gap?**
+Their own auto-accepted edits don't; what they *ask* about did.
+
+**Observed, Claude Code 2.1.322** (one real `claude --print --model haiku`
+turn, `acceptEdits`, our `Edit(**/.git/**)` deny rules, in a throwaway
+temp project; links `notes.md` → outside file, `outdir` → outside folder,
+`hooks` → `.git/hooks`, `dangling.md` → missing file):
+
+- Claude Code resolves links before deciding: none of the four was
+  auto-accepted. With no prompt tool all four were refused.
+- With an allow-everything prompt tool standing in for our broker at an
+  allow-by-default level: `notes.md` and `dangling.md` were refused by the
+  Write/Edit tool itself ("is a symlink", naming the target);
+  `hooks/pre-commit` was refused by our deny rule (it matched the resolved
+  path) and never reached the prompt tool; **`outdir/new.txt` reached the
+  prompt tool as `<proj>/outdir/new.txt` and, allowed, was written outside
+  the project.** A `Read` of `notes.md` reached it as `<proj>/notes.md`.
+
+**Observed, Codex 0.166** (`codex sandbox`, no model turn: the CLI here
+isn't signed in under the default home, and the app's account homes were
+not touched): seatbelt follows links, so writes through `outdir`,
+`notes.md`, `hooks` and `dangling.md` are all refused by the sandbox, with
+both the legacy `workspace-write` mode and the app's permissions profile
+(`.git` read-only). Codex's way past the sandbox is an approval request,
+which names the path as written (`codex_app.rs`, `fileChange`).
+
+**The gap** was in `mcp::decide`, shared by all three engines: every rule
+after the card (the agent's settings, a plan, "Always allow", the level)
+matches paths as text. `autoallow` already judged both the path and its
+target (`both`), but at Bold and Unleashed `go_hard::asks` replaces it and
+resolves lexically, and `policy::verdict` answers reads inside a project
+with Allow at every level. So: a repo with `agents ->
+~/Library/LaunchAgents` (or `cfg -> ~` and `cfg/.zshrc`) and a README
+asking to "add the plist to agents/" got a launch agent written with no
+card at Bold; `keys -> ~/.ssh` and "read keys/id_ed25519" was read with no
+card at any level (`policy::verdict` answers every read inside a known project). Separately, a Codex
+`fileChange` approval was decided on its first path only, so a patch over
+a project file and `~/.zshrc` was judged as the project file.
+
+**Fix.** `agents/links.rs`, run first in `decide_inner` (after a one-time
+grant) for Write/Edit/MultiEdit/NotebookEdit/Read/Glob/Grep/LS: a path that
+crosses a link (macOS's `/var`, `/tmp`, `/etc` aliases excepted) is judged
+at its resolved path by every rule after, and its card says "`<path>` is a
+link: this really changes `<target>`"; a write a link carries into
+`.git`/`.shipstudio` is refused; a write through a dangling or looping
+link always gets a card, never a level, plan or rule. Codex patches are
+judged one file at a time (`codex_app::each_file`); any refusal refuses the
+patch. Tests: `links_tests.rs` (including
+`bold_and_unleashed_ask_for_a_write_a_link_carries_out_of_the_project`,
+which shows the as-written path passing at both levels and the landing
+asking), `codex_app` `file_changes_and_extra_access_get_cards`.
+
+**Left.** A Codex patch over several files that each need a card raises
+one card per file. A project folder that is itself a link to another disk
+(`~/ShipStudio -> /Volumes/…`) is judged at its real path: the few calls
+there that reach the broker at Bold ask (outside the home), which is the
+safe side. Bash redirections through links (`echo >> notes.md`) are not
+covered by this; Claude Code's own shell sandbox and Codex's seatbelt
+resolve them, and `go_hard` judges commands separately. Not run: a live
+Codex app-server turn, so whether Codex 0.166 auto-applies a patch through
+a link before its sandbox sees it is inferred from the sandbox test, not
+observed.
 
 ### 2. Medium: the user's OpenCode config could loosen every ask
 
@@ -247,5 +314,8 @@ minutes, never rotated. Probes are loopback `GET /watchdog` with no token.
 
 `cargo test --lib` for `agents::opencode`, `agents::blocks`,
 `commands::agents`, `companion::server`; `opencode debug config` against
-1.18.29 for #2. Not run: a live OpenCode turn through a symlink, a real
-phone, the Chrome extension.
+1.18.29 for #2. For #14: `cargo test --lib agents::` (1822 pass), one real
+Claude Code 2.1.322 turn in a temp project (twice: no prompt tool, and an
+allow-all one), `codex sandbox` against 0.166's seatbelt. Not run: a live
+OpenCode turn through a symlink, a live Codex turn, a real phone, the
+Chrome extension.
