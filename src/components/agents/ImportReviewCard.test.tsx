@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { AgentMessage, ConnectorCard, ImportPicks } from '../../lib/agents';
 import type { ImportReview } from '../../lib/agents';
-import { ImportReviewCard, lineDiff, PREVIEW_LINES } from './ImportReviewCard';
+import {
+  ImportReviewCard,
+  lineDiff,
+  MANY_AGENTS,
+  PREVIEW_CHARS,
+  PREVIEW_LINES,
+} from './ImportReviewCard';
 
 const apply = vi.fn((_a: string, _r: string, _p: ImportPicks) =>
   Promise.resolve({ agents: [], replaced: [], skipped: [], chiefNotes: false, routinesRefused: [] })
@@ -169,6 +175,44 @@ describe('ImportReviewCard', () => {
     expect(shown.textContent).not.toContain(`Rule ${PREVIEW_LINES + 1}.`);
     fireEvent.click(screen.getByRole('button', { name: 'Show all 20 lines' }));
     expect(shown.textContent).toContain('Rule 20.');
+  });
+
+  it('one long paragraph is cut at a word, not shown whole', () => {
+    const para = Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ');
+    const card: ConnectorCard = {
+      ...CARD,
+      review: { proposals: [{ ...CARD.review!.proposals[1], instructions: para }] },
+    };
+    render(<ImportReviewCard message={message()} card={card} chiefName="Ada" onAnswer={vi.fn()} />);
+    const shown = screen.getByLabelText('Travel’s instructions');
+    expect(shown.textContent!.length).toBeLessThanOrEqual(PREVIEW_CHARS + 1);
+    expect(shown.textContent).toMatch(/word\d+…$/);
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(shown.textContent).toBe(para);
+  });
+
+  it('a card bringing many agents counts what is ticked and ticks or unticks them all', () => {
+    const many = Array.from({ length: MANY_AGENTS + 3 }, (_, i) => ({
+      ...CARD.review!.proposals[1],
+      key: `k${i}`,
+      name: `Agent ${i}`,
+      instructions: 'One.\nTwo.\nThree.\nFour.\nFive.',
+    }));
+    const card: ConnectorCard = { ...CARD, review: { proposals: many } };
+    render(<ImportReviewCard message={message()} card={card} chiefName="Ada" onAnswer={vi.fn()} />);
+    expect(screen.getByText(`All ${many.length} ticked`)).toBeTruthy();
+    // Shorter previews: three lines each.
+    expect(screen.getByLabelText('Agent 0’s instructions').textContent).toBe('One.\nTwo.\nThree.');
+    fireEvent.click(screen.getByRole('button', { name: 'Untick all' }));
+    expect(screen.getByText(`0 of ${many.length} ticked`)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Import notes only' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Tick all' }));
+    expect(screen.getByRole('button', { name: `Import ${many.length} agents` })).toBeTruthy();
+  });
+
+  it('a short card has no tally', () => {
+    render(<ImportReviewCard message={message()} card={CARD} chiefName="Ada" onAnswer={vi.fn()} />);
+    expect(screen.queryByText(/ticked$/)).toBeNull();
   });
 
   it('a recipe’s agent wears the key it will arrive with', () => {

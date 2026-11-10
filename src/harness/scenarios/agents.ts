@@ -590,6 +590,49 @@ export const COVERAGE_REVIEW = {
   },
 };
 
+/** A review bringing twelve agents, one briefed in a single long paragraph (fictional). */
+const MANY_NAMES = [
+  'Finance',
+  'Travel',
+  'Inbox',
+  'Health',
+  'Research',
+  'Outreach',
+  'Calendar',
+  'Home',
+  'Writing',
+  'Garden',
+  'Reading',
+  'Kids',
+];
+export const MANY_REVIEW = {
+  ...REVIEW,
+  proposals: MANY_NAMES.map((name, i) => ({
+    key: `m${i}`,
+    name,
+    role: `Looks after ${name.toLowerCase()}`,
+    instructions:
+      i === 2
+        ? 'Read every new email as it arrives and sort it into one of four piles: needs Sam today, needs Sam this week, can wait, and newsletters. Draft a reply for anything in the first pile, in Sam’s voice, short and warm, and never send it without asking. Unsubscribe from anything Sam has not opened in three months, but list them first. On Fridays, summarise what is still waiting and who has been waiting longest, and suggest which ones Sam could hand to someone else.'
+        : `Look after ${name.toLowerCase()} for Sam.\nAsk before spending anything.\nKeep a short weekly note of what changed.\nFlag anything urgent the same day.\nNever share Sam’s details.`,
+    memory: '- Sam prefers short replies',
+    routines: i % 3 === 0 ? [{ when: 'every monday at 9am', what: 'Weekly check' }] : [],
+    logins: [],
+  })),
+  summary: 'Twelve agents, one per part of Sam’s life.',
+};
+
+export const MANY_REVIEW_CARD = () =>
+  msg('approval', '', 0, {
+    approval: {
+      requestId: 'review3',
+      title: 'Bring in 12 agents from Grok',
+      detail: MANY_NAMES.join(', '),
+      status: 'pending',
+      connector: { kind: 'review', talkId: 'talk1', source: 'Grok', review: MANY_REVIEW },
+    },
+  });
+
 export const COVERAGE_REVIEW_CARD = () =>
   msg('approval', '', 0, {
     approval: {
@@ -3229,6 +3272,21 @@ export const agentsScenarios: Scenario[] = [
         args.agentId === 'chief' ? [...REVIEW_CHAT, COVERAGE_REVIEW_CARD()] : messagesFor(args),
       agents_import_talk: gateWith({ state: 'review' }),
       agents_import_review_current: COVERAGE_REVIEW,
+    },
+  },
+  {
+    id: 'agents-import-review-many',
+    title: 'Agents — the review card bringing twelve agents',
+    looksRightWhen:
+      'One card, “Bring in 12 agents from Grok”. Above the rows a muted line “All 12 ticked” with a quiet “Untick all”. Each row shows only the first three lines of its instructions, then “Show all 5 lines”. Inbox, briefed in one long paragraph, shows its opening few lines cut at a word with “…” and a plain “Show all”, not the whole paragraph in a scrolling box.',
+    command: 'agents.open',
+    requires: '.agent-import-review__tally',
+    commands: {
+      agents_overview: overview([{ ...TEAM[0], pendingApprovals: 1 }]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? [MANY_REVIEW_CARD()] : messagesFor(args),
+      agents_import_talk: gateWith({ state: 'review' }),
+      agents_import_review_current: MANY_REVIEW,
     },
   },
   {
