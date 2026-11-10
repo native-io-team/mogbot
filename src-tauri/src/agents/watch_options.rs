@@ -107,7 +107,7 @@ pub fn refuse_unoffered_folder(source: &Source, offered: &[Folder]) -> Result<()
         let folder = folder.trim().trim_end_matches('/');
         if !offered.iter().any(|f| f.path == folder) {
             return Err(CommandError::expected(
-                "Pick one of the folders your Mac offers. Another folder is set on the Mac.",
+                "Pick one of the folders your Mac offers. For another, set it up on your Mac.",
             ));
         }
     }
