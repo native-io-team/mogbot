@@ -46,14 +46,18 @@ const base = (path: string) => path.trim().replace(/\/+$/, '').split('/').pop() 
 const flat = (text: string) => text.trim().replace(/\s+/g, ' ');
 
 /** A rule or an edge with nothing written in it. */
-const isRule = (t: string) => /^[│┃║╭╮╰╯├┤┬┴┼┌┐└┘─━═┄┈╌▌▐|+\-=_~\s]+$/.test(t) && /[─━═┄┈╌\-=_~]{3,}/.test(t);
+const isRule = (t: string) =>
+  /^[│┃║╭╮╰╯├┤┬┴┼┌┐└┘─━═┄┈╌▌▐|+\-=_~\s]+$/.test(t) && /[─━═┄┈╌\-=_~]{3,}/.test(t);
 const isEdgeOnly = (t: string) => /^[│┃║╭╮╰╯├┤┬┴┼┌┐└┘─━═┄┈╌▌▐|\s]+$/.test(t);
 
 /** A line inside a box, without the box: "│ Do you want…? │" → "Do you want…?". */
 function unboxed(raw: string): string {
   let t = raw.trim();
   for (let i = 0; i < 2; i++) {
-    t = t.replace(/^[│┃║▌▐]\s?/, '').replace(/\s?[│┃║▌▐]$/, '').trim();
+    t = t
+      .replace(/^[│┃║▌▐]\s?/, '')
+      .replace(/\s?[│┃║▌▐]$/, '')
+      .trim();
   }
   return t;
 }
@@ -97,7 +101,8 @@ export function isStatusLine(t: string): boolean {
 }
 
 /** Words under a tool call that say it went wrong or was cut off. */
-const TROUBLE = /\b(error|errored|failed|failure|interrupted|retrying|timed out|rejected|denied)\b/i;
+const TROUBLE =
+  /\b(error|errored|failed|failure|interrupted|retrying|timed out|rejected|denied)\b/i;
 
 /** A count of nothing ("0 failed", "no errors") is good news, not trouble. */
 const troubled = (out: string) =>

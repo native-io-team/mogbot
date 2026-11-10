@@ -19,7 +19,7 @@ import {
   SETTLE_MS,
   type Landing,
 } from './catchUpTab';
-import { feedItems } from './needsYou';
+import { feedItems, waitingCount } from './needsYou';
 import { readJson, writeJson } from './persist';
 import { canCall } from './session';
 import { getApp, useApp } from './store';
@@ -28,12 +28,9 @@ import { getApp, useApp } from './store';
 export function waitingNow(): number {
   const s = getApp();
   if (!s.overview) return 0;
-  return feedItems(
-    s.overview.agents,
-    s.chats,
-    s.teamSetup,
-    canCall('agents.import.review', s.welcome)
-  ).length;
+  return waitingCount(
+    feedItems(s.overview.agents, s.chats, s.teamSetup, canCall('agents.import.review', s.welcome))
+  );
 }
 
 let launch: { landed: Landing; at: number } | null = null;

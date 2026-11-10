@@ -167,9 +167,13 @@ const BODY_MAX = 180;
 
 const clip = (s: string) => (s.length > BODY_MAX ? `${s.slice(0, BODY_MAX - 1).trimEnd()}…` : s);
 
-/** Cards that never answer from a notification: they open the app. */
+/**
+ * Cards that never answer from a notification: they open the app. A skill
+ * offer is one: its answers are Save / Not now, never the lock screen's Allow /
+ * Deny, and it blocks nothing, so there is no hurry to answer it there.
+ */
 const opensOnly = (a: Approval) =>
-  !!(a.secret || a.login || a.prompt || a.connector || a.stepIn || a.crossover);
+  !!(a.secret || a.login || a.prompt || a.connector || a.stepIn || a.crossover || a.skill);
 
 function categoryOf(a: Approval): CategoryId {
   if (a.gate) return CATEGORY.gate;

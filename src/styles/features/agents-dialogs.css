@@ -25,8 +25,7 @@
     label.agent-editor__label,
     .agent-editor__ask-chief,
     .agent-editor__advanced,
-    .agent-editor__more,
-    [data-testid='agent-engine-protections']
+    .agent-editor__more
   ) {
   display: none;
 }
@@ -287,6 +286,11 @@
 p.agent-schedule__place {
   margin: 0;
   padding: 0 var(--spacing-xs) var(--spacing-sm);
+}
+
+/* "Runs in this conversation, so it can keep … up to date": said whole. */
+.agent-schedule__place[data-wrap] {
+  white-space: normal;
 }
 
 /* One routine's model, in its editor: a label and the choice, one line. */

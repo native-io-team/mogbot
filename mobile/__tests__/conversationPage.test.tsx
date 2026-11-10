@@ -84,7 +84,7 @@ describe('ConversationPage (phone)', () => {
   it('starts folded to its bar on a phone, and opens on a tap', async () => {
     await draw();
     expect(await screen.findByText('November budget')).toBeTruthy();
-    expect(screen.getByText('Updated 3 min ago · v4')).toBeTruthy();
+    expect(screen.getByText('Updated 3 min ago by Log the day’s card spend')).toBeTruthy();
     expect(screen.queryByText('Where it went')).toBeNull();
     await fireEvent.press(screen.getByLabelText('November budget. Show the page'));
     expect(screen.getByText('Where it went')).toBeTruthy();
@@ -96,15 +96,16 @@ describe('ConversationPage (phone)', () => {
 
   it('lists versions on a tap, and opens an older one', async () => {
     await draw();
-    await fireEvent.press(await screen.findByLabelText('Updated 3 min ago · v4. What changed'));
+    await fireEvent.press(await screen.findByLabelText('Updated 3 min ago by Log the day’s card spend. What changed'));
     // A routine's version names it; one whose routine isn't known says "a routine".
-    expect(screen.getByText('v4 · 3 min ago · by Log the day’s card spend')).toBeTruthy();
-    expect(screen.getByText('v2 · 2 d ago · by a routine')).toBeTruthy();
+    expect(screen.getByText('Version 4 · 3 min ago · by Log the day’s card spend')).toBeTruthy();
+    expect(screen.getByText('Version 2 · 2 d ago · by a routine')).toBeTruthy();
     expect(screen.getByText('Made the page — Started the month')).toBeTruthy();
+    expect(screen.getByText('“Log the day’s card spend” keeps this page up to date')).toBeTruthy();
     await act(async () => {
-      await fireEvent.press(screen.getByText('v1 · 4 d ago'));
+      await fireEvent.press(screen.getByText('Version 1 · 4 d ago'));
     });
-    expect(screen.getByText('v1, as it was 4 d ago. Back to v4')).toBeTruthy();
+    expect(screen.getByText('Version 1, as it was 4 d ago. Back to the latest')).toBeTruthy();
     expect(screen.queryByText('Where it went')).toBeNull();
   });
 

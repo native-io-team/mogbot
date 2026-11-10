@@ -145,7 +145,8 @@ function asAgent(raw: unknown): Agent | null {
   if (typeof a.preview !== 'string') a.preview = null;
   if (typeof a.sessionId !== 'string') a.sessionId = null;
   if (typeof a.model !== 'string') a.model = null;
-  for (const k of AGENT_STRINGS) if (k in a && a[k] != null && typeof a[k] !== 'string') delete a[k];
+  for (const k of AGENT_STRINGS)
+    if (k in a && a[k] != null && typeof a[k] !== 'string') delete a[k];
   trim(a, AGENT_OBJECTS, AGENT_LISTS);
   return a as unknown as Agent;
 }
@@ -203,7 +204,8 @@ function asSession(raw: unknown): SessionSummary | null {
   s.tab = num(s.tab);
   s.lastOutputAt = num(s.lastOutputAt);
   if (typeof s.state !== 'string' || !s.state) s.state = 'exited';
-  for (const k of ['cli', 'activity']) if (k in s && s[k] != null && typeof s[k] !== 'string') delete s[k];
+  for (const k of ['cli', 'activity'])
+    if (k in s && s[k] != null && typeof s[k] !== 'string') delete s[k];
   if (s.question != null) {
     const q = s.question;
     if (!isObject(q) || typeof q.question !== 'string') delete s.question;

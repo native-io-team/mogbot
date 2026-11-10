@@ -1149,25 +1149,29 @@ export function engineUnavailable(info: EngineInfo): 'install' | 'sign-in' | nul
   return null;
 }
 
+/** The rest is the level's: said as the setting's name, never as a claim of its own. */
+const LEVEL_DECIDES = 'its Independence setting decides whether it asks you first.';
+
 /**
- * What the engine itself enforces under an agent's independence, as each
- * engine actually does it (see "Approvals" in docs/agents.md). Never more,
- * and never a second answer to "what does it do on its own": that is the
- * independence slider's, so this names the engine and only adds what the
- * engine holds to whatever the level says. Apps connected to Codex itself
- * run outside its limits.
+ * What the engine itself holds to under an agent's independence, as each
+ * engine actually does it (see "Approvals" in docs/agents.md), in plain
+ * words. Never more, and never a second answer to "what does it do on its
+ * own": that is the independence slider's, so this only adds what the
+ * engine holds to whatever the level says. Shown under Advanced in Edit
+ * agent, for people who chose an engine on purpose. Apps connected to Codex
+ * itself run outside its limits.
  */
 export function engineProtections(engine: AgentEngine, info?: EngineInfo): string {
   if (engine === 'claude') {
-    return 'Claude Code enforces: file edits go ahead in its project and its own folder; everything else is decided by its independence.';
+    return `It changes files in its project and its own folder without asking. For anything else, ${LEVEL_DECIDES}`;
   }
   if (engine === 'opencode') {
-    return "OpenCode enforces: file edits go ahead in its project and its own folder, never in git's or the app's folders; commands, web access and everything else are decided by its independence. Plugins you've added to OpenCode aren't limited by this.";
+    return `It changes files in its project and its own folder without asking, and never in git's or the app's folders. For commands, the web and anything else, ${LEVEL_DECIDES} Plugins you've added to OpenCode aren't covered by this.`;
   }
   const limits =
-    "Codex enforces: its commands can only change files in your projects and its own folder, and can't reach the internet.";
-  const apps = "Apps you've connected to Codex aren't limited by this.";
-  if (info?.asks === true) return `${limits} Going further is decided by its independence. ${apps}`;
+    "Its commands can change files only in your projects and its own folder, and can't reach the internet.";
+  const apps = "Apps you've connected to Codex aren't covered by this.";
+  if (info?.asks === true) return `${limits} For anything beyond that, ${LEVEL_DECIDES} ${apps}`;
   const cantAsk = engineCantAsk(engine, info ? [info] : []);
   if (cantAsk) return `${limits} ${cantAsk} ${apps}`;
   // Not known (not installed, or a computer that doesn't say): claim nothing more.

@@ -1,13 +1,24 @@
 /**
  * A conversation's living page (`agents/page.rs`): Finance keeps a running
- * budget pinned above its chat. The page as it is (v4, changed by a routine
- * 3 minutes ago), its history open, an older version opened from it, the
- * page folded, and unpinned (the header's Pin page). Fictional throughout.
+ * budget pinned above its chat. The page as it is (version 4, changed by a
+ * routine 3 minutes ago), its history open, an older version opened from it,
+ * the page folded, unpinned (the header's Pin page), and the routine that
+ * keeps it, seen from the routines popover. Fictional throughout.
  * Capture each with `--theme light` too.
  */
 
 import type { Scenario } from '../types';
-import { AGENTS_TAB, MIN, TEAM, messagesFor, msg, now, overview, status } from './agents';
+import {
+  AGENTS_TAB,
+  MIN,
+  TEAM,
+  messagesFor,
+  msg,
+  now,
+  overview,
+  schedulePreview,
+  status,
+} from './agents';
 
 const fin = (o: Record<string, unknown>) => ({ agentId: 'finance', ...o });
 
@@ -136,9 +147,27 @@ const CHAT = [
   msg('agent', 'Over by $68 with 20 days left. I flagged it on the page.', 4, fin({})),
 ];
 
+/** The routine whose runs keep the page: named as the page's history names it. */
+const CARD_SPEND = {
+  id: 'ci-spend',
+  note: 'Log the day’s card spend',
+  repeat: { kind: 'days', days: [0, 1, 2, 3, 4, 5, 6], hour: 20, minute: 0 },
+  nextAt: now + 6 * 60 * MIN,
+  createdAt: now - 4 * 24 * 60 * MIN,
+  paused: false,
+};
+
 const commands = (pinned: boolean) => ({
   agents_overview: overview(
-    TEAM.map((a) => (a.id === 'finance' ? { ...a, status: status('idle') } : a))
+    TEAM.map((a) =>
+      a.id === 'finance'
+        ? {
+            ...a,
+            status: status('idle'),
+            checkIns: [CARD_SPEND, ...((a as { checkIns?: unknown[] }).checkIns ?? [])],
+          }
+        : a
+    )
   ),
   agents_messages: (args: Record<string, unknown>) =>
     args.agentId === 'finance' ? CHAT : messagesFor(args),
@@ -156,7 +185,7 @@ export const agentsPageScenarios: Scenario[] = [
     id: 'agents-page',
     title: 'Agents — a living page pinned above the conversation',
     looksRightWhen:
-      'Under the chat header, in the conversation’s column: a quiet bar with a down chevron and “November budget”, then “Updated 3 min ago · v4” muted on the right and a pin button. The whole band is a tint off the chat (darker in light, lighter in dark), so it reads as the page, not a reply. Under the bar: three flat metric tiles ($1,150 spent, $850 left, 20 days; a faint hairline, no lift), an amber “Heads up” note about eating out, then one card holding “Where it went” (a table, dollar columns right-aligned) and “Bills this month”, scrolling inside the band, which is no taller than 320px. A hairline separates the page from the chat, whose messages carry on below. Tokens only; readable in both themes.',
+      'Under the chat header, in the conversation’s column: a quiet bar with a down chevron and “November budget”, then “Updated 3 min ago by Log the day’s card spend” muted on the right (no version number) and a pin button. The whole band is a tint off the chat (darker in light, lighter in dark), so it reads as the page, not a reply. Under the bar: three flat metric tiles ($1,150 spent, $850 left, 20 days; a faint hairline, no lift), an amber “Heads up” note about eating out, then one card holding “Where it went” (a table, dollar columns right-aligned) and “Bills this month”, scrolling inside the band, which is no taller than 320px. A hairline separates the page from the chat, whose messages carry on below. Tokens only; readable in both themes.',
     requires: '.agent-page .agent-block-metrics',
     openSelector: AGENTS_TAB,
     steps: [open],
@@ -167,7 +196,7 @@ export const agentsPageScenarios: Scenario[] = [
     id: 'agents-page-history',
     title: 'Agents — a page’s versions: what changed, and when',
     looksRightWhen:
-      'Pressing “Updated 3 min ago · v4” opens a popover under it (the page doesn’t move), newest first: “v4 · 3 min ago · by Log the day’s card spend” over “Added Heads up · Changed month, Where it went — Logged Tuesday’s card spend” (v4 highlighted as the one shown), then v3 (Changed Bills this month — Electricity is due Friday), v2 (by a routine: which one isn’t known), and v1 “Made the page — Started the month”.',
+      'Pressing “Updated 3 min ago by Log the day’s card spend” opens a popover under it (the page doesn’t move). Its first line, in secondary text: ““Log the day’s card spend” keeps this page up to date”. Then newest first: “Version 4 · 3 min ago · by Log the day’s card spend” over “Added Heads up · Changed month, Where it went — Logged Tuesday’s card spend” (highlighted as the one shown), then Version 3 (Changed Bills this month — Electricity is due Friday), Version 2 (by a routine: which one isn’t known), and Version 1 “Made the page — Started the month”.',
     requires: '.agent-page__history',
     openSelector: AGENTS_TAB,
     steps: [open, { click: '.agent-page__when' }],
@@ -178,10 +207,14 @@ export const agentsPageScenarios: Scenario[] = [
     id: 'agents-page-older',
     title: 'Agents — reading an earlier version of a page',
     looksRightWhen:
-      'v1 highlighted in the list, a muted line “v1, as it was 4 d ago. Back to v4”, and the page as it was then: $220 spent, $1,780 left, and the bills checklist, with no table or warning. The bar still says v4: the page itself hasn’t changed.',
+      'Version 1 highlighted in the list, a muted line “Version 1, as it was 4 d ago. Back to the latest”, and the page as it was then: $220 spent, $1,780 left, and the bills checklist, with no table or warning. The bar still says “Updated 3 min ago by Log the day’s card spend”: the page itself hasn’t changed.',
     requires: '.agent-page__older',
     openSelector: AGENTS_TAB,
-    steps: [open, { click: '.agent-page__when' }, { click: '.agent-page__version', text: 'v1' }],
+    steps: [
+      open,
+      { click: '.agent-page__when' },
+      { click: '.agent-page__version', text: 'Version 1' },
+    ],
     viewport: VIEW,
     commands: commands(true),
   },
@@ -189,7 +222,7 @@ export const agentsPageScenarios: Scenario[] = [
     id: 'agents-page-folded',
     title: 'Agents — a page folded to its one line',
     looksRightWhen:
-      'Only the page’s bar under the header: the chevron turned to point right, “November budget”, “Updated 3 min ago · v4” and the pin button; the chat takes the rest of the window.',
+      'Only the page’s bar under the header: the chevron turned to point right, “November budget”, “Updated 3 min ago by Log the day’s card spend” and the pin button; the chat takes the rest of the window.',
     requires: '.agent-page[data-folded]',
     openSelector: AGENTS_TAB,
     steps: [open, { click: '.agent-page__toggle' }],
@@ -206,5 +239,27 @@ export const agentsPageScenarios: Scenario[] = [
     steps: [open],
     viewport: VIEW,
     commands: commands(false),
+  },
+  {
+    id: 'agents-page-routine',
+    title: 'Agents — the routine that keeps a page, from the routines popover',
+    looksRightWhen:
+      'Finance’s routines popover, opened from the header. The first row, “Log the day’s card spend” (Every day at 8:00 PM, its Next line), has a muted line under it: “Keeps “November budget” up to date”. The other routines (the one-time check-in, the weekday brief, the paused Monday one) say nothing about the page: none of them has changed it.',
+    requires: '.agent-schedule__item .agent-schedule__place',
+    openSelector: AGENTS_TAB,
+    steps: [open, { click: '.agent-chat__scheduled' }],
+    viewport: VIEW,
+    commands: commands(true),
+  },
+  {
+    id: 'agents-page-new-routine',
+    title: 'Agents — a new routine in a conversation with a page',
+    looksRightWhen:
+      'The New routine picker in Finance’s popover. Under its title, before the When chips, one muted line said whole: “Runs in this conversation, so it can keep “November budget” up to date”. The rest of the picker as in agents-scheduled.',
+    requires: 'p.agent-schedule__place[data-wrap]',
+    openSelector: AGENTS_TAB,
+    steps: [open, { click: '.agent-chat__scheduled' }, { click: '.agent-schedule__add button' }],
+    viewport: VIEW,
+    commands: { ...commands(true), agents_schedule_preview: schedulePreview },
   },
 ];

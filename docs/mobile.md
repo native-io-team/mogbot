@@ -748,7 +748,11 @@ request, the diff and the photo viewer push over them. At
   `app/skill.tsx` to correct or remove, and its Automatically / Ask me / Off
   setting; docs/agents.md, "What it knows how to do"), and "Allowed without
   asking" with Revoke. A skill offer arrives as a Save / Not now card that
-  never counts as needing your OK.
+  never counts as needing your OK: Catch up lists it after everything that
+  blocks an agent, out of the headline and the tab badge ("And 1 offer that
+  can wait", `waitingCount`), One at a time puts it last and out of "3 of 8"
+  ("An offer, no rush"), and its notification has no lock-screen buttons
+  (`opensOnly`): it opens the app.
 - **Files** per agent; **search** across every chat, which pages a chat back
   (40 pages at most) to the hit and lights it.
 - **Projects and sessions.** Live from `projects.changed` events (the Mac

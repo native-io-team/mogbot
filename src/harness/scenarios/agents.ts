@@ -1832,7 +1832,12 @@ const WHEN_USAGE = {
   ],
 };
 
-/** A routine-woken turn asking to set up a model-check routine: its card. */
+/**
+ * A routine-woken turn asking to set up a model-check routine: its card, as
+ * `mcp::watch_card` words it on a plan whose weekly share per token has been
+ * learned, plus `OUTSIDE_WHY`. All words, so the Mac sends them as the card's
+ * plain line (`ask_user_prose`), with no raw detail.
+ */
 const WHEN_CARD_CHAT = [
   msg('check_in', 'Triage it: label it, and tell me if it needs me today.', 6, {
     agentId: 'leadgen',
@@ -1842,9 +1847,10 @@ const WHEN_CARD_CHAT = [
     agentId: 'leadgen',
     approval: {
       requestId: 'when-1',
-      title: 'Let Lead Gen check gmail every 30 min?',
-      detail:
-        'When a new email from dana@acme.com, draft a reply and tell me.\n\nEach check is one short Claude Code call on Haiku that can only read gmail: up to 24 a day. Checks on this Mac this week averaged 2k tokens each, so up to about 48k tokens a day.\n\nThis turn is working on a “When…” routine’s items, which came from outside, so it asks first.',
+      title: 'Let Lead Gen check Gmail every 30 min?',
+      summary:
+        'When a new email from dana@acme.com, draft a reply and tell me.\n\nEach check uses a little of your plan’s usage and can only read Gmail: up to 24 a day. By an estimate from checks on this Mac, that’s about 1% of a week’s usage a day.\n\nIt’s working on something a “When…” routine found, which came from outside this app, so it asks you first.',
+      detail: '',
       status: 'pending',
     },
   }),
@@ -2708,7 +2714,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-when-approval',
     title: 'Agents — a routine-woken turn asks before it sets up a paid check',
     looksRightWhen:
-      'Lead Gen’s chat ends in a routine line (“1 new GitHub mention”), then an Allow / Deny card titled “Let Lead Gen check gmail every 30 min?” whose detail says what it waits for and does, that each check is one short read-only Claude Code call through gmail, up to 24 a day, what checks on this Mac have measured (in tokens: a plan), and that it asks because this turn is working on outside items. No “Always allow” is offered.',
+      'Lead Gen’s chat ends in a routine line (“1 new GitHub mention”), then an Allow / Deny card titled “Let Lead Gen check Gmail every 30 min?” whose words are prose in the card’s own font (no code box, no Details): what it waits for and does; that each check uses a little of your plan’s usage and can only read Gmail, up to 24 a day, “about 1% of a week’s usage a day” by an estimate from checks on this Mac (never tokens); and that it asks because it’s working on something a “When…” routine found. No “Always allow” is offered.',
     requires: '.agent-approval',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="leadgen"]' }],
@@ -3002,11 +3008,15 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-engine-one',
     title: 'Agents — a new agent with only Claude Code installed',
     looksRightWhen:
-      'The New agent dialog has no “Runs on” control at all: name, colour, Model, then “Add a role and instructions”. At the foot, one muted line on what protects a Claude Code agent, and a quiet “Also use Codex” text button. No greyed-out Codex, no jargon.',
+      'The New agent dialog has no “Runs on” control at all: name, colour, then “Add a role and instructions”, and Advanced, opened: Model, project, apps, then one muted line in plain words, “It changes files in its project and its own folder without asking. For anything else, its Independence setting decides whether it asks you first.” (no “enforces”, no engine name in it). At the foot a quiet “Also use Codex” text button. No greyed-out Codex, no jargon.',
     openSelector: AGENTS_TAB,
     requires: '.agent-editor [data-testid="agent-engine-protections"]',
     clipSelector: '.agent-editor',
-    steps: [{ click: '.workspace-sidebar-add-project' }, { click: '.agent-editor__fill-in' }],
+    steps: [
+      { click: '.workspace-sidebar-add-project' },
+      { click: '.agent-editor__fill-in' },
+      { click: '.agent-editor__advanced > .agent-editor__more' },
+    ],
     commands: {
       agents_overview: {
         ...overview(),

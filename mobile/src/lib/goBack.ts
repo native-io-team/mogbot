@@ -5,12 +5,7 @@
  * (`@shipstudio/companion-protocol`'s `rewind.ts`).
  */
 
-import {
-  foldRewound,
-  rewoundIds,
-  type Agent,
-  type Rewind,
-} from '@shipstudio/companion-protocol';
+import { foldRewound, rewoundIds, type Agent, type Rewind } from '@shipstudio/companion-protocol';
 import type { Item } from './timeline';
 
 /** The fold's own row: collapsed, or open with its lines shown below it. */

@@ -31,10 +31,7 @@ export function currentModels(
 }
 
 /** The other engines it can move to: ready ones only. */
-export function otherEngines(
-  agent: Pick<Agent, 'engine'>,
-  engines: EngineInfo[]
-): OtherEngine[] {
+export function otherEngines(agent: Pick<Agent, 'engine'>, engines: EngineInfo[]): OtherEngine[] {
   return engineChoices(engines)
     .filter((c) => c.ready && c.id !== agent.engine)
     .map(({ id, label }) => ({ id, label }));

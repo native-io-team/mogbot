@@ -141,7 +141,12 @@ export async function proveMac(link: PairingLink, route: Route, deps: PairDeps):
   for (let attempt = 1; ; attempt++) {
     const clock = within(deps.signal, deps.identityTimeoutMs ?? IDENTITY_TIMEOUT_MS);
     try {
-      res = await post(deps, base + HTTP.identity, { protocol: SUPPORTED, challenge }, clock.signal);
+      res = await post(
+        deps,
+        base + HTTP.identity,
+        { protocol: SUPPORTED, challenge },
+        clock.signal
+      );
       answer = res.ok ? ((await res.json().catch(() => null)) as IdentityResponse | null) : null;
       break;
     } catch (error) {

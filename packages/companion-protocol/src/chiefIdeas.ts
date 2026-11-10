@@ -72,8 +72,15 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
   {
     id: 'job-search',
     label: 'Help me apply for jobs',
-    what: 'Every morning a scout finds new openings that match what you want and a writer drafts a cover letter for the best ones. You pick which to send; nothing is submitted without your Allow.',
-    text: 'Every weekday morning, have a scout look for new job openings that match what I want and a writer draft a tailored cover letter for the best few, then send me one card with the openings and the letters. Nothing is submitted without my Allow. The jobs I want, and my CV: ',
+    what: 'Every morning a scout finds new openings that match what you want and a writer drafts a cover letter for the best ones, and a page above the chat keeps every application and where it stands. You pick which to send; nothing is submitted without your Allow.',
+    text: 'Every weekday morning, have a scout look for new job openings that match what I want and a writer draft a tailored cover letter for the best few, then send me one card with the openings and the letters. Keep a page above our chat of every application and where it stands, and update it each morning. Nothing is submitted without my Allow. The jobs I want, and my CV: ',
+    group: 'schedule',
+  },
+  {
+    id: 'tracker',
+    label: 'Track something for me',
+    what: 'An agent keeps a page above its chat with the list and where each item stands, updates it when you tell it something, and checks on it every evening. One page that stays current, not a new card each time.',
+    text: 'Keep a page above our chat that tracks this: every item and where it stands. Update it whenever I tell you something changed, and every evening check what you can and bring it up to date. What to track: ',
     group: 'schedule',
   },
   {

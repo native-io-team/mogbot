@@ -42,6 +42,12 @@ export function headline(count: number): string {
   return count === 1 ? '1 thing needs you' : `${count} things need you`;
 }
 
+/** Under the headline, for skill offers (never counted in it): "And 1 offer that can wait". */
+export function offersLine(count: number): string | null {
+  if (count <= 0) return null;
+  return count === 1 ? 'And 1 offer that can wait' : `And ${count} offers that can wait`;
+}
+
 /** "From 2 agents" under the headline, only when there's more than one. */
 export function fromLine(groups: number): string | null {
   return groups > 1 ? `From ${groups} agents` : null;

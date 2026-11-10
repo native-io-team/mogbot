@@ -10,6 +10,9 @@
  *   its chat or the Mac can show): read it, then Chat or Next;
  * - **setup**: "Setting up your team" while it's open, in the Chief's chat.
  *
+ * A skill offer is an ask marked `offer`: it never blocks an agent, so it
+ * comes after everything else and isn't counted in "3 of 8".
+ *
  * The queue is a list and a place in it. What you've passed stays (so "3 of
  * 8" doesn't jump), the card in front of you stays until you move on (the
  * screen says what became of it), anything still ahead that was answered
@@ -43,6 +46,8 @@ export interface CatchItem {
   unread?: number;
   /** When it started waiting, for the order. */
   ts: number;
+  /** A skill offer: last, and not counted in the progress. */
+  offer?: true;
 }
 
 export interface CatchQueue {
@@ -82,13 +87,22 @@ export function buildItems(
   }
   const asks: CatchItem[] = [];
   const replies: CatchItem[] = [];
+  const offers: CatchItem[] = [];
   for (const agent of visible) {
     const messages = chats[agent.id]?.messages ?? [];
     const own = messages.filter((m) => isAsk(m, reviewHere));
     for (const m of own) {
-      asks.push({ key: `ask:${m.id}`, kind: 'ask', agentId: agent.id, messageId: m.id, ts: m.ts });
+      const item: CatchItem = {
+        key: `ask:${m.id}`,
+        kind: 'ask',
+        agentId: agent.id,
+        messageId: m.id,
+        ts: m.ts,
+      };
+      if (m.approval?.skill) offers.push({ ...item, offer: true });
+      else asks.push(item);
     }
-    if (own.length) continue;
+    if (own.some((m) => !m.approval?.skill)) continue;
     const loud = agentNeedsYou(agent, hold) || failedTurn(agent) !== null;
     if (loud || agent.unread > 0) {
       replies.push({
@@ -101,7 +115,7 @@ export function buildItems(
     }
   }
   const byTs = (a: CatchItem, b: CatchItem) => a.ts - b.ts || a.key.localeCompare(b.key);
-  return [...items, ...asks.sort(byTs), ...replies.sort(byTs)];
+  return [...items, ...asks.sort(byTs), ...replies.sort(byTs), ...offers.sort(byTs)];
 }
 
 export const startQueue = (items: CatchItem[]): CatchQueue => ({ items, at: 0 });
@@ -139,10 +153,22 @@ export const current = (q: CatchQueue): CatchItem | null => q.items[q.at] ?? nul
 
 export const isDone = (q: CatchQueue) => q.at >= q.items.length;
 
-/** "3 of 8". */
-export function progressOf(q: CatchQueue): { n: number; of: number } {
-  return { n: Math.min(q.at + 1, q.items.length), of: q.items.length };
+/**
+ * "3 of 8", counting what blocks an agent: skill offers, last in the queue,
+ * aren't counted, and one in front of you says so instead (`offer`).
+ */
+export function progressOf(q: CatchQueue): { n: number; of: number; offer: boolean } {
+  const counted = q.items.filter((i) => !i.offer);
+  const passed = q.items.slice(0, q.at + 1).filter((i) => !i.offer).length;
+  return {
+    n: Math.min(Math.max(passed, 1), counted.length),
+    of: counted.length,
+    offer: !!q.items[q.at]?.offer,
+  };
 }
+
+/** Over a skill offer in One at a time, in place of "3 of 8". */
+export const OFFER_PROGRESS = 'An offer, no rush';
 
 export type AskState = 'pending' | 'answered' | 'expired' | 'gone';
 

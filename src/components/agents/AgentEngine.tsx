@@ -6,10 +6,11 @@
  * The picker only appears once two engines are installed: most people have
  * one, and a choice between one thing and a greyed-out other is noise. One
  * that's installed but not signed in is disabled, with the reason and the way
- * to fix it underneath. What the engine itself enforces under the agent's
- * independence (`engineProtections`) is the engine's own detail, low in the
- * editor (`AgentEngineMore`), never beside the choice or the level, where it
- * read as a second answer to "what does it do on its own".
+ * to fix it underneath. What the engine itself holds to under the agent's
+ * independence (`engineProtections`) is the engine's own detail, under
+ * Advanced (`AgentEngineProtections`), never beside the choice or the level,
+ * where it read as a second answer to "what does it do on its own", and
+ * never on the New agent review, where nobody can act on it.
  *
  * @module components/agents/AgentEngine
  */
@@ -113,10 +114,24 @@ export function AgentEngineField({
   );
 }
 
-/**
- * The quiet half, in the editor's details: what the engine enforces under
- * the agent's independence, and (with one engine) a link to set up another.
- */
+/** Under Advanced: what the engine holds to under the agent's independence, in plain words. */
+export function AgentEngineProtections({
+  engines,
+  value,
+}: {
+  engines: EngineInfo[];
+  value: AgentEngine;
+}) {
+  const selected = engines.find((e) => e.id === value);
+  if (!selected?.installed) return null;
+  return (
+    <p className="agent-editor__hint" data-testid="agent-engine-protections">
+      {engineProtections(value, selected)}
+    </p>
+  );
+}
+
+/** The quiet half, low in the editor: with one engine, a link to set up another. */
 export function AgentEngineMore({
   engines,
   value,
@@ -127,17 +142,11 @@ export function AgentEngineMore({
   onSetUp?: SetUp;
 }) {
   if (engines.length === 0) return null;
-  const selected = engines.find((e) => e.id === value);
   const missing = showsEnginePicker(engines)
     ? []
     : engines.filter((e) => !e.installed && e.id !== value);
   return (
     <>
-      {selected?.installed && (
-        <p className="agent-editor__hint" data-testid="agent-engine-protections">
-          {engineProtections(value, selected)}
-        </p>
-      )}
       {onSetUp &&
         missing.map((info) => (
           <TextButton

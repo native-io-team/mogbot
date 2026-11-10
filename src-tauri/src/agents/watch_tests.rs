@@ -1077,7 +1077,7 @@ fn review_4_a_model_routine_is_refused_under_15_min_and_capped_per_day() {
 fn review_4_the_card_says_source_interval_and_measured_cost_per_day() {
     use super::super::mcp::watch_card;
     let linear = Source::LinearAssigned;
-    let (title, detail) = watch_card("Ops", &linear, 30, "Triage it", None, false);
+    let (title, detail) = watch_card("Ops", &linear, 30, "Triage it", None, false, None);
     assert_eq!(title, "Let Ops check Linear every 30 min?");
     assert!(
         detail.contains("When a Linear issue is assigned to you, Triage it."),
@@ -1096,19 +1096,38 @@ fn review_4_the_card_says_source_interval_and_measured_cost_per_day() {
         output_tokens: 10_000,
         ..Default::default()
     };
-    let (_, priced) = watch_card("Ops", &linear, 60, "x", Some(&measured), false);
+    let (_, priced) = watch_card("Ops", &linear, 60, "x", Some(&measured), false, None);
     assert!(
         priced.contains("averaged <$0.01 at API prices each, so up to about $0.10 a day"),
         "{priced}"
     );
-    // On a plan the price isn't the bill: tokens.
-    let (_, plan) = watch_card("Ops", &linear, 60, "x", Some(&measured), true);
+    // On a plan the price isn't the bill, and tokens mean nothing to weigh:
+    // a share of the week, by estimate, when the share per token is learned
+    // (9k tokens a check, 24 a day, at 0.0001 points a token is about 22%).
+    let (_, plan) = watch_card("Ops", &linear, 60, "x", Some(&measured), true, Some(0.0001));
     assert!(
-        plan.contains("averaged 9k tokens each, so up to about 216k tokens a day"),
+        plan.contains("Each check uses a little of your plan’s usage"),
         "{plan}"
     );
+    assert!(
+        plan.ends_with(
+            "By an estimate from checks on this Mac, that’s about 22% of a week’s usage a day."
+        ),
+        "{plan}"
+    );
+    let (_, small) = watch_card("Ops", &linear, 60, "x", Some(&measured), true, Some(1e-7));
+    assert!(
+        small.contains("that’s under 1% of a week’s usage a day"),
+        "{small}"
+    );
+    // Not learned yet: no figure at all, never tokens.
+    let (_, unknown) = watch_card("Ops", &linear, 60, "x", Some(&measured), true, None);
+    assert!(unknown.ends_with("up to 24 a day."), "{unknown}");
+    for d in [&plan, &small, &unknown] {
+        assert!(!d.contains("token"), "{d}");
+    }
     // Every 4 hours is 6 a day, under the cap.
-    let (_, rare) = watch_card("Ops", &linear, 240, "x", None, false);
+    let (_, rare) = watch_card("Ops", &linear, 240, "x", None, false, None);
     assert!(rare.contains("up to 6 a day"), "{rare}");
 }
 

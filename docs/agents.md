@@ -80,7 +80,9 @@ a team" went for the same reason ("I'm not launching anything").
   your team…"), grouped On a schedule / When something happens / Agents
   together / For builders, everyday jobs first: chase unpaid invoices, draft
   the week's social posts, apply for jobs (a scout and a cover-letter
-  writer), find a place to live, watch competitors, sort the inbox and draft
+  writer, and a page of every application and where it stands), track
+  something (a page kept current, checked every evening), find a place to
+  live, watch competitors, sort the inbox and draft
   replies, tidy up meeting notes when they land in a folder (`new_file`),
   research, plan a trip (prices checked again every few days), a big project
   as a team, and two agents arguing it out. Anything that reaches other
@@ -1415,10 +1417,12 @@ down") are gone from the desk, and what agents can *reach* (projects, apps,
 the browser) is a list of settings, not a scale (see "What each agent may
 do"). Menus and titles say "Independence…", "<Agent>'s independence" and
 "Each agent's independence". The engine's own limits are worded as what the
-engine enforces *under* the level ("Claude Code enforces: file edits go ahead
-in its project and its own folder; everything else is decided by its
-independence", `engineProtections`), low in Edit agent, never beside the
-level as a second answer.
+engine holds to *under* the level, in plain words ("It changes files in its
+project and its own folder without asking. For anything else, its
+Independence setting decides whether it asks you first.",
+`engineProtections`), under Advanced in Edit agent (it's for people who chose
+an engine on purpose, and nobody can act on it while reviewing a new agent),
+never beside the level as a second answer.
 
 One choice for the whole team (`agents/independence.rs`), drawn on desk and
 phone as one four-stop slider titled "Independence", "Asks a lot" at the
@@ -4692,7 +4696,13 @@ their link, else their id, else a hash of title and date (`stable_id`),
 because Haiku may name the same issue by key one time and uuid the next. An
 agent setting one up gets an Allow card first naming the app, the interval,
 checks a day, and what checks on this Mac have measured this week (or that
-nothing has been). Every routine created, by an agent or the user, leaves a
+nothing has been), in words a person can weigh (`mcp::watch_card`): on a
+plan, "about 1% of a week's usage a day", said as an estimate, when the
+share per token of the account's weekly window has been learned here
+(`forecast::rate`), else only that each check uses a little of the plan's
+usage, never tokens; off a plan, dollars at API prices. The card is all
+words, sent as its plain line with no raw detail (`ask_user_prose`), so desk
+and phone draw it as prose, not in a code box. Every routine created, by an agent or the user, leaves a
 line in the chat. At most one model check starts per tick.
 
 They're `CheckIn`s with a `watch` (no `repeat`; `next_at` is the next check),
@@ -6905,6 +6915,13 @@ pinned above its chat on desk and phone, that the agent and the routines
 running in that conversation keep current, instead of a trail of
 point-in-time messages and result cards.
 
+- **Asked for where tracking is the job.** Whether an agent pins one isn't
+  left to the model alone: the "Help me apply for jobs" starter asks for a
+  page of every application and where it stands, "Track something for me"
+  is a page from the first line, the Chief is told to have the agent keep a
+  page for work that changes over time (`CHIEF_INSTRUCTIONS`), and a
+  drafted agent's briefing says to keep one for that kind of work
+  (`draft::prompt`).
 - **Blocks, nothing new to draw.** The `page` tool takes blocks exactly as
   `show` does, each through `blocks::parse` (so the same limits, no HTML,
   http(s) links with no credentials), plus an `id` the agent picks
@@ -6954,7 +6971,8 @@ point-in-time messages and result cards.
   unpinned until they pin it back, and the agent is told so in its receipt.
 - **Desk** (`components/agents/ConversationPage.tsx`, `lib/agentPage.ts`):
   under the chat header, in the conversation's column: a bar (fold, title,
-  "Updated 3 min ago · v4", unpin) over the page's blocks, which scroll inside
+  "Updated 3 min ago by Log the day's card spend", unpin) over the page's
+  blocks, which scroll inside
   a band capped at the smaller of 40% of the window and 320px, so the chat
   keeps the window. It is furniture, not a reply: the band is a tint off the
   chat and its tiles lie flat (a hairline, no lift), so a metric on the page
@@ -6962,12 +6980,26 @@ point-in-time messages and result cards.
   line opens a popover listing every kept version, newest first, with what
   changed in words (`pageChangeLine`, block titles where they have one) and
   the note, so the page itself doesn't move; pressing one shows it as it was,
-  read-only, with "Back to v4". Folding is remembered per conversation on
+  read-only, with "Back to the latest". Folding is remembered per conversation on
   this Mac; until the user picks, a window 820px tall or less starts it
   folded (`SHORT_WINDOW`). Unpinned, the header has a pin button to bring it back; ⌘K has
   "Pin / Unpin this conversation's page".
+- **The page and its routine name each other.** The bar names the routine
+  only when the newest version was its run ("by a routine" when the Mac
+  couldn't tell which); the version number is for the history ("Version 4 ·
+  3 min ago"), never the bar. The history opens on "“Log the day's card
+  spend” keeps this page up to date" (`pageKeptByLine`: the newest named
+  routine in the history). The other way round, a routine's row (desk
+  popover, phone agent screen) says "Keeps “November budget” up to date" when
+  the page of the conversation it runs in has a version made by it
+  (`routinePageLine`, matching the name the Mac records,
+  `routine_steps::routine_name`); nothing is claimed for one that hasn't
+  touched it. A new routine (or one being changed) in a conversation with a
+  page says "Runs in this conversation, so it can keep “November budget” up
+  to date" over the picker (`routineCanKeepPageLine`).
 - **Phone** (`components/ConversationPage.tsx`, `lib/page.ts`): the same band
-  above the messages, on a Mac that lists `agents.page`; read again when the
+  above the messages, on a Mac that lists `agents.page` (the "Updated" line
+  on a second line under the title: 402pt has no room for both); read again when the
   conversation on screen changes and as the agent's turn moves on. Fold
   (for as long as the app runs), versions, an older one, Unpin. The same
   tinted band and flat tiles (`FlatBlocks`), capped at 40% of the screen and

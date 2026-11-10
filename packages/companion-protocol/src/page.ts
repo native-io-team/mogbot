@@ -84,10 +84,85 @@ export function pageAgo(at: number, now: number): string {
   return `${Math.floor(h / 24)} d ago`;
 }
 
-/** "Updated 3 min ago · v4" (or "Made 3 min ago" for the first version). */
-export function pageUpdatedLine(page: Pick<PageVersion, 'at' | 'version'>, now: number): string {
+/**
+ * The page bar's line: "Updated 3 min ago by Log the day’s card spend" when
+ * the newest version was a routine's, else "Updated 3 min ago" ("Made …" for
+ * the first version). The version number belongs to the history only.
+ */
+export function pageUpdatedLine(
+  page: Pick<PageVersion, 'at' | 'version' | 'byRoutine' | 'routine'>,
+  now: number
+): string {
   const verb = page.version <= 1 ? 'Made' : 'Updated';
-  return `${verb} ${pageAgo(page.at, now)} · v${page.version}`;
+  const by = pageByLine(page);
+  return `${verb} ${pageAgo(page.at, now)}${by ? ` ${by}` : ''}`;
+}
+
+/** A version's plain name in the history: "Version 4". */
+export function pageVersionName(version: number): string {
+  return `Version ${version}`;
+}
+
+/** Over an older version: "Version 1, as it was 4 d ago." */
+export function pageOlderLine(older: Pick<PageVersion, 'at' | 'version'>, now: number): string {
+  return `${pageVersionName(older.version)}, as it was ${pageAgo(older.at, now)}.`;
+}
+
+/** The way back from an older version to the page as it is. */
+export const PAGE_BACK_TO_LATEST = 'Back to the latest';
+
+/**
+ * The routine that keeps the page current, as its history names it: the
+ * newest version made by a named routine. Null when no routine has changed
+ * it, or none known by name.
+ */
+export function pageRoutine(page: Pick<ConversationPage, 'history'>): string | null {
+  return page.history.find((h) => h.byRoutine && h.routine)?.routine ?? null;
+}
+
+/** "“Log the day’s card spend” keeps this page up to date", over the history. */
+export function pageKeptByLine(page: Pick<ConversationPage, 'history'>): string | null {
+  const routine = pageRoutine(page);
+  return routine ? `“${routine}” keeps this page up to date` : null;
+}
+
+/**
+ * A routine's name as the Mac records it on a page's history
+ * (`routine_steps::routine_name`): its note's first line, cut at 48
+ * characters, with "…" when anything was left off.
+ */
+export function routineNameOf(note: string): string {
+  const first = (note.split('\n')[0] ?? '').trim();
+  let name = Array.from(first).slice(0, 48).join('');
+  if (Array.from(name).length < Array.from(note.trim()).length) name = name.trimEnd() + '…';
+  return name;
+}
+
+/**
+ * Under a routine's row: "Keeps “November budget” up to date" when the page
+ * of the conversation it runs in was changed by it (its history says so).
+ * Nothing is claimed for a routine that hasn't touched the page.
+ */
+export function routinePageLine(
+  page: Pick<ConversationPage, 'title' | 'history'> | null | undefined,
+  routineNote: string
+): string | null {
+  if (!page) return null;
+  const name = routineNameOf(routineNote);
+  if (!name) return null;
+  return page.history.some((h) => h.byRoutine && h.routine === name)
+    ? `Keeps “${page.title}” up to date`
+    : null;
+}
+
+/**
+ * Over a new routine (or one being changed) in a conversation with a page:
+ * it runs there, so it can keep the page current.
+ */
+export function routineCanKeepPageLine(
+  page: Pick<ConversationPage, 'title'> | null | undefined
+): string | null {
+  return page ? `Runs in this conversation, so it can keep “${page.title}” up to date` : null;
 }
 
 /** The title a block id stands for on a version, else the id itself. */

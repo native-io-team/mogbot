@@ -120,22 +120,22 @@ describe('ConversationPage', () => {
     both();
     await screen.findByRole('region', { name: 'Page: Job search' });
     expect(screen.getByText('Applications')).toBeTruthy();
-    const when = screen.getByRole('button', { name: 'Updated 3 min ago · v2' });
+    const when = screen.getByRole('button', { name: 'Updated 3 min ago by a routine' });
     fireEvent.click(when);
     const versions = screen.getByRole('list', { name: 'Versions' });
-    expect(versions.textContent).toContain('v2 · 3 min ago · by a routine');
+    expect(versions.textContent).toContain('Version 2 · 3 min ago · by a routine');
     expect(versions.textContent).toContain('Changed Applications — Acme moved on');
     expect(versions.textContent).toContain('Made the page');
     // An older version, read-only, then back.
-    fireEvent.click(screen.getByText(/^v1 ·/));
-    await screen.findByText(/v1, as it was/);
+    fireEvent.click(screen.getByText(/^Version 1 ·/));
+    await screen.findByText(/Version 1, as it was/);
     expect(invoke).toHaveBeenCalledWith('agents_page_version', {
       agentId: 'a1',
       conversation: 'first',
       version: 1,
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Back to v2' }));
-    expect(screen.queryByText(/v1, as it was/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the latest' }));
+    expect(screen.queryByText(/Version 1, as it was/)).toBeNull();
     // Nothing on a page answers: no buttons inside the blocks.
     expect(screen.queryByRole('button', { name: /Pick this/ })).toBeNull();
   });

@@ -4,7 +4,9 @@
  * conversation, keep current. Its content is blocks, drawn by `AgentBlocks`
  * like any `show`; nothing on it answers.
  *
- * The bar: a fold toggle with the page's title, "Updated 3 min ago · v4"
+ * The bar: a fold toggle with the page's title, "Updated 3 min ago by Log
+ * the day's card spend" (the routine named only when the newest version
+ * was one's; version numbers are for the history)
  * (press it for what changed, version by version, in a popover off that
  * line, so the page itself doesn't move; press a version to read it as it
  * was), and Unpin. Unpinned, the page leaves the top of the chat and the
@@ -33,7 +35,11 @@ import {
   pageBlocks,
   pageByLine,
   pageChangeLine,
+  pageKeptByLine,
+  pageOlderLine,
   pageUpdatedLine,
+  pageVersionName,
+  PAGE_BACK_TO_LATEST,
   setPagePinned,
   useConversationPage,
   type ConversationPage as Page,
@@ -134,7 +140,7 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
     setHistory(false);
   };
   const toggleHistory = () => setHistory(!history);
-  // The bar's two controls by name: the page is new, and "Updated … · v4"
+  // The bar's two controls by name: the page is new, and "Updated …"
   // doesn't read as the way to its versions until it's been pressed once.
   useCommands(
     () => [
@@ -207,12 +213,13 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
               {...p}
               className="agent-page__when"
               onClick={toggleHistory}
-              title="What changed"
+              title={`${pageUpdatedLine(page, now)}. What changed`}
             >
               {pageUpdatedLine(page, now)}
             </TextButton>
           )}
         >
+          {pageKeptByLine(page) && <p className="agent-page__kept">{pageKeptByLine(page)}</p>}
           <ol className="agent-page__history" aria-label="Versions">
             {page.history.map((h, i) => {
               const prev = page.history[i + 1];
@@ -225,7 +232,7 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
                     onClick={() => void open(h.version)}
                   >
                     <span className="agent-page__version-head">
-                      v{h.version} · {pageAgo(h.at, now)}
+                      {pageVersionName(h.version)} · {pageAgo(h.at, now)}
                       {pageByLine(h) ? ` · ${pageByLine(h)}` : ''}
                     </span>
                     <span className="agent-page__version-what">
@@ -253,8 +260,8 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
         <div className="agent-page__body">
           {older && (
             <p className="agent-page__older">
-              v{older.version}, as it was {pageAgo(older.at, now)}.{' '}
-              <TextButton onClick={() => setOlder(null)}>Back to v{page.version}</TextButton>
+              {pageOlderLine(older, now)}{' '}
+              <TextButton onClick={() => setOlder(null)}>{PAGE_BACK_TO_LATEST}</TextButton>
             </p>
           )}
           {set ? (

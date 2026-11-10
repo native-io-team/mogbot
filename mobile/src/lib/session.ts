@@ -20,7 +20,12 @@ import type {
   RoutineStep,
   WatchSource,
 } from '@shipstudio/companion-protocol';
-import { MAC_FEATURES, legacyColorFor, setClockHour24, type LearnSkills } from '@shipstudio/companion-protocol';
+import {
+  MAC_FEATURES,
+  legacyColorFor,
+  setClockHour24,
+  type LearnSkills,
+} from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -944,11 +949,7 @@ export async function moveRoutine(agentId: string, routineId: string, conversati
  * message; what came after stays in the chat, folded. The chat is read again
  * so the Mac's line saying so is in it.
  */
-export async function rewindConversation(
-  agentId: string,
-  conversation: string,
-  messageId: string
-) {
+export async function rewindConversation(agentId: string, conversation: string, messageId: string) {
   setConversations(
     await call('agents.conversationRewind', { agentId, conversationId: conversation, messageId })
   );

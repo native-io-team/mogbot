@@ -122,7 +122,7 @@ pass fixed on the phone panel.
 Full Disk Access…", then **Open Full Disk Access**, **Check again**. Said once; the readback
 under the form no longer repeats it. Same on the phone. Tests updated on both.
 
-### 6. The page and the routine that keeps it don't mention each other
+### 6. The page and the routine that keeps it don't mention each other (fixed)
 
 **Where.** `agents-page`, `agents-scheduled`; qa:web `page-chat`.
 `packages/companion-protocol/src/page.ts:88` (`pageUpdatedLine`),
@@ -140,7 +140,7 @@ conversation with a page, the routine picker's footnote adds "Runs here, so it c
 budget” up to date". Not done: the phone's bar shares the row with the title at 402pt and
 needs a second line, which wants a design pass.
 
-### 7. "Help me apply for jobs" makes a trail of cards, not a tracker
+### 7. "Help me apply for jobs" makes a trail of cards, not a tracker (fixed)
 
 **Where.** `agents-first-run` → More ideas…; `packages/companion-protocol/src/chiefIdeas.ts:74`.
 
@@ -152,7 +152,7 @@ but no starter asks for one, and whether an agent pins one is left to the model.
 **Fix.** End the brief with "Keep a page above our chat of every application and where it
 stands, and update it each morning." Worth a "Track something for me" starter, too.
 
-### 8. The New agent review speaks engine
+### 8. The New agent review speaks engine (fixed)
 
 **Where.** `agents-describe-drafted`. `src/lib/agents.ts:1162` (`engineProtections`).
 
@@ -164,7 +164,7 @@ of that, and "its independence" isn't explained on this screen.
 it as "It can change files only in its own folder. Anything else asks you first, unless you let
 it do more (Independence)."
 
-### 9. A skill offer counts as something that needs me
+### 9. A skill offer counts as something that needs me (fixed)
 
 **Where.** qa:web `catchup-approval` ("5 of 12"), `catch-up`. `mobile/src/lib/needsYou.ts`,
 `mobile/src/lib/actionable.ts:174` (`categoryOf`).
@@ -176,7 +176,7 @@ buttons would fall into the plain Allow / Deny category (not verified that it's 
 **Fix.** Put skill offers after everything that blocks an agent, uncounted ("and 1 offer"), and
 give them a Save / Not now notification category or none.
 
-### 10. The "When…" cost line talks tokens in a code box
+### 10. The "When…" cost line talks tokens in a code box (fixed)
 
 **Where.** `agents-when-approval`. `src-tauri/src/agents/mcp.rs:1015`; the harness fixture
 (`src/harness/scenarios/agents.ts:1836`) still shows the older "one short Claude Code call on

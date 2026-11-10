@@ -204,7 +204,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-ideas',
     title: 'Agents — first run: “More ideas…” opens the gallery',
     looksRightWhen:
-      'A dialog “Ideas to start with”: a short lede (each keeps running once set up; a pick is typed out and nothing is sent; your Chief sets up what it needs), then four groups (On a schedule, When something happens, Agents together, and last For builders), everyday jobs first (invoices, social posts, job applications, a place to live, meeting notes, a trip) and the GitHub, error and client-site ideas only under For builders, each row a title and one muted line on what happens. Nothing is in the accent. At the foot, two quiet links: Ready-made agents… and Talk to your team from your phone….',
+      'A dialog “Ideas to start with”: a short lede (each keeps running once set up; a pick is typed out and nothing is sent; your Chief sets up what it needs), then four groups (On a schedule, When something happens, Agents together, and last For builders), everyday jobs first (invoices, social posts, job applications with a page of where each stands, Track something for me, a place to live, meeting notes, a trip) and the GitHub, error and client-site ideas only under For builders, each row a title and one muted line on what happens. Nothing is in the accent. At the foot, two quiet links: Ready-made agents… and Talk to your team from your phone….',
     command: 'agents.open',
     steps: [{ click: '.agent-chat__starters > [data-idea="more"]' }],
     requires: '.agents-ideas__idea',
