@@ -75,7 +75,16 @@ import { useRefresh } from '../../../lib/refresh';
 import { answerApproval, canCall, describeError, loadLatest } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
 import { progress as setupProgress } from '../../../lib/teamSetup';
-import { chromeScale, heroMark, iconSize, keySize, PRESSED, radius, space } from '../../../lib/theme';
+import {
+  chromeScale,
+  fonts,
+  heroMark,
+  iconSize,
+  keySize,
+  PRESSED,
+  radius,
+  space,
+} from '../../../lib/theme';
 
 /** Every row comes and goes on these: still under Reduce Motion. */
 const ENTER = FadeIn.duration(200).reduceMotion(ReduceMotion.System);
@@ -510,9 +519,10 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
             {/* The exact command, as it will run, when that's all there is to show. */}
             {!!line && (
               <T
-                variant={command ? 'mono' : 'small'}
+                variant="small"
                 color={colors.textSecondary}
                 numberOfLines={inline ? 4 : 2}
+                style={command ? styles.command : undefined}
               >
                 {line}
               </T>
@@ -523,14 +533,7 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
               </T>
             )}
           </Pressable>
-          {single && (
-            <Button
-              title={openLabel}
-              variant="secondary"
-              size="compact"
-              onPress={open}
-            />
-          )}
+          {single && <Button title={openLabel} variant="secondary" size="compact" onPress={open} />}
         </View>
         {!!error && (
           <T variant="small" color={colors.accentErrorLight} accessibilityLiveRegion="polite">
@@ -670,6 +673,7 @@ const useStyles = makeStyles((colors) => ({
   },
   rowMain: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rowText: { flex: 1, gap: space['2xs'] },
+  command: { fontFamily: fonts.mono },
   rowTitle: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
   danger: { paddingTop: space['2xs'] },
   answers: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm },
@@ -687,7 +691,11 @@ const useStyles = makeStyles((colors) => ({
   },
   since: { gap: space.sm },
   sinceTitle: { paddingHorizontal: space.xs },
-  sinceList: { borderRadius: radius.card, backgroundColor: colors.surfacePanel, overflow: 'hidden' },
+  sinceList: {
+    borderRadius: radius.card,
+    backgroundColor: colors.surfacePanel,
+    overflow: 'hidden',
+  },
   sinceRow: {
     flexDirection: 'row',
     alignItems: 'center',

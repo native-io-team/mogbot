@@ -55,7 +55,9 @@ export function useLanding() {
   const router = useRouter();
   const pathname = usePathname();
   const where = useRef(pathname);
-  where.current = pathname;
+  useEffect(() => {
+    where.current = pathname;
+  }, [pathname]);
 
   // The Mac's first answer, within SETTLE_MS of launch.
   const live = useApp((s) => s.link.kind === 'connected' && !!s.overview);

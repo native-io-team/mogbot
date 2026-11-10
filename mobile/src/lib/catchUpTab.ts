@@ -70,7 +70,11 @@ export const FIRST_LOOK_MS = 24 * 60 * 60 * 1000;
 type Chats = Record<string, { messages: AgentMessage[] } | undefined>;
 
 const firstLine = (text: string | null | undefined) => {
-  const line = (text ?? '').split('\n').find((l) => l.trim())?.trim() ?? '';
+  const line =
+    (text ?? '')
+      .split('\n')
+      .find((l) => l.trim())
+      ?.trim() ?? '';
   return line || undefined;
 };
 

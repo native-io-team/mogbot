@@ -78,9 +78,7 @@ describe('risk on a row', () => {
     expect(answersInPlace(ask('m', 's', 1, { risk: 'high' }))).toBe(false);
     // Unclassified (an older Mac): opens in full first.
     expect(answersInPlace(ask('m', 's', 1))).toBe(false);
-    expect(answersInPlace(ask('m', 's', 1, { risk: 'low', detail: 'x'.repeat(400) }))).toBe(
-      false
-    );
+    expect(answersInPlace(ask('m', 's', 1, { risk: 'low', detail: 'x'.repeat(400) }))).toBe(false);
   });
 });
 
@@ -170,9 +168,7 @@ describe('where the app opens', () => {
   });
 
   it('coming back after a while: Catch up when anything waits', () => {
-    expect(landingOnReturn({ awayMs: AWAY_MS, pathname: '/agents', waiting: 1 })).toBe(
-      '/catch-up'
-    );
+    expect(landingOnReturn({ awayMs: AWAY_MS, pathname: '/agents', waiting: 1 })).toBe('/catch-up');
     expect(landingOnReturn({ awayMs: AWAY_MS, pathname: '/projects', waiting: 1 })).toBe(
       '/catch-up'
     );
@@ -187,8 +183,6 @@ describe('where the app opens', () => {
 
   it('nothing waiting: stays put, except an emptied Catch up hands you to Agents', () => {
     expect(landingOnReturn({ awayMs: AWAY_MS, pathname: '/projects', waiting: 0 })).toBeNull();
-    expect(landingOnReturn({ awayMs: AWAY_MS, pathname: '/catch-up', waiting: 0 })).toBe(
-      '/agents'
-    );
+    expect(landingOnReturn({ awayMs: AWAY_MS, pathname: '/catch-up', waiting: 0 })).toBe('/agents');
   });
 });
