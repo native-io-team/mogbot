@@ -437,10 +437,10 @@ export const agentsLoginsScenarios: Scenario[] = [
     id: 'agents-reach-editor',
     title: 'Agents — What it can reach, in Edit agent',
     looksRightWhen:
-      'Editing Recruiter, below Permissions: “What it can reach” with “Apps”: “Gmail · work@acme.com — Can read; asks before it sends or changes anything · Connected on claude.ai; the sign-in is held there · used 2 hours ago” and “Linear” with an amber “Needs signing in again” line; “Your browser”: Chrome through Claude in Chrome, for www.linkedin.com, every click asks; “Keys in your Keychain”: one key; each row with a quiet Remove.',
+      'Editing Recruiter, continuing “What it can reach” (no second heading of its own): “Apps”: “Gmail · work@acme.com — Can read; asks before it sends or changes anything · Connected on claude.ai; the sign-in is held there · used 2 hours ago” and “Linear” with an amber “Needs signing in again” line; “Your browser”: Chrome through Claude in Chrome, for www.linkedin.com, every click asks; “Keys in your Keychain”: one key; each row with a quiet Remove.',
     openSelector: AGENTS_TAB,
     requires: '.agent-reach__section',
-    clipSelector: '.agent-editor [role="group"][aria-label="What it can reach"]',
+    clipSelector: '.agent-editor .agent-reach',
     steps: [
       { click: '[data-agent-id="hiring"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },

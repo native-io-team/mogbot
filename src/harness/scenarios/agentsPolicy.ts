@@ -275,7 +275,7 @@ export const agentsPolicyScenarios: Scenario[] = [
       'Editing Hiring: “What it can reach” with a quiet “Use the team’s” text button (no presets menu), then one line each: Projects (only client-site and marketing-site, its own copy in client-site), Folders on this Mac (~/Documents/Candidates, read), Apps, Your browser “No”, Admin “No” (no Independence line: the slider above it is the one control), Rules with “Never email candidates directly” and a Remove. Lines it has of its own say “Its own”; the rest “Team default”. Under them a muted line that the app enforces these except independence and rules, and a “Change in chat” text button.',
     openSelector: AGENTS_TAB,
     requires: '.agent-policy__line',
-    clipSelector: '.agent-editor [role="group"][aria-label="What it can reach"]',
+    clipSelector: '.agent-editor .agent-policy',
     steps: [
       { click: '[data-agent-id="hiring"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
