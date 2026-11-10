@@ -1,4 +1,4 @@
-/* Native context-menu primitive, styled to match Ship Studio's existing dark menus. */
+/* Context menu (right-click) primitive. Its items are the same size, padding and type as Dropdown's (dropdown.css), so a right-click menu and a ⋯ menu offering the same actions read as one menu. */
 
 .ss-context-menu {
   position: fixed;
@@ -31,13 +31,13 @@
   gap: var(--spacing-sm);
   min-width: 100%;
   height: var(--context-menu-item-height);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-primary);
   font: inherit;
-  font-size: var(--font-size-body-sm);
+  font-size: var(--font-size-menu-item);
   text-align: left;
   cursor: pointer;
   transition:
@@ -83,7 +83,7 @@
 }
 
 .ss-context-menu__label {
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
   color: var(--text-muted);
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-label);

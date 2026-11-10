@@ -26,6 +26,8 @@ export type CommandMap = Record<string, unknown>;
 export interface ScenarioStep {
   /** Click this once it exists. */
   click?: string;
+  /** Right-click this once it exists, to open its context menu. */
+  rightClick?: string;
   /** Point at this once it exists, e.g. to show its tooltip. */
   hover?: string;
   /** Type into this input once it exists. */

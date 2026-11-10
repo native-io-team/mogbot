@@ -213,7 +213,8 @@ async function runSteps(list?: ScenarioStep[]): Promise<void> {
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 50)));
       continue;
     }
-    const selector = step.click ?? step.hover ?? step.fill ?? step.select ?? step.focus;
+    const selector =
+      step.click ?? step.rightClick ?? step.hover ?? step.fill ?? step.select ?? step.focus;
     if (!selector) continue;
     const el = await waitFor(selector, undefined, step.text);
     const named = step.text ? `${selector} “${step.text}”` : selector;
@@ -239,6 +240,21 @@ async function runSteps(list?: ScenarioStep[]): Promise<void> {
         new MouseEvent('click', { bubbles: true, cancelable: true, view: window, detail: 1 })
       );
       stepLog.push(`clicked ${selector}`);
+    } else if (step.rightClick) {
+      // At the element's middle, where a person would right-click it, so the
+      // menu opens beside it rather than at the page's corner.
+      const box = el.getBoundingClientRect();
+      el.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          button: 2,
+          clientX: box.left + box.width / 2,
+          clientY: box.top + box.height / 2,
+        })
+      );
+      stepLog.push(`right-clicked ${selector}`);
     } else if (step.hover) {
       el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }));
       stepLog.push(`hovered ${selector}`);

@@ -78,4 +78,38 @@ export const connectiveScenarios: Scenario[] = [
     ],
     commands: { ...commands, agents_open_logs: rejectsWith('Finder is not responding.') },
   },
+  {
+    id: 'context-menu-agent',
+    title: 'Context menu — right-clicking an agent',
+    looksRightWhen:
+      'A menu beside Finance’s row, its items the same size and rhythm as the ⋯ menus elsewhere (13px, the dropdown’s padding), separators full width, Delete in red at the foot.',
+    requires: '.ss-context-menu',
+    openSelector: AGENTS_TAB,
+    steps: [{ rightClick: '[data-agent-id="finance"]' }],
+    commands,
+  },
+  {
+    id: 'dropdown-agent-menu',
+    title: 'Dropdown — the agent’s ⋯ menu, for comparison',
+    looksRightWhen:
+      'The chat header’s ⋯ menu: the same item size and rhythm as the right-click menu on the agent’s row.',
+    requires: '.ss-dropdown__menu',
+    openSelector: '[data-agent-id="finance"]',
+    steps: [{ click: '.agent-chat__menu [aria-label^="Actions for"]' }],
+    commands,
+  },
+  {
+    id: 'confirm-delete-agent',
+    title: 'Confirm — deleting an agent',
+    looksRightWhen:
+      'A small dialog in Finance’s colour: “Delete Finance?”, what goes with it, the quiet hint, then Cancel and a red Delete with its warning mark.',
+    requires: '.confirm-modal-text',
+    openSelector: '[data-agent-id="finance"]',
+    steps: [
+      { key: 'mod+k' },
+      { fill: '.command-palette-input', value: 'Delete Finance' },
+      { click: '.command-palette [role="option"]', text: 'Delete Finance' },
+    ],
+    commands,
+  },
 ];
