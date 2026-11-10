@@ -657,8 +657,14 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
                 connection_id: None,
             });
         } else if no_connector.is_some() && !agents_browser {
-            no_connector = no_connector.map(|n| {
-                format!("{n} Using your browser needs Claude Code, and {name} runs on Codex.")
+            // Both ways it can't use in one sentence, then the one fix,
+            // rather than "runs on Codex" said twice.
+            let via_claude_ai = known.is_some_and(|s| matches!(s.connector, Connector::ClaudeAi(_)));
+            no_connector = Some(if via_claude_ai {
+                format!("{title} comes through claude.ai or your own Chrome, and both need Claude Code; {name} runs on Codex. To give it {title}, switch it to Claude Code under Model.")
+            } else {
+                let n = no_connector.unwrap_or_default();
+                format!("{n} Your own Chrome needs Claude Code, and {name} runs on Codex: switch it under Model to use it.")
             });
         }
     }
@@ -2984,6 +2990,10 @@ mod tests {
             off.reach.browser_off = true;
             let none = build(&off, &ask("gmail", &[])).unwrap();
             assert!(none.options.is_empty());
+            // One sentence for both ways it can't use, and the one fix.
+            let told = none.no_connector.as_deref().unwrap();
+            assert_eq!(told.matches("runs on Codex").count(), 1, "{told}");
+            assert!(told.contains("switch it to Claude Code under Model"), "{told}");
             assert!(asked_reply(&none).contains("don't ask for a password"));
             let linear = build(&codex, &ask("linear", &[])).unwrap();
             assert_eq!(

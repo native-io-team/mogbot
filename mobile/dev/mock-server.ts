@@ -2711,7 +2711,7 @@ export function createMockServer(opts: MockOptions = {}) {
               message: !onPhone
                 ? `${login.title}’s sign-in is open in your Mac’s browser.`
                 : option.method === 'gh'
-                  ? 'Type this code at github.com/login/device, on this phone or anywhere.'
+                  ? 'Type this code at github.com/login/device, on your phone or anywhere.'
                   : `Add ${login.title} on claude.ai on your phone, signed in to the same Claude account as this Mac; this card notices when it’s connected.`,
               startedAt: Date.now(),
               fromPhone: true,
@@ -5146,7 +5146,7 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
           flow: {
             state: 'waiting',
             option: 'gh',
-            message: 'Type this code at github.com/login/device, on this phone or anywhere.',
+            message: 'Type this code at github.com/login/device, on your phone or anywhere.',
             startedAt: now - 60_000,
             fromPhone: true,
             onPhone: true,

@@ -297,7 +297,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   recruiterScenario(
     'agents-login-device-code',
     'Agents — GitHub signing in on the phone with a one-time code',
-    'A “Recruiter needs your GitHub” card mid sign-in: spinner and “Type this code at github.com/login/device, on this phone or anywhere.”, then a bordered box “Your code WDJB-MJHT” in mono with a quiet Copy and the link github.com/login/device under it, then a muted phone icon with “Signing in on your phone”. Only a secondary Cancel.',
+    'A “Recruiter needs your GitHub” card mid sign-in: spinner and “Type this code at github.com/login/device, on your phone or anywhere.”, then a bordered box “Your code WDJB-MJHT” in mono with a quiet Copy and the link github.com/login/device under it, then a muted phone icon with “Signing in on your phone”. Only a secondary Cancel.',
     loginCard('hiring', 'Recruiter needs your GitHub', {
       service: 'github',
       title: 'GitHub',
@@ -307,7 +307,7 @@ export const agentsLoginsScenarios: Scenario[] = [
       flow: {
         state: 'waiting',
         option: 'gh',
-        message: 'Type this code at github.com/login/device, on this phone or anywhere.',
+        message: 'Type this code at github.com/login/device, on your phone or anywhere.',
         startedAt: now - MIN,
         fromPhone: true,
         onPhone: true,
@@ -400,7 +400,7 @@ export const agentsLoginsScenarios: Scenario[] = [
     id: 'agents-login-codex',
     title: 'Agents — a Codex agent asking for Gmail: nothing here can',
     looksRightWhen:
-      'Prospector’s chat: “Prospector needs your Gmail” with the read line, and a muted honest line that Gmail comes through a claude.ai connector, which only agents on Claude Code can use, and Prospector runs on Codex. Only “Not now”; no Connect, no password field.',
+      'Prospector’s chat: “Prospector needs your Gmail” with the read line, and one muted honest line that Gmail comes through claude.ai or your own Chrome, both need Claude Code and Prospector runs on Codex, then the one fix: switch it to Claude Code under Model. Only “Not now”; no Connect, no password field.',
     requires: '.agent-login',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="leadgen"]' }],
@@ -416,7 +416,7 @@ export const agentsLoginsScenarios: Scenario[] = [
           abilities: [{ id: 'read', label: 'Read and search your email' }],
           options: [],
           noConnector:
-            'Gmail comes through a claude.ai connector, which only agents on Claude Code can use. Prospector runs on Codex. Using your browser needs Claude Code, and Prospector runs on Codex.',
+            'Gmail comes through claude.ai or your own Chrome, and both need Claude Code; Prospector runs on Codex. To give it Gmail, switch it to Claude Code under Model.',
         }),
       ]),
       ...COMMANDS,
