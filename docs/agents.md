@@ -628,7 +628,7 @@ characters, a Codex agent's 12,619, the Chief's 16,003 before its team list
 (budgets 12,500 / 13,100 / 16,600). The agents' browser in "Getting access"
 took them to 12,697 / 13,262 / 16,646 after trims elsewhere (the repeated
 "don't mention servers or ports", the password paragraph the Secrets section
-already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. The Chief's draft-first line ("Asked to make one? Draft it in one reply ending “Make it?”") went in within the Chief’s (17,245 of 17,250) by trimming its delegate, `project` and `read_agent` bullets: live on Haiku, the tool description alone didn't hold against "do it, don't ask", and a first message asking for an agent was built at once. Measured with Claude Code (Haiku 5.5,
+already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Blocks' one line ("Show, don't describe", `show`) took the budgets to 13,500 / 14,100 / 17,500. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. The Chief's draft-first line ("Asked to make one? Draft it in one reply ending “Make it?”") went in within the Chief’s (17,245 of 17,250) by trimming its delegate, `project` and `read_agent` bullets: live on Haiku, the tool description alone didn't hold against "do it, don't ask", and a first message asking for an agent was built at once. Measured with Claude Code (Haiku 5.5,
 `--append-system-prompt-file`, input tokens over a bare run): on the base
 this work started from, 3,347 tokens before and 3,269 after for a plain agent
 (4,583 → 4,505 for the Chief), while gaining the paragraph above; with
@@ -6338,6 +6338,73 @@ of their own is open.
   apps, scripts, anything executable or with a launching extension
   (`.command`, `.app`, `.py`, `.webloc`…) are only revealed in Finder, never
   run. ⌘-click always reveals.
+
+## Blocks: the right UI at the right moment (`src-tauri/src/agents/blocks.rs`)
+
+An agent can answer with UI, not just prose: `show` posts one message whose
+blocks are drawn from data on the desk (`components/agents/blocks/`) and the
+phone (`mobile/src/components/blocks/`), from the same types and maths
+(`packages/companion-protocol/src/blocks.ts`). Thirteen kinds:
+
+| Kind | For | Answers? |
+|---|---|---|
+| `chart` (line, bar grouped/stacked, area, pie, donut, sparkline) | numbers over time, categories, parts of a whole | no |
+| `table` | records: sortable, numbers right-aligned, eight rows then "Show all" | no |
+| `metrics` | a few headline numbers: value, delta (its direction in words and an arrow, coloured by whether that way is good), an optional sparkline | no |
+| `facts` | label / value details | no |
+| `checklist`, `steps` | progress | no |
+| `comparison` | 2–3 options side by side, each with "Pick this" | yes |
+| `choices` | a quick decision: buttons that send words | yes |
+| `form` | several details at once: text, long text, choice, date, number | yes |
+| `links` | chips with the domain; nothing is fetched | no |
+| `callout` | info / warning / success, with its icon and a word | no |
+| `code` | code, or a diff (`language: "diff"`) | no |
+| `image` | one of the agent's own image files, copied into the chat | no |
+
+**Data only.** The Mac checks every block before anything is kept
+(`blocks::parse`, `blocks_tests.rs`): a known kind and its fields, limits (8
+blocks and 96 KB a message, 8 series, 120 points or 40 bars, 200 rows × 8
+columns, 4 images), finite numbers, labels that line up with values, http(s)
+links with no credentials, and **no HTML anywhere** (a block's strings are
+drawn as text; `code` is shown verbatim). A form that asks for a password, key,
+token, card number or the like is refused with "use request_secret": secrets
+keep their masked card. An image is only a file in the agent's own folder,
+copied in and checked to be an image, as `share_file` does.
+
+**Fallback.** Every block has a plain-text `summary` (the agent's, or made
+from its data), and the message's `text` is the intro plus every summary: what
+an older phone shows, what search finds, what Copy copies, and what the next
+engine session reads back. Messages keep `blocks` as JSON (`v: 1`), so a kind
+from a newer build never makes a message unreadable; a client that doesn't
+know the version or a kind draws the text instead (`readBlocks`).
+
+**Answers are the user's words.** A choice, Pick this or a form sends the
+user's own message through the ordinary send (`formReply` is one "Label:
+value" line each), so independence, approvals and plan grants are exactly as
+for anything typed. Once the user has said anything after the blocks
+(`answerAfter`), they show the answer and send nothing again. Blocks posted in
+a turn answering outside text carry `fromOutside`: a tap only puts the words
+in the composer, with a line saying why, and nothing sends until the user
+does. The agent is told to stop and wait after asking.
+
+**Look.** Charts follow the dataviz rules: one categorical palette of eight,
+drawn from the agent key colourways (blue, orange, teal, mustard, pink, green,
+violet, brick), stepped per theme and validated as a set (lightness band,
+chroma, adjacent colour-blind separation; `--chart-series-1…8`, the phone's
+`theme.ts` the same values); 2px lines, bars at most 24px with a rounded data
+end, 2px surface gaps, a hairline grid, one axis style, a legend only for two
+or more series, the end of a single line labelled, a crosshair and tooltip on
+hover or arrow keys (tap on the phone), and "Show the numbers" for the table
+view. Comparison, choices and form answers are neutral (`strong` /
+`secondary`), never the accent; "Recommended" is a neutral ring.
+
+**Teaching the agents.** The tool description carries each kind's fields and
+an example; the system prompt has one line ("Show, don't describe…"), which
+took the prompt budgets to 13,500 / 14,100 / 17,500.
+
+Harness: `agents-blocks-*` (numbers, a chart's tooltip, a sorted table, more
+charts, deciding, a form left empty, progress, answered, outside text).
+Phone: the qa:web shots `blocks-chat-*` and `blocks-tooltip-*` (a hidden "Blocks" agent in the mock Mac, `mobile/dev/mock-blocks.ts`). One question per message: a `show` with two of choices, comparison or form is refused, since the next message answers it.
 
 ## Result cards (`src-tauri/src/agents/results.rs`)
 

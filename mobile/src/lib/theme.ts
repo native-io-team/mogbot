@@ -107,6 +107,22 @@ export interface Palette {
   overlayFrame: string;
   /** Behind a photo, as the system viewer has it, in either appearance. */
   black: string;
+  /**
+   * A chart's series, in fixed order (blocks, `components/blocks`): the agent
+   * keys' hues (blue, orange, teal, mustard, pink, green, violet, brick),
+   * stepped per appearance and validated as a set (the dataviz method: the
+   * lightness band, chroma, colour-blind separation of neighbours, 3:1 on
+   * dark's panel). The desk's `--chart-series-1…8` are the same values.
+   * Marks only: words beside them stay in text roles.
+   */
+  chart1: string;
+  chart2: string;
+  chart3: string;
+  chart4: string;
+  chart5: string;
+  chart6: string;
+  chart7: string;
+  chart8: string;
 }
 
 /** Shared by both: what sits on a photo or the camera doesn't change with the app around it. */
@@ -171,6 +187,14 @@ const dark: Palette = {
   diffDel: '#ef4444',
   diffDelBg: 'rgba(244, 71, 71, 0.1)',
   scrim: 'rgba(0, 0, 0, 0.75)', // --color-black-o75
+  chart1: '#5a86e6',
+  chart2: '#e86a34',
+  chart3: '#2fa493',
+  chart4: '#b8860b',
+  chart5: '#d46685',
+  chart6: '#3f9443',
+  chart7: '#9580e0',
+  chart8: '#d9604a',
   ...media,
 };
 
@@ -237,8 +261,47 @@ const light: Palette = {
   diffDel: '#b0221a',
   diffDelBg: 'rgba(212, 42, 32, 0.08)',
   scrim: 'rgba(29, 28, 26, 0.24)',
+  chart1: '#3f6fd8',
+  chart2: '#ec6a2e',
+  chart3: '#2e9e8f',
+  chart4: '#e0a520',
+  chart5: '#e37b9b',
+  chart6: '#3e8a3e',
+  chart7: '#7357c9',
+  chart8: '#c2452c',
   ...media,
 };
+
+/** A chart series' colour by its slot (1-based, from `slotOf`). */
+export const seriesColor = (colors: Palette, slot: number): string =>
+  [
+    colors.chart1,
+    colors.chart2,
+    colors.chart3,
+    colors.chart4,
+    colors.chart5,
+    colors.chart6,
+    colors.chart7,
+    colors.chart8,
+  ][Math.max(0, Math.min(7, slot - 1))];
+
+/**
+ * A block's chart (`components/blocks/BlockChart.tsx`): its height, a
+ * sparkline's, the 2pt line, the end dot's radius and its surface ring, and
+ * the area wash's opacity (the dataviz spec: thin marks, a 10% wash).
+ */
+export const chartSize = {
+  height: 180,
+  pie: 168,
+  spark: 28,
+  sparkWidth: 72,
+  line: 2,
+  dot: 4,
+  ring: 2,
+  wash: 0.1,
+  swatch: 8,
+  tooltip: 168,
+} as const;
 
 export const palettes = { dark, light } as const;
 

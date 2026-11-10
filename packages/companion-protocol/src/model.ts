@@ -15,6 +15,7 @@
 // ============================================================================
 
 import type { ResultCard, ResultRef } from './results';
+import type { BlockSet } from './blocks';
 import type { SettingsProposal } from './policy';
 import type { CrossoverAsk, CrossoverAway } from './crossover';
 
@@ -1488,6 +1489,12 @@ export interface AgentMessage {
    * any other is a plain "running on this Mac" chip, never a dead link.
    */
   localLinks?: LocalLink[];
+  /**
+   * Blocks (`show`, `agents/blocks.rs`): charts, tables, metrics, choices,
+   * a form… drawn from data, never markup. `text` carries their plain-text
+   * version for clients that don't draw them. Older Macs never send it.
+   */
+  blocks?: BlockSet;
 }
 
 /** A link an agent wrote to a server on this Mac (`AgentMessage.localLinks`). */

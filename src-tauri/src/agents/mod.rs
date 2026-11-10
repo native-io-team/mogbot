@@ -70,6 +70,7 @@ pub mod apps;
 pub mod arrival;
 pub mod attachments;
 pub mod autoallow;
+pub mod blocks;
 pub mod brief;
 pub mod briefing;
 pub mod broker;
@@ -276,6 +277,7 @@ fn greet(agent_id: &str) {
         room: None,
         decide: Vec::new(),
         local_links: Vec::new(),
+        blocks: None,
         remembered: None,
         via: None,
         fix: None,

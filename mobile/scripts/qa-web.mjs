@@ -1159,6 +1159,30 @@ const LIVE = [
     check:
       'Every message kind: receipts, failure cards, diff tints span the box, To/From Ops, folded result line wraps',
   },
+  // Blocks (`show`): every kind, in one chat (dev/mock-blocks.ts).
+  {
+    name: 'blocks-chat',
+    route: '/chat/blocks',
+    ready: 'Blocks',
+    pages: 10,
+    check:
+      'Every block kind: metric tiles with deltas and a sparkline, a two-series line chart with a legend, a stacked bar, a donut with its slices listed, a sortable table with Show all, facts, a checklist with its count, steps with done/current/failed marks, two callouts with icon and word, link chips with their domain, a tinted diff, an image; the comparison answered (Picked on Vercel), the choices and form still live with neutral answers',
+  },
+  {
+    name: 'blocks-tooltip',
+    route: '/chat/blocks',
+    ready: 'Blocks',
+    act: async (page) => {
+      await scrollToText('Signups per day')(page);
+      await page.clickWhere(
+        `() => document.querySelector('[data-testid="chart-plot"]')`,
+        'a chart'
+      );
+      await sleep(500);
+    },
+    check:
+      'Touching a chart: its column stands out (the others dim) and a tooltip names the day with every series’ value',
+  },
   {
     name: 'chat-table',
     route: '/chat/chief',
@@ -2177,7 +2201,8 @@ const OFFLINE_CACHED = [
     name: 'offline-connection',
     route: '/connection',
     settle: 3000,
-    check: 'Check these first: three rows (Mac awake and app open, Tailscale on, paired: Yes), each with its fix; Details folded; no host in the first lines',
+    check:
+      'Check these first: three rows (Mac awake and app open, Tailscale on, paired: Yes), each with its fix; Details folded; no host in the first lines',
   },
 ];
 

@@ -15,6 +15,8 @@ import {
   splitQuotes,
   viaLabel,
   checkInHead,
+  attachmentsOutsideBlocks,
+  readBlocks,
   type Agent,
   type AgentMessage,
   type ResultRef,
@@ -43,6 +45,7 @@ import { Attachments } from './attachments';
 import { LocalLinks } from './localLinks';
 import { useReveal } from '../lib/reveal';
 import { Markdown } from './Markdown';
+import { Blocks } from './blocks/Blocks';
 import { Card, Line, TextAction } from './surfaces';
 import { Button, Icon, T } from './ui';
 import { AgentKey } from './AgentKey';
@@ -200,7 +203,10 @@ export const MessageRow = memo(function MessageRow({
           )}
         </View>
       );
-    case 'agent':
+    case 'agent': {
+      // Blocks (`show`): drawn from data; the text is their plain version.
+      const set = readBlocks(message);
+      const files = attachmentsOutsideBlocks(message.attachments, set);
       return (
         <Pressable
           onLongPress={hold}
@@ -208,6 +214,7 @@ export const MessageRow = memo(function MessageRow({
           // One element to VoiceOver only while it's just words: grouped, the
           // buttons in its links, choices, files and timeline were out of reach.
           accessible={
+            !set &&
             !message.localLinks?.length &&
             !message.decide?.length &&
             !message.attachments?.length &&
@@ -217,7 +224,11 @@ export const MessageRow = memo(function MessageRow({
           accessibilityHint={hold ? 'Hold for Copy, Quote and Select Text' : undefined}
           style={({ pressed }) => [styles.agentRow, pressed && styles.heldProse]}
         >
-          <Prose id={message.id} text={message.text} />
+          {set ? (
+            <Blocks message={message} set={set} />
+          ) : (
+            <Prose id={message.id} text={message.text} />
+          )}
           {!!message.localLinks?.length && (
             <LocalLinks
               agentId={message.agentId}
@@ -227,18 +238,15 @@ export const MessageRow = memo(function MessageRow({
             />
           )}
           {!!message.decide?.length && <DecideCards message={message} onError={onError} />}
-          {!!message.attachments?.length && (
-            <Attachments
-              agentId={message.agentId}
-              attachments={message.attachments}
-              onError={onError}
-            />
+          {!!files.length && (
+            <Attachments agentId={message.agentId} attachments={files} onError={onError} />
           )}
           {message.work && <WorkLine message={message} work={message.work} onError={onError} />}
           {/* A stopped turn ends in a Line, as every turn that didn't finish does. */}
           {message.stopped && <Line text="Stopped" />}
         </Pressable>
       );
+    }
     case 'approval':
       // A login card, from a Mac that serves its methods. (One that doesn't
       // never sends `login`; if it did, the plain card's Allow starts its

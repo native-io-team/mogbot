@@ -764,6 +764,11 @@ export interface AgentMessage {
    * "Chrome isn't reachable through Claude's extension" → Your Chrome).
    */
   fix?: NoteFix;
+  /**
+   * Blocks (`show`, `agents/blocks.rs`): charts, tables, choices, a form…
+   * drawn from data (`readBlocks`); `text` is their plain-text version.
+   */
+  blocks?: BlockSet;
   /** Which of the agent's conversations it was said in; absent: the first's (`conversationOf`). */
   conversation?: string;
 }
@@ -2728,6 +2733,8 @@ export {
 } from '../../packages/companion-protocol/src/quotes';
 
 import type { ResultCard, ResultRef } from '../../packages/companion-protocol/src/results';
+import type { BlockSet } from '../../packages/companion-protocol/src/blocks';
+export type { BlockSet } from '../../packages/companion-protocol/src/blocks';
 export type {
   ComparePage,
   ResultCard,

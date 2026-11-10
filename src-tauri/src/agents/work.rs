@@ -880,6 +880,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Sharing a file",
             "share a file",
         ),
+        "show" => act(
+            StepKind::Message,
+            "Showed it in the chat",
+            "Showing it in the chat",
+            "show it in the chat",
+        ),
         "share_result" => act(
             StepKind::Message,
             "Put together its result",
