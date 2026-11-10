@@ -27,6 +27,7 @@ import {
   SKILLS_CHANGED_EVENT,
   SKILLS_TITLE,
   skillCardNote,
+  skillWhenLine,
   type SkillCard,
   type LearnSkills,
   type Skill,
@@ -92,7 +93,7 @@ export function AgentSkillCardBody({ card }: { card: SkillCard }) {
   const note = skillCardNote(card);
   return (
     <>
-      {card.when && <p className="agent-skill-card__when">{card.when}</p>}
+      {card.when && <p className="agent-skill-card__when">{skillWhenLine(card.when)}</p>}
       <p className="agent-skill-card__steps">{card.steps}</p>
       {note && <p className="agent-skill-card__note">{note}</p>}
     </>
@@ -192,7 +193,9 @@ export function AgentSkills({ agent, focus = false }: { agent: Agent; focus?: bo
               <li key={skill.slug} className="agent-permissions__rule agent-skills__skill">
                 <span className="agent-skills__what">
                   <span className="agent-skills__name">{skill.name}</span>
-                  {skill.when && <span className="agent-skills__when">{skill.when}</span>}
+                  {skill.when && (
+                    <span className="agent-skills__when">{skillWhenLine(skill.when)}</span>
+                  )}
                 </span>
                 <span className="agent-skills__actions">
                   <TextButton

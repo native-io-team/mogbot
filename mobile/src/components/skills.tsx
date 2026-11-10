@@ -14,6 +14,7 @@ import {
   learnSkillsLabel,
   learnSkillsOf,
   noSkillsLine,
+  skillWhenLine,
   type Agent,
   type Skill,
   type SkillCard,
@@ -49,7 +50,7 @@ export function SkillCardBody({ skill }: { skill: SkillCard }) {
   const shown = long && !open ? lines.slice(0, SKILL_CARD_LINES).join('\n') : skill.steps;
   return (
     <View style={{ gap: space.sm }}>
-      {!!skill.when && <T color={colors.textBody}>{skill.when}</T>}
+      {!!skill.when && <T color={colors.textBody}>{skillWhenLine(skill.when)}</T>}
       <T color={colors.textBody}>{shown}</T>
       {long && (
         <View style={{ alignSelf: 'flex-start' }}>
@@ -153,7 +154,7 @@ export function WhatItKnows({
           <Row
             key={s.slug}
             label={s.name}
-            detail={s.when}
+            detail={skillWhenLine(s.when)}
             onPress={enabled ? () => open(s) : undefined}
             last={i === skills.length - 1}
           />

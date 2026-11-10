@@ -4,6 +4,7 @@
  */
 
 import type { AgentMessage, Approval } from '@shipstudio/companion-protocol';
+import { SKILL_OFFER_NOTE } from '@shipstudio/companion-protocol';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { ARM_MS, ApprovalCard } from '../src/components/ApprovalCard';
 import { setApp } from '../src/lib/store';
@@ -82,7 +83,7 @@ it('previews the skill as an offer: Not now / Save, nothing behind ⋯, nothing 
   expect(screen.getByText(/2\. Export as CSV/)).toBeTruthy();
   expect(
     screen.getByText(
-      '2 personal details or secrets removed. Nothing waits on it. Saved, it’s listed under Skills.'
+      `2 personal details or secrets removed. ${SKILL_OFFER_NOTE}`
     )
   ).toBeTruthy();
   expect(screen.getByText('Save')).toBeTruthy();
