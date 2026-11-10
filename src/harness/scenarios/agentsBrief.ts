@@ -78,7 +78,7 @@ export const agentsBriefScenarios: Scenario[] = [
       'Opened from ⌘K “Morning brief…”, scrolled to Notifications: under Quiet hours, a “Morning brief” row whose one line says what the Chief posts; on the right a short time field “07:30” and the switch, on. Under it “Post even when there’s nothing new” (off: a day with nothing for you posts nothing) with its switch off, then two rows “Check: events on my calendar today” and “Check: unread important mail”, each saying it is read only and in which app (only the last saying to ask the Chief for more), with a quiet “Remove” text action.',
     command: 'agents.morningBrief',
     requires: '.agents-brief',
-    clipSelector: 'section[aria-labelledby="agents-settings-notify"]',
+    clipSelector: 'section[aria-labelledby="agents-settings-quiet"]',
     commands: {
       agents_overview: overview(TEAM),
       agents_morning_brief: BRIEF_SETTINGS,
