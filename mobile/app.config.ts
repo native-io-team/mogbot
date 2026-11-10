@@ -1,4 +1,7 @@
 import type { ExpoConfig } from 'expo/config';
+import { withDangerousMod, type ConfigPlugin } from 'expo/config-plugins';
+import * as fs from 'fs';
+import * as path from 'path';
 // The app's name, scheme and bundle id live only in the repo-root brand.json.
 // This file runs in Node at build time, so it can read it directly.
 // It is also handed to the app as `extra.brand` (src/lib/brand.ts), so Metro
@@ -63,6 +66,39 @@ const SPEECH =
  */
 const shareExtension = process.env.SHIPSTUDIO_SHARE_EXTENSION === '1';
 /**
+ * The Live Activity while an agent works (src/lib/liveActivity.ts) is a
+ * widget extension, which expo-widgets adds, with an App Group a free Apple
+ * team can't always sign. Off unless asked for, as the share extension is,
+ * so `expo prebuild` for a free-team self-build is unchanged. The flag also
+ * reaches the app as `extra.liveActivity`, which is what it checks.
+ */
+export const liveActivity = (env: Record<string, string | undefined> = process.env): boolean =>
+  env.SHIPSTUDIO_LIVE_ACTIVITY === '1';
+/**
+ * Without the Live Activity, expo-widgets isn't linked into the app at all:
+ * autolinking would otherwise add its pod to every build, with a build phase
+ * that bundles widget JavaScript at Xcode time. Its Android half is excluded
+ * (with @expo/ui, which nothing on Android uses) in package.json
+ * (`expo.autolinking.android.exclude`); iOS can't be, since
+ * the flag must be able to bring it back, so the Podfile is told here.
+ */
+export const EXCLUDE_WIDGETS = "use_expo_modules!(exclude: ['expo-widgets'])";
+export const withoutWidgets: ConfigPlugin = (config) =>
+  withDangerousMod(config, [
+    'ios',
+    async (c) => {
+      const podfile = path.join(c.modRequest.platformProjectRoot, 'Podfile');
+      const text = fs.readFileSync(podfile, 'utf8');
+      if (!text.includes(EXCLUDE_WIDGETS)) {
+        const next = text.replace(/^(\s*)use_expo_modules!\s*$/m, `$1${EXCLUDE_WIDGETS}`);
+        if (next === text)
+          throw new Error('Podfile: no `use_expo_modules!` to exclude expo-widgets from.');
+        fs.writeFileSync(podfile, next);
+      }
+      return c;
+    },
+  ]);
+/**
  * The push entitlement (`aps-environment`), which expo-notifications adds by
  * default. A free Apple ID's personal team can't sign it ("Personal
  * development teams … do not support the Push Notifications capability"), so
@@ -120,7 +156,7 @@ export default (): ExpoConfig => {
     );
   }
   const buildNumber = process.env.COMPANION_BUILD_NUMBER ?? '1';
-  return {
+  const config: ExpoConfig = {
     name: brand.name,
     slug: `${brand.slug}-companion`,
     // Must match PAIRING_SCHEME in @shipstudio/companion-protocol (generated from
@@ -244,6 +280,19 @@ export default (): ExpoConfig => {
             ] as [string, Record<string, unknown>],
           ]
         : []),
+      // The Live Activity's extension: no home-screen widgets, only the activity.
+      ...(liveActivity()
+        ? [
+            [
+              'expo-widgets',
+              {
+                widgets: [],
+                bundleIdentifier: `${bundleId}.LiveActivity`,
+                groupIdentifier: `group.${bundleId}`,
+              },
+            ] as [string, Record<string, unknown>],
+          ]
+        : []),
     ],
     experiments: { typedRoutes: true, inlineModules: { watchedDirectories: ['app-intents'] } },
     extra: {
@@ -253,7 +302,10 @@ export default (): ExpoConfig => {
       screenshots: process.env.COMPANION_SCREENSHOTS === '1',
       // Read by src/lib/shareIntent.tsx: only a build with the extension runs its hook.
       shareExtension,
+      // Read by src/lib/liveActivity.ts: only a build with the extension starts one.
+      liveActivity: liveActivity(),
       ...(projectId ? { eas: { projectId } } : {}),
     },
   };
+  return liveActivity() ? config : withoutWidgets(config);
 };
