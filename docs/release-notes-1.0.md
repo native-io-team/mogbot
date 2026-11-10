@@ -67,7 +67,7 @@ Your Mac has to be on and awake for the phone to reach it.
 
 ## Good to know
 
-- **Updates aren't automatic yet.** Download new versions from the same page.
+- **Updates are automatic.** When a new version is out, the sidebar says so; one click restarts into it.
 - **No telemetry.** This build sends no analytics or crash reports.
 - **Open source.** MIT licence.
 - **Help:** juliangalluzzois@gmail.com
