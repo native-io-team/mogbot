@@ -1,5 +1,5 @@
 /**
- * "Save what it learns" and "What it knows how to do" on the agent sheet
+ * "Save new skills" and "Skills" on the agent sheet
  * (desktop `agents_skills`, `agents/skills_learn.rs`). The setting is three
  * choices in a menu, saved at once (`agents.update` `learnSkills`); each
  * skill opens its steps, with Edit (the skill editor page) and Remove. The

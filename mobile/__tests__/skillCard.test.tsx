@@ -76,11 +76,15 @@ const show = async (a: Approval) => {
   await act(() => jest.advanceTimersByTime(ARM_MS + 50));
 };
 
-it('previews the skill and answers Not now / Save, with nothing behind ⋯', async () => {
+it('previews the skill as an offer: Not now / Save, nothing behind ⋯, nothing waits on it', async () => {
   await show(card);
   expect(screen.getByText(/When asked for invoices/)).toBeTruthy();
   expect(screen.getByText(/2\. Export as CSV/)).toBeTruthy();
-  expect(screen.getByText('2 personal details or secrets removed.')).toBeTruthy();
+  expect(
+    screen.getByText(
+      '2 personal details or secrets removed. Nothing waits on it. Saved, it’s listed under Skills.'
+    )
+  ).toBeTruthy();
   expect(screen.getByText('Save')).toBeTruthy();
   expect(screen.getByText('Not now')).toBeTruthy();
   expect(screen.queryByText('Allow')).toBeNull();

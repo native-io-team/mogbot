@@ -391,7 +391,7 @@ export interface Methods {
   'agents.reach': { params: { agentId: string }; result: AgentReach };
   /** "What it can do" (`agents/policy.rs`): its settings in plain words. Read-only; changed in chat. */
   'agents.policy': { params: { agentId: string }; result: AgentPolicyView };
-  /** "What it knows how to do" (`agents/skills_learn.rs`): its setting and saved skills. */
+  /** "Skills" (`agents/skills_learn.rs`): its setting and saved skills. */
   'agents.skills': { params: { agentId: string }; result: SkillsView };
   /** The user's edit of one skill, cleaned as a new one is; a new name moves it. */
   'agents.skillEdit': {

@@ -29,7 +29,7 @@
 //! ([`Placement::Index`], [`prompt_section`]). The same files serve every
 //! engine, so switching engines keeps them.
 //!
-//! **Listed** under the agent as "What it knows how to do" (desk and phone:
+//! **Listed** under the agent as "Skills" (desk and phone:
 //! `agents_skills`, `agents.skills`), each one editable and removable, and
 //! carried in a recipe (`recipe.rs`), scrubbed again on the way out.
 //!
@@ -72,7 +72,7 @@ pub fn schema() -> Value {
 
 /* ------------------------------------------------------------ the setting */
 
-/// "Save what it learns": Automatically / Ask me / Off.
+/// "Save new skills": Automatically / Ask me / Off.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Learning {
@@ -115,9 +115,9 @@ impl Learning {
     /// The tool's and the chat line's words for it, after "Saving skills: ".
     pub fn said(self) -> &'static str {
         match self {
-            Learning::Auto => "saves what it learns without asking",
-            Learning::Ask => "asks before saving what it learns",
-            Learning::Off => "doesn't save what it learns",
+            Learning::Auto => "saves new skills without asking",
+            Learning::Ask => "asks before saving a new skill",
+            Learning::Off => "doesn't save new skills",
         }
     }
 }
@@ -569,7 +569,7 @@ pub fn saved_line(name: &str, replaced: bool) -> String {
     if replaced {
         format!("Updated a skill: {name}. Next time it follows these steps.")
     } else {
-        format!("Learned a skill: {name}. Next time it follows these steps.")
+        format!("Saved a skill: {name}. Next time it follows these steps.")
     }
 }
 
@@ -691,7 +691,7 @@ pub fn answer_card(
 
 /* ---------------------------------------------------- the desk and phone */
 
-/// "What it knows how to do": the setting and the skills.
+/// "Skills": the setting and the skills.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct View {

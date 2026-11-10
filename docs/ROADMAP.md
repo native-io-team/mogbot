@@ -42,8 +42,8 @@ reply to a single message.
 - **Agents learn skills** — after a task the app saw take real effort, an
   agent can save how it did it (`save_skill`): per agent Automatically / Ask
   me / Off, a Save / Not now card, scrubbed, in `.claude/skills`, listed as
-  "What it knows how to do" on desk and phone, carried in recipes
-  (docs/agents.md, "What it knows how to do").
+  "Skills" on desk and phone, carried in recipes
+  (docs/agents.md, "Skills").
 - **Step in to an agent's browser** — an agent that hits a wall only a
   person can pass in its own browser (SSO, "verify it's you", a passkey, a
   2FA code, a CAPTCHA) calls `ask_user_to_step_in` instead of failing or

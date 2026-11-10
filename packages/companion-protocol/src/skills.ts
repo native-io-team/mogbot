@@ -1,5 +1,5 @@
 /**
- * "Save what it learns" and "What it knows how to do" (`agents/skills_learn.rs`),
+ * "Save new skills" and "Skills" (`agents/skills_learn.rs`),
  * worded once for the desk and the phone.
  *
  * After a hard task an agent may save how it did it as a skill (a name,
@@ -39,10 +39,12 @@ export interface SkillCard extends Skill {
   replaces?: boolean;
 }
 
-export const LEARN_SKILLS_LABEL = 'Save what it learns';
-export const SKILLS_TITLE = 'What it knows how to do';
+export const LEARN_SKILLS_LABEL = 'Save new skills';
+export const SKILLS_TITLE = 'Skills';
 export const SKILL_SAVE = 'Save';
 export const SKILL_NOT_NOW = 'Not now';
+/** Under a pending skill card, desk and phone: it's an offer, not a gate. */
+export const SKILL_OFFER_NOTE = 'Nothing waits on it. Saved, it’s listed under Skills.';
 
 /** The three choices, in the order they're offered. */
 export const LEARN_SKILLS_CHOICES: { value: LearnSkills; label: string; detail: string }[] = [
@@ -56,7 +58,7 @@ export const LEARN_SKILLS_CHOICES: { value: LearnSkills; label: string; detail: 
     label: 'Ask me',
     detail: 'After a hard task it offers to save how it did it, on a card.',
   },
-  { value: 'off', label: 'Off', detail: 'It doesn’t save what it learns.' },
+  { value: 'off', label: 'Off', detail: 'It doesn’t save new skills.' },
 ];
 
 export function learnSkillsOf(agent: { learnSkills?: LearnSkills }): LearnSkills {
@@ -76,13 +78,13 @@ export function learnSkillsDetail(value: LearnSkills): string {
 /** "Nothing saved yet": the empty list, by setting. */
 export function noSkillsLine(name: string, value: LearnSkills): string {
   return value === 'off'
-    ? `${name} doesn’t save what it learns.`
+    ? `${name} doesn’t save new skills.`
     : `Nothing yet. When ${name} finishes a hard task it can save how it did it here.`;
 }
 
 /** The card's receipt once answered. */
 export function skillOutcome(status: string): string | null {
-  if (status === 'allowed') return 'Saved · under What it knows how to do';
+  if (status === 'allowed') return 'Saved · under Skills';
   if (status === 'denied') return 'Not now · nothing was saved';
   return null;
 }

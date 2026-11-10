@@ -763,7 +763,7 @@ export async function setAgentToggles(
     colorway?: string;
     icon?: string;
     boundKey?: string;
-    /** "Save what it learns", from a Mac that serves `agents.skills`. */
+    /** "Save new skills", from a Mac that serves `agents.skills`. */
     learnSkills?: LearnSkills;
   }
 ) {

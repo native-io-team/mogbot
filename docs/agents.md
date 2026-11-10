@@ -3608,7 +3608,7 @@ The backend decides, since it knows when a message is recorded and when a turn e
 - Clicking a notification focuses a window and emits `agents://open`; the app switches to Agents and opens that agent. Focusing a window clears the unread of the agent it shows.
 - Uses `tauri-plugin-notification` (2.8, click reporting on macOS). Not verified in a real build yet: the dev binary posts under another app's identity, so click-through should be checked in a signed build.
 
-## What it knows how to do (`src-tauri/src/agents/skills_learn.rs`)
+## Skills (`src-tauri/src/agents/skills_learn.rs`)
 
 After a hard task an agent can keep how it did it as a skill, so next time
 the same request is one sentence. The agent calls `save_skill { name, when,
@@ -3624,13 +3624,18 @@ the stream to report the `save_skill` call itself, which both engines do
 before making it, so every earlier step is counted. A wait that runs out
 judges on what was seen and logs it.
 
-**Per agent: Save what it learns — Automatically / Ask me / Off**
+**One vocabulary.** A skill is saved: the setting is "Save new skills", the
+list is "Skills", the card asks "Save “<name>” as a skill?", the line says
+"Saved a skill: <name>", and the answered card "Saved · under Skills".
+
+**Per agent: Save new skills — Automatically / Ask me / Off**
 (`Agent::learn_skills`, stored `auto` / `ask` / `off`, absent is `ask`).
-Automatically saves at once with the line "Learned a skill: <name>. Next time
+Automatically saves at once with the line "Saved a skill: <name>. Next time
 it follows these steps."; Ask me puts one card in the chat, "Save “<name>” as
 a skill?", showing when to use it and the steps exactly as they'd be saved,
-answered **Not now / Save** (Save neutral, nothing behind ⋯; nothing waits
-on it, it never expires); Off doesn't serve the tool. **A turn answering
+answered **Not now / Save** (nothing behind ⋯; nothing waits on it, it never
+expires, and it is drawn as an offer, not a gate: no raised surface, Not now
+plain and Save outlined, no A / D keys, desk and phone alike); Off doesn't serve the tool. **A turn answering
 outside text, or in a conversation that read outside content
 (`exposure::read_outside`), always gets the card, whatever the setting**,
 marked high risk (the warning icon; never answered in place on the phone's
@@ -3655,12 +3660,12 @@ no skills, no section, so the prompt budgets are unchanged). One set of
 files for every engine, so switching engines keeps them. A SKILL.md the
 user put there by hand is listed too.
 
-**Listed and changed.** Edit agent → "Save what it learns" (a segmented
-control, saved at once) and "What it knows how to do", each skill with Edit
+**Listed and changed.** Edit agent → "Save new skills" (a segmented
+control, saved at once) and "Skills", each skill with Edit
 (name, when, steps; cleaned again, a new name moves its folder) and Remove
 (`agents_skills`, `agents_skill_edit`, `agents_skill_remove`;
-`agents-skills-changed` refreshes the list). Phone: the agent sheet's "What
-it knows how to do" (`agents.skills`, a menu for the setting through
+`agents-skills-changed` refreshes the list). Phone: the agent sheet's
+"Skills" (`agents.skills`, a menu for the setting through
 `agents.update` `learnSkills`, each skill's steps with Edit on its own sheet,
 `agents.skillEdit`, and Remove, `agents.skillRemove`). From chat:
 `update_agent` `learn_skills` (Chief): Ask me and Off apply at once;
@@ -3670,7 +3675,7 @@ and is a card otherwise.
 **In recipes.** A recipe carries `skills: [{name, when, steps}]`, scrubbed
 like the rest and absent when there are none (version stays 1; older builds
 ignore it). On import each is cleaned again (`skills_learn::draft`), shown on
-the review card under "What it knows how to do" with its steps, and written
+the review card under "Skills" with its steps, and written
 into the new agent's home on Import ("It came with skills: …").
 
 **Residual.** The agent can still write a file into that folder with its
@@ -6388,7 +6393,7 @@ are `agents/settings_tools.rs`. Tests: `agents/settings_chat_tests.rs`,
 | Which account turns start on ("use my personal plan") | `use_account` (Chief): puts that signed-in account first in the order (`wallet::reorder`), failover unchanged | no when the user's own message asked; a card when another agent or a routine did; never for outside text |
 | Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
 | Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
-| Save what it learns (skills) | `update_agent` `learn_skills` (Chief) | Ask me and Off no; Automatically no on the user's own message alone, a card otherwise |
+| Save new skills (skills) | `update_agent` `learn_skills` (Chief) | Ask me and Off no; Automatically no on the user's own message alone, a card otherwise |
 | Name, role, look; unbinding from a project | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
 | Binding an agent to a project (more reach), changing its instructions | `update_agent` `project` / `instructions` (Chief) | no on the user's own message alone; a card otherwise ("Works in: shippy", "New instructions: …", with Runs on on the same card when it changes too; `mcp::update_widens`) |
 | Admin switch | `propose_settings_change` `admin` (admins) | yes |

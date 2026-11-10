@@ -72,6 +72,7 @@ export function Card({
   actions,
   children,
   hideHead = false,
+  quiet = false,
   onLayout,
   onHeadLayout,
   style,
@@ -93,6 +94,12 @@ export function Card({
   children?: ReactNode;
   /** The chat pins the question above the list: the card leaves its head out. */
   hideHead?: boolean;
+  /**
+   * An offer, not a gate (a skill card: nothing waits on it): no raised
+   * sheet, a faint hairline, its title a step quieter. As the desk's
+   * `.agent-approval[data-offer]`.
+   */
+  quiet?: boolean;
   onLayout?: (e: LayoutChangeEvent) => void;
   onHeadLayout?: (e: LayoutChangeEvent) => void;
   style?: StyleProp<ViewStyle>;
@@ -111,7 +118,7 @@ export function Card({
     <Animated.View
       layout={CARD_GLIDE}
       onLayout={onLayout}
-      style={[styles.card, style]}
+      style={[styles.card, quiet && styles.cardQuiet, style]}
       testID={testID}
       accessibilityLabel={accessibilityLabel}
     >
@@ -123,7 +130,7 @@ export function Card({
             </View>
             <T
               variant="headline"
-              color={colors.textStrong}
+              color={quiet ? colors.textSecondary : colors.textStrong}
               maxFontSizeMultiplier={CARD_TITLE_SCALE}
               accessibilityRole="header"
               style={{ flex: 1 }}
@@ -580,6 +587,11 @@ export const useCardStyles = makeStyles((colors) => ({
     // Nothing inside draws past the corner: a pressed row, a well or an
     // image at the edge is cut to the card's own curve, never squared off.
     overflow: 'hidden',
+  },
+  cardQuiet: {
+    backgroundColor: 'transparent',
+    borderColor: colors.borderSubtle,
+    boxShadow: 'none',
   },
   head: { gap: space['2xs'] },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.tight },

@@ -2,7 +2,7 @@
  * Skills an agent saved after a hard task (`agents/skills_learn.rs`): the
  * "Save “…” as a skill?" card in its chat (pending, saved, and one from a
  * conversation that read outside content), and Edit agent's "Save what it
- * learns" with "What it knows how to do". Shapes copied from the Rust serde
+ * learns" with "Skills". Shapes copied from the Rust serde
  * output (`fixtures.gen.ts` has `agentsSkills`).
  */
 
@@ -50,7 +50,7 @@ const chat =
             ? [
                 msg(
                   'note',
-                  'Learned a skill: Reconcile Stripe payouts. Next time it follows these steps.',
+                  'Saved a skill: Reconcile Stripe payouts. Next time it follows these steps.',
                   0,
                   { agentId: 'finance' }
                 ),
@@ -68,7 +68,7 @@ export const agentsSkillsScenarios: Scenario[] = [
     id: 'agents-skill-card',
     title: 'Agents — “Save … as a skill?” after a hard task',
     looksRightWhen:
-      'Finance’s chat: the user’s ask, Finance’s reply, then one card “Save “Reconcile Stripe payouts” as a skill?” with a graduation-cap icon, when to use it in plain text, the four numbered steps under it, a muted “1 personal detail or secret removed.”, and a muted note that nothing waits on it. Answers: Not now (outlined) and Save (neutral strong, never the accent). No “More answers” menu, no Always allow.',
+      'Finance’s chat: the user’s ask, Finance’s reply, then one card “Save “Reconcile Stripe payouts” as a skill?” with a graduation-cap icon, when to use it in plain text, the four numbered steps under it, a muted “1 personal detail or secret removed.”, and a muted note that nothing waits on it. Drawn as an offer, not a gate: no raised surface (a faint hairline), the title a step quieter, Not now plain and Save outlined, never solid or the accent; no A / D key hints. No “More answers” menu, no Always allow.',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
     requires: '.agent-skill-card__steps',
@@ -82,7 +82,7 @@ export const agentsSkillsScenarios: Scenario[] = [
     id: 'agents-skill-card-saved',
     title: 'Agents — a skill card once saved',
     looksRightWhen:
-      'The card folded to one quiet line, “Saved · under What it knows how to do”, and under it the line “Learned a skill: Reconcile Stripe payouts. Next time it follows these steps.” No buttons.',
+      'The card folded to one quiet line, “Saved · under Skills”, and under it the line “Saved a skill: Reconcile Stripe payouts. Next time it follows these steps.” No buttons.',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
     requires: '.agent-chat__row--card',
@@ -107,9 +107,9 @@ export const agentsSkillsScenarios: Scenario[] = [
   },
   {
     id: 'agents-editor-skills',
-    title: 'Agents — Edit agent: Save what it learns, and What it knows how to do',
+    title: 'Agents — Edit agent: Save new skills, and Skills',
     looksRightWhen:
-      'At the end of Finance’s editor: “Save what it learns” with a three-way control (Automatically, Ask me, Off) on Ask me, the line “After a hard task it offers to save how it did it, on a card. Anything that read outside content asks first.”, then “What it knows how to do” listing “Reconcile Stripe payouts” with when to use it muted under it, and quiet Edit and Remove at the right.',
+      'At the end of Finance’s editor: “Save new skills” with a three-way control (Automatically, Ask me, Off) on Ask me, the line “After a hard task it offers to save how it did it, on a card. Anything that read outside content asks first.”, then “Skills” listing “Reconcile Stripe payouts” with when to use it muted under it, and quiet Edit and Remove at the right.',
     openSelector: AGENTS_TAB,
     requires: '.agent-skills__skill',
     clipSelector: '.agent-skills',

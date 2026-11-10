@@ -215,7 +215,7 @@ interface AgentEditorModalProps {
   onOpenApps?: () => void;
   /** Editing: open on its memory rather than its settings. */
   initialTab?: EditorTab;
-  /** Editing: bring this section into view on opening ("What it knows how to do"). */
+  /** Editing: bring this section into view on opening ("Skills"). */
   initialFocus?: 'skills';
   /** Install or sign in to an engine that isn't ready, over the editor. */
   onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;

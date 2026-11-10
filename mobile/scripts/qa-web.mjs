@@ -1850,7 +1850,7 @@ const LIVE = [
       await sleep(1000);
     },
     check:
-      'The fold open: the row (chevron up) with the opening-hours lines under it (on the second theme, the first theme’s line too)',
+      'The fold open, read as past: the row (rewind glyph, chevron down) heads a band with a rule down its left, the opening-hours lines under it muted (on the second theme, the first theme’s line too), closed by “End of what was rewound”',
     after: async (page) => {
       await fetch(`${MOCK}/dev/unrewind`);
       await openSiteConversation('Rebuild the Acme site')(page);
@@ -1871,15 +1871,15 @@ const LIVE = [
     route: '/chat/fin',
     ready: 'Not now',
     check:
-      'Finance’s “Save “Reconcile Stripe payouts” as a skill?” card: a graduation-cap icon, when to use it, the numbered steps, a quiet “1 personal detail or secret removed.”, and Not now · Save (Save the neutral answer, no ⋯)',
+      'Finance’s “Save “Reconcile Stripe payouts” as a skill?” card: a graduation-cap icon, when to use it, the numbered steps, drawn as an offer (no raised sheet, a faint hairline, the title a step quieter), a quiet “1 personal detail or secret removed. Nothing waits on it. Saved, it’s listed under Skills.”, and Not now (plain) · Save (outlined, never solid), no ⋯',
   },
   {
     name: 'agent-sheet-skills',
     route: '/agent/fin',
     ready: 'Finance',
-    act: scrollToText('WHAT IT KNOWS HOW TO DO'),
+    act: scrollToText('SKILLS'),
     check:
-      'Finance’s sheet: “What it knows how to do” with “Save what it learns · Ask me” (a menu of Automatically, Ask me, Off), then “Export invoices from Xero” with when to use it, and a muted line saying anything that read outside content asks first',
+      'Finance’s sheet: “Skills” with “Save new skills · Ask me” (a menu of Automatically, Ask me, Off), then “Export invoices from Xero” with when to use it, and a muted line saying anything that read outside content asks first',
   },
   {
     name: 'agent-sheet-site',

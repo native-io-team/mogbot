@@ -3251,7 +3251,7 @@ export function createMockServer(opts: MockOptions = {}) {
       return null;
     },
     'agents.policy': (p) => ({ ...structuredClone(real.agentsPolicy), agentId: String(p.agentId) }),
-    // "What it knows how to do": the Mac's real view; Finance keeps its skills here.
+    // "Skills": the Mac's real view; Finance keeps its skills here.
     'agents.skills': (p) => ({
       agentId: String(p.agentId),
       setting: agent(String(p.agentId))?.learnSkills ?? 'ask',

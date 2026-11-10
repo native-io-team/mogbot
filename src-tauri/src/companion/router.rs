@@ -364,7 +364,7 @@ pub struct AgentToggles {
     /// From a Mac that serves `agents.accounts.use`.
     #[serde(default)]
     pub account: Option<String>,
-    /// "Save what it learns": `auto`, `ask` or `off`. From a Mac that
+    /// "Save new skills": `auto`, `ask` or `off`. From a Mac that
     /// serves `agents.skills`.
     #[serde(default, rename = "learnSkills")]
     pub learn_skills: Option<crate::agents::skills_learn::Learning>,
@@ -899,7 +899,7 @@ pub trait Backend: Send + Sync + 'static {
     async fn reach(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_policy`: "What it can do". Read-only on the phone; changed in chat.
     async fn policy(&self, agent_id: &str) -> Result<Value, CommandError>;
-    /// `agents_skills`: "What it knows how to do" and its setting.
+    /// `agents_skills`: "Skills" and its setting.
     async fn skills(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_skill_edit`: the user's edit of one skill.
     async fn skill_edit(&self, agent_id: &str, edit: SkillEdit) -> Result<Value, CommandError>;

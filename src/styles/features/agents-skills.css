@@ -42,11 +42,25 @@
   gap: var(--spacing-xs);
 }
 
+/* A skill card is an offer, not a gate ("Nothing waits on it"): no raised
+   surface, a hairline instead, its title a step quieter, and answers that
+   don't ask for attention (Not now a ghost, Save outlined). It counts
+   nowhere as waiting (store::count_pending) and takes no A / D keys. */
+.agent-card.agent-approval[data-offer] {
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--border-width-default) var(--border-subtle);
+}
+
+.agent-card.agent-approval[data-offer] .agent-card__title {
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
 /* The card: when to use it first, then the steps as written. */
 .agent-skill-card__when {
   margin: 0;
   font-size: var(--font-size-body-md);
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 .agent-skill-card__steps {

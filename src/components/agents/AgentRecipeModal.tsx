@@ -95,7 +95,7 @@ export function RecipeContents({ preview }: { preview: RecipePreview }) {
         </Section>
       )}
       {!!r.skills?.length && (
-        <Section title="What it knows how to do">
+        <Section title="Skills">
           <ul className="agent-recipe__list">
             {r.skills.map((x, i) => (
               <li key={i}>

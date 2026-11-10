@@ -530,7 +530,7 @@ fn serves(tool: &Tool, caller: &store::Agent) -> bool {
     match tool.name {
         "delete_agent" => super::admin::admin_now(caller),
         "read_agent" => caller.is_main || super::admin::admin_now(caller),
-        // "Save what it learns: Off": not offered at all.
+        // "Save new skills: Off": not offered at all.
         super::skills_learn::TOOL => caller.learn_skills != super::skills_learn::Learning::Off,
         _ => !tool.main_only || caller.is_main,
     }
@@ -2209,7 +2209,7 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if run.learn_skills == Some(super::skills_learn::Learning::Auto)
         && agent.learn_skills != super::skills_learn::Learning::Auto
     {
-        widens.push("Save what it learns: Automatically, without asking".to_string());
+        widens.push("Save new skills: Automatically, without asking".to_string());
     }
     if update_asks(&caller.id, &widens) {
         let title = if account_changes && widens.len() == 1 {
@@ -2356,7 +2356,7 @@ pub(super) struct RunSettings {
     pub effort: Option<Option<String>>,
     pub routine_model: Option<Option<String>>,
     pub muted: Option<bool>,
-    /// "Save what it learns" (`skills_learn`).
+    /// "Save new skills" (`skills_learn`).
     pub learn_skills: Option<super::skills_learn::Learning>,
 }
 
@@ -2490,7 +2490,7 @@ impl RunSettings {
         }
         if after.learn_skills != before.learn_skills {
             out.push(format!(
-                "Save what it learns: {} (it {})",
+                "Save new skills: {} (it {})",
                 after.learn_skills.label(),
                 after.learn_skills.said()
             ));

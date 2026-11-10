@@ -247,7 +247,7 @@ export interface Agent {
    */
   starters?: AgentStarter[];
   muted: boolean;
-  /** "Save what it learns" (`agents/skills_learn.rs`); absent is `ask`. */
+  /** "Save new skills" (`agents/skills_learn.rs`); absent is `ask`. */
   learnSkills?: LearnSkills;
   checkIns?: CheckIn[];
   /**
@@ -1751,7 +1751,7 @@ export interface UpdateAgentInput {
   workDirectly?: boolean;
   /** "Runs on": an account id of its engine, or '' for any account. */
   account?: string;
-  /** "Save what it learns", from a Mac that serves `agents.skills`. */
+  /** "Save new skills", from a Mac that serves `agents.skills`. */
   learnSkills?: LearnSkills;
 }
 
