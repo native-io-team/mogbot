@@ -30,6 +30,7 @@ import { SegmentedControl } from '../primitives/SegmentedControl';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { requestAgentsIntent } from '../../commands/useAgentsCommands';
 import { useAsyncState } from '../../hooks/useAsyncState';
+import { useAgentsList } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   applyImportReview,
@@ -459,6 +460,41 @@ interface ImportReviewCardProps {
   onAnswer: (requestId: string, allow: boolean) => Promise<void>;
 }
 
+/**
+ * "Imported Finance (from Grok), Travel" with each name that is an agent here
+ * a link to its chat: the import ends with the user talking to them.
+ */
+function ImportedNames({ line }: { line: string }) {
+  const team = useAgentsList();
+  const rest = line.startsWith('Imported ') ? line.slice('Imported '.length) : null;
+  if (!rest) return <>{line}</>;
+  const names = rest.split(', ');
+  return (
+    <span>
+      Imported{' '}
+      {names.map((name, i) => {
+        const agent = team.find((a) => a.name === name);
+        return (
+          <span key={`${i}-${name}`}>
+            {agent ? (
+              <TextButton
+                tabIndex={0}
+                aria-label={`Open ${name}`}
+                onClick={() => requestAgentsIntent({ kind: 'open', agentId: agent.id })}
+              >
+                {name}
+              </TextButton>
+            ) : (
+              name
+            )}
+            {i < names.length - 1 ? ', ' : ''}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 export const ImportReviewCard = memo(function ImportReviewCard({
   message,
   card,
@@ -568,12 +604,19 @@ export const ImportReviewCard = memo(function ImportReviewCard({
           pending ? undefined : (
             <span className="agent-import-review__outcome" data-status={approval.status}>
               {approval.status === 'allowed' && <CheckIcon size={12} />}
-              {outcome}
+              {approval.status === 'allowed' && outcome ? (
+                <ImportedNames line={outcome} />
+              ) : (
+                outcome
+              )}
               {approval.status === 'allowed' && (
                 // Every app the imported agents need, one row each, in one place.
-                <TextButton tabIndex={0} onClick={() => requestAgentsIntent({ kind: 'logins' })}>
-                  Set up logins
-                </TextButton>
+                <>
+                  <span aria-hidden>·</span>
+                  <TextButton tabIndex={0} onClick={() => requestAgentsIntent({ kind: 'logins' })}>
+                    Set up logins
+                  </TextButton>
+                </>
               )}
             </span>
           )

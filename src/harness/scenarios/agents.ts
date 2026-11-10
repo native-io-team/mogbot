@@ -3331,7 +3331,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-review-done',
     title: 'Agents — the review card, imported',
     looksRightWhen:
-      'The same card, answered: no checkboxes ticked, no buttons, and at its foot a check mark with “Imported Finance (from Grok), Travel”. Under it a quiet note: imported from Grok, Finance (from Grok) and Travel, they start when you message them, routines paused. No bar above the composer; the sidebar lists Finance (from Grok) and Travel.',
+      'The same card, answered: no checkboxes ticked, no buttons, and at its foot a check mark with “Imported Finance (from Grok), Travel”, each name a link that opens that agent’s chat, then · Set up logins. Under it a quiet note: imported from Grok, Finance (from Grok) and Travel, they start when you message them, routines paused. No bar above the composer; the sidebar lists Finance (from Grok) and Travel.',
     command: 'agents.open',
     requires: '.agent-import-review__outcome',
     commands: {

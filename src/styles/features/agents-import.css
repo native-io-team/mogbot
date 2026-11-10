@@ -653,6 +653,16 @@
   border-radius: var(--radius-pill);
 }
 
+/* An agent that's here: the pill is a button to its chat. */
+.agents-import-done__team li[data-open] {
+  padding: 0;
+  background: none;
+}
+
+.agents-import-done__team li[data-open] .button {
+  border-radius: var(--radius-pill);
+}
+
 .agents-import-done .agents-import-problems {
   align-self: stretch;
   text-align: left;

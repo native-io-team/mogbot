@@ -20,6 +20,13 @@ vi.mock('../../lib/agents', async (importOriginal) => ({
   applyImportReview: (a: string, r: string, p: ImportPicks) => apply(a, r, p),
   currentImportReview: () => current(),
 }));
+/** The team after Import: only Travel is here under the name the card says. */
+vi.mock('../../lib/agentsStore', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/agentsStore')>()),
+  useAgentsList: () => [{ id: 'travel-id', name: 'Travel' }],
+}));
+const intent = vi.hoisted(() => vi.fn());
+vi.mock('../../commands/useAgentsCommands', () => ({ requestAgentsIntent: intent }));
 
 const CARD: ConnectorCard = {
   kind: 'review',
@@ -294,8 +301,14 @@ describe('ImportReviewCard', () => {
         onAnswer={vi.fn()}
       />
     );
-    expect(screen.getByText('Imported Finance (from Grok), Travel')).toBeInTheDocument();
+    const outcome = document.querySelector('.agent-import-review__outcome')!;
+    expect(outcome.textContent).toContain('Imported Finance (from Grok), Travel');
     expect(screen.queryByRole('button', { name: /Import/ })).not.toBeInTheDocument();
+    // The import ends with the user talking to them: an agent that's here opens.
+    fireEvent.click(screen.getByRole('button', { name: 'Open Travel' }));
+    expect(intent).toHaveBeenCalledWith({ kind: 'open', agentId: 'travel-id' });
+    // A name not found here stays text, never a button to nowhere.
+    expect(screen.queryByRole('button', { name: 'Open Finance (from Grok)' })).toBeNull();
   });
 });
 
