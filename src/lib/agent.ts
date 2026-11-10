@@ -82,7 +82,7 @@ export const CODEX: AgentConfig = {
 /** Opencode agent configuration. */
 export const OPENCODE: AgentConfig = {
   id: 'opencode',
-  displayName: 'Opencode',
+  displayName: 'OpenCode',
   binaryName: 'opencode',
   processName: 'opencode',
   autoAcceptFlag: null,

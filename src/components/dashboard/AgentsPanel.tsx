@@ -105,8 +105,7 @@ function iconFor(agentId: string) {
 }
 
 function statusLine(a: AgentStatus): string {
-  // Agents run on Claude Code or Codex; Opencode is for project terminals only.
-  if (a.id === 'opencode') return `Projects only · ${statusOf(a)}`;
+  // Agents run on Claude Code, Codex or OpenCode, so none is "projects only".
   return statusOf(a);
 }
 
