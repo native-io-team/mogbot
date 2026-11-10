@@ -286,6 +286,56 @@ export function isInteractive(block: Block): boolean {
   return block.kind === 'choices' || block.kind === 'comparison' || block.kind === 'form';
 }
 
+/**
+ * Kinds that read as a section of a page: records and notes, nothing drawn
+ * and nothing to answer. Two or more in a row share one card.
+ */
+const PAGE_KINDS: ReadonlySet<BlockKind> = new Set([
+  'facts',
+  'table',
+  'checklist',
+  'steps',
+  'callout',
+]);
+
+/**
+ * A set's blocks as the desk and the phone lay them out: each run of two or
+ * more page kinds (facts, a table, a checklist, steps, a note) is one card
+ * with a section each, so a brief reads as one page rather than a pile of
+ * boxes; everything else (charts, tiles, choices, a form…) stands alone.
+ * A run made only of notes stays as notes.
+ */
+export function blockRuns(items: readonly Block[]): Block[][] {
+  const runs: Block[][] = [];
+  let page: Block[] = [];
+  const flush = () => {
+    if (page.length > 1 && page.some((b) => b.kind !== 'callout')) runs.push(page);
+    else runs.push(...page.map((b) => [b]));
+    page = [];
+  };
+  for (const b of items) {
+    if (PAGE_KINDS.has(b.kind)) {
+      page.push(b);
+    } else {
+      flush();
+      runs.push([b]);
+    }
+  }
+  flush();
+  return runs;
+}
+
+/** A cell this short (a time, a name, a count) is never broken over two lines. */
+export const SHORT_CELL = 12;
+
+/** Per column: whether every cell, and the label, fits on one short line. */
+export function shortColumns(table: Pick<TableBlock, 'columns' | 'rows'>): boolean[] {
+  return table.columns.map(
+    (c, j) =>
+      !!c.numeric || table.rows.every((r) => formatCell(r[j] ?? null, c).length <= SHORT_CELL)
+  );
+}
+
 /** Attachments an image block already draws: the message's file list leaves them out. */
 export function attachmentsOutsideBlocks(
   attachments: readonly Attachment[] | undefined,

@@ -24,6 +24,8 @@
   --agent-block-spark-line: 1.5px; /* css-ok: a sparkline's stroke, thinner than a chart's */
   --agent-block-spark-max: 320px; /* css-ok: a sparkline's widest */
   --agent-block-link-min: 220px; /* css-ok: a link chip's narrowest */
+  --agent-block-fact-label: 36%; /* a fact label's widest share of the row */
+  --agent-block-page-label: 30%; /* the label column every fact on a page shares */
 }
 
 /* The answer: the agent's words, then its blocks, one column wide. */
@@ -73,6 +75,41 @@
 
 .agent-block__card-title {
   margin: 0;
+}
+
+/* A page (`blockRuns`): facts, tables, checklists, steps and notes in a row
+   share one card, a section each, split by a hairline, so a brief reads as
+   one page rather than a pile of boxes. */
+.agent-blocks__page {
+  gap: var(--spacing-md);
+}
+
+.agent-block--section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.agent-block--section + .agent-block--section {
+  padding-top: var(--spacing-md);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-block__section-title {
+  margin: 0;
+  font-size: var(--font-size-subhead);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-compact);
+  letter-spacing: var(--tracking-name);
+  color: var(--text-primary);
+}
+
+.agent-block-callout + .agent-block--section {
+  padding-top: var(--spacing-xs);
+}
+
+.agent-blocks__page .agent-block-facts {
+  grid-template-columns: minmax(0, var(--agent-block-page-label)) minmax(0, 1fr);
 }
 
 /* ------------------------------------------------------------------ chart */
@@ -390,6 +427,16 @@
   white-space: nowrap;
 }
 
+/* A column of short cells (times, names) never breaks one over two lines. */
+.agent-block-table [data-short] {
+  white-space: nowrap;
+}
+
+/* A number's header sits over its digits: the sort arrow goes on the left. */
+.agent-block-table thead th[data-numeric] .agent-block-table__sort {
+  flex-direction: row-reverse;
+}
+
 .agent-block-table td[data-empty] {
   color: var(--text-faint);
 }
@@ -518,7 +565,7 @@
 
 .agent-block-facts {
   display: grid;
-  grid-template-columns: minmax(auto, max-content) 1fr;
+  grid-template-columns: fit-content(var(--agent-block-fact-label)) minmax(0, 1fr);
   gap: 0;
   margin: 0;
 }

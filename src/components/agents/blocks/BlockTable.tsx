@@ -13,6 +13,7 @@ import { TextButton } from '../../primitives/TextButton';
 import {
   TABLE_ROWS_SHOWN,
   formatCell,
+  shortColumns,
   sortRows,
   type SortDir,
   type TableBlock,
@@ -31,6 +32,7 @@ export function TableView({ table }: { table: TableData }) {
     () => (sort ? sortRows(table.rows, sort.col, sort.dir) : table.rows),
     [table.rows, sort]
   );
+  const short = useMemo(() => shortColumns(table), [table]);
   const shown = all ? rows : rows.slice(0, TABLE_ROWS_SHOWN);
   const more = rows.length - shown.length;
   const toggle = (col: number) =>
@@ -85,13 +87,19 @@ export function TableView({ table }: { table: TableData }) {
               <tr key={r}>
                 {table.columns.map((c, i) =>
                   i === 0 ? (
-                    <th key={i} scope="row" data-numeric={c.numeric || undefined}>
+                    <th
+                      key={i}
+                      scope="row"
+                      data-numeric={c.numeric || undefined}
+                      data-short={short[i] || undefined}
+                    >
                       {formatCell(row[i] ?? null, c)}
                     </th>
                   ) : (
                     <td
                       key={i}
                       data-numeric={c.numeric || undefined}
+                      data-short={short[i] || undefined}
                       data-empty={row[i] == null || undefined}
                     >
                       {formatCell(row[i] ?? null, c) || '–'}

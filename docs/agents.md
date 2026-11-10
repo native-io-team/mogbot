@@ -6522,7 +6522,16 @@ a turn answering outside text carry `fromOutside`: a tap only puts the words
 in the composer, with a line saying why, and nothing sends until the user
 does. The agent is told to stop and wait after asking.
 
-**Look.** Charts follow the dataviz rules: one categorical palette of eight,
+**Look.** Records and notes in a row (two or more of facts, table,
+checklist, steps and callout, `blockRuns`) share **one card**, a section
+each split by a hairline, so the morning brief reads as one page rather
+than a pile of boxes; charts, tiles, links, code and anything answerable
+stand alone. A table's short columns (times, names, numbers:
+`shortColumns`) never break a cell over two lines and a number's header
+sits over its digits; on the phone a table fits its card first (headers
+wrap at their words, long text wraps down to a floor) and scrolls sideways
+only when that still can't fit, and a facts block whose labels or values
+are long stacks each label over its value. Charts follow the dataviz rules: one categorical palette of eight,
 drawn from the agent key colourways (blue, orange, teal, mustard, pink, green,
 violet, brick), stepped per theme and validated as a set (lightness band,
 chroma, adjacent colour-blind separation; `--chart-series-1…8`, the phone's
@@ -6561,7 +6570,8 @@ chat's last word; the scenario `blocks` holds this.
 
 Harness: `agents-blocks-*` (numbers, a chart's tooltip, a sorted table, more
 charts, deciding, a form left empty, progress, answered, outside text).
-Phone: the qa:web shots `blocks-chat-*` and `blocks-tooltip-*` (a hidden "Blocks" agent in the mock Mac, `mobile/dev/mock-blocks.ts`). One question per message: a `show` with two of choices, comparison or form is refused, since the next message answers it.
+`agents-blocks-brief*` (the morning brief) and `agents-blocks-in-chat*` (blocks among bubbles, a result card and “What it did”), each at 1280 and 760.
+Phone: the qa:web shots `blocks-chat-*`, `blocks-brief-*` (a hidden “Brief” agent) and `blocks-tooltip-*` (a hidden "Blocks" agent in the mock Mac, `mobile/dev/mock-blocks.ts`). One question per message: a `show` with two of choices, comparison or form is refused, since the next message answers it.
 
 ## Result cards (`src-tauri/src/agents/results.rs`)
 

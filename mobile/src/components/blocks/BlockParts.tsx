@@ -134,22 +134,41 @@ function MetricTile({ metric, half }: { metric: Metric; half: boolean }) {
 
 /* ---- Facts --------------------------------------------------------------------- */
 
+/** Past these, a label beside its value leaves a ragged column: the block stacks them. */
+const FACT_LABEL_SIDE = 18;
+const FACT_VALUE_SIDE = 24;
+
 export function BlockFacts({ block }: { block: FactsBlock }) {
   const colors = useColors();
   const styles = useStyles();
+  const stacked = block.items.some(
+    (f) => f.label.length > FACT_LABEL_SIDE || f.value.length > FACT_VALUE_SIDE
+  );
   return (
-    <View>
+    <View testID={stacked ? 'facts-stacked' : 'facts'}>
       {block.items.map((f, i) => (
         <View
           key={f.label + i}
-          style={[styles.fact, i < block.items.length - 1 && styles.divided]}
+          style={[
+            stacked ? styles.factStacked : styles.fact,
+            i < block.items.length - 1 && styles.divided,
+          ]}
           accessible
           accessibilityLabel={`${f.label}: ${f.value}`}
         >
-          <T variant="small" color={colors.textMuted} style={styles.factLabel}>
+          <T
+            variant={stacked ? 'caption' : 'small'}
+            color={colors.textMuted}
+            style={stacked ? undefined : styles.factLabel}
+          >
             {f.label}
           </T>
-          <T variant="small" color={colors.textStrong} selectable style={styles.factValue}>
+          <T
+            variant="small"
+            color={colors.textStrong}
+            selectable
+            style={stacked ? styles.factValueStacked : styles.factValue}
+          >
             {f.value}
           </T>
         </View>
@@ -423,6 +442,8 @@ const useStyles = makeStyles((colors) => ({
   divided: { borderBottomWidth: 1, borderBottomColor: colors.borderDefault },
   factLabel: { width: '38%' },
   factValue: { flex: 1, textAlign: 'right', fontFamily: fonts.medium },
+  factStacked: { gap: space['2xs'], paddingVertical: space.sm },
+  factValueStacked: { fontFamily: fonts.medium },
   list: { gap: space.sm },
   check: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
   checkIcon: { height: lineHeight(type.body, 1.5), justifyContent: 'center' },
