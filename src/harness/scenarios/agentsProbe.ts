@@ -160,6 +160,8 @@ const chrome = (over: Record<string, unknown>) => ({
   extensionId: 'acpipahophpoekcmokoejnkooedofagk',
   browsers: [],
   updateNeeded: false,
+  management: { machine: [], profiles: [] },
+  route: { route: 'claude_in_chrome', why: 'your_chrome_not_connected' },
   ...over,
 });
 
@@ -356,6 +358,26 @@ export const agentsProbeScenarios: Scenario[] = [
     'on, but it couldn’t start',
     'The line under the switch reads “On, but it couldn’t start: …” ending in one full stop, never two; the stale-host row says the app moved.',
     chrome({ listening: false, error: 'The socket folder is not writable.', host: 'stale' })
+  ),
+  chromeAt(
+    'settings-agents-user-chrome-managed',
+    'the profile Chrome opened last is managed by work',
+    '“Agents use now” says Claude in Chrome for now, because Your Chrome isn’t connected. Under the extension step a row “Chrome is managed by your work”: “This Chrome profile (“Work”, example.com) is managed by your work, so it can’t add the app’s extension. Use a personal Chrome profile for your agents’ browsing.” then the steps, and two neutral buttons, “Open “Personal”” and “Open a new Chrome profile”, wrapping rather than cut off.',
+    chrome({
+      management: {
+        machine: [],
+        profiles: [
+          { dir: 'Profile 1', name: 'Work', domain: 'example.com', managed: true, lastUsed: true },
+          { dir: 'Default', name: 'Personal', managed: false, lastUsed: false },
+        ],
+      },
+    })
+  ),
+  chromeAt(
+    'settings-agents-user-chrome-mac-managed',
+    'this Mac’s Chrome policy turns off Developer mode',
+    'One row “Chrome is managed by your work” saying the policy turns off Developer mode in every profile and to ask whoever manages this Mac; no profile buttons.',
+    chrome({ management: { machine: ['developer_mode'], profiles: [] } })
   ),
   chromeAt(
     'settings-agents-user-chrome-update',
