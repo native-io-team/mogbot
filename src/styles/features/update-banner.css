@@ -20,8 +20,8 @@
     box-shadow var(--transition);
 }
 
-.update-indicator--idle:hover,
-.update-indicator--idle:focus-within,
+.update-indicator--ready:hover,
+.update-indicator--ready:focus-within,
 .update-indicator--error:hover,
 .update-indicator--error:focus-within {
   max-height: calc(var(--space-32) * 10);
@@ -86,39 +86,6 @@
   flex: 0 0 var(--size-icon-sm);
 }
 
-.update-indicator-icon-default,
-.update-indicator-icon-expanded {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    opacity var(--transition-slow),
-    transform var(--transition-slow),
-    filter var(--transition-slow);
-}
-
-.update-indicator-icon-expanded {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  filter: blur(var(--space-04));
-  transform: scale(0.25);
-}
-
-.update-indicator:hover .update-indicator-icon-default,
-.update-indicator:focus-within .update-indicator-icon-default {
-  opacity: 0;
-  filter: blur(var(--space-04));
-  transform: scale(0.25);
-}
-
-.update-indicator:hover .update-indicator-icon-expanded,
-.update-indicator:focus-within .update-indicator-icon-expanded {
-  opacity: 1;
-  filter: blur(0);
-  transform: scale(1);
-}
-
 .update-indicator-label {
   min-width: 0;
   overflow: hidden;
@@ -127,40 +94,6 @@
   font-weight: var(--font-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.update-indicator-label-swap {
-  position: relative;
-  display: inline-grid;
-}
-
-.update-indicator-label-default,
-.update-indicator-label-expanded {
-  grid-area: 1 / 1;
-  transition:
-    opacity var(--transition-slow),
-    transform var(--transition-slow),
-    filter var(--transition-slow);
-}
-
-.update-indicator-label-expanded {
-  opacity: 0;
-  filter: blur(var(--space-04));
-  transform: scale(0.25);
-}
-
-.update-indicator:hover .update-indicator-label-default,
-.update-indicator:focus-within .update-indicator-label-default {
-  opacity: 0;
-  filter: blur(var(--space-04));
-  transform: scale(0.25);
-}
-
-.update-indicator:hover .update-indicator-label-expanded,
-.update-indicator:focus-within .update-indicator-label-expanded {
-  opacity: 1;
-  filter: blur(0);
-  transform: scale(1);
 }
 
 .update-indicator-details {
@@ -191,8 +124,8 @@
     transform var(--transition-slow);
 }
 
-.update-indicator--idle:hover .update-indicator-details,
-.update-indicator--idle:focus-within .update-indicator-details,
+.update-indicator--ready:hover .update-indicator-details,
+.update-indicator--ready:focus-within .update-indicator-details,
 .update-indicator--error:hover .update-indicator-details,
 .update-indicator--error:focus-within .update-indicator-details {
   max-height: calc(var(--space-32) * 8);
@@ -257,28 +190,8 @@
   color: var(--status-info);
 }
 
-.update-indicator-progress-fill {
-  position: absolute;
-  z-index: 0;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--status-info) 18%, transparent);
-  transition: width var(--transition-slow);
-}
-
-.update-indicator-progress-value {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 var(--control-height-standard);
-  color: var(--status-info);
-  font-size: var(--font-size-badge);
-  font-variant-numeric: tabular-nums;
-}
-
-.update-indicator--ready {
+.update-indicator--ready,
+.update-indicator--installing {
   background: color-mix(in srgb, var(--accent-success) 14%, var(--surface-control));
   color: var(--accent-success);
 }
@@ -345,31 +258,6 @@
   font-size: var(--font-size-body-md);
   line-height: 1.5;
   text-wrap: pretty;
-}
-
-.update-details-progress {
-  display: flex;
-  align-items: center;
-  gap: var(--space-08);
-  margin-top: var(--space-16);
-  color: var(--text-secondary);
-  font-size: var(--font-size-body-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-.update-details-progress-track {
-  flex: 1;
-  height: var(--space-06);
-  overflow: hidden;
-  border-radius: var(--radius-pill);
-  background: var(--surface-control);
-}
-
-.update-details-progress-bar {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--status-running);
-  transition: width var(--transition-slow);
 }
 
 .update-details-error {

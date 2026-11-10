@@ -1,36 +1,28 @@
 /**
  * Sidebar update indicator and release-specific update modal.
  *
- * The compact indicator lives immediately above the project/sidebar footer
- * actions. Hovering or focusing reveals the release titles; selecting it opens
- * the full notes and update controls.
+ * Shown only once an update has downloaded in the background and passed its
+ * signature check (`lib/updateStore`): "A new version is ready", with
+ * "Restart to update". Hovering or focusing reveals the release's titles;
+ * selecting them opens the full notes. Later hides it for that version.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
-  checkForUpdate,
-  downloadAndInstall,
-  restartApp,
-  type UpdateHandle,
-  type UpdateInfo,
-} from '../lib/updater';
+  dismissUpdate,
+  getUpdateSnapshot,
+  installAndRestart,
+  startAutomaticUpdateChecks,
+  subscribeUpdates,
+} from '../lib/updateStore';
 import { agentsBusy } from '../lib/agents';
-import { trackEvent, trackError } from '../lib/analytics';
-import { logger } from '../lib/logger';
-import { asCommandError, formatCommandError } from '../lib/errors';
 import { usePolling } from '../hooks/usePolling';
-import { AlertIcon, CloseIcon, DownloadIcon, ErrorIcon, ResetIcon } from '@/components/icons';
+import { CloseIcon, ErrorIcon, ResetIcon } from '@/components/icons';
 import { Button } from './primitives/Button';
 import { IconButton } from './primitives/IconButton';
 import { ModalFrame } from './primitives/ModalFrame';
 import { Spinner } from './primitives/Spinner';
 import '../styles/features/update-banner.css';
-
-const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
-const DEFERRED_UPDATE_KEY = 'shipstudio_deferred_update';
-
-type AvailableUpdate = { update: UpdateHandle; info: UpdateInfo };
-type UpdateStatus = 'idle' | 'downloading' | 'ready' | 'error';
 
 export interface ReleaseNote {
   title: string;
@@ -126,83 +118,18 @@ export function parseReleaseNotes(body: string | undefined, version: string): Re
 }
 
 export function UpdateBanner() {
-  const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
-  const [status, setStatus] = useState<UpdateStatus>('idle');
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const update = useSyncExternalStore(subscribeUpdates, getUpdateSnapshot);
   const [modalOpen, setModalOpen] = useState(false);
-  const [deferred, setDeferred] = useState(false);
   const [waitingForAgents, setWaitingForAgents] = useState(false);
 
-  const check = useCallback(async () => {
-    try {
-      const result = await checkForUpdate();
-      if (!result) {
-        setAvailableUpdate(null);
-        return;
-      }
+  // Idempotent: the first sidebar to mount in the main window starts them.
+  useEffect(() => startAutomaticUpdateChecks(), []);
 
-      setDeferred(sessionStorage.getItem(DEFERRED_UPDATE_KEY) === result.info.version);
-      setAvailableUpdate(result);
-    } catch {
-      logger.warn('[UpdateBanner] Check failed');
-    }
-  }, []);
-
-  usePolling(check, {
-    intervalMs: UPDATE_CHECK_INTERVAL_MS,
-    maxIntervalMs: UPDATE_CHECK_INTERVAL_MS,
-    name: 'app-update-check',
-  });
-
+  const version = update.info?.version ?? '';
   const releaseNotes = useMemo(
-    () => parseReleaseNotes(availableUpdate?.info.body, availableUpdate?.info.version ?? ''),
-    [availableUpdate]
+    () => parseReleaseNotes(update.info?.body, version),
+    [update.info, version]
   );
-
-  const handleUpdate = useCallback(async () => {
-    if (!availableUpdate) return;
-
-    setStatus('downloading');
-    setProgress(0);
-    setError(null);
-    setModalOpen(false);
-    void trackEvent('update_started', {
-      version: availableUpdate.info.version,
-      $screen_name: 'Project Sidebar',
-    });
-
-    try {
-      await downloadAndInstall(availableUpdate.update, setProgress);
-      void trackEvent('update_downloaded', {
-        version: availableUpdate.info.version,
-        $screen_name: 'Project Sidebar',
-      });
-      setStatus('ready');
-    } catch (err: unknown) {
-      logger.warn('[UpdateBanner] Download failed');
-      trackError('update_download', err, 'Project Sidebar');
-      setStatus('error');
-      setError(formatCommandError(asCommandError(err)));
-    }
-  }, [availableUpdate]);
-
-  const restart = useCallback(async () => {
-    setWaitingForAgents(false);
-    try {
-      const result = await restartApp();
-      if (result === 'simulated') {
-        setStatus('idle');
-        setProgress(0);
-      }
-    } catch (err) {
-      const detail = formatCommandError(asCommandError(err));
-      logger.warn('[UpdateBanner] Restart failed', { error: detail });
-      trackError('app_restart', err, 'Project Sidebar');
-      setStatus('error');
-      setError(`Couldn't restart the app: ${detail}. Please quit and reopen the app manually.`);
-    }
-  }, []);
 
   // A restart mid-turn cuts an agent off, so the update waits for working
   // agents to finish. Clicking again while it waits restarts now.
@@ -211,12 +138,17 @@ export function UpdateBanner() {
       setWaitingForAgents(true);
       return;
     }
-    await restart();
-  }, [restart, waitingForAgents]);
+    setWaitingForAgents(false);
+    setModalOpen(false);
+    await installAndRestart();
+  }, [waitingForAgents]);
 
   usePolling(
     async () => {
-      if ((await agentsBusy()) === 0) await restart();
+      if ((await agentsBusy()) === 0) {
+        setWaitingForAgents(false);
+        await installAndRestart();
+      }
     },
     // Restarts the app once agents are done, whether or not anyone is looking.
     {
@@ -228,49 +160,46 @@ export function UpdateBanner() {
   );
 
   const handleLater = useCallback(() => {
-    if (!availableUpdate) return;
-    void trackEvent('update_deferred', {
-      version: availableUpdate.info.version,
-      $screen_name: 'Project Sidebar',
-    });
-    sessionStorage.setItem(DEFERRED_UPDATE_KEY, availableUpdate.info.version);
-    setDeferred(true);
+    setWaitingForAgents(false);
     setModalOpen(false);
-  }, [availableUpdate]);
+    dismissUpdate();
+  }, []);
 
-  if (!availableUpdate || deferred) return null;
+  const { phase } = update;
+  const shown = phase === 'ready' || phase === 'installing' || phase === 'error';
+  if (!shown || !update.info || update.dismissed) return null;
 
-  const version = availableUpdate.info.version;
-  const indicatorLabel =
-    status === 'downloading'
-      ? 'Downloading…'
-      : status === 'ready'
-        ? waitingForAgents
+  const label =
+    phase === 'installing'
+      ? 'Installing…'
+      : phase === 'error'
+        ? 'Update needs attention'
+        : waitingForAgents
           ? 'After agents finish'
-          : 'Click to restart'
-        : status === 'error'
-          ? 'Update needs attention'
-          : 'Update available';
+          : 'Restart to update';
+  const actionLabel =
+    phase === 'installing'
+      ? `Installing version ${version}`
+      : phase === 'error'
+        ? `Try updating to version ${version} again`
+        : waitingForAgents
+          ? `Restarting for version ${version} once agents finish. Restart now`
+          : `Restart to update to version ${version}`;
 
   return (
     <>
-      <div className={`update-indicator update-indicator--${status}`}>
-        {status === 'downloading' && (
-          <span
-            className="update-indicator-progress-fill"
-            style={{ width: `${progress}%` }}
-            aria-hidden="true"
-          />
-        )}
+      <div className={`update-indicator update-indicator--${phase}`}>
         <button
           type="button"
           className="update-indicator-details"
           onClick={() => setModalOpen(true)}
-          disabled={status === 'downloading' || status === 'ready'}
+          disabled={phase === 'installing'}
           aria-label={`View what's new in version ${version}`}
         >
           <span className="update-indicator-details-inner">
-            <span className="update-indicator-version">Version {version} — view changes</span>
+            <span className="update-indicator-version">
+              Version {version} is ready — view changes
+            </span>
             {releaseNotes.length > 0 && (
               <span className="update-indicator-notes">
                 {releaseNotes.map((note, index) => (
@@ -286,71 +215,31 @@ export function UpdateBanner() {
           <button
             type="button"
             className="update-indicator-update-action"
-            onClick={() =>
-              void (status === 'ready'
-                ? handleRestart()
-                : status !== 'downloading' && handleUpdate())
-            }
-            disabled={status === 'downloading'}
-            aria-label={
-              status === 'ready'
-                ? waitingForAgents
-                  ? `Restarting for version ${version} once agents finish. Restart now`
-                  : `Restart to apply version ${version}`
-                : status === 'downloading'
-                  ? `Downloading version ${version}`
-                  : status === 'error'
-                    ? `Retry update to version ${version}`
-                    : `Update to version ${version}`
-            }
+            onClick={() => (phase === 'error' ? setModalOpen(true) : void handleRestart())}
+            disabled={phase === 'installing'}
+            aria-label={actionLabel}
           >
             <span className="update-indicator-icon" aria-hidden="true">
-              {status === 'downloading' ? (
+              {phase === 'installing' ? (
                 <Spinner size="sm" />
-              ) : status === 'ready' ? (
-                <ResetIcon size={14} />
-              ) : status === 'idle' ? (
-                <>
-                  <span className="update-indicator-icon-default">
-                    <AlertIcon size={14} />
-                  </span>
-                  <span className="update-indicator-icon-expanded">
-                    <DownloadIcon size={14} />
-                  </span>
-                </>
-              ) : status === 'error' ? (
+              ) : phase === 'error' ? (
                 <ErrorIcon size={14} />
               ) : (
-                <DownloadIcon size={14} />
+                <ResetIcon size={14} />
               )}
             </span>
-            {status === 'idle' ? (
-              <span className="update-indicator-label update-indicator-label-swap">
-                <span className="update-indicator-label-default">Update available</span>
-                <span className="update-indicator-label-expanded">Install now</span>
-              </span>
-            ) : (
-              <span className="update-indicator-label">{indicatorLabel}</span>
-            )}
+            <span className="update-indicator-label">{label}</span>
           </button>
-          {(status === 'idle' || status === 'error') && (
+          {phase !== 'installing' && (
             <IconButton
               variant="ghost"
               size="default"
               className="update-indicator-dismiss"
               icon={<CloseIcon size={14} />}
               onClick={handleLater}
-              title="Dismiss update until next launch"
-              aria-label="Dismiss update until next launch"
+              title="Not now: hide until the next version"
+              aria-label="Not now: hide until the next version"
             />
-          )}
-          {status === 'downloading' && (
-            <span
-              className="update-indicator-progress-value"
-              aria-label={`${progress}% downloaded`}
-            >
-              {progress}%
-            </span>
           )}
         </div>
       </div>
@@ -358,10 +247,10 @@ export function UpdateBanner() {
       <ModalFrame
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={`What's new in v${version}`}
+        title={`What's new in ${version}`}
         className="update-details-modal"
-        dismissable={status !== 'downloading'}
-        showCloseButton={status !== 'downloading'}
+        dismissable={phase !== 'installing'}
+        showCloseButton={phase !== 'installing'}
       >
         <div className="update-details-body">
           {releaseNotes.length > 0 ? (
@@ -377,49 +266,26 @@ export function UpdateBanner() {
             <p className="update-details-empty">This version is ready to install.</p>
           )}
 
-          {status === 'downloading' && (
-            <div
-              className="update-details-progress"
-              aria-label={`Downloading update: ${progress}%`}
-            >
-              <div className="update-details-progress-track">
-                <div className="update-details-progress-bar" style={{ width: `${progress}%` }} />
-              </div>
-              <span>{progress}%</span>
-            </div>
-          )}
-
-          {status === 'error' && error && (
+          {phase === 'error' && update.error && (
             <p className="update-details-error" role="alert">
-              {error}
+              {update.error}
             </p>
           )}
         </div>
 
         <div className="update-details-actions">
-          {(status === 'idle' || status === 'error') && (
+          {phase !== 'installing' && (
             <Button variant="secondary" onClick={handleLater}>
               Later
             </Button>
           )}
-          {status === 'idle' && (
-            <Button variant="primary" onClick={() => void handleUpdate()}>
-              Update Now
-            </Button>
-          )}
-          {status === 'downloading' && (
+          {phase === 'installing' ? (
             <Button variant="primary" disabled leftIcon={<Spinner size="sm" />}>
-              Updating…
+              Installing…
             </Button>
-          )}
-          {status === 'ready' && (
+          ) : (
             <Button variant="primary" onClick={() => void handleRestart()}>
-              Restart to Apply
-            </Button>
-          )}
-          {status === 'error' && (
-            <Button variant="primary" onClick={() => void handleUpdate()}>
-              Retry Update
+              {phase === 'error' ? 'Try again' : 'Restart to update'}
             </Button>
           )}
         </div>

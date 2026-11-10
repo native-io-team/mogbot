@@ -22,7 +22,7 @@ set -euo pipefail
 
 # --- brand (generated from brand.json by `node scripts/check-brand.mjs --write`) ---
 BRAND_NAME="Mogbot"
-BRAND_RELEASES=""
+BRAND_RELEASES="https://github.com/native-io-team/mogbot-releases/releases"
 # --- end brand ---
 
 APP_NAME="${BRAND_NAME}.app"

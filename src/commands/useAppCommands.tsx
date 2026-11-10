@@ -9,7 +9,8 @@ import type { PaletteCtx } from './types';
 import { useOpenModal } from '../contexts/ModalContext';
 import { getDashboardProjects, type DashboardProject, type Project } from '../lib/project';
 import { sessionRegistry } from '../lib/sessionRegistry';
-import { checkForUpdate, UPDATES_ENABLED } from '../lib/updater';
+import { UPDATES_ENABLED } from '../lib/updater';
+import { checkForUpdatesNow, updateCheckMessage } from '../lib/updateStore';
 import { HAS_CHANGELOG } from '../components/dashboard/Changelog';
 import { requestQuit } from '../lib/agentsDesktop';
 import { checkIdeAvailability, openInIde, openInFinder } from '../lib/ide';
@@ -147,14 +148,12 @@ export function useAppCommands({
   }, [currentProject, showToast]);
 
   const runCheckUpdates = useCallback(async () => {
-    try {
-      const result = await checkForUpdate();
-      if (!result) showToast("You're up to date", 'success');
-      // If there IS an update, the project sidebar indicator surfaces it.
-    } catch (err) {
-      logger.warn('[useAppCommands] checkForUpdate failed', { error: String(err) });
-      showToast('Could not check for updates', 'error');
+    const outcome = await checkForUpdatesNow({ manual: true });
+    const message = updateCheckMessage(outcome);
+    if (outcome.kind === 'failed') {
+      logger.warn('[useAppCommands] update check failed', { error: outcome.message });
     }
+    showToast(message.text, message.tone);
   }, [showToast]);
 
   // Wrappers to keep `run` type Promise<void> | void clean for the registry.

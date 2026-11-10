@@ -263,11 +263,14 @@ export async function checkForUpdate(): Promise<{ update: UpdateHandle; info: Up
 }
 
 /**
- * Download and install an update.
+ * Download an update in the background, without installing it. The plugin
+ * checks the bundle against the public key compiled into the app
+ * (`plugins.updater.pubkey`) once it has every byte, and rejects it on a
+ * mismatch; a verified bundle then waits in memory for `installUpdate`.
  * @param update - The update object from checkForUpdate
  * @param onProgress - Optional callback for download progress (0-100)
  */
-export async function downloadAndInstall(
+export async function downloadUpdate(
   update: UpdateHandle,
   onProgress?: (progress: number) => void
 ): Promise<void> {
@@ -288,7 +291,7 @@ export async function downloadAndInstall(
   let downloaded = 0;
   let contentLength = 0;
 
-  await update.downloadAndInstall((event) => {
+  await update.download((event) => {
     switch (event.event) {
       case 'Started':
         contentLength = event.data.contentLength ?? 0;
@@ -306,6 +309,27 @@ export async function downloadAndInstall(
         break;
     }
   });
+}
+
+/**
+ * Put a downloaded update in place of the app on disk (the signature is
+ * checked again first). The running app carries on as it was; the new
+ * version starts on the next launch, which `restartApp` makes now. Done at
+ * the user's click rather than straight after the download: an app in a
+ * folder the user can't write to asks for an administrator password here.
+ */
+export async function installUpdate(update: UpdateHandle): Promise<void> {
+  if (isMockUpdate(update)) {
+    if (isMockUpdateSimulationEnabled()) return;
+    throw new Error('Mock update handles cannot be installed outside development simulation');
+  }
+  await update.install();
+}
+
+/** Let go of an update's downloaded bytes (superseded by a newer version). */
+export async function releaseUpdate(update: UpdateHandle): Promise<void> {
+  if (isMockUpdate(update)) return;
+  await update.close();
 }
 
 /**
