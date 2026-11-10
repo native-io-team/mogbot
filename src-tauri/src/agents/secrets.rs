@@ -20,8 +20,12 @@
 //! at launch, and whenever one is saved or handed to a turn) is replaced by
 //! `[secret:…]` in everything Agents persists or shows: the chat log, card
 //! answers, the queue, drafts as they stream, the activity line, the prompt
-//! the next turn gets, and the audit log. Values under [`MIN_REDACT`]
-//! characters aren't scrubbed (they'd match ordinary words).
+//! the next turn gets, and the audit log. A value of [`MIN_REDACT`]
+//! characters or more is replaced wherever it appears. A shorter one (a PIN,
+//! from [`MIN_SHORT_REDACT`] characters) is still one of the known values,
+//! never a guess, but would hit ordinary text inside other words and numbers,
+//! so it is replaced only where it stands on its own: no letter or digit
+//! touching it on either side. Under [`MIN_SHORT_REDACT`] nothing is scrubbed.
 //!
 //! What this can't cover: a turn that prints the variable sends it to Claude
 //! as tool output, and Claude Code's own transcript (`~/.claude/projects`)
@@ -35,8 +39,11 @@ use std::sync::{LazyLock, RwLock};
 use super::store::{self, Agent, AgentMessage, ApprovalStatus};
 use crate::errors::CommandError;
 
-/// Shorter values aren't scrubbed: they'd hit ordinary text.
+/// From this length a known value is scrubbed wherever it appears.
 pub const MIN_REDACT: usize = 6;
+/// From this length a shorter known value is scrubbed where it stands on its
+/// own ([`redact`]); below it, not at all.
+pub const MIN_SHORT_REDACT: usize = 4;
 const MAX_VALUE: usize = 16 * 1024;
 const MAX_FIELDS: usize = 5;
 
@@ -161,11 +168,21 @@ pub(crate) mod vault {
 /// replaced whole.
 static KNOWN: LazyLock<RwLock<Vec<(String, String)>>> = LazyLock::new(Default::default);
 
+/// Known values shorter than [`MIN_REDACT`] (a PIN), scrubbed only where they
+/// stand on their own. Kept apart so `egress` never looks for them in an
+/// address, where four digits would match half of everything.
+static KNOWN_SHORT: LazyLock<RwLock<Vec<(String, String)>>> = LazyLock::new(Default::default);
+
 fn remember(value: &str, reference: &str) {
-    if value.chars().count() < MIN_REDACT {
+    let n = value.chars().count();
+    let list = if n >= MIN_REDACT {
+        &KNOWN
+    } else if n >= MIN_SHORT_REDACT && value.trim() == value {
+        &KNOWN_SHORT
+    } else {
         return;
-    }
-    let mut known = KNOWN.write().unwrap_or_else(|e| e.into_inner());
+    };
+    let mut known = list.write().unwrap_or_else(|e| e.into_inner());
     if known.iter().any(|(v, _)| v == value) {
         return;
     }
@@ -174,9 +191,21 @@ fn remember(value: &str, reference: &str) {
 }
 
 /// A value that isn't one of an agent's secrets but must never be shown or
-/// written either (a connection's token, `connections.rs`).
+/// written either (a connection's token, `connections.rs`; a turn's bridge
+/// secret, `broker`).
 pub fn remember_external(value: &str, label: &str) {
     remember(value, label);
+}
+
+/// A value that no longer opens anything (a turn's bridge secret once the
+/// turn is over): stop looking for it, so the list doesn't grow with every
+/// turn.
+pub fn forget_external(value: &str) {
+    for list in [&KNOWN, &KNOWN_SHORT] {
+        list.write()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|(v, _)| v != value);
+    }
 }
 
 /// Every value redaction knows (agents' secrets, connections' tokens), for
@@ -204,10 +233,14 @@ pub fn load_known() {
     }
 }
 
-/// `text` with every known value replaced by `[secret:…]`.
+/// `text` with every known value replaced by `[secret:…]`: a long one
+/// wherever it appears, a short one where it stands on its own.
 pub fn redact(text: &str) -> Cow<'_, str> {
     let known = KNOWN.read().unwrap_or_else(|e| e.into_inner());
-    if !known.iter().any(|(v, _)| text.contains(v.as_str())) {
+    let short = KNOWN_SHORT.read().unwrap_or_else(|e| e.into_inner());
+    if !known.iter().any(|(v, _)| text.contains(v.as_str()))
+        && !short.iter().any(|(v, _)| text.contains(v.as_str()))
+    {
         return Cow::Borrowed(text);
     }
     let mut out = text.to_string();
@@ -216,7 +249,39 @@ pub fn redact(text: &str) -> Cow<'_, str> {
             out = out.replace(value.as_str(), &format!("[{reference}]"));
         }
     }
+    for (value, reference) in short.iter() {
+        if out.contains(value.as_str()) {
+            out = replace_standalone(&out, value, &format!("[{reference}]"));
+        }
+    }
+    if out == text {
+        return Cow::Borrowed(text);
+    }
     Cow::Owned(out)
+}
+
+/// `text` with every `value` that has no letter or digit touching it on
+/// either side replaced by `with`. Pure.
+fn replace_standalone(text: &str, value: &str, with: &str) -> String {
+    let word = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    // The character before the match: the last one already passed.
+    let mut prev: Option<char> = None;
+    while let Some(i) = rest.find(value) {
+        let before = rest[..i].chars().next_back().or(prev);
+        let after = rest[i + value.len()..].chars().next();
+        out.push_str(&rest[..i]);
+        if word(before) || word(after) {
+            out.push_str(value);
+        } else {
+            out.push_str(with);
+        }
+        prev = value.chars().next_back();
+        rest = &rest[i + value.len()..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Every string in `value`, keys included, redacted in place. Works on the
@@ -242,7 +307,9 @@ pub fn redact_value(value: &mut Value) {
 
 /// A chat message, redacted, before it's written or shown.
 pub fn redact_message(message: AgentMessage) -> AgentMessage {
-    if KNOWN.read().map(|k| k.is_empty()).unwrap_or(false) {
+    if KNOWN.read().map(|k| k.is_empty()).unwrap_or(false)
+        && KNOWN_SHORT.read().map(|k| k.is_empty()).unwrap_or(false)
+    {
         return message;
     }
     let Ok(mut value) = serde_json::to_value(&message) else {
@@ -878,6 +945,43 @@ mod tests {
             remember("abc", "secret:x/y");
             assert_eq!(redact("abc"), "abc");
         });
+    }
+
+    /// A PIN given on a secret card is a known value too: scrubbed where it
+    /// stands on its own, left alone inside other numbers and words.
+    #[test]
+    fn a_short_known_secret_is_scrubbed_where_it_stands_alone() {
+        let pin = "73915";
+        remember(pin, "secret:bank/pin");
+        assert_eq!(redact("PIN is 73915."), "PIN is [secret:bank/pin].");
+        assert_eq!(redact("73915"), "[secret:bank/pin]");
+        assert_eq!(
+            redact("PIN=73915 and \"73915\""),
+            "PIN=[secret:bank/pin] and \"[secret:bank/pin]\""
+        );
+        // Inside a longer number, a word or an id it isn't the PIN.
+        for text in ["order 1739150", "id a73915", "739151", "73915b", "x73915x"] {
+            assert_eq!(redact(text), text);
+        }
+        // Mixed: only the standalone one goes.
+        assert_eq!(
+            redact("1739150 73915 73915x"),
+            "1739150 [secret:bank/pin] 73915x"
+        );
+        // Never looked for in an address (`egress`): four digits would
+        // match half of everything.
+        assert!(!known_values().iter().any(|v| v == pin));
+        forget_external(pin);
+        assert_eq!(redact("PIN is 73915."), "PIN is 73915.");
+    }
+
+    #[test]
+    fn replace_standalone_handles_back_to_back_and_unicode() {
+        assert_eq!(replace_standalone("1234 1234", "1234", "[s]"), "[s] [s]");
+        // Two in a row touch each other: neither stands alone.
+        assert_eq!(replace_standalone("12341234", "1234", "[s]"), "12341234");
+        assert_eq!(replace_standalone("é1234", "1234", "[s]"), "é1234");
+        assert_eq!(replace_standalone("→1234←", "1234", "[s]"), "→[s]←");
     }
 
     #[test]

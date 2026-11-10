@@ -113,6 +113,9 @@ fn grants() -> std::sync::MutexGuard<'static, HashMap<String, Caller>> {
     GRANTS.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// What a bridge secret reads as wherever it is redacted.
+pub const BRIDGE_SECRET_LABEL: &str = "bridge secret";
+
 /// 256 bits from the OS, as hex.
 pub fn new_secret() -> String {
     let mut bytes = [0u8; 32];
@@ -136,12 +139,16 @@ impl Access {
 impl Drop for Access {
     fn drop(&mut self) {
         grants().remove(&self.secret);
+        super::secrets::forget_external(&self.secret);
     }
 }
 
 /// Issue a fresh secret for `agent_id` (and `turn`, when it's a turn's).
 pub fn grant(agent_id: &str, turn: Option<u64>) -> Access {
     let secret = new_secret();
+    // A turn that echoes its environment or its config file must not carry
+    // the live secret into the chat, the timeline or the phone.
+    super::secrets::remember_external(&secret, BRIDGE_SECRET_LABEL);
     grants().insert(
         secret.clone(),
         Caller {
@@ -190,12 +197,14 @@ impl SealedAccess {
 impl Drop for SealedAccess {
     fn drop(&mut self) {
         sealed().remove(&self.secret);
+        super::secrets::forget_external(&self.secret);
     }
 }
 
 /// Issue a secret that reads `server_key`'s relay as `agent_id`, and nothing else.
 pub fn grant_sealed(agent_id: &str, server_key: &str) -> SealedAccess {
     let secret = new_secret();
+    super::secrets::remember_external(&secret, BRIDGE_SECRET_LABEL);
     sealed().insert(
         secret.clone(),
         SealedCaller {
@@ -411,6 +420,24 @@ mod tests {
         drop(access);
         assert_eq!(sealed_caller(&secret), None);
         assert_eq!(sealed_caller(""), None);
+    }
+
+    /// A turn that prints its environment or its config file would carry its
+    /// live bridge secret into the chat: redaction knows it while it lives,
+    /// and forgets it once it opens nothing.
+    #[test]
+    fn a_bridge_secret_is_redacted_while_it_lives() {
+        let access = grant("a-redact", Some(7));
+        let secret = access.secret().to_string();
+        let shown = super::super::secrets::redact(&format!("TOKEN={secret}")).into_owned();
+        assert_eq!(shown, format!("TOKEN=[{BRIDGE_SECRET_LABEL}]"));
+        let sealed = grant_sealed("a-redact", "linear");
+        let sealed_secret = sealed.secret().to_string();
+        assert!(!super::super::secrets::redact(&sealed_secret).contains(&sealed_secret));
+        drop(access);
+        drop(sealed);
+        assert!(!super::super::secrets::known_values().contains(&secret));
+        assert!(!super::super::secrets::known_values().contains(&sealed_secret));
     }
 
     #[test]
