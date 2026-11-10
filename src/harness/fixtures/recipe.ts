@@ -15,8 +15,8 @@ const FINANCE_RECIPE = {
   instructions:
     'Track every expense in the books sheet at [removed: a file path].\nChase invoices after 14 days; copy the accountant at [removed: an email address].\nIf a client hasn’t paid after 30 days, draft a reminder and ask me before sending.\nUrgent? Call [removed: a phone number].\nAsk before paying anything.',
   routines: [
-    { when: 'every weekday at 09:00', what: 'Check for new invoices and file them' },
-    { when: 'every month on the 1st at 09:00', what: 'Send me last month’s spending summary' },
+    { when: 'every weekday at 9:00 AM', what: 'Check for new invoices and file them' },
+    { when: 'every month on the 1st at 9:00 AM', what: 'Send me last month’s spending summary' },
   ],
   watches: [{ when: 'a new file appears in [removed: a file path]', what: 'File the receipt' }],
   apps: ['Gmail', 'Google Sheets', 'Linear'],

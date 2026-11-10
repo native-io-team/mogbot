@@ -431,7 +431,7 @@ const ACME_PROMPTS = [
     agentId: 'acme',
     approval: {
       requestId: 'req-edit-demo',
-      title: 'Do you want to make this edit to index.html?',
+      title: 'Edit index.html?',
       detail: 'Edit index.html',
       status: 'pending',
       prompt: {
@@ -493,7 +493,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-session-prompt-owner',
     title: 'Agents — the session’s own chat: trust answered, an edit to allow',
     looksRightWhen:
-      'Acme Site’s chat: the Chief’s brief, “Started work in demo-site”, the trust card collapsed to one quiet line “Let Claude Code work in demo-site? · Allowed · Yes, I trust this folder” with a “Show request” link, then a pending card “Do you want to make this edit to index.html?” with the muted source “Acme Site · in demo-site”, “Edit index.html” as a plain sentence (not code), and the extra choice “Allow all edits until Claude Code is closed” beside Deny / Allow. No key hints, no “session”.',
+      'Acme Site’s chat: the Chief’s brief, “Started work in demo-site”, the trust card collapsed to one quiet line “Let Claude Code work in demo-site? · Allowed · Yes, I trust this folder” with a “Show request” link, then a pending card “Edit index.html?” with the muted source “Acme Site · in demo-site”, “Edit index.html” as a plain sentence (not code), and the extra choice “Allow all edits until Claude Code is closed” beside Deny / Allow. No key hints, no “session”.',
     requires: '.agent-approval[data-prompt="permission"]',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="acme"]' }],
