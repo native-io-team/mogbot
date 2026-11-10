@@ -21,9 +21,10 @@ observed on Claude Code 2.1.318 (`src-tauri/src/agents/testdata/`):
   `--resume` needs one there ("No conversation found with session ID").
 - Sealed calls (`--output-format text|json`) get a short canned answer.
 
-What a turn does is the script in its prompt: the LAST line that starts
-with `#fake ` (anywhere in the prompt) followed by a JSON list of steps.
-With none, it replies "ok". Steps:
+What a turn does is the script in its prompt: the LAST `#fake ` in it
+(not one in quotes, which is a mention) followed by a JSON list of steps.
+With none, it runs `$FAKE_ENGINE_DEFAULT` (the same JSON), else replies
+"ok". Steps:
 
   {"say": "text"}                 a reply (streamed). {session} {turn}
                                   {account} {prompt_lines} are filled in.
@@ -46,12 +47,18 @@ With none, it replies "ok". Steps:
   {"stderr": "text"}              a line on stderr.
   {"exit": 2}                     exit now, no result.
   {"error": "text"}               end with an error result.
+  {"result": true}                a `result` now, the process carrying on
+                                  (a background task, a helper's round).
+  {"raw": "text"}                 a raw stdout line (torn JSON, garbage).
 
 Run as `codex` (a link named so), it is Codex's `exec` driver instead
 (`codex exec --json`, JSONL out, threads under `$CODEX_HOME/sessions`):
 the same steps, except that commands never ask (exec can't) and
-`usage_limit` honours `codex_unless_env`. The app runs it on `exec` when
+`usage_limit` applies to Codex only with `"codex": true`. The app runs it on `exec` when
 `SHIPSTUDIO_AGENTS_CODEX_EXEC` is set (debug builds).
+
+`FAKE_ENGINE_PERMISSION_MODE` changes the permission mode its init
+reports (the app stops a `bypassPermissions` turn).
 
 Every bridge answer is appended to `$FAKE_ENGINE_LOG` (JSON lines) so a test
 can see what the app said back.
@@ -362,18 +369,33 @@ class Turn:
             elif "error" in step:
                 self.result(error=step["error"])
                 sys.exit(1)
+            elif "result" in step:
+                # A `result` mid-process: what Claude Code sends when its
+                # turn is over but a background task keeps it alive, or
+                # before a helper reports back and another round starts.
+                self.result()
+            elif "raw" in step:
+                sys.stdout.write(step["raw"] + "\n")
+                sys.stdout.flush()
 
 
 def script_of(prompt):
     found = None
     for line in prompt.splitlines():
-        i = line.find("#fake ")
-        if i >= 0:
-            found = line[i + len("#fake "):]
+        for m in re.finditer(r"#fake ", line):
+            # A script quoted inside the prompt is a mention, not this
+            # turn's ("Step 2 is “#fake …”" in a routine's step 1).
+            if m.start() > 0 and line[m.start() - 1] in "\u201c\"'":
+                continue
+            found = line[m.end():]
+    if found is None:
+        found = os.environ.get("FAKE_ENGINE_DEFAULT")
     if found is None:
         return [{"say": "ok"}]
     try:
-        steps = json.loads(found)
+        # Whatever follows the JSON on that line (the "]" of a routine's
+        # "[Scheduled routine you set: …]") isn't part of it.
+        steps, _ = json.JSONDecoder().raw_decode(found.strip())
         return steps if isinstance(steps, list) else [steps]
     except Exception as e:
         return [{"say": "bad #fake script: %s" % e}]
@@ -400,7 +422,8 @@ def stream_turn(args):
     tools = ["Bash", "Edit", "Read", "Write"] + ["mcp__app__" + t for t in turn.bridge.tools() if t]
     status = "connected" if turn.bridge.url else "failed"
     out({"type": "system", "subtype": "init", "session_id": turn.session,
-         "cwd": os.getcwd(), "model": "claude-fake", "permissionMode": "acceptEdits",
+         "cwd": os.getcwd(), "model": "claude-fake",
+         "permissionMode": os.environ.get("FAKE_ENGINE_PERMISSION_MODE", "acceptEdits"),
          "claude_code_version": VERSION.split()[0], "tools": tools,
          "mcp_servers": [{"name": "app", "status": status}]})
     turn.run(script_of(prompt))
@@ -480,7 +503,7 @@ class CodexTurn:
                     item, aggregated_output=run.stdout + run.stderr, exit_code=run.returncode,
                     status="completed" if run.returncode == 0 else "failed")})
             elif "usage_limit" in step:
-                if not os.environ.get(step.get("codex_unless_env", "\0") or "\0"):
+                if step.get("codex") and not os.environ.get(step.get("unless_env", "\0") or "\0"):
                     out({"type": "turn.failed", "error": {"message":
                         "You've hit your usage limit. Try again at 7:18 PM."}})
                     sys.exit(1)

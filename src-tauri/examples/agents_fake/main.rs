@@ -556,7 +556,16 @@ async fn delegation(h: &H) -> Check {
 
 /// Out of usage mid-turn on this Mac's account: the turn carries on, on the
 /// next signed-in account, with one quiet line saying so.
+/// Every Claude Code account has room again: a scenario that ran one out
+/// leaves the next one starting clean.
+fn accounts_have_room() {
+    for acc in agents::wallet::of(Engine::Claude) {
+        agents::wallet::mark_out(Engine::Claude, &acc.id, Some(0), 0);
+    }
+}
+
 async fn failover(h: &H) -> Check {
+    accounts_have_room();
     let spare = agents::wallet::add(Engine::Claude, "Spare").map_err(|e| e.to_string())?;
     app_lib::commands::accounts::store_claude_token(
         &spare.id,
@@ -592,6 +601,7 @@ async fn failover(h: &H) -> Check {
     .await;
     let _ = agents::wallet::remove(Engine::Claude, &spare.id);
     agents::wallet::finish_remove(Engine::Claude, &spare.id);
+    accounts_have_room();
     result
 }
 
@@ -670,17 +680,18 @@ async fn stop(h: &H) -> Check {
         ),
     )?;
 
-    // A hung engine: silent until Stop.
+    // A hung engine: silent until Stop. The short line it wrote before
+    // going silent is held as possible narration; Stop must not lose it.
     h.send(
         &a.id,
         &fake(json!([{"say": "about to hang"}, {"hang": true}])),
     )
     .await?;
     h.until("the hang", Duration::from_secs(20), || {
-        last_reply(&a.id) == "about to hang"
+        !h.turns_with("about to hang").is_empty()
     })
     .await?;
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::sleep(Duration::from_millis(800)).await;
     ensure(runner::in_turn(&a.id), "the hung turn ended on its own")?;
     ensure(
         cmd::agents_stop(h.app.clone(), a.id.clone())
@@ -689,6 +700,13 @@ async fn stop(h: &H) -> Check {
         "stop found nothing to stop",
     )?;
     h.turn(&a.id).await?;
+    let said: Vec<String> = log(&a.id).into_iter().map(|m| m.text).collect();
+    let kept_in_chat = said.iter().any(|t| t.contains("about to hang"));
+    let kept_in_timeline = format!("{:?}", timeline(&a.id)).contains("about to hang");
+    ensure(
+        kept_in_chat || kept_in_timeline,
+        format!("the line written before the hang was lost: {said:?}"),
+    )?;
     ensure(
         notes(&a.id).iter().any(|n| n.starts_with("Stopped")),
         format!("no Stopped line: {:?}", notes(&a.id)),
@@ -842,6 +860,975 @@ async fn brief(h: &H) -> Check {
     Ok(())
 }
 
+/// Out of usage after it already ran a command: the next account resumes
+/// the same conversation (carried to that account's folder), so nothing is
+/// done twice. Then every account out: one line saying so, no loop.
+async fn failover_after_acting(h: &H) -> Check {
+    accounts_have_room();
+    let spare = agents::wallet::add(Engine::Claude, "Second").map_err(|e| e.to_string())?;
+    app_lib::commands::accounts::store_claude_token(&spare.id, "fake-token-2", None)
+        .map_err(|e| e.to_string())?;
+    let a = h.agent("Doer");
+    let result = async {
+        h.send(&a.id, &fake(json!([{"say": "warming up {turn}"}])))
+            .await?;
+        h.turn(&a.id).await?;
+        h.send(
+            &a.id,
+            &fake(json!([
+                {"bash": "echo once >> did.txt", "ask": false},
+                {"usage_limit": true, "unless_env": "CLAUDE_CODE_OAUTH_TOKEN"},
+                {"say": "carried on at turn {turn} on {account}"}
+            ])),
+        )
+        .await?;
+        h.turn(&a.id).await?;
+        let home = store::agent_home(&a.id).unwrap();
+        let did = std::fs::read_to_string(home.join("did.txt")).unwrap_or_default();
+        let last = last_reply(&a.id);
+        ensure(
+            last.starts_with("carried on at turn 3") && !last.ends_with("this-mac"),
+            format!(
+                "didn't resume the conversation on the other account: {last:?}, errors {:?}, notes {:?}",
+                errors(&a.id),
+                notes(&a.id)
+            ),
+        )?;
+        // The fake re-runs its script on the resumed try; what matters is
+        // that the try resumed the conversation that already acted.
+        ensure(
+            did.lines().count() <= 2,
+            format!("the command ran {} times", did.lines().count()),
+        )?;
+
+        // Every account out: one line, no loop.
+        let before = log(&a.id).len();
+        std::env::set_var(
+            "FAKE_ENGINE_DEFAULT",
+            json!([{"usage_limit": true}]).to_string(),
+        );
+        h.send(&a.id, &fake(json!([{"usage_limit": true}])))
+            .await?;
+        let ended = h.turn(&a.id).await;
+        std::env::remove_var("FAKE_ENGINE_DEFAULT");
+        ended?;
+        let new: Vec<AgentMessage> = log(&a.id).into_iter().skip(before).collect();
+        let lines: Vec<String> = new
+            .iter()
+            .filter(|m| matches!(m.kind, MessageKind::Error | MessageKind::Note))
+            .map(|m| m.text.clone())
+            .collect();
+        ensure(
+            lines.iter().any(|l| l.contains("usage limit")),
+            format!("all out: {lines:?}"),
+        )?;
+        let tries = h.turns_with("{\"usage_limit\":true}]").len();
+        ensure(tries <= 3, format!("{tries} tries for one message"))
+    }
+    .await;
+    let _ = agents::wallet::remove(Engine::Claude, &spare.id);
+    agents::wallet::finish_remove(Engine::Claude, &spare.id);
+    accounts_have_room();
+    result
+}
+
+/// An engine that crashes on every try: picked up once, then one line.
+async fn crash_twice(h: &H) -> Check {
+    let a = h.agent("Doomed");
+    std::env::set_var("FAKE_ENGINE_DEFAULT", json!([{"crash": true}]).to_string());
+    let r = async {
+        h.send(&a.id, &fake(json!([{"crash": true}]))).await?;
+        h.turn(&a.id).await
+    }
+    .await;
+    std::env::remove_var("FAKE_ENGINE_DEFAULT");
+    r?;
+    let lines: Vec<(MessageKind, String)> = log(&a.id)
+        .into_iter()
+        .filter(|m| matches!(m.kind, MessageKind::Error | MessageKind::Note))
+        .map(|m| (m.kind, m.text))
+        .collect();
+    ensure(
+        lines.last().is_some_and(|(k, _)| *k == MessageKind::Error),
+        format!("didn't end on an error line: {lines:?}"),
+    )?;
+    h.send(&a.id, &fake(json!([{"say": "alive"}]))).await?;
+    h.turn(&a.id).await?;
+    ensure(
+        last_reply(&a.id) == "alive",
+        format!("after: {:?}", last_reply(&a.id)),
+    )
+}
+
+/// Stop while a card waits: a late Allow can't run anything, the card
+/// doesn't stay waiting, and the next turn works.
+async fn stop_on_card(h: &H) -> Check {
+    let a = h.agent("Patient");
+    h.send(
+        &a.id,
+        &fake(json!([{"bash": "touch stopped-card.txt"}, {"say": "ran"}])),
+    )
+    .await?;
+    let c = card(h, &a.id, 0).await?;
+    ensure(
+        cmd::agents_stop(h.app.clone(), a.id.clone())
+            .await
+            .unwrap_or(false),
+        "stop found nothing to stop",
+    )?;
+    h.turn(&a.id).await?;
+    // A late Allow after Stop: refused or harmless, never runs the command.
+    let _ = answer(h, &a.id, &c, true).await;
+    h.turn(&a.id).await?;
+    let home = store::agent_home(&a.id).unwrap();
+    ensure(
+        !home.join("stopped-card.txt").exists(),
+        "a command ran after Stop",
+    )?;
+    h.send(&a.id, &fake(json!([{"say": "after"}]))).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == "after",
+        format!("after: {:?}", replies(&a.id)),
+    )?;
+    let still = approvals(&a.id);
+    ensure(
+        still
+            .iter()
+            .all(|c| c.status != store::ApprovalStatus::Pending),
+        format!(
+            "a card still waits after Stop: {:?}",
+            still.iter().map(|c| &c.status).collect::<Vec<_>>()
+        ),
+    )?;
+    ensure(
+        store::get(&a.id).unwrap().pending_approvals == 0,
+        "the pending count still counts it",
+    )
+}
+
+/// A message while a card waits is queued, not lost, and the card stays.
+async fn queue_on_card(h: &H) -> Check {
+    let a = h.agent("Juggling");
+    h.send(
+        &a.id,
+        &fake(json!([{"bash": "touch q.txt"}, {"say": "carded"}])),
+    )
+    .await?;
+    let c = card(h, &a.id, 0).await?;
+    h.send(&a.id, &fake(json!([{"say": "the second"}]))).await?;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    ensure(
+        approvals(&a.id)
+            .last()
+            .is_some_and(|c| c.status == store::ApprovalStatus::Pending),
+        "the card went away when a message arrived",
+    )?;
+    answer(h, &a.id, &c, true).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let said = replies(&a.id);
+    ensure(
+        said.iter().any(|t| t == "the second"),
+        format!("the queued message was lost: {said:?}"),
+    )
+}
+
+/// Interrupt: the running turn stops, keeps what it said, and the new
+/// message runs next.
+async fn interrupt(h: &H) -> Check {
+    let a = h.agent("Interrupted");
+    let long = "slow ".repeat(200);
+    h.send(&a.id, &fake(json!([{"slow": long, "every": 0.05}])))
+        .await?;
+    h.until("a draft", Duration::from_secs(20), || h.drafting(&a.id, 30))
+        .await?;
+    h.send(&a.id, &fake(json!([{"say": "switched"}]))).await?;
+    ensure(
+        cmd::agents_interrupt(a.id.clone()).await.unwrap_or(false),
+        "interrupt refused",
+    )?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == "switched",
+        format!("{:?}", replies(&a.id)),
+    )?;
+    ensure(
+        notes(&a.id).iter().any(|n| n.starts_with("Interrupted")),
+        format!("no interruption line: {:?}", notes(&a.id)),
+    )
+}
+
+/// The same on Codex (`exec`, the fake as `codex`): a reply, a command, a
+/// tool of the bridge, the thread resumed, a failure said.
+async fn codex(h: &H) -> Check {
+    let a = h.agent("Codexer");
+    store::update(&a.id, |a| a.engine = Engine::Codex).unwrap();
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "echo from-codex > codex.txt"},
+            {"tool": "list_agents"},
+            {"say": "codex {session} {turn}"}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let thread = store::get(&a.id)
+        .unwrap()
+        .session_id
+        .ok_or("no thread kept")?;
+    ensure(
+        last_reply(&a.id) == format!("codex {thread} 1"),
+        format!("{:?}", last_reply(&a.id)),
+    )?;
+    ensure(
+        timeline(&a.id).len() >= 2,
+        format!("timeline {:?}", timeline(&a.id)),
+    )?;
+    h.send(&a.id, &fake(json!([{"say": "again {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == format!("again {thread} 2"),
+        format!("not resumed: {:?}", last_reply(&a.id)),
+    )?;
+    h.send(
+        &a.id,
+        &fake(json!([{"error": "stream error: something broke"}])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    ensure(
+        !errors(&a.id).is_empty(),
+        "a failed Codex turn said nothing",
+    )
+}
+
+/// Claude Code's `result` is in but the process stays alive (a background
+/// task it started): the turn is over, and the agent is idle soon after.
+async fn lingering(h: &H) -> Check {
+    let a = h.agent("Lingerer");
+    let started = Instant::now();
+    h.send(
+        &a.id,
+        &fake(json!([{"say": "all done"}, {"result": true}, {"hang": true}])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        started.elapsed() < Duration::from_secs(30),
+        format!("idle only after {}s", started.elapsed().as_secs()),
+    )?;
+    ensure(
+        last_reply(&a.id) == "all done",
+        format!("{:?}", replies(&a.id)),
+    )
+}
+
+/// A `result`, then more work in the same process (a helper reporting back
+/// starts another round): both replies kept, one turn counted.
+async fn rounds(h: &H) -> Check {
+    let a = h.agent("Rounds");
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"say": "first round"},
+            {"result": true},
+            {"sleep": 1},
+            {"say": "second round"}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let said = replies(&a.id);
+    ensure(
+        said == ["first round", "second round"],
+        format!("replies: {said:?}"),
+    )?;
+    let usage = store::get(&a.id).unwrap().usage.all_time;
+    ensure(usage.turns == 1, format!("{} turns counted", usage.turns))
+}
+
+/// Torn and foreign lines in the stream are skipped; the turn still lands.
+async fn garbage(h: &H) -> Check {
+    let a = h.agent("Noisy");
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"raw": "not json at all"},
+            {"raw": "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"te"},
+            {"raw": "{\"type\":\"mystery_event\",\"x\":1}"},
+            {"raw": "[1,2,3]"},
+            {"say": "landed"}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == "landed",
+        format!("{:?}", replies(&a.id)),
+    )
+}
+
+/// The approval wait runs out (shortened): the call is denied with "no
+/// answer", the card closes as expired, the turn carries on, and a late
+/// Allow on it runs nothing.
+async fn late_allow(h: &H) -> Check {
+    let a = h.agent("Late");
+    std::env::set_var("SHIPSTUDIO_AGENTS_APPROVAL_WAIT_SECS", "2");
+    let r = async {
+        h.send(
+            &a.id,
+            &fake(json!([{"bash": "touch late.txt"}, {"say": "gave up waiting"}])),
+        )
+        .await?;
+        let c = card(h, &a.id, 0).await?;
+        h.turn(&a.id).await?;
+        Ok::<_, String>(c)
+    }
+    .await;
+    std::env::remove_var("SHIPSTUDIO_AGENTS_APPROVAL_WAIT_SECS");
+    let c = r?;
+    let home = store::agent_home(&a.id).unwrap();
+    ensure(!home.join("late.txt").exists(), "ran without an answer")?;
+    ensure(
+        last_reply(&a.id) == "gave up waiting",
+        format!("the turn didn't carry on: {:?}", replies(&a.id)),
+    )?;
+    let told = h
+        .fake_log()
+        .into_iter()
+        .filter(|e| e["tool"] == "approve")
+        .any(|e| e["reply"].to_string().contains("No answer"));
+    ensure(told, "the engine wasn't told there was no answer")?;
+    let still = approvals(&a.id).pop().unwrap();
+    ensure(
+        still.status == store::ApprovalStatus::Expired,
+        format!("the card after the wait: {:?}", still.status),
+    )?;
+    let _ = answer(h, &a.id, &c, true).await;
+    h.turn(&a.id).await?;
+    ensure(!home.join("late.txt").exists(), "a late Allow ran it")?;
+    ensure(
+        store::get(&a.id).unwrap().pending_approvals == 0,
+        "the pending count still counts it",
+    )
+}
+
+/// A message for another conversation while a turn runs: never batched
+/// with this one, and it runs in its own conversation's session.
+async fn queue_conversations(h: &H) -> Check {
+    let a = h.agent("TwoRooms");
+    h.send(&a.id, &fake(json!([{"say": "one {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    let first = agents::conversations::list(&a.id)
+        .map_err(|e| e.to_string())?
+        .current;
+    let s1 = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    let second = cmd::agents_conversation_new(h.app.clone(), a.id.clone())
+        .await
+        .map_err(|e| e.to_string())?
+        .current;
+    h.send_in(
+        &a.id,
+        &fake(json!([{"sleep": 1.5}, {"say": "first-slow {session}"}])),
+        Some(&first),
+    )
+    .await?;
+    h.until("the turn to start", Duration::from_secs(10), || {
+        !h.turns_with("first-slow").is_empty()
+    })
+    .await?;
+    h.send_in(&a.id, "second-a", Some(&second)).await?;
+    h.send_in(
+        &a.id,
+        &fake(json!([{"say": "second-b {session} {turn}"}])),
+        Some(&first),
+    )
+    .await?;
+    h.send_in(
+        &a.id,
+        &fake(json!([{"say": "second-c {session} {turn}"}])),
+        Some(&second),
+    )
+    .await?;
+    h.idle(&[&a.id], Duration::from_secs(1), Duration::from_secs(60))
+        .await?;
+    no_errors(&a.id)?;
+    for t in h.fake_log().into_iter().filter(|e| e.get("turn").is_some()) {
+        let p = t["prompt"].as_str().unwrap_or("");
+        ensure(
+            !(p.contains("second-a") && p.contains("second-b")),
+            "messages for two conversations went in one turn",
+        )?;
+    }
+    let by_text = |prefix: &str| {
+        log(&a.id)
+            .into_iter()
+            .find(|m| m.kind == MessageKind::Agent && m.text.starts_with(prefix))
+    };
+    let b = by_text("second-b").ok_or("no reply in the first conversation")?;
+    let c = by_text("second-c").ok_or("no reply in the second conversation")?;
+    ensure(
+        b.text.contains(&s1) && b.conversation.as_deref().is_none_or(|x| x == first),
+        format!(
+            "first conversation's reply: {:?} in {:?}",
+            b.text, b.conversation
+        ),
+    )?;
+    ensure(
+        !c.text.contains(&s1) && c.conversation.as_deref() == Some(second.as_str()),
+        format!(
+            "second conversation's reply: {:?} in {:?}",
+            c.text, c.conversation
+        ),
+    )
+}
+
+/// Ask for changes: the agent's second share_result revises the card (v2).
+async fn revise(h: &H) -> Check {
+    let a = h.agent("Reviser");
+    let share = |revises: Option<&str>, title: &str| {
+        let mut args = json!({
+            "title": title,
+            "summary": "A note.",
+            "items": [{"path": "note.md"}],
+            "checked": ["Read it back"],
+            "not_verified": []
+        });
+        if let Some(id) = revises {
+            args["revises"] = json!(id);
+            args["changes"] = json!("Shorter");
+        }
+        fake(json!([
+            {"write": "note.md", "text": title},
+            {"tool": "share_result", "args": args},
+            {"say": "shared"}
+        ]))
+    };
+    h.send(&a.id, &share(None, "Note v1")).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let first = log(&a.id)
+        .into_iter()
+        .find_map(|m| m.result)
+        .ok_or("no result card")?;
+    cmd::agents_send(
+        h.app.clone(),
+        a.id.clone(),
+        share(Some(&first.id), "Note v2"),
+        None,
+        None,
+        None,
+        Some(first.id.clone()),
+        None,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let cards: Vec<_> = log(&a.id).into_iter().filter_map(|m| m.result).collect();
+    let last = cards.last().unwrap();
+    ensure(
+        last.version == 2 && last.id == first.id && last.title == "Note v2",
+        format!(
+            "cards: {:?}",
+            cards
+                .iter()
+                .map(|c| (&c.id, c.version, &c.title))
+                .collect::<Vec<_>>()
+        ),
+    )
+}
+
+/// A big reply and a big command output in one turn.
+async fn big(h: &H) -> Check {
+    let a = h.agent("Verbose");
+    let long = "lorem ipsum dolor sit amet ".repeat(4000);
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "python3 -c \"print('x' * 2000000)\"", "ask": false},
+            {"say": long},
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id).len() >= 100_000,
+        format!("reply cut to {}", last_reply(&a.id).len()),
+    )
+}
+
+/// The agent is deleted while its turn runs: the turn stops, nothing is
+/// written back for it, and nothing is left running.
+async fn delete_mid_turn(h: &H) -> Check {
+    let a = h.agent("Doomed2");
+    h.send(&a.id, &fake(json!([{"say": "working"}, {"hang": true}])))
+        .await?;
+    h.until("the turn", Duration::from_secs(10), || {
+        !h.turns_with("\"working\"").is_empty()
+    })
+    .await?;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    cmd::agents_delete(h.app.clone(), a.id.clone())
+        .await
+        .map_err(|e| format!("delete: {e}"))?;
+    h.until("the turn to end", Duration::from_secs(20), || {
+        !runner::in_turn(&a.id)
+    })
+    .await?;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let pids: Vec<i64> = h
+        .turns_with("\"working\"")
+        .iter()
+        .filter_map(|t| t["pid"].as_i64())
+        .collect();
+    for pid in pids {
+        // SAFETY: signal 0 only asks whether the process exists.
+        let alive = unsafe { libc::kill(pid as i32, 0) } == 0;
+        ensure(!alive, format!("the engine ({pid}) still runs"))?;
+    }
+    ensure(store::get(&a.id).is_err(), "still there")
+}
+
+/// A crash in the second conversation is picked up in that conversation's
+/// session, never the first's.
+async fn conversation_crash(h: &H) -> Check {
+    let a = h.agent("CrashRoom");
+    h.send(&a.id, &fake(json!([{"say": "one {session}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    let s1 = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    let second = cmd::agents_conversation_new(h.app.clone(), a.id.clone())
+        .await
+        .map_err(|e| e.to_string())?
+        .current;
+    std::env::set_var(
+        "FAKE_ENGINE_DEFAULT",
+        json!([{"say": "picked up in {session}"}]).to_string(),
+    );
+    let r = async {
+        h.send_in(
+            &a.id,
+            &fake(json!([{"say": "two {session}"}, {"crash": true}])),
+            Some(&second),
+        )
+        .await?;
+        h.turn(&a.id).await
+    }
+    .await;
+    std::env::remove_var("FAKE_ENGINE_DEFAULT");
+    r?;
+    let picked = log(&a.id)
+        .into_iter()
+        .find(|m| m.kind == MessageKind::Agent && m.text.starts_with("picked up in"))
+        .ok_or_else(|| format!("no pick-up: {:?}", replies(&a.id)))?;
+    ensure(
+        !picked.text.contains(&s1),
+        format!(
+            "picked up in the first conversation's session: {}",
+            picked.text
+        ),
+    )?;
+    ensure(
+        picked.conversation.as_deref() == Some(second.as_str()),
+        format!("the pick-up went to {:?}", picked.conversation),
+    )
+}
+
+/// Tool calls the app refuses (an agent that doesn't exist, a file outside
+/// its folders) come back as errors to the engine; the turn carries on.
+async fn refused_tools(h: &H) -> Check {
+    let a = h.agent("Wrong");
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"tool": "message_agent", "args": {"agent": "Nobody Here", "message": "hi"}},
+            {"tool": "share_result", "args": {
+                "title": "Secrets", "summary": "x",
+                "items": [{"path": "/etc/hosts"}], "checked": [], "not_verified": []}},
+            {"tool": "no_such_tool", "args": {}},
+            {"say": "carried on"}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == "carried on",
+        format!("{:?}", replies(&a.id)),
+    )?;
+    let answers: Vec<Value> = h
+        .fake_log()
+        .into_iter()
+        .filter(|e| {
+            e["tool"] == "message_agent" && e["args"]["agent"] == "Nobody Here"
+                || e["tool"] == "share_result" && e["args"]["title"] == "Secrets"
+                || e["tool"] == "no_such_tool"
+        })
+        .collect();
+    ensure(answers.len() == 3, format!("{} answers", answers.len()))?;
+    for e in &answers {
+        let refused = e["reply"]["result"]["isError"] == true || e["reply"].get("error").is_some();
+        ensure(refused, format!("not refused: {e}"))?;
+    }
+    ensure(
+        log(&a.id).iter().all(|m| m.result.is_none()),
+        "a result card was made from a file outside its folders",
+    )
+}
+
+/// Every Claude Code account out, Codex signed in: one card asks; Allow
+/// (just this time) carries the turn on with Codex, with its quiet line;
+/// the Claude Code session is kept for when it's back.
+async fn crossover(h: &H) -> Check {
+    accounts_have_room();
+    let a = h.agent("Crosser");
+    h.send(&a.id, &fake(json!([{"say": "on claude {session}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    let claude_session = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    let script = fake(json!([
+        {"usage_limit": true},
+        {"say": "on the other engine"}
+    ]));
+    h.send(&a.id, &script).await?;
+    let card_seen = h
+        .until("the carry-on card", Duration::from_secs(20), || {
+            approvals(&a.id).iter().any(|c| c.crossover.is_some())
+        })
+        .await;
+    let result = async {
+        card_seen?;
+        let c = approvals(&a.id)
+            .into_iter()
+            .find(|c| c.crossover.is_some())
+            .unwrap();
+        answer(h, &a.id, &c, true).await?;
+        h.idle(&[&a.id], Duration::from_secs(1), Duration::from_secs(60))
+            .await?;
+        let codex_turns: Vec<Value> = h
+            .turns_with("on the other engine")
+            .into_iter()
+            .filter(|t| t["engine"] == "codex")
+            .collect();
+        ensure(
+            !codex_turns.is_empty(),
+            format!(
+                "never ran on Codex: replies {:?}, notes {:?}, errors {:?}",
+                replies(&a.id),
+                notes(&a.id),
+                errors(&a.id)
+            ),
+        )?;
+        ensure(
+            last_reply(&a.id) == "on the other engine",
+            format!("{:?}", replies(&a.id)),
+        )?;
+        ensure(
+            notes(&a.id).iter().any(|n| n.contains("Codex")),
+            format!("no line about carrying on: {:?}", notes(&a.id)),
+        )?;
+        let agent = store::get(&a.id).unwrap();
+        ensure(
+            agent.engine == Engine::Claude && agent.session_id.as_deref() == Some(&claude_session),
+            format!(
+                "its own engine's session wasn't kept: {:?} {:?}",
+                agent.engine, agent.session_id
+            ),
+        )
+    }
+    .await;
+    accounts_have_room();
+    result
+}
+
+/// Make an agent's routines due now and tick the scheduler once.
+fn fire_routines(h: &H, id: &str) {
+    let now = store::now_ms();
+    store::update(id, |a| {
+        for c in &mut a.check_ins {
+            c.next_at = now - 1_000;
+        }
+    })
+    .unwrap();
+    agents::schedule::tick_once(&h.app).unwrap();
+}
+
+/// A routine the agent set up itself fires, runs its note as a turn and is
+/// recorded as run; a routine in steps waits on "OK to go on?" before the
+/// step marked so, and goes on when it's allowed.
+async fn routines(h: &H) -> Check {
+    let a = h.agent("Regular");
+    let step1 = fake(json!([{"say": "step one done"}]));
+    let step2 = fake(json!([{"say": "step two done"}]));
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"tool": "schedule_check_in", "args": {
+                "when": "every day at 9:00",
+                "note": step1,
+                "then": [{"text": step2, "ask_first": true}]}},
+            {"say": "set up"}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let agent = store::get(&a.id).unwrap();
+    ensure(
+        agent.check_ins.len() == 1,
+        format!(
+            "{} routines: {:?}",
+            agent.check_ins.len(),
+            h.fake_log()
+                .into_iter()
+                .filter(|e| e["tool"] == "schedule_check_in")
+                .map(|e| e["reply"].to_string())
+                .collect::<Vec<_>>()
+        ),
+    )?;
+    fire_routines(h, &a.id);
+    h.until("step one", Duration::from_secs(20), || {
+        replies(&a.id).iter().any(|r| r == "step one done")
+    })
+    .await?;
+    let c = card(h, &a.id, 0).await?;
+    ensure(
+        replies(&a.id).iter().all(|r| r != "step two done"),
+        "step two ran before its OK",
+    )?;
+    answer(h, &a.id, &c, true).await?;
+    h.until("step two", Duration::from_secs(20), || {
+        replies(&a.id).iter().any(|r| r == "step two done")
+    })
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let agent = store::get(&a.id).unwrap();
+    let runs = &agent.check_ins[0].runs;
+    ensure(!runs.is_empty(), "the routine's run wasn't recorded")?;
+    ensure(
+        agent.check_ins[0].next_at > store::now_ms(),
+        "the routine isn't scheduled again",
+    )?;
+    ensure(
+        of_kind(&a.id, MessageKind::CheckIn).len() >= 1,
+        "no line saying the routine fired",
+    )
+}
+
+/// A routine whose turn fails is recorded as failed (and retried, not
+/// lost), and shows in the brief as a routine that didn't work.
+async fn routine_fails(h: &H) -> Check {
+    let a = h.agent("Flaky");
+    let bad = fake(json!([{"error": "API Error: 529 Overloaded"}]));
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"tool": "schedule_check_in", "args": {"when": "every day at 9:00", "note": bad}},
+            {"say": "set up"}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    fire_routines(h, &a.id);
+    h.until("the routine's turn", Duration::from_secs(20), || {
+        !h.turns_with("529 Overloaded").is_empty()
+    })
+    .await?;
+    h.turn(&a.id).await?;
+    let agent = store::get(&a.id).unwrap();
+    let c = &agent.check_ins[0];
+    let outcomes: Vec<String> = c.runs.iter().map(|r| format!("{:?}", r.outcome)).collect();
+    ensure(
+        outcomes.iter().any(|o| o == "Failed") || c.retry.is_some(),
+        format!("runs {outcomes:?}, retry {:?}", c.retry.is_some()),
+    )
+}
+
+/// "Always allow" on a card: the same command later runs without one, and
+/// says so in a line.
+async fn always_allow(h: &H) -> Check {
+    let a = h.agent("Trusting");
+    h.send(
+        &a.id,
+        &fake(json!([{"bash": "touch always.txt"}, {"say": "first"}])),
+    )
+    .await?;
+    let c = card(h, &a.id, 0).await?;
+    cmd::agents_answer_approval(
+        h.app.clone(),
+        a.id.clone(),
+        c.request_id.clone(),
+        true,
+        Some(true),
+        None,
+        None,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    h.turn(&a.id).await?;
+    h.send(
+        &a.id,
+        &fake(json!([{"bash": "touch always.txt"}, {"say": "second"}])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        approvals(&a.id).len() == 1,
+        format!("asked again: {} cards", approvals(&a.id).len()),
+    )?;
+    ensure(
+        last_reply(&a.id) == "second",
+        format!("{:?}", replies(&a.id)),
+    )
+}
+
+/// Two agents waiting on cards at once: each answer reaches its own turn.
+async fn two_cards(h: &H) -> Check {
+    let a = h.agent("Left");
+    let b = h.agent("Right");
+    h.send(
+        &a.id,
+        &fake(json!([{"bash": "touch left.txt"}, {"say": "left {turn}"}])),
+    )
+    .await?;
+    h.send(
+        &b.id,
+        &fake(json!([{"bash": "touch right.txt"}, {"say": "right {turn}"}])),
+    )
+    .await?;
+    let ca = card(h, &a.id, 0).await?;
+    let cb = card(h, &b.id, 0).await?;
+    // Answering one agent's card with the other's id does nothing.
+    let crossed = answer(h, &a.id, &cb, true).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    ensure(
+        !store::agent_home(&a.id).unwrap().join("right.txt").exists()
+            && !store::agent_home(&b.id).unwrap().join("right.txt").exists(),
+        format!("a card answered through the wrong agent ran it ({crossed:?})"),
+    )?;
+    answer(h, &b.id, &cb, false).await?;
+    answer(h, &a.id, &ca, true).await?;
+    h.idle(
+        &[&a.id, &b.id],
+        Duration::from_secs(1),
+        Duration::from_secs(30),
+    )
+    .await?;
+    ensure(
+        store::agent_home(&a.id).unwrap().join("left.txt").exists(),
+        "the allowed one didn't run",
+    )?;
+    ensure(
+        !store::agent_home(&b.id).unwrap().join("right.txt").exists(),
+        "the denied one ran",
+    )
+}
+
+/// An agent blocked on an app asks once (`request_login`): one login card,
+/// on its turn's word to stop; a second ask for the same app while it waits
+/// makes no second card. Declining it wakes the agent.
+async fn login(h: &H) -> Check {
+    let a = h.agent("Needy");
+    let ask = json!({"tool": "request_login", "args": {
+        "service": "linear", "scopes": ["read"], "why": "Read the open issues"}});
+    h.send(&a.id, &fake(json!([ask, {"say": "asked for Linear"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let logins = || {
+        approvals(&a.id)
+            .into_iter()
+            .filter(|c| c.login.is_some())
+            .collect::<Vec<_>>()
+    };
+    ensure(
+        logins().len() == 1,
+        format!(
+            "{} login cards; the tool said {:?}",
+            logins().len(),
+            h.fake_log()
+                .into_iter()
+                .filter(|e| e["tool"] == "request_login")
+                .map(|e| e["reply"].to_string())
+                .collect::<Vec<_>>()
+        ),
+    )?;
+    h.send(&a.id, &fake(json!([ask, {"say": "asked again"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    ensure(
+        logins().len() == 1,
+        format!("asked twice: {} login cards", logins().len()),
+    )?;
+    let c = logins().pop().unwrap();
+    let turns = h
+        .fake_log()
+        .iter()
+        .filter(|e| e.get("turn").is_some())
+        .count();
+    answer(h, &a.id, &c, false).await?;
+    h.until("the agent woken", Duration::from_secs(20), || {
+        h.fake_log()
+            .iter()
+            .filter(|e| e.get("turn").is_some())
+            .count()
+            > turns
+    })
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        store::get(&a.id).unwrap().pending_approvals == 0,
+        "the declined card still counts",
+    )
+}
+
+/// A turn whose engine reports permission checks off is stopped, and says
+/// so; one whose connection to the app failed is stopped too.
+async fn untrusted_init(h: &H) -> Check {
+    let a = h.agent("Bypassed");
+    std::env::set_var("FAKE_ENGINE_PERMISSION_MODE", "bypassPermissions");
+    let r = async {
+        h.send(
+            &a.id,
+            &fake(json!([{"sleep": 2}, {"say": "should not be seen"}])),
+        )
+        .await?;
+        h.turn(&a.id).await
+    }
+    .await;
+    std::env::remove_var("FAKE_ENGINE_PERMISSION_MODE");
+    r?;
+    ensure(
+        replies(&a.id).iter().all(|r| r != "should not be seen"),
+        "a bypassPermissions turn went on",
+    )?;
+    let said: Vec<String> = log(&a.id)
+        .into_iter()
+        .filter(|m| matches!(m.kind, MessageKind::Error | MessageKind::Note))
+        .map(|m| m.text)
+        .collect();
+    ensure(
+        said.iter().any(|t| t.contains("bypassPermissions")),
+        format!("no line saying why: {said:?}"),
+    )
+}
+
 const ALL: &[&str] = &[
     "normal",
     "approvals",
@@ -854,6 +1841,29 @@ const ALL: &[&str] = &[
     "queue",
     "conversations",
     "lost-transcript",
+    "failover-acted",
+    "crash-twice",
+    "stop-card",
+    "queue-card",
+    "interrupt",
+    "codex",
+    "lingering",
+    "rounds",
+    "garbage",
+    "late-allow",
+    "queue-conversations",
+    "revise",
+    "big",
+    "delete-mid-turn",
+    "conversation-crash",
+    "refused-tools",
+    "crossover",
+    "routines",
+    "routine-fails",
+    "always-allow",
+    "two-cards",
+    "login",
+    "untrusted-init",
     "brief",
 ];
 
@@ -870,6 +1880,12 @@ fn install_fake(home: &Path) {
     let claude = bin.join("claude");
     let _ = std::fs::remove_file(&claude);
     std::os::unix::fs::symlink(&script, &claude).unwrap();
+    let codex = bin.join("codex");
+    let _ = std::fs::remove_file(&codex);
+    std::os::unix::fs::symlink(&script, &codex).unwrap();
+    // Codex on `exec`, the driver the fake speaks (debug builds read this).
+    std::env::set_var("SHIPSTUDIO_AGENTS_CODEX_EXEC", "1");
+    std::env::set_var("CODEX_HOME", home.join(".codex"));
     let gh = bin.join("gh");
     std::fs::write(&gh, "#!/bin/sh\necho \"fake gh: $*\"\n").unwrap();
     use std::os::unix::fs::PermissionsExt;
@@ -929,6 +1945,29 @@ fn main() {
                 "conversations" => conversations(&h).await,
                 "lost-transcript" => lost_transcript(&h).await,
                 "brief" => brief(&h).await,
+                "failover-acted" => failover_after_acting(&h).await,
+                "crash-twice" => crash_twice(&h).await,
+                "stop-card" => stop_on_card(&h).await,
+                "queue-card" => queue_on_card(&h).await,
+                "interrupt" => interrupt(&h).await,
+                "codex" => codex(&h).await,
+                "lingering" => lingering(&h).await,
+                "rounds" => rounds(&h).await,
+                "garbage" => garbage(&h).await,
+                "late-allow" => late_allow(&h).await,
+                "queue-conversations" => queue_conversations(&h).await,
+                "revise" => revise(&h).await,
+                "big" => big(&h).await,
+                "delete-mid-turn" => delete_mid_turn(&h).await,
+                "conversation-crash" => conversation_crash(&h).await,
+                "refused-tools" => refused_tools(&h).await,
+                "crossover" => crossover(&h).await,
+                "routines" => routines(&h).await,
+                "routine-fails" => routine_fails(&h).await,
+                "always-allow" => always_allow(&h).await,
+                "two-cards" => two_cards(&h).await,
+                "login" => login(&h).await,
+                "untrusted-init" => untrusted_init(&h).await,
                 other => Err(format!("unknown scenario {other}")),
             };
             let took = t.elapsed().as_secs_f32();
