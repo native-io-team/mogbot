@@ -9,7 +9,7 @@
 
 import type { Scenario } from '../types';
 import { readySetupItems } from './base';
-import { rejectsWith } from '../reject';
+import { neverAnswers, rejectsWith } from '../reject';
 import { FLOW_STORAGE_KEY, type FlowStep } from '../../lib/onboardingFlow';
 
 const at = (step: FlowStep) => ({
@@ -47,6 +47,13 @@ const machine = (items: unknown[], mock = false) => ({
   mark_setup_complete: null,
   mock_mark_setup_item_ready: null,
 });
+
+/**
+ * An install or sign-in still going. The mock action flips the item after
+ * a beat; a fixture that answers at once let the capture land after it,
+ * on "closed before it finished", which is a different screen.
+ */
+const STILL_GOING = { mock_mark_setup_item_ready: neverAnswers() };
 
 /** Claude Code installed and signed in, nothing else. */
 const ENGINE_READY = machine([
@@ -92,7 +99,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'engine',
     '2a. Codex on a bare Mac: get the Mac ready first',
     'After choosing Codex: "Get your Mac ready for Codex", one line (a few minutes, maybe the Mac password), "Codex · 1 of 4", and a spinner check saying "Installing…".',
-    machine(FRESH_ITEMS, true),
+    { ...machine(FRESH_ITEMS, true), ...STILL_GOING },
     {
       steps: [{ click: '.agent-pick-card:nth-child(2)' }],
       requires: '[data-flow-step="engine"] .flow-check',
@@ -103,8 +110,20 @@ export const onboardingFlowScenarios: Scenario[] = [
     'engine',
     '2a. Install Claude Code, running',
     'One screen: "Install Claude Code", one line about the password, "Claude Code · 1 of 2", and a check line with a spinner saying "Installing…". No list of other steps.',
-    machine(FRESH_ITEMS, true),
+    { ...machine(FRESH_ITEMS, true), ...STILL_GOING },
     { steps: [{ click: '.agent-pick-card' }], requires: '[data-flow-step="engine"] .flow-check' }
+  ),
+  flow(
+    'onboarding-engine-closed',
+    'engine',
+    '2a. Install window closed before it finished',
+    '"Install Claude Code", then a bordered check with an amber mark: "Not done yet. The install was closed before it finished." and nothing under it (no line repeating the button), the box as tight at the bottom as at the top, and a big "Try again".',
+    machine(FRESH_ITEMS, true),
+    {
+      // The mock install takes a beat; wait for it to come back unfinished.
+      steps: [{ click: '.agent-pick-card' }, { hover: '.flow-check[data-state="fail"]' }],
+      requires: '[data-flow-step="engine"] .flow-check[data-state="fail"]',
+    }
   ),
   flow(
     'onboarding-engine-failed',
@@ -133,10 +152,15 @@ export const onboardingFlowScenarios: Scenario[] = [
     'engine',
     '2b. Sign in to Claude Code',
     'Installed already, so the screen is the sign-in: "Sign in to Claude Code", one line that the browser opens, "Claude Code · 2 of 2", and the check "Waiting for you to finish signing in…".',
-    machine(
-      FRESH_ITEMS.map((i) => (i.id === 'claude' ? { ...i, status: 'ready', version: '2.1.0' } : i)),
-      true
-    ),
+    {
+      ...machine(
+        FRESH_ITEMS.map((i) =>
+          i.id === 'claude' ? { ...i, status: 'ready', version: '2.1.0' } : i
+        ),
+        true
+      ),
+      ...STILL_GOING,
+    },
     { steps: [{ click: '.agent-pick-card' }], requires: '[data-flow-step="engine"] .flow-check' }
   ),
   flow(
@@ -158,7 +182,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-status-failed',
     'engine',
     '2. This Mac couldn’t be checked',
-    'The engine choice as usual, and pinned at the foot a notice: "Couldn’t check this Mac. Try again." with a Try again button. Nothing else blocks; the cards still work.',
+    'The engine choice as usual, and pinned at the foot the same check every screen uses: an amber mark, "Not done yet. Couldn’t check this Mac." and one "Check again" (no red box, no "Try again" said twice). Nothing else blocks; the cards still work.',
     { get_full_setup_status: rejectsWith('network unreachable') }
   ),
 ];

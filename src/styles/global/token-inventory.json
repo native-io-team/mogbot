@@ -5131,7 +5131,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 89
+      "consumerCount": 88
     },
     {
       "name": "--surface-panel",
@@ -6083,7 +6083,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 157
+      "consumerCount": 158
     },
     {
       "name": "--spacing-2xl",
@@ -6443,7 +6443,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 32
+      "consumerCount": 33
     },
     {
       "name": "--shadow-lg",
@@ -6539,7 +6539,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 89
+      "consumerCount": 88
     },
     {
       "name": "--surface-panel",
@@ -7003,7 +7003,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 32
+      "consumerCount": 33
     },
     {
       "name": "--shadow-lg",
