@@ -408,7 +408,11 @@ fi
 [ "$NOTARIZE" = 1 ] || die "not publishing a build that wasn't notarized"
 
 say "Publishing $TAG to $RELEASES_REPO"
-ASSETS=("$DMG_PATH" "$DMG_PATH.sha256" "$UPDATER_PATH" "$UPDATER_PATH.sig")
+# Mogbot.dmg: the same DMG under a name that never changes, so the website can
+# link releases/latest/download/Mogbot.dmg and always hand out the newest one.
+STABLE_DMG="$(dirname "$DMG_PATH")/$APP_NAME.dmg"
+cp -f "$DMG_PATH" "$STABLE_DMG"
+ASSETS=("$DMG_PATH" "$DMG_PATH.sha256" "$STABLE_DMG" "$UPDATER_PATH" "$UPDATER_PATH.sig")
 if gh release view "$TAG" -R "$RELEASES_REPO" >/dev/null 2>&1; then
   # Replacing a release's files: the bundle and its signature go up before
   # the manifest that names them.
