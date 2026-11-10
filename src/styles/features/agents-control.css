@@ -60,7 +60,7 @@
   opacity: 0.75;
 }
 
-/* "↵ queues · ⌘↵ interrupts and sends now", only while it works and you type. */
+/* "Fill in the end, then send" and "Esc again to stop Acme Site". */
 .agent-composer__hint {
   margin-right: var(--spacing-xs);
   font-size: var(--font-size-body-sm);

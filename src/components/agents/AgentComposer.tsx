@@ -12,6 +12,7 @@
 import {
   memo,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -34,6 +35,7 @@ import { sortAgents, type Agent, type ResultRef } from '../../lib/agents';
 import { getAgentsSnapshot } from '../../lib/agentsStore';
 import { setComposerDraft, useComposerDraft } from '../../lib/composerDraft';
 import type { DictationPhase } from './useDictation';
+import { noteQueueHintUse, queueHintLearned } from '../../lib/queueHint';
 
 /** A second Esc within this long stops a working agent; the first only says so. */
 const ESC_CONFIRM_MS = 1500;
@@ -141,6 +143,18 @@ export const AgentComposer = memo(function AgentComposer({
   }, [mentionSet, draft]); // eslint-disable-line react-hooks/exhaustive-deps -- `draft`: re-read the order as you type
   const mentionPicker = useMentionPicker(mentionable, inputRef, setDraft);
 
+  // While it works and you've typed: ↵ queues, ⌘↵ interrupts. Said in a
+  // quiet caption under the box until you've used both a few times
+  // (lib/queueHint); the field's description says it for as long as it holds.
+  const queueHintId = useId();
+  const [learned, setLearned] = useState(queueHintLearned);
+  const queueing = busy && canSend && !dictating && !blank;
+  const sendFromHere = (now: boolean) => {
+    if (busy) setLearned(queueHintLearned(noteQueueHintUse(now)));
+    onSend(now);
+  };
+  const queueSentence = `Enter queues it for when ${agentName} finishes. Command Enter interrupts ${agentName} and sends it now.`;
+
   // Esc stops a working agent only when pressed twice: the first says so,
   // quietly, where the hint goes. A reflex dismissal never drops a turn.
   const [escArmed, setEscArmed] = useState(false);
@@ -186,7 +200,7 @@ export const AgentComposer = memo(function AgentComposer({
       }
       onSubmit={(e) => {
         e.preventDefault();
-        onSend();
+        sendFromHere(false);
       }}
     >
       {mentionPicker.menu}
@@ -233,7 +247,7 @@ export const AgentComposer = memo(function AgentComposer({
             requestAnimationFrame(() => el.setSelectionRange(last.length, last.length));
           } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
-            if (!blank) onSend(e.metaKey);
+            if (!blank) sendFromHere(e.metaKey);
           } else if (e.key === 'Escape' && onEscape?.()) {
             e.preventDefault();
           } else if (e.key === 'Escape' && working && !canSend) {
@@ -247,6 +261,7 @@ export const AgentComposer = memo(function AgentComposer({
           }
         }}
         aria-label={`Message ${agentName}`}
+        aria-describedby={queueing ? queueHintId : undefined}
       />
       <div className="agent-composer__bar">
         {dictating ? (
@@ -278,14 +293,22 @@ export const AgentComposer = memo(function AgentComposer({
           <span className="agent-composer__hint" data-armed role="status">
             Esc again to stop {agentName}
           </span>
-        ) : (
-          busy &&
-          canSend &&
-          !dictating && (
-            <span className="agent-composer__hint" aria-hidden>
-              ↵ queues · ⌘↵ interrupts and sends now
-            </span>
-          )
+        ) : null}
+        {queueing && (
+          <p
+            id={queueHintId}
+            className="agent-composer__queue-hint"
+            data-learned={learned || undefined}
+          >
+            <span className="sr-only">{queueSentence}</span>
+            {!learned && (
+              <span aria-hidden>
+                <kbd className="agent-composer__key">↵</kbd> queue
+                <span className="agent-composer__queue-dot">·</span>
+                <kbd className="agent-composer__key">⌘↵</kbd> send now
+              </span>
+            )}
+          </p>
         )}
         <div className="agent-composer__actions">
           <IconButton
