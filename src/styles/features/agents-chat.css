@@ -108,6 +108,13 @@
   color: var(--text-muted);
 }
 
+/* Open (its menu or popover showing), the button takes the pressed surface;
+   the secondary word on it was 4.3:1 in dark. The word follows the button's
+   own pressed ink, as everywhere else. */
+.agent-chat__actions .agent-chat__action:is([aria-expanded='true'], [aria-pressed='true']) {
+  color: var(--button-text-hover);
+}
+
 /* Compact: the switcher's wrapper is the grid item, its button the title. */
 .agent-chat__switcher {
   display: flex;

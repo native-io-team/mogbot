@@ -206,6 +206,14 @@
   color: var(--text-muted);
 }
 
+/* On the hovered, focused or current row's raised fill, muted was 3.6:1 and
+   secondary 4.3:1 (dark): the row's own ink. */
+.agent-model-menu
+  .ss-dropdown__item:is(:hover, :focus-visible, .ss-dropdown__item--active)
+  .agent-model-menu__detail {
+  color: var(--text-primary);
+}
+
 .agent-editor__usage {
   display: grid;
   grid-template-columns: auto 1fr;
