@@ -260,14 +260,20 @@
   display: none;
 }
 
-/* Cards fold away after they've shown what they resolved to. */
+/* Cards fold away after they've shown what they resolved to. It clips only
+   while its height moves (useHeightReveal writes the height inline for the
+   motion and clears it once open); at rest a clip cut the cards' shadows off
+   in a hard line at its foot. */
 .agents-team__fold {
-  overflow: hidden;
   transition:
     height var(--agents-motion-settle),
     padding var(--agents-motion-settle),
     margin var(--agents-motion-settle),
     opacity var(--transition-interaction);
+}
+
+.agents-team__fold[style*='height'] {
+  overflow: hidden;
 }
 
 .agents-team__line[data-state='failed'] {
