@@ -52,4 +52,29 @@ describe('the agent … menu', () => {
     const last = menu.lastElementChild;
     expect(last?.previousElementSibling?.className).toContain('ss-dropdown__divider');
   });
+
+  it('offers a way back from a wrong turn in the header, beside New conversation', () => {
+    const goBack = vi.fn();
+    render(
+      <Dropdown open trigger={(p) => <button {...p}>…</button>}>
+        <AgentActionItems agent={agent} kind="dropdown" onGoBack={goBack} {...actions} />
+      </Dropdown>
+    );
+    const items = screen.getAllByRole('menuitem').map((el) => el.textContent ?? '');
+    const at = items.indexOf('Go back to an earlier message…');
+    expect(at).toBeGreaterThan(0);
+    expect(items[at + 1]).toBe('New conversation');
+    screen.getAllByRole('menuitem')[at].click();
+    expect(goBack).toHaveBeenCalled();
+  });
+
+  it('has no way back where there is nothing of yours to go back to', () => {
+    render(
+      <Dropdown open trigger={(p) => <button {...p}>…</button>}>
+        <AgentActionItems agent={agent} kind="dropdown" {...actions} />
+      </Dropdown>
+    );
+    const items = screen.getAllByRole('menuitem').map((el) => el.textContent ?? '');
+    expect(items).not.toContain('Go back to an earlier message…');
+  });
 });

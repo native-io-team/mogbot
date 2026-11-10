@@ -46,7 +46,7 @@ import { AgentComposer, LiveSecretHint } from './AgentComposer';
 import { AgentModelMenu } from './AgentModelMenu';
 import { AgentRequestsBar } from './AgentRequests';
 import { AgentKey } from './AgentKey';
-import { AgentActionItems, type AgentActions } from './AgentActions';
+import { AgentActionItems, GO_BACK_MENU, type AgentActions } from './AgentActions';
 import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
 import { StepInBar } from './AgentStepIn';
 import { AgentLine, ConversationBar, ConversationBars } from './AgentCard';
@@ -1056,7 +1056,7 @@ export const AgentChat = memo(function AgentChat({
         ? [
             {
               id: 'agents.goBack.pick',
-              title: 'Go back to an earlier message…',
+              title: GO_BACK_MENU,
               subtitle: `Edit, fork or rewind, in your chat with ${agent.name}`,
               icon: GO_BACK_ICONS.rewind,
               category: 'action' as const,
@@ -1993,6 +1993,7 @@ export const AgentChat = memo(function AgentChat({
                       kind="dropdown"
                       onSchedule={engineReady ? () => setScheduleOpen(true) : undefined}
                       onFiles={() => setFilesOpen(true)}
+                      onGoBack={ownRecent.length > 0 ? () => setPicking(true) : undefined}
                       {...actions}
                     />
                   </Dropdown>

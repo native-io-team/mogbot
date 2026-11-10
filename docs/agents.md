@@ -578,7 +578,9 @@ of the user's own messages (desk: the hover actions' … menu, a right-click on
 the message (Copy and Remember this first, as it stands in for the webview's
 menu; `GoBackContextMenu`), ⌘K for the last one, and ⌘K "Go back to an
 earlier message…", a picker of the last 12 with the three actions on each
-(`GoBackPicker`); phone: long-press): **Edit and resend** puts it back in the
+(`GoBackPicker`), which the conversation header's … menu also opens, since a
+wrong turn is looked for there rather than on a hover of your own message;
+phone: long-press): **Edit and resend** puts it back in the
 composer under "Editing your message"; sending goes back to just before it,
 then sends the new words there. **Fork from here** makes a new conversation
 (titled "Fork of …", which the user is then in) whose history is everything
