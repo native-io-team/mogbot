@@ -720,10 +720,6 @@
   flex-shrink: 0;
 }
 
-.sidebar-project-pixel-loader {
-  color: var(--accent-success);
-}
-
 /* When the row has a Cmd+N shortcut, the initials slot shows the shortcut
  * instead. Matches the ⌘K badge sizing on the dashboard search trigger. */
 .sidebar-project-initials.is-shortcut {

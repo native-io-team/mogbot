@@ -72,4 +72,14 @@ describe('PixelLoader', () => {
     expect(custom.container.querySelectorAll('[data-ring="1"]')).toHaveLength(16);
     expect(custom.container.querySelectorAll('[data-ring="2"]')).toHaveLength(24);
   });
+
+  it("lights in an agent's colourway when given one, else the accent in scope", () => {
+    render(<PixelLoader variant="rings" colorway="sage" data-testid="agent" />);
+    expect(screen.getByTestId('agent')).toHaveAttribute('data-colorway', 'sage');
+    render(<PixelLoader variant="ripple" colorway="not-a-colourway" data-testid="unknown" />);
+    // An unknown id falls back to a real colourway, as the key does.
+    expect(screen.getByTestId('unknown')).toHaveAttribute('data-colorway', 'blue');
+    render(<PixelLoader data-testid="none" />);
+    expect(screen.getByTestId('none')).not.toHaveAttribute('data-colorway');
+  });
 });

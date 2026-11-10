@@ -550,10 +550,9 @@
   --status-pill-dot: var(--space-06);
 }
 
-/* Progress and "working" indicators are status, never the accent: a red or
-   amber accent would make "in progress" read as an error or a warning. */
+/* Progress bars are status, never the accent: a red or amber accent would make
+   "in progress" read as an error or a warning. */
 :root {
-  --pixel-loader-color: var(--status-running);
   --progress-track: var(--surface-selected);
   --progress-indicator: var(--status-running);
 }
@@ -583,6 +582,35 @@
    well as :root for the same reason as the accent block in
    tokens-semantic.css: a scoped accent must re-derive these, or a primary
    button inside an agent's conversation would keep the app's colour. */
+/* The pixel loader is an agent's work, so it lights in that agent's colour:
+   its key colourway when it names one (`data-colorway`, pixel-loader.css),
+   else the accent in scope, which is the agent whose context it sits in (the
+   Chief's on the app's own surfaces). On light the colour is pulled toward
+   the text, as accent text is, so a pale face (putty, sky, lilac) or a bright
+   accent still reads on a light surface. */
+:root,
+[data-accent-scope] {
+  --pixel-loader-color: var(--accent-active);
+}
+
+:root[data-theme='light'],
+:root[data-theme='light'] [data-accent-scope] {
+  --pixel-loader-color: var(--accent-text);
+}
+
+/* On light, brightening a lit pixel washes it toward the page and the colour
+   is lost; there the lit pixel deepens a touch instead. */
+:root[data-theme='light'] {
+  --pixel-loader-brightness: 0.9;
+  --pixel-loader-rest-brightness: 1;
+}
+
+:root {
+  /* How much of an agent's key colour survives on light (the rest is the
+     primary text colour). */
+  --pixel-loader-agent-share-light: 72%;
+}
+
 :root,
 [data-accent-scope] {
   --compact-topbar-pin-active-surface: rgba(var(--accent-user-rgb), 0.15);

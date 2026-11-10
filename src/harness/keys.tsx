@@ -17,6 +17,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AgentKey, type AgentKeySize } from '../components/agents/AgentKey';
+import { PixelLoader } from '../components/primitives/PixelLoader';
+import { accentScopeProps } from '../lib/accent';
 import {
   COLORWAYS,
   INDEPENDENCE_LABEL,
@@ -199,7 +201,56 @@ if (params.get('at') === 'peak') {
 
 const inbox = { name: 'Inbox', colorway: 'blue', icon: 'inbox', boundKey: 'I' } as const;
 
+/**
+ * The pixel loader (`?only=loaders`): beside each colourway's working key, the
+ * rings loader at both row sizes and the ripple (whose unlit pixels stay as a
+ * faint tint, the idle state); then with no agent, on a few accent scopes.
+ * With `freeze=off` it runs, so a capture catches a ring lit.
+ */
+const LOADER_ACCENTS = ['white', 'red', 'green', 'blue', 'purple'];
+
+function Loaders() {
+  const set = (colorway?: string) => (
+    <>
+      <PixelLoader variant="rings" size="sm" colorway={colorway} />
+      <PixelLoader variant="rings" size="md" colorway={colorway} />
+      <PixelLoader variant="ripple" size="md" colorway={colorway} />
+      <PixelLoader variant="ripple" size="lg" colorway={colorway} />
+    </>
+  );
+  return (
+    <section data-section="loaders" className="key-gallery__squint">
+      <h2>Pixel loader · an agent's work</h2>
+      <div className="key-gallery__row key-gallery__row--tight">
+        {COLORWAYS.map((c) => (
+          <div key={c.id} className="key-gallery__listrow">
+            <AgentKey name={c.name} colorway={c.id} icon="inbox" state="working" size="xs" />
+            {set(c.id)}
+            <span className="key-gallery__label">{c.name}</span>
+          </div>
+        ))}
+      </div>
+      <h2>Pixel loader · no agent: the accent in scope</h2>
+      <div className="key-gallery__row key-gallery__row--tight">
+        {LOADER_ACCENTS.map((a) => (
+          <div key={a} className="key-gallery__listrow" {...accentScopeProps(a)}>
+            {set()}
+            <span className="key-gallery__label">{a}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Gallery() {
+  if (params.get('only') === 'loaders') {
+    return (
+      <main className="key-gallery">
+        <Loaders />
+      </main>
+    );
+  }
   if (params.get('only') === 'needsok') {
     return (
       <main className="key-gallery">

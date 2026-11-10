@@ -258,12 +258,6 @@
   color: var(--accent-error-light);
 }
 
-.agent-peer__state .sidebar-row-pixel-loader,
-.agent-peer__state .pixel-loader {
-  /* In progress is the running status, never green (that is "done"). */
-  color: var(--status-running);
-}
-
 /* ------------------------------------------------------- session lines */
 
 /* An agent working in a project (components/agents/AgentSession): started /
