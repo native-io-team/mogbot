@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import cases from './agent-key-cases.json';
 import {
+  CHIEF_COLORWAY,
+  CHIEF_ICON,
   COLORWAYS,
   KEY_ICON_DRAWINGS,
   KEY_ICON_IDS,
@@ -85,6 +87,8 @@ describe('icons', () => {
 
   it('are legends: straight lines only horizontal, vertical or 45°, on the 24 grid', () => {
     for (const [id, drawing] of Object.entries(KEY_ICON_DRAWINGS)) {
+      // The app's mark is the one filled legend, and keeps its curves (below).
+      if (drawing.fill) continue;
       for (const d of drawing.paths) {
         expect(d, id).toMatch(/^[MHVLZ0-9. ]+$/);
         // Walk the path and check each segment's angle.
@@ -132,6 +136,24 @@ describe('icons', () => {
           expect(x >= 0 && x <= 24 && y >= 0 && y <= 24, id).toBe(true);
         }
       }
+    }
+  });
+
+  it("only the app's mark is filled: first in the row, on the grid, the Chief's", () => {
+    const filled = Object.entries(KEY_ICON_DRAWINGS).filter(([, d]) => d.fill);
+    expect(filled.map(([id]) => id)).toEqual(['mogbot']);
+    expect(KEY_ICON_IDS[0]).toBe('mogbot');
+    expect(CHIEF_ICON).toBe('mogbot');
+    expect(CHIEF_COLORWAY).toBe('graphite');
+    const mark = KEY_ICON_DRAWINGS.mogbot;
+    expect(mark.circles).toBeUndefined();
+    for (const d of mark.paths) {
+      for (const n of d.match(/-?[\d.]+/g) ?? []) {
+        expect(Number(n)).toBeGreaterThanOrEqual(0);
+        expect(Number(n)).toBeLessThanOrEqual(24);
+      }
+      // The dome and its two eyes: three closed shapes.
+      expect(d.match(/Z/g)).toHaveLength(3);
     }
   });
 

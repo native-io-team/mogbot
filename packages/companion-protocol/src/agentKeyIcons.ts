@@ -22,13 +22,28 @@ export interface KeyIconDrawing {
    * designers drew it. Ours are square-capped and mitred.
    */
   round?: boolean;
+  /**
+   * Filled in the legend's colour (even-odd), not stroked: the app's mark
+   * only (`mogbot`), which keeps its own curves. Every other legend is a stroke.
+   */
+  fill?: boolean;
 }
 
 /** The grid every legend is drawn on. */
 export const KEY_ICON_GRID = 24;
 
 export const KEY_ICON_DRAWINGS: Record<string, KeyIconDrawing> = {
-  // Two squares, one turned: an eight-point star. The Chief's.
+  // The app's mark, the Chief's: the icon's "M" (a dome, two slot eyes) at
+  // 0.23 of its 96-unit grid, centred. Filled: see the note above.
+  mogbot: {
+    fill: true,
+    paths: [
+      'M9.93 3.72H14.07C18.35 3.72 20.97 6.34 20.97 10.62V18.21C20.97 19.49 20.18 20.28 18.9 20.28H5.1C3.82 20.28 3.03 19.49 3.03 18.21V10.62C3.03 6.34 5.65 3.72 9.93 3.72Z' +
+        'M7.17 18.21V9.93A1.38 1.38 0 0 1 9.93 9.93V18.21Z' +
+        'M14.07 18.21V9.93A1.38 1.38 0 0 1 16.83 9.93V18.21Z',
+    ],
+  },
+  // Two squares, one turned: an eight-point star.
   star: { paths: ['M6 6H18V18H6Z', 'M12 3L21 12L12 21L3 12Z'] },
   // A down-arrow into a tray.
   inbox: { paths: ['M12 3V11M8 7L12 11L16 7', 'M3 13V21H21V13H16L14 15H10L8 13Z'] },

@@ -25,6 +25,9 @@ struct Colorway {
 struct Icon {
     id: String,
     name: String,
+    /// Other names a search finds it by ("logo" for the app's mark).
+    #[serde(default)]
+    aka: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -46,6 +49,7 @@ struct Spec {
     legacy_colors: HashMap<String, String>,
     icons: Vec<Icon>,
     chief_icon: String,
+    chief_colorway: String,
     default_icon: String,
     icon_rules: Vec<Rule>,
     key_chars: String,
@@ -99,7 +103,8 @@ static PACK: LazyLock<Pack> = LazyLock::new(|| {
             name_words: unique(
                 words_stemmed(&i.name)
                     .into_iter()
-                    .chain(words_stemmed(&i.id)),
+                    .chain(words_stemmed(&i.id))
+                    .chain(i.aka.iter().flat_map(|w| words_stemmed(w))),
             ),
             tag_words: unique(
                 SPEC.icon_rules
@@ -441,11 +446,51 @@ pub fn distinct_colorway<'a>(
         .unwrap_or_else(|| preferred.to_string())
 }
 
+/// The Chief's key before it was the app's mark: the star on Putty (its
+/// "white"), what every Chief was given until then.
+const PAST_CHIEF_ICON: &str = "star";
+const PAST_CHIEF_COLORWAY: &str = "putty";
+
+/// Set on the Chief once its key has been brought onto the current default
+/// (`chief_key_default`), so a star the user picks later is never undone.
+/// Kept in the agent's unknown fields, which older builds carry through.
+pub const CHIEF_KEY_SETTLED: &str = "chiefKeyDefault";
+
+/// The Chief's colourway (Graphite, the app icon's).
+pub fn chief_colorway() -> &'static str {
+    &SPEC.chief_colorway
+}
+
+/// Brings a Chief onto the current default key (one made by an older
+/// build, or just made from its "white", which gives Putty): its
+/// legend from the star to the app's mark and its colourway from Putty to
+/// Graphite, each only when it is still the old default (no record says
+/// whether the user chose it, so a value that differs is theirs and is
+/// kept). Once only: marked `CHIEF_KEY_SETTLED` after. Returns whether
+/// anything changed.
+fn chief_key_default(a: &mut Agent) -> bool {
+    if !a.is_main || a.extra.contains_key(CHIEF_KEY_SETTLED) {
+        return false;
+    }
+    if a.icon.as_deref() == Some(PAST_CHIEF_ICON) {
+        a.icon = Some(SPEC.chief_icon.clone());
+    }
+    if a.colorway.as_deref() == Some(PAST_CHIEF_COLORWAY) {
+        // Its old `color` stays: the Chief's colour is the app's accent
+        // (`src/lib/accent.ts`), and a new default key isn't a new accent.
+        a.colorway = Some(SPEC.chief_colorway.clone());
+    }
+    a.extra
+        .insert(CHIEF_KEY_SETTLED.into(), serde_json::Value::from(1));
+    true
+}
+
 /// Gives every agent saved before keys a colourway (its colour's nearest),
 /// an icon (from its name and role) and a key (the first free letter of its
 /// name), the Chief first, then in team order; and keeps bound keys unique
-/// (a later duplicate, say a restored agent's, gets a free one). Returns
-/// whether anything changed.
+/// (a later duplicate, say a restored agent's, gets a free one); and moves
+/// a Chief still on the old default key onto the current one, once
+/// (`chief_key_default`). Returns whether anything changed.
 pub fn fill(agents: &mut [Agent]) -> bool {
     let mut changed = false;
     for i in 0..agents.len() {
@@ -476,6 +521,11 @@ pub fn fill(agents: &mut [Agent]) -> bool {
         a.colorway = Some(colorway);
         a.icon = Some(icon);
         changed = true;
+    }
+    // After the fill: a Chief saved before keys has just been given the old
+    // colourway from its "white", and moves on with everyone else's.
+    for a in agents.iter_mut() {
+        changed |= chief_key_default(a);
     }
     let mut order: Vec<usize> = (0..agents.len()).collect();
     order.sort_by_key(|i| !agents[*i].is_main);

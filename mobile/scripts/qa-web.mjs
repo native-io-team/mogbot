@@ -1684,7 +1684,7 @@ const LIVE = [
       await sleep(500);
       await page.clickLabel('Search 2,029 more icons');
       await page.waitFor(
-        `document.body.innerText.includes('2,051 icons')`,
+        `document.body.innerText.includes('2,052 icons')`,
         20_000,
         'the icon pack'
       );

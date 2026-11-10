@@ -414,6 +414,7 @@
   stroke-linejoin: miter;
   transition:
     stroke var(--agent-key-travel),
+    fill var(--agent-key-travel),
     filter var(--agent-key-travel);
 }
 
@@ -421,6 +422,21 @@
 .agent-key__legend[data-round] {
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* The app's mark, the one filled legend (agentKeyIcons.ts): the legend's
+   colour as a fill, never a stroke, in every state below. */
+.agent-key .agent-key__legend[data-fill] {
+  fill: var(--agent-key-legend);
+  stroke: none;
+}
+.agent-key:is([data-state='working'], [data-state='live'], [data-state='needsOk'])
+  .agent-key__legend[data-fill] {
+  fill: var(--agent-key-lit);
+  stroke: none;
+}
+.agent-key[data-state='needsOk'] .agent-key__legend[data-fill] {
+  fill: var(--agent-key-ask);
 }
 
 /* The bound key, small, bottom right of the face: big keys only. */

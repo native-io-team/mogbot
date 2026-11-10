@@ -7,14 +7,20 @@
 import { Button } from '../../primitives/Button';
 import { AgentKey } from '../../agents/AgentKey';
 import { FlowShell } from './FlowParts';
-import { CHIEF_ICON } from '../../../../packages/companion-protocol/src/agentKeys';
+import { CHIEF_COLORWAY, CHIEF_ICON } from '../../../../packages/companion-protocol/src/agentKeys';
 
 export function WelcomeStep({ onNext }: { onNext: () => void }) {
   return (
     <FlowShell
       step="welcome"
       mark={
-        <AgentKey icon={CHIEF_ICON} name="Chief of Staff" colorway="blue" size="xl" boundKey="C" />
+        <AgentKey
+          icon={CHIEF_ICON}
+          name="Chief of Staff"
+          colorway={CHIEF_COLORWAY}
+          size="xl"
+          boundKey="C"
+        />
       }
       title="Your own team of AI agents"
       lede="They run on this Mac, on your own Claude or ChatGPT plan. You talk to one, your Chief of Staff, and anything risky waits for your OK."

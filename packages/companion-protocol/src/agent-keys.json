@@ -30,6 +30,7 @@
     "gray": "graphite"
   },
   "icons": [
+    { "id": "mogbot", "name": "Logo", "aka": ["logo", "mark", "brand"] },
     { "id": "star", "name": "Star" },
     { "id": "inbox", "name": "Inbox" },
     { "id": "code", "name": "Code" },
@@ -92,7 +93,8 @@
     "ai": ["sparkles", "bot", "brain"],
     "robot": ["bot"]
   },
-  "chiefIcon": "star",
+  "chiefIcon": "mogbot",
+  "chiefColorway": "graphite",
   "defaultIcon": "grid",
   "iconRules": [
     { "icon": "money", "words": ["finance", "financial", "invoice", "invoices", "money", "budget", "accounting", "accounts", "bookkeeping", "books", "ledger", "bills", "billing", "expenses", "payments", "payroll", "tax", "taxes"] },

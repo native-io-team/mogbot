@@ -57,7 +57,7 @@ it('the sheet finds icons by what they are for, and a tap picks one', async () =
       onClose={() => {}}
     />
   );
-  await waitFor(() => expect(screen.getByText('2,051 icons')).toBeTruthy(), LOAD);
+  await waitFor(() => expect(screen.getByText('2,052 icons')).toBeTruthy(), LOAD);
   expect(screen.getByText('Wallet')).toBeTruthy();
   // Lucide's icons in round strokes (the native prop: round is 1, square 2).
   expect(JSON.stringify(screen.toJSON())).toContain('"strokeLinecap":1');

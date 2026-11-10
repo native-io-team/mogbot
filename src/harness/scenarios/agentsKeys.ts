@@ -121,16 +121,16 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-sidebar',
     title: 'Agents — small keys in the sidebar, the Chief’s chat open',
     looksRightWhen:
-      'Twelve sidebar rows, each led by a 30px key in its colourway with one legend: a star for the Chief, money for Finance, people for Hiring, megaphone for Social Posts, shield for Security & DevOps, an inbox for Inbox. Working rows are pressed and warm-lit; Lead Gen’s key sits proud with an amber legend and spill (the loudest); Native App’s key is drained grey and sunk; Hiring’s row says “Live” in green. Every key still reads as a key at this size. The chat header shows the Chief’s 44px key.',
+      'Twelve sidebar rows, each led by a 30px key in its colourway with one legend: the app’s mark (the filled “M”) on Graphite for the Chief, money for Finance, people for Hiring, megaphone for Social Posts, shield for Security & DevOps, an inbox for Inbox. Working rows are pressed and warm-lit; Lead Gen’s key sits proud with an amber legend and spill (the loudest); Native App’s key is drained grey and sunk; Hiring’s row says “Live” in green. Every key still reads as a key at this size. The chat header shows the Chief’s 44px key.',
     openSelector: AGENTS_TAB,
-    requires: '.agents-list__row .agent-key[data-icon="star"]',
+    requires: '.agents-list__row .agent-key[data-icon="mogbot"]',
     commands,
   },
   {
     id: 'agents-keys-picker',
     title: 'Agents — a new agent’s key: colourway, legend and shortcut key',
     looksRightWhen:
-      'New agent. Under the name, the key at 112px on a quiet band (its legend read from the name as you type, the first free letter as its sublegend), then Colour (fourteen small keys), Icon (a search box, the category filters, “2,051 icons” and the grid: the featured legends first as small keys in the chosen colourway, then the pack), and Shortcut key: a field showing the letter, with the line “Press <letter> anywhere outside a text box to open this agent.” The pick is a neutral ring, never the accent.',
+      'New agent. Under the name, the key at 112px on a quiet band (its legend read from the name as you type, the first free letter as its sublegend), then Colour (fourteen small keys), Icon (a search box, the category filters, “2,052 icons” and the grid: the featured legends first as small keys in the chosen colourway, the app’s filled mark leading, then the pack), and Shortcut key: a field showing the letter, with the line “Press <letter> anywhere outside a text box to open this agent.” The pick is a neutral ring, never the accent.',
     requires: '.agent-look__preview .agent-key--xl',
     steps: [
       { click: '.agents-list__new' },
