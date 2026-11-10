@@ -2467,7 +2467,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-apps',
     title: 'Agents — apps your agents can use (connected)',
     looksRightWhen:
-      'Connected leads: “Vercel · sam@acme.com”, “Signed in on this Mac · Acme Site can read and change (asks first); Chief of Staff can read”, “Connected as sam@acme.com” in green, and Who can use it / Remove. Connect an app lists Linear, Notion, Figma, Stripe and Sentry, each with what reading lets an agent do and Connect. Through claude.ai names Google Drive as connected there, with Open claude.ai. Set up in Claude Code says only Claude Code agents use these: figma (Connect it above to use it on every engine, Connected, Remove), linear (the same line, Needs sign-in in amber, no Sign in…, Remove) and playwright (Can’t connect, set up elsewhere, no Remove). Done.',
+      'Connected leads: “Vercel · sam@acme.com”, “Signed in on this Mac · Acme Site can read and change (asks first); Chief of Staff can read”, “Connected as sam@acme.com” in green, and Who can use it / Remove. Connect an app lists Linear, Notion, Figma, Stripe and Sentry, each with what reading lets an agent do and Connect. Through claude.ai names Google Drive as connected there, with Open claude.ai. Set up in Claude Code says only Claude Code agents use these: figma (“Connect it above for Claude Code and Codex alike”, Connected, Remove), linear (the same line, Needs sign-in in amber, no Sign in… but “Connect above”, which brings Linear’s Connect row into view and focuses it, then Remove) and playwright (Can’t connect, set up elsewhere, no Remove). Done.',
     command: 'agents.apps',
     requires: '.agent-apps__list',
     commands: {

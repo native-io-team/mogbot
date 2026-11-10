@@ -139,8 +139,8 @@ export function AgentAppsModal({ isOpen, onClose, agents = [], forAgentId }: Age
       >
         <div className="agent-apps__body">
           <p className="agent-apps__lead">
-            Connect an app once and choose which agents can use it. You sign in in your browser; the
-            sign-in stays in this Mac’s Keychain.
+            Connect an app once and choose which agents can use it. You sign in through your
+            browser; the sign-in stays in this Mac’s Keychain.
           </p>
 
           {ours.error && (
@@ -250,6 +250,9 @@ export function AgentAppsModal({ isOpen, onClose, agents = [], forAgentId }: Age
                         key={app.name}
                         app={app}
                         ours={ourAppFor(app, catalogue)}
+                        connectedAbove={connections.some(
+                          (c) => c.service === ourAppFor(app, catalogue)?.service
+                        )}
                         onSignIn={() => setSigningIn({ title: appTitle(app), name: app.name })}
                         onRemoved={() => void loadClaude()}
                         onError={setActionError}
@@ -594,6 +597,7 @@ function ConnectionRow({
 function ClaudeCodeRow({
   app,
   ours,
+  connectedAbove,
   onSignIn,
   onRemoved,
   onError,
@@ -601,6 +605,8 @@ function ClaudeCodeRow({
   app: AgentApp;
   /** The same app, which can be connected above for every engine instead. */
   ours?: ConnectableApp;
+  /** That app is already connected above. */
+  connectedAbove?: boolean;
   onSignIn: () => void;
   onRemoved: () => void;
   onError: (message: string | null) => void;
@@ -627,7 +633,9 @@ function ClaudeCodeRow({
         <span className="agent-apps__name">{appTitle(app)}</span>
         {ours ? (
           <span className="agent-apps__meta">
-            Connect it above to use it on Claude Code and Codex alike
+            {connectedAbove
+              ? 'Also connected above, for Claude Code and Codex alike'
+              : 'Connect it above for Claude Code and Codex alike'}
           </span>
         ) : (
           managed && <span className="agent-apps__meta">{managed}</span>
@@ -638,7 +646,13 @@ function ClaudeCodeRow({
           {status}
         </span>
       )}
-      {/* One we connect ourselves is connected above, never through /mcp. */}
+      {/* One we connect ourselves is connected above, never through /mcp:
+          its one fix is that row's Connect, so this takes you there. */}
+      {app.status === 'needs_auth' && ours && !connectedAbove && (
+        <TextButton tabIndex={0} onClick={() => focusConnectRow(ours.service)}>
+          Connect above
+        </TextButton>
+      )}
       {app.status === 'needs_auth' && !ours && (
         <TextButton tabIndex={0} onClick={onSignIn}>
           Sign in…
@@ -657,4 +671,13 @@ function ClaudeCodeRow({
       )}
     </li>
   );
+}
+
+/** Brings an app's "Connect an app" row into view and onto its Connect button. */
+function focusConnectRow(service: string) {
+  const row = document.querySelector<HTMLElement>(
+    `.agent-apps [data-service="${CSS.escape(service)}"]`
+  );
+  row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  row?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
 }

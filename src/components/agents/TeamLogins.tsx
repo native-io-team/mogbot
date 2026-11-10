@@ -3,7 +3,7 @@
  * service, not per agent. "Google · Gmail + Calendar — Recruiter, Mailroom and
  * Calendar · Connect" is one sign-in for all three; three agents asking for
  * GitHub is one "Use GitHub on this Mac". Each agent on a row can be unticked
- * (left waiting in its own chat) or put away with "Skip"; "Not needed" on a
+ * (left waiting in its own chat) or answered "Not now", as its own card would; "Not needed" on a
  * row (or "Skip the rest" for the list) declines the app for the whole team,
  * remembered, with Undo on its receipt (`agents/declined.rs`); a progress
  * line says how many rows are done, and done rows fold to the end.
@@ -236,11 +236,11 @@ function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void })
                       tabIndex={0}
                       className="team-logins__dismiss"
                       disabled={busy}
-                      aria-label={`Skip ${c.agentName}`}
-                      title={`Puts away ${c.agentName}’s card. “Not needed” below is for every agent, with Undo.`}
+                      aria-label={`Not now for ${c.agentName}`}
+                      title={`Tells ${c.agentName} no, this time, as its card’s Not now does. “Not needed” below is for every agent, with Undo.`}
                       onClick={() => void run(() => dismissLogin(c.agentId, c.requestId))}
                     >
-                      Skip
+                      Not now
                     </TextButton>
                   )}
                 </li>

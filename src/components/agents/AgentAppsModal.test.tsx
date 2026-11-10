@@ -147,7 +147,7 @@ describe('AgentAppsModal', () => {
     ]);
     render(<AgentAppsModal isOpen onClose={() => undefined} agents={AGENTS} />);
     expect(
-      await screen.findByText('Connect it above to use it on Claude Code and Codex alike')
+      await screen.findByText('Connect it above for Claude Code and Codex alike')
     ).toBeTruthy();
     // Only the one we can't connect ourselves keeps Claude Code's own sign-in.
     expect(screen.getAllByRole('button', { name: 'Sign in…' })).toHaveLength(1);
