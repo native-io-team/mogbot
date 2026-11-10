@@ -12,15 +12,23 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { TextButton } from '../primitives/TextButton';
 import { ExternalLinkIcon } from '@/components/icons';
 import { TAILSCALE_ANDROID_URL, TAILSCALE_IOS_URL } from '../../lib/companion';
+import { PHONE_APP_ON_ANDROID } from '../../lib/phoneApp';
 
 const STORES = {
   ios: { label: 'App Store', where: 'the App Store', url: TAILSCALE_IOS_URL },
   android: { label: 'Google Play', where: 'Google Play', url: TAILSCALE_ANDROID_URL },
 } as const;
 
-/** Tailscale's store page for one platform, or both. */
+/**
+ * Tailscale's store page for one platform, or for every platform the phone
+ * app exists on (just the App Store while it's iPhone only).
+ */
 export function TailscaleStoreLinks({ platform }: { platform?: 'ios' | 'android' }) {
-  const stores = platform ? [STORES[platform]] : [STORES.ios, STORES.android];
+  const stores = platform
+    ? [STORES[platform]]
+    : PHONE_APP_ON_ANDROID
+      ? [STORES.ios, STORES.android]
+      : [STORES.ios];
   return (
     <span className="phone-tailscale__links">
       {stores.map((s) => (

@@ -504,15 +504,30 @@ pub fn approval_url(output: &str) -> Option<String> {
         .map(|w| w.trim_end_matches(['.', ',', ')']).to_string())
 }
 
-/// Turn the Funnel on for our mount.
+/// Turn the Funnel on for our mount. A link that needs approval is
+/// returned with the CLI that printed it already dropped (killed); see
+/// [`enable_funnel_waiting`] to keep it waiting for the approval instead.
+pub async fn enable_funnel(port: u16) -> FunnelOutcome {
+    enable_funnel_waiting(port).await.0
+}
+
+/// Turn the Funnel on for our mount, and when Tailscale wants an approval
+/// first, hand back the CLI that is waiting for it ([`PendingApproval`]).
 ///
 /// Not run through `run_with_timeout`: when Funnel needs approval the CLI
 /// prints the approval link and then *waits* for it, so the useful output
 /// arrives before the command ends — and a timeout that discards captured
 /// output would throw away the one thing we need. This reads both streams as
 /// they arrive and stops as soon as it sees the link, the process exits, or
-/// the deadline passes; the child is killed on drop either way.
-pub async fn enable_funnel(port: u16) -> FunnelOutcome {
+/// the deadline passes.
+///
+/// Tailscale's `enableFeatureInteractive` (cmd/tailscale/cli) prints the
+/// link, then blocks on the IPN bus until the node has the capability and
+/// prints "Success." (no timeout of its own), but only when the control
+/// server says it is worth waiting (`ShouldWait`); otherwise it exits. So a
+/// CLI kept alive finishes the Funnel by itself the moment the user presses
+/// Approve on Tailscale's page, and one that exited is simply asked again.
+pub async fn enable_funnel_waiting(port: u16) -> (FunnelOutcome, Option<PendingApproval>) {
     let target = format!("http://127.0.0.1:{port}");
     let set_path = format!("--set-path={MOUNT_PATH}");
     // Which public port: never one where something private would go public
@@ -522,29 +537,158 @@ pub async fn enable_funnel(port: u16) -> FunnelOutcome {
             match choose_funnel_port(&config, &dns_name) {
                 Some(p) => p,
                 None => {
-                    return FunnelOutcome::Failed {
-                        detail: PORTS_IN_USE_DETAIL.to_string(),
-                    }
+                    return (
+                        FunnelOutcome::Failed {
+                            detail: PORTS_IN_USE_DETAIL.to_string(),
+                        },
+                        None,
+                    )
                 }
             }
         }
         _ => 443,
     };
     let https = format!("--https={public}");
-    let outcome = run_until_settled(&["funnel", "--bg", &https, &set_path, &target]).await;
+    let (outcome, pending) =
+        run_until_settled(&["funnel", "--bg", &https, &set_path, &target]).await;
     if outcome == FunnelOutcome::On {
         set_public_port(public);
     }
-    outcome
+    (
+        outcome,
+        pending.map(|cli| PendingApproval {
+            cli,
+            public_port: public,
+        }),
+    )
+}
+
+/// A `tailscale funnel` that printed an approval link and may still be
+/// waiting for it. Dropping it kills the CLI.
+pub struct PendingApproval {
+    cli: RunningCli,
+    public_port: u16,
+}
+
+impl PendingApproval {
+    /// The approval link it printed.
+    pub fn url(&self) -> &str {
+        &self.cli.url
+    }
+
+    /// The CLI already exited (Tailscale said not to wait): nothing will
+    /// finish by itself, so it has to be asked again.
+    pub fn exited(&self) -> bool {
+        self.cli.exited
+    }
+
+    /// Wait (up to `max`) for the CLI to finish: `On` once the user
+    /// approved, `NeedsApproval` with a second link (and the CLI still
+    /// waiting on that one), or `Failed`.
+    pub async fn wait(mut self, max: Duration) -> (FunnelOutcome, Option<PendingApproval>) {
+        if self.cli.exited {
+            let url = self.cli.url.clone();
+            return (FunnelOutcome::NeedsApproval { url }, None);
+        }
+        // Only what it prints from here on: the first link is already known.
+        self.cli.captured.clear();
+        let deadline = tokio::time::Instant::now() + max;
+        let waited = "Tailscale is still waiting for the approval.";
+        match pump(&mut self.cli, deadline, waited).await {
+            Pumped::Approval(url) => {
+                self.cli.url = url.clone();
+                self.cli.captured.clear();
+                (FunnelOutcome::NeedsApproval { url }, Some(self))
+            }
+            // Exited zero with nothing after the link: Tailscale didn't wait
+            // (`ShouldWait` false, it calls `os.Exit(0)` right after the
+            // link), so nothing was approved yet. A real approval prints
+            // "Success." first.
+            Pumped::Settled(FunnelOutcome::On) if self.cli.captured.trim().is_empty() => {
+                let url = self.cli.url.clone();
+                (FunnelOutcome::NeedsApproval { url }, None)
+            }
+            Pumped::Settled(outcome) => {
+                if outcome == FunnelOutcome::On {
+                    set_public_port(self.public_port);
+                }
+                (outcome, None)
+            }
+        }
+    }
+}
+
+/// A spawned CLI and what it has printed so far.
+struct RunningCli {
+    child: tokio::process::Child,
+    stdout: Option<tokio::process::ChildStdout>,
+    stderr: Option<tokio::process::ChildStderr>,
+    captured: String,
+    /// The last approval link seen (empty until one is).
+    url: String,
+    exited: bool,
+}
+
+enum Pumped {
+    /// An approval link appeared in the output (the CLI may still be waiting).
+    Approval(String),
+    Settled(FunnelOutcome),
+}
+
+/// Read the CLI's output until an approval link appears, it exits, or the
+/// deadline passes.
+async fn pump(
+    cli: &mut RunningCli,
+    deadline: tokio::time::Instant,
+    timeout_detail: &str,
+) -> Pumped {
+    let mut out_buf = [0u8; 2048];
+    let mut err_buf = [0u8; 2048];
+    loop {
+        if let Some(url) = approval_url(&cli.captured) {
+            return Pumped::Approval(url);
+        }
+        tokio::select! {
+            n = async { match cli.stdout.as_mut() { Some(s) => s.read(&mut out_buf).await, None => std::future::pending().await } } => {
+                match n { Ok(0) | Err(_) => cli.stdout = None, Ok(n) => cli.captured.push_str(&String::from_utf8_lossy(&out_buf[..n])) }
+            }
+            n = async { match cli.stderr.as_mut() { Some(s) => s.read(&mut err_buf).await, None => std::future::pending().await } } => {
+                match n { Ok(0) | Err(_) => cli.stderr = None, Ok(n) => cli.captured.push_str(&String::from_utf8_lossy(&err_buf[..n])) }
+            }
+            status = cli.child.wait(), if cli.stdout.is_none() && cli.stderr.is_none() => {
+                cli.exited = true;
+                if let Some(url) = approval_url(&cli.captured) {
+                    return Pumped::Approval(url);
+                }
+                return Pumped::Settled(match status {
+                    Ok(s) if s.success() => FunnelOutcome::On,
+                    _ => FunnelOutcome::Failed { detail: cli.captured.trim().to_string() },
+                });
+            }
+            _ = tokio::time::sleep_until(deadline) => {
+                return Pumped::Settled(FunnelOutcome::Failed {
+                    detail: if cli.captured.trim().is_empty() {
+                        timeout_detail.to_string()
+                    } else {
+                        cli.captured.trim().to_string()
+                    },
+                });
+            }
+        }
+    }
 }
 
 /// Run a `serve`/`funnel` command that may stop to print an approval link
-/// and wait (see [`enable_funnel`]).
-async fn run_until_settled(args: &[&str]) -> FunnelOutcome {
+/// and wait (see [`enable_funnel_waiting`]). On an approval link the CLI is
+/// handed back still running, so the caller can keep it waiting or drop it.
+async fn run_until_settled(args: &[&str]) -> (FunnelOutcome, Option<RunningCli>) {
     let Some(bin) = find_binary() else {
-        return FunnelOutcome::Failed {
-            detail: "Tailscale isn't installed.".to_string(),
-        };
+        return (
+            FunnelOutcome::Failed {
+                detail: "Tailscale isn't installed.".to_string(),
+            },
+            None,
+        );
     };
     let mut cmd = cli_command(bin);
     cmd.args(args)
@@ -555,48 +699,35 @@ async fn run_until_settled(args: &[&str]) -> FunnelOutcome {
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            return FunnelOutcome::Failed {
-                detail: format!("Could not run tailscale: {e}"),
-            }
+            return (
+                FunnelOutcome::Failed {
+                    detail: format!("Could not run tailscale: {e}"),
+                },
+                None,
+            )
         }
     };
-    let mut stdout = child.stdout.take();
-    let mut stderr = child.stderr.take();
-    let mut captured = String::new();
+    let mut cli = RunningCli {
+        stdout: child.stdout.take(),
+        stderr: child.stderr.take(),
+        child,
+        captured: String::new(),
+        url: String::new(),
+        exited: false,
+    };
     let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
-    let mut out_buf = [0u8; 2048];
-    let mut err_buf = [0u8; 2048];
-
-    loop {
-        if let Some(url) = approval_url(&captured) {
-            return FunnelOutcome::NeedsApproval { url };
+    match pump(
+        &mut cli,
+        deadline,
+        "Tailscale didn't answer within 20 seconds.",
+    )
+    .await
+    {
+        Pumped::Approval(url) => {
+            cli.url = url.clone();
+            (FunnelOutcome::NeedsApproval { url }, Some(cli))
         }
-        tokio::select! {
-            n = async { match stdout.as_mut() { Some(s) => s.read(&mut out_buf).await, None => std::future::pending().await } } => {
-                match n { Ok(0) | Err(_) => stdout = None, Ok(n) => captured.push_str(&String::from_utf8_lossy(&out_buf[..n])) }
-            }
-            n = async { match stderr.as_mut() { Some(s) => s.read(&mut err_buf).await, None => std::future::pending().await } } => {
-                match n { Ok(0) | Err(_) => stderr = None, Ok(n) => captured.push_str(&String::from_utf8_lossy(&err_buf[..n])) }
-            }
-            status = child.wait(), if stdout.is_none() && stderr.is_none() => {
-                if let Some(url) = approval_url(&captured) {
-                    return FunnelOutcome::NeedsApproval { url };
-                }
-                return match status {
-                    Ok(s) if s.success() => FunnelOutcome::On,
-                    _ => FunnelOutcome::Failed { detail: captured.trim().to_string() },
-                };
-            }
-            _ = tokio::time::sleep_until(deadline) => {
-                return FunnelOutcome::Failed {
-                    detail: if captured.trim().is_empty() {
-                        "Tailscale didn't answer within 20 seconds.".to_string()
-                    } else {
-                        captured.trim().to_string()
-                    },
-                };
-            }
-        }
+        Pumped::Settled(outcome) => (outcome, None),
     }
 }
 
@@ -744,7 +875,8 @@ pub async fn serve_active(dns_name: &str, https_port: u16, port: u16) -> bool {
 pub async fn enable_serve(https_port: u16, port: u16, dns_name: &str) -> FunnelOutcome {
     let https = format!("--https={https_port}");
     let target = format!("http://127.0.0.1:{port}");
-    let outcome = run_until_settled(&["serve", "--bg", &https, &target]).await;
+    // Phone access asks again from its own Check again; the CLI isn't kept.
+    let (outcome, _) = run_until_settled(&["serve", "--bg", &https, &target]).await;
     if outcome == FunnelOutcome::On && !serve_active(dns_name, https_port, port).await {
         return FunnelOutcome::Failed {
             detail: "Tailscale accepted the command but isn't serving the port.".to_string(),
@@ -1274,5 +1406,115 @@ mod tests {
             )),
             None
         );
+    }
+
+    /// A stand-in for `tailscale funnel` that prints its approval link, then
+    /// whatever `then` prints, as the real CLI does while it waits.
+    fn fake_cli(then: &str) -> RunningCli {
+        let script = format!(
+            "echo 'Funnel is not enabled on your tailnet.'; echo 'To enable, visit:'; \
+             echo '   https://login.tailscale.com/f/funnel?node=n1'; {then}"
+        );
+        let mut child = tokio::process::Command::new("/bin/sh")
+            .args(["-c", &script])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        RunningCli {
+            stdout: child.stdout.take(),
+            stderr: child.stderr.take(),
+            child,
+            captured: String::new(),
+            url: String::new(),
+            exited: false,
+        }
+    }
+
+    async fn first_link(cli: &mut RunningCli) -> String {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        match pump(cli, deadline, "timed out").await {
+            Pumped::Approval(url) => url,
+            Pumped::Settled(o) => panic!("expected an approval link, got {o:?}"),
+        }
+    }
+
+    /// The CLI kept waiting finishes the Funnel by itself once approved: the
+    /// user never comes back to press anything.
+    #[tokio::test]
+    async fn a_kept_cli_finishes_by_itself_once_approved() {
+        let mut cli = fake_cli("sleep 0.3; echo 'Success.'");
+        let url = first_link(&mut cli).await;
+        assert_eq!(url, "https://login.tailscale.com/f/funnel?node=n1");
+        cli.url = url;
+        let pending = PendingApproval {
+            cli,
+            public_port: 443,
+        };
+        assert!(!pending.exited());
+        let (outcome, next) = pending.wait(Duration::from_secs(5)).await;
+        assert_eq!(outcome, FunnelOutcome::On);
+        assert!(next.is_none());
+    }
+
+    /// A second approval (HTTPS, then Funnel) comes back as its own link,
+    /// with the CLI still waiting on it; a refusal is a failure, not a wait.
+    #[tokio::test]
+    async fn a_second_link_or_a_refusal_is_reported() {
+        let mut cli = fake_cli(
+            "sleep 0.2; echo '   https://login.tailscale.com/f/serve?node=n1'; sleep 0.2; echo 'Success.'",
+        );
+        cli.url = first_link(&mut cli).await;
+        let (outcome, next) = PendingApproval {
+            cli,
+            public_port: 443,
+        }
+        .wait(Duration::from_secs(5))
+        .await;
+        assert_eq!(
+            outcome,
+            FunnelOutcome::NeedsApproval {
+                url: "https://login.tailscale.com/f/serve?node=n1".into()
+            }
+        );
+        let (outcome, _) = next.unwrap().wait(Duration::from_secs(5)).await;
+        assert_eq!(outcome, FunnelOutcome::On);
+
+        let mut cli = fake_cli("echo 'access denied' >&2; exit 1");
+        cli.url = first_link(&mut cli).await;
+        let (outcome, _) = PendingApproval {
+            cli,
+            public_port: 443,
+        }
+        .wait(Duration::from_secs(5))
+        .await;
+        assert!(
+            matches!(outcome, FunnelOutcome::Failed { .. }),
+            "{outcome:?}"
+        );
+    }
+
+    /// Tailscale's CLI exits instead of waiting when the server says not to
+    /// (exit 0 right after the link): nothing was approved, so it is asked
+    /// again rather than taken for a yes.
+    #[tokio::test]
+    async fn a_cli_that_did_not_wait_is_not_a_yes() {
+        let mut cli = fake_cli("exit 0");
+        cli.url = first_link(&mut cli).await;
+        let (outcome, next) = PendingApproval {
+            cli,
+            public_port: 443,
+        }
+        .wait(Duration::from_secs(5))
+        .await;
+        assert_eq!(
+            outcome,
+            FunnelOutcome::NeedsApproval {
+                url: "https://login.tailscale.com/f/funnel?node=n1".into()
+            }
+        );
+        assert!(next.is_none(), "nothing left to wait on: ask again");
     }
 }

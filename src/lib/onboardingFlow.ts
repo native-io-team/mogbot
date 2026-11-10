@@ -5,13 +5,18 @@
  * 1. Welcome — what this is, in a line.
  * 2. Engine — Claude Code, Codex or OpenCode, then each install / sign-in
  *    as its own screen, ticked by the app's own checks. Required.
- * 3. Your agents — "Bring your agents from another assistant?" Yes walks
- *    Remote Access a screen per step (Tailscale on this Mac, the private
- *    link, connect the assistant), then starts the import, whose interview
- *    carries on in the Chief's chat. Not now goes on.
+ * 3. Your agents — "Bring your agents from another assistant?" is answered
+ *    by picking it (Claude, ChatGPT, Grok, another) or "I'm starting
+ *    fresh". A pick walks Remote Access a screen per step, skipping any
+ *    already true: Tailscale on this Mac, Turn on remote access (the app
+ *    keeps Tailscale's one-time approval waiting and finishes by itself
+ *    once it's approved), add the link to *that* assistant (its own steps,
+ *    ticked when it really connects), then send it one message (the import
+ *    is allowed on arrival: picking the assistant was the yes), whose
+ *    interview carries on in the Chief's chat.
  * 4. Your phone — "Use your agents from your phone?" Yes walks it a screen
- *    per step (the app, Tailscale on this Mac, Tailscale on the phone with
- *    the same account, phone access, the code, Allow, Paired), in the same
+ *    per step (the app, Tailscale on this Mac, Tailscale on the phone,
+ *    phone access, the code, Allow, Paired), in the same
  *    words the phone uses (`companion-protocol/src/pairWords.ts`).
  * 5. The Chief of Staff's chat, on its greeting and starters.
  *
@@ -31,8 +36,10 @@
  *
  * Everything here is pure: the order, Back, what a resumed launch opens on,
  * and what each check says when it passes or fails. A failed check always
- * says "Not done yet" with the one fix; a passed one says "Done". Never a
- * silent reload.
+ * says "Not done yet" with the one fix; a passed one says "Done"; one that
+ * is simply the user's move (nothing has gone wrong: Tailscale not
+ * installed yet, an assistant not connected yet) says "Waiting for you",
+ * neutral, never amber. Never a silent reload.
  *
  * The step is saved as it changes (per-viewer `localStorage`: losing it
  * costs a few clicks, and every step re-checks what's true anyway), so a
@@ -43,6 +50,13 @@
 
 import { SETUP_DEPENDENCIES, type SetupItem } from './setup';
 import { describeFailure, type InstallFailure } from './installProgress';
+import {
+  assistantName,
+  connectionStep,
+  type AssistantId,
+  type RemoteAccessStatus,
+  type RemoteProblem,
+} from './remoteAccess';
 
 // ============ Steps ============
 
@@ -227,10 +241,21 @@ export function resumeStep(saved: FlowProgress | null): FlowStep {
 
 // ============ Checks ============
 
-/** What a check says: a passed one "Done", a failed one "Not done yet" and the fix. */
+/**
+ * What a check says: a passed one "Done", a failed one "Not done yet" and
+ * the fix, and one that is the user's move "Waiting for you" (neutral: a
+ * screen never opens on an amber "Not done yet" before anyone has acted).
+ */
 export type CheckResult =
   | { state: 'checking'; line: string }
   | { state: 'pass'; line: string }
+  | {
+      state: 'waiting';
+      line: string;
+      /** What to do, when the line alone doesn't say. */
+      fix?: string;
+      action?: { label: string; url: string };
+    }
   | {
       state: 'fail';
       line: string;
@@ -246,6 +271,140 @@ export type CheckResult =
 
 export const NOT_DONE = 'Not done yet';
 export const DONE = 'Done';
+export const WAITING = 'Waiting for you';
+
+// ============ Your agents: which assistant ============
+
+/** The assistant picked on "Bring your agents from another assistant?". */
+export const ASSISTANT_STORAGE_KEY = 'shipstudio.onboarding.assistant';
+
+export function readAssistantChoice(): AssistantId | null {
+  try {
+    const v = window.localStorage.getItem(ASSISTANT_STORAGE_KEY);
+    return v === 'claude' || v === 'chatgpt' || v === 'grok' || v === 'other' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveAssistantChoice(id: AssistantId): void {
+  try {
+    window.localStorage.setItem(ASSISTANT_STORAGE_KEY, id);
+  } catch {
+    // Storage blocked: the screens say "your assistant" instead.
+  }
+}
+
+/**
+ * The first screen of "Your agents" still to do, from what this Mac says
+ * now: a pick goes straight past what's already true (Tailscale on, the
+ * link working, the assistant connected), never into a screen that would
+ * only say Done.
+ */
+export function firstAgentsStep(
+  s: RemoteAccessStatus | null,
+  now: number,
+  choice: AssistantId | null = null
+): FlowStep {
+  if (!s || s.tailscale.state !== 'connected') return 'agentsTailscale';
+  if (assistantConnected(s, choice) && connectionStep(s, now).kind === 'ready') {
+    return 'agentsStart';
+  }
+  return linkIsOn(s, now) ? 'agentsConnect' : 'agentsLink';
+}
+
+/**
+ * The assistant the user picked has reached this Mac (`everConnected`, set
+ * by the first real request, never by the app's own probe). The only time
+ * that's not the answer: the last request came from a different assistant
+ * the app recognises (Grok connected, Claude picked), so Claude's steps
+ * still show. An unrecognised client name never holds the tick back.
+ */
+export function assistantConnected(
+  s: Pick<RemoteAccessStatus, 'everConnected' | 'activity'> | null,
+  choice: AssistantId | null
+): boolean {
+  if (!s?.everConnected) return false;
+  const last = s.activity.lastClient;
+  if (!choice || choice === 'other' || !last) return true;
+  const named = assistantName(last);
+  const known: Record<string, AssistantId> = { Claude: 'claude', ChatGPT: 'chatgpt', Grok: 'grok' };
+  return !(named in known) || known[named] === choice;
+}
+
+/**
+ * The link exists and is working or on its way (Tailscale is making it
+ * public, which clears by itself): enough to add it to the assistant now,
+ * which starts working the moment it's public. A stuck wait isn't.
+ */
+export function linkIsOn(s: RemoteAccessStatus, now: number): boolean {
+  const step = connectionStep(s, now);
+  return step.kind === 'ready' || (step.kind === 'publishing' && step.stage !== 'stuck');
+}
+
+/**
+ * The "Turn on remote access" screen, from the one problem `remoteProblem`
+ * names (so it never disagrees with the Remote access window):
+ *
+ * - `off`: the big button is the whole screen.
+ * - `approve`: Tailscale's one-time approval is the user's move. Neutral,
+ *   with Tailscale's page as the big button; the app keeps the request
+ *   waiting and goes on by itself once it's approved.
+ * - `check`: done, clearing by itself (a spinner), or a real "Not done yet"
+ *   with its one fix; `fix` is that fix when it's an app action rather
+ *   than a page (Try again, Ask Tailscale again, Check again).
+ */
+export type LinkCheck =
+  | { kind: 'off' }
+  | { kind: 'approve'; url: string; check: CheckResult }
+  | { kind: 'check'; check: CheckResult; fix: RemoteProblem['action'] | null };
+
+export function linkCheckFor(problem: RemoteProblem | null): LinkCheck {
+  if (!problem || problem.id === 'noAssistantYet') {
+    return { kind: 'check', check: { state: 'pass', line: 'Remote access is on.' }, fix: null };
+  }
+  const { action } = problem;
+  if (problem.id === 'remoteOff') return { kind: 'off' };
+  if (
+    (problem.id === 'httpsNeedsApproval' || problem.id === 'funnelNeedsApproval') &&
+    action.kind === 'openUrl'
+  ) {
+    return {
+      kind: 'approve',
+      url: action.url,
+      check: {
+        state: 'waiting',
+        line: 'Press Approve on Tailscale’s page.',
+        fix: 'This screen goes on by itself once you have. If the page says only an admin can, ask whoever runs your Tailscale.',
+      },
+    };
+  }
+  if (problem.waiting) {
+    return {
+      kind: 'check',
+      check: {
+        state: 'checking',
+        line:
+          problem.id === 'publishing'
+            ? 'Making the link reachable. Usually a minute or two the first time.'
+            : problem.line,
+      },
+      fix: null,
+    };
+  }
+  return {
+    kind: 'check',
+    check: {
+      state: 'fail',
+      line: problem.line,
+      fix: problem.fix,
+      ...(action.kind === 'openUrl' ? { action: { label: action.label, url: action.url } } : {}),
+    },
+    // A page to change a setting (DNS, Access controls) still needs the
+    // request made again afterwards: Try again sits beside it.
+    fix: action.kind === 'openUrl' ? { kind: 'turnOn', label: 'Try again' } : action,
+  };
+}
 
 // ============ The engine's own screens ============
 

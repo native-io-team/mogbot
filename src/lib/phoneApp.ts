@@ -36,6 +36,13 @@ export const PHONE_APP_STORE_URL: string | null = BRAND_LINKS.appStore ?? null;
 /** The public TestFlight link, when there is one. */
 export const PHONE_APP_TESTFLIGHT_URL: string | null = BRAND_LINKS.testFlight ?? null;
 
+/**
+ * Whether the phone app exists for Android (`links.playStore`). False while
+ * it's iPhone only (TestFlight, then the App Store): the pairing steps then
+ * link only Tailscale's App Store page, not Google Play.
+ */
+export const PHONE_APP_ON_ANDROID: boolean = !!BRAND_LINKS.playStore;
+
 /** This build's route. */
 export const PHONE_APP_ROUTE: PhoneAppRoute = phoneAppRouteFor(
   PHONE_APP_STORE_URL,

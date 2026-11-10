@@ -10,7 +10,7 @@
 import type { Scenario } from '../types';
 import { readySetupItems } from './base';
 import { neverAnswers, rejectsWith } from '../reject';
-import { FLOW_STORAGE_KEY, type FlowStep } from '../../lib/onboardingFlow';
+import { ASSISTANT_STORAGE_KEY, FLOW_STORAGE_KEY, type FlowStep } from '../../lib/onboardingFlow';
 import type { MockFailure } from '../../lib/installProgress';
 import { remoteStatus } from './remote';
 import { phoneStatus } from './phone';
@@ -19,6 +19,12 @@ import { PHONE_PAIRING_LINK, PHONE_QR } from '../fixtures/phoneQr';
 
 const at = (step: FlowStep) => ({
   [FLOW_STORAGE_KEY]: JSON.stringify({ v: 1, step, finished: false }),
+});
+
+/** On `step`, with this assistant picked on the first screen of Your agents. */
+const picked = (step: FlowStep, assistant: string) => ({
+  ...at(step),
+  [ASSISTANT_STORAGE_KEY]: assistant,
 });
 
 const missing = (id: string, friendlyName: string) => ({
@@ -241,80 +247,163 @@ const REQUEST = {
 };
 
 function optionalParts(): Scenario[] {
+  const approve = 'https://login.tailscale.com/f/funnel?node=n1';
+  const PROMPT =
+    'Hi! I’m moving my agents to Mogbot. Please call import_conversation and tell it about each agent you run for me…';
   return [
     flow(
       'onboarding-agents-ask',
       'agentsAsk',
-      '3. Bring your agents?',
-      'The bar on its third part, "Your agents". "Bring your agents from another assistant?", one line (Grok, ChatGPT, Claude… carry on here; nothing created until you say so), a big "Bring my agents" (focused) and a quiet "Not now". Back.',
+      '3. Bring your agents? (pick the assistant)',
+      'The bar on its third part, "Your agents". "Bring your agents from another assistant?", one line, then five rows of the same weight: Claude (focused), ChatGPT, Grok, Another assistant, each with a muted hint and a chevron, and a little apart "I’m starting fresh" ("Skip this. You can bring agents over any time later."). No big button, no other way out needed. Back.',
       {}
     ),
     flow(
       'onboarding-agents-tailscale',
       'agentsTailscale',
-      '3a. Tailscale on this Mac (missing)',
-      '"Turn on Tailscale on this Mac", one line, an amber "Not done yet. Tailscale isn’t on this Mac yet." with its fix (install, sign in, Allow the VPN configuration) and Check again; a big "Get Tailscale for Mac ↗" and "Skip for now". The third segment part-filled.',
-      remote({ tailscale: { state: 'notInstalled' } })
+      '3a. Tailscale on this Mac (not yet)',
+      '"Turn on Tailscale on this Mac", one line naming Claude, a NEUTRAL check (hollow grey mark, no amber): "Waiting for you. Tailscale isn’t on this Mac yet." with its fix and Check again; a big "Get Tailscale for Mac ↗" and "Skip for now".',
+      remote({ tailscale: { state: 'notInstalled' } }),
+      { storage: picked('agentsTailscale', 'claude') }
     ),
     flow(
       'onboarding-agents-tailscale-done',
       'agentsTailscale',
       '3a. Tailscale on this Mac (done)',
-      'The same screen with a green-ticked "Done. Tailscale is on, signed in as julian@example.com." and a big Continue.',
+      'Tailscale already on: the screen goes straight on to the first screen still to do, here "Turn on remote access" with its big "Turn it on".',
       remote({ tailscale: TS })
     ),
     flow(
       'onboarding-agents-link',
       'agentsLink',
       '3b. Turn on remote access',
-      '"Turn on remote access", one line (it lets your assistant reach your agents; the Mac stays awake, keep it plugged in), a big "Turn it on", Skip for now.',
+      '"Turn on remote access", one line (it lets your assistant reach your agents; the Mac stays awake, keep it plugged in), a big "Turn it on", Skip for now. No check line yet.',
       remote({ tailscale: TS })
     ),
     flow(
-      'onboarding-agents-link-funnel',
+      'onboarding-agents-link-approve',
       'agentsLink',
-      '3b. The link needs Funnel switched on',
-      'An amber "Not done yet. Tailscale needs your OK to let your assistant in." with the fix (turn on Funnel on the Tailscale page), "Open the Tailscale page ↗" (which takes focus, so Enter opens it and never skips) and Check again. No big button.',
+      '3b. Tailscale’s one-time approval (after Turn it on)',
+      'Pressed "Turn it on" and Tailscale wants its OK: the page opened on that same click. Title "Approve it in Tailscale", the line saying Tailscale opened its page in your browser, a NEUTRAL "Waiting for you. Press Approve on Tailscale’s page." with "This screen goes on by itself once you have…", a big "Open the page again ↗" (focused), Skip for now. Nothing amber.',
+      {
+        ...remote({ tailscale: TS }),
+        set_remote_access_enabled: remoteStatus({
+          tailscale: TS,
+          enabled: true,
+          serverRunning: true,
+          funnelApprovalUrl: approve,
+          funnelApprovalKind: 'funnel',
+        }),
+      },
+      {
+        steps: [{ click: '[data-flow-primary]' }],
+        requires: '.flow-check[data-state="waiting"]',
+      }
+    ),
+    flow(
+      'onboarding-agents-link-approve-resumed',
+      'agentsLink',
+      '3b. Approval still waiting (arrived on it)',
+      'Arrived (a relaunch) while Tailscale still wants its OK: "Approve it in Tailscale", "One OK on Tailscale’s own page, once…", the same neutral waiting line, a big "Open the Tailscale page ↗".',
       remote({
         tailscale: TS,
         enabled: true,
         serverRunning: true,
-        funnelApprovalUrl: 'https://login.tailscale.com/f/funnel?node=n1',
+        funnelApprovalUrl: approve,
+        funnelApprovalKind: 'funnel',
+      })
+    ),
+    flow(
+      'onboarding-agents-link-https-off',
+      'agentsLink',
+      '3b. HTTPS certificates off (no approval link)',
+      'A real failure: amber "Not done yet. HTTPS certificates are off in your Tailscale account, and the link needs them." with "In Tailscale’s DNS settings, press Enable HTTPS, then try again.", "Open DNS settings ↗" (focused) and "Try again" beside it.',
+      remote({
+        tailscale: TS,
+        enabled: true,
+        serverRunning: true,
+        funnelError:
+          'Funnel not available; HTTPS must be enabled. See https://tailscale.com/s/https.',
+        funnelProblem: { kind: 'httpsOff' },
       })
     ),
     flow(
       'onboarding-agents-link-live',
       'agentsLink',
       '3b. The link is live',
-      'A green-ticked "Done. Remote access is on." and a big Continue.',
+      'Already on when the screen opens: it goes straight on (the status loads after arrival, so it counts as done here) to "Add the link to your assistant". The Done line with a big Continue shows only for the beat before it moves.',
       remote(REMOTE_ON)
     ),
     flow(
-      'onboarding-agents-connect',
+      'onboarding-agents-connect-claude',
       'agentsConnect',
-      '3c. Add the link to your assistant',
-      '"Add the link to your assistant", one line (a custom connector, maybe called MCP, named Mogbot; then ask what your agents are doing), a big "Copy the link", a muted line that the link is a secret, Skip for now.',
-      remote(REMOTE_ON)
-    ),
-    flow(
-      'onboarding-agents-connect-waiting',
-      'agentsConnect',
-      '3c. Copied, waiting for the assistant',
-      'After Copy the link: the button reads "Copied. Copy again" and a "Waiting for your assistant to connect…" line with a spinner.',
+      '3c. Add the link to Claude',
+      '"Add the link to Claude", "A few steps in Claude. This screen ticks the moment it connects.", five numbered steps (copy; Customize → Connectors → + Add → Add custom connector; name Mogbot and paste as the remote MCP server URL; No sign in, Add; in a chat + → Connectors), "Open Claude’s connector settings ↗", a neutral "Waiting for you. Claude hasn’t connected yet.", the plan line (any plan; Free has one custom connector; Team/Enterprise an owner adds it) with the secret note, a big "Copy the link" (focused), Skip for now.',
       remote(REMOTE_ON),
-      { steps: [{ click: '[data-flow-primary]' }], requires: '.flow-check[data-state="checking"]' }
+      { storage: picked('agentsConnect', 'claude') }
+    ),
+    flow(
+      'onboarding-agents-connect-chatgpt',
+      'agentsConnect',
+      '3c. Add the link to ChatGPT',
+      '"Add the link to ChatGPT", its numbered steps (Settings → Apps → Advanced settings → Developer mode; Create app; No authentication; + → Developer mode), "Open ChatGPT ↗", the neutral waiting line, the Developer-mode plan note, a big "Copy the link".',
+      remote(REMOTE_ON),
+      { storage: picked('agentsConnect', 'chatgpt') }
+    ),
+    flow(
+      'onboarding-agents-connect-grok',
+      'agentsConnect',
+      '3c. Add the link to Grok',
+      '"Add the link to Grok", its steps (grok.com/connectors → New Connector → Custom; name and server URL; ask Grok), "Open Grok’s connector settings ↗", the neutral waiting line, a big "Copy the link".',
+      remote(REMOTE_ON),
+      { storage: picked('agentsConnect', 'grok') }
+    ),
+    flow(
+      'onboarding-agents-connect-other',
+      'agentsConnect',
+      '3c. Add the link to another assistant',
+      '"Add the link to your assistant", the two generic steps, no settings button, "Waiting for you. Your assistant hasn’t connected yet.", a big "Copy the link".',
+      remote(REMOTE_ON),
+      { storage: picked('agentsConnect', 'other') }
+    ),
+    flow(
+      'onboarding-agents-connect-publishing',
+      'agentsConnect',
+      '3c. Link still going public',
+      'Came straight on while Tailscale makes the link public: the Claude steps, and a spinner line "Tailscale is still making the link public. Add it now: it starts working by itself." instead of the waiting line.',
+      remote({
+        ...REMOTE_ON,
+        reachability: { state: 'noPublicDns' },
+        publish: { sinceMs: Date.now() - 30_000, autoRetried: false, gaveUp: false },
+      }),
+      { storage: picked('agentsConnect', 'claude') }
+    ),
+    flow(
+      'onboarding-agents-connect-copied',
+      'agentsConnect',
+      '3c. Copied',
+      'After Copy the link: the button reads "Link copied"; the neutral waiting line stays.',
+      remote(REMOTE_ON),
+      {
+        storage: picked('agentsConnect', 'claude'),
+        steps: [{ click: '[data-flow-primary]' }],
+        requires: '[data-flow-step="agentsConnect"] .flow-check[data-state="waiting"]',
+      }
     ),
     flow(
       'onboarding-agents-start',
       'agentsStart',
-      '3d. Start the import',
-      '"Start the import", one line (one import may begin; you see the plan before anything is created), a big "Start the import", Skip for now.',
+      '3d. Send Claude this message',
+      'The import is allowed on arrival (no Start button): "Send Claude this message", one line (paste it into a new chat; you choose what comes over), the message box with "Copy message" focused, a neutral "Waiting for you. Claude hasn’t started the import yet." and Skip for now.',
       {
         ...remote({ ...REMOTE_ON, everConnected: true }),
         agents_import_talk: gateWith(null),
-        agents_import_prompt:
-          'Hi! I’m moving my agents to Mogbot. Please call import_conversation and tell it about each agent you run for me…',
+        agents_import_prompt: PROMPT,
         agents_import_talk_arm: gateWith(null, true),
+      },
+      {
+        storage: picked('agentsStart', 'claude'),
+        requires: '[data-flow-step="agentsStart"] .flow-check[data-state="waiting"]',
       }
     ),
     flow(
@@ -326,7 +415,8 @@ function optionalParts(): Scenario[] {
         ...remote({ ...REMOTE_ON, everConnected: true }),
         agents_import_talk: gateWith({ state: 'awaiting_consent' }),
         agents_import_prompt: 'Hi!',
-      }
+      },
+      { storage: picked('agentsStart', 'grok') }
     ),
     flow(
       'onboarding-phone-ask',
@@ -353,7 +443,7 @@ function optionalParts(): Scenario[] {
       'onboarding-phone-phone-tailscale',
       'phonePhoneTailscale',
       '4c. Tailscale on your phone, same account',
-      '"Turn on Tailscale on your phone", the line naming julian@example.com and the VPN prompt, "Looking for your phone on your Tailscale…", App Store ↗ / Google Play ↗, a big "I did it".',
+      '"Turn on Tailscale on your phone", the line naming julian@example.com and the VPN prompt, "Looking for your phone on your Tailscale…", App Store ↗ only (no Google Play: the phone app is iPhone only), a big "I did it".',
       phone()
     ),
     flow(

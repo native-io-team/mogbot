@@ -1,23 +1,36 @@
 /**
- * Bringing your agents from another assistant, one screen at a time:
- * "Bring your agents from another assistant?" → Tailscale on this Mac →
- * the private link (Remote Access on, Funnel/HTTPS) → add the link to your
- * assistant (ticks when it has really connected) → start the import and
- * send it the message. The interview itself carries on in the Chief of
- * Staff's chat, which is where onboarding ends: its first card there is
- * the import's "OK to start?".
+ * Bringing your agents from another assistant, one screen at a time, each
+ * one thing to look at and one decision:
+ *
+ * 1. "Bring your agents from another assistant?" answered by picking it
+ *    (Claude, ChatGPT, Grok, another) or "I'm starting fresh".
+ * 2. Tailscale on this Mac (skipped when it's already on).
+ * 3. Turn on remote access: one click. When Tailscale wants its one-time
+ *    approval, that click opens Tailscale's page, the app keeps the request
+ *    waiting, and the screen goes on by itself once it's approved.
+ * 4. Add the link to *that* assistant: Copy the link, its own few clicks,
+ *    a button to its connector settings where the vendor documents one;
+ *    Done the moment it really connects (`everConnected`).
+ * 5. Send it one message. The import is allowed on arrival (picking the
+ *    assistant was the yes; the Chief still asks on a card before the
+ *    interview starts), and Done when the assistant asks to start.
  *
  * Every tick is this Mac's own check (`get_remote_access_status`, the
- * import's own state); nothing is ticked on a click.
+ * import's own state); nothing is ticked on a click. Screens already true
+ * are passed over (`firstAgentsStep`). The interview itself carries on in
+ * the Chief of Staff's chat, which is where onboarding ends.
  *
  * @module components/setup/flow/AgentsFlow
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { CheckLine, FlowShell } from './FlowParts';
 import { MessageCard } from '../../agents/ImportParts';
+import { Button } from '../../primitives/Button';
 import { Primary, Skip, tailscaleMacView, useAdvanceWhenPassed } from '../../phone/PhoneFlow';
+import { ChevronRightIcon, ExternalLinkIcon } from '@/components/icons';
 import { usePolling } from '../../../hooks/usePolling';
 import { useOptionalToast } from '../../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../../lib/errors';
@@ -31,14 +44,26 @@ import {
   type ImportGate,
 } from '../../../lib/agents';
 import {
+  assistantGuides,
   connectionStep,
   copyRemoteLink,
   getRemoteAccessStatus,
+  remoteProblem,
   republishRemoteLink,
   setRemoteAccessEnabled,
+  type AssistantId,
   type RemoteAccessStatus,
 } from '../../../lib/remoteAccess';
-import type { CheckResult, FlowStep } from '../../../lib/onboardingFlow';
+import {
+  assistantConnected,
+  firstAgentsStep,
+  linkCheckFor,
+  linkIsOn,
+  readAssistantChoice,
+  saveAssistantChoice,
+  type CheckResult,
+  type FlowStep,
+} from '../../../lib/onboardingFlow';
 
 export type AgentsStep = Extract<FlowStep, `agents${string}`>;
 
@@ -54,10 +79,18 @@ function markStayOnUnderstood() {
   }
 }
 
+/** The pick list: each assistant in one line, by what people call it. */
+const CHOICES: { id: AssistantId; name: string; hint: string }[] = [
+  { id: 'claude', name: 'Claude', hint: 'On claude.ai, any plan' },
+  { id: 'chatgpt', name: 'ChatGPT', hint: 'On chatgpt.com, with Developer mode' },
+  { id: 'grok', name: 'Grok', hint: 'On grok.com' },
+  { id: 'other', name: 'Another assistant', hint: 'Anything that adds a custom connector (MCP)' },
+];
+
 interface Props {
   step: AgentsStep;
   go: (step: FlowStep) => void;
-  /** "Not now" / "Skip for now": on to the phone. */
+  /** "I'm starting fresh" / "Skip for now": on to the phone. */
   onSkip: () => void;
   onBack: () => void;
 }
@@ -73,6 +106,15 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
   const [copied, setCopied] = useState(false);
   const [gate, setGate] = useState<ImportGate | null>(null);
   const [prompt, setPrompt] = useState('');
+  const [choice, setChoice] = useState<AssistantId | null>(() => readAssistantChoice());
+  /** Tailscale's approval page was opened by the click that asked for it. */
+  const [openedApproval, setOpenedApproval] = useState<string | null>(null);
+
+  const guides = assistantGuides(BRAND.name);
+  const guide = guides.find((g) => g.id === (choice ?? 'other')) ?? guides[guides.length - 1];
+  /** "Claude", or "your assistant" when it's another one. */
+  const who = guide.id === 'other' ? 'your assistant' : guide.name;
+  const Who = guide.id === 'other' ? 'Your assistant' : guide.name;
 
   const load = useCallback(async () => {
     const s = await getRemoteAccessStatus().catch(() => null);
@@ -88,7 +130,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
     { intervalMs: 3000, enabled: step !== 'agentsAsk', name: 'agents-flow' }
   );
   useEffect(() => {
-    if (step !== 'agentsAsk') void load();
+    void load();
   }, [step, load]);
 
   // The import's own state, kept current from its events.
@@ -115,8 +157,10 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
     try {
       const next = await fn();
       if (next) setStatus(next);
+      return next ?? null;
     } catch (err) {
       showToast(errText(err), 'error');
+      return null;
     } finally {
       setBusy(null);
     }
@@ -127,32 +171,93 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
     setChecking(false);
   };
 
-  const connection = status ? connectionStep(status, now) : null;
-  const linkLive = connection?.kind === 'ready';
-  const connected = !!status?.everConnected;
+  const connected = assistantConnected(status, choice);
+  const linkOn = status ? linkIsOn(status, now) : false;
+  const ready = status ? connectionStep(status, now).kind === 'ready' : false;
   const talk = gate?.talk ?? null;
   const started = talk !== null && (talk.state === 'imported' || talkIsLive(talk));
 
+  const ahead = (s: RemoteAccessStatus | null) => go(firstAgentsStep(s, Date.now(), choice));
+
   useAdvanceWhenPassed(
     step === 'agentsTailscale' && status?.tailscale.state === 'connected',
-    () => go('agentsLink'),
+    () => ahead(status),
     step
   );
-  useAdvanceWhenPassed(step === 'agentsLink' && linkLive, () => go('agentsConnect'), step);
+  useAdvanceWhenPassed(step === 'agentsLink' && linkOn, () => go('agentsConnect'), step);
   useAdvanceWhenPassed(step === 'agentsConnect' && connected, () => go('agentsStart'), step);
+
+  // Arriving at the message: allow the import (once per arrival). Picking
+  // the assistant was the yes; the Chief still asks on a card first.
+  const armedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (step !== 'agentsStart') {
+      armedFor.current = null;
+      return;
+    }
+    if (!gate || gate.armed || started || armedFor.current === step) return;
+    armedFor.current = step;
+    void armImportTalk()
+      .then(setGate)
+      .catch((err) => showToast(errText(err), 'error'));
+  }, [step, gate, started, showToast]);
 
   const skip = <Skip onSkip={onSkip} />;
 
   if (step === 'agentsAsk') {
+    const pick = async (id: AssistantId) => {
+      saveAssistantChoice(id);
+      setChoice(id);
+      setBusy(id);
+      const s = await load();
+      setBusy(null);
+      go(firstAgentsStep(s, Date.now(), id));
+    };
     return (
       <FlowShell
         step={step}
         onBack={onBack}
         title="Bring your agents from another assistant?"
-        lede="If Grok, ChatGPT, Claude or another assistant runs agents for you, they can carry on here, each where it left off. Nothing is created until you say so."
-        primary={<Primary onClick={() => go('agentsTailscale')}>Bring my agents</Primary>}
-        secondary={<Skip onSkip={onSkip} label="Not now" />}
-      />
+        lede="If one of these runs agents for you, they carry on here, each where it left off. Nothing is created until you say so."
+      >
+        <div className="flow-choices">
+          {CHOICES.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className="flow-choice"
+              data-flow-choice={c.id}
+              disabled={busy !== null}
+              onClick={() => void pick(c.id)}
+            >
+              <span className="flow-choice__text">
+                <span className="flow-choice__name">{c.name}</span>
+                <span className="flow-choice__hint">{c.hint}</span>
+              </span>
+              <span className="flow-choice__go" aria-hidden>
+                <ChevronRightIcon size={14} />
+              </span>
+            </button>
+          ))}
+          <button
+            type="button"
+            className="flow-choice flow-choice--fresh"
+            data-flow-skip
+            data-flow-fresh
+            onClick={onSkip}
+          >
+            <span className="flow-choice__text">
+              <span className="flow-choice__name">I’m starting fresh</span>
+              <span className="flow-choice__hint">
+                Skip this. You can bring agents over any time later.
+              </span>
+            </span>
+            <span className="flow-choice__go" aria-hidden>
+              <ChevronRightIcon size={14} />
+            </span>
+          </button>
+        </div>
+      </FlowShell>
     );
   }
 
@@ -161,7 +266,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
       tailscale: status?.tailscale,
       checking,
       onCheck: () => void recheck(),
-      onNext: () => go('agentsLink'),
+      onNext: () => ahead(status),
       skip,
     });
     return (
@@ -169,7 +274,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
         step={step}
         onBack={onBack}
         title={view.title}
-        lede="A free app that gives this Mac a private address on your own account. Your assistant reaches your agents through it."
+        lede={`A free app that gives this Mac a private address on your own account. ${Who} reaches your agents through it.`}
         primary={view.primary}
         secondary={view.secondary}
       >
@@ -179,40 +284,62 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
   }
 
   if (step === 'agentsLink') {
-    const check: CheckResult | null = !connection
-      ? { state: 'checking', line: 'Checking remote access…' }
-      : connection.kind === 'ready'
-        ? { state: 'pass', line: 'Remote access is on.' }
-        : connection.kind === 'off'
-          ? null
-          : connection.kind === 'publishing' || connection.kind === 'starting'
-            ? {
-                state: 'checking',
-                line: 'Making the link reachable. This can take a minute or two the first time.',
-              }
-            : connection.kind === 'approveFunnel'
-              ? {
-                  state: 'fail',
-                  line: 'Tailscale needs your OK to let your assistant in.',
-                  fix: 'Open the Tailscale page, turn on Funnel there, then come back. This screen notices by itself.',
-                  action: { label: 'Open the Tailscale page', url: connection.url },
-                }
-              : connection.kind === 'unreachable'
-                ? { state: 'fail', line: 'The link isn’t reachable yet.', fix: connection.detail }
-                : connection.kind === 'funnelFailed'
-                  ? {
-                      state: 'fail',
-                      line: 'Tailscale didn’t open the link.',
-                      fix: connection.detail,
-                    }
-                  : connection.kind === 'serverStopped'
-                    ? { state: 'fail', line: 'Remote access stopped.', fix: 'Turn it on again.' }
-                    : {
-                        state: 'fail',
-                        line: 'Tailscale on this Mac isn’t ready.',
-                        fix: 'Go back one step and finish it.',
-                      };
-    const off = connection?.kind === 'off' || connection?.kind === 'serverStopped';
+    const link = status
+      ? linkCheckFor(remoteProblem(status, now))
+      : ({
+          kind: 'check',
+          check: { state: 'checking', line: 'Checking remote access…' },
+          fix: null,
+        } as const);
+    const turnOn = () =>
+      void act('enable', async () => {
+        markStayOnUnderstood();
+        const next = await setRemoteAccessEnabled(true);
+        // The approval page is the next thing to do: open it on this same
+        // click, rather than asking for a second one.
+        const after = linkCheckFor(remoteProblem(next, Date.now()));
+        if (after.kind === 'approve' && after.url) {
+          setOpenedApproval(after.url);
+          void openUrl(after.url);
+        }
+        return next;
+      });
+    if (link.kind === 'approve') {
+      const opened = openedApproval === link.url;
+      return (
+        <FlowShell
+          step={step}
+          onBack={onBack}
+          title="Approve it in Tailscale"
+          lede={
+            opened
+              ? 'Tailscale opened its page in your browser. One OK there, once, and your assistant can reach this Mac.'
+              : 'One OK on Tailscale’s own page, once, and your assistant can reach this Mac.'
+          }
+          primary={
+            <Primary
+              external
+              onClick={() => {
+                setOpenedApproval(link.url);
+                void openUrl(link.url);
+              }}
+            >
+              {opened ? 'Open the page again' : 'Open the Tailscale page'}
+            </Primary>
+          }
+          secondary={skip}
+        >
+          <CheckLine result={link.check} />
+        </FlowShell>
+      );
+    }
+    const fix = link.kind === 'check' ? link.fix : null;
+    const runFix = () => {
+      if (!fix) return;
+      if (fix.kind === 'turnOn') void act('again', () => setRemoteAccessEnabled(true));
+      else if (fix.kind === 'republish') void act('again', republishRemoteLink);
+      else void recheck();
+    };
     return (
       <FlowShell
         step={step}
@@ -220,31 +347,22 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
         title="Turn on remote access"
         lede="It lets your assistant reach your agents on this Mac. The Mac stays awake while it’s on, so keep it plugged in while you’re away."
         primary={
-          off ? (
-            <Primary
-              busy={busy === 'enable'}
-              onClick={() =>
-                void act('enable', async () => {
-                  markStayOnUnderstood();
-                  return setRemoteAccessEnabled(true);
-                })
-              }
-            >
+          link.kind === 'off' ? (
+            <Primary busy={busy === 'enable'} onClick={turnOn}>
               Turn it on
             </Primary>
-          ) : linkLive ? (
+          ) : linkOn ? (
             <Primary onClick={() => go('agentsConnect')}>Continue</Primary>
           ) : undefined
         }
         secondary={skip}
       >
-        {check && (
+        {link.kind === 'check' && (
           <CheckLine
-            result={check}
-            checking={checking || busy === 'republish'}
-            onCheckAgain={
-              check.state === 'fail' ? () => void act('republish', republishRemoteLink) : undefined
-            }
+            result={link.check}
+            checking={checking || busy === 'again'}
+            onCheckAgain={link.check.state === 'fail' && fix ? runFix : undefined}
+            againLabel={fix?.label}
           />
         )}
       </FlowShell>
@@ -253,14 +371,19 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
 
   if (step === 'agentsConnect') {
     const check: CheckResult = connected
-      ? { state: 'pass', line: 'Your assistant connected.' }
-      : { state: 'checking', line: 'Waiting for your assistant to connect…' };
+      ? { state: 'pass', line: `${Who} connected.` }
+      : !ready
+        ? {
+            state: 'checking',
+            line: 'Tailscale is still making the link public. Add it now: it starts working by itself.',
+          }
+        : { state: 'waiting', line: `${Who} hasn’t connected yet.` };
     return (
       <FlowShell
         step={step}
         onBack={onBack}
-        title="Add the link to your assistant"
-        lede={`In your assistant, add a custom connector (it may say MCP), name it ${BRAND.name}, and paste the link. Then ask it: “What are my agents doing?”`}
+        title={guide.id === 'other' ? 'Add the link to your assistant' : `Add the link to ${who}`}
+        lede={`A few steps in ${who}. This screen ticks the moment it connects.`}
         primary={
           connected ? (
             <Primary onClick={() => go('agentsStart')}>Continue</Primary>
@@ -274,66 +397,58 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
                 })
               }
             >
-              {copied ? 'Copied. Copy again' : 'Copy the link'}
+              {copied ? 'Link copied' : 'Copy the link'}
             </Primary>
           )
         }
         secondary={skip}
       >
-        {(copied || connected) && <CheckLine result={check} />}
-        <p className="flow-note">The link is a secret: it only goes to your clipboard.</p>
+        <ol className="flow-steps" data-assistant={guide.id}>
+          <li>Copy the link with the button below.</li>
+          {guide.steps.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ol>
+        {guide.url && (
+          <div className="flow-links">
+            <Button
+              variant="secondary"
+              rightIcon={<ExternalLinkIcon size={12} />}
+              onClick={() => void openUrl(guide.url as string)}
+              data-assistant-settings
+            >
+              {guide.urlLabel ?? `Open ${guide.name}`}
+            </Button>
+          </div>
+        )}
+        <CheckLine result={check} />
+        <p className="flow-note">
+          {guide.needs ? `${guide.needs} ` : ''}The link is a secret: it only goes to your
+          clipboard.
+        </p>
       </FlowShell>
     );
   }
 
   // agentsStart
-  const armed = !!gate?.armed || started;
-  const check: CheckResult | null = started
-    ? {
-        state: 'pass',
-        line: `${talk.source} is asking to start the import.`,
-      }
-    : armed
-      ? { state: 'checking', line: 'Waiting for your assistant to start the import…' }
-      : null;
+  const check: CheckResult = started
+    ? { state: 'pass', line: `${talk.source} is asking to start the import.` }
+    : { state: 'waiting', line: `${Who} hasn’t started the import yet.` };
   return (
     <FlowShell
       step={step}
       onBack={onBack}
-      title={
-        started
-          ? `${talk.source} is ready to bring your agents`
-          : armed
-            ? 'Send your assistant this message'
-            : 'Start the import'
-      }
+      title={started ? `${talk.source} is ready to bring your agents` : `Send ${who} this message`}
       lede={
         started
           ? 'Next, your Chief of Staff asks you to OK it in its chat. You choose which agents come over before anything is created.'
-          : armed
-            ? 'It tells your Chief of Staff what each agent does. You see the plan, and choose what to import, before anything is created.'
-            : 'Your assistant can only start an import after you press Start. Then you send it one message, and you choose what comes over before anything is created.'
+          : `Paste it into a new chat with ${who}. It tells your Chief of Staff what each agent does, and you choose what comes over before anything is created.`
       }
-      primary={
-        started ? (
-          <Primary onClick={onSkip}>Continue</Primary>
-        ) : !armed ? (
-          <Primary
-            busy={busy === 'arm'}
-            onClick={() =>
-              void act('arm', async () => {
-                setGate(await armImportTalk());
-              })
-            }
-          >
-            Start the import
-          </Primary>
-        ) : undefined
-      }
+      primary={started ? <Primary onClick={onSkip}>Continue</Primary> : undefined}
       secondary={started ? undefined : skip}
     >
-      {armed && !started && prompt && <MessageCard message={prompt} autoFocus />}
-      {check && <CheckLine result={check} />}
+      {!started && prompt && <MessageCard message={prompt} autoFocus />}
+      {(started || gate?.armed) && <CheckLine result={check} />}
     </FlowShell>
   );
 }

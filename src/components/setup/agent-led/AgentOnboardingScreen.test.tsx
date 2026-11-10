@@ -69,10 +69,12 @@ describe('AgentOnboardingScreen', () => {
     press('Continue');
     await waitFor(() => expect(setDefaultAgentId).toHaveBeenCalledWith('codex'));
 
-    // The two optional parts, each one question with Not now.
+    // The two optional parts, each one question with a plain way past it.
+    // Your agents is answered by picking the assistant, or starting fresh.
     expect(await heading('Bring your agents from another assistant?')).toBeInTheDocument();
     expect(onComplete).not.toHaveBeenCalled();
-    press('Not now');
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Claude/ })).toHaveFocus());
+    press(/I’m starting fresh/);
     expect(await heading('Use your agents from your phone?')).toBeInTheDocument();
     press('Not now');
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));

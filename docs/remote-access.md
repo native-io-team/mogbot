@@ -125,6 +125,22 @@ link's path).
 | `unreachable` | resolves, request didn't get through | didn't get through yet | Ask Tailscale again |
 | `noAssistantYet` (waiting) | reachable, `everConnected` false | link works, nobody has connected | Copy link, add it as a connector |
 
+**The approval finishes by itself.** `httpsNeedsApproval` /
+`funnelNeedsApproval` are the user's move, not failures: onboarding shows
+them as a neutral "Waiting for you" (`linkCheckFor`), and the click on
+"Turn it on" that produced the link opens Tailscale's page. Tailscale's CLI
+prints the link and then blocks until the node has the capability
+(`enableFeatureInteractive` in `cmd/tailscale/cli`: no timeout, "Success."
+when done), so the app no longer kills it: `enable_funnel_waiting` hands
+back a `PendingApproval` and `start_approval_watch` waits on it (15 min),
+then starts the publish watch. A second link (HTTPS, then Funnel) is
+recorded and waited on the same way; a CLI that exited without waiting
+(exit 0 straight after the link, or nothing after it) is asked again every
+5 s, never taken for a yes. Tailscale's Funnel docs say approving that page
+creates the certificates *and* adds the `funnel` node attribute, so one
+Approve covers both. Turning remote access off kills the waiting CLI.
+Not observed against a live tailnet.
+
 **Funnel never publishes something private.** Funnel is switched on per
 host and port, not per path. `tailscale serve 3000` puts the user's own
 site on `/` at 443, tailnet only; turning our `/<slug>` on there would have

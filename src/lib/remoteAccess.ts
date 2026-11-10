@@ -632,8 +632,10 @@ export interface AssistantGuide {
   steps: string[];
   /** One line on what plan or role it needs, when it needs one. */
   needs?: string;
-  /** Where to start, when there is a page for it. */
+  /** Where to start, when the vendor documents the page. */
   url?: string;
+  /** What the button that opens `url` says. */
+  urlLabel?: string;
 }
 
 /**
@@ -642,12 +644,20 @@ export interface AssistantGuide {
  * says what was and wasn't confirmed). Menus move: each guide names the
  * setting so it can be searched for when a label changes. The link is
  * pasted only into the connector's URL field, never into a chat.
+ *
+ * `url` only where the vendor's own help names it: Claude's connectors page
+ * (support.claude.com, "Getting started with custom connectors using remote
+ * MCP", read 2026-11-10: claude.ai/customize/connectors) and Grok's
+ * (docs.x.ai). ChatGPT's settings have no documented address, so its
+ * button opens ChatGPT itself.
  */
 export function assistantGuides(appName: string): AssistantGuide[] {
   return [
     {
       id: 'claude',
       name: 'Claude',
+      url: 'https://claude.ai/customize/connectors',
+      urlLabel: 'Open Claude’s connector settings',
       needs:
         'Any plan (Free allows one custom connector). On Team and Enterprise an owner adds it.',
       steps: [
@@ -660,6 +670,8 @@ export function assistantGuides(appName: string): AssistantGuide[] {
     {
       id: 'chatgpt',
       name: 'ChatGPT',
+      url: 'https://chatgpt.com/',
+      urlLabel: 'Open ChatGPT',
       needs:
         'On the web, with Developer mode (Plus, Pro, Business, Enterprise, Edu; on Business and Enterprise an admin turns it on).',
       steps: [
@@ -673,6 +685,7 @@ export function assistantGuides(appName: string): AssistantGuide[] {
       id: 'grok',
       name: 'Grok',
       url: 'https://grok.com/connectors',
+      urlLabel: 'Open Grok’s connector settings',
       steps: [
         'Go to grok.com/connectors, press New Connector, then Custom.',
         `Name it ${appName} and paste the link as the server URL. It needs no sign-in.`,

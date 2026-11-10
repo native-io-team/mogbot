@@ -238,6 +238,17 @@ describe('assistantGuides', () => {
     expect(guides[1].steps.join(' ')).toMatch(/No authentication/);
     expect(guides[2].url).toBe('https://grok.com/connectors');
   });
+
+  it('opens only pages the vendor documents, each button saying where it goes', () => {
+    const [claude, chatgpt, grok, other] = assistantGuides('Mogbot');
+    // support.claude.com names this page; ChatGPT documents no settings URL.
+    expect(claude.url).toBe('https://claude.ai/customize/connectors');
+    expect(claude.urlLabel).toBe('Open Claude’s connector settings');
+    expect(chatgpt.url).toBe('https://chatgpt.com/');
+    expect(chatgpt.urlLabel).toBe('Open ChatGPT');
+    expect(grok.urlLabel).toMatch(/Grok’s connector settings/);
+    expect(other.url).toBeUndefined();
+  });
 });
 
 describe('setupSteps', () => {

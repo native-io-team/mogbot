@@ -140,7 +140,7 @@ export const phoneScenarios: Scenario[] = [
     'phone-flow-phone-tailscale',
     'phonePhoneTailscale',
     'Phone — 3. Tailscale on your phone, same account',
-    '“Turn on Tailscale on your phone”, the line naming julian@example.com (the Mac’s account) and the VPN prompt, “Looking for your phone on your Tailscale…” with a spinner, App Store ↗ / Google Play ↗, a big “I did it”.',
+    '“Turn on Tailscale on your phone”, the line naming julian@example.com (the Mac’s account) and the VPN prompt, “Looking for your phone on your Tailscale…” with a spinner, App Store ↗ only (no Google Play: the phone app is iPhone only), a big “I did it”.',
     { tailscale: LOGIN }
   ),
   flowStep(
@@ -246,7 +246,7 @@ export const phoneScenarios: Scenario[] = [
     'Phone — a pairing code on screen',
     'A crisp black-on-white QR code on the left (it scans to this app’s pairing link), ' +
       'four numbered steps on the right, the first in bold: “Install Tailscale on your phone and ' +
-      'sign in as julian@example.com.”, why, and “App Store ↗” / “Google Play ↗” links under it. ' +
+      'sign in as julian@example.com.”, why, and an “App Store ↗” link (no Google Play while the phone app is iPhone only) under it. ' +
       'Then open the app, tap Scan the code, then Pair, and Allow here. "Works once, for 5:00" (or just under) and ' +
       '"Copy link instead" / "Cancel". No “A device reached this Mac” line yet.',
     {

@@ -20,9 +20,137 @@ import {
   sectionOf,
   skipPart,
   FLOW_STORAGE_KEY,
+  assistantConnected,
+  firstAgentsStep,
+  linkCheckFor,
+  linkIsOn,
+  readAssistantChoice,
+  saveAssistantChoice,
   type CheckResult,
 } from './onboardingFlow';
 import type { SetupItem } from './setup';
+import { remoteProblem, type RemoteAccessStatus } from './remoteAccess';
+
+const remote = (over: Partial<RemoteAccessStatus> = {}): RemoteAccessStatus => ({
+  supported: true,
+  enabled: true,
+  serverRunning: true,
+  tailscale: { state: 'connected', dnsName: 'm.tail1.ts.net' },
+  funnelOn: true,
+  funnelApprovalUrl: null,
+  funnelError: null,
+  linkMasked: 'https://m.tail1.ts.net/mogbot/mcp/3f9c••••',
+  reachability: { state: 'reachable' },
+  publish: { sinceMs: null, autoRetried: false, gaveUp: false },
+  power: { hasBattery: false, onAc: true, batteryPercent: null, charging: null },
+  keepAwake: true,
+  lidClosedMode: null,
+  openAtLogin: false,
+  openAtLoginAvailable: true,
+  pushPin: 'notSet',
+  projects: [],
+  everConnected: false,
+  activity: { lastRequestMs: null, lastClient: null, rejectedRequests: 0 },
+  ...over,
+});
+
+describe('Your agents', () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it('remembers which assistant was picked, and nothing else', () => {
+    expect(readAssistantChoice()).toBeNull();
+    saveAssistantChoice('grok');
+    expect(readAssistantChoice()).toBe('grok');
+    window.localStorage.setItem('shipstudio.onboarding.assistant', 'gemini');
+    expect(readAssistantChoice()).toBeNull();
+  });
+
+  it('a pick goes straight past what is already true', () => {
+    const now = Date.now();
+    expect(firstAgentsStep(null, now)).toBe('agentsTailscale');
+    expect(firstAgentsStep(remote({ tailscale: { state: 'notInstalled' } }), now)).toBe(
+      'agentsTailscale'
+    );
+    expect(firstAgentsStep(remote({ enabled: false, linkMasked: null }), now)).toBe('agentsLink');
+    expect(firstAgentsStep(remote(), now)).toBe('agentsConnect');
+    expect(firstAgentsStep(remote({ everConnected: true }), now, 'claude')).toBe('agentsStart');
+    // Grok connected before, Claude picked now: Claude's steps still show.
+    const grokWas = remote({
+      everConnected: true,
+      activity: { lastRequestMs: now, lastClient: 'grok', rejectedRequests: 0 },
+    });
+    expect(firstAgentsStep(grokWas, now, 'claude')).toBe('agentsConnect');
+    expect(firstAgentsStep(grokWas, now, 'grok')).toBe('agentsStart');
+  });
+
+  it('an unrecognised client never holds the tick back', () => {
+    const s = remote({
+      everConnected: true,
+      activity: { lastRequestMs: 1, lastClient: 'my-custom-client', rejectedRequests: 0 },
+    });
+    expect(assistantConnected(s, 'chatgpt')).toBe(true);
+    expect(assistantConnected(remote(), 'chatgpt')).toBe(false);
+  });
+
+  it('a link still going public is enough to add it; a stuck one is not', () => {
+    const now = Date.now();
+    const going = remote({
+      reachability: { state: 'noPublicDns' },
+      publish: { sinceMs: now - 30_000, autoRetried: false, gaveUp: false },
+    });
+    expect(linkIsOn(going, now)).toBe(true);
+    expect(linkIsOn({ ...going, publish: { ...going.publish, gaveUp: true } }, now)).toBe(false);
+  });
+
+  it('Tailscale’s one-time approval is the user’s move: neutral, never “Not done yet”', () => {
+    const s = remote({
+      linkMasked: null,
+      reachability: null,
+      funnelApprovalUrl: 'https://login.tailscale.com/f/funnel?node=n1',
+    });
+    const link = linkCheckFor(remoteProblem(s, 0));
+    expect(link).toMatchObject({
+      kind: 'approve',
+      url: 'https://login.tailscale.com/f/funnel?node=n1',
+      check: { state: 'waiting' },
+    });
+  });
+
+  it('off is the big button alone; a real failure keeps its one fix', () => {
+    expect(linkCheckFor(remoteProblem(remote({ enabled: false, linkMasked: null }), 0))).toEqual({
+      kind: 'off',
+    });
+    const https = linkCheckFor(
+      remoteProblem(
+        remote({
+          linkMasked: null,
+          reachability: null,
+          funnelError: 'HTTPS must be enabled',
+          funnelProblem: { kind: 'httpsOff' },
+        }),
+        0
+      )
+    );
+    expect(https).toMatchObject({
+      kind: 'check',
+      check: { state: 'fail', action: { label: 'Open DNS settings' } },
+      fix: { kind: 'turnOn', label: 'Try again' },
+    });
+    const stuck = linkCheckFor(
+      remoteProblem(
+        remote({
+          reachability: { state: 'noPublicDns' },
+          publish: { sinceMs: 0, autoRetried: true, gaveUp: true },
+        }),
+        0
+      )
+    );
+    expect(stuck).toMatchObject({ kind: 'check', fix: { kind: 'republish' } });
+    expect(linkCheckFor(remoteProblem(remote(), 0))).toMatchObject({
+      check: { state: 'pass' },
+    });
+  });
+});
 
 const failed = (r: CheckResult) => {
   expect(r.state).toBe('fail');

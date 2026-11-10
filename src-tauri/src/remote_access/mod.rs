@@ -891,23 +891,35 @@ pub async fn bring_up(app: tauri::AppHandle) -> Result<tailscale::FunnelOutcome,
     ensure_token()?;
     let port = start_server(app).await?;
     power::start_keep_awake()?;
-    let outcome = match tailscale::status().await {
+    stop_approval_watch();
+    let (outcome, pending) = match tailscale::status().await {
         tailscale::TailscaleState::Connected { .. } => {
             tailscale::remove_previous_mount().await;
-            tailscale::enable_funnel(port).await
+            tailscale::enable_funnel_waiting(port).await
         }
-        tailscale::TailscaleState::NotInstalled => tailscale::FunnelOutcome::Failed {
-            detail: "Tailscale isn't installed.".to_string(),
-        },
-        tailscale::TailscaleState::NeedsLogin => tailscale::FunnelOutcome::Failed {
-            detail: "Sign in to Tailscale first.".to_string(),
-        },
+        tailscale::TailscaleState::NotInstalled => (
+            tailscale::FunnelOutcome::Failed {
+                detail: "Tailscale isn't installed.".to_string(),
+            },
+            None,
+        ),
+        tailscale::TailscaleState::NeedsLogin => (
+            tailscale::FunnelOutcome::Failed {
+                detail: "Sign in to Tailscale first.".to_string(),
+            },
+            None,
+        ),
         tailscale::TailscaleState::Unknown { detail } => {
-            tailscale::FunnelOutcome::Failed { detail }
+            (tailscale::FunnelOutcome::Failed { detail }, None)
         }
     };
-    if outcome == tailscale::FunnelOutcome::On {
-        start_publish_watch(port);
+    // Recorded before any watch starts, so a watch that finishes first is
+    // never overwritten by this older answer.
+    set_last_funnel(Some(outcome.clone()));
+    match outcome {
+        tailscale::FunnelOutcome::On => start_publish_watch(port),
+        tailscale::FunnelOutcome::NeedsApproval { .. } => start_approval_watch(port, pending),
+        tailscale::FunnelOutcome::Failed { .. } => {}
     }
     Ok(outcome)
 }
@@ -915,6 +927,8 @@ pub async fn bring_up(app: tauri::AppHandle) -> Result<tailscale::FunnelOutcome,
 /// Take everything down. The Funnel goes first so nothing new arrives while
 /// the server stops.
 pub async fn tear_down() {
+    stop_approval_watch();
+    set_last_funnel(None);
     stop_publish_watch();
     shots::clear();
     if tailscale::find_binary().is_some() {
@@ -1056,10 +1070,14 @@ fn start_publish_watch(port: u16) {
 pub async fn republish() -> Result<tailscale::FunnelOutcome, CommandError> {
     let port =
         running_port().ok_or_else(|| CommandError::expected("Remote access isn't running."))?;
+    stop_approval_watch();
     let _ = tailscale::disable_funnel().await;
-    let outcome = tailscale::enable_funnel(port).await;
-    if outcome == tailscale::FunnelOutcome::On {
-        start_publish_watch(port);
+    let (outcome, pending) = tailscale::enable_funnel_waiting(port).await;
+    set_last_funnel(Some(outcome.clone()));
+    match outcome {
+        tailscale::FunnelOutcome::On => start_publish_watch(port),
+        tailscale::FunnelOutcome::NeedsApproval { .. } => start_approval_watch(port, pending),
+        tailscale::FunnelOutcome::Failed { .. } => {}
     }
     audit(
         "republish",
@@ -1068,6 +1086,100 @@ pub async fn republish() -> Result<tailscale::FunnelOutcome, CommandError> {
         outcome == tailscale::FunnelOutcome::On,
     );
     Ok(outcome)
+}
+
+// ============================================================================
+// Approval — Tailscale's one-time "Allow" page, finished without the user
+// coming back to press anything
+// ============================================================================
+//
+// The first time, Tailscale wants the tailnet's owner to approve HTTPS
+// certificates and Funnel (one page: approving it creates the certificates
+// and adds the `funnel` node attribute to the policy file, per Tailscale's
+// Funnel docs). The CLI prints that page's link and waits. We used to kill
+// it there, so after approving, the user had to come back and press Check
+// again. Now the waiting CLI is kept: the moment they approve, it finishes,
+// and the publish watch takes over. If Tailscale's CLI didn't wait, it is
+// asked again every few seconds until it says yes.
+
+/// The last Funnel attempt's result, so a "needs approval" link survives the
+/// status being re-read. Cleared whenever the Funnel is confirmed on.
+static LAST_FUNNEL: LazyLock<Mutex<Option<tailscale::FunnelOutcome>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+pub fn last_funnel() -> Option<tailscale::FunnelOutcome> {
+    LAST_FUNNEL.lock().ok().and_then(|l| l.clone())
+}
+
+pub fn set_last_funnel(outcome: Option<tailscale::FunnelOutcome>) {
+    if let Ok(mut l) = LAST_FUNNEL.lock() {
+        *l = outcome;
+    }
+}
+
+/// How long to keep waiting for the approval before leaving it to the user
+/// (the screen still shows the link; Try again asks afresh).
+const APPROVAL_WAIT_FOR: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+/// How often to ask again when Tailscale's CLI didn't stay to wait.
+const APPROVAL_ASK_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
+
+static APPROVAL_TASK: LazyLock<Mutex<Option<tokio::task::AbortHandle>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+/// Stop waiting for an approval; the waiting CLI is killed with the task.
+fn stop_approval_watch() {
+    if let Some(h) = APPROVAL_TASK.lock().ok().and_then(|mut t| t.take()) {
+        h.abort();
+    }
+}
+
+/// Wait for the user to approve on Tailscale's page, then finish turning the
+/// link on by ourselves.
+fn start_approval_watch(port: u16, pending: Option<tailscale::PendingApproval>) {
+    use tailscale::FunnelOutcome as F;
+    stop_approval_watch();
+    let task = tokio::spawn(async move {
+        let started = std::time::Instant::now();
+        let mut pending = pending;
+        loop {
+            let left = APPROVAL_WAIT_FOR.saturating_sub(started.elapsed());
+            if left.is_zero() {
+                tracing::info!("[Remote] Stopped waiting for the Tailscale approval");
+                return;
+            }
+            let (outcome, next) = match pending.take() {
+                Some(p) if !p.exited() => p.wait(left).await,
+                _ => {
+                    tokio::time::sleep(APPROVAL_ASK_EVERY).await;
+                    if !read_config().enabled || running_port() != Some(port) {
+                        return;
+                    }
+                    tailscale::enable_funnel_waiting(port).await
+                }
+            };
+            match outcome {
+                F::On => {
+                    tracing::info!("[Remote] Tailscale approved; the link is on");
+                    set_last_funnel(Some(F::On));
+                    start_publish_watch(port);
+                    return;
+                }
+                F::NeedsApproval { .. } => {
+                    set_last_funnel(Some(outcome));
+                    pending = next;
+                }
+                F::Failed { .. } if started.elapsed() >= APPROVAL_WAIT_FOR => return,
+                F::Failed { .. } => {
+                    tracing::warn!(?outcome, "[Remote] Funnel failed after the approval");
+                    set_last_funnel(Some(outcome));
+                    return;
+                }
+            }
+        }
+    });
+    if let Ok(mut t) = APPROVAL_TASK.lock() {
+        *t = Some(task.abort_handle());
+    }
 }
 
 /// Called at launch: if the user left remote access on, put it back.

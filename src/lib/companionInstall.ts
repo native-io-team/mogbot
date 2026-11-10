@@ -398,8 +398,14 @@ const sh = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
  */
 const REPO = BRAND_LINKS.companionSource;
 
-/** Whether "Install on my phone" is offered in this build. */
-export const COMPANION_INSTALL_ENABLED: boolean = REPO !== null || import.meta.env.DEV;
+/**
+ * Whether "Build it on this Mac…" ("Install on my phone") is offered in
+ * this build: in a dev build only. Someone who downloaded the app and was
+ * sent a TestFlight link is never offered an Xcode build of the phone app,
+ * even when brand.json names the source (`REPO`, which a dev build doesn't
+ * need: it builds from this checkout's mobile/).
+ */
+export const COMPANION_INSTALL_ENABLED: boolean = import.meta.env.DEV;
 
 /** Get the source to `path` (its parent is the checkout) if it isn't there. */
 function sourceInstruction(src: SourceCheck): string {

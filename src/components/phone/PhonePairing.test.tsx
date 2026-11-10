@@ -91,7 +91,8 @@ describe('PairCode', () => {
       /^Install Tailscale on your phone and sign in as julian@example\.com\./
     );
     expect(screen.getByRole('button', { name: /App Store/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Google Play/ })).toBeTruthy();
+    // The phone app is iPhone only (no links.playStore): no Google Play.
+    expect(screen.queryByRole('button', { name: /Google Play/ })).toBeNull();
     expect(screen.queryByTestId('phone-code-reached')).toBeNull();
   });
 

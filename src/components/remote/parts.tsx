@@ -768,7 +768,7 @@ export function AssistantSteps({ appName }: { appName: string }) {
             rightIcon={<ExternalLinkIcon size={14} />}
             onClick={() => void openUrl(guide.url as string)}
           >
-            Open {guide.name}’s connectors
+            {guide.urlLabel ?? `Open ${guide.name}`}
           </Button>
         </div>
       )}

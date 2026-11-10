@@ -42,6 +42,12 @@ export interface BrandLinks {
    * no App Store page yet.
    */
   testFlight: string | null;
+  /**
+   * The phone app's Google Play page. Absent or null while the phone app is
+   * iPhone only: Android isn't offered anywhere (not even Tailscale's
+   * Android link on the pairing steps).
+   */
+  playStore?: string | null;
   pushRelay: string | null;
   /** Where the Mac app is downloaded from (the phone's pairing screen links it). */
   macDownload: string | null;
