@@ -933,6 +933,8 @@ pub fn run() {
             commands::agents_usage::agents_spare_add,
             commands::agents_usage::agents_spare_remove,
             commands::agents_usage::agents_spare_spend_now,
+            commands::agents_usage::agents_usage_sign_in_seen,
+            commands::agents_usage::agents_usage_check_account,
             commands::agents::agents_account_add,
             commands::agents::agents_account_rename,
             commands::agents::agents_account_reorder,

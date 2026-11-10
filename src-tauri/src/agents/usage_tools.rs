@@ -817,6 +817,7 @@ mod tests {
             }],
             routines: vec![],
             totals: crate::agents::compute::totals(&[], 0),
+            sign_in_changes: vec![],
             now: 0,
         }
     }
