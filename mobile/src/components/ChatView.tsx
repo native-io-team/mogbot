@@ -16,6 +16,7 @@ import {
   showsStarters,
   type Agent,
   type AgentMessage,
+  type UsageTone,
 } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
@@ -226,7 +227,6 @@ export function ChatView({
   const ripple = useRipple();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const accent = useAccent();
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === id));
   // The header's ring: the current 5-hour window, as the engine reported it. None without a reading.
   const { quotas, now: quotaNow } = useQuotas();
@@ -642,61 +642,13 @@ export function ChatView({
           <IconButton name="info.circle" label={`About ${agent.name}`} onPress={openSheet} />
         </View>
       ) : (
-        <Stack.Screen
-          options={{
-            // Back and the header's controls in this agent's colour, not the Chief's.
-            headerTintColor: accent.accent,
-            headerTitle: () => (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityHint="Instructions, memory, files and routines"
-                onPress={openSheet}
-                style={({ pressed }) => pressed && PRESSED}
-              >
-                {header}
-              </Pressable>
-            ),
-            // On iOS the system's own bar button (below): a view of ours in its
-            // glass got the bar's side padding, so the circle came out wider than tall.
-            ...(NATIVE_HEADER_BUTTONS
-              ? {}
-              : {
-                  headerRight: () => (
-                    <View style={styles.headerRight}>
-                      {usageRing}
-                      {conversationsButton}
-                      <IconButton
-                        name="info.circle"
-                        label={`About ${agent.name}`}
-                        fallback="ⓘ"
-                        onPress={openSheet}
-                      />
-                    </View>
-                  ),
-                }),
-          }}
+        <ChatHeader
+          agent={agent}
+          ringPercent={ring?.percent}
+          ringTone={ring?.tone}
+          offered={offered}
+          switchRow={switchRow}
         />
-      )}
-      {!embedded && NATIVE_HEADER_BUTTONS && (
-        <Stack.Toolbar placement="right">
-          {/* Left of ⓘ: the ring, only once an engine has reported the window. */}
-          <Stack.Toolbar.View hidden={!ring} separateBackground>
-            {usageRing || <View />}
-          </Stack.Toolbar.View>
-          <Stack.Toolbar.Button
-            hidden={!offered || switchRow}
-            icon="bubble.left"
-            accessibilityLabel="Conversations"
-            tintColor={accent.accent}
-            onPress={openConversations}
-          />
-          <Stack.Toolbar.Button
-            icon="info.circle"
-            accessibilityLabel={`About ${agent.name}`}
-            tintColor={accent.accent}
-            onPress={openSheet}
-          />
-        </Stack.Toolbar>
       )}
       {switchRow && conversations && (
         <ConversationSwitch
@@ -956,7 +908,7 @@ export function ChatView({
 /**
  * Memoised: the chat re-renders as it lays out (its height, the composer's,
  * the rows in view), several times while it opens, and each of those drew
- * every row again.
+ * every row again. And by `sameRow`: a turn's every step is a new agent.
  */
 const ItemView = memo(function ItemView({
   item,
@@ -969,19 +921,7 @@ const ItemView = memo(function ItemView({
   lit,
   afterLine,
   arrived,
-}: {
-  afterLine?: boolean;
-  /** Came in while the chat was open: it rises in once. */
-  arrived?: boolean;
-  item: Item;
-  agent: Agent;
-  liveCopyCard?: string | null;
-  newestResult?: Set<string>;
-  latestFailure?: string | null;
-  onError: (t: string) => void;
-  onLongPress: (m: AgentMessage) => void;
-  lit?: boolean;
-}) {
+}: ItemProps) {
   const styles = useStyles();
   const drawn =
     item.kind === 'message' ? (
@@ -1046,7 +986,48 @@ const ItemView = memo(function ItemView({
       )}
     </View>
   );
-});
+}, sameRow);
+
+interface ItemProps {
+  afterLine?: boolean;
+  /** Came in while the chat was open: it rises in once. */
+  arrived?: boolean;
+  item: Item;
+  agent: Agent;
+  liveCopyCard?: string | null;
+  newestResult?: Set<string>;
+  latestFailure?: string | null;
+  onError: (t: string) => void;
+  onLongPress: (m: AgentMessage) => void;
+  lit?: boolean;
+}
+
+/**
+ * A row draws again when its props change, except that an agent whose only
+ * news is its turn's progress (the activity line, the timeline) is the same
+ * agent to every row but the working one: those draw from whether it's busy
+ * and since when (a queued line, a paused card), not from each step. During
+ * a turn that's a status event every step, and each one redrew every row.
+ */
+function sameRow(a: ItemProps, b: ItemProps): boolean {
+  const keys = Object.keys(a) as (keyof ItemProps)[];
+  if (keys.length !== Object.keys(b).length) return false;
+  for (const k of keys) if (k !== 'agent' && a[k] !== b[k]) return false;
+  if (a.agent === b.agent) return true;
+  if (a.item.kind === 'working') return false;
+  return sameButProgress(a.agent, b.agent);
+}
+
+function sameButProgress(a: Agent, b: Agent): boolean {
+  const keys = Object.keys(a) as (keyof Agent)[];
+  if (keys.length !== Object.keys(b).length) return false;
+  for (const k of keys) if (k !== 'status' && a[k] !== b[k]) return false;
+  return (
+    a.status.state === b.status.state &&
+    a.status.since === b.status.since &&
+    a.status.room === b.status.room
+  );
+}
 
 /**
  * Whether a row is drawn as a Line (a time, a note, an answered card, a task
@@ -1095,6 +1076,101 @@ function Glow() {
  * the right, and the bar's insets. The title stops short of them.
  */
 const HEADER_RESERVED = 200;
+
+/**
+ * The chat's header and its buttons, as the screen's options. Its own memoised
+ * component: options built in the chat's render were new objects every
+ * render, and each one set the navigator's options again (the stack and its
+ * header re-rendered with every streamed word). Now they change only with
+ * what the header shows.
+ */
+const ChatHeader = memo(function ChatHeader({
+  agent,
+  ringPercent: percent,
+  ringTone: tone,
+  offered,
+  switchRow,
+}: {
+  agent: Agent;
+  ringPercent?: number;
+  ringTone?: UsageTone;
+  offered: boolean;
+  switchRow: boolean;
+}) {
+  const styles = useStyles();
+  const router = useRouter();
+  const accent = useAccent();
+  const id = agent.id;
+  const header = <Header agent={agent} />;
+  const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
+  const openUsage = () => router.push({ pathname: '/usage', params: { id } });
+  const openConversations = () => router.push({ pathname: '/conversations', params: { id } });
+  const ring = percent != null && tone != null;
+  const conversationsButton = offered && !switchRow && (
+    <IconButton name="bubble.left" label="Conversations" onPress={openConversations} />
+  );
+  const usageRing = ring && <UsageRing percent={percent} tone={tone} onPress={openUsage} />;
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          // Back and the header's controls in this agent's colour, not the Chief's.
+          headerTintColor: accent.accent,
+          headerTitle: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint="Instructions, memory, files and routines"
+              onPress={openSheet}
+              style={({ pressed }) => pressed && PRESSED}
+            >
+              {header}
+            </Pressable>
+          ),
+          // On iOS the system's own bar button (below): a view of ours in its
+          // glass got the bar's side padding, so the circle came out wider than tall.
+          ...(NATIVE_HEADER_BUTTONS
+            ? {}
+            : {
+                headerRight: () => (
+                  <View style={styles.headerRight}>
+                    {usageRing}
+                    {conversationsButton}
+                    <IconButton
+                      name="info.circle"
+                      label={`About ${agent.name}`}
+                      fallback="ⓘ"
+                      onPress={openSheet}
+                    />
+                  </View>
+                ),
+              }),
+        }}
+      />
+      {NATIVE_HEADER_BUTTONS && (
+        <Stack.Toolbar placement="right">
+          {/* Left of ⓘ: the ring, only once an engine has reported the window. */}
+          <Stack.Toolbar.View hidden={!ring} separateBackground>
+            {usageRing || <View />}
+          </Stack.Toolbar.View>
+          <Stack.Toolbar.Button
+            hidden={!offered || switchRow}
+            icon="bubble.left"
+            accessibilityLabel="Conversations"
+            tintColor={accent.accent}
+            onPress={openConversations}
+          />
+          <Stack.Toolbar.Button
+            icon="info.circle"
+            accessibilityLabel={`About ${agent.name}`}
+            tintColor={accent.accent}
+            onPress={openSheet}
+          />
+        </Stack.Toolbar>
+      )}
+    </>
+  );
+});
+
 
 function Header({ agent }: { agent: Agent }) {
   const colors = useColors();

@@ -16,6 +16,10 @@ const mockCall = jest.fn();
 jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
 jest.mock('../src/lib/session', () => ({
   call: (...a: unknown[]) => mockCall(...a),
+  // Every read goes to the Mac here: nothing remembered between them.
+  callFresh: (method: unknown, params: unknown) => mockCall(method, params),
+  lastRead: () => undefined,
+  READ_FRESH_MS: 0,
   canCall: () => true,
   describeError: (e: unknown) => String(e),
 }));

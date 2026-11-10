@@ -19,6 +19,7 @@
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --phases send            # a send, frame by frame (not in the default run)
  *   pnpm qa:web --phases perf            # a 5,000-line chat: first render and scroll jank (not in the default run)
+ *   pnpm qa:web --phases net             # requests the Mac sees and React renders: cold start, tabs, chats, reconnect, a streaming reply (not in the default run)
  *   pnpm qa:web --phases reconnecting    # the Mac going away under an open app (not in the default run)
  *   pnpm qa:web --phases link-down       # the connection bar: away, back, the Mac's app stuck or closing (not in the default run)
  *   pnpm qa:web --out /tmp/shots
@@ -3307,6 +3308,227 @@ async function perfLongChat(page) {
   log('perf', JSON.stringify(results));
 }
 
+// ---- Requests and renders (`--phases net`) ------------------------------------------
+
+/**
+ * Before any page script: a stand-in for the React DevTools hook that counts
+ * commits and the components each one rendered (by name), so a run can say
+ * how much of the tree an event or a tap re-renders. React sees a hook and
+ * turns its profiling timers on, which is what dates each fiber's render.
+ */
+const RENDER_PRELUDE = `(() => {
+  const counts = { commits: 0, renders: 0, byName: {}, roots: {} };
+  window.__renders = counts;
+  let since = 0;
+  const nameOf = (f) => {
+    const t = f.type;
+    if (!t) return '?';
+    if (typeof t === 'function') return t.displayName || t.name || 'anon';
+    if (t.render) return t.displayName || t.render.displayName || t.render.name || 'forwardRef';
+    if (t.type) return t.displayName || nameOf({ type: t.type });
+    return '?';
+  };
+  window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+    supportsFiber: true,
+    renderers: new Map(),
+    inject(r) { this.renderers.set(1, r); return 1; },
+    onScheduleFiberRoot() {},
+    onCommitFiberUnmount() {},
+    onPostCommitFiberRoot() {},
+    checkDCE() {},
+    onCommitFiberRoot(_id, root) {
+      counts.commits++;
+      // A render whose parent component didn't render is where it started (a
+      // store subscription, state, context): counted apart as \`roots\`.
+      const stack = [[root.current, false]];
+      while (stack.length) {
+        const [f, parentRendered] = stack.pop();
+        let rendered = parentRendered;
+        if ([0, 1, 11, 14, 15].includes(f.tag)) {
+          // Visited this commit (dated) and not bailed out (PerformedWork).
+          rendered = f.actualStartTime >= since && (f.flags & 1) === 1;
+          if (rendered) {
+            counts.renders++;
+            const n = nameOf(f);
+            counts.byName[n] = (counts.byName[n] || 0) + 1;
+            if (!parentRendered) {
+              // Named with the component that drew it, which is usually the one to look at.
+              const o = f._debugOwner;
+              const k = o && o.type ? n + ' in ' + nameOf(o) : n;
+              counts.roots[k] = (counts.roots[k] || 0) + 1;
+            }
+          }
+        }
+        if (f.sibling) stack.push([f.sibling, parentRendered]);
+        if (f.child) stack.push([f.child, rendered]);
+      }
+      since = performance.now();
+    },
+  };
+})()`;
+
+const resetRenders = (page) =>
+  page.eval(
+    `(() => { const c = window.__renders; c.commits = 0; c.renders = 0; c.byName = {}; c.roots = {}; })()`
+  );
+const readRenders = (page) =>
+  page.eval(`(() => { const c = window.__renders;
+    const top = Object.entries(c.byName).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const roots = Object.entries(c.roots).sort((a, b) => b[1] - a[1]).slice(0, 12);
+    return { commits: c.commits, renders: c.renders, top: Object.fromEntries(top), roots: Object.fromEntries(roots) }; })()`);
+const resetRequests = () => fetch(`${MOCK}/dev/requests?reset=1`).then((r) => r.json());
+async function readRequests() {
+  const all = await (await fetch(`${MOCK}/dev/requests`)).json();
+  const byMethod = {};
+  for (const r of all) byMethod[r.method] = (byMethod[r.method] ?? 0) + 1;
+  // The most requests inside any 250 ms: how hard a burst lands on the Mac.
+  let burst = 0;
+  for (let i = 0, j = 0; i < all.length; i++) {
+    while (all[i].at - all[j].at > 250) j++;
+    burst = Math.max(burst, i - j + 1);
+  }
+  return { total: all.length, burst250ms: burst, byMethod };
+}
+/** Requests and renders over `work`. */
+async function measured(page, label, work) {
+  await resetRequests();
+  await resetRenders(page);
+  const t0 = Date.now();
+  const extra = (await work()) ?? {};
+  const out = {
+    ms: Date.now() - t0,
+    ...extra,
+    requests: await readRequests(),
+    renders: await readRenders(page),
+  };
+  log('net', label, JSON.stringify(out));
+  return out;
+}
+const navigate = (page, to) =>
+  page.eval(
+    `history.pushState(null, '', ${JSON.stringify(to)}); dispatchEvent(new PopStateEvent('popstate'))`
+  );
+const shows = (text) => `document.body.innerText.includes(${JSON.stringify(text)})`;
+
+async function netAndRenders(page) {
+  const results = {};
+  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: RENDER_PRELUDE });
+  await page.goto(`${WEB}/agents`);
+  await page.waitFor(shows('Chief of Staff'), 60_000, 'the agents list');
+  await sleep(4000);
+  // Cold start with a saved copy: the reload reads it, then reconnects.
+  results.cold = await measured(page, 'cold', async () => {
+    await page.send('Page.navigate', { url: `${WEB}/agents` });
+    const t0 = Date.now();
+    let spinner = false;
+    for (;;) {
+      const s = await page
+        .eval(
+          `({ row: ${shows('Chief of Staff')}, spin: !!document.querySelector('[role="progressbar"]') })`
+        )
+        .catch(() => ({}));
+      if (s.spin) spinner = true;
+      if (s.row) break;
+      if (Date.now() - t0 > 60_000) throw new Error('cold start never showed the list');
+      await sleep(20);
+    }
+    const firstRowMs = Date.now() - t0;
+    await sleep(5000);
+    return { firstRowMs, spinnerBeforeRow: spinner };
+  });
+  // Nothing happening: what an idle, connected app costs.
+  results.idle = await measured(page, 'idle', () => sleep(10_000));
+  // Tabs, three times round.
+  results.tabs = await measured(page, 'tabs', async () => {
+    for (let i = 0; i < 3; i++) {
+      for (const [to, text] of [
+        ['/catch-up', 'Catch up'],
+        ['/projects', 'Projects'],
+        ['/search', 'Search'],
+        ['/agents', 'Chief of Staff'],
+      ]) {
+        await navigate(page, to);
+        await page.waitFor(shows(text), 10_000, to);
+        await sleep(400);
+      }
+    }
+  });
+  // A chat, opened and left three times: the first open reads it, the rest show the copy.
+  results.chat = await measured(page, 'chat', async () => {
+    const opens = [];
+    for (let i = 0; i < 3; i++) {
+      const t0 = Date.now();
+      await navigate(page, '/chat/site');
+      await page.waitFor(
+        `location.pathname === '/chat/site' && document.querySelector('textarea')`,
+        15_000,
+        'the chat'
+      );
+      opens.push(Date.now() - t0);
+      await sleep(1500);
+      await page.eval('history.back()');
+      await page.waitFor(`location.pathname === '/agents'`, 10_000, 'back');
+      await sleep(800);
+    }
+    return { openMs: opens };
+  });
+  // Tapping between chats quickly: the burst the Mac sees.
+  results.burst = await measured(page, 'burst', async () => {
+    for (let i = 0; i < 3; i++) {
+      for (const id of ['main', 'site', 'main', 'site']) {
+        await navigate(page, `/chat/${id}`);
+        await sleep(120);
+        await page.eval('history.back()');
+        await sleep(120);
+      }
+    }
+    await sleep(2000);
+  });
+  // The Mac going away and coming back under an open app.
+  results.reconnect = await measured(page, 'reconnect', async () => {
+    await killMock();
+    await sleep(3000);
+    await startMock();
+    const t0 = Date.now();
+    await page.waitFor(
+      `!/Reconnecting|Can.t reach|Reaching|Not connected/.test(document.body.innerText)`,
+      30_000,
+      'reconnected'
+    );
+    const backMs = Date.now() - t0;
+    await sleep(5000);
+    return { backMs };
+  });
+  // A reply streaming into the open chat: what each draft event re-renders.
+  await navigate(page, '/chat/site');
+  await page.waitFor(`document.querySelector('textarea')`, 15_000, 'the chat');
+  await sleep(1500);
+  results.stream = await measured(page, 'stream', async () => {
+    await page.type('Write me a long reply please', 'textarea');
+    await sleep(200);
+    await page.clickWhere(
+      `() => [...document.querySelectorAll('[aria-label]')].find((e) => /^(Send|Queue)/.test(e.getAttribute('aria-label')))`,
+      'Send'
+    );
+    await sleep(10_000);
+  });
+  // The same, watched from the agents list: what one agent's turn costs the rows.
+  await sleep(5000);
+  results.streamList = await measured(page, 'streamList', async () => {
+    await page.type('And another long one', 'textarea');
+    await sleep(200);
+    await page.clickWhere(
+      `() => [...document.querySelectorAll('[aria-label]')].find((e) => /^(Send|Queue)/.test(e.getAttribute('aria-label')))`,
+      'Send'
+    );
+    await sleep(300);
+    await page.eval('history.back()');
+    await sleep(10_000);
+  });
+  await writeFile(path.join(OUT, 'net.json'), JSON.stringify(results, null, 2));
+  log('net', 'written', path.join(OUT, 'net.json'));
+}
+
 async function main() {
   for (const p of [WEB_PORT, MOCK_PORT, CDP_PORT]) {
     if (!(await portFree(p)))
@@ -3547,6 +3769,13 @@ async function main() {
     await page.goto(`${WEB}/agents`);
     await sleep(4000);
     await perfLongChat(page);
+  }
+
+  if (phase('net')) {
+    await startMock();
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await netAndRenders(page);
   }
 
   if (phase('torture')) {

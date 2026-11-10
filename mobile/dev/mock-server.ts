@@ -1868,6 +1868,8 @@ export function createMockServer(opts: MockOptions = {}) {
   }
 
   const loginTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Every request a phone made, socket and HTTP (`GET /dev/requests`). */
+  const requestLog: { at: number; method: string }[] = [];
   const phoneFlows = new Map<string, { agentId: string; requestId: string; state: string }>();
   // "Apps your agents can use": the Mac's connections, its catalogue, and
   // connects under way (one per app), as `agents.apps` serves them.
@@ -4074,6 +4076,7 @@ export function createMockServer(opts: MockOptions = {}) {
         return;
       }
       if (frame.t !== 'req') return;
+      requestLog.push({ at: Date.now(), method: frame.method });
       const handler = methods[frame.method];
       const c = conn;
       try {
@@ -4103,6 +4106,9 @@ export function createMockServer(opts: MockOptions = {}) {
   // ---- HTTP: pairing ---------------------------------------------------------------------
 
   async function onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+    if (req.method !== 'OPTIONS' && !req.url?.startsWith('/dev/')) {
+      requestLog.push({ at: Date.now(), method: `HTTP ${req.method} ${req.url?.split('?')[0]}` });
+    }
     if (opts.cors) {
       // The web build (`pnpm qa:web`) is another origin; the real Mac never needs this.
       res.setHeader('Access-Control-Allow-Origin', '*');
@@ -4158,6 +4164,13 @@ export function createMockServer(opts: MockOptions = {}) {
     }
     if (await files_(req, res)) return;
     // Dev only (the real Mac has no such route): a new link per request.
+    // Dev only: every request the phone made (socket and HTTP), for `qa:web --phases net`.
+    if (req.method === 'GET' && req.url?.startsWith('/dev/requests')) {
+      const out = JSON.stringify(requestLog);
+      if (req.url.includes('reset=1')) requestLog.length = 0;
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(out);
+      return;
+    }
     if (req.method === 'GET' && req.url === '/dev/link') {
       res.writeHead(200, { 'Content-Type': 'text/plain' }).end(pairingLink());
       return;
