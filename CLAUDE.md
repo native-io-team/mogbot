@@ -237,6 +237,7 @@ Command modules in `src-tauri/src/commands/`. Domains with submodules are direct
 Single-file domains:
 - `agent_bridge.rs` - Commands for the agent preview bridge (the loopback MCP server in `src-tauri/src/agent_bridge.rs` that lets the workspace agent read the preview's console/network/DOM, navigate it, and take screenshots)
 - `agents.rs` - Agents mode commands (overview, messages, send, create/update/delete, approvals, focus). The engine is `src-tauri/src/agents/`
+- `agents_desk.rs` - Desk-only views: a step's exact command, what a turn was told, Pause/Resume all routines, Open logs (docs/agents.md, "Under the hood, desk only")
 - `agents_usage.rs` - Settings → Accounts & usage: the capacity inventory, the usage mode and the spare-capacity list
 - `ai.rs` - AI-powered PR title/description generation via the agent CLI
 - `analytics.rs` - PostHog event tracking (API key stays in Rust; see `docs/analytics.md`)
