@@ -89,6 +89,7 @@ import {
   GO_BACK_ORDER,
   GoBackConfirm,
   foldRows,
+  openOneFold,
   type GoBackAction,
   type GoBackAsk,
 } from './AgentGoBack';
@@ -1027,15 +1028,7 @@ export const AgentChat = memo(function AgentChat({
   const rewinds = conversationList?.items.find((c) => c.id === viewing)?.rewinds;
   const rewound = useMemo(() => rewoundIds(rewinds), [rewinds]);
   const [openFolds, setOpenFolds] = useState<ReadonlySet<string>>(() => new Set());
-  const toggleFold = useCallback(
-    (id: string) =>
-      setOpenFolds((open) => {
-        const next = new Set(open);
-        if (!next.delete(id)) next.add(id);
-        return next;
-      }),
-    []
-  );
+  const toggleFold = useCallback((id: string) => setOpenFolds((open) => openOneFold(open, id)), []);
   // Lines still on their way have no place in the log to go back to yet.
   const localIds = useMemo(() => new Set(pending.map((p) => p.key)), [pending]);
   const lastOwn = useMemo(() => {

@@ -35,6 +35,7 @@ import {
   goBackQuote,
   rewindConfirm,
   rewoundSummary,
+  REWOUND_END,
   type GoBackAction,
 } from '../../../packages/companion-protocol/src/rewind';
 
@@ -197,6 +198,12 @@ export function ComposerEditing({ text, onCancel }: { text: string | null; onCan
  * opened. Row count and order are unchanged (the working line and the setup
  * card are placed by index), and an opened row is still a direct child of
  * the chat, so its own styles hold.
+ *
+ * Opened, the run reads as past: the summary line heads it, "End of what
+ * was rewound" closes it, and the rows between are muted behind a rule on
+ * the left. That is drawn by sibling selectors between the two lines
+ * (agents-chat.css), which is why only one run is open at a time
+ * (`openOneFold`).
  */
 export function foldRows<T>(
   rows: (ReactElement | null)[],
@@ -214,16 +221,13 @@ export function foldRows<T>(
     if (group.kind !== 'rewound') continue;
     const count = group.items.reduce((n, x) => n + Math.max(1, idsOf(x.item).length), 0);
     const isOpen = open.has(group.rewindId);
+    const last = group.items.length - 1;
     group.items.forEach(({ i }, at) => {
       const row = rows[i];
       const key = isValidElement(row) && row.key != null ? String(row.key) : `rewound-${i}`;
       const shown = isOpen ? row : null;
-      if (at > 0) {
-        out[i] = shown;
-        return;
-      }
-      out[i] = (
-        <Fragment key={key}>
+      const head =
+        at === 0 ? (
           <div
             className="agent-note agent-go-back__summary"
             data-rewound={group.rewindId}
@@ -232,16 +236,37 @@ export function foldRows<T>(
             <TextButton
               tabIndex={0}
               aria-expanded={isOpen}
-              leftIcon={<ChevronRightIcon size={12} className="agent-go-back__chevron" />}
+              leftIcon={<UndoIcon size={12} />}
+              rightIcon={<ChevronRightIcon size={12} className="agent-go-back__chevron" />}
               onClick={() => onToggle(group.rewindId)}
             >
               {rewoundSummary(count)}
             </TextButton>
           </div>
+        ) : null;
+      const tail =
+        isOpen && at === last ? (
+          <div className="agent-note agent-go-back__end" data-rewound-end={group.rewindId}>
+            {REWOUND_END}
+          </div>
+        ) : null;
+      if (!head && !tail) {
+        out[i] = shown;
+        return;
+      }
+      out[i] = (
+        <Fragment key={key}>
+          {head}
           {shown}
+          {tail}
         </Fragment>
       );
     });
   }
   return out;
+}
+
+/** Opening a fold closes any other (see `foldRows`); toggling it again closes it. */
+export function openOneFold(open: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  return open.has(id) ? new Set() : new Set([id]);
 }

@@ -1058,6 +1058,56 @@
   transform: rotate(90deg);
 }
 
+/* Opened, the run reads as past: one band from the summary line to "End of
+   what was rewound", a rule down its left and its rows muted. The rows stay
+   direct children of the chat (foldRows), so the band is the run of siblings
+   between the two lines; only one run is open at a time (openOneFold).
+   Inside it the rhythm is padding, not margin, so the rule doesn't break. */
+.agent-chat__messages > .agent-go-back__summary[data-open],
+.agent-chat__messages > .agent-go-back__end,
+.agent-chat__messages
+  > .agent-go-back__summary[data-open]
+  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *) {
+  align-self: stretch;
+  max-width: none;
+  padding-left: var(--spacing-lg);
+  border-left: var(--border-width-emphasis) solid var(--border-default);
+  text-align: start;
+}
+
+.agent-chat__messages > .agent-go-back__summary[data-open] {
+  padding-bottom: var(--spacing-xs);
+}
+
+.agent-chat__messages
+  > .agent-go-back__summary[data-open]
+  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *),
+.agent-chat__messages > .agent-go-back__end {
+  margin-top: 0;
+  padding-top: var(--spacing-xl);
+}
+
+.agent-chat__messages
+  > .agent-go-back__summary[data-open]
+  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *)
+  > * {
+  opacity: 0.55;
+  transition: opacity var(--transition-interaction);
+}
+
+/* What's in a past row is muted, not the row: the rule stays one even line.
+   Read closely (hovered or in focus), a past row comes up to full ink. */
+.agent-chat__messages
+  > .agent-go-back__summary[data-open]
+  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *):is(:hover, :focus-within)
+  > * {
+  opacity: 1;
+}
+
+.agent-chat__messages > .agent-go-back__end {
+  padding-bottom: var(--spacing-xs);
+}
+
 /* Why Edit and Rewind wait: under the menu's items. */
 .agent-go-back__reason {
   max-width: 240px;
@@ -1088,7 +1138,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-go-back__summary .agent-go-back__chevron {
+  .agent-go-back__summary .agent-go-back__chevron,
+  .agent-chat__messages > .agent-go-back__summary[data-open] ~ * > * {
     transition: none;
   }
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState, type ReactElement } from 'react';
-import { ComposerEditing, GoBackConfirm, GoBackMenu, foldRows } from './AgentGoBack';
-import { rewoundIds } from '../../../packages/companion-protocol/src/rewind';
+import { ComposerEditing, GoBackConfirm, GoBackMenu, foldRows, openOneFold } from './AgentGoBack';
+import { REWOUND_END, rewoundIds } from '../../../packages/companion-protocol/src/rewind';
 
 const idle = { agentName: 'Writer', working: false, driven: false };
 
@@ -136,6 +136,17 @@ describe('foldRows', () => {
     fireEvent.click(toggle);
     expect(shown()).toEqual(['a', 'b', 'peer', 'note']);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    // Opened, the run is closed by its own line, right after its last row.
+    const end = screen.getByText(REWOUND_END);
+    expect(end.previousElementSibling?.textContent).toBe('peer');
+    fireEvent.click(toggle);
+    expect(screen.queryByText(REWOUND_END)).toBeNull();
+  });
+
+  it('keeps one fold open at a time, so the band between its lines is one run', () => {
+    expect([...openOneFold(new Set(), 'r1')]).toEqual(['r1']);
+    expect([...openOneFold(new Set(['r1']), 'r2')]).toEqual(['r2']);
+    expect([...openOneFold(new Set(['r2']), 'r2')]).toEqual([]);
   });
 
   it('leaves a chat with no rewinds exactly as it was', () => {

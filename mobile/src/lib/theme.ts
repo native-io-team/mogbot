@@ -895,3 +895,10 @@ export const duration = { fast: 100, standard: 150, slow: 300 } as const;
 
 /** What a pressed text control, pill or icon looks like: the same everywhere, from the first frame of the press. */
 export const PRESSED = { opacity: 0.6 } as const;
+
+/**
+ * What a rewind passed over, opened: muted, behind a rule on its left, so it
+ * reads as past. The desk's `.agent-go-back__summary[data-open] ~ …` is the
+ * same 0.55 and the same 2px rule in its default border.
+ */
+export const PAST = { opacity: 0.55, rule: space['2xs'] } as const;

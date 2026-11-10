@@ -68,9 +68,16 @@ export function foldRewoundItems(
       count,
       open: isOpen,
     };
-    // Inverted: the row is drawn above its lines when it comes after them.
-    if (isOpen) out.push(...f.items, row);
-    else out.push(row);
+    // Inverted: the row is drawn above its lines when it comes after them,
+    // and "End of what was rewound" under them when it comes before. Open,
+    // the lines are marked past so the chat draws them as one muted band.
+    if (isOpen) {
+      out.push(
+        { kind: 'rewound-end', key: `rewound-end:${f.rewindId}`, rewindId: f.rewindId },
+        ...f.items.map((i) => ({ ...i, past: true })),
+        row
+      );
+    } else out.push(row);
   }
   return out;
 }

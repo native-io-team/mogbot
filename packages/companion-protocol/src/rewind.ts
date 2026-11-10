@@ -83,6 +83,9 @@ export function rewoundSummary(count: number): string {
   return `Rewound · ${count} message${count === 1 ? '' : 's'}`;
 }
 
+/** The line that closes an opened fold, so where the past ends is said, not guessed. */
+export const REWOUND_END = 'End of what was rewound';
+
 /** A message as a confirm quotes it: its first line, at most 40 characters. */
 export function goBackQuote(text: string): string {
   const first =

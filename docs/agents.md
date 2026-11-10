@@ -585,7 +585,9 @@ carries the same conversation on from just before it.
   kept in `conversations.json` (`Conversation::rewinds`: the message it went
   back before and the ids it folded); the chat shows those lines under one
   "Rewound · N messages" line that opens them (`foldRewound`, shared by desk
-  and phone), and a recap leaves them out (`runner::recap_log`). A fork lists
+  and phone). Opened, they read as past on both: one band with a rule down
+  its left from that line to "End of what was rewound", the lines muted (the
+  desk keeps one fold open at a time, `openOneFold`). A recap leaves them out (`runner::recap_log`). A fork lists
   the ids it was made with (`inherited`): `store::conversation_page` reads
   them from the one log like its own lines, so nothing is copied and a fork
   of a fork carries the whole history. Each ends on one quiet line saying
