@@ -518,7 +518,7 @@ async fn skills(h: &H) -> Check {
     ensure(
         notes(&a.id)
             .iter()
-            .any(|n| n.starts_with("Learned a skill: Tally the receipts")),
+            .any(|n| *n == agents::skills_learn::saved_line("Tally the receipts", false)),
         format!("no saved line: {:?}", notes(&a.id)),
     )?;
 
@@ -1096,9 +1096,19 @@ async fn brief(h: &H) -> Check {
         text.contains("Waiter"),
         format!("the waiting card isn't in it: {text}"),
     )?;
+    // Any agent that replied in this run, so the check holds for a subset
+    // of scenarios too (`brief` alone has only the earlier ones' agents).
+    let worked: Vec<String> = store::list()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|a| !a.is_main && !replies(&a.id).is_empty())
+        .map(|a| a.name)
+        .collect();
     ensure(
-        text.contains("Plain") || text.contains("Maker"),
-        format!("the agents that worked aren't in it: {text}"),
+        worked
+            .iter()
+            .any(|name| text.contains(&format!("- {name}:"))),
+        format!("the agents that worked aren't in it ({worked:?}): {text}"),
     )?;
     println!(
         "      ---\n{}\n      ---",
@@ -3311,6 +3321,17 @@ fn main() {
     #[cfg(target_os = "macos")]
     app.set_activation_policy(tauri::ActivationPolicy::Accessory);
     let h = H::new(app.handle().clone(), home.clone());
+    // The automatic morning brief off: the schedule loop would otherwise
+    // post one mid-suite whenever the suite runs between 8:00 and 11:00
+    // (`brief::LATE_MS`), and the `brief` scenario's own brief would then
+    // cover only the seconds since it. Observed 10:27: "6 agents worked",
+    // none of them the agents the scenarios above ran. `post_now` posts
+    // whatever the setting.
+    agents::brief::set(agents::brief::Settings {
+        on: false,
+        ..agents::brief::get()
+    })
+    .expect("brief off");
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     let wanted: Vec<&str> = if args.is_empty() {

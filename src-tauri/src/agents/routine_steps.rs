@@ -367,10 +367,10 @@ pub fn after_step(
             let request_id = approval.request_id.clone();
             let mut message = runner::new_message(agent_id, MessageKind::Approval, "");
             message.approval = Some(approval);
-            if let Err(e) = runner::record_own(app, message) {
-                tracing::warn!(error = %e, "couldn't post a routine's OK card");
-                return None;
-            }
+            // Waiting before the card is shown: a Go ahead the moment it
+            // appears (a quick tap, an answer for the user) must find the
+            // run waiting, not "That routine has moved on". Observed in the
+            // fake-engine suite, which answers as soon as the card exists.
             let now = store::now_ms();
             store::update(agent_id, |a| {
                 if let Some(x) = a.check_ins.iter_mut().find(|x| x.id == c.id) {
@@ -383,6 +383,20 @@ pub fn after_step(
                 }
             })
             .or_log("a routine step waiting on the user's OK");
+            if let Err(e) = runner::record_own(app, message) {
+                tracing::warn!(error = %e, "couldn't post a routine's OK card");
+                let _ = store::update(agent_id, |a| {
+                    if let Some(x) = a.check_ins.iter_mut().find(|x| x.id == c.id) {
+                        if x.waiting
+                            .as_ref()
+                            .is_some_and(|w| w.request_id == request_id)
+                        {
+                            x.waiting = None;
+                        }
+                    }
+                });
+                return None;
+            }
             store::refresh_pending(agent_id);
             super::notify::refresh_badge(app);
             Some(runs::Outcome::Waiting)
