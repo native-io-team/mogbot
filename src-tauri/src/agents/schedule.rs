@@ -1834,25 +1834,36 @@ pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandE
 
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let now = store::now_ms();
-        for agent in store::list().unwrap_or_default() {
-            if agent
-                .check_ins
-                .iter()
-                .any(|c| !c.runs.is_empty() || c.retry.is_some())
-            {
-                let _ = store::update(&agent.id, |a| {
-                    runs::after_restart(&mut a.check_ins, now);
-                });
+        // The registry's reads and writes (and a tick's turns starting) run
+        // on a blocking thread: a slow disk or a held store lock then holds
+        // only that thread, never an async worker the bridge, the phone and
+        // every command share.
+        let _ = tokio::task::spawn_blocking(|| {
+            let now = store::now_ms();
+            for agent in store::list().unwrap_or_default() {
+                if agent
+                    .check_ins
+                    .iter()
+                    .any(|c| !c.runs.is_empty() || c.retry.is_some())
+                {
+                    let _ = store::update(&agent.id, |a| {
+                        runs::after_restart(&mut a.check_ins, now);
+                    });
+                }
             }
-        }
+        })
+        .await;
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {
-            // A panic in one tick is caught: routines keep firing.
-            if let Some(Err(err)) = super::survive::tick_blocking("schedule", || tick(&app)) {
-                tracing::warn!(error = %err, "agent check-in tick failed");
-            }
-            super::survive::flush(&app);
+            let a = app.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                // A panic in one tick is caught: routines keep firing.
+                if let Some(Err(err)) = super::survive::tick_blocking("schedule", || tick(&a)) {
+                    tracing::warn!(error = %err, "agent check-in tick failed");
+                }
+                super::survive::flush(&a);
+            })
+            .await;
             // On the minute, with the other minute loops (one wake-up).
             crate::power::sleep_aligned(TICK).await;
         }

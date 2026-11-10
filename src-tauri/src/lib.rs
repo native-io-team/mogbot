@@ -24,6 +24,7 @@ pub mod companion;
 pub mod error_reporting;
 pub mod errors;
 pub mod external_command;
+pub mod joined;
 pub mod keychain;
 pub mod logging;
 pub mod navigation_guard;
@@ -50,18 +51,28 @@ use tauri::Emitter;
 #[cfg(unix)]
 use std::process::Command;
 
-// Kill orphaned agent processes spawned by this app
+/// Stop this app's own agent CLIs, and the orphans a crashed run left.
+/// Run when the last window goes.
 fn cleanup_agent_processes() {
     #[cfg(unix)]
     {
         let pid = std::process::id();
-
-        // Iterate ALL agents to kill children and orphans for each
         for ag in agent::ALL_AGENTS {
             let _ = Command::new("pkill")
                 .args(["-P", &pid.to_string(), ag.process_name])
                 .output();
+        }
+    }
+    reap_orphaned_agent_processes();
+}
 
+/// Agent CLIs and `next-server` dev servers whose parent is gone (reparented
+/// to launchd, ppid 1): what a crashed run left behind. Never this app's own
+/// children, so it can run while this run's own agents start.
+fn reap_orphaned_agent_processes() {
+    #[cfg(unix)]
+    {
+        for ag in agent::ALL_AGENTS {
             let kill_script = format!(
                 r#"
                     for pid in $(pgrep -x {} 2>/dev/null); do
@@ -141,17 +152,24 @@ pub fn run() {
         Some(why) => tracing::info!(why, "[AgentBrowser] not available to agents"),
     }
 
-    // Clean up any orphaned agent processes from previous crashed sessions
-    cleanup_agent_processes();
-    tracing::debug!("Orphaned agent processes cleaned up");
-
-    // Reap serve-sim mirror daemons orphaned by a previous hard crash — they pin
-    // the mirror port and would otherwise accumulate one per crash.
-    #[cfg(target_os = "macos")]
-    {
-        commands::mobile::reap_orphaned_serve_sim();
-        tracing::debug!("Orphaned serve-sim mirrors reaped");
-    }
+    // What a previous crashed run left: orphaned agent CLIs and dev servers,
+    // and serve-sim mirror daemons (they pin the mirror port and would
+    // otherwise accumulate one per crash). A dozen `pgrep`/`ps` spawns, about
+    // a third of a second, so on a thread of its own rather than before the
+    // window: only processes whose parent is gone (ppid 1) are touched, never
+    // this run's own children.
+    let _ = std::thread::Builder::new()
+        .name("reap-orphans".into())
+        .spawn(|| {
+            let started = std::time::Instant::now();
+            reap_orphaned_agent_processes();
+            #[cfg(target_os = "macos")]
+            commands::mobile::reap_orphaned_serve_sim();
+            tracing::debug!(
+                ms = started.elapsed().as_millis() as u64,
+                "Orphaned agent processes and serve-sim mirrors reaped"
+            );
+        });
 
     // Hydrate the default agent cache from persisted AppState
     let app_state = commands::setup::read_app_state();
@@ -194,9 +212,8 @@ pub fn run() {
 
             // Install the bundled skills for the user's own agents. Idempotent,
             // and skips agents that aren't installed.
-            tauri::async_runtime::spawn(async move {
-                commands::skills::install_bundled_skills();
-            });
+            // File copies: on a blocking thread, not an async worker.
+            tauri::async_runtime::spawn_blocking(commands::skills::install_bundled_skills);
 
             // Agents: notification clicks open the agent. A card still
             // "pending" from the last run has nobody waiting on it any more;

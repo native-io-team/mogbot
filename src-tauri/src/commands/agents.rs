@@ -1138,7 +1138,7 @@ pub async fn agents_copy_discard(
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_instructions(agent_id: String) -> Result<String, CommandError> {
-    store::read_instructions(&agent_id)
+    blocking(move || store::read_instructions(&agent_id)).await
 }
 
 /// The agent's `## Memory`, as entries (`agents/memory.rs`).
@@ -2086,7 +2086,8 @@ pub async fn agents_focus(
     window: tauri::WebviewWindow,
     agent_id: Option<String>,
 ) -> Result<(), CommandError> {
-    focus_as(&app, window.label(), agent_id)
+    let label = window.label().to_string();
+    blocking(move || focus_as(&app, &label, agent_id)).await
 }
 
 /// [`agents_focus`] for any surface with a label: a window, or a phone's
@@ -2111,9 +2112,12 @@ pub(crate) fn focus_as(
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_mark_unread(app: AppHandle, agent_id: String) -> Result<(), CommandError> {
-    store::update(&agent_id, |a| a.unread = a.unread.max(1))?;
-    notify::refresh_badge(&app);
-    Ok(())
+    blocking(move || {
+        store::update(&agent_id, |a| a.unread = a.unread.max(1))?;
+        notify::refresh_badge(&app);
+        Ok(())
+    })
+    .await
 }
 
 /// Every agent's conversation, searched: all words must match, newest first.
@@ -2129,7 +2133,7 @@ pub async fn agents_search(query: String) -> Result<Vec<search::SearchHit>, Comm
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_usage(agent_id: String) -> Result<usage::UsageSummary, CommandError> {
-    Ok(usage::summarize(&store::get(&agent_id)?, usage::today()))
+    blocking(move || Ok(usage::summarize(&store::get(&agent_id)?, usage::today()))).await
 }
 
 /// How much of each engine's plan is used, as the engine last reported it.
@@ -2417,11 +2421,14 @@ pub async fn agents_schedule_create(
     note: String,
     then: Option<Vec<agents::routine_steps::Step>>,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let created =
-        schedule::create_with_steps(&agent_id, &when, &note, then.as_deref().unwrap_or(&[]))?;
-    agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
-    emit_registry(&app);
-    Ok(created.check_in)
+    blocking(move || {
+        let created =
+            schedule::create_with_steps(&agent_id, &when, &note, then.as_deref().unwrap_or(&[]))?;
+        agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
+        emit_registry(&app);
+        Ok(created.check_in)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -2431,9 +2438,12 @@ pub async fn agents_schedule_cancel(
     agent_id: String,
     id: String,
 ) -> Result<(), CommandError> {
-    schedule::cancel(&agent_id, &id)?;
-    emit_registry(&app);
-    Ok(())
+    blocking(move || {
+        schedule::cancel(&agent_id, &id)?;
+        emit_registry(&app);
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -2444,9 +2454,12 @@ pub async fn agents_schedule_pause(
     id: String,
     paused: bool,
 ) -> Result<(), CommandError> {
-    schedule::set_paused(&agent_id, &id, paused)?;
-    emit_registry(&app);
-    Ok(())
+    blocking(move || {
+        schedule::set_paused(&agent_id, &id, paused)?;
+        emit_registry(&app);
+        Ok(())
+    })
+    .await
 }
 
 /// What one routine wakes its agent on: `""` like its other routines,
@@ -2459,9 +2472,12 @@ pub async fn agents_schedule_model(
     id: String,
     model: String,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let changed = schedule::set_model(&agent_id, &id, &model)?;
-    emit_registry(&app);
-    Ok(changed)
+    blocking(move || {
+        let changed = schedule::set_model(&agent_id, &id, &model)?;
+        emit_registry(&app);
+        Ok(changed)
+    })
+    .await
 }
 
 /// Change a check-in's when and what in place (same id, same paused state).
@@ -2475,9 +2491,12 @@ pub async fn agents_schedule_update(
     note: String,
     then: Option<Vec<agents::routine_steps::Step>>,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let edited = schedule::edit_with_steps(&agent_id, &id, &when, &note, then.as_deref())?;
-    emit_registry(&app);
-    Ok(edited)
+    blocking(move || {
+        let edited = schedule::edit_with_steps(&agent_id, &id, &when, &note, then.as_deref())?;
+        emit_registry(&app);
+        Ok(edited)
+    })
+    .await
 }
 
 /// Fire a check-in now as a normal wake; its next time doesn't move.
@@ -2488,7 +2507,7 @@ pub async fn agents_schedule_run_now(
     agent_id: String,
     id: String,
 ) -> Result<(), CommandError> {
-    schedule::run_now(&app, &agent_id, &id)
+    blocking(move || schedule::run_now(&app, &agent_id, &id)).await
 }
 
 /// Add a "When…" routine: `source` is `watch::Source` (`{ kind, folder?, check?, app? }`).
@@ -2864,7 +2883,7 @@ pub async fn agents_set_quiet_hours(
     app: AppHandle,
     window: Option<agents::quiet::Window>,
 ) -> Result<Option<agents::quiet::Window>, CommandError> {
-    let saved = set_quiet_hours(window)?;
+    let saved = blocking(move || set_quiet_hours(window)).await?;
     let _ = app.emit(agents::quiet::EVENT, ());
     Ok(saved)
 }
@@ -3147,7 +3166,7 @@ pub async fn agents_account_rename(
     name: String,
 ) -> Result<agents::wallet::Account, CommandError> {
     let engine = Engine::parse(&engine)?;
-    let account = agents::wallet::rename(engine, &id, &name)?;
+    let account = blocking(move || agents::wallet::rename(engine, &id, &name)).await?;
     let _ = app.emit(EVENT_ACCOUNTS, ());
     Ok(account)
 }
@@ -3161,7 +3180,7 @@ pub async fn agents_account_reorder(
     ids: Vec<String>,
 ) -> Result<Vec<agents::wallet::Account>, CommandError> {
     let engine = Engine::parse(&engine)?;
-    let accounts = agents::wallet::reorder(engine, &ids)?;
+    let accounts = blocking(move || agents::wallet::reorder(engine, &ids)).await?;
     let _ = app.emit(EVENT_ACCOUNTS, ());
     Ok(accounts)
 }

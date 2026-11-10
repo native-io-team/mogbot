@@ -756,7 +756,10 @@ static REGISTRY_CACHE: LazyLock<Mutex<Option<(PathBuf, FileStamp, Registry)>>> =
 
 /// The registry, recovering a damaged file. Call with [`lock`] held.
 fn read_registry() -> Result<Registry, CommandError> {
-    debug_assert!(lock::held_here(), "recovery rewrites agents.json: hold the lock");
+    debug_assert!(
+        lock::held_here(),
+        "recovery rewrites agents.json: hold the lock"
+    );
     if let Some(registry) = read_registry_unlocked()? {
         return Ok(registry);
     }
@@ -1605,8 +1608,7 @@ pub fn take_expired(now: i64) -> Vec<Agent> {
         };
         let items = read_trash();
         let cutoff = now - TRASH_DAYS * 24 * 60 * 60 * 1000;
-        let (old, keep): (Vec<_>, Vec<_>) =
-            items.into_iter().partition(|d| d.deleted_at < cutoff);
+        let (old, keep): (Vec<_>, Vec<_>) = items.into_iter().partition(|d| d.deleted_at < cutoff);
         if old.is_empty() || write_trash(&keep).is_err() {
             return Vec::new();
         }

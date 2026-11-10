@@ -87,7 +87,9 @@ fn re_entering_the_registry_lock_is_refused_not_a_hang() {
         let _ = update(&id, |_| seen = Some(get(&id).map(|a| a.name)));
         let _ = tx.send(seen);
     });
-    let seen = rx.recv_timeout(Duration::from_secs(5)).expect("a read inside a write hung");
+    let seen = rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("a read inside a write hung");
     assert_eq!(seen.unwrap().unwrap(), "Locky");
     set_root_for_tests(None);
 }
@@ -118,10 +120,15 @@ fn a_writer_gives_up_on_a_wedged_lock() {
     let _ = release_tx.send(());
     wedged.join().unwrap().unwrap();
     lock::set_wait_for_tests(None);
-    let err = late.expect("a writer waited on a wedged lock for ever").unwrap_err();
+    let err = late
+        .expect("a writer waited on a wedged lock for ever")
+        .unwrap_err();
     assert_eq!(err.to_string(), lock::BUSY);
     // Released, the next write goes through.
-    assert_eq!(update(&agent.id, |a| a.role = "Now".into()).unwrap().role, "Now");
+    assert_eq!(
+        update(&agent.id, |a| a.role = "Now".into()).unwrap().role,
+        "Now"
+    );
     set_root_for_tests(None);
 }
 

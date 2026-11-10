@@ -161,12 +161,18 @@ pub async fn signed_in_here(engine: Engine) -> bool {
             crate::commands::setup::claude_auth_truth(&account).await
         }
         Engine::Codex => {
-            let mut cmd = tokio::process::Command::new(binary);
-            cmd.args(["login", "status"])
-                .env("PATH", crate::utils::get_extended_path());
-            crate::external_command::run_with_timeout(cmd, "codex login status", 15)
+            // Callers asking while one is running share it (`joined`).
+            static PROBE: crate::joined::Joined<bool> = crate::joined::Joined::new();
+            PROBE
+                .run(|| async move {
+                    let mut cmd = tokio::process::Command::new(binary);
+                    cmd.args(["login", "status"])
+                        .env("PATH", crate::utils::get_extended_path());
+                    crate::external_command::run_with_timeout(cmd, "codex login status", 15)
+                        .await
+                        .is_ok_and(|out| out.status.success())
+                })
                 .await
-                .is_ok_and(|out| out.status.success())
         }
     };
     CACHE
