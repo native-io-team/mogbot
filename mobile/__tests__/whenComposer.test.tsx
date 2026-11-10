@@ -174,7 +174,7 @@ describe('the phone’s “When…” composer', () => {
       screen.getByPlaceholderText('Triage it and tell me if it’s urgent'),
       'Tell me'
     );
-    expect(screen.getByText(words)).toBeTruthy();
+    expect(screen.getAllByText(words)).toHaveLength(1);
     await fireEvent.press(screen.getByText('Add'));
     expect(mockCreate).not.toHaveBeenCalled();
     // Switched on at the Mac: Check again hears so, and it can be added.

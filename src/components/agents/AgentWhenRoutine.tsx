@@ -155,7 +155,8 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
   const choices = whenSourceChoices(hasLinear);
   const intervals = whenIntervalChoices(kind, every);
   const source = whenSourceOf(kind, folder.trim(), check.trim(), app, filter);
-  const missing = whenMissing(kind, folder, check, app, filter) ?? access?.words ?? null;
+  const fieldMissing = whenMissing(kind, folder, check, app, filter);
+  const missing = fieldMissing ?? access?.words ?? null;
   const detailMissing = missing !== null;
 
   const pick = (next: Kind) => {
@@ -240,18 +241,25 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
             maxLength={200}
           />
         )}
-        {access?.settings && (
-          <div className="agent-when__actions">
-            <Button variant="secondary" size="compact" onClick={() => void askMac()}>
-              {WHEN_WORDS.checkAgain}
-            </Button>
-            <Button
-              variant="default"
-              size="compact"
-              onClick={() => void openUrl(access.settings ?? '')}
-            >
-              {WHEN_WORDS.openSettings}
-            </Button>
+        {access && (
+          // What macOS needs, said where its buttons are: open the setting
+          // first, then Check again (it also notices on its own).
+          <div className="agent-when__access" role="status">
+            <p className="agent-when__cost">{access.words}</p>
+            {access.settings && (
+              <div className="agent-when__access-actions">
+                <Button
+                  variant="default"
+                  size="compact"
+                  onClick={() => void openUrl(access.settings ?? '')}
+                >
+                  {WHEN_WORDS.openSettings}
+                </Button>
+                <Button variant="secondary" size="compact" onClick={() => void askMac()}>
+                  {WHEN_WORDS.checkAgain}
+                </Button>
+              </div>
+            )}
           </div>
         )}
         {kind === 'custom' && (
@@ -315,7 +323,8 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
       <div className="agent-schedule__echo" aria-live="polite">
         {!detailMissing && <p className="agent-schedule__echo-line">{echo}</p>}
         <p className="agent-schedule__readback" data-invalid={error ? true : undefined}>
-          {error ?? missing ?? whenReadback(agent.name, source, every)}
+          {/* Access is said beside its buttons above, not again here. */}
+          {error ?? fieldMissing ?? (access ? null : whenReadback(agent.name, source, every))}
         </p>
       </div>
 

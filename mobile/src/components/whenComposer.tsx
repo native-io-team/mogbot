@@ -117,7 +117,8 @@ export function WhenComposer({
   const intervals = whenIntervalChoices(kind, every);
   const source = whenSourceOf(kind, folder.trim(), check.trim(), app, filter);
   const access = whenAccess(kind, options?.mac);
-  const missing = whenMissing(kind, folder, check, app, filter) ?? access?.words ?? null;
+  const fieldMissing = whenMissing(kind, folder, check, app, filter);
+  const missing = fieldMissing ?? access?.words ?? null;
   const folders = options?.folders ?? [];
   const readsMac = whenKindReadsMac(kind);
 
@@ -231,6 +232,13 @@ export function WhenComposer({
               />
             )}
             {access ? (
+              // What the Mac needs, said beside Check again (as on the desk),
+              // not under the form.
+              <T variant="caption" color={colors.textSecondary}>
+                {access.words}
+              </T>
+            ) : null}
+            {access ? (
               <Button
                 title={WHEN_WORDS.checkAgain}
                 variant="ghost"
@@ -335,7 +343,7 @@ export function WhenComposer({
           </T>
         ) : (
           <T variant="caption" color={colors.textSecondary}>
-            {missing ?? whenReadback(agent.name, source, every)}
+            {fieldMissing ?? (access ? '' : whenReadback(agent.name, source, every))}
           </T>
         )}
       </View>

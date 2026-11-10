@@ -226,6 +226,11 @@ describe('WhenComposer', () => {
       target: { value: 'File the invoice' },
     });
     await waitFor(() => expect(screen.getByText(fda.words)).toBeInTheDocument());
+    // Said once, beside its buttons, with the setting first: not under the form.
+    expect(screen.getAllByText(fda.words)).toHaveLength(1);
+    const access = screen.getByText(fda.words).parentElement as HTMLElement;
+    const buttons = Array.from(access.querySelectorAll('button')).map((b) => b.textContent);
+    expect(buttons).toEqual(['Open Full Disk Access', 'Check again']);
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Open Full Disk Access' }));
     expect(opened).toContain(fda.settings);
