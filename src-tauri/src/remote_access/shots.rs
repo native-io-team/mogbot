@@ -184,7 +184,8 @@ pub fn id_from_path(path: &str) -> Option<&str> {
 /// The public URL for a stored screenshot.
 pub fn public_url(dns_name: &str, id: &str) -> String {
     format!(
-        "https://{dns_name}{}/shot/{id}.jpg",
+        "https://{}{}/shot/{id}.jpg",
+        super::tailscale::public_authority(dns_name),
         super::tailscale::MOUNT_PATH
     )
 }

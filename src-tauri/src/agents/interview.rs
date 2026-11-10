@@ -65,7 +65,7 @@ pub const TOOLS: [&str; 5] = [
 /// Claude Code's built-ins, named as well as removed: belt and braces.
 const BUILT_INS: &str = "Bash,BashOutput,KillShell,Edit,MultiEdit,Write,NotebookEdit,Read,Glob,Grep,LS,WebFetch,WebSearch,Task,Agent,TodoWrite,ExitPlanMode,SlashCommand,Skill";
 /// One exchange, at most. A reply is a few sentences and a tool call or two.
-const EXCHANGE_TIMEOUT: Duration = Duration::from_secs(240);
+pub(crate) const EXCHANGE_TIMEOUT: Duration = Duration::from_secs(240);
 /// procs' registry key, so quitting the app stops it like any turn.
 pub const PROC_KEY: &str = "import-interview";
 

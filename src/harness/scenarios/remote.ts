@@ -161,6 +161,51 @@ export const remoteScenarios: Scenario[] = [
     choices({ understood: true })
   ),
   remote(
+    'remote-setup-2-https-off',
+    'Remote access setup — step 2, HTTPS certificates are off in the tailnet',
+    'One line saying HTTPS certificates are off and the link needs them, the one fix ' +
+      '("Enable HTTPS" in DNS settings), an "Open DNS settings" button and "Try again". Never ' +
+      'Tailscale’s raw error text.',
+    {
+      ...ON,
+      linkMasked: null,
+      funnelOn: false,
+      funnelError:
+        'Funnel not available; HTTPS must be enabled. See https://tailscale.com/s/https.',
+      funnelProblem: { kind: 'httpsOff' },
+    },
+    choices({ understood: true })
+  ),
+  remote(
+    'remote-setup-2-funnel-not-allowed',
+    'Remote access setup — step 2, the tailnet’s access controls don’t allow Funnel',
+    'One line saying the Tailscale account doesn’t allow Funnel for this Mac, the fix (an admin ' +
+      'adds the “funnel” attribute in Access controls), "Open Access controls" and "Try again".',
+    {
+      ...ON,
+      linkMasked: null,
+      funnelOn: false,
+      funnelError:
+        'Funnel not available; "funnel" node attribute not set. See https://tailscale.com/s/no-funnel.',
+      funnelProblem: { kind: 'funnelNotAllowed' },
+    },
+    choices({ understood: true })
+  ),
+  remote(
+    'remote-setup-2-tailscale-off',
+    'Remote access setup — step 2, Tailscale is switched off',
+    'One line: Tailscale is switched off; the fix: switch it on in the menu bar; "Check again".',
+    {
+      ...ON,
+      tailscale: { state: 'needsLogin' },
+      tailscaleBackend: 'Stopped',
+      linkMasked: null,
+      funnelOn: false,
+      reachability: null,
+    },
+    choices({ understood: true })
+  ),
+  remote(
     'remote-setup-3-projects',
     'Remote access setup — step 3, choose projects',
     'Step 2 shows the machine name as its summary. Step 3 lists the projects with one ticked, ' +
@@ -237,6 +282,7 @@ export const remoteScenarios: Scenario[] = [
       reachability: null,
       funnelOn: false,
       funnelError: 'Tailscale didn’t answer within 20 seconds.',
+      funnelProblem: { kind: 'timedOut' },
       projects: [PROJECTS[0]],
       pushPin: 'locked',
       everConnected: true,

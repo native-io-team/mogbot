@@ -105,6 +105,18 @@ pub enum TalkState {
     Stopped,
 }
 
+/// Who ended a stopped import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EndedBy {
+    /// Stop, from the desk or the phone.
+    User,
+    /// Nothing from the other assistant for [`IDLE_MS`].
+    Idle,
+    /// Claude Code, which the interview runs on, isn't on this Mac.
+    Unavailable,
+}
+
 impl TalkState {
     pub fn live(self) -> bool {
         matches!(
@@ -136,6 +148,13 @@ pub struct Talk {
     pub conversations: usize,
     /// Times the plan has been played back to the user.
     pub playbacks: u32,
+    /// Why a `stopped` import stopped: the user, or the other assistant
+    /// going quiet for [`IDLE_MS`]. `None` while it's going.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended_by: Option<EndedBy>,
+    /// The ended-by-silence line has been written to the Chief's chat.
+    #[serde(skip)]
+    idle_noted: bool,
     /// The interview's MCP path: only this import's session can call it.
     #[serde(skip)]
     secret: String,
@@ -194,6 +213,7 @@ fn expire(state: &mut State, now: i64) {
     if let Some(t) = state.talk.as_mut() {
         if t.state == TalkState::Interviewing && !t.busy && now - t.last_at > IDLE_MS {
             t.state = TalkState::Stopped;
+            t.ended_by = Some(EndedBy::Idle);
             t.outbox.clear();
             t.held = None;
             // Its past conversations go with it: nothing left on disk.
@@ -209,6 +229,44 @@ fn expire(state: &mut State, now: i64) {
             );
         }
     }
+}
+
+/// The line in the Chief's chat when an import ends because the other
+/// assistant went quiet: what happened, that nothing was lost, and the fix.
+pub(crate) fn idle_line(source: &str) -> String {
+    format!(
+        "The import from {source} ended: it sent nothing for {} minutes. Nothing was created. To carry on, press ⌘K → Import agents → Start, then tell {source} “carry on with the import”.",
+        IDLE_MS / 60_000
+    )
+}
+
+/// Expire a quiet import now and, the first time it has, say so in the
+/// Chief's chat and tell every window. Nothing goes silent: without this
+/// the bar kept saying "Importing from Grok" after the import had ended.
+pub(crate) fn sweep_state(now: i64) -> Option<(String, String)> {
+    let mut state = lock();
+    expire(&mut state, now);
+    let t = state.talk.as_mut().filter(|t| {
+        t.state == TalkState::Stopped && t.ended_by == Some(EndedBy::Idle) && !t.idle_noted
+    })?;
+    t.idle_noted = true;
+    Some((t.chief_id.clone(), t.source.clone()))
+}
+
+pub fn sweep(app: &AppHandle) {
+    if let Some((chief_id, source)) = sweep_state(store::now_ms()) {
+        note(app, &chief_id, idle_line(&source));
+        emit(app, Some(&chief_id));
+    }
+}
+
+/// Check again once the import could have gone quiet for [`IDLE_MS`].
+fn sweep_later(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(IDLE_MS as u64 + 5_000)).await;
+        sweep(&app);
+    });
 }
 
 /// The import going on, or one that just ended (for the bar and the modal).
@@ -332,6 +390,7 @@ fn stop_state(now: i64) -> Stopped {
         return Stopped { talk: None };
     };
     t.state = TalkState::Stopped;
+    t.ended_by = Some(EndedBy::User);
     t.last_at = now;
     t.busy = false;
     // Only what the other assistant had queued is dropped.
@@ -639,6 +698,8 @@ pub(crate) fn admit(
             history_chars: 0,
             conversations: 0,
             playbacks: 0,
+            ended_by: None,
+            idle_noted: false,
             next_key: 0,
             coverage: Default::default(),
             capped: false,
@@ -781,6 +842,10 @@ pub(crate) fn answer(status: Status, talk: &Talk, chief: &str, replies: &[String
         Status::Refused => format!(
             "The user declined the import from {source}. Tell them it didn't happen. Don't try again unless they ask, and then only after they press Start in the app again."
         ),
+        Status::Stopped if talk.ended_by == Some(EndedBy::Idle) => format!(
+            "The import ended because nothing came from you for {} minutes. Nothing was created. Tell the user in one line, and that to carry on they press ⌘K → Import agents → Start on their computer and ask you again; then start over from your first message.",
+            IDLE_MS / 60_000
+        ),
         Status::Stopped => "The user stopped the import in the app. Tell them it stopped and nothing was created. Don't carry on unless they ask, and then only after they press Start again.".to_string(),
     };
     out.push_str(&format!("\n\nNEXT: {next}"));
@@ -834,11 +899,22 @@ pub async fn converse(
     let chief = super::ensure_main().map_err(|e| e.to_string())?;
     let source = clean_source(source, &chief.name)?;
     let message = clean_message(message)?;
+    // An import that went quiet ends here with its line, before this call
+    // is answered as "ended".
+    sweep(app);
     let admitted = admit(&source, &message, &chief, store::now_ms())?;
     let talk_id = match admitted {
         Admit::AskConsent { talk_id } => {
             if interview::binary().await.is_none() {
                 let _ = stop_state(store::now_ms());
+                if let Some(t) = lock().talk.as_mut().filter(|t| t.id == talk_id) {
+                    t.ended_by = Some(EndedBy::Unavailable);
+                }
+                note(
+                    app,
+                    &chief.id,
+                    format!("{source} tried to bring its agents over, but importing from another assistant needs Claude Code on this Mac. Install Claude Code, or use ⌘K → Import agents → “Use an export or paste a reply”."),
+                );
                 emit(app, None);
                 return Err("STATUS: unavailable\n\nThis import needs Claude Code on the user's computer, and it isn't installed there.\n\nNEXT: Tell the user to install Claude Code, or to use Import agents → Paste a reply instead.".into());
             }
@@ -1228,15 +1304,47 @@ fn deliver_from(app: &AppHandle, talk_id: &str, message: &str, from_user: bool) 
         };
         if let Some((why, busy)) = failed {
             if let Some(t) = busy.report(&[], true, done.began) {
-                note(
-                    &app,
-                    &t.chief_id,
-                    format!("The import interview didn't answer: {why}"),
-                );
+                note(&app, &t.chief_id, interview_failed_line(&why, &t.source));
             }
         }
         emit(&app, Some(&t.chief_id));
+        // The ball is with the other assistant now: if it never comes
+        // back, the import ends and says so.
+        sweep_later(&app);
     });
+}
+
+/// One plain line and its one fix for an interview exchange that failed on
+/// this Mac. The other assistant is only told to send its message again
+/// ([`FAILED_REPLY`]); the user is told why and what to do. The import
+/// carries on either way: nothing staged is lost.
+pub(crate) fn interview_failed_line(why: &str, source: &str) -> String {
+    let w = why.to_lowercase();
+    let again = format!("Nothing staged was lost; {source} has been asked to send it again.");
+    if w.contains("usage limit")
+        || w.contains("rate limit")
+        || w.contains("limit reached")
+        || w.contains("out of usage")
+        || w.contains("credit balance")
+    {
+        format!("The import paused: Claude Code is out of usage on this Mac. Once it refills (or another account is added in Settings → Accounts & usage), tell {source} “carry on with the import”. {again}")
+    } else if w.contains("not logged in")
+        || w.contains("/login")
+        || w.contains("invalid api key")
+        || w.contains("authentication")
+        || w.contains("oauth")
+    {
+        format!("The import paused: Claude Code isn't signed in on this Mac. Sign it in again in Settings → Accounts & usage, then tell {source} “carry on with the import”. {again}")
+    } else if w.contains("took too long") {
+        format!(
+            "One answer took longer than {} minutes, so it was skipped. {again}",
+            interview::EXCHANGE_TIMEOUT.as_secs() / 60
+        )
+    } else if w.contains("isn't installed") || w.contains("couldn't start claude code") {
+        format!("The import paused: Claude Code couldn't start on this Mac. Check it opens (type `claude` in Terminal), then tell {source} “carry on with the import”.")
+    } else {
+        format!("One answer in the import failed ({why}). {again}")
+    }
 }
 
 async fn run_exchange(app: &AppHandle, t: &Talk, prompt: &str) -> interview::Exchanged {
@@ -2131,6 +2239,8 @@ pub(crate) fn stage_one_shot_state(
         history_chars: 0,
         conversations: 0,
         playbacks: 0,
+        ended_by: None,
+        idle_noted: false,
         next_key: 0,
         coverage: Default::default(),
         capped: false,
@@ -2853,6 +2963,59 @@ mod tests {
         expire(&mut lock(), last + 2 * IDLE_MS);
         assert_eq!(AUDITED.lock().unwrap().len(), 1);
         reset_for_tests();
+    }
+
+    /// The other assistant went quiet: the import says so once in the
+    /// Chief's chat, says it wasn't the user, and tells the assistant the
+    /// same if it comes back.
+    #[test]
+    fn going_quiet_is_said_once_and_never_blamed_on_the_user() {
+        let _serial = store::tests_lock();
+        interviewing();
+        let last = lock().talk.as_ref().unwrap().last_at;
+        // Not quiet long enough: nothing.
+        assert_eq!(sweep_state(last + IDLE_MS - 1), None);
+        let (chief_id, source) = sweep_state(last + IDLE_MS + 1).expect("noted");
+        assert_eq!(source, "Grok");
+        assert_eq!(chief_id, chief().id);
+        assert_eq!(sweep_state(last + 2 * IDLE_MS), None, "once");
+        let t = lock().talk.clone().unwrap();
+        assert_eq!(t.ended_by, Some(EndedBy::Idle));
+        assert_eq!(
+            serde_json::to_value(&t).unwrap()["endedBy"],
+            serde_json::json!("idle")
+        );
+        let line = idle_line("Grok");
+        assert!(line.contains("sent nothing for 30 minutes"), "{line}");
+        assert!(line.contains("Start"), "{line}");
+        let said = answer(Status::Stopped, &t, "Chief", &[]);
+        assert!(said.contains("nothing came from you"), "{said}");
+        assert!(!said.contains("The user stopped"), "{said}");
+        reset_for_tests();
+
+        // A Stop is the user's.
+        interviewing();
+        let _ = stop_state(store::now_ms());
+        assert_eq!(lock().talk.as_ref().unwrap().ended_by, Some(EndedBy::User));
+        reset_for_tests();
+    }
+
+    #[test]
+    fn a_failed_answer_is_one_line_with_its_fix() {
+        for (why, says) in [
+            ("Claude AI usage limit reached|1730000000", "out of usage"),
+            ("Invalid API key · Please run /login", "isn't signed in"),
+            (
+                "The interview took too long to answer.",
+                "longer than 4 minutes",
+            ),
+            ("Couldn't start Claude Code: No such file", "couldn't start"),
+            ("something odd", "failed (something odd)"),
+        ] {
+            let line = interview_failed_line(why, "Grok");
+            assert!(line.contains(says), "{why} → {line}");
+            assert!(!line.contains('\n'), "one line: {line}");
+        }
     }
 
     #[test]

@@ -1197,6 +1197,8 @@ export interface ImportTalk {
   busy: boolean;
   conversations?: number;
   playbacks?: number;
+  /** Why a `stopped` import stopped (desktop `lib/agents.ts`). */
+  endedBy?: 'user' | 'idle' | 'unavailable';
 }
 
 /** What importing from a review card made. */

@@ -118,13 +118,20 @@ describe('talkLine', () => {
     expect(talkLine({ ...TALK, state: 'stopped' }, 'Ada')).toBe(
       'You stopped the import from Grok. Nothing was created'
     );
+    // Ended by silence or a missing engine: never "you stopped it".
+    expect(talkLine({ ...TALK, state: 'stopped', endedBy: 'idle' }, 'Ada')).toMatch(
+      /^Grok went quiet for 30 minutes.*carry on with the import/
+    );
+    expect(talkLine({ ...TALK, state: 'stopped', endedBy: 'unavailable' }, 'Ada')).toMatch(
+      /needs Claude Code/
+    );
   });
 });
 
 describe('ImportTalkBar', () => {
   it('shows while an import is going, in one line of real counts, and stops it', async () => {
     stopImportTalk.mockClear();
-    gate = { armed: false, talk: { ...TALK, conversations: 37 } };
+    gate = { armed: false, talk: { ...TALK, conversations: 37, lastAt: Date.now() } };
     render(<ImportTalkBar />);
     expect(await screen.findByText('Importing from Grok')).toBeInTheDocument();
     expect(screen.getByText('2 agents staged · 37 conversations')).toBeInTheDocument();
@@ -148,6 +155,21 @@ describe('ImportTalkBar', () => {
     expect(barLines({ ...TALK, state: 'review' }).detail).toMatch(
       /Nothing is created until you import/
     );
+  });
+
+  it('says when the other assistant has left the interview waiting, and the fix', () => {
+    const at = 10 * 60_000;
+    // Under three minutes, or while the interview itself is answering: not quiet.
+    expect(barLines({ ...TALK, lastAt: at - 2 * 60_000 }, at).quiet).toBeUndefined();
+    expect(barLines({ ...TALK, busy: true, lastAt: 0 }, at).quiet).toBeUndefined();
+    const quiet = barLines({ ...TALK, lastAt: at - 4 * 60_000 }, at);
+    expect(quiet.quiet).toBe(true);
+    expect(quiet.title).toBe('Import from Grok · waiting on Grok');
+    expect(quiet.detail).toBe(
+      'Nothing from Grok for 4 min. In Grok, say “carry on with the import”.'
+    );
+    // Waiting on the user is never blamed on Grok.
+    expect(barLines({ ...TALK, state: 'playback', lastAt: 0 }, at).quiet).toBeUndefined();
   });
 
   it('counts only what it has, never names or a percentage', () => {

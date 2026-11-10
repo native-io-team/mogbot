@@ -1600,6 +1600,30 @@ export interface ImportTalk {
   conversations?: number;
   /** Times the plan has been played back to you. */
   playbacks?: number;
+  /**
+   * Why a `stopped` import stopped: `user` (Stop), `idle` (the other
+   * assistant sent nothing for 30 minutes) or `unavailable` (no Claude Code
+   * on this Mac for the interview).
+   */
+  endedBy?: 'user' | 'idle' | 'unavailable';
+}
+
+/**
+ * How long the other assistant can leave the interview's question
+ * unanswered before the bar says it's waiting on it (the import itself
+ * ends at 30 minutes, `connector::IDLE_MS`).
+ */
+export const IMPORT_QUIET_MS = 3 * 60_000;
+
+/**
+ * Minutes the other assistant has left the interview waiting, when that's
+ * long enough to say so: the interview answered (`busy` false) and nothing
+ * has come back since. Null otherwise.
+ */
+export function importQuietMinutes(t: ImportTalk, now: number): number | null {
+  if (t.state !== 'interviewing' || t.busy) return null;
+  const quiet = now - t.lastAt;
+  return quiet >= IMPORT_QUIET_MS ? Math.floor(quiet / 60_000) : null;
 }
 
 /** Whether an import may begin (you pressed Start), and the one going on. */

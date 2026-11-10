@@ -79,6 +79,12 @@ export function talkLine(talk: ImportTalk, chief: string): string {
     case 'denied':
       return `You declined ${talk.source}. Nothing was shared`;
     default:
+      if (talk.endedBy === 'idle') {
+        return `${talk.source} went quiet for 30 minutes, so the import ended. Nothing was created. Press Start and tell ${talk.source} “carry on with the import”`;
+      }
+      if (talk.endedBy === 'unavailable') {
+        return 'Importing from another assistant needs Claude Code on this Mac. Install it, or use an export or paste a reply';
+      }
       return `You stopped the import from ${talk.source}. Nothing was created`;
   }
 }

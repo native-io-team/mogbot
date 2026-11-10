@@ -64,6 +64,92 @@ done when something is *true*, not when something was clicked:
 
 Done steps collapse to a summary with **Change**.
 
+### Connecting each assistant (step 5)
+
+`assistantGuides` (`lib/remoteAccess.ts`) holds the steps the setup shows,
+picked per assistant with a segmented control. Checked against each
+assistant's own help pages on 2026-11-10; menus move, so each step names
+the setting to search for. The link goes only in the connector's URL field
+and needs no sign-in: the token is in the path.
+
+| Assistant | Where | Auth | Needs |
+| --- | --- | --- | --- |
+| Claude | Customize → Connectors → + Add → Add custom connector; name, remote MCP server URL → Continue | **No sign in** | Any plan (Free: one custom connector); Team/Enterprise: an owner adds it in Organization settings → Connectors. In a chat: + → Connectors, switch it on |
+| ChatGPT | Settings → Apps → Advanced settings → **Developer mode** on; then Apps → Create app; name, MCP server URL | **No authentication**, tick that you trust it | Web only; Plus, Pro, Business, Enterprise, Edu (on Business/Enterprise an admin enables Developer mode). In a chat: + → Developer mode → pick it. OpenAI's help says full write access may be limited to Business/Enterprise/Edu: **unverified** whether Plus/Pro can call our write tools (`message_agent`, `import_conversation`) |
+| Grok | grok.com/connectors → New Connector → Custom; server URL | none | xAI says connectors are on every plan; Business/Enterprise need an admin. Grok Bot adding a custom server: still unconfirmed |
+| Other | wherever it adds a custom/remote MCP server | none | — |
+
+### Failure states (for the onboarding screens)
+
+Every way step 2 of onboarding (Remote Access, then the import) can fail
+ends in **one plain line and one fix**, as data the screens render however
+they like. Nothing here is a raw CLI or serde message unless it is the
+"other" fallback, which quotes Tailscale.
+
+**Remote Access: `remoteProblem(status, now)`** (`lib/remoteAccess.ts`,
+tested in `remoteAccess.test.ts`) returns `{ id, line, fix, action,
+waiting? }` or `null` (the link works and an assistant has connected).
+`action.kind` is `openUrl` (with `url`), `recheck`
+(`getRemoteAccessStatus`), `turnOn` (`setRemoteAccessEnabled(true)`),
+`republish` (`republishRemoteLink`) or `copyLink` (`copyRemoteLink`).
+`waiting: true` means nothing is wrong yet; it clears by itself. Derived
+from `connectionStep`, so the modal and onboarding never disagree. The
+backend fields behind it: `tailscaleBackend` (Tailscale's `BackendState`,
+or `NotRunning` when the app isn't open), `funnelProblem.kind`
+(`tailscale::classify_funnel_failure`, matched on Tailscale's own CLI
+messages) and `funnelApprovalKind` (`https` | `funnel`, from the approval
+link's path).
+
+| `id` | When | Line (short) | Fix / action |
+| --- | --- | --- | --- |
+| `unsupported` | not macOS | Remote access only works on a Mac | use an export or paste |
+| `tailscaleMissing` | no CLI | Tailscale isn't on this Mac yet | Get Tailscale (opens download) |
+| `tailscaleNotRunning` | CLI can't reach its daemon | installed but isn't open | open it, Check again |
+| `tailscaleOff` | `BackendState` `Stopped` | switched off | switch it on in the menu bar, Check again |
+| `tailscaleSignedOut` | `NeedsLogin` (or logged out mid-way) | signed out | sign in from the menu bar, Check again |
+| `tailscaleUnreadable` | status JSON unreadable | quotes it | quit and reopen Tailscale |
+| `remoteOff` | not enabled | Remote access is off | Turn on remote access |
+| `serverStopped` | enabled, server not running | the app's side stopped | Start it again |
+| `httpsNeedsApproval` | approval link `/f/serve` | HTTPS needs turning on, once | Allow in Tailscale (the link); "ask whoever runs your Tailscale" if not admin |
+| `funnelNeedsApproval` | approval link `/f/funnel` | Tailscale needs your OK, once | Allow in Tailscale (the link) |
+| `httpsOff` | "HTTPS must be enabled", "HTTPS cert support is not enabled", "Serve is not enabled" | certificates are off | Open DNS settings → Enable HTTPS |
+| `funnelNotAllowed` | `"funnel" node attribute not set` (ACL, no link offered) | the account doesn't allow Funnel | Open Access controls; an admin adds `funnel` |
+| `funnelPortNotAllowed` | "not in the node's allowed ports" | Funnel allowed, not on 443 | Open Access controls |
+| `funnelPortsInUse` | every Funnel port (443/8443/10000) serves something private | turning it on would make that public | stop that share, Try again |
+| `funnelTimedOut` | no answer in 20 s | Tailscale didn't answer in time | Try again |
+| `funnelFailed` | anything else, or "said yes but settings don't show the link" | quotes Tailscale | Try again |
+| `publishing` (waiting) | Funnel on, not yet in public DNS | making the link public | Copy link now |
+| `publishStuck` | 10 min or the watchdog gave up | still not public | Ask Tailscale again |
+| `cantCheckFromHere` | the DNS-over-HTTPS lookup itself failed | this Mac couldn't reach the internet | check it's online |
+| `notThisApp` | something else answered at the address | something else answers there | Ask Tailscale again |
+| `unreachable` | resolves, request didn't get through | didn't get through yet | Ask Tailscale again |
+| `noAssistantYet` (waiting) | reachable, `everConnected` false | link works, nobody has connected | Copy link, add it as a connector |
+
+**Funnel never publishes something private.** Funnel is switched on per
+host and port, not per path. `tailscale serve 3000` puts the user's own
+site on `/` at 443, tailnet only; turning our `/<slug>` on there would have
+made their site public too. `choose_funnel_port` now uses the first Funnel
+port (443, 8443, 10000) that is empty, already funnelled, or already ours,
+and the link carries `:8443` when it moved (`public_authority`); with none
+free it refuses (`funnelPortsInUse`).
+
+**The import over the connector** (`ImportTalk`, `lib/agents.ts`):
+
+| State | How the screens tell | Line | Fix |
+| --- | --- | --- | --- |
+| Not started | the assistant gets `STATUS: not_started` | (in the assistant) press Start in the app | ⌘K → Import agents → Start |
+| Waiting on the user | `state: awaiting_consent` | needs your OK in the Chief's chat | answer the card |
+| The assistant went quiet | `importQuietMinutes(talk, now)` ≥ 3 (interviewing, not busy) | "Nothing from Grok for 4 min." | "In Grok, say “carry on with the import”." |
+| Ended by silence (30 min) | `state: stopped`, `endedBy: 'idle'`; a line in the Chief's chat (`connector::idle_line`, once, by a timer: it used to end silently and the bar kept saying "Importing") | the import ended, nothing was created | Start again, tell Grok "carry on" |
+| No Claude Code | `endedBy: 'unavailable'`; a line in the Chief's chat | importing needs Claude Code on this Mac | install it, or use an export / paste |
+| One answer failed | a line in the Chief's chat (`interview_failed_line`); the assistant is asked to resend | out of usage / not signed in / took over 4 min / couldn't start / failed (reason) | refill or add an account / sign in again in Settings → Accounts & usage / nothing (resent) |
+| Stopped | `endedBy: 'user'` | you stopped it | Start again |
+| Replace while that agent works | Import refuses | "Finance is working. Replace it once it's done, or stop it first." | wait, or Stop it |
+
+The no-Remote-Access paths (export file or folder, pasted reply) report
+through `import_export::Preview`; their states are listed in
+docs/internal/import-remote-reliability-2026-11-10.md.
+
 **Live** (`RemoteLive`), shown from the first connection onwards:
 
 - A hero (Live / Not reachable / Off) with the assistant last heard from

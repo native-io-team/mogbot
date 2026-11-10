@@ -134,27 +134,49 @@ pub fn parse_status(json: &Value) -> TailscaleState {
 }
 
 pub async fn status() -> TailscaleState {
+    status_with_backend().await.0
+}
+
+/// The app's own word for "the Tailscale app isn't running at all" (the CLI
+/// couldn't reach its daemon), alongside Tailscale's `BackendState` words.
+pub const BACKEND_NOT_RUNNING: &str = "NotRunning";
+
+/// [`status`], plus Tailscale's `BackendState` when it gave one. `Stopped`
+/// (switched off in the menu bar), `NeedsLogin` (signed out) and
+/// [`BACKEND_NOT_RUNNING`] all read as [`TailscaleState::NeedsLogin`], but
+/// each has a different fix, so the Remote access status says which.
+pub async fn status_with_backend() -> (TailscaleState, Option<String>) {
     if find_binary().is_none() {
-        return TailscaleState::NotInstalled;
+        return (TailscaleState::NotInstalled, None);
     }
     let output = match run_cli(&["status", "--json"], 8).await {
         Ok(o) => o,
         Err(e) => {
-            return TailscaleState::Unknown {
-                detail: e.to_string(),
-            }
+            return (
+                TailscaleState::Unknown {
+                    detail: e.to_string(),
+                },
+                None,
+            )
         }
     };
     // `status` exits non-zero when logged out but still prints JSON.
     match serde_json::from_slice::<Value>(&output.stdout) {
-        Ok(json) => parse_status(&json),
+        Ok(json) => (
+            parse_status(&json),
+            json.get("BackendState")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        ),
         Err(_) => {
             let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
-            if stderr.contains("not running")
-                || stderr.contains("logged out")
-                || stderr.contains("failed to connect")
-            {
-                TailscaleState::NeedsLogin
+            if stderr.contains("failed to connect") || stderr.contains("is tailscaled running") {
+                (
+                    TailscaleState::NeedsLogin,
+                    Some(BACKEND_NOT_RUNNING.to_string()),
+                )
+            } else if stderr.contains("not running") || stderr.contains("logged out") {
+                (TailscaleState::NeedsLogin, None)
             } else {
                 // Never an empty reason: some failures only print to stdout.
                 let said = if stderr.trim().is_empty() {
@@ -162,13 +184,16 @@ pub async fn status() -> TailscaleState {
                 } else {
                     stderr.trim().to_string()
                 };
-                TailscaleState::Unknown {
-                    detail: if said.is_empty() {
-                        "Tailscale gave no answer.".to_string()
-                    } else {
-                        said
+                (
+                    TailscaleState::Unknown {
+                        detail: if said.is_empty() {
+                            "Tailscale gave no answer.".to_string()
+                        } else {
+                            said
+                        },
                     },
-                }
+                    None,
+                )
             }
         }
     }
@@ -261,33 +286,199 @@ pub async fn phones() -> Vec<TailnetPhone> {
 ///   "AllowFunnel": { "host.ts.net:443": true } }
 /// ```
 pub fn funnel_routes_to(config: &Value, dns_name: &str, port: u16) -> bool {
-    let host_port = format!("{dns_name}:443");
-    let allowed = config
+    funnel_port_of(config, dns_name, port).is_some()
+}
+
+/// The public ports Tailscale Funnel allows, in the order we try them.
+pub const FUNNEL_PORTS: [u16; 3] = [443, 8443, 10000];
+
+fn funnel_allowed(config: &Value, host_port: &str) -> bool {
+    config
         .get("AllowFunnel")
-        .and_then(|a| a.get(&host_port))
+        .and_then(|a| a.get(host_port))
         .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let proxy = config
-        .get("Web")
-        .and_then(|w| w.get(&host_port))
-        .and_then(|h| h.pointer("/Handlers"))
-        .and_then(|h| h.get(MOUNT_PATH))
-        .and_then(|h| h.get("Proxy"))
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    let proxy = proxy.trim_end_matches('/');
-    allowed
-        && (proxy == format!("http://127.0.0.1:{port}")
-            || proxy == format!("http://localhost:{port}"))
+        .unwrap_or(false)
+}
+
+/// Which public port carries our mount, funnelled, to loopback `port`.
+pub fn funnel_port_of(config: &Value, dns_name: &str, port: u16) -> Option<u16> {
+    FUNNEL_PORTS.into_iter().find(|p| {
+        let host_port = format!("{dns_name}:{p}");
+        let proxy = config
+            .get("Web")
+            .and_then(|w| w.get(&host_port))
+            .and_then(|h| h.pointer("/Handlers"))
+            .and_then(|h| h.get(MOUNT_PATH))
+            .and_then(|h| h.get("Proxy"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim_end_matches('/');
+        funnel_allowed(config, &host_port)
+            && (proxy == format!("http://127.0.0.1:{port}")
+                || proxy == format!("http://localhost:{port}"))
+    })
+}
+
+/// The public port our mount can go on without publishing anything else.
+///
+/// Funnel is switched on per host *and port*, never per path: turning it on
+/// for our `/<slug>` on 443 makes every other handler on 443 public too. So
+/// a port where the user already serves something **tailnet only** (say
+/// `tailscale serve 3000`, which lands on `/` at 443) is never used: we move
+/// to the next port Funnel allows. A port that is already funnelled (Ship
+/// Studio's mount, or the user's own public site) adds no exposure, and a
+/// port that already carries our mount is ours. A raw TCP forward on a port
+/// leaves no room for a web handler. `None`: every Funnel port is taken.
+pub fn choose_funnel_port(config: &Value, dns_name: &str) -> Option<u16> {
+    FUNNEL_PORTS.into_iter().find(|p| {
+        let host_port = format!("{dns_name}:{p}");
+        let tcp = config.get("TCP").and_then(|t| t.get(p.to_string()));
+        if tcp.is_some_and(|t| t.get("TCPForward").is_some()) {
+            return false;
+        }
+        let handlers = config
+            .get("Web")
+            .and_then(|w| w.get(&host_port))
+            .and_then(|h| h.get("Handlers"))
+            .and_then(Value::as_object);
+        match handlers {
+            None => true,
+            Some(h) if h.is_empty() => true,
+            Some(h) if h.keys().all(|k| k == MOUNT_PATH) => true,
+            Some(_) => funnel_allowed(config, &host_port),
+        }
+    })
+}
+
+/// The public port the link is on: 443 unless [`choose_funnel_port`] had to
+/// move it. Kept from the last read-back of the Funnel config.
+static PUBLIC_PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(443);
+
+fn set_public_port(p: u16) {
+    PUBLIC_PORT.store(p, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// `machine.tailnet.ts.net`, with `:<port>` when the link isn't on 443.
+pub fn public_authority(dns_name: &str) -> String {
+    authority_for(
+        dns_name,
+        PUBLIC_PORT.load(std::sync::atomic::Ordering::Relaxed),
+    )
+}
+
+pub fn authority_for(dns_name: &str, port: u16) -> String {
+    if port == 443 {
+        dns_name.to_string()
+    } else {
+        format!("{dns_name}:{port}")
+    }
+}
+
+async fn funnel_config() -> Option<Value> {
+    let output = run_cli(&["funnel", "status", "--json"], 8).await.ok()?;
+    serde_json::from_slice::<Value>(&output.stdout).ok()
 }
 
 pub async fn funnel_active(dns_name: &str, port: u16) -> bool {
-    let Ok(output) = run_cli(&["funnel", "status", "--json"], 8).await else {
+    let Some(config) = funnel_config().await else {
         return false;
     };
-    serde_json::from_slice::<Value>(&output.stdout)
-        .map(|config| funnel_routes_to(&config, dns_name, port))
-        .unwrap_or(false)
+    match funnel_port_of(&config, dns_name, port) {
+        Some(p) => {
+            set_public_port(p);
+            true
+        }
+        None => false,
+    }
+}
+
+/// Every port that has our mount on it, whatever it proxies to.
+fn ports_with_our_mount(config: &Value, dns_name: &str) -> Vec<u16> {
+    FUNNEL_PORTS
+        .into_iter()
+        .filter(|p| {
+            config
+                .get("Web")
+                .and_then(|w| w.get(format!("{dns_name}:{p}")))
+                .and_then(|h| h.get("Handlers"))
+                .and_then(|h| h.get(MOUNT_PATH))
+                .is_some()
+        })
+        .collect()
+}
+
+/// What stopped the Funnel, in a shape the UI turns into one line and one
+/// fix (`lib/remoteAccess.ts`, `remoteProblem`). Read from the CLI's own
+/// words, which is all Tailscale gives us.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum FunnelProblem {
+    /// The tailnet has HTTPS certificates off (DNS page in the admin
+    /// console); Funnel needs them.
+    HttpsOff,
+    /// The tailnet's access controls don't give this Mac the `funnel`
+    /// attribute (no approval link was offered, so an admin has to add it).
+    FunnelNotAllowed,
+    /// The `funnel` attribute exists but doesn't allow the port.
+    PortNotAllowed,
+    /// Something of the user's is served tailnet-only on every Funnel port;
+    /// turning ours on would make it public, so we didn't.
+    PortsInUse,
+    /// Tailscale didn't answer in time.
+    TimedOut,
+    /// Signed out, switched off, or the Tailscale app isn't running.
+    NotConnected,
+    /// Anything else: the CLI's words are in `funnelError`.
+    Other,
+}
+
+/// What [`enable_funnel`] says when every Funnel port is in use.
+pub const PORTS_IN_USE_DETAIL: &str = "Every port Funnel allows (443, 8443, 10000) already serves something else on this Mac, privately. Turning the link on would make that public too.";
+
+/// Sort the CLI's failure text (or ours) into a [`FunnelProblem`]. Matches
+/// the messages in Tailscale's `cmd/tailscale/cli` and `ipn` packages.
+pub fn classify_funnel_failure(detail: &str) -> FunnelProblem {
+    let d = detail.to_lowercase();
+    if detail == PORTS_IN_USE_DETAIL {
+        FunnelProblem::PortsInUse
+    } else if d.contains("https must be enabled")
+        || d.contains("https cert")
+        || d.contains("https is not enabled")
+        || d.contains("serve is not enabled")
+        || d.contains("tailscale.com/s/https")
+    {
+        FunnelProblem::HttpsOff
+    } else if d.contains("allowed ports") || d.contains("not in the node's allowed") {
+        FunnelProblem::PortNotAllowed
+    } else if d.contains("node attribute not set")
+        || d.contains("s/no-funnel")
+        || d.contains("funnel not available")
+        || d.contains("funnel is not enabled")
+    {
+        FunnelProblem::FunnelNotAllowed
+    } else if d.contains("didn't answer within") || d.contains("timed out") {
+        FunnelProblem::TimedOut
+    } else if d.contains("sign in to tailscale")
+        || d.contains("logged out")
+        || d.contains("needslogin")
+        || d.contains("failed to connect to local tailscale")
+        || d.contains("tailscale is stopped")
+        || d.contains("isn't installed")
+    {
+        FunnelProblem::NotConnected
+    } else {
+        FunnelProblem::Other
+    }
+}
+
+/// Which switch an approval link turns on: `https` (certificates, which
+/// Tailscale's CLI calls "Serve") or `funnel`.
+pub fn approval_kind(url: &str) -> &'static str {
+    if url.contains("/f/serve") || url.contains("/f/https") {
+        "https"
+    } else {
+        "funnel"
+    }
 }
 
 /// What happened when we asked for a Funnel.
@@ -324,7 +515,27 @@ pub fn approval_url(output: &str) -> Option<String> {
 pub async fn enable_funnel(port: u16) -> FunnelOutcome {
     let target = format!("http://127.0.0.1:{port}");
     let set_path = format!("--set-path={MOUNT_PATH}");
-    run_until_settled(&["funnel", "--bg", "--https=443", &set_path, &target]).await
+    // Which public port: never one where something private would go public
+    // with us (`choose_funnel_port`). Unreadable config: 443, as before.
+    let public = match (funnel_config().await, status().await) {
+        (Some(config), TailscaleState::Connected { dns_name, .. }) => {
+            match choose_funnel_port(&config, &dns_name) {
+                Some(p) => p,
+                None => {
+                    return FunnelOutcome::Failed {
+                        detail: PORTS_IN_USE_DETAIL.to_string(),
+                    }
+                }
+            }
+        }
+        _ => 443,
+    };
+    let https = format!("--https={public}");
+    let outcome = run_until_settled(&["funnel", "--bg", &https, &set_path, &target]).await;
+    if outcome == FunnelOutcome::On {
+        set_public_port(public);
+    }
+    outcome
 }
 
 /// Run a `serve`/`funnel` command that may stop to print an approval link
@@ -446,8 +657,28 @@ pub async fn remove_previous_mount() {
 
 /// Remove our mount from the Funnel. Leaves anything else the user serves.
 pub async fn disable_funnel() -> Result<(), CommandError> {
+    // Wherever our mount is (443, or the port `choose_funnel_port` moved it
+    // to); 443 when the config can't be read, as before.
+    let ports = match (funnel_config().await, status().await) {
+        (Some(config), TailscaleState::Connected { dns_name, .. }) => {
+            ports_with_our_mount(&config, &dns_name)
+        }
+        _ => vec![443],
+    };
+    let mut result = Ok(());
+    for p in ports {
+        if let Err(e) = disable_funnel_on(p).await {
+            result = Err(e);
+        }
+    }
+    set_public_port(443);
+    result
+}
+
+async fn disable_funnel_on(public: u16) -> Result<(), CommandError> {
     let set_path = format!("--set-path={MOUNT_PATH}");
-    let output = run_cli(&["funnel", "--https=443", &set_path, "off"], 10).await?;
+    let https = format!("--https={public}");
+    let output = run_cli(&["funnel", &https, &set_path, "off"], 10).await?;
     if output.status.success() {
         return Ok(());
     }
@@ -651,7 +882,8 @@ async fn probe(dns_name: &str, token: &str) -> Reachability {
         Ok(ips) => ips,
         Err(detail) => return Reachability::Unreachable { detail },
     };
-    let addr = std::net::SocketAddr::from((ips[0], 443));
+    let public = PUBLIC_PORT.load(std::sync::atomic::Ordering::Relaxed);
+    let addr = std::net::SocketAddr::from((ips[0], public));
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .resolve(dns_name, addr)
@@ -664,7 +896,10 @@ async fn probe(dns_name: &str, token: &str) -> Reachability {
             }
         }
     };
-    let url = format!("https://{dns_name}{MOUNT_PATH}/mcp/{token}");
+    let url = format!(
+        "https://{}{MOUNT_PATH}/mcp/{token}",
+        authority_for(dns_name, public)
+    );
     let response = client
         .post(url)
         .header(
@@ -928,6 +1163,102 @@ mod tests {
             serde_json::to_value(TailscaleState::NotInstalled).unwrap(),
             json!({ "state": "notInstalled" })
         );
+    }
+
+    /// The CLI's own words (cmd/tailscale/cli and ipn), each to one cause.
+    #[test]
+    fn funnel_failures_sort_into_one_cause_each() {
+        use FunnelProblem as P;
+        for (said, cause) in [
+            (
+                "Funnel not available; HTTPS must be enabled. See https://tailscale.com/s/https.",
+                P::HttpsOff,
+            ),
+            (
+                "error: HTTPS cert support is not enabled/configured for your tailnet.",
+                P::HttpsOff,
+            ),
+            ("Serve is not enabled on your tailnet.", P::HttpsOff),
+            (
+                "Funnel not available; \"funnel\" node attribute not set. See https://tailscale.com/s/no-funnel.",
+                P::FunnelNotAllowed,
+            ),
+            (
+                "Funnel not available; \"443\" is not in the node's allowed ports.",
+                P::PortNotAllowed,
+            ),
+            ("Tailscale didn't answer within 20 seconds.", P::TimedOut),
+            ("Sign in to Tailscale first.", P::NotConnected),
+            (
+                "failed to connect to local Tailscale daemon for /localapi/v0/status",
+                P::NotConnected,
+            ),
+            (PORTS_IN_USE_DETAIL, P::PortsInUse),
+            ("something nobody has seen", P::Other),
+        ] {
+            assert_eq!(classify_funnel_failure(said), cause, "{said}");
+        }
+        assert_eq!(
+            approval_kind("https://login.tailscale.com/f/serve?node=abc"),
+            "https"
+        );
+        assert_eq!(
+            approval_kind("https://login.tailscale.com/f/funnel?node=abc"),
+            "funnel"
+        );
+        assert_eq!(
+            serde_json::to_value(P::HttpsOff).unwrap(),
+            json!({ "kind": "httpsOff" })
+        );
+    }
+
+    /// Funnel is per host and port, never per path: our mount on a port
+    /// where something is served tailnet-only would publish that too.
+    #[test]
+    fn never_publishes_what_the_user_serves_privately() {
+        let dns = "m.t.ts.net";
+        // Nothing served: 443.
+        assert_eq!(choose_funnel_port(&json!({}), dns), Some(443));
+        // `tailscale serve 3000` (tailnet only, `/` on 443): move to 8443.
+        let private_root = json!({
+            "TCP": { "443": { "HTTPS": true } },
+            "Web": { "m.t.ts.net:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:3000" } } } }
+        });
+        assert_eq!(choose_funnel_port(&private_root, dns), Some(8443));
+        // Already public there (Ship Studio's mount, the user's own site):
+        // adding ours exposes nothing new.
+        let mut public_root = private_root.clone();
+        public_root["AllowFunnel"] = json!({ "m.t.ts.net:443": true });
+        assert_eq!(choose_funnel_port(&public_root, dns), Some(443));
+        // Ours already there: same port.
+        let ours = json!({
+            "Web": { "m.t.ts.net:443": { "Handlers": { MOUNT_PATH: { "Proxy": "http://127.0.0.1:9" } } } }
+        });
+        assert_eq!(choose_funnel_port(&ours, dns), Some(443));
+        // A raw TCP forward on 443 and private sites on the other two: none.
+        let full = json!({
+            "TCP": { "443": { "TCPForward": "127.0.0.1:22" } },
+            "Web": {
+                "m.t.ts.net:8443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:1" } } },
+                "m.t.ts.net:10000": { "Handlers": { "/x": { "Proxy": "http://127.0.0.1:2" } } }
+            }
+        });
+        assert_eq!(choose_funnel_port(&full, dns), None);
+        assert_eq!(
+            classify_funnel_failure(PORTS_IN_USE_DETAIL),
+            FunnelProblem::PortsInUse
+        );
+
+        // Read back on whichever port it landed.
+        let on_8443 = json!({
+            "Web": { "m.t.ts.net:8443": { "Handlers": { MOUNT_PATH: { "Proxy": "http://127.0.0.1:4321" } } } },
+            "AllowFunnel": { "m.t.ts.net:8443": true }
+        });
+        assert_eq!(funnel_port_of(&on_8443, dns, 4321), Some(8443));
+        assert!(funnel_routes_to(&on_8443, dns, 4321));
+        assert_eq!(ports_with_our_mount(&on_8443, dns), vec![8443]);
+        assert_eq!(authority_for(dns, 8443), "m.t.ts.net:8443");
+        assert_eq!(authority_for(dns, 443), "m.t.ts.net");
     }
 
     #[test]
