@@ -414,6 +414,16 @@ export function localTs(date: string, hour: number, minute: number, timeZone?: s
 }
 
 /** "Today 9:00 AM" as `formatWhen` says it, in `timeZone`'s days and clock. */
+/**
+ * `formatWhenIn` inside a sentence: "tomorrow at 9:00 AM", "Fri, Nov 13 at
+ * 9:00 AM", as `formatWhenInline` writes this Mac's own times.
+ */
+export function formatWhenInlineIn(ts: number, now = Date.now(), timeZone?: string): string {
+  return formatWhenIn(ts, now, timeZone)
+    .replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())
+    .replace(/ (\d{1,2}[:.]\d{2}(?:\s?[^\s\d]+)?)$/, ' at $1');
+}
+
 export function formatWhenIn(ts: number, now = Date.now(), timeZone?: string): string {
   if (!timeZone || !wallFormat(timeZone)) return formatWhen(ts, now);
   const w = wallClock(ts, timeZone);
@@ -462,7 +472,7 @@ export function routineWhenOf(
 
 /**
  * What the picker will make, in the words the list shows it in:
- * "Every weekday at 9:00 AM", "Every 2 hours", "Once · Tomorrow 9:00 AM",
+ * "Every weekday at 9:00 AM", "Every 2 hours", "Once, tomorrow at 9:00 AM",
  * with "Mac time" after the time when the Mac's clock isn't this phone's.
  */
 export function describeRoutineWhen(w: RoutineWhen, now = Date.now(), timeZone?: string): string {
@@ -471,7 +481,7 @@ export function describeRoutineWhen(w: RoutineWhen, now = Date.now(), timeZone?:
   if (w.kind === 'monthly') return `${describeMonthly(w)}${note}`;
   if (w.kind === 'once') {
     const ts = localTs(w.date, w.hour, w.minute, timeZone);
-    return `Once · ${formatWhenIn(ts, now, timeZone)}${note}`;
+    return `Once, ${formatWhenInlineIn(ts, now, timeZone)}${note}`;
   }
   return `${describeRepeat({ ...w, days: [...new Set(w.days)] })}${note}`;
 }
