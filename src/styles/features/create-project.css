@@ -40,7 +40,7 @@
 .create-modal {
   background: var(--surface-app);
   border: 1px solid var(--border-default);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 580px;
   max-height: 90vh;
@@ -71,7 +71,7 @@
 
 .create-modal-header h2 {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
   margin: 0 0 4px 0;
   color: var(--text-primary);
 }
@@ -143,7 +143,7 @@
 .stack-group-title {
   margin: 0 0 var(--spacing-sm);
   font-size: var(--font-size-badge);
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -199,7 +199,7 @@
      description below the others in the row, breaking alignment. */
   flex-wrap: nowrap;
   font-size: var(--font-size-body-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
   color: var(--text-primary);
 }
 
@@ -247,7 +247,7 @@
   flex-direction: column;
   gap: 8px;
   font-size: var(--font-size-body-lg);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
   color: var(--text-secondary);
 }
 
@@ -290,7 +290,7 @@
 /* Creating state */
 .create-modal-content.creating h2 {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
   margin-bottom: 4px;
   color: var(--text-primary);
 }
@@ -430,7 +430,7 @@
   padding: 24px 16px;
   background: var(--surface-panel);
   border: 2px dashed var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   cursor: pointer;
   transition:
     background-color var(--transition),
@@ -472,7 +472,7 @@
   padding: 12px 14px;
   background: var(--tint-subtle);
   border: 1px solid var(--accent-active);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   margin-bottom: 0;
 }
 

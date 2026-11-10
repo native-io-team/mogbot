@@ -39,7 +39,7 @@
   padding: 12px 14px;
   background: var(--surface-panel);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   cursor: pointer;
   transition:
     background-color var(--transition),
@@ -71,7 +71,7 @@
   align-items: center;
   justify-content: center;
   font-size: var(--font-size-subhead);
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
   color: var(--text-inverse);
   flex-shrink: 0;
 }
@@ -102,7 +102,7 @@
 
 .import-owner-name {
   font-size: var(--font-size-subhead);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
   color: var(--text-primary);
 }
 
@@ -189,7 +189,7 @@
 
 .import-repo-name {
   font-size: var(--font-size-subhead);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
   color: var(--text-primary);
 }
 
@@ -197,7 +197,7 @@
   font-size: var(--font-size-badge);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
 }
 
 .import-repo-badge.private {
@@ -256,7 +256,7 @@
 
 .workspace-picker-title {
   font-size: var(--font-size-h4);
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
   color: var(--text-primary);
   margin: 0 0 var(--spacing-xs);
 }
@@ -270,7 +270,7 @@
 
 .workspace-picker-subtitle strong {
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
 }
 
 .workspace-picker-list {
@@ -340,7 +340,7 @@
 
 .workspace-picker-item-name {
   font-size: var(--font-size-body-lg);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;

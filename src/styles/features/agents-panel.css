@@ -164,8 +164,8 @@
   margin: 0 0 var(--dashboard-section-gap);
   padding: var(--spacing-lg);
   background: var(--surface-panel);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
 }
 
 .dashboard-card-header {
