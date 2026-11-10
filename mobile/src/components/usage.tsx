@@ -11,17 +11,28 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usageSheet';
-import { depthOf, iconSize, meter as meterSize, PRESSED, radius, space, type Palette } from '../lib/theme';
+import {
+  depthOf,
+  iconSize,
+  meter as meterSize,
+  PRESSED,
+  radius,
+  space,
+  type Palette,
+} from '../lib/theme';
 import { T } from './ui';
 
 /** The warning role from 80% used and when used up (it refills by itself: never error red). */
-const inkOf = (colors: Palette, tone: UsageTone) =>
-  tone === 'limited' || tone === 'warning' ? colors.accentWarning : colors.textSecondary;
+const inkOf = (colors: Palette, tone: UsageTone, calm = colors.textSecondary) =>
+  tone === 'limited' || tone === 'warning' ? colors.accentWarning : calm;
 
-/** The meter's diameter: an icon button's glyph. */
-const RING = iconSize.button;
-/** The outline's width and the gap between it and the pie. */
-const OUTLINE = 1;
+/**
+ * The meter's diameter and line: a header glyph, the size and weight of the
+ * system's ⓘ beside it, so the three read as one set.
+ */
+const RING = iconSize.bar;
+/** The outline's width (an SF Symbol's regular weight) and the gap to the pie. */
+const OUTLINE = 1.6;
 const GAP = space['2xs'];
 
 /**
@@ -49,10 +60,13 @@ export function piePath(cx: number, cy: number, r: number, share: number): strin
 export function UsageRing({
   percent,
   tone,
+  tint,
   onPress,
 }: {
   percent: number;
   tone: UsageTone;
+  /** The header's tint (the agent's colour), as its other buttons; else secondary ink. */
+  tint?: string;
   onPress: () => void;
 }) {
   const colors = useColors();
@@ -75,11 +89,11 @@ export function UsageRing({
           cx={c}
           cy={c}
           r={c - OUTLINE / 2}
-          stroke={colors.textSecondary}
+          stroke={tint ?? colors.textSecondary}
           strokeWidth={OUTLINE}
           fill="none"
         />
-        {pie && <Path d={pie} fill={inkOf(colors, tone)} />}
+        {pie && <Path d={pie} fill={inkOf(colors, tone, tint)} />}
       </Svg>
     </Pressable>
   );

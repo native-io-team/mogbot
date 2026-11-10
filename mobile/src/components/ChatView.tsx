@@ -77,6 +77,7 @@ import { messageActions, plainText, type MessageAction } from '../lib/actions';
 import { canReadAloud, readAloud, stopReading, useReading } from '../lib/readAloud';
 import { announce } from '../lib/a11y';
 import { addQuote, setComposer } from '../lib/drafts';
+import { TALK_OFFERED } from '../lib/talk';
 import { BlockRepliesContext, blockAnswers, type BlockReplies } from '../lib/blocks';
 import { preview } from '../lib/files';
 import { haptic } from '../lib/haptics';
@@ -354,7 +355,18 @@ export function ChatView({
     const rows = chatItems(agent, messages, pending, draft);
     const withSetup = setup && chat?.loaded ? withSetupCard(rows, setupAt, !!chat.more) : rows;
     return foldRewoundItems(withSetup, rewinds, openFolds);
-  }, [agent, messages, draft, pending, setup, setupAt, chat?.loaded, chat?.more, rewinds, openFolds]);
+  }, [
+    agent,
+    messages,
+    draft,
+    pending,
+    setup,
+    setupAt,
+    chat?.loaded,
+    chat?.more,
+    rewinds,
+    openFolds,
+  ]);
   // What came in while this chat was open rises in; the chat as it loads,
   // and older history fetched by scrolling back, hold still.
   const itemKeys = useMemo(() => items.map((i) => i.key), [items]);
@@ -738,11 +750,13 @@ export function ChatView({
           </Pressable>
           {usageRing}
           {conversationsButton}
-          <IconButton
-            name="waveform"
-            label={`Talk to ${agent.name}`}
-            onPress={() => router.push({ pathname: '/talk', params: { id } })}
-          />
+          {TALK_OFFERED && (
+            <IconButton
+              name="waveform"
+              label={`Talk to ${agent.name}`}
+              onPress={() => router.push({ pathname: '/talk', params: { id } })}
+            />
+          )}
           <IconButton name="info.circle" label={`About ${agent.name}`} onPress={openSheet} />
         </View>
       ) : (
@@ -1101,9 +1115,7 @@ const ItemView = memo(function ItemView({
         tight && styles.itemAfterLine,
         // An opened fold reads as past: one rule down the left, from the
         // "Rewound" row to "End of what was rewound", its lines muted.
-        (item.past ||
-          item.kind === 'rewound-end' ||
-          (item.kind === 'rewound' && item.open)) &&
+        (item.past || item.kind === 'rewound-end' || (item.kind === 'rewound' && item.open)) &&
           styles.past,
       ]}
     >
@@ -1294,7 +1306,9 @@ const ChatHeader = memo(function ChatHeader({
   const conversationsButton = offered && !switchRow && (
     <IconButton name="bubble.left" label="Conversations" onPress={openConversations} />
   );
-  const usageRing = ring && <UsageRing percent={percent} tone={tone} onPress={openUsage} />;
+  const usageRing = ring && (
+    <UsageRing percent={percent} tone={tone} tint={accent.accent} onPress={openUsage} />
+  );
   return (
     <>
       <Stack.Screen
@@ -1320,11 +1334,13 @@ const ChatHeader = memo(function ChatHeader({
                   <View style={styles.headerRight}>
                     {usageRing}
                     {conversationsButton}
-                    <IconButton
-                      name="waveform"
-                      label={`Talk to ${agent.name}`}
-                      onPress={openTalk}
-                    />
+                    {TALK_OFFERED && (
+                      <IconButton
+                        name="waveform"
+                        label={`Talk to ${agent.name}`}
+                        onPress={openTalk}
+                      />
+                    )}
                     <IconButton
                       name="info.circle"
                       label={`About ${agent.name}`}
@@ -1338,10 +1354,9 @@ const ChatHeader = memo(function ChatHeader({
       />
       {NATIVE_HEADER_BUTTONS && (
         <Stack.Toolbar placement="right">
-          {/* Left of ⓘ: the ring, only once an engine has reported the window. */}
-          <Stack.Toolbar.View hidden={!ring} separateBackground>
-            {usageRing || <View />}
-          </Stack.Toolbar.View>
+          {/* Left of ⓘ: the ring, only once an engine has reported the window,
+              in the same glass group as the buttons so the set reads as one. */}
+          <Stack.Toolbar.View hidden={!ring}>{usageRing || <View />}</Stack.Toolbar.View>
           <Stack.Toolbar.Button
             hidden={!offered || switchRow}
             icon="bubble.left"
@@ -1350,6 +1365,7 @@ const ChatHeader = memo(function ChatHeader({
             onPress={openConversations}
           />
           <Stack.Toolbar.Button
+            hidden={!TALK_OFFERED}
             icon="waveform"
             accessibilityLabel={`Talk to ${agent.name}`}
             tintColor={accent.accent}

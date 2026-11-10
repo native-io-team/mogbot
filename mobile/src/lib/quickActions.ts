@@ -11,6 +11,7 @@ import { isDemo } from './demo';
 import { quietAgentIds } from './home';
 import type { Target } from './notify';
 import { getApp, useApp } from './store';
+import { TALK_OFFERED } from './talk';
 
 export type QuickTarget = (Target & { compose?: boolean; talk?: boolean }) | 'home';
 
@@ -40,7 +41,9 @@ function items(): QuickActions.Action[] {
             title: `New message to ${chief.name}`,
             icon: 'symbol:square.and.pencil',
           },
-          { id: 'talk', title: `Talk to ${chief.name}`, icon: 'symbol:waveform' },
+          ...(TALK_OFFERED
+            ? [{ id: 'talk', title: `Talk to ${chief.name}`, icon: 'symbol:waveform' }]
+            : []),
         ]
       : []),
   ];

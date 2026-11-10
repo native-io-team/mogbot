@@ -517,7 +517,11 @@ export const squircle = (size: number) => Math.round(size * 0.28);
  */
 export const meter = { height: 6, large: 12 } as const;
 
-export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, hero: 28 } as const;
+/**
+ * - `bar` 22: a glyph of our own drawn beside the header's system symbols
+ *   (the usage meter beside ⓘ), the size iOS draws those at.
+ */
+export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, bar: 22, hero: 28 } as const;
 
 /**
  * The typing dots (`components/TypingDots.tsx`), the desktop's

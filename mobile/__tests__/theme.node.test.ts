@@ -298,7 +298,7 @@ describe('the scale', () => {
   });
 
   it('has the four icon sizes and one exception, and the desk’s key sizes, as the spec sets them', () => {
-    expect(iconSize).toEqual({ micro: 10, inline: 12, body: 16, button: 20, hero: 28 });
+    expect(iconSize).toEqual({ micro: 10, inline: 12, body: 16, button: 20, bar: 22, hero: 28 });
     // agent-key.css: --agent-key-size-xs … -xl.
     expect(keySize).toEqual({ xs: 16, sm: 20, md: 30, lg: 44, xl: 112 });
     // A well's corner is tighter than its card's, so the two read as nested.

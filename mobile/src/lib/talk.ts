@@ -29,6 +29,12 @@
  * - **ended**: End, or leaving the screen.
  */
 
+/**
+ * Whether Talk is offered anywhere (the chat header, the icon's menu). Off for
+ * now: the screen stays, reachable only by an old link, until it's ready.
+ */
+export const TALK_OFFERED = false;
+
 import type { AgentMessage } from '@shipstudio/companion-protocol';
 import type { DictationProblem } from './dictation';
 import { problemCopy } from './dictation';
