@@ -64,7 +64,7 @@ export function FlowShell({
   wide = false,
   mark,
 }: FlowShellProps) {
-  const { section, sections } = progressOf(step);
+  const { section, sections, within } = progressOf(step);
   const screen = useRef<HTMLDivElement>(null);
   // Keyboard first: whenever nothing has focus (a new screen, a button that
   // just disappeared, a check that just passed), the screen's one answer
@@ -72,7 +72,13 @@ export function FlowShell({
   // Never takes focus from something the user is in.
   useEffect(() => {
     const active = document.activeElement;
-    if (active && active !== document.body) return;
+    // A quiet way out that took focus while the big button was still
+    // loading gives it back once the big button is there.
+    const skipFocused =
+      active instanceof HTMLElement &&
+      active.hasAttribute('data-flow-skip') &&
+      !!screen.current?.querySelector('.flow-actions [data-flow-primary]:not(:disabled)');
+    if (active && active !== document.body && !skipFocused) return;
     for (const target of FLOW_FOCUS_TARGET) {
       const el = screen.current?.querySelector<HTMLElement>(target);
       if (el) {
@@ -114,13 +120,20 @@ export function FlowShell({
               key={s}
               className="flow-progress__segment"
               data-state={i + 1 < section ? 'done' : i + 1 === section ? 'current' : 'todo'}
+              style={
+                i + 1 === section
+                  ? ({ '--flow-progress-fill': `${Math.round(within * 100)}%` } as CSSProperties)
+                  : undefined
+              }
             />
           ))}
           <span className="flow-progress__label">{SECTION_LABEL[FLOW_SECTIONS[section - 1]]}</span>
         </div>
         <div className="flow-top__back" aria-hidden />
       </header>
-      <main className={`flow-body${wide ? ' flow-body--wide' : ''}`}>
+      {/* Keyed by the screen, so each one arrives (the same short rise every
+          time) rather than its words swapping in place. */}
+      <main key={step} className={`flow-body${wide ? ' flow-body--wide' : ''}`}>
         {mark && <div className="flow-mark">{mark}</div>}
         <h1 className="flow-title">{title}</h1>
         {lede && <p className="flow-lede">{lede}</p>}

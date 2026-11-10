@@ -320,6 +320,8 @@ CA and no trust-on-first-use.
 
 ## Pairing
 
+Both sides walk it one screen per step, one question and one big button each, in the same words (`packages/companion-protocol/src/pairWords.ts`): on the desk `src/components/phone/PhoneFlow.tsx` (onboarding and the Phone panel while no phone is paired), on the phone `mobile/src/app/pair.tsx` with `mobile/src/lib/pairSteps.ts`. CLAUDE.md, "Onboarding / Setup Testing", lists the screens. Underneath, the protocol is:
+
 1. **Mac:** Settings → Phone (the same panel, titled "Phone" whether opened from Settings or the
    sidebar's phone line, so the phone's "Phone (in Settings, or the phone line
    at the foot of the sidebar) → Show code", `WHERE_TO_PAIR`, names what's on

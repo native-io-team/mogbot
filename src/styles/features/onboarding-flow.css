@@ -158,7 +158,8 @@
   margin-top: var(--spacing-md);
 }
 
-.flow-actions > .button--large {
+.flow-actions > .button--large,
+.flow-actions > .button--size-large {
   min-width: 240px;
 }
 
@@ -408,4 +409,137 @@
   color: var(--text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ---- Motion: each screen arrives, the bar fills, Done lands ------------- */
+
+:root {
+  --flow-paired-size: 96px;
+  --flow-arrive-rise: 10px;
+}
+
+/* The part in progress fills as its screens go by, not only between parts. */
+.flow-progress__segment[data-state='current'] {
+  background: linear-gradient(
+    to right,
+    var(--text-primary) var(--flow-progress-fill, 0%),
+    var(--progress-track) var(--flow-progress-fill, 0%)
+  );
+  box-shadow: inset 0 0 0 var(--border-width-default) var(--text-secondary);
+  transition: background var(--motion-screen);
+}
+
+@keyframes flow-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(var(--flow-arrive-rise));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.flow-body {
+  animation: flow-arrive var(--motion-screen) both;
+}
+
+@keyframes flow-tick-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.flow-check[data-state='pass'] {
+  animation: flow-arrive var(--transition-arrive) both;
+}
+
+.flow-check[data-state='pass'] .flow-check__mark {
+  animation: flow-tick-pop var(--motion-screen) both;
+}
+
+/* ---- The code, alone and large (PhoneFlow's scan screen) --------------- */
+
+.flow-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.flow-qr__frame {
+  display: flex;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-md);
+}
+
+.flow-qr__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* ---- Paired: the moment, not a settings line --------------------------- */
+
+@keyframes flow-paired-ring {
+  from {
+    box-shadow: 0 0 0 0 var(--accent-success);
+  }
+  to {
+    box-shadow: 0 0 0 var(--spacing-2xl) transparent;
+  }
+}
+
+.flow-paired {
+  display: flex;
+  justify-content: center;
+}
+
+.flow-paired__mark {
+  width: var(--flow-paired-size);
+  height: var(--flow-paired-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  color: var(--accent-success);
+  background: var(--surface-panel);
+  border: var(--border-width-emphasis) solid var(--accent-success);
+  animation:
+    flow-tick-pop var(--motion-celebrate) both,
+    flow-paired-ring var(--motion-celebrate-ring) var(--motion-celebrate-delay) both;
+}
+
+/* The device and code-end under an Allow, and store links under a step. */
+.flow-facts {
+  margin: 0;
+  text-align: center;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.flow-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-body,
+  .flow-check[data-state='pass'],
+  .flow-check[data-state='pass'] .flow-check__mark,
+  .flow-paired__mark {
+    animation-duration: var(--motion-reduced);
+  }
 }

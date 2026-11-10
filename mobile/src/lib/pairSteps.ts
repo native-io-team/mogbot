@@ -26,7 +26,15 @@ export const INTRO_STEPS = ['mac', 'tailscale', 'account', 'code'] as const;
 export type IntroStep = (typeof INTRO_STEPS)[number] | 'getMac';
 
 /** Every place the bar counts, the intro's four then the camera and the two answers. */
-export const PAIR_STAGES = ['mac', 'tailscale', 'account', 'code', 'scan', 'pair', 'allow'] as const;
+export const PAIR_STAGES = [
+  'mac',
+  'tailscale',
+  'account',
+  'code',
+  'scan',
+  'pair',
+  'allow',
+] as const;
 export type PairStage = (typeof PAIR_STAGES)[number];
 
 /** Where on the bar a screen sits: `getMac` is still the first question. */

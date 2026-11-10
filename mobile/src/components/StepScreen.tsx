@@ -77,9 +77,7 @@ export function StepScreen({
     >
       <View style={styles.top}>
         <View style={styles.back}>
-          {onBack && (
-            <IconButton name="chevron.left" label="Back" fallback="‹" onPress={onBack} />
-          )}
+          {onBack && <IconButton name="chevron.left" label="Back" fallback="‹" onPress={onBack} />}
         </View>
         <View
           style={styles.track}
@@ -134,7 +132,12 @@ export function DoneLine({ children }: { children: ReactNode }) {
   const styles = useStyles();
   return (
     <View style={styles.done} testID="step-done">
-      <Icon name="checkmark" size={iconSize.body} color={colors.accentSuccess} fallback={<T>✓</T>} />
+      <Icon
+        name="checkmark"
+        size={iconSize.body}
+        color={colors.accentSuccess}
+        fallback={<T>✓</T>}
+      />
       <T color={colors.textPrimary} style={styles.doneText}>
         <T color={colors.textStrong} style={styles.doneWord}>
           Done.

@@ -462,7 +462,11 @@ const wanted = (name) => !ONLY || ONLY.split(',').some((o) => name.startsWith(o)
 /** The pairing screen's first question: a step saved by an earlier visit is walked back from. */
 async function toFirstPairScreen(page) {
   await page.goto(`${WEB}/pair`);
-  await page.waitFor(`!!document.querySelector('[data-testid="step-progress"]')`, 180_000, 'the welcome');
+  await page.waitFor(
+    `!!document.querySelector('[data-testid="step-progress"]')`,
+    180_000,
+    'the welcome'
+  );
   for (let i = 0; i < 6; i++) {
     const back = await page.eval(`!!document.querySelector('[aria-label="Back"]')`);
     if (!back) break;
@@ -492,23 +496,55 @@ async function prePairShots(page, d) {
       // a person would. The first visit of the run starts on the first
       // question (nothing saved); each later one is reset to it.
       const steps = [
-        ['pair-start', null, 'Do you have', '“Do you have Mogbot on your Mac?” under the Chief’s key, the bar at 1 of 7 with no Back; big Yes, an outline Not yet, then a quiet “Try the demo” with its one line'],
-        ['pair-getmac', 'Not yet', 'first', '“Get Mogbot on your Mac first”, its one line, the download address in a panel; big “Send the link to my Mac”, quiet “I have it now”; Back, the bar still 1 of 7'],
-        ['pair-tailscale', 'I have it now', 'Turn on Tailscale on this phone', '“Turn on Tailscale on this phone”, one line; a Done tick only if the phone saw it installed; one big button (Get/Open Tailscale, or It’s on) and one quiet one; bar 2 of 7'],
-        ['pair-account', '__next', 'Same Tailscale account', '“Same Tailscale account on both”, one line; big Same account, quiet Open Tailscale; bar 3 of 7'],
-        ['pair-code', 'Same account', 'Pair your phone', '“On your Mac, click “Pair your phone” at the bottom of the sidebar”, “A code appears on your Mac.”; big I see the code, quiet Paste a pairing link instead; bar 4 of 7'],
+        [
+          'pair-start',
+          null,
+          'Do you have',
+          '“Do you have Mogbot on your Mac?” under the Chief’s key, the bar at 1 of 7 with no Back; big Yes, an outline Not yet, then a quiet “Try the demo” with its one line',
+        ],
+        [
+          'pair-getmac',
+          'Not yet',
+          'first',
+          '“Get Mogbot on your Mac first”, its one line, the download address in a panel; big “Send the link to my Mac”, quiet “I have it now”; Back, the bar still 1 of 7',
+        ],
+        [
+          'pair-tailscale',
+          'I have it now',
+          'Turn on Tailscale on this phone',
+          '“Turn on Tailscale on this phone”, one line; a Done tick only if the phone saw it installed; one big button (Get/Open Tailscale, or It’s on) and one quiet one; bar 2 of 7',
+        ],
+        [
+          'pair-account',
+          '__next',
+          'Same Tailscale account',
+          '“Same Tailscale account on both”, one line; big Same account, quiet Open Tailscale; bar 3 of 7',
+        ],
+        [
+          'pair-code',
+          'Same account',
+          'Pair your phone',
+          '“On your Mac, click “Pair your phone” at the bottom of the sidebar”, “A code appears on your Mac.”; big I see the code, quiet Paste a pairing link instead; bar 4 of 7',
+        ],
       ];
       if (steps.some(([n]) => wanted(`${n}-${theme}`))) {
         await toFirstPairScreen(page);
         for (const [name, tap, waitText, check] of steps) {
           if (tap === '__next')
             await page.clickText(
-              (await page.eval(`document.body.innerText.includes('It’s on')`)) ? 'It’s on' : 'I did it'
+              (await page.eval(`document.body.innerText.includes('It’s on')`))
+                ? 'It’s on'
+                : 'I did it'
             );
           else if (tap) await page.clickText(tap);
-          await page.waitFor(`document.body.innerText.includes(${JSON.stringify(waitText)})`, 20_000, name);
+          await page.waitFor(
+            `document.body.innerText.includes(${JSON.stringify(waitText)})`,
+            20_000,
+            name
+          );
           await sleep(600);
-          if (wanted(`${name}-${theme}`)) await capture(page, `${name}-${theme}`, { route: '/pair', check, theme });
+          if (wanted(`${name}-${theme}`))
+            await capture(page, `${name}-${theme}`, { route: '/pair', check, theme });
         }
       }
       if (!wanted(`pair-reaching-${theme}`) && !wanted(`pair-unreachable-${theme}`)) continue;
@@ -567,7 +603,8 @@ async function demoShots(page) {
     if (wanted(`demo-welcome-${theme}`))
       await capture(page, `demo-welcome-${theme}`, {
         route: '/pair',
-        check: '“Try the demo” quiet under Yes / Not yet on the first question, with “No Mac nearby?…” under it',
+        check:
+          '“Try the demo” quiet under Yes / Not yet on the first question, with “No Mac nearby?…” under it',
         theme,
       });
     await page.clickText('Try the demo');
@@ -3984,7 +4021,8 @@ async function main() {
       if (wanted(`pair-waiting-${THEMES[0]}`))
         await capture(page, `pair-waiting-${THEMES[0]}`, {
           route: '/pair?d=… (waiting for the desk)',
-          check: '“Click Allow on your Mac” with a spinner, the code’s last four, Cancel; bar at 7 of 7',
+          check:
+            '“Click Allow on your Mac” with a spinner, the code’s last four, Cancel; bar at 7 of 7',
           theme: THEMES[0],
         });
     })
@@ -3996,7 +4034,8 @@ async function main() {
       if (wanted(`pair-paired-${THEMES[0]}`))
         await capture(page, `pair-paired-${THEMES[0]}`, {
           route: '/pair?d=… (allowed)',
-          check: 'A tick, “Paired with <Mac>”, the bar full; alerts asked once or “Opening your agents…”',
+          check:
+            'A tick, “Paired with <Mac>”, the bar full; alerts asked once or “Opening your agents…”',
           theme: THEMES[0],
         });
     })

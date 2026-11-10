@@ -3,6 +3,9 @@
 /* A QR code is read most reliably dark-on-light, so its paper stays light in
    both themes. */
 :root {
+  --phone-flow-min-height: 440px;
+  --phone-flow-back-width: 72px;
+  --phone-flow-button-width: 220px;
   --phone-qr-paper: #ffffff;
   --phone-qr-ink: #0b0b0c;
 }
@@ -48,91 +51,85 @@
   margin-top: var(--spacing-sm);
 }
 
-/* The first phone: each step numbered, its one button, Done when it is. */
-.phone-setup__list {
+/* The first phone (PhoneFlow inside the panel): one screen per step, Back
+   and a bar at the top, one question, one big button. */
+.phone-flow {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: var(--spacing-xl);
+  min-height: var(--phone-flow-min-height);
 }
 
-.phone-setup__step {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-card);
-  border: 1px solid var(--border-default);
-  background: var(--surface-panel);
-}
-
-.phone-setup__num {
-  display: inline-flex;
-  flex: none;
+.phone-flow__top {
+  display: grid;
+  grid-template-columns: var(--phone-flow-back-width) 1fr var(--phone-flow-back-width);
   align-items: center;
-  justify-content: center;
-  width: var(--spacing-xl);
-  height: var(--spacing-xl);
+  gap: var(--spacing-md);
+}
+
+.phone-flow__back {
+  display: flex;
+}
+
+.phone-flow__bar {
+  height: var(--spacing-xs);
   border-radius: var(--radius-pill);
-  background: var(--surface-control);
-  color: var(--text-primary);
-  font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-heading);
-  font-variant-numeric: tabular-nums;
+  background: var(--progress-track);
+  overflow: hidden;
 }
 
-.phone-setup__step[data-done] .phone-setup__num {
-  color: var(--accent-success);
+.phone-flow__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--text-primary);
+  transition: width var(--motion-screen);
 }
 
-.phone-setup__body {
+.phone-flow__body {
   display: flex;
-  flex: 1;
-  min-width: 0;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  align-items: stretch;
+  gap: var(--spacing-md);
+  margin: auto 0;
+  animation: flow-arrive var(--motion-screen) both;
 }
 
-.phone-setup__title {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-sm);
+.phone-flow__title {
   margin: 0;
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-3xl);
   font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-compact);
   color: var(--text-primary);
+  text-align: center;
+  text-wrap: balance;
 }
 
-.phone-setup__step[data-done] .phone-setup__title {
-  color: var(--text-secondary);
-}
-
-.phone-setup__done {
-  font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-body);
-  color: var(--accent-success);
-}
-
-.phone-setup__text {
+.phone-flow__lede {
   margin: 0;
   font-size: var(--font-size-body-md);
   line-height: var(--line-height-help);
   color: var(--text-secondary);
+  text-align: center;
+  text-wrap: pretty;
 }
 
-.phone-setup__wait {
+.phone-flow__content {
   display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.phone-flow__actions {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
 }
 
-.phone-setup__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-xs);
+.phone-flow__actions > .button--size-large {
+  min-width: var(--phone-flow-button-width);
 }
 
 .phone-section {

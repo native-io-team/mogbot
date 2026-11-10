@@ -50,7 +50,14 @@ import { PairCode, PairConfirm, PairOffer } from './PhonePairing';
 import { PhoneDevices } from './PhoneDevices';
 import { PhoneInstall } from './PhoneInstall';
 import { PhoneInstallEntry } from './PhoneInstallEntry';
-import { PhoneSetupSteps } from './PhoneSetupSteps';
+import {
+  PanelStepShell,
+  PhoneFlow,
+  prevPhoneStep,
+  readPanelStep,
+  savePanelStep,
+  type PhoneFlowStep,
+} from './PhoneFlow';
 import {
   COMPANION_INSTALL_ENABLED,
   readInstallRecord,
@@ -118,8 +125,14 @@ function PhonePanel({
   const [now, setNow] = useState(() => Date.now());
   // "Install on my phone": the route choice, or a reinstall for one platform.
   const [install, setInstall] = useState<{ reinstall?: InstallPlatform } | null>(null);
-  // Said they already have the app (from somewhere other than this Mac).
-  const [haveApp, setHaveApp] = useState(false);
+  // No phone paired yet: the same one-screen-per-step flow as onboarding,
+  // on the screen it stopped at. Null once a phone is paired or it's skipped.
+  const [flow, setFlow] = useState<PhoneFlowStep | null>(null);
+  const flowDecided = useRef(false);
+  const goFlow = useCallback((step: PhoneFlowStep | null) => {
+    savePanelStep(step);
+    setFlow(step);
+  }, []);
   const { copy } = useCopyToClipboard({
     onCopy: () => showToast('Pairing link copied. It works once, for five minutes.', 'success'),
   });
@@ -163,6 +176,8 @@ function PhonePanel({
     if (!isOpen) {
       setCode(null);
       setInstall(null);
+      setFlow(null);
+      flowDecided.current = false;
       autoIssued.current = false;
       return;
     }
@@ -208,6 +223,16 @@ function PhonePanel({
 
   // No phone paired yet and the last setup step just went green: the code,
   // without another click.
+  // First look with no phone paired: into the flow (it makes its own code).
+  useEffect(() => {
+    if (!isOpen || !s || flowDecided.current) return;
+    flowDecided.current = true;
+    if (s.devices.length === 0) {
+      autoIssued.current = true;
+      setFlow(readPanelStep() ?? (readInstallRecord() ? 'phoneMacTailscale' : 'phoneGetApp'));
+    }
+  }, [isOpen, s]);
+
   const firstReady = !!s && s.devices.length === 0 && phoneStep(s).kind === 'ready';
   useEffect(() => {
     if (!isOpen || !firstReady || code || pairing?.request || busy !== null) return;
@@ -248,15 +273,46 @@ function PhonePanel({
         onBack={() => setInstall(null)}
         onPair={() => {
           setInstall(null);
-          if (s && phoneStep(s).kind === 'ready') void pair();
+          const ready = !!s && phoneStep(s).kind === 'ready';
+          // The first phone: on into the flow, on the code when it can be shown.
+          if (flow || (s && s.devices.length === 0))
+            goFlow(ready ? 'phoneScan' : 'phoneMacTailscale');
+          else if (ready) void pair();
         }}
       />
     );
   }
 
-  // The first phone, until a code can be shown: every step in order with
-  // its Done tick. Once it's ready, the code itself takes the panel.
-  const firstSetup = !!s && s.devices.length === 0 && phoneStep(s).kind !== 'ready';
+  if (flow && s) {
+    return frame(
+      'Phone',
+      'phone-modal phone-modal--flow',
+      <div className="settings-modal-body phone-access">
+        <PhoneFlow
+          step={flow}
+          go={goFlow}
+          onSkip={() => goFlow(null)}
+          onDone={() => {
+            goFlow(null);
+            if (!inline) onClose();
+          }}
+          doneLabel="Done"
+          onInstall={COMPANION_INSTALL_ENABLED ? () => setInstall({}) : undefined}
+          render={(step, view) => (
+            <PanelStepShell
+              step={step}
+              view={view}
+              onBack={
+                step === 'phoneGetApp' || step === 'phonePaired'
+                  ? undefined
+                  : () => goFlow(prevPhoneStep(step))
+              }
+            />
+          )}
+        />
+      </div>
+    );
+  }
 
   // "Phone", the Settings section's name, wherever it opens: the phone app
   // sends people to Settings → Phone, so the sidebar's window says the same.
@@ -277,25 +333,12 @@ function PhonePanel({
           {/* The app comes first: there's nothing to connect until it's on a
                 phone. Off, with no phone paired and no build from this Mac, the
                 panel is the way to get it; turning access on comes after. */}
-          {firstSetup ? (
-            <PhoneSetupSteps
-              status={s}
-              step={phoneStep(s)}
-              busy={busy}
-              haveApp={haveApp || !!readInstallRecord()}
-              onHaveApp={() => setHaveApp(true)}
-              onInstall={COMPANION_INSTALL_ENABLED ? () => setInstall({}) : undefined}
-              onEnable={() => void run('enable', () => setPhoneAccess(true))}
-              onRetry={() => void run('retry', retryPhoneTailscale)}
-            />
-          ) : (
-            <AccessHeader
-              step={phoneStep(s)}
-              busy={busy}
-              onEnable={(on) => void run(on ? 'enable' : 'disable', () => setPhoneAccess(on))}
-              onRetry={() => void run('retry', retryPhoneTailscale)}
-            />
-          )}
+          <AccessHeader
+            step={phoneStep(s)}
+            busy={busy}
+            onEnable={(on) => void run(on ? 'enable' : 'disable', () => setPhoneAccess(on))}
+            onRetry={() => void run('retry', retryPhoneTailscale)}
+          />
 
           {phoneStep(s).kind === 'ready' && (
             <section className="phone-section">
@@ -321,7 +364,7 @@ function PhonePanel({
             </section>
           )}
 
-          {COMPANION_INSTALL_ENABLED && (!firstSetup || !!readInstallRecord()) && (
+          {COMPANION_INSTALL_ENABLED && (
             <PhoneInstallEntry
               now={now}
               onInstall={() => setInstall({})}

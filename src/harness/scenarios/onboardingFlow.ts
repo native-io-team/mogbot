@@ -12,6 +12,10 @@ import { readySetupItems } from './base';
 import { neverAnswers, rejectsWith } from '../reject';
 import { FLOW_STORAGE_KEY, type FlowStep } from '../../lib/onboardingFlow';
 import type { MockFailure } from '../../lib/installProgress';
+import { remoteStatus } from './remote';
+import { phoneStatus } from './phone';
+import { gateWith } from './agents';
+import { PHONE_PAIRING_LINK, PHONE_QR } from '../fixtures/phoneQr';
 
 const at = (step: FlowStep) => ({
   [FLOW_STORAGE_KEY]: JSON.stringify({ v: 1, step, finished: false }),
@@ -178,6 +182,223 @@ function installFailures(): Scenario[] {
   ];
 }
 
+/*
+ * The two optional parts after the engine, a screen per step. Each reads
+ * only the app's own checks (remote access status, the import's state, phone
+ * access status, the tailnet's phones, the phone's request).
+ */
+const MIN_MS = 60_000;
+const TS = {
+  state: 'connected',
+  dnsName: 'studio-mac.tail1234.ts.net',
+  login: 'julian@example.com',
+};
+const REMOTE_ON = {
+  enabled: true,
+  serverRunning: true,
+  tailscale: TS,
+  funnelOn: true,
+  linkMasked: 'https://studio-mac.tail1234.ts.net/mogbot/••••••••',
+  reachability: { state: 'reachable' },
+};
+const remote = (over: Record<string, unknown> = {}) => ({
+  get_remote_access_status: remoteStatus(over),
+  set_remote_access_enabled: remoteStatus({ ...REMOTE_ON, reachability: null }),
+  republish_remote_link: remoteStatus(over),
+  copy_remote_link: null,
+});
+const PHONE_ON = {
+  enabled: true,
+  running: true,
+  serve: { state: 'on', url: 'https://studio-mac.tail1234.ts.net:47443' },
+};
+const phone = (over: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) => ({
+  companion_status: phoneStatus({ tailscale: TS, ...over }),
+  companion_tailnet_phones: [],
+  companion_retry_tailscale: phoneStatus({ tailscale: TS, ...over }),
+  companion_set_enabled: phoneStatus({ tailscale: TS, ...PHONE_ON }),
+  companion_pair_start: {
+    link: PHONE_PAIRING_LINK,
+    qr: PHONE_QR,
+    expiresAt: Date.now() + 5 * MIN_MS,
+  },
+  companion_pair_decide: null,
+  ...extra,
+});
+const REQUEST = {
+  id: 'pr_1',
+  device: {
+    name: 'Sam’s iPhone',
+    platform: 'ios',
+    model: 'iPhone 16 Pro',
+    appVersion: '1.0.0',
+    build: 'official',
+  },
+  requestedAt: Date.now() - 20_000,
+  codeHint: '5D2Q',
+  login: 'julian@example.com',
+  replaces: [],
+};
+
+function optionalParts(): Scenario[] {
+  return [
+    flow(
+      'onboarding-agents-ask',
+      'agentsAsk',
+      '3. Bring your agents?',
+      'The bar on its third part, "Your agents". "Bring your agents from another assistant?", one line (Grok, ChatGPT, Claude… carry on here; nothing created until you say so), a big "Bring my agents" (focused) and a quiet "Not now". Back.',
+      {}
+    ),
+    flow(
+      'onboarding-agents-tailscale',
+      'agentsTailscale',
+      '3a. Tailscale on this Mac (missing)',
+      '"Turn on Tailscale on this Mac", one line, an amber "Not done yet. Tailscale isn’t on this Mac yet." with its fix (install, sign in, Allow the VPN configuration) and Check again; a big "Get Tailscale for Mac ↗" and "Skip for now". The third segment part-filled.',
+      remote({ tailscale: { state: 'notInstalled' } })
+    ),
+    flow(
+      'onboarding-agents-tailscale-done',
+      'agentsTailscale',
+      '3a. Tailscale on this Mac (done)',
+      'The same screen with a green-ticked "Done. Tailscale is on, signed in as julian@example.com." and a big Continue.',
+      remote({ tailscale: TS })
+    ),
+    flow(
+      'onboarding-agents-link',
+      'agentsLink',
+      '3b. Turn on the private link',
+      '"Turn on the private link", one line (this Mac stays awake while remote access is on; keep it plugged in), a big "Turn on remote access", Skip for now.',
+      remote({ tailscale: TS })
+    ),
+    flow(
+      'onboarding-agents-link-funnel',
+      'agentsLink',
+      '3b. The link needs Funnel switched on',
+      'An amber "Not done yet. One switch in Tailscale is off: Funnel." with why, "Open Tailscale ↗" and Check again. No big button.',
+      remote({
+        tailscale: TS,
+        enabled: true,
+        serverRunning: true,
+        funnelApprovalUrl: 'https://login.tailscale.com/f/funnel?node=n1',
+      })
+    ),
+    flow(
+      'onboarding-agents-link-live',
+      'agentsLink',
+      '3b. The link is live',
+      'A green-ticked "Done. The private link is live." and a big Continue.',
+      remote(REMOTE_ON)
+    ),
+    flow(
+      'onboarding-agents-connect',
+      'agentsConnect',
+      '3c. Add the link to your assistant',
+      '"Add the link to your assistant", one line (a custom connector, maybe called MCP, named Mogbot; then ask what your agents are doing), a big "Copy the link", a muted line that the link is a secret, Skip for now.',
+      remote(REMOTE_ON)
+    ),
+    flow(
+      'onboarding-agents-connect-waiting',
+      'agentsConnect',
+      '3c. Copied, waiting for the assistant',
+      'After Copy the link: the button reads "Copied. Copy again" and a "Waiting for your assistant to connect…" line with a spinner.',
+      remote(REMOTE_ON),
+      { steps: [{ click: '[data-flow-primary]' }], requires: '.flow-check[data-state="checking"]' }
+    ),
+    flow(
+      'onboarding-agents-start',
+      'agentsStart',
+      '3d. Start the import',
+      '"Start the import", one line (one import may begin; you see the plan before anything is created), a big "Start the import", Skip for now.',
+      {
+        ...remote({ ...REMOTE_ON, everConnected: true }),
+        agents_import_talk: gateWith(null),
+        agents_import_prompt:
+          'Hi! I’m moving my agents to Mogbot. Please call import_conversation and tell it about each agent you run for me…',
+        agents_import_talk_arm: gateWith(null, true),
+      }
+    ),
+    flow(
+      'onboarding-agents-started',
+      'agentsStart',
+      '3d. The assistant asked to start',
+      'A green-ticked "Done. Grok is asking to start. You’ll say OK in your Chief of Staff’s chat, next." and a big Continue; no message box.',
+      {
+        ...remote({ ...REMOTE_ON, everConnected: true }),
+        agents_import_talk: gateWith({ state: 'awaiting_consent' }),
+        agents_import_prompt: 'Hi!',
+      }
+    ),
+    flow(
+      'onboarding-phone-ask',
+      'phoneAsk',
+      '4. Use your agents from your phone?',
+      'The bar on "Your phone". "Use your agents from your phone?", one line (chat, answer and approve; only to this Mac, through Tailscale on both; about five minutes), a big "Set up my phone" and a quiet "Not now".',
+      {}
+    ),
+    flow(
+      'onboarding-phone-app',
+      'phoneGetApp',
+      '4a. Get the app',
+      '"Get Mogbot on your phone", one line (TestFlight or the invite you were sent), "Build it on this Mac…" only in a dev build, a big "I have it", Skip for now. No tick.',
+      phone()
+    ),
+    flow(
+      'onboarding-phone-mac-tailscale',
+      'phoneMacTailscale',
+      '4b. Tailscale on this Mac (done)',
+      '"Turn on Tailscale on this Mac" with a green-ticked "Done. Tailscale is on, signed in as julian@example.com." and a big Continue.',
+      phone()
+    ),
+    flow(
+      'onboarding-phone-phone-tailscale',
+      'phonePhoneTailscale',
+      '4c. Tailscale on your phone, same account',
+      '"Turn on Tailscale on your phone", the line naming julian@example.com and the VPN prompt, "Looking for your phone on your Tailscale…", App Store ↗ / Google Play ↗, a big "I did it".',
+      phone()
+    ),
+    flow(
+      'onboarding-phone-phone-tailscale-done',
+      'phonePhoneTailscale',
+      '4c. A phone on your Tailscale',
+      'A green-ticked "Done. Sam’s iPhone is on your Tailscale." and a big Continue.',
+      phone({}, { companion_tailnet_phones: [{ name: 'Sam’s iPhone', os: 'ios', online: true }] })
+    ),
+    flow(
+      'onboarding-phone-access',
+      'phoneAccess',
+      '4d. Turn on phone access',
+      '"Turn on phone access", one line (this Mac has to stay on), a big "Turn on phone access".',
+      phone()
+    ),
+    flow(
+      'onboarding-phone-scan',
+      'phoneScan',
+      '4e. The code, big and alone',
+      'The title is the phone’s own words, "On your phone, open Mogbot and tap Scan the code", then the QR large on white paper in a soft card, "Works once, for 5:00" under it, Skip for now. Nothing else on the screen.',
+      phone({ ...PHONE_ON, pairing: { active: true, expiresAt: Date.now() + 5 * MIN_MS } })
+    ),
+    flow(
+      'onboarding-phone-allow',
+      'phoneScan',
+      '4f. Allow the phone that used it',
+      '"Allow Sam’s iPhone?", one line (only the phone in your hand, code ending 5D2Q), the device line, a big neutral Allow (never the accent) and a quiet Deny.',
+      phone({ ...PHONE_ON, pairing: { active: false, request: REQUEST } }),
+      { requires: '[data-flow-step="phoneAllow"]' }
+    ),
+    flow(
+      'onboarding-phone-paired',
+      'phoneScan',
+      '4g. Paired',
+      'After Allow: a large green-ringed tick that springs in, "Paired", "Sam’s iPhone can reach your agents now. Try it…", and a big "Go to your Chief of Staff". No Back.',
+      phone({ ...PHONE_ON, pairing: { active: false, request: REQUEST } }),
+      {
+        steps: [{ click: '[data-flow-step="phoneAllow"] [data-flow-primary]' }],
+        requires: '[data-flow-step="phonePaired"]',
+      }
+    ),
+  ];
+}
+
 export const onboardingFlowScenarios: Scenario[] = [
   {
     id: 'onboarding-fresh',
@@ -306,7 +527,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-engine-connected',
     'engine',
     '2. Engine already set up: Done',
-    '"Claude Code is connected", a green-ticked "Done. Claude Code is installed and signed in.", a big "Meet your Chief of Staff" (focused: Enter goes on) and a quiet "Use a different one". The third segment, "Your Chief of Staff", is next.',
+    '"Claude Code is connected", a green-ticked "Done. Claude Code is installed and signed in.", a big "Continue" (focused: Enter goes on) and a quiet "Use a different one". The bar has five parts: Your AI is current, then Your agents, Your phone and Your Chief of Staff.',
     {}
   ),
   flow(
@@ -324,4 +545,5 @@ export const onboardingFlowScenarios: Scenario[] = [
     'The engine choice as usual, and pinned at the foot the same check every screen uses: an amber mark, "Not done yet. Couldn’t check this Mac." and one "Check again" (no red box, no "Try again" said twice). Nothing else blocks; the cards still work.',
     { get_full_setup_status: rejectsWith('network unreachable') }
   ),
+  ...optionalParts(),
 ];

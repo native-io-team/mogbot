@@ -18,6 +18,7 @@ import {
   resumeStep,
   saveProgress,
   sectionOf,
+  skipPart,
   FLOW_STORAGE_KEY,
   type CheckResult,
 } from './onboardingFlow';
@@ -29,22 +30,46 @@ const failed = (r: CheckResult) => {
 };
 
 describe('the line', () => {
-  it('is two screens, Welcome then the engine; after the engine is the Chief’s chat', () => {
-    expect(FLOW_STEPS).toEqual(['welcome', 'engine']);
+  it('walks the engine, then your agents, then your phone; after the last is the Chief’s chat', () => {
+    expect(FLOW_STEPS.slice(0, 3)).toEqual(['welcome', 'engine', 'agentsAsk']);
     expect(nextStep('welcome')).toBe('engine');
-    expect(nextStep('engine')).toBeNull();
+    expect(nextStep('engine')).toBe('agentsAsk');
+    expect(nextStep('agentsStart')).toBe('phoneAsk');
+    expect(nextStep('phonePaired')).toBeNull();
   });
 
-  it('Back goes one screen back', () => {
+  it('Back goes one screen back; an optional part’s question goes back to the one before', () => {
     expect(prevStep('welcome')).toBeNull();
     expect(prevStep('engine')).toBe('welcome');
+    expect(prevStep('agentsAsk')).toBe('engine');
+    expect(prevStep('phoneAsk')).toBe('agentsAsk');
+    expect(prevStep('phoneAllow')).toBe('phoneScan');
+    expect(prevStep('phonePaired')).toBe('phoneScan');
   });
 
-  it('shows three parts, the last being where it leads', () => {
-    expect(progressOf('welcome')).toEqual({ section: 1, sections: 3 });
-    expect(progressOf('engine')).toEqual({ section: 2, sections: 3 });
-    expect(FLOW_SECTIONS[2]).toBe('chief');
+  it('Not now and Skip for now go on to the next part, then the Chief’s chat', () => {
+    expect(skipPart('agentsAsk')).toBe('phoneAsk');
+    expect(skipPart('agentsConnect')).toBe('phoneAsk');
+    expect(skipPart('phoneAsk')).toBeNull();
+    expect(skipPart('phoneScan')).toBeNull();
+  });
+
+  it('shows five parts, the last being where it leads, and moves within a part', () => {
+    expect(progressOf('welcome')).toEqual({ section: 1, sections: 5, within: 0 });
+    expect(progressOf('engine').section).toBe(2);
+    expect(progressOf('agentsAsk')).toEqual({ section: 3, sections: 5, within: 0 });
+    expect(progressOf('agentsConnect').within).toBeGreaterThan(progressOf('agentsLink').within);
+    expect(progressOf('phonePaired').section).toBe(4);
+    expect(progressOf('phonePaired').within).toBeLessThan(1);
+    expect(FLOW_SECTIONS[4]).toBe('chief');
     expect(sectionOf('engine')).toBe('engine');
+    expect(sectionOf('agentsLink')).toBe('agents');
+    expect(sectionOf('phoneScan')).toBe('phone');
+  });
+
+  it('a relaunch on a phone’s answer opens on a new code', () => {
+    expect(resumeStep({ v: 1, step: 'phoneAllow', finished: false })).toBe('phoneScan');
+    expect(resumeStep({ v: 1, step: 'agentsLink', finished: false })).toBe('agentsLink');
   });
 });
 

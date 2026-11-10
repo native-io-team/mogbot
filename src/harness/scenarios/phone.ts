@@ -6,6 +6,7 @@
 
 import type { Scenario } from '../types';
 import { PHONE_PAIRING_LINK, PHONE_QR } from '../fixtures/phoneQr';
+import { PANEL_FLOW_KEY } from '../../components/phone/PhoneFlow';
 
 const DNS = 'studio-mac.tail1234.ts.net';
 const MIN = 60_000;
@@ -43,7 +44,7 @@ const ON = {
   serve: { state: 'on', url: `https://${DNS}:47443` },
 };
 
-const devices = [
+export const PHONE_DEVICES = [
   {
     id: 'dev_1',
     name: 'Sam’s iPhone',
@@ -70,6 +71,8 @@ const devices = [
   },
 ];
 
+const devices = PHONE_DEVICES;
+
 const phone = (
   id: string,
   title: string,
@@ -90,41 +93,124 @@ const phone = (
   },
 });
 
+/** The Phone panel's flow, opened on one screen (no phone paired yet). */
+const at = (step: string) => ({ [PANEL_FLOW_KEY]: step });
+const LOGIN = { state: 'connected', dnsName: DNS, login: 'julian@example.com' };
+const CODE = {
+  companion_pair_start: { link: PHONE_PAIRING_LINK, qr: PHONE_QR, expiresAt: Date.now() + 5 * MIN },
+};
+const flowStep = (
+  id: string,
+  step: string,
+  title: string,
+  looksRightWhen: string,
+  status: Record<string, unknown>,
+  extra: Partial<Scenario> = {}
+) =>
+  phone(id, title, looksRightWhen, status, {
+    storage: at(step),
+    ...extra,
+    requires: `[data-phone-flow-step="${extra.requires ?? step}"]`,
+    commands: { companion_tailnet_phones: [], ...CODE, ...(extra.commands ?? {}) },
+  });
+
 export const phoneScenarios: Scenario[] = [
-  phone(
+  flowStep(
     'phone-off',
-    'Phone — nothing paired yet: the numbered setup steps',
-    'Titled “Phone”. One line, then five numbered step cards: 1 “Get the Mogbot app on your phone” (from your TestFlight invite) with a neutral “I have it” and a quiet “No invite? Get the app…”; 2 “Tailscale on this Mac” ticked with a green “Done”; 3 “Tailscale on your phone” saying sign in as julian@example.com, with “App Store ↗” and “Google Play ↗”; 4 “Turn on phone access” with its button; 5 “Scan the code”, saying the code shows here once the rest are done. No QR, no Xcode.',
-    { tailscale: { state: 'connected', dnsName: DNS, login: 'julian@example.com' } }
+    'phoneGetApp',
+    'Phone — nothing paired yet: 1. Get the app',
+    'Titled “Phone”. One screen, not a list: Back hidden, a thin bar at 1 of 7, “Get Mogbot on your phone”, one line (TestFlight on your iPhone, or the invite), a quiet “Build it on this Mac…” in a dev build, a big “I have it” and a quiet “Skip for now”.',
+    { tailscale: LOGIN }
   ),
-  phone(
+  flowStep(
+    'phone-flow-mac-tailscale',
+    'phoneMacTailscale',
+    'Phone — 2. Tailscale on this Mac, done',
+    'Back, the bar at 2 of 7, “Turn on Tailscale on this Mac”, one line, a green-ticked “Done. Tailscale is on, signed in as julian@example.com.”, a big Continue and Skip for now.',
+    { tailscale: LOGIN }
+  ),
+  flowStep(
     'phone-install-tailscale',
-    'Phone — on, nothing paired, Tailscale missing on this Mac',
-    'The same five steps: step 2 “Tailscale on this Mac” not done, with “Get Tailscale for Mac ↗” and “Check again”; step 4 waits on step 2 and says so.',
-    { enabled: true, running: true, tailscale: { state: 'notInstalled' } }
+    'phoneMacTailscale',
+    'Phone — 2. Tailscale missing on this Mac',
+    '“Turn on Tailscale on this Mac”, an amber “Not done yet. Tailscale isn’t on this Mac yet.” with the fix (install, sign in, Allow the VPN configuration) and Check again; a big “Get Tailscale for Mac ↗”.',
+    { tailscale: { state: 'notInstalled' } }
   ),
-  phone(
+  flowStep(
+    'phone-flow-phone-tailscale',
+    'phonePhoneTailscale',
+    'Phone — 3. Tailscale on your phone, same account',
+    '“Turn on Tailscale on your phone”, the line naming julian@example.com (the Mac’s account) and the VPN prompt, “Looking for your phone on your Tailscale…” with a spinner, App Store ↗ / Google Play ↗, a big “I did it”.',
+    { tailscale: LOGIN }
+  ),
+  flowStep(
+    'phone-flow-access',
+    'phoneAccess',
+    'Phone — 4. Turn on phone access',
+    '“Turn on phone access”, one line (this Mac has to stay on), a big “Turn on phone access”, Skip for now.',
+    { tailscale: LOGIN }
+  ),
+  flowStep(
     'phone-approve-https',
-    'Phone — nothing paired, Tailscale needs HTTPS switched on',
-    'The five steps with 2 Done; step 4 says one switch in Tailscale (HTTPS), with “Open Tailscale ↗” and “I’ve switched it on”.',
+    'phoneAccess',
+    'Phone — 4. Tailscale needs HTTPS switched on',
+    'An amber “Not done yet. One switch in Tailscale is off: HTTPS certificates.” with why, “Open Tailscale ↗” and Check again; no big button.',
     {
       enabled: true,
       running: true,
+      tailscale: LOGIN,
       serve: { state: 'needsApproval', url: 'https://login.tailscale.com/f/serve?node=n1' },
     }
   ),
-  phone(
+  flowStep(
     'phone-failed',
-    'Phone — nothing paired, Tailscale refused, in its own words',
-    'Step 4 says Tailscale didn’t start phone access, Tailscale’s message in red wraps inside the card, and “Try again” is offered.',
+    'phoneAccess',
+    'Phone — 4. Tailscale refused, in its own words',
+    'An amber “Not done yet. Tailscale didn’t start phone access.” with Tailscale’s message wrapping inside the check, and Check again.',
     {
       enabled: true,
       running: true,
+      tailscale: LOGIN,
       serve: {
         state: 'failed',
         detail: 'error: failed to serve: listener already exists for port 47443',
       },
     }
+  ),
+  flowStep(
+    'phone-first-code',
+    'phoneScan',
+    'Phone — 5. The code, big and alone',
+    'Bar at 5 of 7. One line as the title, “On your phone, open Mogbot and tap Scan the code”, then the QR large and alone on light paper, “Works once, for 5:00” (or just under) under it, and Skip for now. Nothing else.',
+    { ...ON, tailscale: LOGIN, pairing: { active: true, expiresAt: Date.now() + 5 * MIN } }
+  ),
+  flowStep(
+    'phone-confirm',
+    'phoneScan',
+    'Phone — 6. A phone used the code: Allow',
+    '“Allow Sam’s iPhone?”, one line (only the phone in your hand, code ending 5D2Q; it can read and send to every agent), “iPhone 16 Pro · app 1.0.0 · asked at <time> · julian@example.com”, a big neutral Allow (not the accent) and a quiet Deny.',
+    {
+      ...ON,
+      tailscale: LOGIN,
+      pairing: {
+        active: false,
+        request: {
+          id: 'pr_1',
+          device: {
+            name: 'Sam’s iPhone',
+            platform: 'ios',
+            model: 'iPhone 16 Pro',
+            appVersion: '1.0.0',
+            build: 'official',
+          },
+          requestedAt: Date.now() - 20_000,
+          codeHint: '5D2Q',
+          login: 'julian@example.com',
+          replaces: [],
+        },
+      },
+    },
+    { requires: 'phoneAllow' }
   ),
   phone(
     'phone-ready',
@@ -182,29 +268,6 @@ export const phoneScenarios: Scenario[] = [
     }
   ),
   phone(
-    'phone-first-code',
-    'Phone — no phone paired, set up: opens straight on the code',
-    'Opened the plain way (Paired phones / the sidebar row), with nothing paired and phone access ' +
-      'ready: the QR is already on screen with no extra click, titled “Scan this with your phone”, ' +
-      'four steps beside it (the app from TestFlight, Tailscale on the phone signed in as ' +
-      'julian@example.com, tap Scan the code, tap Pair then Allow here). No setup steps above it.',
-    {
-      ...ON,
-      tailscale: { state: 'connected', dnsName: DNS, login: 'julian@example.com' },
-      pairing: { active: true, expiresAt: Date.now() + 5 * MIN },
-    },
-    {
-      requires: '[data-testid="phone-pair-code"]',
-      commands: {
-        companion_pair_start: {
-          link: PHONE_PAIRING_LINK,
-          qr: PHONE_QR,
-          expiresAt: Date.now() + 5 * MIN,
-        },
-      },
-    }
-  ),
-  phone(
     'phone-code-reached',
     'Phone — a code on screen, and a device has reached this Mac',
     'As phone-code, but Tailscale reports no account for this Mac, so the first step says ' +
@@ -227,34 +290,6 @@ export const phoneScenarios: Scenario[] = [
           link: PHONE_PAIRING_LINK,
           qr: PHONE_QR,
           expiresAt: Date.now() + 5 * MIN,
-        },
-      },
-    }
-  ),
-  phone(
-    'phone-confirm',
-    'Phone — a phone used the code and waits for Allow',
-    'Centred in an amber-edged card: a phone tile, "Allow Sam’s iPhone to use your agents?" ' +
-      'with the name in bold, "iPhone 16 Pro · app 1.0.0", "Asked at <time> · code ending 5D2Q · ' +
-      'julian@example.com", an amber warning to only allow a phone you’re holding showing the same ' +
-      'code ending, and Deny / Allow with Allow primary.',
-    {
-      ...ON,
-      pairing: {
-        active: false,
-        request: {
-          id: 'pr_1',
-          device: {
-            name: 'Sam’s iPhone',
-            platform: 'ios',
-            model: 'iPhone 16 Pro',
-            appVersion: '1.0.0',
-            build: 'official',
-          },
-          requestedAt: Date.now() - 20_000,
-          codeHint: '5D2Q',
-          login: 'julian@example.com',
-          replaces: [],
         },
       },
     }
