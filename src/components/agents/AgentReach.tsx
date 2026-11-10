@@ -12,7 +12,7 @@
  * @module components/agents/AgentReach
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { Tooltip } from '../primitives/Tooltip';
@@ -29,7 +29,16 @@ import {
 } from '../../lib/agentLogins';
 import type { Agent } from '../../lib/agents';
 
-export function AgentReach({ agent }: { agent: Agent }) {
+export function AgentReach({
+  agent,
+  onOpenApps,
+  focus,
+}: {
+  agent: Agent;
+  onOpenApps?: () => void;
+  /** Opened from a card's "What it can reach": scroll its heading into view once loaded. */
+  focus?: boolean;
+}) {
   const load = useCallback(() => agentReach(agent.id), [agent.id]);
   const { data, setData, error: loadError, execute } = useAsyncState<Reach>(load);
   const openModal = useOpenModal();
@@ -38,6 +47,16 @@ export function AgentReach({ agent }: { agent: Agent }) {
   }, [execute]);
   const [error, setError] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const loaded = !!data;
+  useEffect(() => {
+    if (!focus || !loaded) return;
+    // The heading is AgentPolicy's, just above this list.
+    const el = groupRef.current;
+    const heading = el?.parentElement?.querySelector<HTMLElement>('.agent-policy') ?? el;
+    heading?.scrollIntoView({ block: 'start' });
+  }, [focus, loaded]);
   const remove = async (removal: Removal) => {
     setError(null);
     try {
@@ -59,6 +78,7 @@ export function AgentReach({ agent }: { agent: Agent }) {
     // reach" and continues it (its sections carry their own headings), so the
     // editor doesn't show the same title twice in a row.
     <div
+      ref={groupRef}
       className="agent-editor__label agent-reach"
       role="group"
       aria-label="What it can reach: sign-ins, browser and keys"
@@ -94,13 +114,28 @@ export function AgentReach({ agent }: { agent: Agent }) {
                   </span>
                   {c.needsSignIn && (
                     <span className="agent-secrets__meta agent-reach__warn">
-                      Needs signing in again: {agent.name} will ask on a card.
+                      {onOpenApps
+                        ? `Needs signing in again. Until then ${agent.name} asks on a card.`
+                        : `Needs signing in again: ${agent.name} will ask on a card.`}
                     </span>
                   )}
                 </span>
+                {/* The one fix, where it is: Apps signs it in again for every agent it's shared with. */}
+                {c.needsSignIn && onOpenApps && (
+                  <TextButton
+                    tabIndex={0}
+                    className="agent-permissions__revoke"
+                    data-sign-in-again
+                    onClick={onOpenApps}
+                  >
+                    Sign in again
+                  </TextButton>
+                )}
                 <TextButton
                   tabIndex={0}
                   className="agent-permissions__revoke"
+                  aria-label={`Remove ${c.title} from ${agent.name}`}
+                  title={`Takes ${c.title} from ${agent.name} only, from its next message. Other agents keep it.`}
                   onClick={() => void remove({ kind: 'connection', connectionId: c.connectionId })}
                 >
                   Remove
@@ -130,11 +165,7 @@ export function AgentReach({ agent }: { agent: Agent }) {
                 </span>
                 <span className="agent-secrets__meta">
                   {reach.browser.on
-                    ? `Where you’re signed in${
-                        reach.browser.sites.length
-                          ? ` · reads ${reach.browser.sites.join(', ')}`
-                          : ''
-                      } · other sites, and every click, post or send, ask you first · never for routines answering outside text`
+                    ? browserLine(reach.browser.sites)
                     : reach.browser.teamOn
                       ? `${agent.name} can’t use your browser.`
                       : 'Your team’s browser isn’t on yet, so it asks you instead.'}
@@ -162,6 +193,8 @@ export function AgentReach({ agent }: { agent: Agent }) {
                 <TextButton
                   tabIndex={0}
                   className="agent-permissions__revoke"
+                  aria-label={`Remove your browser from ${agent.name}`}
+                  title={`${agent.name} stops using your Chrome from its next message. Other agents keep it.`}
                   onClick={() => void remove({ kind: 'browser' })}
                 >
                   Remove
@@ -205,12 +238,29 @@ export function AgentReach({ agent }: { agent: Agent }) {
                     {s.lastUsedAt ? `Used ${formatAgo(s.lastUsedAt, now)}` : 'Not used yet'}
                   </span>
                 </span>
+                {/* The only Remove here that can't be undone: the key leaves the
+                    Keychain. So it asks once, in place, as Apps' Remove does. */}
                 <TextButton
                   tabIndex={0}
                   className="agent-permissions__revoke"
-                  onClick={() => void remove({ kind: 'secret', secretId: s.secretId })}
+                  data-confirming={confirmKey === s.secretId || undefined}
+                  aria-label={
+                    confirmKey === s.secretId
+                      ? `Confirm deleting ${s.purpose || s.name}`
+                      : `Remove ${s.purpose || s.name} from ${agent.name}`
+                  }
+                  title="Deletes the key from your Keychain. To use it again, you paste it again."
+                  onBlur={() => setConfirmKey(null)}
+                  onClick={() => {
+                    if (confirmKey !== s.secretId) {
+                      setConfirmKey(s.secretId);
+                      return;
+                    }
+                    setConfirmKey(null);
+                    void remove({ kind: 'secret', secretId: s.secretId });
+                  }}
                 >
-                  Remove
+                  {confirmKey === s.secretId ? 'Delete key?' : 'Remove'}
                 </TextButton>
               </li>
             ))}
@@ -263,4 +313,13 @@ export function AgentReach({ agent }: { agent: Agent }) {
       )}
     </div>
   );
+}
+
+/**
+ * The browser row's line: where it works, what it reads without asking, and
+ * that everything else asks. Plain sentences, not a chain of fragments.
+ */
+export function browserLine(sites: string[]): string {
+  const reads = sites.length ? ` It reads ${sites.join(', ')} without asking.` : '';
+  return `Your own Chrome, where you’re already signed in.${reads} Any other site, and every click, post or send, asks you first. Never used while it answers someone else’s message.`;
 }

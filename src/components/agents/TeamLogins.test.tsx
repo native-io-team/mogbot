@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { TeamLogins } from './TeamLogins';
@@ -87,7 +87,7 @@ describe('TeamLogins', () => {
     render(<TeamLogins />);
     await screen.findByText('Used by Site, Docs and Release');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Skip Site' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Not now for Site' }));
       await Promise.resolve();
     });
     expect(calls).toContainEqual([
@@ -220,7 +220,8 @@ describe('AgentReach', () => {
     await screen.findByText('Gmail · work@acme.com');
     expect(screen.getByText(/extension isn’t set up/)).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+      // Named for what and from whom, so a screen reader hears more than "Remove".
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Gmail from Recruiter' }));
       await Promise.resolve();
     });
     expect(calls).toContainEqual([
@@ -228,5 +229,53 @@ describe('AgentReach', () => {
       { agentId: 'recruiter', removal: { kind: 'connection', connectionId: 'c1' } },
     ]);
     await waitFor(() => expect(screen.queryByText('Gmail · work@acme.com')).toBeNull());
+  });
+
+  it('asks once before deleting a key, and offers Sign in again where one lapsed', async () => {
+    const calls: [string, unknown][] = [];
+    const reach = {
+      connections: [
+        {
+          connectionId: 'c2',
+          service: 'linear',
+          title: 'Linear',
+          account: 'Linear',
+          access: 'read',
+          kept: 'Signed in on this Mac',
+          needsSignIn: true,
+        },
+      ],
+      secrets: [
+        { secretId: 's1', name: 'greenhouse_key', purpose: 'Read candidates', variables: ['$GH'] },
+      ],
+      blockedApps: [],
+    };
+    mockIPC((cmd, args) => {
+      calls.push([cmd, args]);
+      if (cmd === 'agents_reach') return reach;
+      return { ...reach, secrets: [] };
+    });
+    const onOpenApps = vi.fn();
+    render(
+      <ModalProvider>
+        <AgentReach
+          agent={{ id: 'recruiter', name: 'Recruiter' } as Agent}
+          onOpenApps={onOpenApps}
+        />
+      </ModalProvider>
+    );
+    await screen.findByText('Read candidates');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in again' }));
+    expect(onOpenApps).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Read candidates from Recruiter' }));
+    expect(calls.some(([cmd]) => cmd === 'agents_reach_remove')).toBe(false);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm deleting Read candidates' }));
+      await Promise.resolve();
+    });
+    expect(calls).toContainEqual([
+      'agents_reach_remove',
+      { agentId: 'recruiter', removal: { kind: 'secret', secretId: 's1' } },
+    ]);
   });
 });

@@ -21,6 +21,7 @@ import { Spinner } from '../primitives/Spinner';
 import { AgentCard } from './AgentCard';
 import { useCardGuard } from './useCardGuard';
 import { SignInHelp, useNotNeeded } from './SignInHelp';
+import { useOpenReach } from './openReach';
 import {
   ChevronIcon,
   ChevronRightIcon,
@@ -61,6 +62,7 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
   const [openedPending] = useState(approval?.status === 'pending');
   const { guard, keyProps } = useCardGuard(approval?.status === 'pending');
   const notNeeded = useNotNeeded();
+  const openReach = useOpenReach();
   if (!approval || !login) return null;
   const view = loginCardView(approval, agentName);
   const pending = approval.status === 'pending';
@@ -176,7 +178,24 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
             .join(' · ') || undefined
         }
         actions={actions}
-        outcome={pending ? undefined : view.outcome}
+        outcome={
+          pending ? undefined : approval.status === 'allowed' && openReach ? (
+            // What was just given, and where to change it or take it back.
+            <>
+              {view.outcome}{' '}
+              <TextButton
+                tabIndex={0}
+                className="agent-login__reach"
+                aria-label={`What ${agentName} can reach: change or remove ${login.title}`}
+                onClick={() => openReach(message.agentId)}
+              >
+                What it can reach
+              </TextButton>
+            </>
+          ) : (
+            view.outcome
+          )
+        }
         outcomeTone={approval.status === 'allowed' ? 'done' : undefined}
         resolved={openedPending && !pending}
         wrapActions

@@ -222,6 +222,8 @@ interface AgentEditorModalProps {
   onAskInChat?: (text: string) => void;
   /** Creating: open on this ready-made agent (an id from `ROLE_TEMPLATES`). */
   initialTemplate?: string | null;
+  /** Editing: open scrolled to "What it can reach". */
+  focusReach?: boolean;
 }
 
 export type EditorTab = 'agent' | 'memory';
@@ -244,6 +246,7 @@ export function AgentEditorModal({
   onAskChief,
   onAskInChat,
   initialTemplate,
+  focusReach,
 }: AgentEditorModalProps) {
   const editing = Boolean(agent);
   const [tab, setTab] = useState<EditorTab>(initialTab);
@@ -749,7 +752,7 @@ export function AgentEditorModal({
           <AdminSwitch agent={agent} />
           <Permissions agent={agent} />
           <AgentPolicy agent={agent} onAskInChat={onAskInChat} />
-          <AgentReach agent={agent} />
+          <AgentReach agent={agent} onOpenApps={onOpenApps} focus={focusReach} />
         </div>
       )}
       {/* With one engine there's no "Runs on": what protects it, and the way to add another, live down here. */}

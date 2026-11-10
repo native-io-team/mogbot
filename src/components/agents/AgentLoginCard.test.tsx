@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { ApprovalCard } from './AgentChatItems';
 import { ARM_MS } from './useCardGuard';
+import { OpenReachContext } from './openReach';
 import type { AgentMessage, Approval } from '../../lib/agents';
 import type { LoginRequest } from '../../lib/agentLogins';
 import { loginCardView } from '../../lib/agentLogins';
@@ -286,5 +287,19 @@ describe('LoginCard', () => {
     renderCard(card(GMAIL, { status: 'allowed', choice: 'Connected · Gmail (work@acme.com)' }));
     expect(screen.getByText('Connected · Gmail (work@acme.com)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Connect Gmail' })).toBeNull();
+  });
+
+  it('a connected card says where to change it or take it back', () => {
+    const openReach = vi.fn();
+    const m = card(GMAIL, { status: 'allowed', choice: 'Connected · Gmail (work@acme.com)' });
+    render(
+      <OpenReachContext.Provider value={openReach}>
+        <ApprovalCard message={m} agentName="Recruiter" paused={false} onAnswer={vi.fn()} />
+      </OpenReachContext.Provider>
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'What Recruiter can reach: change or remove Gmail' })
+    );
+    expect(openReach).toHaveBeenCalledWith(m.agentId);
   });
 });
