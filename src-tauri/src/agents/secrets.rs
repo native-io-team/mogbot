@@ -31,6 +31,7 @@
 //! as tool output, and Claude Code's own transcript (`~/.claude/projects`)
 //! keeps it. The prompt tells agents never to print one.
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -593,11 +594,12 @@ pub fn env_for(agent: &Agent) -> Vec<(String, String)> {
     }
     if !used.is_empty() {
         let now = store::now_ms();
-        let _ = store::update(&agent.id, |a| {
+        store::update(&agent.id, |a| {
             for s in a.secrets.iter_mut().filter(|s| used.contains(&s.id)) {
                 s.last_used_at = Some(now);
             }
-        });
+        })
+        .or_log("when an agent's secrets were last used");
     }
     env
 }

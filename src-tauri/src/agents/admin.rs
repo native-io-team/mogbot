@@ -34,6 +34,7 @@
 //! to see if the download finished"), with the raw command behind Details.
 //! Cards made before this get one when read ([`apply`]).
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Mutex;
@@ -91,9 +92,10 @@ const NOTED_KEY: &str = "adminNoted";
 
 /// A Chief made by this build already knows: no upgrade line for it.
 pub fn mark_noted(agent_id: &str) {
-    let _ = store::update(agent_id, |a| {
+    store::update(agent_id, |a| {
         a.extra.insert(NOTED_KEY.to_string(), Value::Bool(true));
-    });
+    })
+    .or_log("that the Chief was told it's an admin");
 }
 
 pub const UPGRADE_LINE: &str =
@@ -105,9 +107,10 @@ pub fn note_upgrade(chief: &store::Agent) -> bool {
     if !chief.is_main || chief.extra.contains_key(NOTED_KEY) {
         return false;
     }
-    let _ = store::update(&chief.id, |a| {
+    store::update(&chief.id, |a| {
         a.extra.insert(NOTED_KEY.to_string(), Value::Bool(true));
-    });
+    })
+    .or_log("that the Chief was told it's an admin");
     if !is_admin(chief) {
         return false;
     }
@@ -1451,7 +1454,7 @@ fn pause(app: &AppHandle, caller: &store::Agent, args: &Value, on: bool) -> Valu
         }
     }
     let changed = switched.len();
-    let _ = store::update(&target.id, |a| {
+    store::update(&target.id, |a| {
         for c in a.check_ins.iter_mut() {
             // Only the routines this pause switched off are the admin's to
             // switch back on: never one the user paused, or one an import
@@ -1462,7 +1465,8 @@ fn pause(app: &AppHandle, caller: &store::Agent, args: &Value, on: bool) -> Valu
                 c.extra.remove(PAUSED_BY_ADMIN);
             }
         }
-    });
+    })
+    .or_log("which routines an admin paused");
     let stopped = on && runner::stop(app, &target.id);
     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     let routines = format!("{changed} routine{}", if changed == 1 { "" } else { "s" });
@@ -1516,8 +1520,14 @@ pub async fn soft_delete(
         ),
     );
     there.peer = Some(peer(admin));
-    let _ = store::append_message(&there);
-    if let Err(e) = store::soft_delete(&target.id, Some(peer(admin))) {
+    store::append_message(&there).or_log("an admin's delete line");
+    // Its folder moves to the trash: off the async workers.
+    let (id, by) = (target.id.clone(), Some(peer(admin)));
+    let deleted = tokio::task::spawn_blocking(move || store::soft_delete(&id, by))
+        .await
+        .map_err(super::err_other)
+        .and_then(|r| r);
+    if let Err(e) = deleted {
         runner::undelete(&target.id);
         return Err(e);
     }

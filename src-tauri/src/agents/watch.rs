@@ -47,6 +47,7 @@
 //!   team, set up routines or edit its own memory without a card
 //!   (`mcp::needs_card_in_routine_turn`, `runner::routine_turn_args`).
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -1906,11 +1907,12 @@ async fn checked(
 
 /// A firing whose turn couldn't be queued: its run failed, and its items go.
 fn settle_unstarted(agent_id: &str, id: &str, at: i64, why: &str) {
-    let _ = store::update(agent_id, |a| {
+    store::update(agent_id, |a| {
         if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == id) {
             mark_unstarted(c, at, why);
         }
-    });
+    })
+    .or_log("a When… routine that didn't start");
 }
 
 pub fn mark_unstarted(c: &mut CheckIn, at: i64, why: &str) {
@@ -2054,22 +2056,24 @@ fn tick(app: &AppHandle) {
                 .iter()
                 .any(|r| r.outcome == runs::Outcome::Running && now - r.at >= LOST_RUN_MS)
             {
-                let _ = store::update(&agent.id, |a| {
+                store::update(&agent.id, |a| {
                     if let Some(x) = a.check_ins.iter_mut().find(|x| x.id == c.id) {
                         settle_lost(x, now);
                     }
-                });
+                })
+                .or_log("a When… routine's lost run");
             }
             if !c.paused {
                 if let Some(note) = runs_auto_pause(&c.runs) {
-                    let _ = store::update(&agent.id, |a| {
+                    store::update(&agent.id, |a| {
                         if let Some(x) = a.check_ins.iter_mut().find(|x| x.id == c.id) {
                             x.paused = true;
                             if let Some(w) = x.watch.as_mut() {
                                 w.paused_note = Some(note.clone());
                             }
                         }
-                    });
+                    })
+                    .or_log("a When… routine paused after lost runs");
                     paused_line(app, &agent.id, &agent.check_ins, &c.id, &note);
                     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
                     continue;

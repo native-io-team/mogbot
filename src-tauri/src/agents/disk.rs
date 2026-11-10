@@ -32,6 +32,7 @@
 //! tracks nothing in it, so removing it changes nothing git would call a
 //! change. Reports, `.git` folders and unpushed commits are never touched.
 
+use crate::agents::store::OrLog;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -306,7 +307,7 @@ pub fn step_kept(path: &Path, free: u64, now: i64) -> Option<Crossing> {
     let crossing = step(&mut said, free, now);
     if said != before {
         if let Ok(json) = serde_json::to_vec(&said) {
-            let _ = store::write_atomic(path, &json);
+            store::write_atomic(path, &json).or_log("the disk-space warning state");
         }
     }
     crossing

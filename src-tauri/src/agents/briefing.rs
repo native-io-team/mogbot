@@ -17,6 +17,7 @@
 //! and again as it is read. Never sent to the phone: only the desk's
 //! `agents_turn_briefing` reads it.
 
+use crate::agents::store::OrLog;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -140,7 +141,7 @@ pub fn keep(agent_id: &str, prompt: &str, instructions: Option<&str>, now: i64) 
             return None;
         }
     }
-    let _ = store::write_atomic(&dir.join("latest"), key.as_bytes());
+    store::write_atomic(&dir.join("latest"), key.as_bytes()).or_log("the latest briefing key");
     Some(key)
 }
 

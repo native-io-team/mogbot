@@ -27,6 +27,7 @@
 //! by quitting is recorded as such at the next launch, and a routine's retry
 //! that came due while closed is dropped rather than run late.
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use std::sync::{LazyLock, Mutex};
 use tauri::AppHandle;
@@ -410,11 +411,12 @@ pub fn turn_ended(
         let today = super::usage::today();
         // "Where did my usage go" names the routine, not only the agent.
         super::usage_plan::tag_routine(agent_id, since, store::now_ms(), &id);
-        let _ = store::update(agent_id, |agent| {
+        store::update(agent_id, |agent| {
             if let Some(c) = agent.check_ins.iter_mut().find(|c| c.id == id) {
                 c.usage.record(spent, today);
             }
-        });
+        })
+        .or_log("a routine run's usage");
     }
     let now = store::now_ms();
     let failed = match stopped {
@@ -470,7 +472,7 @@ pub fn turn_ended(
                 }
             }
         }
-        let _ = store::update(agent_id, |agent| {
+        store::update(agent_id, |agent| {
             for snapshot in &ticket.check_ins {
                 match agent.check_ins.iter_mut().find(|c| c.id == snapshot.id) {
                     Some(c) => {
@@ -493,7 +495,8 @@ pub fn turn_ended(
                     None => {}
                 }
             }
-        });
+        })
+        .or_log("routine runs ending");
         if let Some(alert) = settled.alert {
             super::notify::replace_held(agent_id, alert);
         }

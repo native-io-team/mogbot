@@ -19,6 +19,7 @@
 //! taken key gets a free one, and an independence it suggests is only ever
 //! applied when it's stricter than the team's (`level_to_apply`).
 
+use crate::agents::store::OrLog;
 use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
@@ -478,7 +479,7 @@ pub fn apply_look(agent_id: &str, look: &ProposedLook) -> Vec<String> {
             }
         };
         if let Some(change) = change.filter(|c| !c.is_empty()) {
-            let _ = store::update(agent_id, |a| change.apply(a));
+            store::update(agent_id, |a| change.apply(a)).or_log("a recipe's change to an agent");
         }
     }
     if let Some(suggested) = look.independence {
