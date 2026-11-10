@@ -9,7 +9,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Command, Fields } from '../src/components/ApprovalCard';
 import { DiffLines } from '../src/components/diff';
 import { capFields, DETAIL_LINES } from '../src/lib/agents';
-import { FAR, revealsCard } from '../src/lib/follow';
+import { FAR, revealsCard, seeCards } from '../src/lib/follow';
 
 jest.mock('react-native-reanimated', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -129,16 +129,31 @@ describe('the expander', () => {
 });
 
 describe('revealsCard', () => {
+  const seen = (...ids: string[]) => new Set(ids);
   it('brings a new card into view at or near the newest line', () => {
-    expect(revealsCard(null, 'c1', 0)).toBe(true);
-    expect(revealsCard('c0', 'c1', FAR)).toBe(true);
+    expect(revealsCard(seen(), 'c1', 0)).toBe(true);
+    expect(revealsCard(seen('c0'), 'c1', FAR)).toBe(true);
   });
   it('leaves you where you are when you scrolled back to read', () => {
-    expect(revealsCard(null, 'c1', FAR + 1)).toBe(false);
+    expect(revealsCard(seen(), 'c1', FAR + 1)).toBe(false);
   });
   it('does it once, and not for a card already there on opening', () => {
-    expect(revealsCard('c1', 'c1', 0)).toBe(false);
+    expect(revealsCard(seen('c1'), 'c1', 0)).toBe(false);
     expect(revealsCard(undefined, 'c1', 0)).toBe(false);
-    expect(revealsCard('c1', null, 0)).toBe(false);
+    expect(revealsCard(seen('c1'), null, 0)).toBe(false);
+  });
+  it('the newer of two cards answered on the Mac: the older isn’t new, so the chat stays put', () => {
+    // Opened with two waiting: both seen.
+    let s = seeCards(undefined, ['older', 'newer']);
+    // `newer` answered on the desk: `older` is now the newest waiting card.
+    expect(revealsCard(s, 'older', 0)).toBe(false);
+    s = seeCards(s, ['older']);
+    // A card that really is new still comes into view.
+    expect(revealsCard(s, 'third', 0)).toBe(true);
+  });
+  it('keeps the same set when nothing new is waiting', () => {
+    const s = seeCards(undefined, ['a', 'b']);
+    expect(seeCards(s, ['a'])).toBe(s);
+    expect(seeCards(s, [])).toBe(s);
   });
 });

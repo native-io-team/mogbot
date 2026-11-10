@@ -685,7 +685,10 @@ request, the diff and the photo viewer push over them. At
   6 at large text) with "Show all", so the question and the answers fit
   together without scrolling (`__tests__/detailCap.test.tsx`); a new card
   landing while you're at or near the newest line scrolls its answers into
-  view (`revealsCard`, never when you'd scrolled back to read).
+  view (`revealsCard`, never when you'd scrolled back to read). "New" means
+  a card this chat hasn't shown waiting before (`seeCards`): with two
+  waiting, answering the newer on the Mac used to make the older one look
+  new and scroll the chat back up to it, past everything said since.
 - **A task's questions** (`PromptCard`): the question, whose task it is and
   where, the diff (tinted) or text it shows, and every option it offers,
   answered with `agents.answerApproval`'s `choice`; the same 400 ms guard.
@@ -1780,6 +1783,17 @@ What the web build can't show, so don't file it:
   time picker.
 - The composer field is two lines tall, and the task header's title can sit off
   centre: rn-web layout, check on a device.
+- Nothing rises in: a row arriving in a chat, or your own message, just
+  appears. Reanimated's web entering animation for the arrival preset can end
+  on its timer before `animationend` and pin the row `position: absolute` at
+  window coordinates, which inside the inverted chat drew it ~1,300px from its
+  place (`torture-events`: "Written second" above "Written first", the
+  burst's replies blank). `arriving()` (`components/Arrive.tsx`) is off on
+  the web for that reason; the same events in the iOS Simulator land in order.
+- The chat draws only `windowSize` screens around where you are, so a line far
+  back isn't in the page's text until you scroll to it: `torture-reconnect`
+  reads back to "Plan for the week?" before counting it (counted at the newest
+  end it was sometimes 0 with nothing missing).
 
 It says nothing about native-only surfaces (action sheets, Alerts, sheet detents,
 the share extension, the camera, real keyboard behaviour).
