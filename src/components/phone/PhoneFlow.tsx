@@ -25,18 +25,23 @@ import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon, WarningIcon } from '@/compo
 import { CheckLine, ADVANCE_MS } from '../setup/flow/FlowParts';
 import { PhoneQr } from './PhoneQr';
 import { usePolling } from '../../hooks/usePolling';
+import { useAsyncState } from '../../hooks/useAsyncState';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { BRAND } from '../../lib/brand';
 import { TAILSCALE_DOWNLOAD_URL } from '../../lib/remoteAccess';
-import { PHONE_APP_STORE_URL } from '../../lib/phoneApp';
-import { TESTFLIGHT_URL } from '../../lib/companionInstall';
+import {
+  GET_ON_TESTFLIGHT,
+  PHONE_APP_STORE_URL,
+  PHONE_APP_TESTFLIGHT_URL,
+} from '../../lib/phoneApp';
 import { formatClock } from '../../../packages/companion-protocol/src/clock';
 import {
   COMPANION_CHANGED_EVENT,
   decidePairing,
   deviceLine,
   expiresIn,
+  getLinkQr,
   getPhoneStatus,
   getTailnetPhones,
   phoneStep,
@@ -444,14 +449,41 @@ function useStepView(p: {
   switch (step) {
     case 'phoneGetApp': {
       const store = PHONE_APP_STORE_URL;
+      const testFlight = store ? null : PHONE_APP_TESTFLIGHT_URL;
+      if (testFlight) {
+        // The beta: the link is the way, so it is the big button, and its
+        // code is beside it, since the phone's camera opens it straight from
+        // this screen. Only the person knows when it's installed.
+        return {
+          title: GET_PHONE_APP_TITLE,
+          lede: 'It’s a free beta on TestFlight. Point your iPhone’s camera at the code to get it.',
+          children: <LinkQr url={testFlight} label="Code for the phone app on TestFlight" />,
+          primary: (
+            <Primary external onClick={() => void openUrl(testFlight)}>
+              {GET_ON_TESTFLIGHT}
+            </Primary>
+          ),
+          secondary: (
+            <>
+              <Button
+                variant="secondary"
+                size="large"
+                onClick={() => go('phoneMacTailscale')}
+                data-flow-have-it
+              >
+                I have it
+              </Button>
+              {skip}
+            </>
+          ),
+        };
+      }
       return {
         title: GET_PHONE_APP_TITLE,
         lede: store
           ? 'It’s free on the App Store. Install it on your iPhone.'
-          : TESTFLIGHT_URL
-            ? 'Install it from TestFlight on your iPhone.'
-            : 'On your iPhone, open the TestFlight invite you were sent and install it.',
-        children: (store || TESTFLIGHT_URL || p.onInstall) && (
+          : 'On your iPhone, open the TestFlight invite you were sent and install it.',
+        children: (store || p.onInstall) && (
           <div className="flow-links">
             {store && (
               <Button
@@ -461,15 +493,6 @@ function useStepView(p: {
                 data-app-store
               >
                 Open the App Store
-              </Button>
-            )}
-            {!store && TESTFLIGHT_URL && (
-              <Button
-                variant="secondary"
-                rightIcon={<ExternalLinkIcon size={12} />}
-                onClick={() => void openUrl(TESTFLIGHT_URL!)}
-              >
-                Open TestFlight
               </Button>
             )}
             {!store && p.onInstall && (
@@ -705,6 +728,27 @@ export function savePanelStep(step: PhoneFlowStep | null) {
  * screens, one question, one big button. Smaller than onboarding's full
  * window, never a list of cards.
  */
+/**
+ * A web page's address as a code the phone's camera opens (the Mac draws the
+ * modules). A spinner while it's made; on a failure, nothing: the button
+ * under it opens the same page.
+ */
+function LinkQr({ url, label }: { url: string; label: string }) {
+  const { data, error } = useAsyncState(() => getLinkQr(url), { immediate: true });
+  if (error) return null;
+  return (
+    <div className="flow-qr" data-testid="flow-link-qr">
+      {data ? (
+        <div className="flow-qr__frame">
+          <PhoneQr size={data.size} modules={data.modules} pixels={200} label={label} />
+        </div>
+      ) : (
+        <Spinner size="lg" />
+      )}
+    </div>
+  );
+}
+
 export function PanelStepShell({
   step,
   view,

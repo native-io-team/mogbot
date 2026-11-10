@@ -4,9 +4,12 @@
  * stand in for it). Built on the navigation Tabs primitive in its segmented
  * look, since it switches a top-level view rather than filtering in place.
  *
- * While Projects is showing, an amber badge on the Agents segment's corner
- * says an agent wants you; its tooltip says which. The badge is out of flow,
- * so both labels stay centred whether it is there or not.
+ * While Projects is showing, a count rides in the Agents segment right after
+ * its label: how many agents need your OK, in the needs-you amber wash the
+ * What's in flight bell and the Dock badge use (never the accent), or, when
+ * nobody is waiting but something is new, how many have unread messages in a
+ * neutral wash. Its tooltip says who. On the icon layouts the same count sits
+ * on the icon's corner.
  *
  * Three layouts: `labels` fills the sidebar's width at the Search field's
  * height; `stacked` is the collapsed rail's, one icon above the other;
@@ -39,6 +42,30 @@ export function describeAgentsAttention({ waiting, unread }: AgentsAttention): s
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
+/** What the Agents segment's count says, or null for no count. */
+export interface AgentsCount {
+  /** The figure shown: capped at "9+". */
+  text: string;
+  /** `waiting`: someone needs your OK (amber). `unread`: only new messages (neutral). */
+  tone: 'waiting' | 'unread';
+  /** Read out with the segment: "1 agent needs you", "2 unread". */
+  label: string;
+}
+
+export function agentsCountFor({ waiting, unread }: AgentsAttention): AgentsCount | null {
+  const cap = (n: number) => (n > 9 ? '9+' : String(n));
+  if (waiting.length > 0) {
+    const n = waiting.length;
+    return {
+      text: cap(n),
+      tone: 'waiting',
+      label: n === 1 ? '1 agent needs you' : `${n} agents need you`,
+    };
+  }
+  if (unread > 0) return { text: cap(unread), tone: 'unread', label: `${unread} unread` };
+  return null;
+}
+
 interface ModeToggleProps {
   mode: AppMode;
   onProjects: () => void;
@@ -54,8 +81,9 @@ export function ModeToggle({
   layout = 'labels',
   className,
 }: ModeToggleProps) {
-  const attention = describeAgentsAttention(useAgentsAttention());
-  const showDot = attention !== null && mode !== 'agents';
+  const counts = useAgentsAttention();
+  const attention = describeAgentsAttention(counts);
+  const count = mode !== 'agents' ? agentsCountFor(counts) : null;
   const iconOnly = layout !== 'labels';
   const tabClass = `mode-toggle__tab${iconOnly ? ' button--icon-only' : ''}`;
   const choose = (next: string) => {
@@ -88,15 +116,23 @@ export function ModeToggle({
       >
         {/* The app's tooltip, not a native `title`: WKWebView draws native
             tooltips at the window's top-left, under the traffic lights. */}
-        <Tooltip content={`${(showDot && attention) || 'Agents'} (${MODE_TOGGLE_SHORTCUT})`}>
+        <Tooltip content={`${(count && attention) || 'Agents'} (${MODE_TOGGLE_SHORTCUT})`}>
           <TabsTab
             value="agents"
             className={tabClass}
-            aria-label={showDot ? `Agents, ${attention}` : 'Agents'}
+            aria-label={count ? `Agents, ${count.label}` : 'Agents'}
             leftIcon={iconOnly ? <AgentsModeIcon size={12} /> : undefined}
           >
             {iconOnly ? undefined : 'Agents'}
-            {showDot && <span className="sidebar-row-dot dot-attention mode-toggle__dot" />}
+            {count && (
+              <span
+                className={`mode-toggle__count mode-toggle__count--${count.tone}`}
+                data-tone={count.tone}
+                aria-hidden="true"
+              >
+                {count.text}
+              </span>
+            )}
           </TabsTab>
         </Tooltip>
         <Tooltip content={`Projects (${MODE_TOGGLE_SHORTCUT})`}>

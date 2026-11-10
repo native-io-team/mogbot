@@ -4094,16 +4094,46 @@ export const agentsScenarios: Scenario[] = [
     startOn: 'projects',
     title: 'Mode toggle — on the dashboard, an agent waiting',
     looksRightWhen:
-      'A text-only “Projects | Agents” segmented control directly above Search, 30px tall like it, with exactly Search’s left and right edges. Projects is selected. A small amber badge sits in the Agents segment’s top-right corner and both labels are centred in their halves. No Agents row under Search and no + beside the toggle.',
-    requires: '.mode-toggle .mode-toggle__dot',
+      'A text-only “Projects | Agents” segmented control directly above Search, 30px tall like it, with exactly Search’s left and right edges. Projects is selected. The Agents segment reads “Agents 1”: a small rounded amber-washed count in ordinary ink right after the label, centred on it, the pair centred in its half; Projects is centred in its own. No floating dot between the segments. No Agents row under Search and no + beside the toggle.',
+    requires: '.mode-toggle .mode-toggle__count--waiting',
     commands: { agents_overview: overview() },
+  },
+  {
+    id: 'mode-toggle-home-three',
+    startOn: 'projects',
+    title: 'Mode toggle — on the dashboard, three agents waiting',
+    looksRightWhen:
+      'As with one waiting, but the count reads 3, the same height and shape, the pill a touch wider only if the figure needs it. The control’s edges and the Projects label haven’t moved.',
+    requires: '.mode-toggle .mode-toggle__count--waiting',
+    commands: {
+      agents_overview: overview(
+        TEAM.map((a) =>
+          a.id === 'finance' || a.id === 'hiring'
+            ? { ...a, status: status('waiting', 'Waiting for your OK') }
+            : a
+        )
+      ),
+    },
+  },
+  {
+    id: 'mode-toggle-home-unread',
+    startOn: 'projects',
+    title: 'Mode toggle — on the dashboard, nobody waiting, something unread',
+    looksRightWhen:
+      'The Agents segment carries a neutral grey count (no amber: nobody needs your OK), the number of agents with something new.',
+    requires: '.mode-toggle .mode-toggle__count--unread',
+    commands: {
+      agents_overview: overview(
+        TEAM.map((a) => (a.id === 'leadgen' ? { ...a, status: status('idle') } : a))
+      ),
+    },
   },
   {
     id: 'mode-toggle-tooltip',
     startOn: 'projects',
     title: 'Mode toggle — the Agents tooltip names who wants you',
     looksRightWhen: 'Hovering Agents shows “Lead Gen needs your OK · 1 unread (⌘⇧A)”.',
-    requires: '.mode-toggle .mode-toggle__dot',
+    requires: '.mode-toggle .mode-toggle__count',
     steps: [{ hover: AGENTS_TAB }],
     commands: { agents_overview: overview() },
   },
@@ -4111,9 +4141,9 @@ export const agentsScenarios: Scenario[] = [
     id: 'mode-toggle-workspace',
     title: 'Mode toggle — inside a project',
     looksRightWhen:
-      'The toggle sits above Search in the project sidebar, Projects selected, the amber badge on Agents. The titlebar has no Agents button. The hairline under Search continues the preview toolbar’s bottom hairline in one straight line.',
+      'The toggle sits above Search in the project sidebar, Projects selected, the amber “1” count after the Agents label. The titlebar has no Agents button. The hairline under Search continues the preview toolbar’s bottom hairline in one straight line.',
     project: WORKSPACE_PROJECT,
-    requires: '.workspace-body .mode-toggle .mode-toggle__dot',
+    requires: '.workspace-body .mode-toggle .mode-toggle__count',
     storage: {
       elementTreeVisible: '0',
       [`shipstudio.layout.project:${WORKSPACE_PROJECT}`]: JSON.stringify({
@@ -4145,8 +4175,8 @@ export const agentsScenarios: Scenario[] = [
     startOn: 'projects',
     title: 'Mode toggle — collapsed sidebar',
     looksRightWhen:
-      'In the rail the toggle is two stacked icons (folder, agents) in one 30px-wide segmented column, Projects selected, the amber badge on the agents icon’s corner. Search sits under it as an icon.',
-    requires: '.workspace-sidebar.is-hidden .mode-toggle--stacked .mode-toggle__dot',
+      'In the rail the toggle is two stacked icons (folder, agents) in one 30px-wide segmented column, Projects selected, a small amber “1” count straddling the agents icon’s top-right corner. Search sits under it as an icon.',
+    requires: '.workspace-sidebar.is-hidden .mode-toggle--stacked .mode-toggle__count',
     steps: [{ click: '.workspace-sidebar-toggle' }],
     commands: { agents_overview: overview() },
   },
@@ -4185,7 +4215,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'mode-toggle-compact-workspace',
     title: 'Mode toggle — compact window, project',
     looksRightWhen:
-      'The compact top bar leads with the icon pair (Projects selected, badge on agents), then the dev-server dot, pin, ⌘K and the project picker on the right. Same height as those controls.',
+      'The compact top bar leads with the icon pair (Projects selected, the amber count on the agents icon’s corner), then the dev-server dot, pin, ⌘K and the project picker on the right. Same height as those controls.',
     viewport: { width: 700, height: 800 },
     project: WORKSPACE_PROJECT,
     requires: '.compact-topbar',

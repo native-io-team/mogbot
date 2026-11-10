@@ -119,22 +119,39 @@ describe('HomeSidebar', () => {
       expect(props.onGoAgents).not.toHaveBeenCalled();
     });
 
-    it('badges Agents and names who wants you', () => {
+    it('counts who needs you on Agents and names them in the tooltip', () => {
       attention = { waiting: ['Lead Gen'], unread: 1 };
       renderSidebar(<HomeSidebar {...props} activeNav="home" />);
-      const agents = screen.getByRole('tab', { name: 'Agents, Lead Gen needs your OK · 1 unread' });
-      expect(agents.querySelector('.mode-toggle__dot')).not.toBeNull();
+      const agents = screen.getByRole('tab', { name: 'Agents, 1 agent needs you' });
+      const count = agents.querySelector('.mode-toggle__count');
+      expect(count).toHaveTextContent('1');
+      expect(count).toHaveAttribute('data-tone', 'waiting');
       expect(agents).toHaveAttribute(
         'data-tooltip-content',
         `Lead Gen needs your OK · 1 unread (${kbd('mod', 'shift', 'A')})`
       );
     });
 
-    it('drops the badge while Agents mode is showing', () => {
+    it('says three, and a neutral unread count when nobody is waiting', () => {
+      attention = { waiting: ['Lead Gen', 'Finance', 'Hiring'], unread: 0 };
+      const { unmount } = renderSidebar(<HomeSidebar {...props} activeNav="home" />);
+      expect(screen.getByRole('tab', { name: 'Agents, 3 agents need you' })).toHaveTextContent(
+        'Agents3'
+      );
+      unmount();
+      attention = { waiting: [], unread: 2 };
+      renderSidebar(<HomeSidebar {...props} activeNav="home" />);
+      const count = screen
+        .getByRole('tab', { name: 'Agents, 2 unread' })
+        .querySelector('.mode-toggle__count');
+      expect(count).toHaveAttribute('data-tone', 'unread');
+    });
+
+    it('drops the count while Agents mode is showing', () => {
       attention = { waiting: ['Lead Gen'], unread: 0 };
       renderSidebar(<HomeSidebar {...props} activeNav="agents" />);
       expect(
-        screen.getByRole('tab', { name: 'Agents' }).querySelector('.mode-toggle__dot')
+        screen.getByRole('tab', { name: 'Agents' }).querySelector('.mode-toggle__count')
       ).toBeNull();
     });
 

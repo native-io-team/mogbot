@@ -1599,6 +1599,12 @@
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
     },
     {
+      "path": "src/styles/features/workspace/mode-toggle.css",
+      "token": "--space-16",
+      "count": 2,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
+    },
+    {
       "path": "src/styles/features/workspace/sidebar-rows.css",
       "token": "--font-size-12",
       "count": 1,
