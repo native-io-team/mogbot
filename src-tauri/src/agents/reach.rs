@@ -222,10 +222,12 @@ const SCAN_DEPTH: usize = 3;
 /// At most this many protected paths are listed.
 const SCAN_LIMIT: usize = 400;
 
-/// Existing [`PROTECTED_DIRS`] folders inside `roots`, for Codex's sandbox
-/// to keep read-only. Codex accepts a glob only to deny reading, so they are
-/// listed by exact path: the roots themselves, projects in them, and copies
-/// under `.worktrees/<project>/` (depth 3).
+/// [`PROTECTED_DIRS`] folders inside `roots`, for Codex's sandbox to keep
+/// read-only. Codex accepts a glob only to deny reading, so they are listed
+/// by exact path: the roots themselves, projects in them, and copies under
+/// `.worktrees/<project>/` (depth 3). Existing ones anywhere in that reach;
+/// missing ones where a project's would go (a root, a project, a folder git
+/// works in), so a turn can't create one either.
 ///
 /// Re-checked on Codex 0.166 (`codex sandbox -P`): a `"<root>/**/.git" =
 /// "read"` entry is refused outright ("filesystem glob path … only supports
@@ -249,9 +251,19 @@ fn scan(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
     if out.len() >= SCAN_LIMIT {
         return;
     }
+    // Where a project's own folders belong: a root, a project in one, or
+    // any folder git works in. There, one that doesn't exist yet is listed
+    // too, so a turn can't create it (Claude Code's deny rules are patterns
+    // and cover that already). Checked on 0.166 with `codex sandbox -P`: a
+    // "read" entry for a missing `.shipstudio` refuses its `mkdir`, while
+    // without one the folder is created.
+    let project_place = depth == 0
+        || (depth == 1 && dir.file_name().is_some_and(|n| n != ".worktrees"))
+        || dir.join(".git").exists();
     for name in PROTECTED_DIRS {
         let p = dir.join(name);
-        if p.is_dir() {
+        // A copy's `.git` is a file pointing into its project's: never listed.
+        if p.is_dir() || (project_place && !p.exists()) {
             out.push(p);
         }
     }
@@ -367,6 +379,10 @@ mod tests {
             "site/src",
             ".worktrees/site/a1-t1/.shipstudio",
             ".hidden/x/.git",
+            // A project with git and no `.shipstudio` yet, and one with neither.
+            "repo/.git",
+            "plain/index",
+            "repo/deep/er/.git",
         ] {
             std::fs::create_dir_all(root.join(dir)).unwrap();
         }
@@ -380,11 +396,23 @@ mod tests {
         assert_eq!(
             rel,
             vec![
+                // The root's own, though it has no git: a turn can't make one.
+                ".git",
                 ".shipstudio",
                 ".worktrees/site/a1-t1/.shipstudio",
+                // Projects: what they don't have yet can't be created either
+                // (Claude Code's deny rules are patterns, so they cover it).
+                "plain/.git",
+                "plain/.shipstudio",
+                "repo/.git",
+                "repo/.shipstudio",
+                "repo/deep/er/.git",
+                "repo/deep/er/.shipstudio",
                 "site/.git",
                 "site/.shipstudio",
             ]
         );
+        // Only the copy's `.shipstudio`: its `.git` file stays as it is.
+        assert!(!rel.contains(&".worktrees/site/a1-t1/.git".to_string()));
     }
 }
