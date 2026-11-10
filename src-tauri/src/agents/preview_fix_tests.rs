@@ -140,16 +140,16 @@ fn the_reason_reads_what_it_printed_before_the_code() {
 #[test]
 fn the_note_says_who_it_is_from_what_to_do_and_carries_the_log() {
     let p = fix_prompt(
-        "memberstack-marketing",
+        "northwind-marketing",
         true,
         "a compile error",
         "line 1\nline 2",
     );
     assert!(p.starts_with("[From the app, not the user]"));
     assert!(
-        p.contains("Your preview for your copy of memberstack-marketing stopped: a compile error.")
+        p.contains("Your preview for your copy of northwind-marketing stopped: a compile error.")
     );
-    assert!(p.contains("restart it with preview_start (project \"memberstack-marketing\")"));
+    assert!(p.contains("restart it with preview_start (project \"northwind-marketing\")"));
     assert!(p.contains("```\nline 1\nline 2\n```"));
 }
 

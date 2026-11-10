@@ -175,13 +175,9 @@ jobs:
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Clippy
-        env:
-          CSTAR_IDENTITY_SECRET: ${{ secrets.CSTAR_IDENTITY_SECRET }}
         run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -A clippy::uninlined_format_args
 
       - name: Run tests
-        env:
-          CSTAR_IDENTITY_SECRET: ${{ secrets.CSTAR_IDENTITY_SECRET }}
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       # The vendored PTY plugin is a path dependency, not a workspace member,
@@ -190,8 +186,6 @@ jobs:
       # handler — the thing standing between us and the app SIGKILLing its own
       # process group again — and an untested guard is not a guard.
       - name: Run PTY plugin tests
-        env:
-          CSTAR_IDENTITY_SECRET: ${{ secrets.CSTAR_IDENTITY_SECRET }}
         run: cargo test --manifest-path src-tauri/plugins/tauri-plugin-pty/Cargo.toml
 
   # Windows smoke test — the codebase has substantial Windows-specific logic
@@ -252,18 +246,12 @@ jobs:
       # when they pass — these tests exist to answer a quoting question, not
       # just to gate.
       - name: PTY spawn-shape canaries (verbose)
-        env:
-          CSTAR_IDENTITY_SECRET: ${{ secrets.CSTAR_IDENTITY_SECRET }}
         run: cargo test --manifest-path src-tauri/Cargo.toml preserves_pipe_and_spaces_through_pty -- --nocapture
 
       - name: Backend tests
-        env:
-          CSTAR_IDENTITY_SECRET: ${{ secrets.CSTAR_IDENTITY_SECRET }}
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Check Tauri build (no bundle)
-        env:
-          CSTAR_IDENTITY_SECRET: ${{ secrets.CSTAR_IDENTITY_SECRET }}
         run: pnpm tauri build --no-bundle
 
   # Build verification (PRs and main)
@@ -299,6 +287,4 @@ jobs:
         run: pnpm build
 
       - name: Check Tauri build (no bundle)
-        env:
-          CSTAR_IDENTITY_SECRET: ${{ secrets.CSTAR_IDENTITY_SECRET }}
         run: pnpm tauri build --no-bundle

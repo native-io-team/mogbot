@@ -1,26 +1,25 @@
 # Code of conduct
 
-Ship Studio follows the [Contributor Covenant v2.1][covenant] as its code of
-conduct. The full text lives at that link — please read it before contributing.
+This project follows the [Contributor Covenant v2.1][covenant] as its code of
+conduct. The full text lives at that link; please read it before contributing.
 
 In short:
 
 - Be respectful. Disagree about code, not about people.
 - Assume good intent. Ask before assuming malice.
 - No personal attacks, demeaning language, or unwelcome attention.
-- Keep public threads focused on the project; take side conversations to DMs.
+- Keep public threads focused on the project.
 
 ## Reporting
 
-If you experience or witness behavior that violates this code, please DM a
-maintainer privately in our [community Slack](https://ship.studio/slack),
-or email [juliangalluzzois@gmail.com](mailto:juliangalluzzois@gmail.com).
-Reports are handled in confidence. We will not retaliate against good-faith
+If you experience or witness behaviour that breaks this code, email
+[juliangalluzzois@gmail.com](mailto:juliangalluzzois@gmail.com). Reports are
+handled in confidence, and there is no retaliation against good-faith
 reporters.
 
 Enforcement follows the
-[Contributor Covenant enforcement ladder][enforcement]: correction → warning →
-temporary ban → permanent ban, scaled to the severity of the conduct.
+[Contributor Covenant enforcement ladder][enforcement]: correction, warning,
+temporary ban, permanent ban, scaled to the severity of the conduct.
 
 [covenant]: https://www.contributor-covenant.org/version/2/1/code_of_conduct/
 [enforcement]: https://www.contributor-covenant.org/version/2/1/code_of_conduct/#enforcement-guidelines

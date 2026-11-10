@@ -121,7 +121,7 @@ describe('A remembered rule', () => {
     agentId: 'lead',
     ts: 1,
     kind: 'note',
-    text: 'Remembered: Lead Gen can always upsert social posts · Native os',
+    text: 'Remembered: Lead Gen can always upsert social posts · Acme crm',
     remembered: { ruleId: 'rule-1', active },
   });
 
@@ -161,7 +161,7 @@ describe('A remembered rule', () => {
         always: {
           kind: 'tool',
           value: 'mcp__native-os__upsertSocialPosts',
-          label: 'Upsert social posts · Native os',
+          label: 'Upsert social posts · Acme crm',
           said: 'ur always allowed to do those',
         },
       },

@@ -2,58 +2,59 @@
 
 ## Supported versions
 
-We provide security fixes for the latest released version of Ship Studio.
-Older versions are not patched.
-
-| Version    | Supported          |
-| ---------- | ------------------ |
-| Latest     | :white_check_mark: |
-| < Latest   | :x:                |
+Security fixes go into the latest release only. Older versions are not
+patched; the app's update feed moves you to the fixed one.
 
 ## Reporting a vulnerability
 
-**Please do not file a public GitHub issue for security reports.**
+**Please don't open a public GitHub issue for a security report.**
 
-Use GitHub's [private vulnerability reporting](https://github.com/ship-studio/ship-studio/security/advisories/new)
-to file a report only the maintainers can see.
+Email **[juliangalluzzois@gmail.com](mailto:juliangalluzzois@gmail.com)** with
+"Security" in the subject. Once this repository is public you can also use
+GitHub's private vulnerability reporting (the repo's **Security** tab →
+**Report a vulnerability**), which only the maintainers can see.
 
-Include:
+Please include:
 
-- A clear description of the vulnerability and its impact.
-- Steps to reproduce (or a proof-of-concept) on a clean install of the latest
+- What the vulnerability is and what an attacker could do with it.
+- Steps to reproduce, or a proof of concept, on a clean install of the latest
   release.
-- The Ship Studio version and host OS — find the version in the **Ship
-  Studio** menu → **About** (the leftmost app menu on both platforms).
-- Any logs from `~/Library/Logs/ShipStudio/` (macOS) or
-  `%LOCALAPPDATA%\ShipStudio\logs\` (Windows) that help reproduce.
+- The app version (app menu → About) and your macOS version, and the phone
+  app's version if the phone is involved.
+- Any lines from `~/Library/Logs/Mogbot/` that help. Check them for your own
+  paths and project names first.
 
 ### What to expect
 
-- We acknowledge reports within **3 business days**.
-- We aim to triage and confirm within **7 business days**.
-- High-severity issues get a patched release within **14 days**; others
-  within the next regular release.
-- We will credit you in the release notes unless you ask us not to.
+- An acknowledgement within **3 business days**.
+- Triage and confirmation within **7 business days**.
+- A fix for a high-severity issue within **14 days**; others in the next
+  regular release.
+- Credit in the release notes, unless you'd rather not.
 
 ## Scope
 
 In scope:
 
-- The Ship Studio desktop app (this repository).
-- Official release binaries from
-  [ship-studio/releases](https://github.com/ship-studio/releases).
-- The auto-updater channel referenced in `src-tauri/tauri.conf.json`.
+- The desktop app in this repository, and its release builds.
+- The phone companion app (`mobile/`) and its pairing with the Mac.
+- The agent approval broker, independence levels, the Keychain handling of
+  logins and secrets, Remote Access, and the Chrome extension
+  (`chrome-extension/`).
+- The update feed named in `brand.json` (`links.updates`).
+
+The threat model and what each wall is meant to stop are written down in
+[docs/agents.md](docs/agents.md) ("Approvals", "Threat model additions"),
+[docs/mobile.md](docs/mobile.md) and
+[docs/remote-access.md](docs/remote-access.md). A way around any of them is in
+scope, including prompt injection that gets an agent past an approval it
+should have asked for.
 
 Out of scope:
 
-- Third-party integrations Ship Studio shells out to (`gh`, `vercel`,
-  `claude`) — report those to their respective maintainers.
-- Forks that rebrand or repackage Ship Studio — please contact the fork
-  maintainer.
-- Issues that require a pre-compromised user machine (e.g. an attacker who
-  already has filesystem access).
-
-## Hall of fame
-
-Researchers who responsibly disclose security issues will be listed here
-(with permission) once their reports are resolved.
+- Bugs in the engines and tools the app runs (Claude Code, Codex, OpenCode,
+  `gh`, Tailscale): report those to their maintainers. How the app *uses*
+  them is in scope.
+- Forks that rebrand or repackage the app: contact that fork's maintainer.
+- Attacks that need an already compromised Mac (someone with your login or
+  filesystem access).

@@ -105,10 +105,16 @@ Mac proves it's yours. Nothing passes through our servers.
   ([docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)).
 - Light and dark, on desktop and phone.
 
-## Quick start
+## Download
 
-There's no download yet: you build it on your Mac. The full runbook, with a
-check for every step, is **[docs/INSTALL.md](docs/INSTALL.md)**.
+**[Get it for your Mac](https://mogbot-site.vercel.app/start)**, and the phone
+app from the same page (a public TestFlight beta for iPhone). Release builds
+are also on [GitHub Releases](https://github.com/native-io-team/mogbot-releases/releases).
+
+## Build from source
+
+The full runbook, with a check for every step, is
+**[docs/INSTALL.md](docs/INSTALL.md)**.
 
 **You need**
 
@@ -151,7 +157,7 @@ and signs it in like any Mac installer, and you land in a conversation with
 your Chief of Staff. Importing agents, the phone and how independent agents
 are come up later, when they matter.
 
-**The phone app** comes two ways until it's on the App Store: **Expo Go**
+**The phone app from source** comes two ways (or use TestFlight above): **Expo Go**
 (minutes; a terminal on the Mac stays open; no dictation or share sheet) or
 **built with Xcode** (the real app; 30 to 60 minutes the first time; with a
 free Apple ID, re-install every 7 days). Neither gets push notifications yet.
@@ -189,10 +195,9 @@ pinned identity, and every pairing is confirmed on the desk. Details:
 
 ## Status
 
-Early, and moving fast. macOS only for now. There is no signed download, no
-App Store or TestFlight build, no push notifications, no update feed and no
-telemetry: those stay off until `brand.json` names an endpoint for them, and
-it names none. Several features landed recently and say in the docs where
+Early, and moving fast. macOS only for now. No App Store build or push
+notifications yet, and no telemetry: each stays off until `brand.json` names
+an endpoint for it. Several features landed recently and say in the docs where
 they haven't yet been tried on a real phone or a live account. What's next: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 **Works with Ship Studio.** This is the evolution of

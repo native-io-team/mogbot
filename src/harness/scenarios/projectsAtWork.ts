@@ -50,7 +50,7 @@ const team = () =>
     return a;
   });
 
-const MEMBER = `${HARNESS_ROOT}/memberstack-docs`;
+const MEMBER = `${HARNESS_ROOT}/northwind-docs`;
 
 /** Three projects; agents working in two of them (four in one, to show the +N). */
 const busyTeam = () =>
@@ -77,7 +77,7 @@ const busyCommands = {
   get_dashboard_projects: [
     dashboardProject('lumen-site'),
     dashboardProject('acme-marketing'),
-    dashboardProject('memberstack-docs'),
+    dashboardProject('northwind-docs'),
   ],
   list_pinned_projects: [SITE, ACME, MEMBER],
   agents_overview: overview(busyTeam()),

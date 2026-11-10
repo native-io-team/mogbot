@@ -213,7 +213,7 @@ fn with_its_context_local_work_is_exactly_what_go_hard_answers() {
     assert_eq!(local(&bash("ls -la ~/Downloads/KiteExport")), Kind::Local);
     assert_eq!(local(&bash("mkdir ~/Kite/drafts")), Kind::Local);
     // Another agent's edits in a project, or a worktree of one: the admin
-    // answers them (the owner's Memberstack cards, paths fictional).
+    // answers them (the owner's Northwind cards, paths fictional).
     for c in [
         "sed -i '' 's/old-hero/new-hero/g' ~/Desktop/Projects/fictional-marketing/src/pages/index.astro",
         "cd ~/Desktop/Projects/fictional-marketing && npm run build",

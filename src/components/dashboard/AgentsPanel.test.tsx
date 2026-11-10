@@ -312,24 +312,22 @@ describe('AgentsPanel', () => {
   // ============ Per-workspace Claude auth (email + reconnect) ============
 
   it('shows the account email instead of a generic "Signed in"', async () => {
-    mockInvoke('get_agents_status', [
-      agent({ isDefault: true, authEmail: 'circa@circabranding.com' }),
-    ]);
+    mockInvoke('get_agents_status', [agent({ isDefault: true, authEmail: 'sam@example.com' })]);
     render(<AgentsPanel />);
 
     await waitFor(() => expect(screen.getByText('Claude Code')).toBeInTheDocument());
-    expect(screen.getByText('v1.2.3 · circa@circabranding.com')).toBeInTheDocument();
+    expect(screen.getByText('v1.2.3 · sam@example.com')).toBeInTheDocument();
   });
 
   it('renders a red Reconnect button + status when the token needs reconnect', async () => {
     mockInvoke('get_agents_status', [
-      agent({ authed: true, needsReconnect: true, authEmail: 'circa@circabranding.com' }),
+      agent({ authed: true, needsReconnect: true, authEmail: 'sam@example.com' }),
     ]);
     const { container } = render(<AgentsPanel />);
 
     await waitFor(() => expect(screen.getByText('Claude Code')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
-    expect(screen.getByText('circa@circabranding.com · Reconnect needed')).toBeInTheDocument();
+    expect(screen.getByText('sam@example.com · Reconnect needed')).toBeInTheDocument();
     // The card carries the red attention class, not the connected state class.
     expect(container.querySelector('.agents-panel-row.needs-reconnect')).toBeInTheDocument();
     expect(container.querySelector('.agents-panel-row.is-connected')).not.toBeInTheDocument();
@@ -350,9 +348,9 @@ describe('AgentsPanel', () => {
 
   it('routes Claude "Sign in" to the connect modal in a non-default workspace', async () => {
     mockInvoke('get_agents_status', [agent({ authed: false })]);
-    mockInvoke('get_active_account_id', 'circa');
+    mockInvoke('get_active_account_id', 'northwind');
     mockInvoke('list_accounts', [
-      { id: 'circa', name: 'Circa', color: '#000', isDefault: false, createdAt: 0 },
+      { id: 'northwind', name: 'Northwind', color: '#000', isDefault: false, createdAt: 0 },
     ]);
     render(<AgentsPanel />);
 
@@ -367,16 +365,16 @@ describe('AgentsPanel', () => {
       expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
     );
     // The workspace name appears in both the header badge and the modal copy.
-    expect(screen.getAllByText(/Circa/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Northwind/).length).toBeGreaterThan(0);
     expect(screen.queryByTestId('mock-terminal')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mock-connect-terminal')).not.toBeInTheDocument();
   });
 
   it('connect flow: Continue opens the PTY terminal; capture closes + refreshes', async () => {
     mockInvoke('get_agents_status', [agent({ authed: false })]);
-    mockInvoke('get_active_account_id', 'circa');
+    mockInvoke('get_active_account_id', 'northwind');
     mockInvoke('list_accounts', [
-      { id: 'circa', name: 'Circa', color: '#000', isDefault: false, createdAt: 0 },
+      { id: 'northwind', name: 'Northwind', color: '#000', isDefault: false, createdAt: 0 },
     ]);
     render(<AgentsPanel />);
 
@@ -422,7 +420,13 @@ describe('AgentsPanel', () => {
 
   // ============ Workspace badge + section grouping + Services rows ============
 
-  const CIRCA = { id: 'circa', name: 'Circa', color: '#abcdef', isDefault: false, createdAt: 0 };
+  const NORTHWIND = {
+    id: 'northwind',
+    name: 'Northwind',
+    color: '#abcdef',
+    isDefault: false,
+    createdAt: 0,
+  };
   const DEFAULT_WS = {
     id: 'default',
     name: 'Default',
@@ -433,20 +437,20 @@ describe('AgentsPanel', () => {
 
   const NOT_CONNECTED = { githubAuthEmail: null, vercelUsername: null };
 
-  function mockWorkspace(account: typeof CIRCA | typeof DEFAULT_WS) {
+  function mockWorkspace(account: typeof NORTHWIND | typeof DEFAULT_WS) {
     mockInvoke('get_active_account_id', account.id);
     mockInvoke('list_accounts', [account]);
   }
 
   it('names the active workspace and groups rows under AI apps / Services', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT]);
-    mockWorkspace(CIRCA);
+    mockWorkspace(NORTHWIND);
     mockInvoke('get_account_credential_status', NOT_CONNECTED);
     render(<AgentsPanel />);
 
     await waitFor(() => expect(invokeCalls.some((c) => c.cmd === 'list_accounts')).toBe(true));
     // Workspace badge names the active workspace.
-    await waitFor(() => expect(screen.getAllByText(/Circa/).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Northwind/).length).toBeGreaterThan(0));
     // The two section subheaders are present.
     expect(screen.getByText('AI apps')).toBeInTheDocument();
     expect(screen.getByText('Services')).toBeInTheDocument();
@@ -457,14 +461,14 @@ describe('AgentsPanel', () => {
 
   it('shows the workspace Vercel identity once the credential status resolves', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT]);
-    mockWorkspace(CIRCA);
+    mockWorkspace(NORTHWIND);
     mockInvoke('get_account_credential_status', {
       githubAuthEmail: 'octocat@github.com',
-      vercelUsername: 'circa-team',
+      vercelUsername: 'northwind-team',
     });
     render(<AgentsPanel />);
 
-    await waitFor(() => expect(screen.getByText('circa-team')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('northwind-team')).toBeInTheDocument());
     expect(screen.getByText('octocat@github.com')).toBeInTheDocument();
     // Connected services show a quiet state label and a kebab, not Connect.
     expect(screen.getAllByText('Connected')).toHaveLength(2);
@@ -474,7 +478,7 @@ describe('AgentsPanel', () => {
 
   it('non-default workspace: Vercel "Connect" opens the token modal and saves the credential', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT]);
-    mockWorkspace(CIRCA);
+    mockWorkspace(NORTHWIND);
     // Neither service signed in → both read "Connect".
     mockInvoke('get_account_credential_status', NOT_CONNECTED);
     render(<AgentsPanel />);
@@ -495,7 +499,7 @@ describe('AgentsPanel', () => {
     await waitFor(() => {
       const call = invokeCalls.find((c) => c.cmd === 'set_account_credential');
       expect(call?.args).toMatchObject({
-        id: 'circa',
+        id: 'northwind',
         key: 'vercel_token',
         value: 'vercel_abc123',
       });
@@ -504,7 +508,7 @@ describe('AgentsPanel', () => {
 
   it('non-default workspace: GitHub "Connect" routes through the backend PTY modal', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT]);
-    mockWorkspace(CIRCA);
+    mockWorkspace(NORTHWIND);
     mockInvoke('get_account_credential_status', NOT_CONNECTED);
     render(<AgentsPanel />);
 

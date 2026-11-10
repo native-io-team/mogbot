@@ -223,44 +223,27 @@ Verify after building that no requests fire to PostHog or Sentry domains.
 
 If you want a single source tree that produces both an "official" build
 (with telemetry) and a "private" build (without), convert the constants to
-`option_env!()` / build-time `import.meta.env` reads. This is the same
-pattern used for `CSTAR_IDENTITY_SECRET` (see §6).
+`option_env!()` / build-time `import.meta.env` reads.
 
 ---
 
 ## 6 — Optional: support / identity integrations
 
-Two additional integrations the official build uses; safe to ignore in a
-fork:
-
-- **cStar.help** — an in-app support widget. Driven by a build-time
-  `CSTAR_IDENTITY_SECRET` env var (see
-  `src-tauri/src/commands/support.rs:15-18`). It's already
-  `option_env!()`-based and defaults to empty, so forks get a no-op
-  Help/Support panel automatically. Replace with your own integration if
-  you want one.
-
-- **The community Slack invite URL** is referenced in
-  `src/components/ProjectList.tsx`, `src/components/setup/OnboardingScreen.tsx`,
-  and `src/components/support/SupportHome.tsx`. Swap for your own community
-  link or remove.
+The cStar.help support widget and its build-time `CSTAR_IDENTITY_SECRET` are
+gone: nothing in the code reads it any more, and CI no longer passes it.
+Community links (issues, discussions, community chat) come only from
+`brand.json`'s `links`; null hides each one.
 
 ---
 
 ## 7 — CI: handling forked PRs
 
-`.github/workflows/ci.yml` references `secrets.CSTAR_IDENTITY_SECRET`. Forks
-have no such secret, so:
-
-- The Rust code path defaults to `""` via `option_env!()` — clippy and
-  `cargo build` pass.
-- Any test that exercises HMAC signing of identity requests will produce a
-  bogus signature. The CI job *passes* but the signed value is not
-  meaningful.
-
-If you don't use cStar, remove every `secrets.CSTAR_IDENTITY_SECRET` reference
-from `.github/workflows/ci.yml` so contributors' forked PRs run the full
-identical workflow.
+`.github/workflows/ci.yml` uses no repository secrets, so a fork's PR runs the
+same jobs as the main repo. `dependency-security-scan.yml` uses only the
+built-in `GITHUB_TOKEN` to post its PR comment, and that step is
+`continue-on-error` because a fork's token is read-only. Signing and
+notarisation are local scripts (`scripts/release-mac.sh`,
+`mobile/scripts/store-ios.sh`), never CI.
 
 ---
 
