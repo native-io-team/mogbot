@@ -260,7 +260,9 @@ export function TotalCard({
             onPress={() => onOpen?.(s.engine, s.id)}
             style={({ pressed }) => [styles.legendRow, i > 0 && styles.divided, pressed && PRESSED]}
           >
-            <T variant="small" color={colors.textPrimary} style={styles.grow} numberOfLines={1}>
+            {/* Two lines before an ellipsis: at large text an address beside its
+                figure and refill chip was cut to "sam@example…". */}
+            <T variant="small" color={colors.textPrimary} style={styles.grow} numberOfLines={2}>
               {s.name}
             </T>
             <T variant="small" color={colors.textSecondary} style={styles.figure}>
@@ -373,7 +375,7 @@ export function AccountRows({
                   variant="headline"
                   color={colors.textStrong}
                   style={styles.grow}
-                  numberOfLines={1}
+                  numberOfLines={2}
                 >
                   {k.name}
                 </T>

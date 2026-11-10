@@ -92,7 +92,7 @@ export function UsagePlanControls({
 
   return (
     <View style={styles.wrap}>
-      <SectionTitle title="How agents use your limits" />
+      <SectionTitle title="How agents use your limits" style={styles.title} />
       <Segmented
         value={inventory.mode}
         options={USAGE_MODES.map((m) => ({ value: m, label: SHORT[m] }))}
@@ -102,7 +102,7 @@ export function UsagePlanControls({
         {USAGE_MODE_LABEL[inventory.mode]}: {USAGE_MODE_DETAIL[inventory.mode]}
       </T>
 
-      <SectionTitle title="Spare-capacity list" style={styles.gap} />
+      <SectionTitle title="Spare-capacity list" style={[styles.title, styles.gap]} />
       <T variant="small" color={colors.textMuted}>
         {waiting === 0
           ? 'Nothing waiting. Add work to do when a limit is about to reset with room left.'
@@ -152,6 +152,9 @@ export function UsagePlanControls({
 
 const useStyles = makeStyles((colors) => ({
   wrap: { gap: space.sm, marginBottom: space.xl },
+  // Flush with the choice and the lines under it (the wrap's gap spaces it),
+  // as the usage page's other group labels sit, not inset as over a card.
+  title: { marginLeft: 0, marginBottom: 0 },
   gap: { marginTop: space.md },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   input: {
