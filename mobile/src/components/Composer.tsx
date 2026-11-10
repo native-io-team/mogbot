@@ -174,6 +174,7 @@ export function Composer({
   onOpenSetup,
   onHeight,
   side = { left: 0, right: 0 },
+  focusKey,
 }: {
   agent: Agent;
   autoFocus?: boolean;
@@ -186,6 +187,8 @@ export function Composer({
   onHeight?: (h: number) => void;
   /** Kept clear at each side: a phone in landscape has its notch there. */
   side?: { left: number; right: number };
+  /** Changed to put the cursor in the field (a starter just typed into it). */
+  focusKey?: number;
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -217,6 +220,11 @@ export function Composer({
       : undefined;
   const seq = useRef(0);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
+  useEffect(() => {
+    if (!focusKey) return;
+    const t = setTimeout(() => input.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [focusKey]);
   const [micHint, setMicHint] = useState<string | null>(null);
   // The draft came back from disk this launch (after a crash, a restart, iOS
   // reclaiming the app): a quiet line says so, once, for a few seconds.

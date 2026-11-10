@@ -31,6 +31,7 @@ export * from './loginNames';
 export * from './agentKeys';
 export * from './agentKeySearch';
 export * from './attention';
+export * from './chiefIdeas';
 export * from './tables';
 export * from './gallery';
 export * from './preview';
