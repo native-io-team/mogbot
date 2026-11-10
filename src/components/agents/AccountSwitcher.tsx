@@ -1,10 +1,13 @@
 /**
  * Usage at a glance, always in sight: the row at the foot of the Agents
  * sidebar, answering "how much can my agents still do, and when does it
- * refill" in words anyone reads: the total across every account ("72% left
- * · 2 accounts"), the total bar (a segment per real account, in the work
- * order; a second sign-in of one never draws one), and "Refills in 2d 4h". A
- * status dot only when the user must act, or agents are out. It opens the
+ * refill" in words anyone reads, said as what is USED (`glanceUsed`): "8%
+ * used · refills in 6d" over one bar that fills with use, so a short fill is
+ * light use and a full bar is out ("92% left" beside a nearly full bar read
+ * as 92% used). The warning role from 80% used; never accent. The whole
+ * sentence (of what, how many accounts, any not read, the exact refill) is
+ * the tooltip and the VoiceOver label. A status dot only when the user must
+ * act, or agents are out. First in the sidebar's foot. It opens the
  * Usage view (`AgentsUsageView`), where every account is a key in order.
  *
  * Words and figures are the phone's too (`companion-protocol/usageGlance`
@@ -27,7 +30,7 @@ import { Tooltip } from '../primitives/Tooltip';
 import { FooterRowIcon, type FooterRowStatus } from '../workspace/FooterRowIcon';
 import { useUsageAccounts } from './useUsageAccounts';
 import { useUsageInventory } from './AgentsUsage';
-import { TotalBar } from './UsageStack';
+import { UsedBar } from './UsageStack';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { Agent, AgentEngine, EngineInfo } from '../../lib/agents';
 import {
@@ -37,6 +40,7 @@ import {
   type UsageAccount,
 } from '../../lib/agentAccounts';
 import { usageGlance, type UsageGlance } from '../../lib/agentsUsage';
+import { glanceUsed } from '../../../packages/companion-protocol/src/usageGlance';
 import {
   ranOnName,
   type WorkingLine,
@@ -155,9 +159,9 @@ export function AccountSwitcher({
   const { row: words } = glance;
   // Signed in, nothing read yet, nothing to do: calm, the label alone.
   const quiet = glance.unread && !words.needsYou;
-  const label = `Usage: ${[words.figure, words.count, words.notRead, words.refill]
-    .filter(Boolean)
-    .join('. ')}`;
+  // Said as what is used, its bar filling with use (`glanceUsed`).
+  const used = glanceUsed(glance);
+  const label = `Usage: ${used.detail}`;
 
   const row = (
     <Button
@@ -171,6 +175,7 @@ export function AccountSwitcher({
       data-testid="account-switcher"
       data-needs-you={words.needsYou || undefined}
       data-quiet={quiet || undefined}
+      data-tone={used.tone}
       onClick={() => onOpen?.()}
       leftIcon={<FooterRowIcon icon={<ActivityIcon size={14} />} status={glanceStatus(glance)} />}
     >
@@ -181,24 +186,17 @@ export function AccountSwitcher({
       )}
       {!collapsed && !quiet && (
         <span className="usage-glance__body">
-          <span className="usage-glance__label">Usage</span>
+          {/* "8% used · refills in 6d": the figure, then when it refills. */}
           <span className="usage-glance__headline">
-            {words.figure}
-            {words.count && glance.total.left !== null && (
-              <span className="usage-glance__count"> · {words.count}</span>
-            )}
+            <span className="usage-glance__figure">{used.figure}</span>
+            {used.refill && <span className="usage-glance__count"> · {used.refill}</span>}
           </span>
-          <TotalBar total={glance.total} size="small" />
-          {(words.refill || words.notRead) && (
-            <span className="usage-glance__summary">
-              {[words.refill, words.notRead].filter(Boolean).join(' · ')}
-            </span>
-          )}
+          <UsedBar used={used} />
         </span>
       )}
     </Button>
   );
-  return <Tooltip content={collapsed ? label : 'Show usage and accounts'}>{row}</Tooltip>;
+  return <Tooltip content={label}>{row}</Tooltip>;
 }
 
 /**

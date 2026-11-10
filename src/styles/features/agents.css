@@ -696,3 +696,37 @@
   :is(.agents-list__group-toggle, .agents-list__group-empty, .agents-list__group-new) {
   display: none;
 }
+
+/* New agent | New room, one row of two in the foot (`AgentsSidebarActions`).
+   Too narrow for both side by side, they wrap into a stack. */
+.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .button {
+  flex: 1 1 calc(var(--control-height-standard) * 3);
+  width: auto;
+  min-width: 0;
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Side by side, each half centres its icon and label: the badge-wide icon
+   box of a full-width row would leave the label no room. */
+.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .agents-list__new,
+.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .agents-list__new-room {
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding-inline: var(--spacing-xs);
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .button > svg {
+  flex-shrink: 0;
+  padding: 0;
+}

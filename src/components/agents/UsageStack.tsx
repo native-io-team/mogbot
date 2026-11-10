@@ -54,7 +54,10 @@ import {
   NEW_WORK_HERE,
   USE_THIS_ONE_NOW,
 } from '../../../packages/companion-protocol/src/cardWords';
-import { usersLine } from '../../../packages/companion-protocol/src/usageGlance';
+import {
+  usersLine,
+  type GlanceUsed,
+} from '../../../packages/companion-protocol/src/usageGlance';
 import { pinnedLine } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { AgentKey } from './AgentKey';
 
@@ -103,6 +106,32 @@ export function TotalBar({
           style={{ '--usage-total-fill': `${left}%` } as CSSProperties}
         />
       )}
+    </span>
+  );
+}
+
+/**
+ * The glance's bar (`glanceUsed`): it fills with use, so 8% used is a short
+ * fill and a full bar is out. Ordinary ink; the warning role from
+ * `HIGH_USED`. Never accent. Nothing read draws nothing (the row says so).
+ */
+export function UsedBar({ used }: { used: GlanceUsed }) {
+  if (used.used === null) return null;
+  return (
+    <span
+      className="usage-used"
+      data-tone={used.tone}
+      role="meter"
+      aria-label="Usage used"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={used.used}
+      aria-valuetext={used.figure}
+    >
+      <span
+        className="usage-used__fill"
+        style={{ '--usage-used-fill': `${used.used}%` } as CSSProperties}
+      />
     </span>
   );
 }

@@ -5,9 +5,10 @@
  * shared status dots — so it reads as the same sidebar, not a second app.
  *
  * There is one group, so there is no group header: the Projects | Agents
- * toggle above it says where you are. "New agent" and "New room" are pinned
- * under the list (`AgentsSidebarActions`), outside its scroller; the
- * Routines page sits in the footer with Usage (`RoutinesRow`). The sidebar's top field searches
+ * toggle above it says where you are. The foot, outside the scroller: Usage
+ * first, then "New agent" | "New room" as one row (`AgentsSidebarActions`),
+ * then Routines (`RoutinesRow`) sharing the last row with the phone, remote
+ * and Settings icons. The sidebar's top field searches
  * conversations here; while it has a query the results take the list's place.
  *
  * Right-click a row (or Shift+F10 on it) for Pin, Mark as unread, Mute notifications, Edit, Hide
@@ -467,38 +468,48 @@ export function AgentsSidebar({
 }
 
 /**
- * The create actions, pinned under the list rather than at its end, so with
- * ten agents or project groups they never scroll under the Usage footer
- * (round 4, #10). Pages (Routines, Usage) live in the footer; actions here.
+ * The create actions, in the foot under Usage: New agent and New room side
+ * by side as one row (two half-width buttons), so the foot stays short; a
+ * sidebar too narrow for both stacks them. Outside the list's scroller, so
+ * ten agents or project groups never push them away (round 4, #10).
  */
 export function AgentsSidebarActions({
   agentCount,
+  collapsed = false,
   onNew,
   onNewRoom,
 }: {
   agentCount: number;
+  collapsed?: boolean;
   onNew: () => void;
   onNewRoom: () => void;
 }) {
+  // A room needs two agents to talk to.
+  const room = agentCount >= 2;
   return (
-    <div className="workspace-sidebar-active-actions agents-list__actions">
+    <div
+      className={`workspace-sidebar-active-actions agents-list__actions${
+        room && !collapsed ? ' agents-list__actions--pair' : ''
+      }`}
+    >
       <Button
         variant="ghost"
         width="fill"
         className="workspace-sidebar-add-project agents-list__new"
         onClick={onNew}
+        aria-label="New agent"
         title={`New agent (${kbd('mod', 'N')})`}
       >
         <AddIcon size={16} />
         <span>New agent</span>
       </Button>
-      {/* A room needs two agents to talk to. */}
-      {agentCount >= 2 && (
+      {room && (
         <Button
           variant="ghost"
           width="fill"
           className="workspace-sidebar-add-project agents-list__new-room"
           onClick={onNewRoom}
+          aria-label="New room"
           title={ROOM_WHAT}
         >
           <CollaboratorsIcon size={16} />
@@ -510,9 +521,9 @@ export function AgentsSidebarActions({
 }
 
 /**
- * Routines, every agent's in one list: a page, so it sits in the footer
- * with Usage, in the footer rows' own shape, and wears the selected fill
- * while it's open.
+ * Routines, every agent's in one list: a page, so it sits in the foot's last
+ * row, beside the phone, remote and Settings icons, in the footer rows' own
+ * shape, and wears the selected fill while it's open.
  */
 export function RoutinesRow({
   open,

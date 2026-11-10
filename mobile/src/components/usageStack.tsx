@@ -20,6 +20,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import {
   ADD_ON_MAC,
+  glanceUsed,
   LOW_LEFT,
   NEW_WORK_HERE,
   usersLine,
@@ -29,6 +30,7 @@ import {
   placeLabel,
   SIGN_IN_DIFFERENT,
   USE_THIS_ONE_NOW,
+  type GlanceUsed,
   type KeyLimit,
   type StackKey,
   type UsageGlance,
@@ -144,23 +146,57 @@ export function RefillChip({ text, label }: { text: string; label?: string }) {
 const CHIP_SCALE = 1.6;
 
 /**
+ * The glance's bar, as the desk's (`glanceUsed`): it fills with USE, so 8%
+ * used is a short fill and a full bar is out. Ordinary ink, the warning
+ * role from 80% used. Nothing read draws nothing.
+ */
+export function UsedBar({ used }: { used: GlanceUsed }) {
+  const colors = useColors();
+  const styles = useStyles();
+  if (used.used === null) return null;
+  const high = used.tone === 'high' || used.tone === 'out';
+  return (
+    <View
+      style={styles.total}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="Usage used"
+      accessibilityValue={{ min: 0, max: 100, now: used.used, text: used.figure }}
+    >
+      <View
+        style={[
+          styles.fill,
+          {
+            width: `${Math.max(used.used, 2)}%`,
+            backgroundColor: high ? colors.accentWarning : colors.textPrimary,
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
+/**
  * The Agents list's usage glance, as the desk sidebar's row says it, as one
- * compact card: "Usage", the total across every account ("72% left · 2
- * accounts", `usageGlance.total`, never the account in use), the next refill
- * as a chip, and the total bar under it, a segment per account in the work
- * order. Amber only when the user must act. Opens Usage.
+ * compact card, said as what is USED (`glanceUsed`): "Usage", "8% used"
+ * (the total across every account, never the account in use), the next
+ * refill as a chip, and a bar under it that fills with use, so a short fill
+ * is light use ("92% left" beside a nearly full bar read as 92% used).
+ * Amber from 80% used, or when the user must act. Opens Usage.
  */
 export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   if (glance.keys.length === 0) return null;
   const { row, total } = glance;
+  const used = glanceUsed(glance);
   const count = total.left !== null ? row.count : null;
   // Out everywhere, the refill is a moment ("Refills Sat 10:00 AM"); otherwise a countdown.
   const out = glance.tone === 'limited';
   const chip = out ? row.refill : total.refill ? total.refill.in : null;
   const notRead = total.left !== null ? row.notRead : null;
-  const label = `Usage: ${[row.figure, count, notRead, row.refill].filter(Boolean).join('. ')}`;
+  const label = `Usage: ${used.detail}`;
+  const warn = row.needsYou || used.tone === 'high' || used.tone === 'out';
   return (
     <Pressable
       accessibilityRole="button"
@@ -176,10 +212,10 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
           </T>
           <T
             variant="headline"
-            color={row.needsYou ? colors.accentWarning : colors.textStrong}
+            color={warn ? colors.accentWarning : colors.textStrong}
             numberOfLines={1}
           >
-            {row.figure}
+            {used.figure}
             {count && (
               <T variant="small" color={colors.textMuted}>
                 {' '}
@@ -191,7 +227,7 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
         {!!chip && <RefillChip text={chip} />}
         <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
       </View>
-      <TotalBar total={total} />
+      <UsedBar used={used} />
       {!!notRead && (
         <T variant="caption" color={colors.textMuted}>
           {notRead}
