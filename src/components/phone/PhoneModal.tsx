@@ -441,6 +441,9 @@ interface HeaderProps {
 /** What phone access needs next, or that it's on. */
 function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
   const spin = (key: string) => (busy === key ? <Spinner size="sm" /> : undefined);
+  // On the green bar "Turn off" sits beside "Phone access is on". Beside a
+  // setup step ("Install Tailscale") a bare "Turn off" read as turning off
+  // the thing it asks you to install, so it names what it turns off.
   const turnOff = (
     <Button
       size="compact"
@@ -449,7 +452,7 @@ function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
       leftIcon={spin('disable')}
       onClick={() => onEnable(false)}
     >
-      Turn off
+      {step.kind === 'ready' ? 'Turn off' : 'Turn off phone access'}
     </Button>
   );
 
@@ -544,7 +547,12 @@ function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
             leftIcon={spin('retry')}
             onClick={onRetry}
           >
-            {step.kind === 'approveHttps' ? 'I’ve switched it on' : 'Try again'}
+            {/* Nothing has failed while a step waits on you: you check, not retry. */}
+            {step.kind === 'approveHttps'
+              ? 'I’ve switched it on'
+              : step.kind === 'failed'
+                ? 'Try again'
+                : 'Check again'}
           </Button>
         )}
       </div>
