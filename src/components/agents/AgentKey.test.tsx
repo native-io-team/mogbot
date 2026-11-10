@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import { AgentKey } from './AgentKey';
-import { COLORWAYS, KEY_GEOMETRY } from '../../../packages/companion-protocol/src/agentKeys';
+import {
+  COLORWAYS,
+  KEY_ASK_KEYLINE_WAYS,
+  KEY_GEOMETRY,
+} from '../../../packages/companion-protocol/src/agentKeys';
 
 // Paths from the repo root, where Vitest runs.
 const css = readFileSync('src/styles/features/agent-key.css', 'utf8');
@@ -138,7 +142,7 @@ describe('AgentKey', () => {
     for (const f of frames) expect(f).not.toMatch(/^\s*filter:/m);
   });
 
-  it('keeps a small Needs-your-OK legend sharp: a keyline under it, no glow on it', () => {
+  it('keeps a small Needs-your-OK legend sharp: no glow on it, a shade under it only on a pale face', () => {
     const small = render(
       <AgentKey name="Finance" icon="money" state="needsOk" size="md" />
     ).container;
@@ -165,9 +169,21 @@ describe('AgentKey', () => {
     expect(rule('.agent-key__face::after')).toContain('content: none');
     // The shared numbers (KEY_GEOMETRY.needsOk), the phone's too.
     expect(css).toContain(`--agent-key-keyline: ${KEY_GEOMETRY.needsOk.smallKeyline};`);
-    expect(css).toContain(
-      `color-mix(in srgb, var(--agent-key-depth), var(--agent-key-black) ${KEY_GEOMETRY.needsOk.smallKeylineShade * 100}%)`
+    // The shade shows only on the pale faces, in the cap's own depth colour:
+    // never a dark ring (a near-black keyline read as an outline on a dark cap).
+    const shown = css.slice(
+      css.indexOf(`${smallOk}:is(`),
+      css.indexOf('}', css.indexOf(`${smallOk}:is(`))
     );
+    expect(shown).toContain('display: block;');
+    expect(shown).toContain('stroke: var(--agent-key-depth);');
+    expect(shown).not.toContain('--agent-key-black');
+    for (const c of COLORWAYS) {
+      expect({ c: c.id, shaded: shown.includes(`[data-colorway='${c.id}']`) }).toEqual({
+        c: c.id,
+        shaded: KEY_ASK_KEYLINE_WAYS.has(c.id),
+      });
+    }
   });
 
   it('holds every looping animation still in a hidden window', () => {

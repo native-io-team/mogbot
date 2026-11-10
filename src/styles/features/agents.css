@@ -426,7 +426,7 @@
 
 /* The open list's right edge is clean: the key says working, free or needs
    you, the pill says what's wrong, and unread is the row's ink. Only the
-   collapsed rail, with no words, keeps a state mark on the badge. */
+   collapsed rail, with no words, keeps the unread mark on the badge. */
 .workspace-sidebar:not(.is-hidden) .agents-list__status {
   display: none;
 }
@@ -486,8 +486,8 @@
   transform: rotate(90deg);
 }
 
-/* Collapsed rail: badges only, centred like project badges, with the status
-   riding on the badge's corner so unread and needs-you still show. */
+/* Collapsed rail: badges only, centred like project badges. The key shows
+   working and needs you; unread rides on the badge's corner. */
 .workspace-sidebar.is-hidden .agents-list__row {
   justify-content: center;
   height: calc(var(--control-height-standard) + (var(--spacing-sm) * 2));
@@ -517,7 +517,22 @@
   height: auto;
 }
 
-.workspace-sidebar.is-hidden .agents-list__status .sidebar-row-dot {
+/* The one mark beside an agent's key (AgentMark), and a room's: unread. A
+   small still dot in the strongest neutral ink, the phone's unread dot too;
+   never a loader or an amber or red dot, since the key says working, needs
+   your OK and paused itself. */
+.agent-unread-dot {
+  display: block;
+  flex: 0 0 auto;
+  width: var(--size-sidebar-status-indicator);
+  height: var(--size-sidebar-status-indicator);
+  border-radius: var(--radius-pill);
+  background: var(--text-primary);
+}
+
+/* On the rail it sits on the badge's top-right corner, ringed in the panel's
+   colour so it reads apart from the cap and any light spilling round it. */
+.workspace-sidebar.is-hidden .agents-list__status .agent-unread-dot {
   box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-panel);
 }
 

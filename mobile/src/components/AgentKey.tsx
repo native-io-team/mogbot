@@ -165,8 +165,8 @@ export function AgentKey({
   const pose = keyPose(g, state, pressed);
   const pips = g.details ? pipsFor(look.level) : 0;
   const paused = state === 'paused';
-  // Needs your OK at list size: steady and sharp on a dark keyline, with no
-  // glow and no amber wash, which fill a small icon's gaps (agent-key.css).
+  // Needs your OK at list size: steady and sharp, with no glow and no amber
+  // wash, which fill a small icon's gaps; a pale face's shade under it (agent-key.css).
   const sharp = state === 'needsOk' && g.small;
   const legend = (
     <Legend
@@ -175,7 +175,8 @@ export function AgentKey({
       ink={paint.legend}
       light={pose.light}
       dim={paused}
-      keyline={sharp ? askKeyline(base) : undefined}
+      sharp={sharp}
+      keyline={sharp ? askKeyline(way.id, base) : undefined}
     />
   );
   return (
@@ -187,11 +188,11 @@ export function AgentKey({
     >
       {pose.light !== 'none' && state !== 'live' ? (
         <Breathing kind={pose.light === 'ask' ? 'pulse' : 'breathe'} fill>
-          <Spill g={g} color={spillColor(pose.light, base)} opacity={neutrals.spill} />
+          <Spill g={g} color={spillColor(pose.light, base, neutrals.spillFace)} opacity={neutrals.spill} />
         </Breathing>
       ) : (
         state === 'live' && (
-          <Spill g={g} color={spillColor('warm', base)} opacity={neutrals.spill} />
+          <Spill g={g} color={spillColor('warm', base, neutrals.spillFace)} opacity={neutrals.spill} />
         )
       )}
       <View style={[StyleSheet.absoluteFill, paused && { opacity: neutrals.pausedOpacity }]}>
@@ -303,8 +304,8 @@ export function AgentKey({
 }
 
 /** The spill's colour: the key's own face warmed (working, live), or amber (needs your OK). */
-function spillColor(light: KeyLight, paint: KeyColors): string {
-  return light === 'ask' ? keyLit.askSpill : mix(paint.face, keyLit.spillWarm, 0.75);
+function spillColor(light: KeyLight, paint: KeyColors, faceShare: number): string {
+  return light === 'ask' ? keyLit.askSpill : mix(paint.face, keyLit.spillWarm, faceShare);
 }
 
 /** A vertical light-to-shade wash over a cap or face: white at the top, clear at `at`, black at the foot. */
@@ -389,6 +390,7 @@ function Legend({
   ink,
   light,
   dim,
+  sharp = false,
   keyline,
 }: {
   icon: string;
@@ -396,7 +398,9 @@ function Legend({
   ink: string;
   light: KeyLight;
   dim: boolean;
-  /** A small Needs-your-OK key: drawn on this dark keyline instead of a glow. */
+  /** A small Needs-your-OK key: steady and sharp, no glow under the legend. */
+  sharp?: boolean;
+  /** A small Needs-your-OK key on a pale face: the shade drawn under the legend instead of a glow. */
   keyline?: string;
 }) {
   // A pack icon's drawing arrives with its file (agentKeyPack.ts): until
@@ -470,8 +474,8 @@ function Legend({
       }
       style={[styles.legend, dim && { opacity: KEY_GEOMETRY.paused.legendOpacity }]}
     >
-      {keyline
-        ? strokes(keyline, g.stroke + 2 * KEY_ASK_KEYLINE, 1, true, true)
+      {sharp
+        ? keyline && strokes(keyline, g.stroke + 2 * KEY_ASK_KEYLINE, 1, true, true)
         : lit && (
             <>
               {strokes(glow, g.stroke * wide, light === 'ask' ? 0.2 : 0.16, true)}

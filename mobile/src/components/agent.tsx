@@ -1,7 +1,8 @@
 /**
  * An agent's status mark beside its key (components/AgentKey.tsx): one mark
  * for needs-you (amber), waiting on the Mac (grey), working (a spinner),
- * didn't finish (red), usage limit (amber) or unread (a strong dot); and the
+ * didn't finish (red) or unread (a strong dot); a usage limit is the key's
+ * own paused look, never a dot; and the
  * spinner every loading indicator uses.
  */
 
@@ -57,11 +58,9 @@ export function StatusMark({
     );
   }
   if (agent.status.state === 'working') return <Spinner label="Working" />;
-  if (failure) {
-    return (
-      <Dot color={failure.kind === 'usage_limit' ? colors.accentWarning : colors.accentError} />
-    );
-  }
+  // A usage limit is the key's to say (grey and sunk, it heals by itself):
+  // amber means needs you, only, and the desk's list carries no dot for it.
+  if (failure && failure.kind !== 'usage_limit') return <Dot color={colors.accentError} />;
   if (agent.unread > 0) return <Dot color={colors.textStrong} />;
   return null;
 }

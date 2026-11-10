@@ -26,7 +26,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronRightIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { StatusPill } from '../primitives/StatusPill';
-import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { AgentKey } from './AgentKey';
 import { AgentsBoard } from './AgentsBoard';
 import { AgentWorkingLine } from './AgentWorkingLine';
@@ -721,7 +720,6 @@ export function AgentsTeamView({
                 state="working"
                 working
                 arrived={isNewRow(`working:${agent.id}`)}
-                meta={<PixelLoaderRings size="sm" label={`${agent.name} is working`} />}
                 onOpen={() => openWhere(agent, agent.status.room)}
               />
             ))}

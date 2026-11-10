@@ -677,6 +677,8 @@ export interface KeyNeutrals {
   stem: string;
   stemDepth: string;
   spill: number;
+  /** How much of the key's face colours its spill (the desk's `--agent-key-spill-face`): a spill is light, so on the light theme a dark cap only tints it, never smudges a dark halo. */
+  spillFace: number;
   pausedOpacity: number;
 }
 
@@ -691,6 +693,7 @@ export const keyNeutrals: Record<'dark' | 'light', KeyNeutrals> = {
     stem: '#6e6a61',
     stemDepth: '#45423c',
     spill: 0.42,
+    spillFace: 0.75,
     pausedOpacity: 0.5,
   },
   light: {
@@ -703,6 +706,7 @@ export const keyNeutrals: Record<'dark' | 'light', KeyNeutrals> = {
     stem: '#bdb4a2',
     stemDepth: '#968c78',
     spill: 0.5,
+    spillFace: 0.15,
     pausedOpacity: 0.55,
   },
 };

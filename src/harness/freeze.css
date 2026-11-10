@@ -38,3 +38,13 @@
 [data-harness-freeze] .os-scrollbar {
   visibility: hidden !important;
 }
+
+/*
+ * A working key's glow breathes as two lit copies of its legend crossfading
+ * (agent-key.css). Frozen, both animations end and both copies sit at full
+ * opacity, which blooms a small legend into a blank lit disc no real frame
+ * ever shows. Hold it at the low end of the breath instead.
+ */
+[data-harness-freeze] .agent-key__glow[data-glow='high'] {
+  opacity: 0 !important;
+}

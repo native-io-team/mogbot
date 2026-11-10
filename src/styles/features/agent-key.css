@@ -130,6 +130,11 @@
   --agent-key-stem-depth: #45423c;
   --agent-key-stem-shadow: rgba(0, 0, 0, 0.3);
   --agent-key-spill: 0.42;
+  /* How much of the key's own face colours its spill; the rest is warm light.
+     A spill is light, so it never reads darker than the surface: on a light
+     theme a dark cap's colour (plum, navy, graphite) would smudge a dark
+     halo round the key, an outline, so there it only tints the light. */
+  --agent-key-spill-face: 75%;
   --agent-key-paused-opacity: 0.5;
   /* The board the keys sit on (AgentsBoard): a warm neutral plate. */
   --agent-key-plate-top: #26241f;
@@ -168,6 +173,7 @@
   --agent-key-stem-depth: #968c78;
   --agent-key-stem-shadow: rgba(0, 0, 0, 0.16);
   --agent-key-spill: 0.5;
+  --agent-key-spill-face: 15%;
   --agent-key-paused-opacity: 0.55;
   --agent-key-plate-top: #e2dbcb;
   --agent-key-plate-bottom: #ddd5c4;
@@ -294,9 +300,9 @@
   --agent-key-rest-depth: calc(8 * var(--agent-key-u));
   --agent-key-icon: calc(40 * var(--agent-key-u));
   --agent-key-stroke: 2;
-  /* Needs your OK at list size: the dark keyline either side of the legend,
-     in grid units like the stroke (KEY_GEOMETRY.needsOk.smallKeyline). */
-  --agent-key-keyline: 1.4;
+  /* Needs your OK at list size on a pale face: the shade either side of the
+     legend, in grid units like the stroke (KEY_GEOMETRY.needsOk.smallKeyline). */
+  --agent-key-keyline: 0.9;
   --agent-key-ambient-y: calc(6 * var(--agent-key-u));
   --agent-key-ambient-blur: calc(13 * var(--agent-key-u));
   --agent-key-ambient-spread: calc(-3 * var(--agent-key-u));
@@ -520,7 +526,11 @@
   pointer-events: none;
   background: radial-gradient(
     closest-side,
-    color-mix(in oklab, var(--agent-key-face) 75%, var(--agent-key-spill-warm)),
+    color-mix(
+      in oklab,
+      var(--agent-key-face) var(--agent-key-spill-face),
+      var(--agent-key-spill-warm)
+    ),
     transparent
   );
   opacity: var(--agent-key-spill);
@@ -621,19 +631,18 @@
 .agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk'] {
   --agent-key-ty: calc(-2 * var(--agent-key-v));
   --agent-key-d: calc(var(--agent-key-rest-depth) + 2 * var(--agent-key-v));
-  /* The keyline's shade: its own depth taken halfway to black (the phone's
-     askKeyline, KEY_GEOMETRY.needsOk.smallKeylineShade). */
-  --agent-key-ask-keyline: color-mix(in srgb, var(--agent-key-depth), var(--agent-key-black) 50%);
 }
 
 /* At list size (30 and under) the wide glow that lights a big key's legend
    fills the gaps inside the icon, so a banknote or a receipt blooms into a
-   blank lit tile, and on a pale face the amber barely parts from the cap.
-   There, the legend stays steady and sharp instead: no glow on the icon and
-   no amber wash in the face, and a dark keyline under it (a copy of the
-   legend drawn wider, `smallKeyline` grid units either side, so it scales
-   with the key) that parts amber from any face. What makes it the loudest
-   key on the list stays: proud, deepened, the amber spill pulsing round it. */
+   blank lit tile. There, the legend stays steady and sharp instead: no glow
+   on the icon and no amber wash in the face. What makes it the loudest key
+   on the list stays: proud, deepened, the amber spill pulsing round it.
+   On a dark face the amber parts from the cap on its own and the legend is
+   drawn bare; it never gets an outline. Only a pale face, where amber on
+   the deepened cap barely parts (KEY_ASK_KEYLINE_WAYS), has a shade under
+   the legend: a copy drawn a hair wider in the cap's own depth colour, an
+   engraving's shadow rather than a dark ring. */
 .agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk']
   .agent-key__legend {
   filter: none;
@@ -646,16 +655,24 @@
 .agent-key__keyline {
   display: none;
 }
-.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk']
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk']:is(
+    [data-colorway='putty'],
+    [data-colorway='teal'],
+    [data-colorway='mustard'],
+    [data-colorway='pink'],
+    [data-colorway='sage'],
+    [data-colorway='sky'],
+    [data-colorway='lilac']
+  )
   .agent-key__legend.agent-key__keyline {
   display: block;
-  stroke: var(--agent-key-ask-keyline);
+  stroke: var(--agent-key-depth);
   stroke-width: calc(var(--agent-key-stroke) + 2 * var(--agent-key-keyline));
 }
 .agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk']
   .agent-key__legend.agent-key__keyline[data-fill] {
-  fill: var(--agent-key-ask-keyline);
-  stroke: var(--agent-key-ask-keyline);
+  fill: var(--agent-key-depth);
+  stroke: var(--agent-key-depth);
   stroke-width: calc(2 * var(--agent-key-keyline));
   stroke-linejoin: round;
 }

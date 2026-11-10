@@ -8,6 +8,7 @@
  */
 
 import {
+  KEY_ASK_KEYLINE_WAYS,
   KEY_GEOMETRY as G,
   KEY_LIT_MIX,
   KEY_PIPS_MIN,
@@ -187,12 +188,13 @@ export const KEY_BREATHE_MS = G.working.breatheMs;
 export const KEY_BREATHE_LOW = 0.5;
 
 /**
- * A small key's Needs-your-OK keyline (the desk's `--agent-key-ask-keyline`):
- * its depth shade taken part of the way to black, drawn just wider than the
- * legend under it, so the amber parts from any face at list size.
+ * A small key's Needs-your-OK shade (the desk's `.agent-key__keyline`): on a
+ * pale face only, the cap's own depth colour drawn just wider than the legend
+ * under it. A dark face has none: there the amber parts on its own, and a
+ * dark ring round the icon read as an outline.
  */
-export function askKeyline(paint: KeyColors): string {
-  return mix(keyLit.black, paint.depth, G.needsOk.smallKeylineShade);
+export function askKeyline(colorway: string, paint: KeyColors): string | undefined {
+  return KEY_ASK_KEYLINE_WAYS.has(colorway) ? paint.depth : undefined;
 }
-/** How far the keyline reaches either side of the legend's stroke, in grid units. */
+/** How far the shade reaches either side of the legend's stroke, in grid units. */
 export const KEY_ASK_KEYLINE = G.needsOk.smallKeyline;

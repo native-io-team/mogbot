@@ -147,6 +147,56 @@ function NeedsOk() {
   );
 }
 
+/**
+ * The contact sheet (`?only=sheet`): every lit and unlit state on several
+ * colourways at every size a key is drawn at (112 board, 44 lg, 30 sidebar
+ * row, 24 chat header, 20 menu). Captured with `freeze=off&at=peak` it holds
+ * every loop at its brightest point instead of stacking both glow copies.
+ */
+const SHEET_WAYS = ['plum', 'putty', 'mustard', 'sky', 'navy', 'orange', 'graphite', 'teal'];
+const SHEET_STATES = ['idle', 'working', 'live', 'needsOk', 'paused'] as const;
+const SHEET_SIZES: [AgentKeySize, boolean][] = [
+  ['xl', false],
+  ['lg', false],
+  ['md', false],
+  ['md', true],
+  ['sm', false],
+];
+
+function Sheet() {
+  return (
+    <section data-section="sheet" className="key-gallery__squint">
+      {SHEET_SIZES.map(([size, header]) => (
+        <div key={`${size}${header}`}>
+          <h2>{header ? '24 · header' : size}</h2>
+          {SHEET_STATES.map((st) => (
+            <div key={st} className="key-gallery__row key-gallery__row--tight">
+              {SHEET_WAYS.map((c) => (
+                <AgentKey
+                  key={c}
+                  name={c}
+                  colorway={c}
+                  icon={st === 'needsOk' ? 'money' : 'inbox'}
+                  state={st}
+                  size={size}
+                  className={header ? 'key-gallery__header-key' : undefined}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+if (params.get('at') === 'peak') {
+  const style = document.createElement('style');
+  style.textContent =
+    '.agent-key, .agent-key *, .agent-key::before, .agent-key *::after { animation-play-state: paused !important; animation-delay: -1.2s !important; }';
+  document.head.appendChild(style);
+}
+
 const inbox = { name: 'Inbox', colorway: 'blue', icon: 'inbox', boundKey: 'I' } as const;
 
 function Gallery() {
@@ -154,6 +204,13 @@ function Gallery() {
     return (
       <main className="key-gallery">
         <NeedsOk />
+      </main>
+    );
+  }
+  if (params.get('only') === 'sheet') {
+    return (
+      <main className="key-gallery">
+        <Sheet />
       </main>
     );
   }

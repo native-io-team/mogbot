@@ -320,16 +320,31 @@ export const KEY_GEOMETRY = {
     deeper: 0.14,
     /**
      * At list size (a small key) the wide glow would fill the icon's gaps, so
-     * the legend holds still with no glow, on a dark keyline `smallKeyline`
-     * grid units either side of its stroke, in its depth shade taken
-     * `smallKeylineShade` of the way to black: amber parts from any face.
+     * the legend holds still with no glow. On a dark face it is drawn bare
+     * (a near-black keyline there read as an outline round the icon). Only a
+     * pale face (`KEY_ASK_KEYLINE_WAYS`) has a shade under it, `smallKeyline`
+     * grid units either side of the stroke, in the cap's own depth colour.
      */
-    smallKeyline: 1.4,
-    smallKeylineShade: 0.5,
+    smallKeyline: 0.9,
   },
   /** Paused: the cap drained of colour, faded, sunk halfway. */
   paused: { saturate: 0.12, legendOpacity: 0.55 },
 } as const;
+
+/**
+ * The pale colourways, where an amber Needs-your-OK legend barely parts from
+ * the deepened cap at list size (under 3:1), so it gets a shade in the cap's
+ * own depth colour. Every other face is drawn bare, never outlined.
+ */
+export const KEY_ASK_KEYLINE_WAYS: ReadonlySet<string> = new Set([
+  'putty',
+  'teal',
+  'mustard',
+  'pink',
+  'sage',
+  'sky',
+  'lilac',
+]);
 
 /**
  * How far a lit face deepens toward its own depth shade (the site's

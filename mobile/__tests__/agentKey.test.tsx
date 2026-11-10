@@ -203,22 +203,40 @@ describe('the key', () => {
     expect(mockRepeat).toHaveBeenCalled();
   });
 
-  it('keeps a small Needs-your-OK legend sharp: steady, on a dark keyline, the spill still pulsing', async () => {
-    await render(<AgentKey name="Finance" icon="money" state="needsOk" size={keySize.md} />);
+  it('keeps a small Needs-your-OK legend sharp: steady, the spill still pulsing, no dark ring', async () => {
+    await render(
+      <AgentKey name="Finance" icon="money" colorway="plum" state="needsOk" size={keySize.md} />
+    );
     // One pulse, the spill's; the legend holds still so it never fades on the face.
     expect(screen.getAllByTestId('agent-key-pulse', hidden)).toHaveLength(1);
     expect(screen.getByTestId('agent-key-legend-ask', hidden)).toBeTruthy();
     const strokes = paths().map((p) => p.stroke?.payload);
-    expect(strokes).toContain(argb(askKeyline(keyColorways.blue)));
     expect(strokes).toContain(argb(keyLit.ask));
+    // A dark face's legend is drawn bare: one colour of stroke, the amber.
+    expect(new Set(strokes)).toEqual(new Set([argb(keyLit.ask)]));
     // No amber glow ring on the icon.
     expect(strokes).not.toContain(argb(keyLit.askGlow));
   });
 
-  it('parts the amber legend from every colourway’s keyline at list size', () => {
+  it('shades a pale face’s amber legend in the cap’s own depth colour, never black', async () => {
+    await render(
+      <AgentKey name="Finance" icon="money" colorway="putty" state="needsOk" size={keySize.md} />
+    );
+    const strokes = paths().map((p) => p.stroke?.payload);
+    expect(strokes).toContain(argb(keyColorways.putty.depth));
+    expect(strokes).toContain(argb(keyLit.ask));
+  });
+
+  it('draws the amber bare only where it parts from the lit face on its own', () => {
     for (const [id, paint] of Object.entries(keyColorways)) {
-      const ratio = contrast(keyLit.ask, askKeyline(paint));
-      expect({ id, ok: ratio >= 4.5 }).toEqual({ id, ok: true });
+      const line = askKeyline(id, paint);
+      if (line) {
+        expect(line).toBe(paint.depth);
+        continue;
+      }
+      // Orange sits just under 3:1 by luminance and parts by hue (amber on red-orange).
+      const face = keyPaint(id, paint, 'needsOk').face;
+      expect({ id, ok: contrast(keyLit.ask, face) >= 2.8 }).toEqual({ id, ok: true });
     }
   });
 

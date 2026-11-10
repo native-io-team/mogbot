@@ -1,8 +1,8 @@
 /**
  * Below the compact breakpoint the sidebar is gone, so the header's title is
- * a menu of every agent and Home. Each item carries the sidebar's own
- * marks (the loader, the attention and unread dots), so state reads the same
- * here as in the list it stands in for.
+ * a menu of every agent and Home. Each item's key shows its state (pressed
+ * and lit while it works, amber while it needs you) as the list's does, and
+ * the one mark beside it is the list's: unread.
  *
  * @module components/agents/AgentSwitcher
  */
@@ -11,9 +11,8 @@ import type { ReactNode } from 'react';
 import { CheckIcon, ChevronIcon, HomeIcon } from '@/components/icons';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
-import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { AgentKey } from './AgentKey';
-import { failedTurn, needsYou, sortAgents, type Agent } from '../../lib/agents';
+import { agentKeyState, sortAgents, type Agent } from '../../lib/agents';
 
 interface AgentSwitcherProps {
   agents: Agent[];
@@ -26,21 +25,16 @@ interface AgentSwitcherProps {
   onGoHome: () => void;
 }
 
-/** The sidebar row's status slot, for a menu item. */
+/**
+ * The one mark beside an agent's key: unread, a small quiet dot in neutral
+ * ink. Everything else is the key's to say: working (pressed, lit,
+ * breathing), needs your OK (proud, amber, pulsing), paused at a usage limit
+ * (grey, sunk); a turn that didn't finish says so in the row's words and its
+ * chat. No loader and no amber or red dot on top of a key: that was three
+ * signals stacked on one that already said it.
+ */
 export function AgentMark({ agent }: { agent: Agent }) {
-  const failure = failedTurn(agent);
-  if (needsYou(agent)) {
-    return <span className="sidebar-row-dot dot-attention" aria-label="Needs your OK" />;
-  }
-  if (agent.status.state === 'working') {
-    return <PixelLoaderRings size="sm" label={`${agent.name} is working`} />;
-  }
-  // Amber means one thing: it needs you. A usage limit heals on its own, so
-  // its row says when in words and carries no dot.
-  if (failure && failure.kind !== 'usage_limit') {
-    return <span className="sidebar-row-dot dot-error" aria-label="Didn’t finish" />;
-  }
-  if (agent.unread > 0) return <span className="sidebar-row-dot dot-unread" aria-label="Unread" />;
+  if (agent.unread > 0) return <span className="agent-unread-dot" aria-label="Unread" />;
   return null;
 }
 
@@ -79,7 +73,15 @@ export function AgentSwitcher({
         .map((a) => (
           <DropdownItem
             key={a.id}
-            icon={<AgentKey id={a.id} name={a.name} color={a.color} size="sm" />}
+            icon={
+              <AgentKey
+                id={a.id}
+                name={a.name}
+                color={a.color}
+                state={agentKeyState(a)}
+                size="sm"
+              />
+            }
             onSelect={() => onOpenAgent(a.id)}
           >
             <span className="agent-model-menu__label">{a.name}</span>

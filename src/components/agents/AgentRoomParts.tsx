@@ -18,7 +18,6 @@ import {
 } from '../primitives/ContextMenu';
 import { StatusPill } from '../primitives/StatusPill';
 import { TextButton } from '../primitives/TextButton';
-import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { agentInitials } from '../../lib/agentInitials';
 import { AgentKey } from './AgentKey';
 import { useAgentsSelector } from '../../lib/agentsStore';
@@ -105,7 +104,6 @@ export const RoomRow = memo(function RoomRow({
   actions: RoomActions;
 }) {
   const line = roomSubtitle(room, members);
-  const { working } = roomActivity(room, members);
   const asking = line.asking !== undefined;
   // Read already when it's the one open (a muted room's count stays 0).
   const unread = room.unread > 0 && !current;
@@ -145,14 +143,10 @@ export const RoomRow = memo(function RoomRow({
                 </span>
               ))}
           </span>
+          {/* The same one mark as an agent's row: unread. Who is replying or
+              waiting on you is in the line, and on the members' own keys. */}
           <span className="agents-list__status">
-            {asking ? (
-              <span className="sidebar-row-dot dot-attention" aria-label="Needs your OK" />
-            ) : working.length > 0 ? (
-              <PixelLoaderRings size="sm" label={`Replying in ${room.name}`} />
-            ) : unread ? (
-              <span className="sidebar-row-dot dot-unread" aria-label="Unread" />
-            ) : null}
+            {unread && <span className="agent-unread-dot" aria-label="Unread" />}
           </span>
         </button>
       </ContextMenuTrigger>

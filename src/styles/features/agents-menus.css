@@ -259,7 +259,7 @@
   color: var(--text-secondary);
 }
 
-/* The sidebar's status slot, so its loader keeps its size in a menu. */
+/* The sidebar's status slot, so the unread dot sits where the check would. */
 .agent-model-menu .agent-switcher__mark {
   flex: 0 0 auto;
   justify-content: center;
