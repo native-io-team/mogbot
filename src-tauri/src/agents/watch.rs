@@ -10,9 +10,13 @@
 //! - **A new file in a folder**: the folder's listing. Free.
 //! - **Linear, email, anything else** (`Source::LinearAssigned`,
 //!   `Source::Custom`): there's no CLI we can call, only one of the user's
-//!   Claude Code connectors, so the check is one short headless Claude Code
-//!   call on Haiku, sealed to that connector's read tools
-//!   (`agents::watch_seal`). What it costs is what Claude Code reports,
+//!   connections (ours, from Apps, or one set up in Claude Code), so the
+//!   check is one short headless model call sealed to that connection's
+//!   read tools: Claude Code on Haiku (`agents::watch_seal`), or Codex on
+//!   a small model for one of our own connections
+//!   (`agents::watch_seal_codex`). The agent's own engine runs it when it
+//!   can, else the other ([`pick_engine`]), and Check now and the morning
+//!   brief say which ran. What it costs is what the engine reports,
 //!   counted as a check (not a turn) in the agent's and the routine's usage.
 //!   Never estimated. At most [`DEFAULT_MAX_CHECKS_PER_DAY`] a day each, and
 //!   one an agent sets up itself needs the user's Allow first.
@@ -50,17 +54,19 @@ use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 use tauri::AppHandle;
 
+use super::engine::Engine;
 use super::runner;
 use super::runs;
 use super::schedule::{self, CheckIn, CheckInMark, Refused};
 use super::store::{self, MessageKind};
 use super::usage::{self, UsageTotals};
 use super::watch_seal;
+use super::watch_seal_codex;
 use crate::errors::CommandError;
 
 const MINUTE_MS: i64 = 60_000;
 pub const DEFAULT_EVERY_MINUTES: u32 = 10;
-/// A model check's default: it's a Claude Code call each time.
+/// A model check's default: it's a model call each time.
 pub const DEFAULT_MODEL_EVERY_MINUTES: u32 = 30;
 pub const MAX_EVERY_MINUTES: u32 = 24 * 60;
 /// Ids remembered per routine whose source lists only a window (GitHub's
@@ -294,12 +300,12 @@ pub fn found_words(source: &Source, n: usize) -> String {
     }
 }
 
-/// "checks every 30 min, each a short Claude Code call (at most 24 a day)"
+/// "checks every 30 min, each a short model call (at most 24 a day)"
 /// or "checks every 5 min, free": the chat line a new routine leaves.
 pub fn cost_words(w: &Watch) -> String {
     if w.source.uses_model() {
         format!(
-            "checks every {} min, each a short Claude Code call (at most {} a day)",
+            "checks every {} min, each a short model call (at most {} a day)",
             w.every_minutes,
             w.daily_cap()
         )
@@ -322,7 +328,7 @@ pub fn list_line(w: &Watch) -> String {
     }
     if w.source.uses_model() {
         line.push_str(&format!(
-            " (each check is a short Claude Code call, at most {} a day)",
+            " (each check is a short model call, at most {} a day)",
             w.daily_cap()
         ));
     }
@@ -589,9 +595,7 @@ pub fn validate(source: Source, every_minutes: u32) -> Result<(Source, u32), Ref
     if every_minutes < min && source.uses_model() {
         return Err(invalid(
             "every",
-            format!(
-                "Each check is a Claude Code call, so check every {min} minutes at the most often."
-            ),
+            format!("Each check is a model call, so check every {min} minutes at the most often."),
         ));
     }
     if every_minutes < min || every_minutes > MAX_EVERY_MINUTES {
@@ -796,6 +800,7 @@ pub fn assigned_found(pages: Vec<SearchPage>) -> Found {
         complete,
         keep: Vec::new(),
         coverage,
+        engine: None,
     }
 }
 
@@ -871,6 +876,7 @@ pub fn list_folder(folder: &Path, now: i64) -> Result<Found, String> {
         complete: true,
         keep: settling,
         coverage: None,
+        engine: None,
     })
 }
 
@@ -1009,6 +1015,8 @@ pub struct Found {
     pub keep: Vec<String>,
     /// What part of the source this covers, when not all of it.
     pub coverage: Option<String>,
+    /// The engine a model check ran on, which the line about it names.
+    pub engine: Option<Engine>,
 }
 
 impl Found {
@@ -1242,48 +1250,209 @@ fn route_now(agent_id: &str, source: &Source) -> Result<Route, String> {
     )
 }
 
+/// Whether an engine is here to run a sealed check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ready {
+    Yes,
+    /// Not installed (or, for Codex, not signed in).
+    No,
+    /// Codex older than the seal was verified on (`watch_seal_codex::SINCE`).
+    TooOld,
+}
+
+/// Which engine runs a model check: the agent's own when it is ready and
+/// can seal this route, else the other one. Claude Code seals either route;
+/// Codex only our own connections, through the relay, since a server from a
+/// CLI's own config would need that config (and any secret in it) on
+/// Codex's command line (`watch_seal_codex`).
+pub fn pick_engine(
+    preferred: Engine,
+    route: &Route,
+    ready: impl Fn(Engine) -> Ready,
+) -> Result<Engine, String> {
+    let can_seal = |e: Engine| match (e, route) {
+        (Engine::Claude, _) => true,
+        (Engine::Codex, Route::Ours { .. }) => true,
+        (Engine::Codex, Route::ClaudeCode(_)) => false,
+    };
+    let other = match preferred {
+        Engine::Claude => Engine::Codex,
+        Engine::Codex => Engine::Claude,
+    };
+    if let Some(e) = [preferred, other]
+        .into_iter()
+        .find(|e| can_seal(*e) && ready(*e) == Ready::Yes)
+    {
+        return Ok(e);
+    }
+    Err(match (route, ready(Engine::Codex)) {
+        (Route::ClaudeCode(c), Ready::Yes) => format!(
+            "{} is set up in Claude Code, which isn't on this Mac. Connect it in Apps so Codex can check it.",
+            c.name
+        ),
+        (_, Ready::TooOld) if ready(Engine::Claude) != Ready::Yes => format!(
+            "Checks on Codex need Codex {}.{} or later. Update Codex.",
+            watch_seal_codex::SINCE.0,
+            watch_seal_codex::SINCE.1
+        ),
+        _ => "This routine's check runs on Claude Code or Codex, and neither is set up on this Mac."
+            .into(),
+    })
+}
+
+/// [`Ready`] for each engine on this Mac now. Claude Code: installed (a
+/// signed-out one says so in its own answer). Codex: installed, new enough
+/// and signed in, since Claude Code may be there to fall back on.
+async fn readiness() -> (
+    Ready,
+    Ready,
+    Option<std::path::PathBuf>,
+    Option<std::path::PathBuf>,
+) {
+    let (claude, codex) = tokio::join!(
+        super::engine::binary(Engine::Claude),
+        super::engine::binary(Engine::Codex)
+    );
+    let claude_ready = if claude.is_some() {
+        Ready::Yes
+    } else {
+        Ready::No
+    };
+    let codex_ready = match &codex {
+        None => Ready::No,
+        Some(b) if !watch_seal_codex::can_seal(b).await => Ready::TooOld,
+        Some(_) if !super::engine::signed_in(Engine::Codex).await => Ready::No,
+        Some(_) => Ready::Yes,
+    };
+    (claude_ready, codex_ready, claude, codex)
+}
+
 async fn model_check(
     app: &AppHandle,
     agent_id: &str,
     source: &Source,
 ) -> (Result<Found, String>, Option<UsageTotals>) {
-    let binary = tokio::task::spawn_blocking(|| {
-        crate::commands::claude::find_validated_binary("claude", "--version")
-    })
-    .await
-    .ok()
-    .flatten();
-    let Some(binary) = binary else {
-        return (
-            Err("This routine checks through Claude Code, which isn't installed.".into()),
-            None,
-        );
-    };
     let route = match route_now(agent_id, source) {
         Ok(r) => r,
         Err(why) => return (Err(why), None),
     };
-    // Ours: the relay, opened for this check alone (reads only, no cards),
-    // its secret revoked when `_sealed` drops at the end of the check.
+    let preferred = store::get(agent_id).map(|a| a.engine).unwrap_or_default();
+    let (claude_ready, codex_ready, claude, codex) = readiness().await;
+    let engine = match pick_engine(preferred, &route, |e| match e {
+        Engine::Claude => claude_ready,
+        Engine::Codex => codex_ready,
+    }) {
+        Ok(e) => e,
+        Err(why) => return (Err(why), None),
+    };
+    let (found, usage) = match (engine, route) {
+        (Engine::Codex, Route::Ours { server_key }) => {
+            let Some(binary) = codex else {
+                return (Err("Codex isn't installed.".into()), None);
+            };
+            codex_check(app, agent_id, source, &binary, &server_key).await
+        }
+        (_, route) => {
+            let Some(binary) = claude else {
+                return (Err("Claude Code isn't installed.".into()), None);
+            };
+            claude_check(app, agent_id, source, &binary, route).await
+        }
+    };
+    let found = found.map(|f| Found {
+        engine: Some(engine),
+        ..f
+    });
+    (found, usage)
+}
+
+/// Our connection's relay, opened for this check alone (reads only, no
+/// cards): its URL and the check's own secret, revoked when the returned
+/// access drops at the end of the check.
+async fn open_relay(
+    app: &AppHandle,
+    agent_id: &str,
+    server_key: &str,
+) -> Result<(String, super::broker::SealedAccess), String> {
+    let port = crate::agent_bridge::start_global_agent_bridge(app.clone())
+        .await
+        .map(|(port, _)| port)
+        .map_err(|e| format!("Couldn't open the app's connection: {e}"))?;
+    let sealed = super::broker::grant_sealed(agent_id, server_key);
+    Ok((super::reach::connection_url(port, server_key), sealed))
+}
+
+/// The check on Codex, sealed by `watch_seal_codex`: our relay is its one
+/// server, its secret in the environment, never argv.
+async fn codex_check(
+    app: &AppHandle,
+    agent_id: &str,
+    source: &Source,
+    binary: &Path,
+    server_key: &str,
+) -> (Result<Found, String>, Option<UsageTotals>) {
+    if !watch_seal_codex::key_is_plain(server_key) {
+        return (
+            Err("This app's name can't be used for a check on Codex.".into()),
+            None,
+        );
+    }
+    let (url, sealed) = match open_relay(app, agent_id, server_key).await {
+        Ok(r) => r,
+        Err(why) => return (Err(why), None),
+    };
+    let dir = watch_seal::work_dir();
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return (Err(format!("Couldn't make the check's folder: {e}")), None);
+    }
+    let model = watch_seal_codex::small_model_here();
+    let mut cmd = crate::utils::create_command(binary);
+    cmd.args(watch_seal_codex::args(server_key, &url, model.as_deref()));
+    runner::strip_session_env(&mut cmd);
+    cmd.env("PATH", crate::utils::get_extended_path());
+    cmd.env(watch_seal_codex::TOKEN_ENV, sealed.secret());
+    if let Some(home) = dirs::home_dir() {
+        cmd.env("HOME", home);
+    }
+    // An empty folder of its own: nothing of the user's is in reach.
+    cmd.current_dir(&dir);
+    let output = crate::external_command::run_with_timeout_stdin(
+        tokio::process::Command::from(cmd),
+        &model_check_prompt(source),
+        "Codex (When… routine check)",
+        MODEL_TIMEOUT_SECS,
+    )
+    .await;
+    drop(sealed);
+    let output = match output {
+        Ok(o) => o,
+        Err(e) => return (Err(e.to_string()), None),
+    };
+    let (reply, usage) =
+        watch_seal_codex::parse_result(&String::from_utf8_lossy(&output.stdout), server_key);
+    let found = reply
+        .and_then(|text| parse_model_items(&text))
+        .map(Found::window);
+    (found, usage)
+}
+
+/// The check on Claude Code, sealed by `watch_seal`.
+async fn claude_check(
+    app: &AppHandle,
+    agent_id: &str,
+    source: &Source,
+    binary: &Path,
+    route: Route,
+) -> (Result<Found, String>, Option<UsageTotals>) {
     let (connector, _sealed) = match route {
         Route::ClaudeCode(c) => (c, None),
-        Route::Ours { server_key } => {
-            let port = match crate::agent_bridge::start_global_agent_bridge(app.clone()).await {
-                Ok((port, _)) => port,
-                Err(e) => {
-                    return (
-                        Err(format!("Couldn't open the app's connection: {e}")),
-                        None,
-                    )
-                }
-            };
-            let sealed = super::broker::grant_sealed(agent_id, &server_key);
-            let url = super::reach::connection_url(port, &server_key);
-            (
+        Route::Ours { server_key } => match open_relay(app, agent_id, &server_key).await {
+            Ok((url, sealed)) => (
                 watch_seal::relay_connector(&server_key, &url, sealed.secret()),
                 Some(sealed),
-            )
-        }
+            ),
+            Err(why) => return (Err(why), None),
+        },
     };
     let dir = watch_seal::work_dir();
     if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -1523,6 +1692,9 @@ pub struct CheckOutcome {
     /// It paused itself after this check.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub paused: Option<String>,
+    /// A model check: what it ran on ("Codex"), for the line about it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engine: Option<String>,
 }
 
 /// What a check did to the registry, and the wake it calls for.
@@ -1568,6 +1740,7 @@ pub fn apply_check(
     }
     match result {
         Ok(found) => {
+            applied.outcome.engine = found.engine.map(|e| e.label().to_string());
             applied.outcome.baseline = w.baseline_at.is_none();
             // An empty first answer from a model check may be a connector
             // that wasn't ready: it only counts once a second one agrees.
@@ -1705,7 +1878,7 @@ async fn checked(
         Err(NotNow::Capped(cap)) => {
             let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
             return Err(CommandError::expected(format!(
-                "It has made its {cap} checks for today (each is a Claude Code call). It checks again tomorrow."
+                "It has made its {cap} checks for today (each is a model call). It checks again tomorrow."
             )));
         }
     };
@@ -1901,7 +2074,7 @@ async fn tick(app: &AppHandle) {
                 }
                 Some(Due::Check) => {
                     let uses_model = c.watch.as_ref().is_some_and(|w| w.source.uses_model());
-                    // At most one model check a tick: each is a Claude Code call.
+                    // At most one model check a tick: each is a model call.
                     if uses_model {
                         if model_checks >= 1 {
                             continue;
@@ -1988,7 +2161,7 @@ pub(crate) fn create_in(
     // It runs in the conversation it was set up in.
     super::conversations::note_routine(agent_id, &check_in.id);
     let cost = if source.uses_model() {
-        " Each check is a short read-only Claude Code call on Haiku, at most 24 a day, which counts toward the user's usage; say so."
+        " Each check is a short read-only model call (Haiku on Claude Code, or a small model on Codex), at most 24 a day, which counts toward the user's usage; say so."
     } else {
         " Checks cost nothing."
     };
