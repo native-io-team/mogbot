@@ -143,6 +143,21 @@ never whole into memory. Thumbnails are refused (422) for images over
 last 128 are cached. `agents.memorySuggest` runs two at a time and is
 audited. `agents.fetchPath` copies at most 25 MB even if the file grows.
 
+**Requests the phone makes** (`lib/reads.ts`, through `session.call`): a
+read (`READ_ONLY_METHODS`) already on its way with the same params answers
+every asker, so two screens or a quick tap back and forth are one request;
+at most 6 reads are at the Mac at once and the rest wait their turn (changes
+never wait); and the last answer to each read is kept for this Mac. Usage,
+accounts and quota start from it and read again only when it is 20 s old
+(`READ_FRESH_MS`) or a change was sent since (`agents.focus` and
+`rooms.focus` aren't changes), so switching tabs asks nothing. Focus is sent
+150 ms after the chat on screen settles, and only when it differs from what
+the socket holds: tapping in and out of chats is one `agents.focus`. The
+agents list reads a waiting agent's newest page once per connection, not on
+every reconnect; after a snapshot (the Mac restarted) every chat is read
+again. The offline copy is written at most every 4 s while events arrive,
+and at once when the app goes to the background.
+
 ### Methods
 
 `router::METHODS` is what the Mac serves and lists in `welcome.methods`; the
@@ -1637,6 +1652,15 @@ in from the agents list, and 20 s of scrolling back (frame times, long tasks,
 how far it got), into `perf-long-chat.json` in `--out`. It runs against Metro's
 development build, so read the numbers as relative. `QA_PROFILE=1` adds
 `perf-open.cpuprofile` (the last open from the agents list) and `perf-scroll.cpuprofile`.
+
+`--phases net` (not in the default run) counts what the phone costs the Mac
+and itself: every request the mock saw (`GET /dev/requests` on the mock, by
+method, with the most inside any 250 ms) and, through a stand-in React
+DevTools hook, commits, component renders and the component each render
+started at. Scenarios: a cold start on a saved copy, 10 s idle, the tabs
+three times round, a chat opened three times, tapping between two chats,
+the Mac killed and back, and a reply streaming in (in the chat, then from
+the agents list). Into `net.json` in `--out`.
 
 The ports also read `QA_WEB_PORT`, `QA_MOCK_PORT` and `QA_CDP_PORT`; `--verbose`
 streams the mock's and Expo's output. With a `TMPDIR` longer than 60 characters

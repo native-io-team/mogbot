@@ -3512,6 +3512,19 @@ async function netAndRenders(page) {
     );
     await sleep(10_000);
   });
+  // The same, watched from the agents list: what one agent's turn costs the rows.
+  await sleep(5000);
+  results.streamList = await measured(page, 'streamList', async () => {
+    await page.type('And another long one', 'textarea');
+    await sleep(200);
+    await page.clickWhere(
+      `() => [...document.querySelectorAll('[aria-label]')].find((e) => /^(Send|Queue)/.test(e.getAttribute('aria-label')))`,
+      'Send'
+    );
+    await sleep(300);
+    await page.eval('history.back()');
+    await sleep(10_000);
+  });
   await writeFile(path.join(OUT, 'net.json'), JSON.stringify(results, null, 2));
   log('net', 'written', path.join(OUT, 'net.json'));
 }
