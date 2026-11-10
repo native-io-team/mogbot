@@ -163,7 +163,7 @@ export function AgentKey({
                 right: 0,
                 top: (size * 0.32 - line) / 2,
                 height: line,
-                borderRadius: 1,
+                borderRadius: line / 2,
                 backgroundColor: neutrals.newPlus,
               }}
             />
@@ -174,7 +174,7 @@ export function AgentKey({
                 bottom: 0,
                 left: (size * 0.32 - line) / 2,
                 width: line,
-                borderRadius: 1,
+                borderRadius: line / 2,
                 backgroundColor: neutrals.newPlus,
               }}
             />
