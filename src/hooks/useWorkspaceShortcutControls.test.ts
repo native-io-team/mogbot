@@ -101,15 +101,15 @@ describe('useWorkspaceShortcutControls', () => {
       setWorkspaceTab,
     });
 
-    nativeListeners.get('switch-workspace-mode-shortcut')?.({ payload: 2 });
+    nativeListeners.get('menu://action')?.({ payload: 'switch_workspace_mode_2' });
     expect(setIsPreviewHidden).toHaveBeenCalledWith(true);
 
-    nativeListeners.get('toggle-edit-mode-shortcut')?.({ payload: undefined });
+    nativeListeners.get('menu://action')?.({ payload: 'toggle_edit_mode' });
     expect(toggleEditMode).toHaveBeenCalledTimes(1);
 
     const togglePreviewLogs = vi.fn();
     renderControls({ togglePreviewLogs });
-    nativeListeners.get('toggle-inspector-shortcut')?.({ payload: undefined });
+    nativeListeners.get('menu://action')?.({ payload: 'toggle_inspector' });
     expect(togglePreviewLogs).toHaveBeenCalledTimes(1);
   });
 

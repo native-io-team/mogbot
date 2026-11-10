@@ -38,6 +38,19 @@ export async function setWindowTitle(title: string): Promise<void> {
   return invoke('set_window_title', { title });
 }
 
+/** A new window on the app's home (File → New Window; ⌥⌘N). */
+export async function openNewWindow(): Promise<string> {
+  return invoke<string>('open_new_window');
+}
+
+/**
+ * Close this window if it isn't the main one (whose close is a quit, or a
+ * hide while agents keep running). True when it closed.
+ */
+export async function closeSecondaryWindow(): Promise<boolean> {
+  return invoke<boolean>('close_secondary_window');
+}
+
 /**
  * Get the current window's label.
  * Used for multi-window support to identify which window is making requests.

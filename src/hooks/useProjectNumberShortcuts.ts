@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import type { Project } from '../lib/project';
 import { sessionRegistry } from '../lib/sessionRegistry';
 import { useModal } from '../contexts/ModalContext';
 import { basename } from '../lib/paths';
-import { isMac } from '../lib/setup';
+import { menuNumber, menuOwnsShortcuts, onMenuAction } from '../lib/nativeMenu';
 import { familyRootOf, ensureFamilyRoot } from '../lib/worktreeFamilies';
 import { getActiveProjectOrder } from '../lib/activeProjectOrder';
 
@@ -13,58 +12,74 @@ interface Params {
   pinnedPaths: readonly string[];
   /** Project-open handler, same as the one the sidebar uses. */
   handleSelectProject: (project: Project) => void | Promise<void>;
+  /** Agents is showing: the menu's ⌘1…⌘9 open agents there (hooks/useNativeMenu). */
+  inAgents?: boolean;
 }
 
 /**
- * Global Cmd/Ctrl+1..9 shortcuts to jump to the Nth project in the sidebar's
- * effective order: pinned rows first, then active sessions
- * (deduped against pinned, using the Active group's saved order with a
- * deterministic name fallback — matches `WorkspaceSidebar`).
- *
- * The ordering is read fresh on each keystroke from a ref + the session
- * registry, so pin changes / new active sessions are reflected without
- * re-registering the listener.
+ * The projects ⌘1…⌘9 lead to, in the sidebar's effective order: pinned rows
+ * first, then active sessions (deduped against pinned, using the Active
+ * group's saved order with a deterministic name fallback — matches
+ * `WorkspaceSidebar`). One entry per repository family (a project and its
+ * worktrees are one sidebar row); roots come from the shared cache, and
+ * resolution starts for any session path not yet resolved so the order
+ * converges.
  */
-export function useProjectNumberShortcuts({ pinnedPaths, handleSelectProject }: Params): void {
+export function projectShortcutOrder(pins: readonly string[]): string[] {
+  const pinSet = new Set(pins);
+  const snaps = sessionRegistry.snapshotAll();
+  for (const s of snaps) ensureFamilyRoot(s.projectPath);
+  const seen = new Set<string>();
+  const activePaths = snaps
+    .map((s) => familyRootOf(s.projectPath))
+    .filter((p) => !pinSet.has(p))
+    .filter((p) => (seen.has(p) ? false : (seen.add(p), true)))
+    .sort((a, b) => {
+      const order = getActiveProjectOrder();
+      const aRank = order.indexOf(a);
+      const bRank = order.indexOf(b);
+      if (aRank >= 0 || bRank >= 0) {
+        if (aRank < 0) return 1;
+        if (bRank < 0) return -1;
+        if (aRank !== bRank) return aRank - bRank;
+      }
+      return (basename(a) || a).localeCompare(basename(b) || b) || a.localeCompare(b);
+    });
+  return [...pins, ...activePaths];
+}
+
+/**
+ * Global Cmd/Ctrl+1..9 shortcuts to jump to the Nth project in
+ * {@link projectShortcutOrder}.
+ *
+ * On macOS the Go menu owns ⌘1…⌘9 (so they work from the preview's iframe
+ * too) and names the projects; its choice arrives here. Elsewhere it's
+ * Ctrl+1..9 as a key handler. The order is read fresh on each press, so pin
+ * changes and new sessions are reflected without re-registering.
+ */
+export function useProjectNumberShortcuts({
+  pinnedPaths,
+  handleSelectProject,
+  inAgents = false,
+}: Params): void {
   const palette = useModal('commandPalette');
-  const latest = useRef({ pinnedPaths, handleSelectProject, closePalette: palette.close });
+  const latest = useRef({
+    pinnedPaths,
+    handleSelectProject,
+    closePalette: palette.close,
+    inAgents,
+  });
 
   useEffect(() => {
-    latest.current = { pinnedPaths, handleSelectProject, closePalette: palette.close };
-  }, [pinnedPaths, handleSelectProject, palette.close]);
+    latest.current = { pinnedPaths, handleSelectProject, closePalette: palette.close, inAgents };
+  }, [pinnedPaths, handleSelectProject, palette.close, inAgents]);
 
   useEffect(() => {
     const switchProject = (index: number): boolean => {
       if (!Number.isInteger(index) || index < 0 || index > 8) return false;
 
       const { pinnedPaths: pins, handleSelectProject: open, closePalette } = latest.current;
-
-      const pinSet = new Set(pins);
-      // One entry per repository family (a project and its worktrees are one
-      // sidebar row), name-ordered — must mirror WorkspaceSidebar's grouping.
-      // Roots come from the shared git-truth cache; kick off resolution for
-      // any session path not yet resolved so the ordering converges.
-      const snaps = sessionRegistry.snapshotAll();
-      for (const s of snaps) ensureFamilyRoot(s.projectPath);
-      const seen = new Set<string>();
-      const activePaths = snaps
-        .map((s) => familyRootOf(s.projectPath))
-        .filter((p) => !pinSet.has(p))
-        .filter((p) => (seen.has(p) ? false : (seen.add(p), true)))
-        .sort((a, b) => {
-          const order = getActiveProjectOrder();
-          const aRank = order.indexOf(a);
-          const bRank = order.indexOf(b);
-          if (aRank >= 0 || bRank >= 0) {
-            if (aRank < 0) return 1;
-            if (bRank < 0) return -1;
-            if (aRank !== bRank) return aRank - bRank;
-          }
-          return (basename(a) || a).localeCompare(basename(b) || b) || a.localeCompare(b);
-        });
-
-      const ordered = [...pins, ...activePaths];
-      const path = ordered[index];
+      const path = projectShortcutOrder(pins)[index];
       if (!path) return false;
 
       closePalette();
@@ -74,10 +89,8 @@ export function useProjectNumberShortcuts({ pinnedPaths, handleSelectProject }: 
     };
 
     const handler = (e: KeyboardEvent) => {
-      // macOS registers this accelerator with the native menu so it also works
-      // from the cross-origin preview iframe. Avoid handling the same keydown
-      // a second time if WebKit also forwards it to the app frame.
-      if (isMac()) return;
+      // The macOS menu owns this key; handling the keydown too acted twice.
+      if (menuOwnsShortcuts()) return;
       if (!e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
       if (e.key.length !== 1 || e.key < '1' || e.key > '9') return;
 
@@ -89,13 +102,14 @@ export function useProjectNumberShortcuts({ pinnedPaths, handleSelectProject }: 
     };
 
     window.addEventListener('keydown', handler, { capture: true });
-    const unlisten = listen<number>('switch-project-shortcut', ({ payload }) => {
-      switchProject(payload - 1);
+    const offMenu = onMenuAction((action) => {
+      const n = menuNumber(action, 'go_to');
+      if (n !== null && !latest.current.inAgents) switchProject(n - 1);
     });
 
     return () => {
       window.removeEventListener('keydown', handler, { capture: true });
-      void unlisten.then((fn) => fn());
+      offMenu();
     };
   }, []);
 }
