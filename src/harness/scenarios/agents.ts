@@ -2679,7 +2679,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-when-routines',
     title: 'Agents — “When…” routines in the schedule popover',
     looksRightWhen:
-      'New routine on Lead Gen’s routines: the editor stands in for the list (a back arrow and “New routine” at the top), then “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost, under a “When this happens” label; Check every 5/10/30 min/every hour; a “What” field labelled like the time picker’s; the echo “When someone mentions you on GitHub — …” and the cost sentence; Cancel and a neutral Add (never Lead Gen’s teal). Readable in light and dark.',
+      'New routine on Lead Gen’s routines: the editor stands in for the list (a back arrow and “New routine” at the top), then “At a time / When…” with When… pressed and the composer: the everyday sources first (Mail, Messages, a folder, Something else… naming Gmail), then GitHub and Linear (Linear offered since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost, under a “When this happens” label, GitHub mentions picked; Check every 5/10/30 min/every hour; a “What” field labelled like the time picker’s; the echo “When someone mentions you on GitHub — …” and the cost sentence; Cancel and a neutral Add (never Lead Gen’s teal). Readable in light and dark.',
     requires: '.agent-when__sources',
     openSelector: AGENTS_TAB,
     steps: [
@@ -2687,6 +2687,7 @@ export const agentsScenarios: Scenario[] = [
       { click: '.agent-chat__scheduled' },
       { click: '.agent-schedule__add button' },
       { click: '.agent-schedule__mode [aria-pressed="false"]' },
+      { click: '.agent-when__source:nth-child(5)' },
       {
         fill: '.agent-when input[aria-label="What to do when it happens"]',
         value: 'Triage it and tell me what’s urgent',
@@ -2699,6 +2700,8 @@ export const agentsScenarios: Scenario[] = [
       agents_usage: WHEN_USAGE,
       // The "At a time" composer previews its phrase before When… is pressed.
       agents_schedule_preview: schedulePreview,
+      // The composer opens on Mail, so it asks whether this Mac can read it.
+      agents_watch_mac_access: { mail: { state: 'ok' }, messages: { state: 'ok' } },
     },
   },
   {
@@ -2720,7 +2723,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-when-mail-access',
     title: 'Agents — “When an email arrives” before Full Disk Access is on',
     looksRightWhen:
-      'New routine on Lead Gen, When… pressed, “An email arrives in Mail” picked (“Free · reads Mail on this Mac”), with “From (optional)” filled with billing@northwind.com and the words field empty; under them Check again and Open Full Disk Access side by side; Check every 1/5/10/30 min; no echo, and the line under it is the Mac’s own words, “Reading Mail needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on …”; Add disabled.',
+      'New routine on Lead Gen, When… pressed, “An email arrives in Mail” picked (“Free · reads Mail on this Mac”), with “From (optional)” filled with billing@northwind.com and the words field empty; under them the Mac’s own words, “Reading Mail needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on …”, with Open Full Disk Access then Check again under it; Check every 1/5/10/30 min; no echo and nothing repeated under the form; Add disabled.',
     requires: '.agent-when__sources',
     openSelector: AGENTS_TAB,
     steps: [
@@ -2728,7 +2731,7 @@ export const agentsScenarios: Scenario[] = [
       { click: '.agent-chat__scheduled' },
       { click: '.agent-schedule__add button' },
       { click: '.agent-schedule__mode [aria-pressed="false"]' },
-      { click: '.agent-when__source:nth-child(5)' },
+      { click: '.agent-when__source:nth-child(1)' },
       { fill: '.agent-when input[aria-label="Only from"]', value: 'billing@northwind.com' },
       {
         fill: '.agent-when input[aria-label="What to do when it happens"]',
@@ -2756,14 +2759,14 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-when-custom',
     title: 'Agents — adding a “When…” routine that checks through a connector',
     looksRightWhen:
-      'Linear is set up only as a claude.ai connector, so four sources are offered; “Something else…” is chosen, with “a new email from dana@acme.com” and what to do typed, and “Through” offers only the apps set up in Claude Code itself (figma, playwright; never “claude.ai …”), figma picked. The interval choices start at every 15 min with 30 pressed (a model check costs a call), and the line under says each check is a short read-only Claude Code call on Haiku, up to 24 a day, counted in Lead Gen’s usage, and that the first check only notes what’s already there. Add is enabled, with no Cancel (there is nothing to go back to).',
+      'Linear is set up only as a claude.ai connector, so six sources are offered (no Linear); “Something else…” is chosen, with “a new email from dana@acme.com” and what to do typed, and “Through” offers only the apps set up in Claude Code itself (figma, playwright; never “claude.ai …”), figma picked. The interval choices start at every 15 min with 30 pressed (a model check costs a call), and the line under says each check is a short read-only Claude Code call on Haiku, up to 24 a day, counted in Lead Gen’s usage, and that the first check only notes what’s already there. Add is enabled, with no Cancel (there is nothing to go back to).',
     requires: '.agent-when__sources',
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="leadgen"]' },
       { click: '.agent-chat__header [aria-label^="Schedule a routine"]' },
       { click: '.agent-schedule__mode [aria-pressed="false"]' },
-      { click: '.agent-when__source:last-child' },
+      { click: '.agent-when__source:nth-child(4)' },
       {
         fill: '.agent-when input[aria-label="What to look out for"]',
         value: 'a new email from dana@acme.com',
@@ -2786,6 +2789,8 @@ export const agentsScenarios: Scenario[] = [
         },
         ...CONNECTED_APPS.filter((a) => a.name !== 'linear'),
       ]),
+      // The composer opens on Mail, so it asks whether this Mac can read it.
+      agents_watch_mac_access: { mail: { state: 'ok' }, messages: { state: 'ok' } },
     },
   },
   {

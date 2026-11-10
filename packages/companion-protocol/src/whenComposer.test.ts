@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_WHEN_KIND,
   everyAfterPick,
   isHandle,
   whenAccess,
@@ -16,8 +17,17 @@ import {
 
 describe('the "When…" composer, desk and phone', () => {
   it('says where checks run from where it is said', () => {
-    expect(whenSourceChoices(false)[0].how).toBe('Free · checked from this Mac');
-    expect(whenSourceChoices(false, 'your Mac')[0].how).toBe('Free · checked from your Mac');
+    expect(whenSourceChoices(false)[0].how).toBe('Free · reads Mail on this Mac');
+    expect(whenSourceChoices(false, 'your Mac')[0].how).toBe('Free · reads Mail on your Mac');
+    const github = whenSourceChoices(false, 'your Mac').find((s) => s.kind === 'github_mentions');
+    expect(github?.how).toBe('Free · checked from your Mac');
+  });
+
+  it('offers everyday sources first, starts on the first, and points Gmail at Something else', () => {
+    const kinds = whenSourceChoices(true).map((s) => s.kind);
+    expect(kinds.slice(0, 4)).toEqual(['new_mail', 'new_text', 'new_file', 'custom']);
+    expect(kinds[0]).toBe(DEFAULT_WHEN_KIND);
+    expect(whenSourceChoices(false).find((s) => s.kind === 'custom')?.how).toMatch(/Gmail/);
     expect(whenSourceChoices(false).map((s) => s.kind)).not.toContain('linear_assigned');
     expect(whenSourceChoices(true).map((s) => s.kind)).toContain('linear_assigned');
   });

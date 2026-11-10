@@ -63,11 +63,22 @@ describe('the phone’s “When…” composer', () => {
     expect(screen.getAllByText('Free · checked from your Mac')).toHaveLength(2);
     expect(screen.getByText('A Linear issue is assigned to you')).toBeTruthy();
     expect(screen.getByText('CHECK EVERY')).toBeTruthy();
+    // Everyday sources first, as on the desk; GitHub further down.
+    const labels = screen
+      .getAllByText(/^(An email arrives|A text arrives|Someone mentions you)/)
+      .map((n) => n.props.children);
+    expect(labels).toEqual([
+      'An email arrives in Mail',
+      'A text arrives in Messages',
+      'Someone mentions you on GitHub',
+    ]);
+    await fireEvent.press(screen.getByText('Someone mentions you on GitHub'));
     expect(screen.getByText(/^Checks are free\. The first check only notes/)).toBeTruthy();
   });
 
   it('echoes the routine and adds it with the source, interval and note', async () => {
     const onDone = await mount();
+    await fireEvent.press(screen.getByText('Someone mentions you on GitHub'));
     await fireEvent.changeText(
       screen.getByPlaceholderText('Triage it and tell me if it’s urgent'),
       'Triage it'

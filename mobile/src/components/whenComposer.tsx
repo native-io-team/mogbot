@@ -20,6 +20,7 @@
 
 import {
   DEFAULT_WHEN_EVERY,
+  DEFAULT_WHEN_KIND,
   describeEvery,
   everyAfterPick,
   shortEvery,
@@ -75,7 +76,7 @@ export function WhenComposer({
   const appearance = useAppearance();
   const accent = useAccent();
   const start = editing?.watch?.source;
-  const startKind: WhenKind = start && start.kind !== 'unknown' ? start.kind : 'github_mentions';
+  const startKind: WhenKind = start && start.kind !== 'unknown' ? start.kind : DEFAULT_WHEN_KIND;
   const [kind, setKind] = useState<WhenKind>(startKind);
   const [folder, setFolder] = useState(start?.kind === 'new_file' ? start.folder : '');
   const [check, setCheck] = useState(start?.kind === 'custom' ? start.check : '');

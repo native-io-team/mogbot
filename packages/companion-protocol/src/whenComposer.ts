@@ -54,7 +54,22 @@ export interface WhenSourceChoice {
  * the desk, "your Mac" on the phone.
  */
 export function whenSources(mac: 'this Mac' | 'your Mac' = 'this Mac'): WhenSourceChoice[] {
+  // Everyday things first (mail, texts, a folder, anything else), then the
+  // ones for people who work on GitHub or Linear.
   return [
+    { kind: 'new_mail', label: 'An email arrives in Mail', how: `Free · reads Mail on ${mac}` },
+    {
+      kind: 'new_text',
+      label: 'A text arrives in Messages',
+      how: `Free · reads Messages on ${mac}`,
+    },
+    { kind: 'new_file', label: 'A new file appears in a folder', how: 'Free · reads the folder' },
+    {
+      kind: 'custom',
+      label: 'Something else…',
+      // Gmail on the web isn't Mail on this Mac: this is where it goes.
+      how: 'You say what, in one app like Gmail · uses a little of your usage each check',
+    },
     {
       kind: 'github_mentions',
       // "you", as the routine reads back once added ("When someone mentions you…").
@@ -71,20 +86,11 @@ export function whenSources(mac: 'this Mac' | 'your Mac' = 'this Mac'): WhenSour
       label: 'A Linear issue is assigned to you',
       how: 'Through your Linear app · uses a little of your usage each check',
     },
-    { kind: 'new_file', label: 'A new file appears in a folder', how: 'Free · reads the folder' },
-    { kind: 'new_mail', label: 'An email arrives in Mail', how: `Free · reads Mail on ${mac}` },
-    {
-      kind: 'new_text',
-      label: 'A text arrives in Messages',
-      how: `Free · reads Messages on ${mac}`,
-    },
-    {
-      kind: 'custom',
-      label: 'Something else…',
-      how: 'You say what, in one app · uses a little of your usage each check',
-    },
   ];
 }
+
+/** What a new "When…" routine starts on: the first source offered. */
+export const DEFAULT_WHEN_KIND: WhenKind = 'new_mail';
 
 /** How often each kind of source can be checked: a folder is free, a model check isn't. */
 export function whenIntervals(kind: WhenKind): number[] {

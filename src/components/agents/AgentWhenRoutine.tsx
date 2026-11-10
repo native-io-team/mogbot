@@ -45,6 +45,7 @@ import { usePolling } from '../../hooks/usePolling';
 // The composer's words and rules, shared with the phone's.
 import {
   DEFAULT_WHEN_EVERY,
+  DEFAULT_WHEN_KIND,
   everyAfterPick,
   shortEvery,
   whenAccess,
@@ -85,7 +86,7 @@ interface WhenComposerProps {
 /** Add or edit a "When…" routine. Mounted fresh for each edit (keyed by the caller). */
 export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerProps) {
   const start = editing?.watch?.source;
-  const startKind: Kind = start && start.kind !== 'unknown' ? start.kind : 'github_mentions';
+  const startKind: Kind = start && start.kind !== 'unknown' ? start.kind : DEFAULT_WHEN_KIND;
   const [kind, setKind] = useState<Kind>(startKind);
   const [folder, setFolder] = useState(start?.kind === 'new_file' ? start.folder : '');
   const [check, setCheck] = useState(start?.kind === 'custom' ? start.check : '');

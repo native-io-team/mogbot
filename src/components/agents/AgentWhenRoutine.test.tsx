@@ -95,6 +95,9 @@ const radio = (name: string) => screen.getByRole('radio', { name: new RegExp(nam
 describe('WhenComposer', () => {
   it('offers the free sources, says what each costs, and adds a GitHub one', async () => {
     const { calls, onDone } = mount();
+    // Everyday sources first, and it starts on the first: mail.
+    expect(radio('An email arrives in Mail')).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(radio('Someone mentions you on GitHub'));
     // The choice and the readback speak in one person.
     expect(radio('Someone mentions you on GitHub')).toHaveAttribute('aria-checked', 'true');
     expect(radio('Someone mentions you on GitHub')).toHaveTextContent(
