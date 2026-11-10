@@ -557,6 +557,16 @@
   gap: var(--spacing-sm);
   max-height: 70vh;
   overflow-y: auto;
+  /* On the header's edges, as every other dialog's body (round 4: it sat
+     flush on the dialog's border). */
+  padding: var(--spacing-md) var(--spacing-xl) var(--spacing-xl);
+}
+
+/* A briefing is prose, not a command: the reading face, at body size. */
+.agent-briefing__text {
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
 }
 
 .agent-briefing__note {

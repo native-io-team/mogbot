@@ -84,6 +84,19 @@ describe('Show exact command', () => {
     expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
   });
 
+  it('says “details” on a step that ran no command', () => {
+    mockIPC(() => null);
+    const read = { ...work.steps[0], hasExact: true };
+    render(
+      <AgentBubble message={reply({ ...work, steps: [read, work.steps[1]] })} agent={agent} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
+    expect(screen.getAllByRole('button', { name: /^Show / }).map((b) => b.textContent)).toEqual([
+      'Show details',
+      'Show exact command',
+    ]);
+  });
+
   it('says so when it is no longer kept', async () => {
     mockIPC(() => null);
     render(<AgentBubble message={reply(work)} agent={agent} />);
@@ -113,7 +126,7 @@ describe('What it was told', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
     fireEvent.click(screen.getByRole('button', { name: 'What it was told' }));
     expect(await screen.findByText('How much to do on your own')).toBeInTheDocument();
-    expect(screen.getByText('Its instructions and memory (CLAUDE.md)')).toBeInTheDocument();
+    expect(screen.getByText('Its instructions and memory')).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).toBeNull();
   });
 

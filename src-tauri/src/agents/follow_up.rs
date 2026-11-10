@@ -574,6 +574,7 @@ fn record(agent_id: &str, note: &str, now: i64) -> Result<(), crate::errors::Com
         follow_up: true,
         then: Vec::new(),
         waiting: None,
+        model: None,
         extra: Default::default(),
     };
     store::update(agent_id, |a| {

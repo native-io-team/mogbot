@@ -210,6 +210,9 @@ export const baseCommands: CommandMap = {
         role: 'Runs the other agents and keeps track of what’s in flight.',
         shape: 5,
         color: 'white',
+        // What `ensure_main` gives a new Chief: the app's mark on Graphite.
+        colorway: 'graphite',
+        icon: 'mogbot',
         isMain: true,
         pinned: false,
         hidden: false,

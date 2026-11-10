@@ -23,6 +23,7 @@ import {
   LOW_LEFT,
   OUT_OF_USAGE,
   pinnedLine,
+  placeLabel,
   SIGN_IN_DIFFERENT,
   USE_THIS_ONE_NOW,
   type AgentEngine,
@@ -327,7 +328,16 @@ export function TotalCard({
 }
 
 /** Every account as one row in turn order, in one grouped card; a tap opens its screen. */
-export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: StackKey) => void }) {
+export function AccountRows({
+  keys,
+  onOpen,
+  all = keys,
+}: {
+  keys: StackKey[];
+  onOpen: (k: StackKey) => void;
+  /** Every account listed (across engines), so a place names its engine when both are there. */
+  all?: readonly StackKey[];
+}) {
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -339,7 +349,7 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
           <Pressable
             key={k.key}
             accessibilityRole="button"
-            accessibilityLabel={`${k.position}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
+            accessibilityLabel={`${placeLabel(k, all)}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
               refill ? `, refills in ${refill}` : ''
             }`}
             onPress={() => onOpen(k)}
@@ -354,7 +364,7 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
                 variant="caption"
                 color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
               >
-                {String(k.position)}
+                {placeLabel(k, all)}
               </T>
             </View>
             <View style={styles.rowBody}>
@@ -423,7 +433,16 @@ export interface KeyActions {
  * the order; its fix; its limits each as a card against pace, or who used it
  * (Limits | Tokens); and where its usage went. Its name is the screen's title.
  */
-export function KeyCard({ k, actions = {} }: { k: StackKey; actions?: KeyActions }) {
+export function KeyCard({
+  k,
+  actions = {},
+  all = [],
+}: {
+  k: StackKey;
+  actions?: KeyActions;
+  /** Every account listed, so its place names its engine when both are there ("Claude 2"). */
+  all?: readonly StackKey[];
+}) {
   const colors = useColors();
   const styles = useStyles();
   const [view, setView] = useState<'limits' | 'tokens'>('limits');
@@ -440,7 +459,7 @@ export function KeyCard({ k, actions = {} }: { k: StackKey; actions?: KeyActions
               color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
               maxFontSizeMultiplier={CHIP_SCALE}
             >
-              {String(k.position)}
+              {placeLabel(k, all)}
             </T>
           </View>
           <View style={styles.title}>
@@ -854,7 +873,8 @@ const useStyles = makeStyles((colors) => ({
   cardQuiet: { backgroundColor: colors.surfaceApp, boxShadow: 'none', borderStyle: 'dashed' },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   cap: {
-    width: space.xl,
+    minWidth: space.xl,
+    paddingHorizontal: space['2xs'],
     height: space.xl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -873,7 +893,12 @@ const useStyles = makeStyles((colors) => ({
   partHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   switch: { width: '50%' },
   actions: { flexDirection: 'row', alignItems: 'center', marginRight: -space.sm },
-  capLarge: { width: keySize.lg, height: keySize.lg, borderRadius: radius.inner },
+  capLarge: {
+    minWidth: keySize.lg,
+    height: keySize.lg,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.inner,
+  },
   timeline: {
     height: space['3xs'] * 2,
     marginTop: space.xs,

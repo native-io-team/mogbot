@@ -113,6 +113,14 @@ struct PlanFile {
     /// Windows the Chief was already woken for (`spare_key`).
     #[serde(default)]
     nudged: Vec<String>,
+    /// Windows the user was already warned about (`saver::warn_key`): one
+    /// notification per window instance, never repeated.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    warned: Vec<String>,
+    /// Routines already said to be held for a reset (`saver::held_key`):
+    /// one line per routine per hold.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    held: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -331,9 +339,12 @@ pub fn spare_key(s: &Spare) -> String {
 }
 
 /// Whether to wake the Chief to use a spare window, and for which: only in
-/// `UseItAll`, only with work waiting, only while the Chief is free, only
-/// for the account turns would actually run on next (spare capacity on
-/// another account wouldn't be what the work spends), and once per window.
+/// `UseItAll`, only with work waiting, only while the Chief is free, and
+/// once per window. The account turns run on next comes first; with none
+/// spare there, the soonest-expiring spare window on any other account,
+/// which turns then start on until it resets (`wallet::spend_first`), so a
+/// second account's room isn't left to expire untouched (persona review
+/// 2026-11-09, the Maximizer).
 pub fn should_nudge<'a>(
     mode: Mode,
     spare: &'a [Spare],
@@ -344,9 +355,18 @@ pub fn should_nudge<'a>(
     if mode != Mode::UseItAll || waiting == 0 || chief_busy {
         return None;
     }
+    pick_spare(spare, nudged)
+}
+
+/// The spare window to use now, not yet used: on the account turns run on
+/// next if it has one, else the soonest to reset on any account.
+pub fn pick_spare<'a>(spare: &'a [Spare], nudged: &[String]) -> Option<&'a Spare> {
+    let fresh = |s: &&Spare| !nudged.iter().any(|k| same_window(k, s));
     spare
         .iter()
-        .find(|s| s.next && !nudged.iter().any(|k| same_window(k, s)))
+        .filter(fresh)
+        .find(|s| s.next)
+        .or_else(|| spare.iter().find(fresh))
 }
 
 /// Whether a press of "Give agents something to do" for `s` would only
@@ -453,7 +473,12 @@ pub fn set_mode(mode: Mode, now: i64) -> Result<(), CommandError> {
             f.mode_set_at = now;
         }
         Ok(())
-    })
+    })?;
+    if mode != Mode::UseItAll {
+        // Spending another account's expiring room was this mode's OK alone.
+        super::wallet::clear_spend_first();
+    }
+    Ok(())
 }
 
 pub fn backlog() -> Vec<SpareItem> {
@@ -527,6 +552,47 @@ pub fn mark_nudged(key: String) -> Result<(), CommandError> {
         f.nudged.drain(..extra);
         Ok(())
     })
+}
+
+fn read_plan() -> PlanFile {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    read_json(plan_path())
+}
+
+/// Note `key` in a kept list (warned or held), keeping the last `max`.
+/// False when it was already there: someone already said it.
+fn note_once(list: &mut Vec<String>, key: String, max: usize) -> bool {
+    if list.contains(&key) {
+        return false;
+    }
+    list.push(key);
+    let extra = list.len().saturating_sub(max);
+    list.drain(..extra);
+    true
+}
+
+/// The user is to be warned about a window (`saver::warn_key`): true the
+/// first time, recorded before anything is said, so a restart never says
+/// it twice. `seen` tells an earlier key for the same instance.
+pub fn first_warning(key: String, seen: impl Fn(&str) -> bool) -> bool {
+    if read_plan().warned.iter().any(|k| seen(k)) {
+        return false;
+    }
+    change_plan(|f| {
+        if f.warned.iter().any(|k| seen(k)) {
+            return Ok(false);
+        }
+        Ok(note_once(&mut f.warned, key, 50))
+    })
+    .unwrap_or(false)
+}
+
+/// A routine is held for a reset (`saver::held_key`): true the first time.
+pub fn first_hold(key: String) -> bool {
+    if read_plan().held.contains(&key) {
+        return false;
+    }
+    change_plan(|f| Ok(note_once(&mut f.held, key, 100))).unwrap_or(false)
 }
 
 pub fn nudged() -> Vec<String> {
@@ -936,17 +1002,22 @@ mod tests {
         assert_eq!(should_nudge(Mode::Save, &s, 3, false, &[]), None);
         assert_eq!(should_nudge(Mode::UseItAll, &s, 0, false, &[]), None);
         assert_eq!(should_nudge(Mode::UseItAll, &s, 3, true, &[]), None);
-        // Not the account work would run on: never that one.
+        // The account work runs on next comes first, though the other resets sooner.
         let chosen = should_nudge(Mode::UseItAll, &s, 3, false, &[]).unwrap();
         assert_eq!(chosen.account_id, "next");
         let done = [spare_key(chosen)];
-        assert_eq!(should_nudge(Mode::UseItAll, &s, 3, false, &done), None);
+        // Then another account's expiring room, not left to waste.
+        let then = should_nudge(Mode::UseItAll, &s, 3, false, &done).unwrap();
+        assert_eq!(then.account_id, "other");
+        let both = [spare_key(chosen), spare_key(then)];
+        assert_eq!(should_nudge(Mode::UseItAll, &s, 3, false, &both), None);
         // A later reading that puts the same reset a few seconds off is the
         // same window: not a second wake.
         let drifted = [spare_key(&Spare {
             resets_at: chosen.resets_at + 7_000,
             ..chosen.clone()
         })];
+        let drifted = [drifted[0].clone(), spare_key(then)];
         assert_eq!(should_nudge(Mode::UseItAll, &s, 3, false, &drifted), None);
         // The next window of that kind (hours later) is a new one.
         let earlier = [spare_key(&Spare {

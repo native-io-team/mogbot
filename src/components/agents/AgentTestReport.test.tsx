@@ -55,7 +55,7 @@ describe('Preview on a card, in Agents mode', () => {
       </AgentPreviewProvider>
     );
     expect(screen.getByTestId('pane').textContent).toBe('closed');
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open preview' }));
     expect(screen.getByTestId('pane').textContent).toBe('site/m1/look');
     expect(onPreview).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Test it' }));
@@ -67,7 +67,7 @@ describe('Preview on a card, in Agents mode', () => {
     render(
       <ResultCardView message={message} card={OLD} agent={agent} newest onPreview={onPreview} />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open preview' }));
     expect(onPreview).toHaveBeenCalledWith('/p/harbor-bakery');
     expect(screen.queryByRole('button', { name: 'Test it' })).toBeNull();
   });
@@ -79,7 +79,7 @@ describe('Preview on a card, in Agents mode', () => {
         <ResultCardView message={{ ...message, result: card }} card={card} agent={agent} newest />
       </AgentPreviewProvider>
     );
-    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open preview' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Test it' })).toBeNull();
   });
 });

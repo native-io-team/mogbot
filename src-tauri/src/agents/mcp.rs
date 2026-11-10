@@ -706,7 +706,7 @@ async fn usage_tool(
         "usage_overview" => u::overview(app).await,
         "forecast_usage" => u::forecast(args).await,
         "add_spare_work" | "finish_spare_work" | "run_routine_now" | "use_account"
-        | "set_usage_mode" | "set_engine_fallback"
+        | "set_usage_mode" | "set_engine_fallback" | "set_routine_model"
             if outside =>
         {
             error(
@@ -716,6 +716,11 @@ async fn usage_tool(
         "add_spare_work" => u::add(caller, args),
         "finish_spare_work" => u::finish(args),
         "run_routine_now" => u::run_routine(app, args),
+        "set_routine_model" => {
+            let done = u::set_routine_model(app, args);
+            u::note_change(app, caller, &done);
+            done
+        }
         // The user's own message asked for it: done, as Settings would. Asked
         // for by another agent (or a routine), the user OKs it on a card that
         // nothing waits on (`usage_tools::ask_to_switch`).

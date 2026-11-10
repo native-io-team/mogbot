@@ -347,6 +347,13 @@
   margin-top: var(--spacing-xs);
 }
 
+/* Routines is a page, not an action: open, it wears the selected fill like
+   the agent rows and the Usage row (round 4). */
+.workspace-sidebar:not(.is-hidden) .agents-list__routines[aria-current='page'] {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
 /* What's in flight, beside the sidebar toggle (InFlightBell): the one count
    of what waits on you in the sidebar. The count is a status pill's wash of
    the needs-you amber with ordinary ink on it, so it clears AA in both themes

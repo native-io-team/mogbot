@@ -1114,6 +1114,567 @@ export const agentsUsagePlan = {
     ]
   }
 } satisfies Result<'agents.usagePlan'>;
+export const agentsUsageSetMode = {
+  "accounts": [
+    {
+      "changes": [
+        {
+          "from": 20.0,
+          "kind": "five_hour",
+          "nothingHere": false,
+          "runs": [
+            {
+              "agentId": "a1",
+              "name": "Riley",
+              "routine": "Morning brief",
+              "tokens": 90000,
+              "turns": 2
+            }
+          ],
+          "since": 1762280000000,
+          "to": 38.0,
+          "until": 1762290000000
+        }
+      ],
+      "check": {
+        "at": 1762294000000,
+        "outcome": "read"
+      },
+      "engine": "claude",
+      "id": "default",
+      "learned": [
+        "five_hour"
+      ],
+      "name": "This Mac",
+      "next": true,
+      "orgName": "Example",
+      "out": false,
+      "pace": [
+        {
+          "estimate": true,
+          "kind": "five_hour",
+          "reachesAt": 1762298000000,
+          "readings": 6,
+          "resetsAt": 1762300000000,
+          "spanMinutes": 95
+        }
+      ],
+      "signedIn": true,
+      "spent": [
+        {
+          "agentId": "a1",
+          "name": "Riley",
+          "tokens": 182000,
+          "turns": 4
+        }
+      ],
+      "thisMac": true,
+      "windows": [
+        {
+          "kind": "five_hour",
+          "limited": false,
+          "observedAt": 1762290000000,
+          "resetsAt": 1762300000000,
+          "usedPercent": 38.0,
+          "windowMinutes": 300
+        }
+      ]
+    },
+    {
+      "engine": "claude",
+      "id": "w1",
+      "learned": [],
+      "name": "Work",
+      "next": false,
+      "out": false,
+      "pace": [
+        {
+          "estimate": true,
+          "kind": "five_hour",
+          "reachesAt": 1762297000000,
+          "readings": 5,
+          "resetsAt": 1762301000000,
+          "spanMinutes": 70
+        }
+      ],
+      "plan": "max",
+      "signedIn": true,
+      "thisMac": false,
+      "windows": [
+        {
+          "kind": "five_hour",
+          "limited": false,
+          "observedAt": 1762290000000,
+          "resetsAt": 1762301000000,
+          "usedPercent": 80.0,
+          "windowMinutes": 300
+        }
+      ]
+    },
+    {
+      "check": {
+        "at": 1762294000000,
+        "outcome": "failed",
+        "why": "Codex didn't answer in time"
+      },
+      "engine": "codex",
+      "id": "c1",
+      "learned": [],
+      "name": "Plus",
+      "next": false,
+      "out": true,
+      "outUntil": 1762400000000,
+      "plan": "plus",
+      "signedIn": true,
+      "thisMac": false,
+      "windows": [
+        {
+          "kind": "primary",
+          "limited": true,
+          "observedAt": 1762290000000,
+          "resetsAt": 1762400000000,
+          "usedPercent": 100.0,
+          "windowMinutes": 300
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "engine": "claude",
+      "id": "a1",
+      "isMain": false,
+      "model": "sonnet",
+      "name": "Finance",
+      "perTurn": {
+        "days": 5,
+        "estimate": true,
+        "high": 90000,
+        "low": 12000,
+        "runs": 37,
+        "tokens": 41000
+      }
+    }
+  ],
+  "backlog": [
+    {
+      "addedAt": 1762100000000,
+      "addedBy": "you",
+      "agentId": "a1",
+      "id": "s1",
+      "startedAt": 1762295000000,
+      "state": "started",
+      "text": "Read the three papers in Downloads and summarise them"
+    }
+  ],
+  "engines": [
+    {
+      "agents": 3,
+      "allOut": false,
+      "id": "claude",
+      "installed": true,
+      "label": "Claude Code",
+      "nextAccount": "This Mac",
+      "perTurn": {
+        "days": 5,
+        "estimate": true,
+        "high": 90000,
+        "low": 12000,
+        "runs": 37,
+        "tokens": 41000
+      },
+      "signedIn": true
+    }
+  ],
+  "local": [
+    {
+      "models": [
+        "llama3.2:3b"
+      ],
+      "name": "Ollama",
+      "running": true
+    },
+    {
+      "models": [],
+      "name": "Opencode"
+    }
+  ],
+  "mode": "use_it_all",
+  "modeSetAt": 1762200000000,
+  "now": 1762295000000,
+  "routines": [
+    {
+      "agentId": "a1",
+      "id": "r1",
+      "perRun": {
+        "days": 5,
+        "estimate": true,
+        "high": 90000,
+        "low": 12000,
+        "runs": 37,
+        "tokens": 41000
+      },
+      "what": "Morning brief",
+      "when": false
+    }
+  ],
+  "signInChanges": [
+    {
+      "at": 1762290000000,
+      "beforeEmail": "work@example.com",
+      "beforeOrgName": "Northwind",
+      "beforeWeeklyReset": 1762185600000,
+      "byReset": false,
+      "engine": "claude",
+      "key": "claude:1762290000000",
+      "nowEmail": "me@example.com",
+      "nowWeeklyReset": 1762596000000
+    }
+  ],
+  "spare": [
+    {
+      "accountId": "default",
+      "accountName": "This Mac",
+      "engine": "claude",
+      "kind": "five_hour",
+      "next": true,
+      "observedAt": 1762290000000,
+      "resetsAt": 1762300000000,
+      "usedPercent": 38.0,
+      "windowMinutes": 300
+    }
+  ],
+  "totals": {
+    "accounts": 3,
+    "engines": [
+      {
+        "accounts": 2,
+        "engine": "claude",
+        "read": 2,
+        "room": 2
+      },
+      {
+        "accounts": 1,
+        "engine": "codex",
+        "read": 1,
+        "room": 0
+      }
+    ],
+    "nextRoom": {
+      "accountId": "c1",
+      "accountName": "Plus",
+      "at": 1762400000000,
+      "engine": "codex"
+    },
+    "read": 3,
+    "room": 2,
+    "runOut": [
+      {
+        "accounts": 2,
+        "engine": "claude",
+        "estimate": true,
+        "reachesAt": 1762298000000,
+        "readings": 11
+      }
+    ],
+    "signedIn": 3,
+    "windows": [
+      {
+        "family": "session",
+        "read": 3,
+        "room": 2,
+        "soonestReset": {
+          "accountId": "default",
+          "accountName": "This Mac",
+          "at": 1762300000000,
+          "engine": "claude"
+        }
+      }
+    ]
+  }
+} satisfies Result<'agents.usage.setMode'>;
+export const agentsSpareAdd = {
+  "accounts": [
+    {
+      "changes": [
+        {
+          "from": 20.0,
+          "kind": "five_hour",
+          "nothingHere": false,
+          "runs": [
+            {
+              "agentId": "a1",
+              "name": "Riley",
+              "routine": "Morning brief",
+              "tokens": 90000,
+              "turns": 2
+            }
+          ],
+          "since": 1762280000000,
+          "to": 38.0,
+          "until": 1762290000000
+        }
+      ],
+      "check": {
+        "at": 1762294000000,
+        "outcome": "read"
+      },
+      "engine": "claude",
+      "id": "default",
+      "learned": [
+        "five_hour"
+      ],
+      "name": "This Mac",
+      "next": true,
+      "orgName": "Example",
+      "out": false,
+      "pace": [
+        {
+          "estimate": true,
+          "kind": "five_hour",
+          "reachesAt": 1762298000000,
+          "readings": 6,
+          "resetsAt": 1762300000000,
+          "spanMinutes": 95
+        }
+      ],
+      "signedIn": true,
+      "spent": [
+        {
+          "agentId": "a1",
+          "name": "Riley",
+          "tokens": 182000,
+          "turns": 4
+        }
+      ],
+      "thisMac": true,
+      "windows": [
+        {
+          "kind": "five_hour",
+          "limited": false,
+          "observedAt": 1762290000000,
+          "resetsAt": 1762300000000,
+          "usedPercent": 38.0,
+          "windowMinutes": 300
+        }
+      ]
+    },
+    {
+      "engine": "claude",
+      "id": "w1",
+      "learned": [],
+      "name": "Work",
+      "next": false,
+      "out": false,
+      "pace": [
+        {
+          "estimate": true,
+          "kind": "five_hour",
+          "reachesAt": 1762297000000,
+          "readings": 5,
+          "resetsAt": 1762301000000,
+          "spanMinutes": 70
+        }
+      ],
+      "plan": "max",
+      "signedIn": true,
+      "thisMac": false,
+      "windows": [
+        {
+          "kind": "five_hour",
+          "limited": false,
+          "observedAt": 1762290000000,
+          "resetsAt": 1762301000000,
+          "usedPercent": 80.0,
+          "windowMinutes": 300
+        }
+      ]
+    },
+    {
+      "check": {
+        "at": 1762294000000,
+        "outcome": "failed",
+        "why": "Codex didn't answer in time"
+      },
+      "engine": "codex",
+      "id": "c1",
+      "learned": [],
+      "name": "Plus",
+      "next": false,
+      "out": true,
+      "outUntil": 1762400000000,
+      "plan": "plus",
+      "signedIn": true,
+      "thisMac": false,
+      "windows": [
+        {
+          "kind": "primary",
+          "limited": true,
+          "observedAt": 1762290000000,
+          "resetsAt": 1762400000000,
+          "usedPercent": 100.0,
+          "windowMinutes": 300
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "engine": "claude",
+      "id": "a1",
+      "isMain": false,
+      "model": "sonnet",
+      "name": "Finance",
+      "perTurn": {
+        "days": 5,
+        "estimate": true,
+        "high": 90000,
+        "low": 12000,
+        "runs": 37,
+        "tokens": 41000
+      }
+    }
+  ],
+  "backlog": [
+    {
+      "addedAt": 1762100000000,
+      "addedBy": "you",
+      "agentId": "a1",
+      "id": "s1",
+      "startedAt": 1762295000000,
+      "state": "started",
+      "text": "Read the three papers in Downloads and summarise them"
+    }
+  ],
+  "engines": [
+    {
+      "agents": 3,
+      "allOut": false,
+      "id": "claude",
+      "installed": true,
+      "label": "Claude Code",
+      "nextAccount": "This Mac",
+      "perTurn": {
+        "days": 5,
+        "estimate": true,
+        "high": 90000,
+        "low": 12000,
+        "runs": 37,
+        "tokens": 41000
+      },
+      "signedIn": true
+    }
+  ],
+  "local": [
+    {
+      "models": [
+        "llama3.2:3b"
+      ],
+      "name": "Ollama",
+      "running": true
+    },
+    {
+      "models": [],
+      "name": "Opencode"
+    }
+  ],
+  "mode": "use_it_all",
+  "modeSetAt": 1762200000000,
+  "now": 1762295000000,
+  "routines": [
+    {
+      "agentId": "a1",
+      "id": "r1",
+      "perRun": {
+        "days": 5,
+        "estimate": true,
+        "high": 90000,
+        "low": 12000,
+        "runs": 37,
+        "tokens": 41000
+      },
+      "what": "Morning brief",
+      "when": false
+    }
+  ],
+  "signInChanges": [
+    {
+      "at": 1762290000000,
+      "beforeEmail": "work@example.com",
+      "beforeOrgName": "Northwind",
+      "beforeWeeklyReset": 1762185600000,
+      "byReset": false,
+      "engine": "claude",
+      "key": "claude:1762290000000",
+      "nowEmail": "me@example.com",
+      "nowWeeklyReset": 1762596000000
+    }
+  ],
+  "spare": [
+    {
+      "accountId": "default",
+      "accountName": "This Mac",
+      "engine": "claude",
+      "kind": "five_hour",
+      "next": true,
+      "observedAt": 1762290000000,
+      "resetsAt": 1762300000000,
+      "usedPercent": 38.0,
+      "windowMinutes": 300
+    }
+  ],
+  "totals": {
+    "accounts": 3,
+    "engines": [
+      {
+        "accounts": 2,
+        "engine": "claude",
+        "read": 2,
+        "room": 2
+      },
+      {
+        "accounts": 1,
+        "engine": "codex",
+        "read": 1,
+        "room": 0
+      }
+    ],
+    "nextRoom": {
+      "accountId": "c1",
+      "accountName": "Plus",
+      "at": 1762400000000,
+      "engine": "codex"
+    },
+    "read": 3,
+    "room": 2,
+    "runOut": [
+      {
+        "accounts": 2,
+        "engine": "claude",
+        "estimate": true,
+        "reachesAt": 1762298000000,
+        "readings": 11
+      }
+    ],
+    "signedIn": 3,
+    "windows": [
+      {
+        "family": "session",
+        "read": 3,
+        "room": 2,
+        "soonestReset": {
+          "accountId": "default",
+          "accountName": "This Mac",
+          "at": 1762300000000,
+          "engine": "claude"
+        }
+      }
+    ]
+  }
+} satisfies Result<'agents.spare.add'>;
+export const agentsSpareSpendNow = {
+  "line": "Chief of Staff is starting your spare-capacity list (2 waiting)."
+} satisfies Result<'agents.spare.spendNow'>;
 export const agentsMessages = {
   "asOf": {
     "epoch": "epoch-test",
@@ -4522,6 +5083,9 @@ export const frames = [
       "agents.accounts.use",
       "agents.accounts.reorder",
       "agents.usagePlan",
+      "agents.usage.setMode",
+      "agents.spare.add",
+      "agents.spare.spendNow",
       "agents.quietHours",
       "agents.setQuietHours",
       "agents.morningBrief",

@@ -200,6 +200,7 @@ fn watch_check_in(source: Source) -> CheckIn {
         follow_up: false,
         then: Vec::new(),
         waiting: None,
+        model: None,
         extra: Default::default(),
     }
 }

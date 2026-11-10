@@ -1077,6 +1077,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Running a routine now",
             "run a routine now",
         ),
+        "set_routine_model" => act(
+            StepKind::Plan,
+            "Changed a routine's model",
+            "Changing a routine's model",
+            "change a routine's model",
+        ),
         // Testing a site in the preview (`preview_test`).
         "test_open" => {
             let path = named("path", "a page");

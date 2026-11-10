@@ -330,6 +330,11 @@ export interface CheckIn {
   then?: RoutineStep[];
   /** A run waiting for the user's OK between two steps, with its card. */
   waiting?: RoutineWaiting;
+  /**
+   * The model this routine wakes its agent on (`CheckIn::model`): `same` is the
+   * agent's own, else one of its engine's; omitted for the agent's routine model.
+   */
+  model?: string;
 }
 
 /** Routines in steps and drafted agents; shared with the phone. */
@@ -368,6 +373,7 @@ export interface CheckInRun {
     | 'skipped'
     | 'waiting'
     | 'declined'
+    | 'held'
     | 'unknown';
   /** 1 for the run itself, 2 for its first retry. */
   attempt: number;
@@ -1979,6 +1985,9 @@ export const cancelCheckIn = (agentId: string, id: string) =>
   invoke<void>('agents_schedule_cancel', { agentId, id });
 export const pauseCheckIn = (agentId: string, id: string, paused: boolean) =>
   invoke<void>('agents_schedule_pause', { agentId, id, paused });
+/** One routine's model: `''` like its other routines, `'same'` its agent's own, or a model (`CheckIn::model`). */
+export const setRoutineModel = (agentId: string, id: string, model: string) =>
+  invoke<CheckIn>('agents_schedule_model', { agentId, id, model });
 /** `then` replaces its steps; leave it out to keep them. */
 export const updateCheckIn = (
   agentId: string,
@@ -2724,6 +2733,8 @@ export type {
   ResultCard,
   ResultItem,
   ResultRef,
+  ResultStatus,
+  LinkKind,
   ShotRole,
 } from '../../packages/companion-protocol/src/results';
 export type { LocalLink } from '../../packages/companion-protocol/src/model';
@@ -2748,6 +2759,12 @@ export {
   foldResultReplies,
   revisingLabel,
   supersededLine,
+  resultVersions,
+  resultStatus,
+  RESULT_STATUS_LABEL,
+  linkKind,
+  linkHost,
+  isPortrait,
 } from '../../packages/companion-protocol/src/results';
 
 /** "9:24 AM": a message's time, on hover. */

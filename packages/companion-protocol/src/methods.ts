@@ -71,6 +71,7 @@ import type {
   Quota,
   UsageAccount,
   UsageInventory,
+  UsageMode,
 } from './model';
 
 /** A file uploaded with `PUT /v1/blobs`, referenced by id. Replaces a desktop path. */
@@ -558,6 +559,27 @@ export interface Methods {
    * phone. Newer Macs only.
    */
   'agents.usagePlan': { params: Record<string, never>; result: UsageInventory };
+  /**
+   * The usage mode, chosen by the user on the phone: applies at once, as in
+   * the desk's Settings (an agent asking for it gets a card instead).
+   * Answers the inventory as `agents.usagePlan` does. Audited. Newer Macs only.
+   */
+  'agents.usage.setMode': { params: { mode: UsageMode }; result: UsageInventory };
+  /**
+   * Something for the spare-capacity list, added by "you" (at most 600
+   * characters), optionally for one agent. Answers the inventory. Audited.
+   * Newer Macs only.
+   */
+  'agents.spare.add': {
+    params: { text: string; agentId?: string };
+    result: UsageInventory;
+  };
+  /**
+   * "Give agents something to do": the Chief starts the spare-capacity list
+   * on a limit near its reset with room left, on any account (the one turns
+   * run on next first). Answers the line to show. Audited. Newer Macs only.
+   */
+  'agents.spare.spendNow': { params: Record<string, never>; result: { line: string } };
   /**
    * The ready-made agents the phone's New agent sheet offers. `template` on
    * `agents.create` takes one's id, and the Mac fills in its briefing. A Mac

@@ -92,7 +92,7 @@ import {
 } from './AgentChatItems';
 import { DecideCards } from './AgentAdmin';
 import { AgentProjectChip, ChangeCard, useAgentProjects } from './AgentProject';
-import { ResultCardView } from './AgentResult';
+import { ResultCardView, ResultChatProvider } from './AgentResult';
 import { AgentGalleryProvider } from './AgentGallery';
 import { SessionCard } from './AgentSession';
 import { RoomFoldLine, RoomWorkingPlace } from './AgentRoomParts';
@@ -118,6 +118,7 @@ import {
   approvalSeries,
   withQuotes,
   newestResults,
+  resultVersions,
   foldResultReplies,
   sendAgentMessage,
   reviewTextImport,
@@ -816,6 +817,8 @@ export const AgentChat = memo(function AgentChat({
   const copyAgent = liveCopyCard ? agent : undefined;
   // Each result's newest version is drawn in full; older ones fold.
   const newestResult = useMemo(() => new Set(newestResults(shown).values()), [shown]);
+  // Every version of each result, for a card's version switcher (v1 · v2).
+  const versionsByResult = useMemo(() => resultVersions(shown), [shown]);
   /** Nothing yet but what the Chief said first: the user hasn't spoken. */
   const greetingOnly =
     agent.isMain &&
@@ -1372,6 +1375,14 @@ export const AgentChat = memo(function AgentChat({
   });
   const stopNow = useStableEvent(() => void onStop());
   const clearRevising = useCallback(() => setRevising(null), []);
+  // A result card's own Ask for changes field sends here, revising that result.
+  const sendChanges = useStableEvent((ref: ResultRef, text: string) =>
+    sendText(text, false, { revises: ref })
+  );
+  const resultChat = useMemo(
+    () => ({ versionsOf: (id: string) => versionsByResult.get(id), sendChanges }),
+    [versionsByResult, sendChanges]
+  );
 
   // Identity only: who this is. What it's doing is said once in the sidebar
   // row and once in the conversation (a bar, the working line), never a third
@@ -1645,380 +1656,382 @@ export const AgentChat = memo(function AgentChat({
   return (
     <AccentScopeProvider scope={accentScope}>
       <AgentGalleryProvider messages={shown} agentOf={galleryAgentOf}>
-        <section
-          ref={sectionRef}
-          className="agent-chat"
-          data-color={agent.color}
-          data-dropping={dropping || undefined}
-          data-takeover-terminal={terminalShown || undefined}
-          aria-label={`Conversation with ${agent.name}`}
-          {...accentScope}
-          {...dropHandlers}
-        >
-          <ChatAnnouncer chatId={agent.id} messages={messages} agentName={agent.name} />
-          <header className="agent-chat__header">
-            {compact && (
-              <CompactModeToggle
-                mode="agents"
-                onProjects={compact.onGoProjects}
-                className="agent-chat__mode"
-              />
-            )}
-            {compact ? (
-              <LiveAgentSwitcher
-                currentId={agent.id}
-                title={title}
-                label={`${agent.name}. Switch agent`}
-                onOpenAgent={onOpenAgent}
-                onGoHome={compact.onGoHome}
-              />
-            ) : (
-              <div className="agent-chat__title">
-                {title}
-                {/* Not in the compact switcher: it's a button already. */}
-                <AgentProjectChip agent={agent} />
-                <AgentAccountChip agent={agent} />
-                {conversationSwitcher}
+        <ResultChatProvider value={resultChat}>
+          <section
+            ref={sectionRef}
+            className="agent-chat"
+            data-color={agent.color}
+            data-dropping={dropping || undefined}
+            data-takeover-terminal={terminalShown || undefined}
+            aria-label={`Conversation with ${agent.name}`}
+            {...accentScope}
+            {...dropHandlers}
+          >
+            <ChatAnnouncer chatId={agent.id} messages={messages} agentName={agent.name} />
+            <header className="agent-chat__header">
+              {compact && (
+                <CompactModeToggle
+                  mode="agents"
+                  onProjects={compact.onGoProjects}
+                  className="agent-chat__mode"
+                />
+              )}
+              {compact ? (
+                <LiveAgentSwitcher
+                  currentId={agent.id}
+                  title={title}
+                  label={`${agent.name}. Switch agent`}
+                  onOpenAgent={onOpenAgent}
+                  onGoHome={compact.onGoHome}
+                />
+              ) : (
+                <div className="agent-chat__title">
+                  {title}
+                  {/* Not in the compact switcher: it's a button already. */}
+                  <AgentProjectChip agent={agent} />
+                  <AgentAccountChip agent={agent} />
+                  {conversationSwitcher}
+                </div>
+              )}
+              <div className="agent-chat__actions">
+                {/* Compact: the title is the agent menu, so it sits with the actions. */}
+                {compact && conversationSwitcher}
+                {/* Nothing to schedule or pick a model for until Claude Code is here. */}
+                {engineReady && (
+                  <>
+                    <AgentUsageRing agent={agent} open={usageOpen} onOpenChange={setUsageOpen} />
+                    <AgentSchedulePopover
+                      agent={agent}
+                      open={scheduleOpen}
+                      onOpenChange={openSchedule}
+                      startWhen={scheduleWhen}
+                    />
+                    <AgentModelMenu agent={agent} />
+                  </>
+                )}
+                <Dropdown
+                  align="right"
+                  portal
+                  menuClassName="agent-model-menu"
+                  className="agent-chat__menu"
+                  trigger={(p) => (
+                    <IconButton
+                      {...p}
+                      tabIndex={0}
+                      variant="ghost"
+                      icon={<MoreHorizontalIcon size={14} />}
+                      title="Agent actions"
+                      aria-label={`Actions for ${agent.name}`}
+                    />
+                  )}
+                >
+                  <AgentActionItems
+                    agent={agent}
+                    kind="dropdown"
+                    onSchedule={engineReady ? () => setScheduleOpen(true) : undefined}
+                    onFiles={() => setFilesOpen(true)}
+                    {...actions}
+                  />
+                </Dropdown>
+                <AgentFilesModal
+                  agent={agent}
+                  isOpen={filesOpen}
+                  onClose={() => setFilesOpen(false)}
+                />
+                <RememberModal
+                  key={remembering?.id ?? 'none'}
+                  agent={agent}
+                  message={remembering}
+                  onClose={() => setRemembering(null)}
+                />
+              </div>
+            </header>
+
+            {/* Unmounted while the chat shows (a hidden xterm would fit itself to
+            nothing); showing it again replays the session's scrollback. */}
+            {takeover && terminalShown && (
+              <div className="agent-chat__takeover">
+                <TakeoverTerminal takeover={takeover} />
               </div>
             )}
-            <div className="agent-chat__actions">
-              {/* Compact: the title is the agent menu, so it sits with the actions. */}
-              {compact && conversationSwitcher}
-              {/* Nothing to schedule or pick a model for until Claude Code is here. */}
-              {engineReady && (
-                <>
-                  <AgentUsageRing agent={agent} open={usageOpen} onOpenChange={setUsageOpen} />
-                  <AgentSchedulePopover
-                    agent={agent}
-                    open={scheduleOpen}
-                    onOpenChange={openSchedule}
-                    startWhen={scheduleWhen}
-                  />
-                  <AgentModelMenu agent={agent} />
-                </>
-              )}
-              <Dropdown
-                align="right"
-                portal
-                menuClassName="agent-model-menu"
-                className="agent-chat__menu"
-                trigger={(p) => (
-                  <IconButton
-                    {...p}
-                    tabIndex={0}
-                    variant="ghost"
-                    icon={<MoreHorizontalIcon size={14} />}
-                    title="Agent actions"
-                    aria-label={`Actions for ${agent.name}`}
-                  />
-                )}
-              >
-                <AgentActionItems
-                  agent={agent}
-                  kind="dropdown"
-                  onSchedule={engineReady ? () => setScheduleOpen(true) : undefined}
-                  onFiles={() => setFilesOpen(true)}
-                  {...actions}
-                />
-              </Dropdown>
-              <AgentFilesModal
-                agent={agent}
-                isOpen={filesOpen}
-                onClose={() => setFilesOpen(false)}
-              />
-              <RememberModal
-                key={remembering?.id ?? 'none'}
-                agent={agent}
-                message={remembering}
-                onClose={() => setRemembering(null)}
-              />
-            </div>
-          </header>
 
-          {/* Unmounted while the chat shows (a hidden xterm would fit itself to
-            nothing); showing it again replays the session's scrollback. */}
-          {takeover && terminalShown && (
-            <div className="agent-chat__takeover">
-              <TakeoverTerminal takeover={takeover} />
-            </div>
-          )}
-
-          {/* Focusable, so the history scrolls with the keyboard (arrows, Page Up). */}
-          <div
-            className="agent-chat__scroll"
-            ref={scrollRef}
-            onScroll={onScroll}
-            tabIndex={0}
-            role="region"
-            aria-label="Messages"
-          >
+            {/* Focusable, so the history scrolls with the keyboard (arrows, Page Up). */}
             <div
-              className="agent-chat__messages"
-              ref={messagesRef}
-              data-greeting={(greetingOnly && engineReady) || undefined}
+              className="agent-chat__scroll"
+              ref={scrollRef}
+              onScroll={onScroll}
+              tabIndex={0}
+              role="region"
+              aria-label="Messages"
             >
-              {/* Asked once, for an install that never answered it. On a
+              <div
+                className="agent-chat__messages"
+                ref={messagesRef}
+                data-greeting={(greetingOnly && engineReady) || undefined}
+              >
+                {/* Asked once, for an install that never answered it. On a
               first run it comes after the greeting and its starters (below),
               so the Chief speaks first. */}
-              {agent.isMain && engineReady && !greetingOnly && (
-                <ImportChoiceCard onImport={onImport} />
-              )}
-              {items.length === 0 ? (
-                <div className="agent-chat__empty">
-                  <AgentKey id={agent.id} name={agent.name} color={agent.color} size="lg" />
-                  <p className="agent-chat__empty-name">{agent.name}</p>
-                  {agent.isMain ? (
-                    <>
-                      <p className="agent-chat__empty-role">
-                        Tell me what you’re working on and I’ll put a team together. I create
-                        agents, hand them the work, and bring you what comes back.
-                      </p>
-                      {engineReady && chiefStarters}
-                    </>
-                  ) : (
-                    <>
-                      {agent.role && <p className="agent-chat__empty-role">{agent.role}</p>}
-                      <p className="agent-chat__empty-hint">
-                        It remembers what you tell it. Anything risky comes to you first, for you to
-                        Allow or Deny.
-                      </p>
-                      <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
-                        View instructions
-                      </TextButton>
-                      {engineReady && templateStarters}
-                      {engineReady && !template && (
-                        <div className="agent-chat__starters">
-                          {AGENT_STARTERS.map((text) => (
-                            <Button
-                              key={text}
-                              tabIndex={0}
-                              variant="secondary"
-                              onClick={() => sendStarter(text)}
-                            >
-                              {text}
-                            </Button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              ) : (
-                rows
-              )}
-              {/* The Chief spoke first (its stored greeting); the ways in sit
+                {agent.isMain && engineReady && !greetingOnly && (
+                  <ImportChoiceCard onImport={onImport} />
+                )}
+                {items.length === 0 ? (
+                  <div className="agent-chat__empty">
+                    <AgentKey id={agent.id} name={agent.name} color={agent.color} size="lg" />
+                    <p className="agent-chat__empty-name">{agent.name}</p>
+                    {agent.isMain ? (
+                      <>
+                        <p className="agent-chat__empty-role">
+                          Tell me what you’re working on and I’ll put a team together. I create
+                          agents, hand them the work, and bring you what comes back.
+                        </p>
+                        {engineReady && chiefStarters}
+                      </>
+                    ) : (
+                      <>
+                        {agent.role && <p className="agent-chat__empty-role">{agent.role}</p>}
+                        <p className="agent-chat__empty-hint">
+                          It remembers what you tell it. Anything risky comes to you first, for you
+                          to Allow or Deny.
+                        </p>
+                        <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
+                          View instructions
+                        </TextButton>
+                        {engineReady && templateStarters}
+                        {engineReady && !template && (
+                          <div className="agent-chat__starters">
+                            {AGENT_STARTERS.map((text) => (
+                              <Button
+                                key={text}
+                                tabIndex={0}
+                                variant="secondary"
+                                onClick={() => sendStarter(text)}
+                              >
+                                {text}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  rows
+                )}
+                {/* The Chief spoke first (its stored greeting); the ways in sit
               under it until the user says something. */}
-              {greetingOnly && engineReady && chiefStarters}
-              {greetingOnly && engineReady && <ImportChoiceCard onImport={onImport} />}
-              {/* The phone, offered once the first thing asked for is back. */}
-              {agent.isMain &&
-                engineReady &&
-                onSetUpPhone &&
-                !busy &&
-                importChoice !== 'undecided' &&
-                reachedFirstResult(shown) && <ChiefPhoneOffer onSetUp={onSetUpPhone} />}
-              {/* A ready-made agent the Chief just made: only "Created by" so
+                {greetingOnly && engineReady && chiefStarters}
+                {greetingOnly && engineReady && <ImportChoiceCard onImport={onImport} />}
+                {/* The phone, offered once the first thing asked for is back. */}
+                {agent.isMain &&
+                  engineReady &&
+                  onSetUpPhone &&
+                  !busy &&
+                  importChoice !== 'undecided' &&
+                  reachedFirstResult(shown) && <ChiefPhoneOffer onSetUp={onSetUpPhone} />}
+                {/* A ready-made agent the Chief just made: only "Created by" so
               far, so its own starters sit under it until the user speaks. */}
-              {templateFirstOpen && engineReady && !firstOpen && templateStarters}
-              {/* A new agent's welcome, then three things it can do now. */}
-              {firstOpen && engineReady && (
-                <AgentStarters starters={agent.starters ?? []} onSend={sendStarter} />
-              )}
-              {items.length > 0 && (
-                <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
-              )}
-              {items.length === 0 && indicator.mounted && (
-                <WorkingIndicator
-                  activity={activity}
-                  work={agent.status.work}
-                  agent={rowAgent}
-                  entering={indicator.entering}
-                  leaving={indicator.leaving}
-                  onExited={indicator.onExited}
+                {templateFirstOpen && engineReady && !firstOpen && templateStarters}
+                {/* A new agent's welcome, then three things it can do now. */}
+                {firstOpen && engineReady && (
+                  <AgentStarters starters={agent.starters ?? []} onSend={sendStarter} />
+                )}
+                {items.length > 0 && (
+                  <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
+                )}
+                {items.length === 0 && indicator.mounted && (
+                  <WorkingIndicator
+                    activity={activity}
+                    work={agent.status.work}
+                    agent={rowAgent}
+                    entering={indicator.entering}
+                    leaving={indicator.leaving}
+                    onExited={indicator.onExited}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="agent-chat__footer">
+              {jump.mounted && (
+                <IconButton
+                  tabIndex={0}
+                  size="compact"
+                  className="agent-chat__jump"
+                  data-leaving={jump.leaving || undefined}
+                  onAnimationEnd={jump.leaving ? jump.onExited : undefined}
+                  icon={<ArrowDownIcon size={14} />}
+                  onClick={scrollToBottom}
+                  aria-label="Jump to latest"
+                  title="Jump to latest"
                 />
               )}
-            </div>
-          </div>
 
-          <div className="agent-chat__footer">
-            {jump.mounted && (
-              <IconButton
-                tabIndex={0}
-                size="compact"
-                className="agent-chat__jump"
-                data-leaving={jump.leaving || undefined}
-                onAnimationEnd={jump.leaving ? jump.onExited : undefined}
-                icon={<ArrowDownIcon size={14} />}
-                onClick={scrollToBottom}
-                aria-label="Jump to latest"
-                title="Jump to latest"
-              />
-            )}
-
-            {/* This conversation's state, in one stack in a fixed order: you're
+              {/* This conversation's state, in one stack in a fixed order: you're
               driving it, an import, what its engine can't do, a key in the
               draft, dictation blocked. Two at most; the rest fold. A bar that
               fails to draw leaves the composer and the history working. */}
-            <AreaBoundary where="agent-bars" resetKey={agent.id}>
-              <ConversationBars
-                bars={[
-                  // The phone is driving a tab in this Mac's Chrome: said in every conversation.
-                  { id: 'phoneSignin', node: <PhoneSigninBar /> },
-                  // You're in its browser right now (Step in): Hand back from here.
-                  { id: 'stepIn', node: <StepInBar agent={agent} messages={allLines ?? []} /> },
-                  {
-                    id: 'waiting',
-                    node: <WaitingForYouBar agent={agent} messages={allLines ?? []} />,
-                  },
-                  {
-                    id: 'takeover',
-                    node: (
-                      <TakeoverBanner
-                        agent={agent}
-                        terminalShown={terminalShown}
-                        onToggleTerminal={toggleTerminal}
-                      />
-                    ),
-                  },
-                  { id: 'import', node: agent.isMain && <ImportTalkBar /> },
-                  {
-                    // What the import left to do opens its checklist, not the
-                    // requests panel: those logins are on the card (and left out
-                    // of the requests bar's counts through `shownRequestIds`).
-                    id: 'setup',
-                    node: setupHere && !setupHere.complete && (
-                      <ConversationBar
-                        state="waiting"
-                        data-testid="team-setup-bar"
-                        title={SETUP_BAR_TITLE}
-                        detail={progressLine(setupHere)}
-                        actions={
-                          <Button size="compact" variant="secondary" onClick={showTeamSetup}>
-                            Continue
-                          </Button>
-                        }
-                      />
-                    ),
-                  },
-                  {
-                    id: 'requests',
-                    node: engineReady && (
-                      <AgentRequestsBar
-                        agent={agent}
-                        peerIds={peerIds}
-                        askers={foreignOwners}
-                        shownRequestIds={shownRequestIds}
-                        onOpenAgent={onOpenAgent}
-                        setup={setupBarTarget}
-                      />
-                    ),
-                  },
-                  {
-                    id: 'engine',
-                    node: engineReady && cantAsk && (
-                      <ConversationBar
-                        data-testid="agent-cant-ask"
-                        title={`${ENGINE_LABEL[agent.engine]} can’t stop to ask you here`}
-                        detail={`Anything that needs your OK is refused instead. Updating ${ENGINE_LABEL[agent.engine]} fixes this.`}
-                      />
-                    ),
-                  },
-                  {
-                    id: 'secret',
-                    node: engineReady && (
-                      <LiveSecretHint agentId={agent.id} agentName={agent.name} />
-                    ),
-                  },
-                  {
-                    id: 'dictation',
-                    node: blocked && (
-                      <ConversationBar
-                        role="alert"
-                        state="waiting"
-                        title={blocked.message}
-                        actions={
-                          <>
-                            <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
-                            {blocked.settings && (
-                              <Button
-                                size="compact"
-                                variant="secondary"
-                                onClick={() => {
-                                  const url = blocked.settings;
-                                  if (url) void openPrivacySettings(url);
-                                }}
-                              >
-                                Open System Settings
-                              </Button>
-                            )}
-                          </>
-                        }
-                      />
-                    ),
-                  },
-                ]}
-              />
-            </AreaBoundary>
+              <AreaBoundary where="agent-bars" resetKey={agent.id}>
+                <ConversationBars
+                  bars={[
+                    // The phone is driving a tab in this Mac's Chrome: said in every conversation.
+                    { id: 'phoneSignin', node: <PhoneSigninBar /> },
+                    // You're in its browser right now (Step in): Hand back from here.
+                    { id: 'stepIn', node: <StepInBar agent={agent} messages={allLines ?? []} /> },
+                    {
+                      id: 'waiting',
+                      node: <WaitingForYouBar agent={agent} messages={allLines ?? []} />,
+                    },
+                    {
+                      id: 'takeover',
+                      node: (
+                        <TakeoverBanner
+                          agent={agent}
+                          terminalShown={terminalShown}
+                          onToggleTerminal={toggleTerminal}
+                        />
+                      ),
+                    },
+                    { id: 'import', node: agent.isMain && <ImportTalkBar /> },
+                    {
+                      // What the import left to do opens its checklist, not the
+                      // requests panel: those logins are on the card (and left out
+                      // of the requests bar's counts through `shownRequestIds`).
+                      id: 'setup',
+                      node: setupHere && !setupHere.complete && (
+                        <ConversationBar
+                          state="waiting"
+                          data-testid="team-setup-bar"
+                          title={SETUP_BAR_TITLE}
+                          detail={progressLine(setupHere)}
+                          actions={
+                            <Button size="compact" variant="secondary" onClick={showTeamSetup}>
+                              Continue
+                            </Button>
+                          }
+                        />
+                      ),
+                    },
+                    {
+                      id: 'requests',
+                      node: engineReady && (
+                        <AgentRequestsBar
+                          agent={agent}
+                          peerIds={peerIds}
+                          askers={foreignOwners}
+                          shownRequestIds={shownRequestIds}
+                          onOpenAgent={onOpenAgent}
+                          setup={setupBarTarget}
+                        />
+                      ),
+                    },
+                    {
+                      id: 'engine',
+                      node: engineReady && cantAsk && (
+                        <ConversationBar
+                          data-testid="agent-cant-ask"
+                          title={`${ENGINE_LABEL[agent.engine]} can’t stop to ask you here`}
+                          detail={`Anything that needs your OK is refused instead. Updating ${ENGINE_LABEL[agent.engine]} fixes this.`}
+                        />
+                      ),
+                    },
+                    {
+                      id: 'secret',
+                      node: engineReady && (
+                        <LiveSecretHint agentId={agent.id} agentName={agent.name} />
+                      ),
+                    },
+                    {
+                      id: 'dictation',
+                      node: blocked && (
+                        <ConversationBar
+                          role="alert"
+                          state="waiting"
+                          title={blocked.message}
+                          actions={
+                            <>
+                              <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
+                              {blocked.settings && (
+                                <Button
+                                  size="compact"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    const url = blocked.settings;
+                                    if (url) void openPrivacySettings(url);
+                                  }}
+                                >
+                                  Open System Settings
+                                </Button>
+                              )}
+                            </>
+                          }
+                        />
+                      ),
+                    },
+                  ]}
+                />
+              </AreaBoundary>
 
-            {engineReady ? (
-              <AgentComposer
-                agentId={agent.id}
-                agentName={agent.name}
-                inputRef={inputRef}
-                micRef={micRef}
-                dictation={dictation}
-                mentionSet={mentionSet}
-                staged={staged}
-                onRemoveStaged={attachments.remove}
-                onPaste={attachments.onPaste}
-                quotes={quotes}
-                onRemoveQuote={removeQuote}
-                revising={revising}
-                onClearRevising={clearRevising}
-                busy={busy}
-                working={working}
-                onEscape={onEscape}
-                onStop={stopNow}
-                onSend={send}
-                onPickFiles={pickFiles}
-              />
-            ) : (
-              <div className="agent-composer agent-composer--blocked" role="status">
-                <InfoIcon size={14} className="agent-composer__blocked-icon" />
-                <span className="agent-composer__blocked-text">
-                  {engineInstalled
-                    ? `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which is signed out on this Mac.`
-                    : `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which isn’t installed on this Mac yet.`}
-                </span>
-                <Button tabIndex={0} variant="primary" onClick={onSetUpEngine}>
-                  {engineInstalled ? 'Sign in' : `Set up ${ENGINE_LABEL[agent.engine]}`}
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {quoting.anchor && (
-            <Button
-              size="compact"
-              className="agent-chat__quote"
-              style={{ top: quoting.anchor.top, left: quoting.anchor.left }}
-              // Keep the selection: a mousedown here would otherwise clear it.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => quoting.quote()}
-            >
-              Quote <kbd className="agent-chat__kbd">⌘L</kbd>
-            </Button>
-          )}
-
-          <div className="agent-chat__drop" aria-hidden={!dropping}>
-            <div className="agent-chat__drop-label">
-              <span className="agent-chat__drop-icon">
-                <PaperclipIcon size={18} />
-              </span>
-              Drop files for {agent.name}
+              {engineReady ? (
+                <AgentComposer
+                  agentId={agent.id}
+                  agentName={agent.name}
+                  inputRef={inputRef}
+                  micRef={micRef}
+                  dictation={dictation}
+                  mentionSet={mentionSet}
+                  staged={staged}
+                  onRemoveStaged={attachments.remove}
+                  onPaste={attachments.onPaste}
+                  quotes={quotes}
+                  onRemoveQuote={removeQuote}
+                  revising={revising}
+                  onClearRevising={clearRevising}
+                  busy={busy}
+                  working={working}
+                  onEscape={onEscape}
+                  onStop={stopNow}
+                  onSend={send}
+                  onPickFiles={pickFiles}
+                />
+              ) : (
+                <div className="agent-composer agent-composer--blocked" role="status">
+                  <InfoIcon size={14} className="agent-composer__blocked-icon" />
+                  <span className="agent-composer__blocked-text">
+                    {engineInstalled
+                      ? `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which is signed out on this Mac.`
+                      : `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which isn’t installed on this Mac yet.`}
+                  </span>
+                  <Button tabIndex={0} variant="primary" onClick={onSetUpEngine}>
+                    {engineInstalled ? 'Sign in' : `Set up ${ENGINE_LABEL[agent.engine]}`}
+                  </Button>
+                </div>
+              )}
             </div>
-          </div>
-        </section>
+
+            {quoting.anchor && (
+              <Button
+                size="compact"
+                className="agent-chat__quote"
+                style={{ top: quoting.anchor.top, left: quoting.anchor.left }}
+                // Keep the selection: a mousedown here would otherwise clear it.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => quoting.quote()}
+              >
+                Quote <kbd className="agent-chat__kbd">⌘L</kbd>
+              </Button>
+            )}
+
+            <div className="agent-chat__drop" aria-hidden={!dropping}>
+              <div className="agent-chat__drop-label">
+                <span className="agent-chat__drop-icon">
+                  <PaperclipIcon size={18} />
+                </span>
+                Drop files for {agent.name}
+              </div>
+            </div>
+          </section>
+        </ResultChatProvider>
       </AgentGalleryProvider>
     </AccentScopeProvider>
   );

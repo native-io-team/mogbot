@@ -55,6 +55,7 @@ import {
   takeUsageAdd,
   type UsageAccount,
   type UsageAccountRef,
+  USAGE_ID,
 } from '../../lib/agentAccounts';
 import {
   USAGE_MODES,
@@ -77,7 +78,7 @@ import { onAccountSignIn, takeAccountSignIn } from '../../lib/settingsFromChat';
 import { ADD_ACCOUNT_WHY } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { AccountSignIn } from './AccountSignIn';
 import { EngineSignInModal } from './EngineSignInModal';
-import { AgentKey } from './AgentKey';
+import { AgentsPageHeader, type AgentsPageCompact } from './AgentsPageHeader';
 import { AgentsCrossover } from './AgentsCrossover';
 import { SpareList } from './AgentsUsage';
 import { useUsageGlance } from './AccountSwitcher';
@@ -85,15 +86,22 @@ import { AccountDetail, AccountRow, SameNotes, TotalBar } from './UsageStack';
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
 
-export function AgentsUsageView() {
+export function AgentsUsageView({
+  compact,
+  onOpenAgent = () => {},
+}: {
+  compact?: AgentsPageCompact;
+  onOpenAgent?: (agentId: string) => void;
+} = {}) {
   return (
     <section className="agent-chat agents-usage-view" aria-label="Usage">
-      <header className="agent-chat__header">
-        <div className="agent-chat__title">
-          <AgentKey name="Usage" colorway="putty" icon="lucide:gauge" size="md" />
-          <h2 className="agent-chat__name">Usage</h2>
-        </div>
-      </header>
+      <AgentsPageHeader
+        name="Usage"
+        icon="lucide:gauge"
+        pageId={USAGE_ID}
+        compact={compact}
+        onOpenAgent={onOpenAgent}
+      />
       <div
         className="agent-chat__scroll"
         tabIndex={0}

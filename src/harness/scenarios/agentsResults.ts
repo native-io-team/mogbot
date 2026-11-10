@@ -247,7 +247,7 @@ export const agentsResultsScenarios: Scenario[] = [
     id: 'agents-result-v1',
     title: 'Agents — a result card at the end of a reply',
     looksRightWhen:
-      'Finance’s chat ends on one card (same grey surface and radius as an approval card): the title “October invoice summary” in the heading weight, the two-sentence summary, then a quiet outlined “Not verified” box (a question mark, not a warning triangle; no fill) with a warning icon and two lines (EUR rate, Northwind unpaid). Then three rows, each opening: “Summary (PDF)” with “PDF · 47.1 KB”, “october-invoices.csv” with “CSV · 6.0 KB”, “Source sheet” with “docs.google.com”, each with a muted “Open ↗” on the right. Then a quiet “It says it checked” list with two plain-bulleted lines (no ticks: they are the agent’s claims), and a single “Ask for changes” action. Under the card, the folded “Worked 6 min · 5 steps” line. No raw ids, no tool names.',
+      'Finance’s chat ends on one card (same surface and radius as an approval card). Header: a document icon in a small tile, “October invoice summary” in the heading weight, and on the right a calm “Finished” status pill (green dot, ordinary ink). The two-sentence summary at the chat’s size. Then one grouped, hairline-divided list: “Summary (PDF)” with “PDF · 47.1 KB”, “october-invoices.csv” with “CSV · 6.0 KB”, and “Source sheet” with “docs.google.com” and a document icon, each with a muted “Open ↗” on the right and the link with a copy button. Then one Checks block split by a hairline: “It says it checked” (two plain-bulleted lines, no ticks: they are the agent’s claims) beside “Not verified” (a question mark, not a warning triangle) with the EUR-rate and Northwind lines. A single “Ask for changes” text action at the bottom right. Under the card, the folded “Worked 7 min · 5 steps” line. No raw ids, no tool names.',
     requires: '.agent-result .agent-result__unverified',
     openSelector: AGENTS_TAB,
     steps: [open('finance')],
@@ -255,16 +255,16 @@ export const agentsResultsScenarios: Scenario[] = [
   },
   {
     id: 'agents-result-asking',
-    title: 'Agents — Ask for changes opens the composer on the card',
+    title: 'Agents — Ask for changes opens a field in the card',
     looksRightWhen:
-      'Same chat. Above the composer’s text, a quote-style chip with a speech-bubble icon: “Changes to October invoice summary · v1”, with an × to drop it. The text field has focus and the typed request “Use the rate on each invoice’s date for the EUR ones.”',
-    requires: '.agent-composer__revising',
+      'Same chat. At the bottom of the result card, in place of its Ask for changes action, a recessed field: a speech-bubble icon and “Changes to October invoice summary · v1” in muted type, then the typed request “Use the rate on each invoice’s date for the EUR ones.”, and on its right Cancel and a neutral “Send” with an up arrow. The chat’s own composer below is untouched.',
+    requires: '.agent-result-ask',
     openSelector: AGENTS_TAB,
     steps: [
       open('finance'),
       { click: '.agent-result > .agent-card__actions button' },
       {
-        fill: '.agent-composer__input',
+        fill: '.agent-result-ask__input',
         value: 'Use the rate on each invoice’s date for the EUR ones.',
       },
     ],
@@ -274,7 +274,7 @@ export const agentsResultsScenarios: Scenario[] = [
     id: 'agents-result-v2',
     title: 'Agents — the same result, revised to version 2',
     looksRightWhen:
-      'The first card is folded to one muted line with a chevron: “October invoice summary · v1 · earlier version”. Your message shows a quote bar “Changes to October invoice summary · v1” above “Use the rate on each invoice’s date…”. The newest card has a small “v2” badge beside the title and, under it, a muted line “Changes since v1: EUR invoices use the rate on each invoice’s date (Globex −$12.40, Initech +$3.10)”; its Not verified box now has one line; “It says it checked” has “Recomputed both EUR totals”. One Ask for changes, on the newest card only.',
+      'The first card is folded to one muted line with a chevron: “October invoice summary · v1 · earlier version”. Your message shows a quote bar “Changes to October invoice summary · v1” above “Use the rate on each invoice’s date…”. The newest card’s header has the “Finished” pill and a small “v1 · v2” switcher with v2 selected; under the title, a block set off by a rule at its left edge: “Changes since v1” over “EUR invoices use the rate on each invoice’s date (Globex −$12.40, Initech +$3.10)”. Its Not verified side has one line; “It says it checked” has “Recomputed both EUR totals”. One Ask for changes, on the newest card only.',
     requires: '.agent-result-past',
     openSelector: AGENTS_TAB,
     steps: [open('finance')],
@@ -284,7 +284,7 @@ export const agentsResultsScenarios: Scenario[] = [
     id: 'agents-result-not-verified',
     title: 'Agents — a result whose agent couldn’t verify much',
     looksRightWhen:
-      'Lead Gen’s brief: title, summary, and straight under it the quiet outlined “Not verified” box with three plain lines (LinkedIn sign-in, a best guess on the website owner, cached launch dates), before the items. No “It says it checked” section at all, because the agent listed none. Items: the brief (MD), “Their team page” (northwind.example.com) and the LinkedIn link shown by its host and path.',
+      'Lead Gen’s brief: title with a “Finished” pill, the summary, then the items as one grouped list: the brief (MD · 3.4 KB), “Their team page” (northwind.example.com) and the LinkedIn link shown by its host and path (no repeated host line), each link with a copy button. Then the Checks block with only its “Not verified” side, full width: three plain lines (LinkedIn sign-in, a best guess on the website owner, cached launch dates). No “It says it checked” at all, because the agent listed none.',
     requires: '.agent-result[data-unverified]',
     openSelector: AGENTS_TAB,
     steps: [open('leadgen')],
@@ -294,7 +294,7 @@ export const agentsResultsScenarios: Scenario[] = [
     id: 'agents-result-copy',
     title: 'Agents — a project copy’s card carrying the result, with before and after',
     looksRightWhen:
-      'Acme Site’s reply ends on ONE card, not two: title “Pricing cards on mobile”, the summary, a quiet outlined “Not verified · Safari on a real iPhone”, then two phone screenshots side by side captioned “Before” (cards overlapping) and “After” (stacked), then the “Pricing page in the preview” link row and “It says it checked” (build, three widths, bulleted, no ticks). Below a hairline inside the same card: “Changes are ready” with “3 files”, the line “On a copy of acme-marketing · acme-marketing itself is unchanged”, and Keep changes · Review · Preview · Ask for changes · Discard · ⋯. The folded “Worked 5 min · 5 steps” line sits under the card.',
+      'Acme Site’s reply ends on ONE card, not two: a globe tile, “Pricing cards on mobile”, a “Finished” pill; the summary; a recessed before-and-after stage (“Before and after” and “Side by side · Slider” in its toolbar) holding two phone screenshots, each whole in a dark device frame with a “Before” / “After” tag (overlapping cards before, stacked after); the “Pricing page in the preview” row (a screen icon, localhost:3104, Open and a copy button); the Checks block (build and three widths beside “Safari on a real iPhone”). Then the card’s footer, on the recessed fill to the card’s edges below a hairline: “Changes are ready” with “+123 −16” (green and red) and “3 files”, the line “On a copy of acme-marketing · acme-marketing itself is unchanged”, and ⋯ · Discard · Preview · Ask for changes · Review changes · Keep changes (neutral, strong). The folded “Worked 6 min · 5 steps” line sits under the card.',
     requires: '.agent-result .agent-changes[data-in-result]',
     openSelector: AGENTS_TAB,
     steps: [open('acme')],

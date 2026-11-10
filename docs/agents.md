@@ -9,8 +9,8 @@ talk only to the Chief and let it run everything else.
 Agents is a mode, not a page. The **Agents | Projects** toggle at the top of
 the sidebar (⌘⇧A, or ⌘K → Switch to Agents) turns the whole window into the
 chat app: agent list on the left, one conversation on the right. Switching
-back returns to wherever you were on the Projects side (the dashboard,
-Workflows, the Inbox, or the open project); switching in returns to the last
+back returns to wherever you were on the Projects side (the dashboard or the
+open project); switching in returns to the last
 conversation. While Projects is showing, an amber badge on the
 Agents segment says an agent needs your OK or has news, and its tooltip says
 which. New agent is ⌘N, the row at the foot of the agent list, or ⌘K. In the
@@ -5311,10 +5311,47 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   use and which account it runs on, then goes ahead.
 - **Save my limits**: ask before heavy work (`usage_plan::ask_first`: a
   forecast of a tenth of a window or more, or a fan-out with no forecast),
-  and send light work to agents on lighter models or engines.
+  and send light work to agents on lighter models or engines. It also
+  **holds routines** (`agents/saver.rs`): a repeating routine that comes due
+  while every account its agent could run on is past 90% (`HOLD_PERCENT`) of
+  a 5-hour or weekly limit waits for the first of them to reset, then runs
+  once, late. Said once per hold: a line in the agent's chat and a run row
+  "Waiting for the reset" (`runs::Outcome::Held`, `usage_plan::first_hold`).
+  Run now still runs; "When…" routines aren't held; an account with no
+  reading is never held for.
+- **In any mode, an account out until a known reset is waited for, not
+  tried** (persona review 2026-11-09, the Adversary): a routine due while
+  every account the agent runs on is out until a reset the engine reported is
+  held the same way, unless its agent would carry on with the other engine
+  (`crossover` not Wait and the other engine ready, as last looked; unknown
+  counts as ready). A turn on a lone (or pinned) account that is out until a
+  known reset ends before the try (`wallet::pinned_and_out`), and a routine
+  that ends on a usage limit whose reset is too far off to retry at is
+  `Held`, not `Failed`. A background read that shows room on an account
+  marked out clears the mark (and its twins'), when it names the window that
+  was out or both kinds (`wallet::back_by_reading`).
+- **One warning per window** (`saver::warn_now`, from the minute tick at
+  most every 3 minutes): the first time the account turns run on next is past
+  90% of a limit, or its pace (an estimate) runs out at least an hour before
+  the reset, one notification in the Chief's name (desk; the phone when away
+  from the desk) and a line in the Chief's chat, with "Switch to Save my
+  limits" outside Save. Recorded before it is said (`usage_plan::first_warning`,
+  30 minutes of reset slack): never repeated for that window. Not in "Use it
+  all before reset".
+- **A model per routine** (`CheckIn::model`; the routine editor's "Runs on",
+  `agents_schedule_model`; the Chief's `set_routine_model`): like its other
+  routines (`Agent::routine_model`, the default), the agent's own (`same`),
+  or one of its engine's. The turn finds it through its tickets
+  (`runs::routine_model`), only when every routine in that turn agrees.
 - **Use it all before reset**: the user's standing OK to spend capacity that
-  would otherwise expire. When a window on the account turns would run on
-  next is near its reset (within a fifth of its length, at most a day:
+  would otherwise expire. **Any account's** expiring room counts: the
+  account turns run on next first; with none spare there, the soonest spare
+  window on another account, and turns on that engine then start on it until
+  that window resets (`wallet::spend_first`, applied in `wallet::candidates`;
+  pinned agents stay on theirs; leaving the mode clears it). The phone changes
+  the mode, adds to the list and presses "Give agents something to do"
+  (`agents.usage.setMode`, `agents.spare.add`, `agents.spare.spendNow`,
+  audited). When a window on such an account is near its reset (within a fifth of its length, at most a day:
   `five_hour` → last hour, `seven_day` → last day; Codex's own
   `windowDurationMins`; a window we can't size is never spare) with at least
   `SPARE_MIN_PERCENT` (25) points unused (and the account's other 5-hour or
@@ -5369,9 +5406,18 @@ older Mac doesn't list it in `welcome.methods`). Wording lives once in
   account no turn has run on. Those accounts say "No reading yet".
 - Opencode and local models aren't agent engines here; they're listed, not
   used.
-- Choosing *accounts* by reset time isn't done: the wallet's order is the
-  user's, and failover keeps it. Agents choose between *engines* (an agent on
-  Codex vs one on Claude Code) by what resets sooner.
+- Choosing *accounts* by reset time is done only for "Use it all before
+  reset" (`spend_first`, until that window resets); otherwise the wallet's
+  order is the user's, and failover keeps it. Agents choose between *engines*
+  (an agent on Codex vs one on Claude Code) by what resets sooner.
+- **"These may be the same account"** (`agents/lockstep.rs`,
+  `AccountLine.maybe_same_as`): asked, never counted, when two accounts'
+  weekly readings, paired within 15 minutes, share a reset to the second and
+  a figure (within half a point) across 3+ pairs, moved at least a point, and
+  one of them ran no turn of ours in that span. One line under the meter
+  (`sameNotes`, words in `sameAccount.ts`); totals, failover and spare
+  capacity still count both. The phone numbers accounts by engine when both
+  engines are listed ("Claude 2", "Codex 1": `placeLabel`).
 - "Route light work to cheaper models" is an instruction to the Chief
   (delegate to agents on lighter models); nothing reclassifies a turn
   automatically.
@@ -6318,10 +6364,24 @@ chat.
   Links are http/https with no sign-in details in them. `checked`
   and `not_verified` are the agent's own words; the app never fills either,
   and shows each only when given. On the desk the card reads work first:
-  summary, before/after, files and links, then one Checks row with "It says
-  it checked" and "Not verified" side by side (stacked when narrow), all at
-  the chat's reading size. A link's subtitle is left out when it only repeats
-  the title's host (`lib/resultItems.ts`).
+  a header (a tile for what kind of thing was made, the title, a status pill
+  read from the card alone — Finished, Partway through or Earlier version,
+  never "verified" — and a v1 · v2 switcher once the chat holds more than one
+  version, `resultVersions`), "Changes since v1" set off by a rule, the
+  summary, then the media: before/after on a recessed stage (side by side
+  with the captions as tags on the pictures, or a slider with a round grip),
+  a phone screen shown whole in a device frame when the picture is clearly
+  portrait (`isPortrait`, from the picture's own size once loaded), other
+  pictures as a small gallery, and a site's "Live preview" row (Test it,
+  Open preview). Then files and links as one hairline-divided list (a kind
+  tile, the name, type and size or the host, Open, and Copy link for a link;
+  the icon from `linkKind`, the address alone, never words), then one Checks
+  block with "It says it checked" and "Not verified" split by a hairline
+  (stacked under 520px of card, a container query, as with the preview pane
+  open). A link's subtitle is left out when it only repeats the title's host
+  (`lib/resultItems.ts`). A project copy's "Changes are ready" is the card's
+  footer, on the recessed fill to its edges, with the diff stat (+12 −3) by
+  the file count.
 - **Refused, never trimmed.** Title 120, summary 2,000, each line 300, 12
   lines per list, 12 items (files also ≤ 10, 25 MB each). Cutting a "not
   verified" list would hide exactly what matters, so too much is an error the
@@ -6344,8 +6404,11 @@ chat.
   the caller has no live turn (`broker::is_live`) the card is recorded into
   the chat at once and the agent is told it is there now
   (`results::recorded_reply`); a second call adds a second card.
-- **Ask for changes** opens the composer with a "Changes to <title> · v1"
-  chip; the send carries `revises` (the result id). `agents_send` pins the
+- **Ask for changes** opens a field in the card itself on the desk
+  (`ResultChatProvider`: Enter sends, Escape puts it away, Send is neutral);
+  a copy's Ask for changes opens the same field. Where the card can't send
+  (a room), it opens the composer with a "Changes to <title> · v1" chip.
+  Either way the send carries `revises` (the result id). `agents_send` pins the
   message to the result as the log has it (`revises: {id, version, title}`)
   and adds `results::revising_prompt` ahead of the text. The next
   `share_result` revises that result: explicitly (`revises`) or because the
