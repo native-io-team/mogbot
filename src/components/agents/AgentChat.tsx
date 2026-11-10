@@ -174,6 +174,7 @@ import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 import { guardRow, useGuardedRows } from './AgentsErrorBoundary';
 import { AreaBoundary } from '../primitives/AreaBoundary';
 import { isRecipeFile, looksLikeRecipe } from '../../lib/agentRecipe';
+import { scrollMotion } from '../../lib/motion';
 
 /**
  * The Chief's first open: three workflows that run without the user
@@ -1119,7 +1120,7 @@ export const AgentChat = memo(function AgentChat({
     }
     // The scroll handler settles `atBottom`; until then, don't follow new lines.
     atBottomRef.current = false;
-    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.scrollIntoView({ block: 'center', behavior: scrollMotion() });
     // Restart the flash if it's already running (the same hit, clicked twice).
     target.removeAttribute('data-flash');
     void target.offsetWidth;
@@ -1162,7 +1163,7 @@ export const AgentChat = memo(function AgentChat({
     setupRevealed.current = ask;
     setupReveal.done();
     atBottomRef.current = false;
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.scrollIntoView({ block: 'center', behavior: scrollMotion() });
     row.removeAttribute('data-flash');
     void row.offsetWidth;
     row.setAttribute('data-flash', '');
@@ -1176,7 +1177,7 @@ export const AgentChat = memo(function AgentChat({
 
   const scrollToBottom = () => {
     const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: scrollMotion() });
   };
 
   const staged = attachments.items;

@@ -4918,6 +4918,14 @@
       "consumerCount": 0
     },
     {
+      "name": "--duration-reduced",
+      "definitionFile": "src/styles/global/tokens-core.css",
+      "layer": "core",
+      "owner": "global/core",
+      "status": "canonical",
+      "consumerCount": 3
+    },
+    {
       "name": "--ease-standard",
       "definitionFile": "src/styles/global/tokens-core.css",
       "layer": "core",

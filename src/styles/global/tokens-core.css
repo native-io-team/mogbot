@@ -221,6 +221,8 @@
   --duration-loader-standard: 1200ms;
   --duration-loader-decay: 1350ms;
   --duration-loader-isolated: 1800ms;
+  /* Reduce Motion: long enough that transitionend/animationend still fire. */
+  --duration-reduced: 0.01ms;
   --ease-standard: ease;
   --ease-icon-swap: cubic-bezier(0.2, 0, 0, 1);
   /* The site's motion (mogbot-site global.css): one curve for arriving, one

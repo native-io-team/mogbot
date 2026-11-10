@@ -1786,6 +1786,12 @@
     },
     {
       "path": "src/styles/global/base.css",
+      "token": "--duration-reduced",
+      "count": 2,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
+    },
+    {
+      "path": "src/styles/global/base.css",
       "token": "--line-height-default",
       "count": 2,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
