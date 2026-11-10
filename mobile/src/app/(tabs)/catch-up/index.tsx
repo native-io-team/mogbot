@@ -54,6 +54,7 @@ import {
   fromLine,
   groupByAgent,
   headline,
+  offersLine,
   FIRST_LOOK_MS,
   sinceItems,
   sinceTitle,
@@ -66,6 +67,8 @@ import { largeTitle } from '../../../lib/navigation';
 import {
   answersInPlace,
   feedItems,
+  offerCount,
+  waitingCount,
   highRisk,
   rowAction,
   type FeedItem,
@@ -202,7 +205,8 @@ export default function CatchUp() {
     [colors, items.length, router]
   );
 
-  const sub = fromLine(groups.length);
+  // Skill offers are listed, last, but never counted: they block nothing.
+  const sub = [fromLine(groups.length), offersLine(offerCount(items))].filter(Boolean).join(' · ');
   return (
     <>
       <Stack.Screen options={screenOptions} />
@@ -230,7 +234,7 @@ export default function CatchUp() {
           ) : (
             <View style={styles.summary} accessibilityRole="header">
               <T variant="title" color={colors.textStrong}>
-                {headline(items.length)}
+                {headline(waitingCount(items))}
               </T>
               {/* Offline, the connection bar above says when it last heard: not again here. */}
               {!!sub && (
@@ -331,7 +335,7 @@ function Group({ agent, items }: { agent: Agent; items: FeedItem[] }) {
   const styles = useStyles();
   const router = useRouter();
   const ripple = useRipple();
-  const n = items.length;
+  const n = waitingCount(items);
   return (
     <View style={styles.group}>
       <Pressable
@@ -341,7 +345,7 @@ function Group({ agent, items }: { agent: Agent; items: FeedItem[] }) {
         }}
         android_ripple={ripple}
         accessibilityRole="button"
-        accessibilityLabel={`${agent.name}, ${n} waiting`}
+        accessibilityLabel={n ? `${agent.name}, ${n} waiting` : `${agent.name}, an offer`}
         accessibilityHint="Opens its chat"
         style={({ pressed }) => [styles.groupHead, pressed && PRESSED]}
       >

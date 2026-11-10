@@ -94,7 +94,8 @@ export function chipLabel(
 ): ChipLabel {
   const engine = ENGINE_NAME[agent.engine] ?? agent.engine;
   const model = modelShortName(agent, engines);
-  const effort = agent.effort && AGENT_EFFORTS.includes(agent.effort) ? EFFORT_LABEL[agent.effort] : null;
+  const effort =
+    agent.effort && AGENT_EFFORTS.includes(agent.effort) ? EFFORT_LABEL[agent.effort] : null;
   const main = model ?? engine;
   const says = [
     model ? `${model} on ${engine}` : `${engine}, its default model`,

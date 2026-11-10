@@ -41,7 +41,12 @@ export const EMPTY_DRAFT: ComposerDraft = { text: '', quotes: [], mentions: [], 
 export const FILE_KEEP_MS = 55 * 60_000;
 
 const isEmpty = (d: ComposerDraft) =>
-  !d.text && !d.quotes.length && !d.mentions.length && !d.files?.length && !d.revising && !d.editing;
+  !d.text &&
+  !d.quotes.length &&
+  !d.mentions.length &&
+  !d.files?.length &&
+  !d.revising &&
+  !d.editing;
 
 /** Files that waited too long for the Mac to still have them. */
 export const expiredFiles = (d: ComposerDraft, now = Date.now()) =>

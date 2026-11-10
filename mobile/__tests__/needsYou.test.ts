@@ -12,8 +12,11 @@ import {
   fitsWhole,
   highRisk,
   keepCard,
+  offerCount,
   rowAction,
+  waitingCount,
 } from '../src/lib/needsYou';
+import { offersLine } from '../src/lib/catchUpTab';
 import { agent, msg } from './helpers';
 
 const a = (id: string, over: Partial<Agent> = {}) =>
@@ -63,6 +66,24 @@ describe('the feed', () => {
       site: { messages: [ask('s1', 'site', 5), ask('s2', 'site', 30)] },
     };
     expect(keys(feedItems(agents, chats, null))).toEqual(['ask:s2', 'ask:d1', 'ask:s1']);
+  });
+
+  it('lists a skill offer after everything, and never counts it', () => {
+    // As the Mac counts (`count_pending`): the offer isn't pending work.
+    const agents = [
+      a('site', { pendingApprovals: 1 }),
+      a('ops', { copy: copy('c1'), status: { state: 'idle', activity: null, since: null } }),
+    ];
+    const chats = {
+      site: { messages: [ask('s1', 'site', 5), ask('k1', 'site', 50, { skill: {} as never })] },
+      ops: { messages: [changes('m1', 'ops', 10, 'c1')] },
+    };
+    const items = feedItems(agents, chats, null);
+    expect(keys(items)).toEqual(['ask:s1', 'keep:m1', 'ask:k1']);
+    expect(waitingCount(items)).toBe(2);
+    expect(offerCount(items)).toBe(1);
+    expect(offersLine(offerCount(items))).toBe('And 1 offer that can wait');
+    expect(offersLine(0)).toBeNull();
   });
 
   it('puts what blocks an agent before changes to keep, setup and the Mac’s own', () => {

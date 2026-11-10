@@ -53,6 +53,7 @@ import {
   current,
   isDone,
   progressOf,
+  OFFER_PROGRESS,
   startQueue,
   syncQueue,
   type CatchItem,
@@ -161,7 +162,9 @@ export default function CatchUp() {
   }
 
   const agent = overview?.agents.find((a) => a.id === item.agentId);
-  const { n, of } = progressOf(queue);
+  const { n, of, offer } = progressOf(queue);
+  // A skill offer comes after what blocks, and is not counted in "3 of 8".
+  const where = offer || of === 0 ? OFFER_PROGRESS : `${n} of ${of}`;
   return (
     <View style={[styles.page, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -173,12 +176,12 @@ export default function CatchUp() {
           variant="caption"
           color={colors.textSecondary}
           style={styles.count}
-          accessibilityLabel={`${n} of ${of}`}
+          accessibilityLabel={where}
         >
-          {`${n} of ${of}`}
+          {where}
         </T>
       </View>
-      <Progress share={n / Math.max(1, of)} />
+      <Progress share={offer || of === 0 ? 1 : n / of} />
       {agent ? (
         <AgentAccent agentId={agent.id}>
           <Shown

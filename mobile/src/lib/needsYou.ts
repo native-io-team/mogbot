@@ -17,6 +17,12 @@
  * - **mac**: a card only the Mac can answer (an import to review).
  * - **setup**: "Setting up your team" while it's open.
  *
+ * A skill offer ("Save … as a skill?") is an ask marked `offer`: it never
+ * blocks an agent, so it is listed after everything that does and never
+ * counted (`waitingCount`), as the Mac's own count (`count_pending`), the
+ * desk's bell and its badge leave it out. The headline says "And 1 offer
+ * that can wait" instead.
+ *
  * One import is one row: its stages (consent, playback, review) are cards of
  * one `connector.talkId`, and only the newest still waiting is listed and
  * counted, as the desk shows one card that replaces the last.
@@ -44,6 +50,18 @@ export interface FeedItem {
   messageId?: string;
   /** When it started waiting. */
   ts: number;
+  /** A skill offer: listed last, never counted. */
+  offer?: true;
+}
+
+/** What blocks an agent, counted: every row but the offers. */
+export function waitingCount(items: readonly FeedItem[]): number {
+  return items.filter((i) => !i.offer).length;
+}
+
+/** The offers listed after what blocks. */
+export function offerCount(items: readonly FeedItem[]): number {
+  return items.filter((i) => i.offer).length;
 }
 
 type Chats = Record<string, { messages: AgentMessage[] } | undefined>;
@@ -99,8 +117,10 @@ export function feedItems(
         agentId: agent.id,
         messageId: m.id,
         ts: m.ts,
+        ...(card.skill ? { offer: true as const } : {}),
       });
-      asks++;
+      // An offer doesn't hold the agent: whether it is stuck is still asked below.
+      if (!card.skill) asks++;
     }
     // Keep / Discard waits once the turn is over; mid-turn the copy is still changing.
     const keep = agent.status.state === 'idle' ? keepCard(agent, messages) : undefined;
@@ -130,7 +150,11 @@ export function feedItems(
     }
   }
   return items.sort(
-    (a, b) => TIER[a.kind] - TIER[b.kind] || b.ts - a.ts || a.key.localeCompare(b.key)
+    (a, b) =>
+      Number(!!a.offer) - Number(!!b.offer) ||
+      TIER[a.kind] - TIER[b.kind] ||
+      b.ts - a.ts ||
+      a.key.localeCompare(b.key)
   );
 }
 

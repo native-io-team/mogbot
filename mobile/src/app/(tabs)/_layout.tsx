@@ -6,7 +6,7 @@
 
 import { NativeTabs } from 'expo-router/native-tabs';
 import { useLanding } from '../../lib/landing';
-import { feedItems } from '../../lib/needsYou';
+import { feedItems, waitingCount } from '../../lib/needsYou';
 import { canCall } from '../../lib/session';
 import { useApp } from '../../lib/store';
 import { useColors } from '../../lib/appearance';
@@ -23,15 +23,17 @@ export default function TabsLayout() {
   // What the tab lists, counted: one per row (a card, changes to keep, a
   // turn to fix), so the number always matches the list it opens on. The
   // one place a waiting request is counted on the phone; the agents' rows
-  // only label theirs.
+  // only label theirs. A skill offer is listed but never counted: it blocks nothing.
   const waiting = useApp((s) =>
     s.overview
-      ? feedItems(
-          s.overview.agents,
-          s.chats,
-          s.teamSetup,
-          canCall('agents.import.review', s.welcome)
-        ).length
+      ? waitingCount(
+          feedItems(
+            s.overview.agents,
+            s.chats,
+            s.teamSetup,
+            canCall('agents.import.review', s.welcome)
+          )
+        )
       : 0
   );
   // Projects carries no count: a project whose agent is asking is already a
@@ -46,10 +48,7 @@ export default function TabsLayout() {
     >
       {/* First: Catch up, every card waiting on you across all agents, with the one count. */}
       <NativeTabs.Trigger name="catch-up">
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'tray', selected: 'tray.fill' }}
-          md="inbox"
-        />
+        <NativeTabs.Trigger.Icon sf={{ default: 'tray', selected: 'tray.fill' }} md="inbox" />
         <NativeTabs.Trigger.Label>Catch up</NativeTabs.Trigger.Label>
         {live && waiting > 0 && (
           <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>

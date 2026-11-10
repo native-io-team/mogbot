@@ -133,7 +133,7 @@ describe('approvalNotice', () => {
     expect(n?.body.length).toBeLessThanOrEqual(180);
   });
 
-  it('keys, logins, questions, step-ins and three-way cards never answer from a notification', () => {
+  it('keys, logins, questions, step-ins, three-way cards and skill offers never answer from a notification', () => {
     for (const over of [
       { secret: { name: 'STRIPE_SECRET_KEY' } },
       { login: { service: 'gmail', title: 'Gmail' } },
@@ -141,6 +141,8 @@ describe('approvalNotice', () => {
       { stepIn: { reason: 'r', site: 's', url: 'u', tab: 1 } },
       { crossover: {} },
       { connector: { kind: 'consent', source: 'Grok' } },
+      // A skill offer: Save / Not now, never the lock screen's Allow / Deny.
+      { skill: { name: 'x' } },
     ] as Partial<Approval>[]) {
       expect(approvalNotice(who, card(over))?.categoryIdentifier).toBe(CATEGORY.review);
     }

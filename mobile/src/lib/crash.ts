@@ -85,11 +85,9 @@ export function installCrashHandler(
       previous(error, isFatal);
       return;
     }
-    const save = Promise.all([
-      flushDrafts(),
-      flushCache(),
-      recordCrash(error, 'js', true),
-    ]).catch(() => {});
+    const save = Promise.all([flushDrafts(), flushCache(), recordCrash(error, 'js', true)]).catch(
+      () => {}
+    );
     let timer: ReturnType<typeof setTimeout> | undefined;
     const limit = new Promise((done) => (timer = setTimeout(done, SAVE_BEFORE_EXIT_MS)));
     void Promise.race([save, limit]).then(() => {

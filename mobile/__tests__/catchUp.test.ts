@@ -78,6 +78,28 @@ describe('the order', () => {
     expect(buildItems(agents, chats, null)[0].kind).toBe('reply');
     expect(buildItems(agents, chats, null, true)[0].key).toBe('ask:r');
   });
+
+  it('puts a skill offer after everything else, and leaves it out of "3 of 8"', () => {
+    // The Mac counts no offer as pending (`count_pending`): 1 here is the real ask.
+    const agents = [a('x', { pendingApprovals: 1 }), a('y', { unread: 1, lastActivityAt: 9 })];
+    const chats = {
+      x: { messages: [ask('k', 'x', 1, { skill: {} as never }), ask('c', 'x', 2)] },
+    };
+    const items = buildItems(agents, chats, null);
+    expect(keys(items)).toEqual(['ask:c', 'reply:y:9', 'ask:k']);
+    expect(items[2].offer).toBe(true);
+    let q = startQueue(items);
+    expect(progressOf(q)).toEqual({ n: 1, of: 2, offer: false });
+    q = advance(advance(q));
+    expect(progressOf(q)).toEqual({ n: 2, of: 2, offer: true });
+    // An agent whose only card is an offer isn't held by it.
+    const only = buildItems(
+      [a('z')],
+      { z: { messages: [ask('o', 'z', 1, { skill: {} as never })] } },
+      null
+    );
+    expect(only).toMatchObject([{ key: 'ask:o', offer: true }]);
+  });
 });
 
 describe('moving through', () => {
@@ -89,10 +111,10 @@ describe('moving through', () => {
 
   it('counts "1 of 2", then on, then done', () => {
     let q = startQueue(items);
-    expect(progressOf(q)).toEqual({ n: 1, of: 2 });
+    expect(progressOf(q)).toEqual({ n: 1, of: 2, offer: false });
     expect(current(q)?.key).toBe('ask:c1');
     q = advance(q);
-    expect(progressOf(q)).toEqual({ n: 2, of: 2 });
+    expect(progressOf(q)).toEqual({ n: 2, of: 2, offer: false });
     q = advance(q);
     expect(isDone(q)).toBe(true);
     expect(current(q)).toBeNull();
@@ -118,7 +140,7 @@ describe('keeping up with the Mac', () => {
     );
     const q = syncQueue(start, fresh);
     expect(keys(q.items)).toEqual(['ask:c1', 'ask:c3']);
-    expect(progressOf(q)).toEqual({ n: 1, of: 2 });
+    expect(progressOf(q)).toEqual({ n: 1, of: 2, offer: false });
   });
 
   it('keeps the card in front of you, so the screen can say what became of it', () => {
