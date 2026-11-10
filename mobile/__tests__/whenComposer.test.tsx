@@ -134,4 +134,62 @@ describe('the phone’s “When…” composer', () => {
       'Triage it'
     );
   });
+
+  it('reads Mail on your Mac, narrowed by sender and words', async () => {
+    await mount();
+    await fireEvent.press(screen.getByText('An email arrives in Mail'));
+    expect(screen.getByText('Free · reads Mail on your Mac')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Only from'), 'billing@northwind.com');
+    await fireEvent.changeText(screen.getByLabelText('Only with these words'), 'invoice');
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Triage it and tell me if it’s urgent'),
+      'File it'
+    );
+    expect(
+      screen.getByText(
+        'When an email arrives in Mail from billing@northwind.com mentioning “invoice” — File it'
+      )
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText('Add'));
+    expect(mockCreate).toHaveBeenCalledWith(
+      'a1',
+      { kind: 'new_mail', from: 'billing@northwind.com', words: 'invoice' },
+      10,
+      'File it'
+    );
+  });
+
+  it('says the Mac needs Full Disk Access for Messages, and asks again', async () => {
+    const words =
+      'Reading Messages needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot.';
+    mockOptions.mockImplementationOnce(() =>
+      Promise.resolve({
+        ...options,
+        mac: { mail: { state: 'ok' }, messages: { state: 'full_disk_access', words } },
+      })
+    );
+    await mount();
+    await fireEvent.press(screen.getByText('A text arrives in Messages'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Triage it and tell me if it’s urgent'),
+      'Tell me'
+    );
+    expect(screen.getByText(words)).toBeTruthy();
+    await fireEvent.press(screen.getByText('Add'));
+    expect(mockCreate).not.toHaveBeenCalled();
+    // Switched on at the Mac: Check again hears so, and it can be added.
+    await fireEvent.press(screen.getByText('Check again'));
+    await act(async () => {});
+    expect(screen.queryByText(words)).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('Only from'), 'my landlord');
+    expect(screen.getByText(/^Give their phone number or email/)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Only from'), '+1 555 123 4567');
+    await fireEvent.press(screen.getByText('Add'));
+    expect(mockCreate).toHaveBeenCalledWith(
+      'a1',
+      { kind: 'new_text', from: '+1 555 123 4567' },
+      10,
+      'Tell me'
+    );
+  });
 });

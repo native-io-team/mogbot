@@ -2024,6 +2024,34 @@ const LIVE = [
       'Something else… ticked: the “What to look for” field filled, THROUGH with Gmail and Linear chips (Gmail on), CHECK EVERY 15/30 min/1 hour/4 hours with 30 min on; the echo “When Acme Site finds “a new email from Dana about the launch”” and “Each check uses a little of Acme Site’s usage and can only read that app, up to 24 a day. The first check…”',
   },
   {
+    name: 'schedule-when-mail',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('An email arrives in Mail');
+      await sleep(400);
+      await page.type('billing@northwind.com', '[aria-label="Only from"]');
+      await page.type('invoice', '[aria-label="Only with these words"]');
+      await page.type('File it and tell me the total', '[aria-label="What to do when it happens"]');
+      await sleep(400);
+    },
+    check:
+      'An email arrives in Mail ticked (“Free · reads Mail on your Mac”): a From field with billing@northwind.com and a words field with invoice, no Check again (the Mac can read Mail); CHECK EVERY 1/5/10/30 min; the echo “When an email arrives in Mail from billing@northwind.com mentioning “invoice” — File it and tell me the total” and “Checks are free. What a message says is only information to Acme Site, and it asks you before replying. The first check…”; Add enabled',
+  },
+  {
+    name: 'schedule-when-text-access',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('A text arrives in Messages');
+      await sleep(400);
+      await page.type('Tell me what they said', '[aria-label="What to do when it happens"]');
+      await sleep(400);
+    },
+    check:
+      'A text arrives in Messages ticked: the From field empty with its placeholder, a ghost Check again under it; no echo; the line under it is the Mac’s own words, “Reading Messages needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot.”; Add off',
+  },
+  {
     name: 'agent-sheet-when',
     route: '/agent/site',
     ready: 'Acme Site',
