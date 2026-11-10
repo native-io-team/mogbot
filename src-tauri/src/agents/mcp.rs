@@ -194,6 +194,12 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: super::team_record::TOOL,
+        description: super::team_record::DESCRIPTION,
+        main_only: false,
+        schema: super::team_record::schema,
+    },
+    Tool {
         name: "read_agent",
         description: "Read another agent without waking it: its role, instructions and memory, routines, logins and the requests waiting on the user. Use it to find out what an agent does or needs instead of messaging it to ask.",
         main_only: true,
@@ -838,6 +844,7 @@ async fn call(
         "message_agent" => message_agent(app, caller, args),
         "read_agent" => read_agent(args),
         "search_my_chat" => search_my_chat(caller, args),
+        super::team_record::TOOL => team_lookup(caller, args).await,
         "share_file" => share_file(app, caller, args).await,
         "share_result" => share_result(app, caller, turn, args).await,
         super::blocks::TOOL => show(app, caller, turn, args).await,
@@ -1366,7 +1373,7 @@ fn may_search_chat_of(caller: &store::Agent, whose: &store::Agent, outside: bool
 }
 
 /// Whether `caller` may search teammates' chats (and memories) at all.
-fn may_search_team(caller: &store::Agent, outside: bool) -> bool {
+pub(super) fn may_search_team(caller: &store::Agent, outside: bool) -> bool {
     !outside
         && (caller.is_main
             || super::admin::admin_now(caller)
@@ -1495,6 +1502,34 @@ fn search_my_chat(caller: &store::Agent, args: &Value) -> Value {
         )),
         Ok(found) => text(chat_hits(&found, whose.id == caller.id)),
         Err(e) => error(format!("Couldn't read the chat: {e}")),
+    }
+}
+
+/// `team_lookup`: what the rest of the team handed back, ranked and cited
+/// (`team_record`). Its step in "What it did" names what it found.
+async fn team_lookup(caller: &store::Agent, args: &Value) -> Value {
+    // Its step is in the timeline before it is relabelled below.
+    super::work::caught_up(&caller.id, super::team_record::TOOL, super::work::CATCH_UP_MS).await;
+    let outside = runner::from_outside(&caller.id);
+    let rights = super::team_record::Rights {
+        chats: may_search_team(caller, outside),
+        outside_turn: outside,
+    };
+    match super::team_record::lookup(caller, args, rights) {
+        Ok(found) => {
+            // What it read holds someone else's words: the conversation
+            // has read outside content (`exposure`).
+            if found.has_outside {
+                super::exposure::mark_read(&caller.id, "the team's record");
+            }
+            let label = match &found.headline {
+                Some(h) => format!("Checked the team: {h}"),
+                None => "Checked the team: nothing on it yet".to_string(),
+            };
+            super::work::relabel_newest(&caller.id, super::team_record::STEP_ASK, &label);
+            text(found.text)
+        }
+        Err(e) => error(e),
     }
 }
 
