@@ -22,6 +22,7 @@ import {
   needsYouCount,
   secretTitle,
   skillOutcome,
+  skillWhenLine,
   tokenCount,
   workingRowLine,
 } from '@shipstudio/companion-protocol';
@@ -629,9 +630,33 @@ export function capFields(
   return { shown, clipped };
 }
 
+/**
+ * A skill offer's plain line, spoken to you as its card is ("When you ask
+ * for last month's invoices"), not the Mac's fallback for an older client
+ * ("When to use it: When the user asks…"). What the Mac adds after it (it
+ * replaces one, details removed, outside content read) stays as it said it.
+ */
+export function skillSummary(approval: Pick<Approval, 'skill' | 'summary'>): string | null {
+  const skill = approval.skill;
+  if (!skill) return null;
+  const when = skill.when.trim();
+  const summary = approval.summary?.trim() ?? '';
+  const prefix = `When to use it: ${when}`;
+  const rest = summary.startsWith(prefix) ? summary.slice(prefix.length).trim() : '';
+  const line = when ? skillWhenLine(when) : '';
+  // The Mac runs what it adds straight on ("…payouts 1 personal detail…"): a stop between.
+  const said = rest && line && !/[.!?…]$/.test(line) ? `${line}.` : line;
+  return [said, rest].filter(Boolean).join(' ') || summary || null;
+}
+
 export function askingLine(
-  approval: Pick<Approval, 'title' | 'detail' | 'tool' | 'secret' | 'connector' | 'summary'>
+  approval: Pick<
+    Approval,
+    'title' | 'detail' | 'tool' | 'secret' | 'connector' | 'summary' | 'skill'
+  >
 ): string {
+  const offer = skillSummary(approval);
+  if (offer) return offer;
   // The Mac's plain line, what and why (`admin::summary_for`), when it sent one.
   if (approval.summary?.trim() && !approval.connector && !approval.secret) return approval.summary;
   // These cards' titles are the request; their detail is the reassurance or
