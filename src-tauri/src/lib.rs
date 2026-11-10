@@ -895,7 +895,6 @@ pub fn run() {
             commands::agents::agents_import_playback_answer,
             commands::agents::agents_import_paste_prompt,
             commands::agents::agents_import_paste_preview,
-            commands::agents::agents_import_paste,
             commands::agents::agents_import_export_prompt,
             commands::agents::agents_import_text_preview,
             commands::agents::agents_import_text_review,

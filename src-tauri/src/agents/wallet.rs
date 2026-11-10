@@ -947,6 +947,10 @@ pub fn env_for(account: &Account) -> Vec<(String, String)> {
                     .into_owned(),
             )];
             if let Some(token) = accounts::claude_token_for(&account.id) {
+                // In the turn's environment, so an `env` or a script that
+                // echoes it would carry it into the chat, the timeline and
+                // the phone: redaction has to know it (`secrets::redact`).
+                super::secrets::remember_external(&token, "Claude account token");
                 env.push(("CLAUDE_CODE_OAUTH_TOKEN".to_string(), token));
             }
             env

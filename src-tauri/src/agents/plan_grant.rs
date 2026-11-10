@@ -261,6 +261,23 @@ pub fn revoke(id: &str) -> bool {
     })
 }
 
+/// The agent's instructions were replaced (`review`): it no longer holds
+/// any yes given to the old ones. Grants nobody holds any more end.
+pub fn drop_holder(agent_id: &str) {
+    with_grants(|g| {
+        for x in g.iter_mut() {
+            x.holders.retain(|h| h != agent_id);
+        }
+        g.retain(|x| !x.holders.is_empty());
+    })
+}
+
+/// Whether `agent_id` holds any grant (tests).
+#[cfg(test)]
+pub fn holds_any(agent_id: &str) -> bool {
+    with_grants(|g| g.iter().any(|x| x.holders.iter().any(|h| h == agent_id)))
+}
+
 /* --------------------------------------------- the user's yes in chat */
 
 /// (when, the agent's reply it answered).

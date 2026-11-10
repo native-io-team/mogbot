@@ -2167,6 +2167,16 @@ pub fn queued_for_room(agent_id: &str, room_id: &str) -> bool {
 /// Whether the agent's turn in progress answers text from outside (a
 /// "When…" routine's items), or replaced one that did. Such a turn needs a
 /// card to change the team, set up routines or edit its memory.
+/// Whether the batch the agent's current turn answers carries outside text,
+/// running or about to.
+fn batch_outside(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.outside)
+}
+
 pub fn from_outside(agent_id: &str) -> bool {
     RUNTIMES
         .lock()
@@ -3869,7 +3879,10 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         super::workplace::begin(&agent_id, bound.as_deref().map(std::path::Path::new));
         // What its conversation read outside stays with that conversation.
         let resumes = current.as_ref().and_then(|a| a.session_id.as_deref());
-        super::exposure::begin(&agent_id, resumes);
+        // Outside text it was asked to answer (a "When…" routine's items,
+        // someone else's Slack message) is read just as surely as a web page,
+        // and stays in this conversation after the capped turn ends.
+        super::exposure::begin_turn(&agent_id, resumes, batch_outside(&agent_id));
         super::full_send::begin(&agent_id);
         super::results::discard(&agent_id);
         super::dev_servers::begin(&agent_id);

@@ -1817,7 +1817,6 @@ export interface ImportSummary {
 export const getPasteImportPrompt = () => invoke<string>('agents_import_paste_prompt');
 export const previewPasteImport = (text: string) =>
   invoke<PasteImportPreview>('agents_import_paste_preview', { text });
-export const importPaste = (text: string) => invoke<ImportSummary>('agents_import_paste', { text });
 
 /* ------------------------- import from an export file or a pasted reply */
 
