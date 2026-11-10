@@ -97,12 +97,6 @@
   color: var(--accent-warning);
   cursor: pointer;
   white-space: nowrap;
-  opacity: 0.8;
-  transition: opacity var(--transition);
-}
-
-.main-branch-banner-checkbox:hover {
-  opacity: 1;
 }
 
 .main-branch-banner-checkbox input[type='checkbox'] {
