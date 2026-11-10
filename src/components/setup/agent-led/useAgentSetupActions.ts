@@ -232,7 +232,7 @@ export function useAgentSetupActions({
         await wait(line.after);
         if (!live(t)) return;
         if (!line.text) continue;
-        const text = line.waitsForInput ? line.text : `${line.text}\r\n`;
+        const text = line.waitsForInput || line.open ? line.text : `${line.text}\r\n`;
         tail += text;
         append(text);
         if (line.waitsForInput) {

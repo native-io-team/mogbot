@@ -198,7 +198,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-codex-prereqs',
     'engine',
     '2a. Codex on a bare Mac: get the Mac ready first',
-    'After choosing Codex: "Get your Mac ready for Codex", one line (a few minutes, maybe the Mac password), "Codex · 1 of 4", the steps "Downloading Homebrew…" (spinner) then "Installing" and "Checking it works" dimmed, and a bordered box: "Homebrew’s installer needs your Mac password", one line that it goes straight to the installer and isn’t kept, a masked field (focused) and a neutral "Continue". "Show details" and a quiet "Cancel" at the foot. No terminal window.',
+    'After choosing Codex: "Get your Mac ready for Codex", one line (a few minutes, maybe the Mac password), "Codex · 1 of 4", the steps "Getting ready to install Homebrew…" (spinner) then "Downloading and installing Homebrew" and "Checking it works" dimmed, and a bordered box: "Homebrew’s installer needs your Mac password", one line that it goes straight to the installer and isn’t kept, a masked field (focused) and a neutral "Continue". "Show details" and a quiet "Cancel" at the foot. No terminal window.',
     { ...machine(FRESH_ITEMS, true), ...STILL_GOING },
     {
       steps: [

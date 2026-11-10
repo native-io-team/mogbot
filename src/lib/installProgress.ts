@@ -90,6 +90,16 @@ export function installSteps(itemId: string): InstallStep[] {
       { phase: 'check', label: 'Checking it works' },
     ];
   }
+  if (itemId === 'homebrew') {
+    // Homebrew's installer downloads nothing until after the password, the
+    // Return and (on a bare Mac) Apple's Command Line Tools; then one line,
+    // "Downloading and installing Homebrew...", covers the rest.
+    return [
+      { phase: 'download', label: 'Getting ready to install Homebrew' },
+      { phase: 'install', label: 'Downloading and installing Homebrew' },
+      { phase: 'check', label: 'Checking it works' },
+    ];
+  }
   return [
     { phase: 'download', label: `Downloading ${plainName(itemId)}` },
     { phase: 'install', label: 'Installing' },
@@ -116,9 +126,22 @@ export function stepState(step: InstallStep, phase: InstallPhase): 'done' | 'cur
  */
 const OWN_ECHO = /^(Downloading the .+ installer|Installing .+ via npm)/i;
 
-/** Lines an installer prints once it has the files and is putting them in place. */
+/**
+ * Lines an installer prints once it has the files and is putting them in
+ * place. Claude Code's install.sh downloads the binary silently (`curl -fsSL`),
+ * then prints "Setting up Claude Code..." and runs `claude install`, which
+ * prints "Installing Claude Code native build …" and "Claude Code successfully
+ * installed!" (transcripts in `__fixtures__/install/`).
+ */
 const INSTALLING_SIGNAL =
-  /setting up|\binstalling\b|successfully installed|installation (complete|successful)|\breify\b|\b(added|changed) \d+ packages?\b|==> (Downloading and installing|Pouring)/i;
+  /setting up|\binstalling\b|successfully installed|installation (complete|successful)/i;
+
+/**
+ * Homebrew's own "downloading now" line. Nothing before it is a download:
+ * "==> Installing Command Line Tools for Xcode…" comes first on a bare Mac and
+ * is Apple's tools, not Homebrew, so the generic "installing" never applies.
+ */
+const HOMEBREW_DOWNLOADING = /^==> Downloading and installing Homebrew/;
 
 /** The phase a run's output shows it has reached (before it exits). */
 export function phaseFromOutput(itemId: string, output: string): InstallPhase {
@@ -129,6 +152,9 @@ export function phaseFromOutput(itemId: string, output: string): InstallPhase {
   }
   if (QUIET_ITEMS.has(itemId)) return 'install';
   if (NPM_ITEMS.has(itemId)) return 'download';
+  if (itemId === 'homebrew') {
+    return lines.some((line) => HOMEBREW_DOWNLOADING.test(line)) ? 'install' : 'download';
+  }
   return lines.some((line) => INSTALLING_SIGNAL.test(line)) ? 'install' : 'download';
 }
 
@@ -137,13 +163,18 @@ export function phaseFromOutput(itemId: string, output: string): InstallPhase {
 /**
  * What the process is waiting for, read off its last line:
  * - `password`: sudo's "Password:" (Homebrew's installer)
- * - `enter`: Homebrew's "Press RETURN/ENTER to continue"
+ * - `enter`: Homebrew's "Press RETURN/ENTER to continue or any other key to abort:"
+ * - `key`: Homebrew's "Press any key when the installation has completed.",
+ *   once it has opened Apple's Command Line Tools installer window
  * - `code`: a sign-in that offers to take a code pasted from the browser
+ *   (`claude auth login`: "Paste code here if prompted > ", or "Paste code
+ *   here > " when the browser can't hand the sign-in back; and after
+ *   "Invalid code…", which waits for another)
  * - `question`: something else that ends like a prompt and has gone quiet
  *   (the caller says how long it's been quiet); the screen opens the details
  *   so it can be answered
  */
-export type InstallPrompt = 'password' | 'enter' | 'code' | 'question';
+export type InstallPrompt = 'password' | 'enter' | 'key' | 'code' | 'question';
 
 /** Quiet this long on a line that ends like a prompt, and it is asking something. */
 export const QUESTION_QUIET_MS = 4000;
@@ -156,7 +187,13 @@ export function promptOf(output: string, quietMs = 0): InstallPrompt | null {
   const endsOpen = !/\n\s*$/.test(stripAnsi(output));
   if (/\bpassword\b[^:]*:\s*$/i.test(last) && endsOpen) return 'password';
   if (/press (return|enter)/i.test(last)) return 'enter';
-  if (/paste (the )?code/i.test(last)) return 'code';
+  if (/press any key when/i.test(last)) return 'key';
+  // The code prompt stays on the line it was printed on: whatever comes next
+  // (the echoed code, or "Login successful." once the browser answered)
+  // lands after it, so it only counts while the line still ends in it.
+  if (/paste (the )?code[^>]*>\s*$|^invalid code\b|not from this sign-in/i.test(last)) {
+    return 'code';
+  }
   if (endsOpen && quietMs >= QUESTION_QUIET_MS && /[?:>❯]\s*$/.test(last)) return 'question';
   return null;
 }
@@ -182,6 +219,7 @@ export type InstallFailureKind =
   | 'admin'
   | 'password'
   | 'homebrew'
+  | 'license'
   | 'node'
   | 'signed_in'
   | 'unverified'
@@ -196,15 +234,23 @@ export interface InstallFailure {
 }
 
 const NOT_ADMIN =
-  /does not have admin privileges|requires administrator access|not an administrator|need sudo access|not in the sudoers/i;
+  /does not have admin privileges|requires administrator access|not an administrator|need sudo access|not in the sudoers|insufficient permissions to install homebrew/i;
+/** sudo giving up. Homebrew then aborts with "Insufficient permissions", which isn't the cause. */
+const PASSWORD_GAVE_UP = /incorrect password attempts/i;
+const XCODE_LICENSE = /not agreed to the xcode license/i;
 const DISK_FULL =
   /\bENOSPC\b|no space left on device|not enough (free )?(disk )?space|disk (is )?full/i;
 const NO_HOMEBREW = /homebrew is needed|brew: (command )?not found|failed to run brew/i;
 const BAD_PASSWORD = /sorry, try again|incorrect password attempts/i;
 const NO_PERMISSION =
   /\bEACCES\b|\bEPERM\b|permission denied|operation not permitted|not writable/i;
+/**
+ * curl's exit 23 is a failed write on this Mac, not the network. Claude
+ * Code's installer says "download service is unreachable" when it gets no
+ * version back; Homebrew gives up on `git fetch` with "Failed 5 times doing".
+ */
 const NETWORKISH =
-  /network|timed? ?out|offline|couldn.t reach|could not reach|ssl|certificate|curl: \(\d+\)/i;
+  /network|timed? ?out|offline|couldn.t reach|could not reach|ssl|certificate|curl: \((?!23\))\d+\)|download service is unreachable|failed \d+ times doing: \S*git fetch/i;
 
 /**
  * What a failed run was, from everything it printed (or the error the app
@@ -220,6 +266,13 @@ export function describeFailure(
   const auth = isAuthItem(itemId);
   const name = plainName(itemId);
 
+  if (PASSWORD_GAVE_UP.test(text)) {
+    return {
+      kind: 'password',
+      line: 'The Mac password wasn’t accepted.',
+      fix: 'Press Try again, and use the password you log in to this Mac with.',
+    };
+  }
   if (NOT_ADMIN.test(text)) {
     return {
       kind: 'admin',
@@ -239,6 +292,13 @@ export function describeFailure(
       kind: 'homebrew',
       line: `Homebrew isn’t on this Mac, and ${name} installs with it.`,
       fix: 'Press Try again: it installs Homebrew first.',
+    };
+  }
+  if (XCODE_LICENSE.test(text)) {
+    return {
+      kind: 'license',
+      line: 'Apple’s developer tools are waiting for you to accept their licence.',
+      fix: 'Open Xcode once and agree to the licence, then press Try again.',
     };
   }
   if (isNodeMissingError(text)) {
@@ -316,6 +376,12 @@ export interface MockLine {
   text: string;
   /** Waits here until the person answers (a password, Return). */
   waitsForInput?: boolean;
+  /**
+   * Printed with no line break and doesn't wait: a prompt the process
+   * leaves up while it carries on (`claude auth login`'s "Paste code here if
+   * prompted > ", answered by the browser instead).
+   */
+  open?: boolean;
 }
 
 export interface MockScript {
@@ -336,10 +402,20 @@ export function mockScript(itemId: string, failure: MockFailure | null = null): 
   const ok = (lines: MockLine[]): MockScript => ({ lines, exitCode: 0 });
   const fail = (lines: MockLine[]): MockScript => ({ lines, exitCode: 1 });
 
-  if (isAuthItem(itemId)) {
+  // The lines below are the real installers' and CLIs' own words (see
+  // `__fixtures__/install/` for where each comes from); only the links,
+  // versions and timings are made up.
+  if (itemId === 'codex_auth') {
     const opening: MockLine[] = [
-      { after: 400, text: 'Opening your browser to sign in…' },
-      { after: 300, text: `If the browser didn’t open, visit: ${MOCK_SIGN_IN}` },
+      { after: 400, text: 'Starting local login server on http://localhost:1455.' },
+      { after: 50, text: 'If your browser did not open, navigate to this URL to authenticate:' },
+      { after: 50, text: ' ' },
+      { after: 50, text: MOCK_SIGN_IN },
+      { after: 50, text: ' ' },
+      {
+        after: 50,
+        text: 'On a remote or headless machine? Use `codex login --device-auth` instead.',
+      },
     ];
     if (failure === 'network' || failure === 'signin') {
       return fail([
@@ -348,8 +424,31 @@ export function mockScript(itemId: string, failure: MockFailure | null = null): 
           after: 2400,
           text:
             failure === 'network'
-              ? 'Error: getaddrinfo ENOTFOUND auth.example.com'
-              : 'Error: Login was cancelled in the browser.',
+              ? 'Error logging in: error sending request for url (https://auth.example.com/oauth/token): getaddrinfo ENOTFOUND auth.example.com'
+              : 'Error logging in: Login was not completed',
+        },
+      ]);
+    }
+    return ok([...opening, { after: 3200, text: 'Successfully logged in' }]);
+  }
+
+  if (isAuthItem(itemId)) {
+    // `claude auth login`, which leaves its code prompt up while it waits for
+    // the browser to hand the sign-in back.
+    const opening: MockLine[] = [
+      { after: 400, text: 'Opening browser to sign in…' },
+      { after: 50, text: `If the browser didn't open, visit: ${MOCK_SIGN_IN}` },
+      { after: 50, text: 'Paste code here if prompted > ', open: true },
+    ];
+    if (failure === 'network' || failure === 'signin') {
+      return fail([
+        ...opening,
+        {
+          after: 2400,
+          text:
+            failure === 'network'
+              ? 'OAuth login failed: getaddrinfo ENOTFOUND auth.example.com'
+              : 'Login interrupted.',
         },
       ]);
     }
@@ -369,46 +468,65 @@ export function mockScript(itemId: string, failure: MockFailure | null = null): 
   }
 
   if (itemId === 'homebrew') {
-    const start: MockLine[] = [
-      { after: 200, text: 'Downloading the Homebrew installer…' },
-      { after: 900, text: '==> Checking for `sudo` access (which may request your password)...' },
-    ];
     if (failure === 'admin') {
+      // The app's own check, before it downloads anything (`TERMINAL_COMMANDS.homebrew`).
       return fail([
-        start[0],
         { after: 900, text: 'Error: Homebrew requires administrator access to install.' },
         { after: 50, text: 'Your macOS user account (you) does not have admin privileges.' },
       ]);
     }
     return ok([
-      ...start,
+      { after: 200, text: 'Downloading the Homebrew installer…' },
+      { after: 900, text: '==> Checking for `sudo` access (which may request your password)...' },
       { after: 300, text: 'Password:', waitsForInput: true },
       { after: 400, text: '==> This script will install:' },
-      { after: 100, text: '/opt/homebrew/bin/brew' },
+      { after: 50, text: '/opt/homebrew/bin/brew' },
+      { after: 50, text: '/opt/homebrew/share/doc/homebrew' },
+      { after: 50, text: '/opt/homebrew' },
+      { after: 50, text: '==> The following new directories will be created:' },
+      { after: 50, text: '/opt/homebrew/bin' },
       {
         after: 200,
         text: 'Press RETURN/ENTER to continue or any other key to abort:',
         waitsForInput: true,
       },
-      { after: 400, text: '==> Downloading and installing Homebrew...' },
-      { after: 2200, text: '==> Installation successful!' },
+      {
+        after: 300,
+        text: '==> /usr/bin/sudo /usr/bin/install -d -o root -g wheel -m 0755 /opt/homebrew',
+      },
+      { after: 600, text: '==> Downloading and installing Homebrew...' },
+      { after: 900, text: 'remote: Enumerating objects: 312456, done.' },
+      { after: 1400, text: '==> Installation successful!' },
+      { after: 100, text: '==> Next steps:' },
+      { after: 50, text: '- Run brew help to get started' },
     ]);
   }
 
   const npm = itemId === 'codex';
+  // Claude Code: our echo, curl's bar for install.sh itself, then a silence
+  // while install.sh fetches the binary with `curl -fsSL`, then its own line.
   const download: MockLine[] = npm
     ? [
         { after: 200, text: 'Installing Codex via npm…' },
-        { after: 900, text: 'npm http fetch GET 200 https://registry.npmjs.org/@openai%2fcodex' },
+        { after: 300, text: 'npm warn using --force Recommended protections disabled.' },
       ]
     : [
         { after: 200, text: `Downloading the ${plainName(itemId)} installer…` },
-        { after: 800, text: '############                                   24.0%' },
-        { after: 900, text: '################################################ 100.0%' },
+        { after: 500, text: '######################################################## 100.0%' },
       ];
+  // npm prints nothing between its warning and its summary (a spinner only),
+  // which is why an npm install is one step.
+  const settingUp: MockLine = { after: 2400, text: `Setting up ${plainName(itemId)}...` };
   const installing: MockLine[] = npm
-    ? [{ after: 1400, text: 'reify:@openai/codex: timing reifyNode:node_modules/@openai/codex' }]
-    : [{ after: 900, text: `Setting up ${plainName(itemId)}...` }];
+    ? []
+    : itemId === 'claude'
+      ? [
+          settingUp,
+          { after: 300, text: 'Checking installation status...' },
+          { after: 600, text: 'Installing Claude Code native build 2.1.0...' },
+          { after: 900, text: 'Setting up launcher and shell integration...' },
+        ]
+      : [settingUp];
 
   switch (failure) {
     case 'network':
@@ -429,18 +547,18 @@ export function mockScript(itemId: string, failure: MockFailure | null = null): 
           after: 1200,
           text: npm
             ? 'npm error code ENOSPC\nnpm error syscall write\nnpm error nospc ENOSPC: no space left on device, write'
-            : 'error: write /Users/you/.local/share/claude/versions/2.1.0: no space left on device',
+            : '✗ Installation failed\nENOSPC: no space left on device, write',
         },
       ]);
     case 'permission':
       return fail([
+        // install.sh makes its download folder before fetching anything.
         ...download,
-        ...installing,
         {
           after: 1200,
           text: npm
             ? "npm error code EACCES\nnpm error syscall mkdir\nnpm error Error: EACCES: permission denied, mkdir '/usr/local/lib/node_modules/@openai'"
-            : 'mkdir: /Users/you/.local/bin: Permission denied',
+            : 'mkdir: /Users/you/.claude/downloads: Permission denied',
         },
       ]);
     default:
@@ -449,8 +567,9 @@ export function mockScript(itemId: string, failure: MockFailure | null = null): 
         ...installing,
         {
           after: 1600,
-          text: npm ? 'added 1 package in 4s' : `✔ ${plainName(itemId)} successfully installed!`,
+          text: npm ? 'added 2 packages in 9s' : `✔ ${plainName(itemId)} successfully installed!`,
         },
+        ...(npm ? [] : [{ after: 300, text: '✅ Installation complete!' }]),
       ]);
   }
 }

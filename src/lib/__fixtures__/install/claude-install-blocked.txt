@@ -1,0 +1,7 @@
+%% Claude Code where install.sh arrives but downloads.claude.ai answers with
+%% something that isn't a version (a captive portal, a blocked region).
+%% Source: install.sh's two echo lines after `version=$(download_file …/latest)`.
+Downloading the Claude Code installer…
+\r######################################################################## 100.0%
+Failed to get a valid version from downloads.claude.ai (got unexpected content).
+This can happen if the download service is unreachable or not available in your region - see https://www.anthropic.com/supported-countries
