@@ -47,8 +47,13 @@ one row, while the export list is checked exactly against the source file.
 
 | Layer | Definition files | Token count | Sample names |
 | --- | --- | ---: | --- |
+<<<<<<< HEAD
 | core | `src/styles/global/fonts.css`<br>`src/styles/global/tokens-core.css` | 183 | `--color-white`, `--color-white-o15`, `--color-black`, `--color-black-o15`, `--color-black-o38`, `--color-black-o75` |
 | semantic | `src/styles/global/tokens-semantic.css` | 274 | `--font-size-micro`, `--font-size-caption`, `--tracking-micro`, `--surface-app`, `--surface-panel`, `--surface-control` |
+=======
+| core | `src/styles/global/fonts.css`<br>`src/styles/global/tokens-core.css` | 182 | `--color-white`, `--color-white-o15`, `--color-black`, `--color-black-o15`, `--color-black-o38`, `--color-black-o75` |
+| semantic | `src/styles/global/tokens-semantic.css` | 275 | `--font-size-micro`, `--font-size-caption`, `--tracking-micro`, `--surface-app`, `--surface-panel`, `--surface-control` |
+>>>>>>> worktree-agent-ad2ce791b88d53318
 | components | `src/styles/global/tokens-components.css` | 390 | `--size-control-standard`, `--size-control-large`, `--size-control-medium`, `--size-control-compact`, `--size-target-min`, `--workspace-layout-menu-width` |
 | compatibility | `src/styles/global/tokens-compatibility.css` | 43 | `--modified-yellow`, `--info`, `--info-hover`, `--info-light`, `--info-dark`, `--purple` |
 

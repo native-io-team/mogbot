@@ -447,9 +447,6 @@ export const AgentChat = memo(function AgentChat({
   // under its own key. Unknown for a moment on first open, while the Mac
   // says which one the user was last in.
   const viewing = useAgentsSelector((s) => s.viewing[agent.id]);
-  const severalConversations = useAgentsSelector(
-    (s) => (s.conversations[agent.id]?.items.length ?? 0) > 1
-  );
   useEffect(() => {
     void ensureViewing(agent.id);
   }, [agent.id]);
@@ -1376,12 +1373,11 @@ export const AgentChat = memo(function AgentChat({
   const stopNow = useStableEvent(() => void onStop());
   const clearRevising = useCallback(() => setRevising(null), []);
 
-  // Identity only: who this is and what it's for. What it's doing is said
-  // once in the sidebar row and once in the conversation (a bar, the working
-  // line), never a third time up here.
-  // With several conversations the title of the one on screen wins the room:
-  // the role is in the sidebar row already, and cut there it said nothing.
-  const role = agent.role && !severalConversations ? roleWithoutPath(agent.role) : '';
+  // Identity only: who this is. What it's doing is said once in the sidebar
+  // row and once in the conversation (a bar, the working line), never a third
+  // time up here. Its role sentence crowded the band and was cut at every
+  // width; it is the name's tooltip, and in the agent's sheet.
+  const role = agent.role ? roleWithoutPath(agent.role) : '';
   const title = (
     <>
       <AgentKey
@@ -1391,12 +1387,9 @@ export const AgentChat = memo(function AgentChat({
         state={agentKeyState(agent)}
         size="md"
       />
-      <h2 className="agent-chat__name">{agent.name}</h2>
-      {role && (
-        <span className="agent-chat__status" title={role}>
-          {role}
-        </span>
-      )}
+      <h2 className="agent-chat__name" title={role || undefined}>
+        {agent.name}
+      </h2>
     </>
   );
 

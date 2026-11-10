@@ -91,7 +91,7 @@
 
 .changelog-version-link:hover {
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: var(--text-underline-offset);
 }
 
 .changelog-current-badge {

@@ -27,7 +27,7 @@
  * @module components/agents/AgentsUsageView
  */
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { AddIcon, ZapIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { SegmentedControl } from '../primitives/SegmentedControl';
@@ -202,6 +202,24 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
     reload();
   };
 
+  // Limits or tokens: a view of the accounts, so it sits at the right of
+  // their section's heading, not loose between sections.
+  const viewSwitch =
+    glance.burning.length > 0 ? (
+      <div className="usage-switch" data-testid="usage-view-switch">
+        <SegmentedControl
+          aria-label="Show limits or tokens"
+          value={view}
+          size="default"
+          options={[
+            { value: 'limits', label: 'Limits' },
+            { value: 'tokens', label: 'Tokens' },
+          ]}
+          onValueChange={(v) => setView(v)}
+        />
+      </div>
+    ) : null;
+
   return (
     <div className="usage-panel" ref={top} data-in-settings={inSettings || undefined}>
       {!accounts ? null : (
@@ -333,26 +351,14 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
             </section>
           )}
 
-          {glance.burning.length > 0 && (
-            <div className="usage-switch" data-testid="usage-view-switch">
-              <SegmentedControl
-                aria-label="Show limits or tokens"
-                value={view}
-                size="default"
-                options={[
-                  { value: 'limits', label: 'Limits' },
-                  { value: 'tokens', label: 'Tokens' },
-                ]}
-                onValueChange={(v) => setView(v)}
-              />
-            </div>
-          )}
-
           {view === 'tokens' && glance.burning.length > 0 && (
             <section className="usage-section" aria-labelledby="usage-tokens">
-              <h3 className="usage-section__title" id="usage-tokens">
-                Who used it this week
-              </h3>
+              <div className="usage-section__head">
+                <h3 className="usage-section__title" id="usage-tokens">
+                  Who used it this week
+                </h3>
+                {viewSwitch}
+              </div>
               <p className="usage-section__muted">
                 Tokens as the engines reported them for turns these agents ran, across your
                 accounts. Not a cost: your plans aren’t billed per token.
@@ -375,10 +381,11 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
           )}
 
           {view === 'limits' &&
-            glance.engines.map((e) => (
+            glance.engines.map((e, i) => (
               <EngineStack
                 key={e.engine}
                 engine={e}
+                aside={i === 0 ? viewSwitch : null}
                 several={glance.engines.length > 1}
                 onReorder={(ids) => void attempt(() => reorderUsageAccounts(e.engine, ids))}
                 onUse={(id) => void attempt(() => putAccountFirst(e.engine, id))}
@@ -475,6 +482,7 @@ function swap(ids: readonly string[], a: number, b: number): string[] {
 
 function EngineStack({
   engine,
+  aside,
   several,
   onReorder,
   onUse,
@@ -483,6 +491,7 @@ function EngineStack({
   onRemove,
 }: {
   engine: StackEngine;
+  aside?: ReactNode;
   several: boolean;
   onReorder: (ids: string[]) => void;
   onUse: (id: string) => void;
@@ -498,9 +507,12 @@ function EngineStack({
       aria-labelledby={`usage-engine-${engine.engine}`}
       data-engine={engine.engine}
     >
-      <h3 className="usage-section__title" id={`usage-engine-${engine.engine}`}>
-        {several ? `${engine.label} accounts` : 'Accounts'}
-      </h3>
+      <div className="usage-section__head">
+        <h3 className="usage-section__title" id={`usage-engine-${engine.engine}`}>
+          {several ? `${engine.label} accounts` : 'Accounts'}
+        </h3>
+        {aside}
+      </div>
       <p className="usage-section__muted">
         {draggable
           ? 'Turns start on the first with room and carry on down. Drag to change the order, or use its menu.'

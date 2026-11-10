@@ -500,7 +500,9 @@ stays flat; a key is for the one action that starts or answers something.
 Use `TextButton` for inline prose/metadata actions: it retains native button, ref, disabled, focus,
 and icon behavior without a fixed control surface. Its `accent` variant carries the Chief's colour,
 so it is only for the recommended action; an action inside an alert, a status line or prose (Try
-again, Update available, a link to another panel) is `strong`: full text colour, never the accent. Use `Tabs` for panel navigation and
+again, Update available, a link to another panel) is `strong`: full text colour, never the accent.
+Every underline sits `--text-underline-offset` (0.3em) under its text, never touching descenders;
+use the token, not a px offset. Use `Tabs` for panel navigation and
 `SegmentedControl` for mutually exclusive filters/settings.
 
 `Tabs` defaults to `mode="panel"`: every `TabsList` requires an accessible label, every `TabsTab`

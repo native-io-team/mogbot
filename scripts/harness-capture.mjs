@@ -47,7 +47,12 @@ const BASE_CDP_PORT = Number(process.env.HARNESS_CDP_PORT ?? 9333);
 let CDP_PORT = BASE_CDP_PORT;
 // A run that outlives this is hung: Chrome is closed and the run fails.
 const MAX_MS = Number(process.env.HARNESS_MAX_MS ?? 45 * 60 * 1000);
-const VIEWPORT = { width: 1440, height: 900 };
+// `HARNESS_WIDTH` / `HARNESS_HEIGHT` capture at another window size (e.g. a
+// spacing review at 1280 and 1600).
+const VIEWPORT = {
+  width: Number(process.env.HARNESS_WIDTH ?? 1440),
+  height: Number(process.env.HARNESS_HEIGHT ?? 900),
+};
 
 /**
  * Commands that are noise in a visual sweep: they navigate away from the thing

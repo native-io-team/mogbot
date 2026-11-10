@@ -187,6 +187,9 @@
   --spacing-xl: var(--space-24);
   --spacing-2xl: var(--space-32);
   --spacing-tight: var(--space-06);
+  /* Text never touches its underline: a third of an em clears descenders
+     at every size we set (4px at 13px, 3.6px at 11px). */
+  --text-underline-offset: 0.3em;
 
   --radius-control: var(--radius-6);
   --radius-card: var(--radius-10);

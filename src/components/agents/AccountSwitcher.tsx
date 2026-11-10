@@ -208,9 +208,17 @@ export function AgentAccountChip({ agent }: { agent: Agent }) {
         aria-label={tip}
         data-testid="agent-account-chip"
       >
-        {name}
+        {/* A short label: an email's name part. The whole of it is in the
+            tooltip and the label, so the header band never carries it. */}
+        <span className="agent-chat__account-name">{shortAccountLabel(name)}</span>
         {only && <span className="agent-chat__project-copy">· only</span>}
       </Button>
     </Tooltip>
   );
+}
+
+/** An account's label for a chip: an email's name part, anything else as it is. */
+export function shortAccountLabel(name: string): string {
+  const at = name.indexOf('@');
+  return at > 0 ? name.slice(0, at) : name;
 }

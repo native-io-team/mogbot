@@ -71,13 +71,27 @@
   color: var(--text-muted);
 }
 
-/* Right-aligned, the single affirmative last (the macOS order). */
+/* Right-aligned, the single affirmative last (the macOS order). A step
+   further from the body (12px) than the title is (8px): the answer is its
+   own group, not the body's last line. */
 .agent-card__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--spacing-sm);
+}
+
+.agent-card > .agent-card__actions {
+  margin-top: var(--spacing-xs);
+}
+
+/* A card's or a bar's answer is one height: a compact button there was a
+   20px target beside a 30px Allow. */
+:is(.agent-card__actions, .agent-bar__actions) > .button--size-compact:not(.button--icon-only) {
+  height: var(--control-height-standard);
+  min-height: var(--control-height-standard);
+  padding-inline: var(--spacing-sm);
 }
 
 .agent-card__outcome {
@@ -186,7 +200,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2xs);
-  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
+  /* Room above and below its two lines. The right inset stays 8px so its
+     button ends on the composer's send button below it. */
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
   font-size: var(--font-size-body-md);
   color: var(--text-secondary);
   /* The composer's surface: --surface-recessed is the app background in both
