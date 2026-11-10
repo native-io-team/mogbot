@@ -825,6 +825,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
                 format!("catch up on {n}'s chat"),
             )
         }
+        super::team_record::TOOL => act(
+            StepKind::Read,
+            "Checked the team",
+            "Checking the team",
+            super::team_record::STEP_ASK,
+        ),
         "search_my_chat" => act(
             StepKind::Read,
             "Looked back through the chat",
@@ -2166,6 +2172,26 @@ pub fn on_declined(agent_id: &str, call_id: &str) {
             output: None,
         },
     );
+}
+
+/// One of our tools says, once it ran, what its step should read: the
+/// newest call with these `ask` words takes `label` ("Checked the team:
+/// Finance's Q3 summary"). The engine reported the call before making it
+/// (`caught_up`), so its step is there.
+pub fn relabel_newest(agent_id: &str, ask: &str, label: &str) {
+    let label = clean(label);
+    with_live(agent_id, |live| {
+        let newest = live
+            .calls
+            .values()
+            .filter(|c| c.ask == ask)
+            .map(|c| c.step)
+            .max();
+        if let Some(step) = newest.and_then(|n| live.step_mut(n)) {
+            step.label = label;
+            live.dirty = true;
+        }
+    });
 }
 
 /// A card was answered (in any chat; only the turn that raised it has its step).

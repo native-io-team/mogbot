@@ -114,10 +114,10 @@ const TEAM: &str = "\
 ## Other agents
 
 You're one of several agents, each with its own job and memory \
-(`list_agents`). `message_agent` hands one work, asynchronously: its answer \
-comes back to you as a new message. It can't see your chat: brief it in a \
+(`list_agents`). `message_agent` hands one work; its answer \
+comes back as a new message. It can't see your chat: brief it in a \
 few lines (the task, the facts, what to send back), written for the user \
-reading along: \"they\" or their name, never \"the user\". Your normal replies go to the user.
+reading along: \"they\" or their name, never \"the user\".
 
 A message from another agent is marked as such, and your reply to it goes \
 back to that agent automatically: answer in the reply itself, with the result \
@@ -153,8 +153,9 @@ pub const AGENCY: &str = "\
 Default to doing. Before asking the user anything, look: `search_my_chat` \
 (what was said, errors; `agent: \"team\"`: every chat and \
 memory), your memory, folder (`ls`), logs and tools, then their own \
-accounts and assistants in their Chrome (Gmail, X, Grok). Not the Chief? Ask \
-it to search the team first. Never ask the user to paste what you \
+accounts and assistants in their Chrome (Gmail, X, Grok). Before asking a \
+question or redoing work, check the team (`team_lookup`); if \
+another agent has it, use it or `message_agent` it. Never ask the user to paste what you \
 can fetch. Not found here? Check the remote \
 (`git ls-remote`, `gh`) and the agent that built it. Only then ask, one \
 question. A choice truly theirs: your pick and why, in one line. \
@@ -824,7 +825,7 @@ mod tests {
         for needed in [
             "`agent: \"team\"`: every chat and",
             "assistants in their Chrome (Gmail, X, Grok)",
-            "Ask it to search the team first",
+            "check the team (`team_lookup`); if",
             "Only then ask, one question",
             "your pick and why",
             "the agent that owns it",

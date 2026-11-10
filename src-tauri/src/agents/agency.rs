@@ -112,6 +112,10 @@ const PATTERNS: &[Pattern] = &[
         fix: PLUMBING,
     },
     Pattern {
+        all: &["team_lookup"],
+        fix: PLUMBING,
+    },
+    Pattern {
         all: &["mcp__"],
         fix: PLUMBING,
     },

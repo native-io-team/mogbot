@@ -161,6 +161,12 @@ pub(in crate::agents) fn system_prompt_for(
         prompt.push_str("\n\n");
         prompt.push_str(&declined);
     }
+    // Who else is here and their latest result, in a few lines
+    // (`team_record`): enough to know whom to check with, never their chats.
+    if let Some(roster) = crate::agents::team_record::roster_for(agent) {
+        prompt.push_str("\n\n");
+        prompt.push_str(&roster);
+    }
     if agent.is_main {
         if let Some(team) = store::list()
             .ok()
