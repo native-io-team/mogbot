@@ -174,7 +174,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-first-win-morning-brief',
     title: 'Agents — first run: “Brief me every morning”',
     looksRightWhen:
-      'The greeting with its starters still under it (Brief me every morning, Sort my inbox, draft replies, Research it and write it up, left-aligned under the greeting, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
+      'The greeting with its starters still under it (Brief me every morning, Sort my inbox, draft replies, Research it and write it up, left-aligned under the greeting, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Send is off and a quiet hint says “Fill in the end, then send”: the brief can’t go with its blank empty. Nothing has been sent.',
     command: 'agents.open',
     steps: [{ click: '.agent-chat__starters > [data-idea="morning-brief"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
@@ -296,7 +296,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-first-win-result',
     title: 'Agents — the first win: a document summarised',
     looksRightWhen:
-      'The greeting, the user’s request with the PDF chip, then the Chief’s reply leading with the answer, naming dates and what the user must do, and saying plainly which page it couldn’t read. Then one line offering a Research assistant. The starters are gone.',
+      'The greeting, the user’s request with the PDF chip, then the Chief’s reply leading with the answer, naming dates and what the user must do, and saying plainly which page it couldn’t read. Then one line offering a Research assistant. The starters are gone, and no phone card sits under it: the reply ends on a question to the user, so the offer waits for the next reply rather than standing between them and their answer.',
     command: 'agents.open',
     requires: '.agent-chat__messages',
     commands: {
@@ -317,7 +317,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-first-result-phone-offer',
     title: 'Agents — the first result is back: the Chief offers the phone',
     looksRightWhen:
-      'The site handed back on its result card, and under it one calm card: a phone icon, “Use your agents from your phone?”, one muted line (chat, answer and approve from anywhere; about ten minutes), then “Not now” and a neutral “Set up my phone”. The phone used to be four onboarding screens before any result; now it is offered once something came back.',
+      'The site handed back on its result card, and under it one calm card: a phone icon, “Use your agents from your phone?”, one muted line (chat, answer and approve from anywhere; no App Store app yet, so ten minutes to an hour), then “Not now” and a neutral “Set up my phone”. The phone used to be four onboarding screens before any result; now it is offered once something came back.',
     command: 'agents.open',
     requires: '[data-testid="chief-phone-offer"]',
     commands: {

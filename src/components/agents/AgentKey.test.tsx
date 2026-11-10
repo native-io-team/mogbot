@@ -88,7 +88,8 @@ describe('AgentKey', () => {
       [
         'agent-key-breathe var(--agent-key-breathe) ease-in-out infinite',
         'agent-key-breathe var(--agent-key-breathe) ease-in-out infinite',
-        'agent-key-glow var(--agent-key-breathe) ease-in-out infinite',
+        'agent-key-glow-in var(--agent-key-breathe) ease-in-out infinite',
+        'agent-key-glow-out var(--agent-key-breathe) ease-in-out infinite',
         'agent-key-pulse var(--agent-key-pulse) ease-in-out infinite',
         'agent-key-pulse var(--agent-key-pulse) ease-in-out infinite',
         'agent-key-seat var(--agent-key-seat) var(--agent-key-ease-arrive) both',
@@ -120,6 +121,21 @@ describe('AgentKey', () => {
       /\[data-state='working'\] \{\s*--agent-key-ty: calc\(var\(--agent-key-rest-depth\)/
     );
     expect(css).toMatch(/\[data-state='needsOk'\] \{\s*--agent-key-ty: calc\(-5/);
+  });
+
+  it('breathes a working glow by crossfading two lit copies, never by animating a filter', () => {
+    const working = render(<AgentKey name="Inbox" state="working" />).container;
+    const copies = working.querySelectorAll('.agent-key__glow');
+    expect([...copies].map((c) => c.getAttribute('data-glow'))).toEqual(['low', 'high']);
+    // The legend that draws the strokes is the last one, on top.
+    expect(working.querySelector('.agent-key__face > .agent-key__legend:last-of-type')).not.toBe(
+      copies[1]
+    );
+    const idle = render(<AgentKey name="Inbox" />).container;
+    expect(idle.querySelectorAll('.agent-key__glow')).toHaveLength(0);
+    // No keyframes move a filter: that repaints on the main thread every frame.
+    const frames = [...css.matchAll(/@keyframes [\w-]+ \{([\s\S]*?)\n\}/g)].map((m) => m[1]);
+    for (const f of frames) expect(f).not.toMatch(/^\s*filter:/m);
   });
 
   it('holds every looping animation still in a hidden window', () => {

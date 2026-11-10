@@ -22,6 +22,7 @@ fn routine(then: Vec<Step>) -> CheckIn {
         follow_up: false,
         then,
         waiting: None,
+        model: None,
         extra: Default::default(),
     }
 }

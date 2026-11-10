@@ -79,8 +79,8 @@ export const SETTINGS_PAGES: readonly SettingsPageInfo[] = [
   {
     id: 'projects',
     title: 'Projects',
-    lead: 'Where projects live, and what the app does in them.',
-    keywords: ['folder', 'commits', 'thumbnails', 'terminal', 'libraries'],
+    lead: 'Where projects live, what goes into their commits, and their previews and terminals.',
+    keywords: ['folder', 'commits', 'thumbnails', 'terminal', 'libraries', 'dev servers'],
   },
   {
     id: 'appearance',
@@ -91,8 +91,8 @@ export const SETTINGS_PAGES: readonly SettingsPageInfo[] = [
   {
     id: 'advanced',
     title: 'Advanced',
-    lead: 'Usage reports, and things that are off by default.',
-    keywords: ['analytics', 'experimental', 'spotify', 'dev servers'],
+    lead: 'Usage reports, and extras that stay off until you turn them on.',
+    keywords: ['analytics', 'experimental', 'spotify', 'error reports'],
   },
 ];
 

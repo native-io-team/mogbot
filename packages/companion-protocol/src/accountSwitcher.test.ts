@@ -4,12 +4,23 @@ import {
   inUseOf,
   movedIds,
   pinnedLine,
+  placeLabel,
   roomOf,
   switcherView,
   usedFirst,
   workingLine,
 } from './accountSwitcher';
 import * as real from './fixtures.gen';
+
+describe('placeLabel', () => {
+  it('names the engine only when both engines are in the list', () => {
+    const claude = { engine: 'claude' as const, position: 2 };
+    const codex = { engine: 'codex' as const, position: 1 };
+    expect(placeLabel(claude, [claude, claude])).toBe('2');
+    expect(placeLabel(claude, [claude, codex])).toBe('Claude 2');
+    expect(placeLabel(codex, [claude, codex])).toBe('Codex 1');
+  });
+});
 
 // A Thursday, noon local.
 const NOW = new Date(2026, 10, 5, 12, 0).getTime();

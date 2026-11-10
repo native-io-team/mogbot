@@ -26,9 +26,11 @@ const WHAT_EACH_SHOWS: Record<SettingsPage, string> = {
   chrome: 'The agents’ own browser, then Your Chrome with its switch.',
   apps: 'Slack, then apps you said no to when there are any.',
   projects:
-    'Projects folder with its path field, Shared libraries with Manage, thumbnails, the commit-message and credit switches, terminal GPU.',
-  appearance: 'Theme, accent colour, then the compact toolbar and breadcrumb switches.',
-  advanced: 'Usage analytics & error reports, then Keep dev servers running and Spotify controls.',
+    'Three groups, a hairline between each: Where projects live (Projects folder with its path field, Shared libraries with Manage…), Commits (the commit-message and credit switches), Previews and terminals (keep dev servers running, thumbnails, terminal GPU). Rows at the agents’ pages’ rhythm.',
+  appearance:
+    'Look (Theme, accent colour), then Project workspace (Compact toolbar, Element breadcrumb), a hairline between.',
+  advanced:
+    'Reports (Usage analytics & error reports), then Extras (Spotify controls), a hairline between.',
 };
 
 const pageScenario = (page: (typeof SETTINGS_PAGES)[number]): Scenario => ({

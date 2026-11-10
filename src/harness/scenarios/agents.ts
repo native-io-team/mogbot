@@ -1902,7 +1902,14 @@ const crowdedHeader = (id: string, width?: number): Scenario => ({
   ...(width ? { viewport: { width, height: 800 } } : {}),
   openSelector: AGENTS_TAB,
   requires: '.agent-conversations__title',
-  steps: [{ click: '[data-agent-id="acme"]' }],
+  // Below 750px there's no sidebar: Acme is picked from the header's switcher.
+  steps:
+    width && width < 750
+      ? [
+          { click: '.agent-chat__switcher .agent-chat__title' },
+          { click: '[role="menuitem"]', text: 'Acme Site' },
+        ]
+      : [{ click: '[data-agent-id="acme"]' }],
   clipSelector: '.agent-chat__header',
   commands: CROWDED_HEADER,
 });
@@ -2357,7 +2364,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-schedule-edit',
     title: 'Agents — editing a routine in the schedule popover',
     looksRightWhen:
-      'The editor stands in for the list (the list is gone while it is open): a back arrow and “Edit routine” at the top, then the picker on the weekday brief: Weekdays selected, At 09:00, What holding the brief’s own words, the echo of the routine and its first run, and Cancel / Save, Save neutral (dark keycap in light, light in dark), never Finance’s colour.',
+      'The editor stands in for the list (the list is gone while it is open): a back arrow and “Edit routine” at the top, a quiet “Runs on” line with “Like its other routines (Fastest) ⌄” (the routine’s own model), then the picker on the weekday brief: Weekdays selected, At 09:00, What holding the brief’s own words, the echo of the routine and its first run, and Cancel / Save, Save neutral (dark keycap in light, light in dark), never Finance’s colour.',
     requires: '.agent-schedule__editor-head',
     openSelector: AGENTS_TAB,
     steps: [
@@ -2845,7 +2852,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-first-run',
     title: 'Agents — first open: the Chief of Staff says hello',
     looksRightWhen:
-      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Sort my inbox, draft replies, Research it and write it up), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
+      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Sort my inbox, draft replies, Research it and write it up), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. Nothing is said twice: the header has Schedule and Model but no Usage (nothing read yet), and the sidebar footer has Routines and a calm “Usage” with no “Not read yet” and no empty bar. The composer is ready.',
     command: 'agents.open',
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
@@ -3507,7 +3514,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-conversations',
     title: 'Agents — several conversations with one agent, the switcher open',
     looksRightWhen:
-      'Acme Site’s chat. Beside its name in the header, a quiet button with a speech-bubble icon, “Plan the November launch email” (cut with … if it must) and an amber dot. Open under it, a menu: a search field, “New conversation” with a plus, a divider, the small heading “Recent”, then four rows newest first: the launch email on the selected fill in ordinary text colour (never accent), a check, “4m ago”, “Chase the two overdue invoices” (“Needs your OK” and an amber dot), “Set up the weekly metrics report” (“3d ago”), “Draft the job post for a designer” (“6d ago”); then a divider and “Rename this conversation…” with a pencil. The chat shows only the launch conversation’s lines.',
+      'Acme Site’s chat. Beside its name in the header, a quiet button with a speech-bubble icon, “Plan the November launch email” (cut with … if it must); the amber dot is a small badge on the speech-bubble icon (another conversation waits), never after the title. Open under it, a menu: a search field, “New conversation” with a plus, a divider, the small heading “Recent”, then four rows newest first: the launch email on the selected fill in ordinary text colour (never accent), a check, “4m ago”, “Chase the two overdue invoices” with a “Needs your OK” status pill, “Set up the weekly metrics report” (“3d ago”), “Draft the job post for a designer” (“6d ago”); then a divider and “Rename this conversation…” with a pencil. The chat shows only the launch conversation’s lines.',
     openSelector: AGENTS_TAB,
     requires: '.agent-conversations__menu',
     steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-conversations__trigger' }],
@@ -3552,7 +3559,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-conversations-header',
     title: 'Agents — the conversation on screen, named in the header',
     looksRightWhen:
-      'Acme Site’s chat, its header: the badge and name, then a quiet “Plan the November launch email” button with a speech-bubble icon and an amber dot (another conversation waits on you), then the usual usage, routines and model controls on the right. The chat holds only the launch email conversation: your ask and its outline reply. Nothing from the invoices or the first conversation.',
+      'Acme Site’s chat, its header: the badge and name, then a quiet “Plan the November launch email” button whose speech-bubble icon wears a small amber badge (another conversation waits on you; nothing after the title), then the usual schedule and model controls on the right. The chat holds only the launch email conversation: your ask and its outline reply. Nothing from the invoices or the first conversation.',
     openSelector: AGENTS_TAB,
     requires: '.agent-conversations__title',
     steps: [{ click: '[data-agent-id="acme"]' }],
@@ -3596,7 +3603,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-conversations-search',
     title: 'Agents — searching an agent’s conversations',
     looksRightWhen:
-      'The conversation menu is open with “invoice” typed in its search field. One row is left: “Chase the two overdue invoices”, “Needs your OK”, an amber dot. New conversation and Rename stay.',
+      'The conversation menu is open with “invoice” typed in its search field. One row is left: “Chase the two overdue invoices” with a “Needs your OK” status pill. New conversation and Rename stay.',
     openSelector: AGENTS_TAB,
     requires: '.agent-conversations__menu',
     steps: [

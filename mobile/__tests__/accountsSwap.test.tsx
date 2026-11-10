@@ -12,6 +12,8 @@ import { useAccounts, type AccountsState } from '../src/lib/accounts';
 import { setApp } from '../src/lib/store';
 
 const mockCall = jest.fn();
+// An agent's key is drawn with Reanimated; here only the words matter.
+jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
 jest.mock('../src/lib/session', () => ({
   call: (...a: unknown[]) => mockCall(...a),
   canCall: () => true,

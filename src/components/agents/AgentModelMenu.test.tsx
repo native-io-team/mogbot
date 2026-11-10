@@ -57,14 +57,14 @@ describe('AgentModelItems effort', () => {
     expect(updateAgent).toHaveBeenCalledWith('a1', { effort: 'high' });
   });
 
-  it('picking the level it already has saves nothing; default clears it', async () => {
+  it('picking the level it already has saves nothing; its own pick clears it', async () => {
     render(<AgentModelItems agent={{ ...finance, effort: 'high' }} />);
     fireEvent.click(screen.getByRole('menuitem', { name: 'High' }));
     expect(updateAgent).not.toHaveBeenCalled();
-    const defaults = screen.getAllByRole('menuitem', { name: 'Default' });
+    // One "Default" in the menu, the model's; the effort's is "Its own pick".
+    expect(screen.getAllByRole('menuitem', { name: 'Default' })).toHaveLength(1);
     await act(async () => {
-      // The second "Default" is the effort's (the first, the model's).
-      fireEvent.click(defaults[defaults.length - 1]);
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Its own pick' }));
       await Promise.resolve();
     });
     expect(updateAgent).toHaveBeenCalledWith('a1', { effort: '' });

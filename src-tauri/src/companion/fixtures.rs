@@ -606,6 +606,21 @@ async fn generate() -> String {
         call("agents.usagePlan", json!({})).await,
     );
     out += &entry(
+        "agentsUsageSetMode",
+        "Result<'agents.usage.setMode'>",
+        call("agents.usage.setMode", json!({ "mode": "save" })).await,
+    );
+    out += &entry(
+        "agentsSpareAdd",
+        "Result<'agents.spare.add'>",
+        call("agents.spare.add", json!({ "text": "Tidy the docs" })).await,
+    );
+    out += &entry(
+        "agentsSpareSpendNow",
+        "Result<'agents.spare.spendNow'>",
+        call("agents.spare.spendNow", json!({})).await,
+    );
+    out += &entry(
         "agentsMessages",
         "Result<'agents.messages'>",
         call("agents.messages", json!({ "agentId": AGENT, "limit": 100 })).await,

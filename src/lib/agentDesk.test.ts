@@ -3,9 +3,12 @@ import {
   lastResultWords,
   nextRunWords,
   pausedLine,
+  modelWords,
   ranOnLine,
   resumedLine,
+  routineCountLine,
   routineCounts,
+  routineLine,
   routineRows,
   routineWhenWords,
   stepIndex,
@@ -29,6 +32,23 @@ describe('ranOnLine', () => {
     );
     expect(ranOnLine({ engine: 'Codex', model: '  ' })).toBe('Codex');
     expect(ranOnLine({})).toBeNull();
+  });
+
+  it('says the model in the Model menu’s words, the id only when asked for', () => {
+    const work = { engine: 'Claude Code', account: 'sam@acme.com', model: 'claude-opus-4-6' };
+    expect(ranOnLine(work)).toBe('Claude Code · sam@acme.com · Opus');
+    expect(ranOnLine(work, true)).toBe('Claude Code · sam@acme.com · claude-opus-4-6');
+  });
+});
+
+describe('modelWords', () => {
+  it('names Claude’s families and leaves other models as reported', () => {
+    expect(modelWords('claude-opus-4-6')).toBe('Opus');
+    expect(modelWords('claude-sonnet-4-5-20250929')).toBe('Sonnet');
+    expect(modelWords('claude-3-5-haiku-latest')).toBe('Haiku');
+    expect(modelWords('sonnet')).toBe('Sonnet');
+    expect(modelWords('gpt-5.5')).toBe('gpt-5.5');
+    expect(modelWords('magnum-opusx')).toBe('magnum-opusx');
   });
 });
 
@@ -62,6 +82,25 @@ describe('the Routines overview', () => {
     expect(lastResultWords(daily)).toBe('Didn’t run');
     expect(lastResultWords(routine('new'))).toBeNull();
     expect(nextRunWords(routine('p', { paused: true }))).toBeNull();
+  });
+
+  it('reads the second line as one sentence, lower case after its first word', () => {
+    const now = new Date(2026, 10, 4, 8, 0).getTime();
+    const daily = routine('d', {
+      repeat: { kind: 'days', days: [1, 2, 3, 4, 5], hour: 9, minute: 0 },
+      nextAt: new Date(2026, 10, 4, 9, 0).getTime(),
+      runs: [{ at: 1, outcome: 'failed', attempt: 2 }],
+    });
+    expect(routineLine(daily, now)).toMatch(
+      /^Every weekday at .+ · next today at .+ · last: didn’t run after 2 tries$/
+    );
+    expect(routineLine(routine('p', { paused: true }), now)).toBe('Once · paused');
+  });
+
+  it('counts across agents, and names the one when there is one', () => {
+    expect(routineCountLine(routineRows(agents))).toBe('2 on · 1 paused, across 2 agents');
+    expect(routineCountLine(routineRows([agents[0]]))).toBe('1 on · 1 paused, for b');
+    expect(routineCountLine([])).toBe('No routines yet.');
   });
 
   it('words the bulk outcomes', () => {

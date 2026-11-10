@@ -15,6 +15,7 @@
 // ============================================================================
 
 import type { ResultCard, ResultRef } from './results';
+import type { BlockSet } from './blocks';
 import type { SettingsProposal } from './policy';
 import type { CrossoverAsk, CrossoverAway } from './crossover';
 
@@ -354,6 +355,8 @@ export interface CheckIn {
   retry?: CheckInRetry;
   /** A "When…" routine: it runs when something happens; `nextAt` is its next check. */
   watch?: Watch;
+  /** The model this routine wakes its agent on (`same`: the agent's own); omitted for the agent's routine model. */
+  model?: string;
   /** Steps after the first (`note`), each its own turn (`routine_steps::Step`). Macs with `MAC_FEATURES.steps`. */
   then?: RoutineStep[];
   /** A run waiting for the user's OK between two steps, with its card. */
@@ -519,6 +522,7 @@ export interface CheckInRun {
     | 'skipped'
     | 'waiting'
     | 'declined'
+    | 'held'
     | 'unknown';
   /** 1 for the run itself, 2 for its first retry. */
   attempt: number;
@@ -1485,6 +1489,12 @@ export interface AgentMessage {
    * any other is a plain "running on this Mac" chip, never a dead link.
    */
   localLinks?: LocalLink[];
+  /**
+   * Blocks (`show`, `agents/blocks.rs`): charts, tables, metrics, choices,
+   * a form… drawn from data, never markup. `text` carries their plain-text
+   * version for clients that don't draw them. Older Macs never send it.
+   */
+  blocks?: BlockSet;
 }
 
 /** A link an agent wrote to a server on this Mac (`AgentMessage.localLinks`). */
@@ -1891,12 +1901,18 @@ export interface UsageAccountLine {
    * Macs that predate it, and whenever that isn't known.
    */
   sameAs?: string;
+  /**
+   * An account earlier in the order this one *may* be the same account as:
+   * their weekly readings moved together with the same reset while only one
+   * ran turns. A question, never counted. Newer Macs only.
+   */
+  maybeSameAs?: string;
   /** The organization's name, when the engine recorded it. */
   orgName?: string;
   /** Who used it in the last 7 days, from the turns this app ran on it. */
   spent?: UsageRun[];
   /**
-   * "Where did my usage go": each recent rise in its 5-hour and weekly
+   * "Where it went": each recent rise in its 5-hour and weekly
    * meters, newest first, with the turns this app ran on it in that time.
    */
   changes?: UsageChange[];

@@ -114,7 +114,53 @@ pub const TOOLS: &[Def] = &[
             "required": ["agent", "id"]
         }),
     },
+    Def {
+        name: "set_routine_model",
+        description: "Choose the model one routine wakes its agent on, when the user asks (\"run the inbox check on Haiku\", \"cheaper model for that routine\"): the biggest saving for a routine that fires often and mostly checks. `model` is `haiku`, `sonnet` or `opus` on Claude Code, one of Codex's models on Codex, `same` for the agent's own model, or empty for the agent's routine model (the default). Applies at once with a line.",
+        main_only: true,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "agent": { "type": "string", "description": "The agent the routine belongs to (name or id)." },
+                "id": { "type": "string", "description": "The routine's id (list_check_ins on that agent, or usage_overview)." },
+                "model": { "type": "string", "description": "haiku, sonnet, opus, a Codex model, same, or empty for the default." }
+            },
+            "required": ["agent", "id", "model"]
+        }),
+    },
 ];
+
+/// The Chief chose a model for one routine: applied, with what it now runs on.
+pub fn set_routine_model(app: &AppHandle, args: &Value) -> Value {
+    let (Some(who), Some(id)) = (arg(args, "agent"), arg(args, "id")) else {
+        return error("`agent` and `id` are required.");
+    };
+    let model = args
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let agent = match store::find(who) {
+        Ok(Some(a)) => a,
+        _ => return error(format!("There's no agent called {who}.")),
+    };
+    match super::schedule::set_model(&agent.id, id, model) {
+        Ok(c) => {
+            let _ = tauri::Emitter::emit(app, super::runner::EVENT_REGISTRY, ());
+            let what = c.note.lines().next().unwrap_or("").trim().to_string();
+            let on = match c.model.as_deref() {
+                None => "the same model as its other routines".to_string(),
+                Some("same") => format!("{}'s own model", agent.name),
+                Some(m) => m.to_string(),
+            };
+            text(format!(
+                "{}'s routine “{what}” now runs on {on}.",
+                agent.name
+            ))
+        }
+        Err(e) => error(e.to_string()),
+    }
+}
 
 pub fn find(name: &str) -> Option<&'static Def> {
     TOOLS.iter().find(|t| t.name == name)
@@ -664,11 +710,22 @@ pub async fn nudge(app: &AppHandle) {
     else {
         return;
     };
+    if !spend_there(&spare) {
+        return;
+    }
     if usage_plan::mark_nudged(usage_plan::spare_key(&spare)).is_err() {
         // Not recorded: waking it now could wake it every tick.
         return;
     }
     wake_for_spare(app, &inv, &chief, &spare, &waiting, false);
+}
+
+/// Room about to expire on an account turns don't run on next: turns start
+/// on it until the window resets (`wallet::spend_first`). False when that
+/// couldn't be set (the account went), and the wake is then not worth it.
+fn spend_there(spare: &usage_plan::Spare) -> bool {
+    spare.next
+        || super::wallet::spend_first(spare.engine, &spare.account_id, spare.resets_at).is_ok()
 }
 
 /// The user pressed "Give agents something to do" by a window near its
@@ -690,15 +747,17 @@ pub async fn spend_now(app: &AppHandle) -> Result<String, crate::errors::Command
         ));
     }
     let now = inv.now;
-    let Some(spare) = inv
+    // The account turns run on next first; else room expiring on another.
+    let live: Vec<usage_plan::Spare> = inv
         .spare
         .iter()
-        .find(|s| s.next && s.resets_at > now)
+        .filter(|s| s.resets_at > now)
         .cloned()
-    else {
+        .collect();
+    let Some(spare) = usage_plan::pick_spare(&live, &[]).cloned() else {
         return Err(super::err_invalid(
             "spare",
-            "No limit is about to reset with room left on the account agents use next.",
+            "No limit is about to reset with room left on any account.",
         ));
     };
     let chief = store::list()
@@ -710,6 +769,12 @@ pub async fn spend_now(app: &AppHandle) -> Result<String, crate::errors::Command
         return Ok(format!(
             "{} is already starting your spare-capacity list for this limit.",
             chief.name
+        ));
+    }
+    if !spend_there(&spare) {
+        return Err(super::err_invalid(
+            "spare",
+            "That account isn't in your list any more.",
         ));
     }
     // Recorded, so "Use it all" doesn't wake it a second time for this window.
@@ -734,8 +799,14 @@ fn wake_for_spare(
     let window = inventory::window_name(&spare.kind, spare.window_minutes);
     let reset = super::failure::clock_phrase(&tz, spare.resets_at, inv.now);
     let read = super::failure::clock_phrase(&tz, spare.observed_at, inv.now);
+    // Another account than the one turns run on next: they start there now.
+    let first = if spare.next {
+        String::new()
+    } else {
+        format!(" {} turns start on it until then.", spare.engine.label())
+    };
     let note = format!(
-        "{} “{}”: the {window} limit resets {reset} and was {}% used when last reported. Using it on your spare-capacity list ({} waiting).",
+        "{} “{}”: the {window} limit resets {reset} and was {}% used when last reported. Using it on your spare-capacity list ({} waiting).{first}",
         spare.engine.label(),
         spare.account_name,
         spare.used_percent.floor(),
@@ -759,12 +830,17 @@ fn wake_for_spare(
         "The user chose “Use it all before reset”: their standing OK to use capacity that would otherwise expire."
     };
     let prompt = format!(
-        "[Spare capacity — from the app, not the user]\n\n{why} {} account “{}”: the {window} limit resets {reset} and was {}% used when reported {read}.\n\nWaiting on the spare-capacity list:\n{}\n\nStart what fits before the reset: hand each item to the agent it names, or whose role fits, with message_agent (on {} if there's a choice), or do it yourself, and mark each started with finish_spare_work. You may also bring a routine forward with run_routine_now. Nothing that sends, spends, pushes or changes what other people see without the user's usual Allow. Then tell the user in one line what you started and which account it runs on.",
+        "[Spare capacity — from the app, not the user]\n\n{why} {} account “{}”: the {window} limit resets {reset} and was {}% used when reported {read}.\n\nWaiting on the spare-capacity list:\n{}\n\nStart what fits before the reset: hand each item to the agent it names, or whose role fits, with message_agent (on {} if there's a choice), or do it yourself, and mark each started with finish_spare_work. You may also bring a routine forward with run_routine_now. Nothing that sends, spends, pushes or changes what other people see without the user's usual Allow. Then tell the user in one line what you started and which account it runs on.{}",
         spare.engine.label(),
         spare.account_name,
         spare.used_percent.floor(),
         items.join("\n"),
         spare.engine.label(),
+        if spare.next {
+            ""
+        } else {
+            " Until that reset, new turns on this engine start on that account (agents set to one account stay on theirs)."
+        },
     );
     let line = super::runner::new_message(&chief.id, store::MessageKind::Note, note);
     let _ = super::runner::record(app, line);
@@ -941,7 +1017,8 @@ mod tests {
                 "set_usage_mode",
                 "use_account",
                 "set_engine_fallback",
-                "run_routine_now"
+                "run_routine_now",
+                "set_routine_model"
             ]
         );
         // What changes the user's setting or runs work is the Chief's alone.
@@ -950,7 +1027,11 @@ mod tests {
                 t.main_only,
                 matches!(
                     t.name,
-                    "set_usage_mode" | "use_account" | "set_engine_fallback" | "run_routine_now"
+                    "set_usage_mode"
+                        | "use_account"
+                        | "set_engine_fallback"
+                        | "run_routine_now"
+                        | "set_routine_model"
                 ),
                 "{}",
                 t.name

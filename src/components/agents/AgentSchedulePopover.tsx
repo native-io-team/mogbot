@@ -2,7 +2,8 @@
  * An agent's schedule, anchored to the chat header: the check-ins it set for
  * itself and the routines you gave it, and a picker to add another.
  *
- * The trigger reads "N scheduled", or is a quiet clock when there's nothing.
+ * The trigger reads "N scheduled", or "Schedule" when there's nothing: never
+ * "Routines", which names the page with every agent's routines (round 4).
  * Adding or editing is the phone's picker, not a grammar: When is a few
  * chips (Every day / Weekdays / Weekly + days / Monthly + "On the [15th]
  * [day]" / Every few hours / Once with a date) and a time, What is one
@@ -107,6 +108,7 @@ import {
   describeWatchCheck,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
+import { AgentRoutineModel } from './AgentRoutineModel';
 import { useQuotaLines } from './AgentsQuota';
 import {
   moveRoutineTo,
@@ -185,7 +187,7 @@ export function AgentSchedulePopover({
             title="Schedule a routine"
             aria-label={`Schedule a routine for ${agent.name}`}
           >
-            <span className="agent-chat__scheduled-word agent-chat__action-word">Routines</span>
+            <span className="agent-chat__scheduled-word agent-chat__action-word">Schedule</span>
           </Button>
         )
       }
@@ -266,6 +268,13 @@ function ScheduleBody({
           <p className="agent-schedule__place">
             Runs {routineConversationLine(conversations, editing.id)}
           </p>
+        )}
+        {editing && editing.repeat && !editing.watch && (
+          <AgentRoutineModel
+            agent={agent}
+            // The live row: the editor opened on a copy.
+            routine={items.find((c) => c.id === editing.id) ?? editing}
+          />
         )}
         {!editing && (
           <div className="agent-schedule__mode">

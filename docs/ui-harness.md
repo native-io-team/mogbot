@@ -374,6 +374,18 @@ Long chats: `--lines 5000` serves a chat that long (the scenario reads
 node scripts/perf-agents.mjs --build --lines 5000 cold,scroll,typing,arrive,open
 ```
 
+Two more, also not in `all`, cover moving around the view:
+
+| Phase | What it does |
+| --- | --- |
+| `switch` | Opens 18 agents in turn from the sidebar, twice: ms from click to the chat on screen, first visit (its pages read) and again |
+| `usage` | Opens the Usage view from the sidebar's usage row four times, then sits on it for 15 s |
+
+`--ipc-ms <n>` makes every command answer `n` ms late (the harness's
+`?ipcMs=`), standing in for the Mac's round trip. With instant answers, reads
+made one after another that could have overlapped cost nothing; with a round
+trip they show up in `switch` and `cold` (`--ipc-ms 15 switch,cold`).
+
 Scrolling, here and in `open`'s set-up, dispatches a `wheel` before moving the
 scroll: the chat follows the bottom unless the reader moved it. The phone's
 counterpart is `pnpm qa:web --phases perf` (docs/mobile.md).

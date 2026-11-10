@@ -111,7 +111,7 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-board',
     title: 'Agents — the team as a board of keys (What’s in flight)',
     looksRightWhen:
-      'What’s in flight opens on a warm plate of full-size keys, one per agent, its name in bold and a state line under it, then an empty socket “New agent · Empty socket”. Each key: a top-lit skirt, a lighter inset face, a hard depth shadow, one legend centred, its bound letter small at the bottom right clear of the corner, independence pips on the front edge. Acme Site and Research are pressed and lit warm with a soft spill in their colour (“Working on …”); Lead Gen sits proud with an amber legend and an amber spill (Needs your OK, the word in amber), the loudest key; Hiring is lit and still (“Live · You’re driving it”, Live in green); Native App is drained grey and sunk (Paused); idle keys are at rest and unlit, with their last line. Readable in both themes; keys keep their colours.',
+      'What’s in flight opens on a warm plate of full-size keys, one per agent, its name in bold and a state line under it, then the dashed New agent key named just “New agent” (no second line). Each key: a top-lit skirt, a lighter inset face, a hard depth shadow, one legend centred, its bound letter small at the bottom right clear of the corner, independence pips on the front edge. Acme Site and Research are pressed and lit warm with a soft spill in their colour (“Working on …”); Lead Gen sits proud with an amber legend and an amber spill (Needs your OK, the word in amber), the loudest key; Hiring is lit and still (“Live · You’re driving it”, Live in green); Native App is drained grey and sunk (Paused); idle keys are at rest and unlit, with their last line. Readable in both themes; keys keep their colours.',
     requires: '.agents-board .agent-key[data-state="needsOk"]',
     command: 'agents.team',
     viewport: { width: 1440, height: 1000 },
@@ -146,7 +146,7 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-icon-search',
     title: 'Agents — searching every icon for “money”',
     looksRightWhen:
-      'New agent, the key picker open, “money” typed into the icon search. Under it the categories as a strip of quick filters (All, Featured, Accessibility, …), the line “N for “money””, then the matches as small keys in the chosen colourway: our Money legend first, then Lucide’s banknote, coins, currency, wallet, dollar sign… drawn in the same uniform stroke as the featured legends, round-capped. The key at 112px above wears whatever is picked. Readable in both themes.',
+      'New agent, the key picker open, “money” typed into the icon search. Under it the categories as a strip that fits the dialog (All, Featured, People, Finance, Mail, Time & calendar, then More holding the rest), nothing cut at the edge, the line “N for “money””, then the matches as small keys in the chosen colourway: our Money legend first, then Lucide’s banknote, coins, currency, wallet, dollar sign… drawn in the same uniform stroke as the featured legends, round-capped. The key at 112px above wears whatever is picked. Readable in both themes.',
     requires: '.agent-icons .agent-look__choice[data-value="lucide:banknote"]',
     steps: [
       { click: '.agents-list__new' },

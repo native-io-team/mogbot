@@ -114,6 +114,8 @@ function toLoad(agents: Agent[], chats: Record<string, { loaded?: boolean } | un
  * doesn't vanish while you read it; the visit ends (and is saved) when the
  * tab is left or the app goes to the background.
  */
+const RECENT_MAX = 8;
+
 function useSince(): { since: number | null; lastVisit: number | null } {
   const [state, setState] = useState<{ since: number | null; lastVisit: number | null }>({
     since: null,
@@ -171,13 +173,16 @@ export default function CatchUp() {
   );
   const groups = useMemo(() => groupByAgent(items), [items]);
   const { since, lastVisit } = useSince();
-  const happened = useMemo(
-    () =>
-      overview && since !== null
-        ? sinceItems(overview.agents, chats, since, new Set(groups.map((g) => g.agentId)))
-        : [],
-    [overview, chats, since, groups]
-  );
+  // What happened since the last visit; with nothing new, the last day's activity
+  // under "Recently", so the screen never goes blank after one look.
+  const { happened, recent } = useMemo(() => {
+    if (!overview || since === null) return { happened: [], recent: false };
+    const waiting = new Set(groups.map((g) => g.agentId));
+    const fresh = sinceItems(overview.agents, chats, since, waiting);
+    if (fresh.length > 0) return { happened: fresh, recent: false };
+    const day = sinceItems(overview.agents, chats, Date.now() - FIRST_LOOK_MS, waiting);
+    return { happened: day.slice(0, RECENT_MAX), recent: true };
+  }, [overview, chats, since, groups]);
 
   const screenOptions = useMemo(
     () =>
@@ -254,7 +259,7 @@ export default function CatchUp() {
                 style={styles.sinceTitle}
                 accessibilityRole="header"
               >
-                {sinceTitle(lastVisit).toUpperCase()}
+                {sinceTitle(recent ? null : lastVisit).toUpperCase()}
               </T>
               <View style={styles.sinceList}>
                 {happened.map((h, i) => {
@@ -705,7 +710,7 @@ const useStyles = makeStyles((colors) => ({
   answers: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm },
   swipe: { width: SWIPE_W, backgroundColor: colors.surfaceSelected },
   swipeInner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space['2xs'] },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
+  empty: { alignItems: 'center', gap: space.md, paddingTop: space['2xl'] },
   emptyText: { textAlign: 'center', paddingHorizontal: space.xl },
   check: {
     width: heroMark,

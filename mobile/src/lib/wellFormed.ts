@@ -35,6 +35,7 @@ const OBJECT_FIELDS = [
   'revises',
   'remembered',
   'via',
+  'blocks',
 ] as const;
 
 /** Optional fields that are a list when present. */

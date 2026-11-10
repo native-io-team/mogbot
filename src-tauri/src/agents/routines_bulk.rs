@@ -89,6 +89,7 @@ mod tests {
             follow_up: false,
             then: Vec::new(),
             waiting: None,
+            model: None,
             extra,
         }
     }

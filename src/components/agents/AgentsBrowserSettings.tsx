@@ -60,7 +60,7 @@ export function AgentsBrowserSettings() {
         {AGENTS_BROWSER_TITLE}
       </h3>
       <div className="settings-section">
-        <Row label={AGENTS_BROWSER_TITLE} description={agentsBrowserLine(status)}>
+        <Row label="Let agents use their own Chrome" description={agentsBrowserLine(status)}>
           <Toggle
             on={status?.enabled ?? true}
             label={AGENTS_BROWSER_TITLE}
@@ -68,7 +68,7 @@ export function AgentsBrowserSettings() {
           />
         </Row>
         {status?.enabled && (
-          <div data-testid="agents-browser-permissions">
+          <div className="settings-row-steps" data-testid="agents-browser-permissions">
             <Row
               label="Signing in to Google from your phone"
               description={permissionsLine(status.permissions)}

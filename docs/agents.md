@@ -9,8 +9,8 @@ talk only to the Chief and let it run everything else.
 Agents is a mode, not a page. The **Agents | Projects** toggle at the top of
 the sidebar (⌘⇧A, or ⌘K → Switch to Agents) turns the whole window into the
 chat app: agent list on the left, one conversation on the right. Switching
-back returns to wherever you were on the Projects side (the dashboard,
-Workflows, the Inbox, or the open project); switching in returns to the last
+back returns to wherever you were on the Projects side (the dashboard or the
+open project); switching in returns to the last
 conversation. While Projects is showing, an amber badge on the
 Agents segment says an agent needs your OK or has news, and its tooltip says
 which. New agent is ⌘N, the row at the foot of the agent list, or ⌘K. In the
@@ -630,7 +630,7 @@ characters, a Codex agent's 12,619, the Chief's 16,003 before its team list
 (budgets 12,500 / 13,100 / 16,600). The agents' browser in "Getting access"
 took them to 12,697 / 13,262 / 16,646 after trims elsewhere (the repeated
 "don't mention servers or ports", the password paragraph the Secrets section
-already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. The Chief's draft-first line ("Asked to make one? Draft it in one reply ending “Make it?”") went in within the Chief’s (17,245 of 17,250) by trimming its delegate, `project` and `read_agent` bullets: live on Haiku, the tool description alone didn't hold against "do it, don't ask", and a first message asking for an agent was built at once. Measured with Claude Code (Haiku 5.5,
+already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Blocks' one line ("Show, don't describe", `show`) took the budgets to 13,500 / 14,100 / 17,500. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. The Chief's draft-first line ("Asked to make one? Draft it in one reply ending “Make it?”") went in within the Chief’s (17,245 of 17,250) by trimming its delegate, `project` and `read_agent` bullets: live on Haiku, the tool description alone didn't hold against "do it, don't ask", and a first message asking for an agent was built at once. Measured with Claude Code (Haiku 5.5,
 `--append-system-prompt-file`, input tokens over a bare run): on the base
 this work started from, 3,347 tokens before and 3,269 after for a plain agent
 (4,583 → 4,505 for the Chief), while gaining the paragraph above; with
@@ -978,13 +978,15 @@ steps has no line.
 
 For people who live in a terminal and want to see what ran:
 
-- **Ran on**: beside the folded line, "Claude Code · sam@acme.com ·
-  claude-opus-4-6". The engine and account are the ones the runner started
+- **Ran on**: beside the folded line, "Claude Code · sam@acme.com · Opus"
+  (the model in the Model menu's words, `modelWords`; the id as reported in
+  its tooltip). The engine and account are the ones the runner started
   the turn on (`work::on_ran_on`; the last try's, when a limit moved it).
   The model is only what the engine said: Claude Code's `system/init`
   event, Codex's `thread/start` result (`Step::Model`). Absent when it
   didn't say; nothing is inferred from the agent's settings.
-- **Show exact command**: under a step, the command line (or the tool and
+- **Exact command**: a kept step's own words open it (a chevron at their
+  trailing edge; no link per step), the command line (or the tool and
   its input) exactly as it ran. It is kept beside the timeline in
   `<home>/turn-detail/<message-id>.json`, never on the step (which carries
   only `hasExact`), so the status, the phone and notifications never see it.
@@ -4791,7 +4793,7 @@ account as …", this Mac's sign-in having changed); "Limits" with Limits |
 Tokens at its right: the limit cards (5-hour, weekly, per-model, each with
 its countdown chip, pace marker, the Mac's labelled run-out estimate and the
 pace in words) or "Used by these agents this week" as a table (agent key,
-name, tokens, messages); and "Where did my usage go". Adding is one click
+name, tokens, messages); and "Where it went". Adding is one click
 per engine (a free name, then its sign-in). Onboarding offers adding right
 after the engine's sign-in ("Add another account?", skippable). The phone
 has the same two levels: the Usage sheet (the total, then a row per
@@ -4855,7 +4857,7 @@ do and when it refills (`usageGlance` `row`): the total ("72% left", or
 the total bar and "Refills in 2d 4h". Its corner dot shows only when the
 user must act or agents are out; the phone's Agents list says the same.
 
-**Where did my usage go** (`agents/usage_story.rs`). Each turn's tokens are
+**Where it went** (`agents/usage_story.rs`). Each turn's tokens are
 recorded per account with its agent, and its routine when it ran one alone
 (`usage_plan::add_turn`, `tag_routine`; kept 8 days). For each rise of at
 least 2 points in an account's 5-hour or weekly meter (consecutive readings
@@ -5313,10 +5315,47 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   use and which account it runs on, then goes ahead.
 - **Save my limits**: ask before heavy work (`usage_plan::ask_first`: a
   forecast of a tenth of a window or more, or a fan-out with no forecast),
-  and send light work to agents on lighter models or engines.
+  and send light work to agents on lighter models or engines. It also
+  **holds routines** (`agents/saver.rs`): a repeating routine that comes due
+  while every account its agent could run on is past 90% (`HOLD_PERCENT`) of
+  a 5-hour or weekly limit waits for the first of them to reset, then runs
+  once, late. Said once per hold: a line in the agent's chat and a run row
+  "Waiting for the reset" (`runs::Outcome::Held`, `usage_plan::first_hold`).
+  Run now still runs; "When…" routines aren't held; an account with no
+  reading is never held for.
+- **In any mode, an account out until a known reset is waited for, not
+  tried** (persona review 2026-11-09, the Adversary): a routine due while
+  every account the agent runs on is out until a reset the engine reported is
+  held the same way, unless its agent would carry on with the other engine
+  (`crossover` not Wait and the other engine ready, as last looked; unknown
+  counts as ready). A turn on a lone (or pinned) account that is out until a
+  known reset ends before the try (`wallet::pinned_and_out`), and a routine
+  that ends on a usage limit whose reset is too far off to retry at is
+  `Held`, not `Failed`. A background read that shows room on an account
+  marked out clears the mark (and its twins'), when it names the window that
+  was out or both kinds (`wallet::back_by_reading`).
+- **One warning per window** (`saver::warn_now`, from the minute tick at
+  most every 3 minutes): the first time the account turns run on next is past
+  90% of a limit, or its pace (an estimate) runs out at least an hour before
+  the reset, one notification in the Chief's name (desk; the phone when away
+  from the desk) and a line in the Chief's chat, with "Switch to Save my
+  limits" outside Save. Recorded before it is said (`usage_plan::first_warning`,
+  30 minutes of reset slack): never repeated for that window. Not in "Use it
+  all before reset".
+- **A model per routine** (`CheckIn::model`; the routine editor's "Runs on",
+  `agents_schedule_model`; the Chief's `set_routine_model`): like its other
+  routines (`Agent::routine_model`, the default), the agent's own (`same`),
+  or one of its engine's. The turn finds it through its tickets
+  (`runs::routine_model`), only when every routine in that turn agrees.
 - **Use it all before reset**: the user's standing OK to spend capacity that
-  would otherwise expire. When a window on the account turns would run on
-  next is near its reset (within a fifth of its length, at most a day:
+  would otherwise expire. **Any account's** expiring room counts: the
+  account turns run on next first; with none spare there, the soonest spare
+  window on another account, and turns on that engine then start on it until
+  that window resets (`wallet::spend_first`, applied in `wallet::candidates`;
+  pinned agents stay on theirs; leaving the mode clears it). The phone changes
+  the mode, adds to the list and presses "Give agents something to do"
+  (`agents.usage.setMode`, `agents.spare.add`, `agents.spare.spendNow`,
+  audited). When a window on such an account is near its reset (within a fifth of its length, at most a day:
   `five_hour` → last hour, `seven_day` → last day; Codex's own
   `windowDurationMins`; a window we can't size is never spare) with at least
   `SPARE_MIN_PERCENT` (25) points unused (and the account's other 5-hour or
@@ -5371,9 +5410,18 @@ older Mac doesn't list it in `welcome.methods`). Wording lives once in
   account no turn has run on. Those accounts say "No reading yet".
 - Opencode and local models aren't agent engines here; they're listed, not
   used.
-- Choosing *accounts* by reset time isn't done: the wallet's order is the
-  user's, and failover keeps it. Agents choose between *engines* (an agent on
-  Codex vs one on Claude Code) by what resets sooner.
+- Choosing *accounts* by reset time is done only for "Use it all before
+  reset" (`spend_first`, until that window resets); otherwise the wallet's
+  order is the user's, and failover keeps it. Agents choose between *engines*
+  (an agent on Codex vs one on Claude Code) by what resets sooner.
+- **"These may be the same account"** (`agents/lockstep.rs`,
+  `AccountLine.maybe_same_as`): asked, never counted, when two accounts'
+  weekly readings, paired within 15 minutes, share a reset to the second and
+  a figure (within half a point) across 3+ pairs, moved at least a point, and
+  one of them ran no turn of ours in that span. One line under the meter
+  (`sameNotes`, words in `sameAccount.ts`); totals, failover and spare
+  capacity still count both. The phone numbers accounts by engine when both
+  engines are listed ("Claude 2", "Codex 1": `placeLabel`).
 - "Route light work to cheaper models" is an instruction to the Chief
   (delegate to agents on lighter models); nothing reclassifies a turn
   automatically.
@@ -6294,6 +6342,73 @@ of their own is open.
   apps, scripts, anything executable or with a launching extension
   (`.command`, `.app`, `.py`, `.webloc`…) are only revealed in Finder, never
   run. ⌘-click always reveals.
+
+## Blocks: the right UI at the right moment (`src-tauri/src/agents/blocks.rs`)
+
+An agent can answer with UI, not just prose: `show` posts one message whose
+blocks are drawn from data on the desk (`components/agents/blocks/`) and the
+phone (`mobile/src/components/blocks/`), from the same types and maths
+(`packages/companion-protocol/src/blocks.ts`). Thirteen kinds:
+
+| Kind | For | Answers? |
+|---|---|---|
+| `chart` (line, bar grouped/stacked, area, pie, donut, sparkline) | numbers over time, categories, parts of a whole | no |
+| `table` | records: sortable, numbers right-aligned, eight rows then "Show all" | no |
+| `metrics` | a few headline numbers: value, delta (its direction in words and an arrow, coloured by whether that way is good), an optional sparkline | no |
+| `facts` | label / value details | no |
+| `checklist`, `steps` | progress | no |
+| `comparison` | 2–3 options side by side, each with "Pick this" | yes |
+| `choices` | a quick decision: buttons that send words | yes |
+| `form` | several details at once: text, long text, choice, date, number | yes |
+| `links` | chips with the domain; nothing is fetched | no |
+| `callout` | info / warning / success, with its icon and a word | no |
+| `code` | code, or a diff (`language: "diff"`) | no |
+| `image` | one of the agent's own image files, copied into the chat | no |
+
+**Data only.** The Mac checks every block before anything is kept
+(`blocks::parse`, `blocks_tests.rs`): a known kind and its fields, limits (8
+blocks and 96 KB a message, 8 series, 120 points or 40 bars, 200 rows × 8
+columns, 4 images), finite numbers, labels that line up with values, http(s)
+links with no credentials, and **no HTML anywhere** (a block's strings are
+drawn as text; `code` is shown verbatim). A form that asks for a password, key,
+token, card number or the like is refused with "use request_secret": secrets
+keep their masked card. An image is only a file in the agent's own folder,
+copied in and checked to be an image, as `share_file` does.
+
+**Fallback.** Every block has a plain-text `summary` (the agent's, or made
+from its data), and the message's `text` is the intro plus every summary: what
+an older phone shows, what search finds, what Copy copies, and what the next
+engine session reads back. Messages keep `blocks` as JSON (`v: 1`), so a kind
+from a newer build never makes a message unreadable; a client that doesn't
+know the version or a kind draws the text instead (`readBlocks`).
+
+**Answers are the user's words.** A choice, Pick this or a form sends the
+user's own message through the ordinary send (`formReply` is one "Label:
+value" line each), so independence, approvals and plan grants are exactly as
+for anything typed. Once the user has said anything after the blocks
+(`answerAfter`), they show the answer and send nothing again. Blocks posted in
+a turn answering outside text carry `fromOutside`: a tap only puts the words
+in the composer, with a line saying why, and nothing sends until the user
+does. The agent is told to stop and wait after asking.
+
+**Look.** Charts follow the dataviz rules: one categorical palette of eight,
+drawn from the agent key colourways (blue, orange, teal, mustard, pink, green,
+violet, brick), stepped per theme and validated as a set (lightness band,
+chroma, adjacent colour-blind separation; `--chart-series-1…8`, the phone's
+`theme.ts` the same values); 2px lines, bars at most 24px with a rounded data
+end, 2px surface gaps, a hairline grid, one axis style, a legend only for two
+or more series, the end of a single line labelled, a crosshair and tooltip on
+hover or arrow keys (tap on the phone), and "Show the numbers" for the table
+view. Comparison, choices and form answers are neutral (`strong` /
+`secondary`), never the accent; "Recommended" is a neutral ring.
+
+**Teaching the agents.** The tool description carries each kind's fields and
+an example; the system prompt has one line ("Show, don't describe…"), which
+took the prompt budgets to 13,500 / 14,100 / 17,500.
+
+Harness: `agents-blocks-*` (numbers, a chart's tooltip, a sorted table, more
+charts, deciding, a form left empty, progress, answered, outside text).
+Phone: the qa:web shots `blocks-chat-*` and `blocks-tooltip-*` (a hidden "Blocks" agent in the mock Mac, `mobile/dev/mock-blocks.ts`). One question per message: a `show` with two of choices, comparison or form is refused, since the next message answers it.
 
 ## Result cards (`src-tauri/src/agents/results.rs`)
 

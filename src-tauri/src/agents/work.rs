@@ -880,6 +880,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Sharing a file",
             "share a file",
         ),
+        "show" => act(
+            StepKind::Message,
+            "Showed it in the chat",
+            "Showing it in the chat",
+            "show it in the chat",
+        ),
         "share_result" => act(
             StepKind::Message,
             "Put together its result",
@@ -1076,6 +1082,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Ran a routine now",
             "Running a routine now",
             "run a routine now",
+        ),
+        "set_routine_model" => act(
+            StepKind::Plan,
+            "Changed a routine's model",
+            "Changing a routine's model",
+            "change a routine's model",
         ),
         // Testing a site in the preview (`preview_test`).
         "test_open" => {

@@ -51,6 +51,27 @@
   --color-blue-600: #0978e3;
   --color-blue-500: #2792ff;
   --color-blue-400: #6bb5ff;
+  /* The chart palette (agents' blocks): eight categorical hues drawn from the
+     agent key colourways (blue, orange, teal, mustard, pink, green, violet,
+     brick), each stepped per theme and validated as a set by the dataviz
+     checks (lightness band, chroma, adjacent colour-blind separation). The
+     order is part of that: never re-order or cycle it. */
+  --color-chart-light-1: #3f6fd8;
+  --color-chart-light-2: #ec6a2e;
+  --color-chart-light-3: #2e9e8f;
+  --color-chart-light-4: #e0a520;
+  --color-chart-light-5: #e37b9b;
+  --color-chart-light-6: #3e8a3e;
+  --color-chart-light-7: #7357c9;
+  --color-chart-light-8: #c2452c;
+  --color-chart-dark-1: #5a86e6;
+  --color-chart-dark-2: #e86a34;
+  --color-chart-dark-3: #2fa493;
+  --color-chart-dark-4: #b8860b;
+  --color-chart-dark-5: #d46685;
+  --color-chart-dark-6: #3f9443;
+  --color-chart-dark-7: #9580e0;
+  --color-chart-dark-8: #d9604a;
   --color-blue-500-o40: color-mix(in srgb, var(--color-blue-500) 40%, transparent);
   --color-blue-500-o15: color-mix(in srgb, var(--color-blue-500) 15%, transparent);
 

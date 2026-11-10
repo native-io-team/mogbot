@@ -19,6 +19,7 @@ import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown'
 import { MenuButton } from '../primitives/MenuButton';
 import {
   EFFORT_CHOICES,
+  ENGINE_DEFAULT_LABEL,
   ENGINE_LABEL,
   modelChoices,
   modelLabel,
@@ -149,10 +150,14 @@ export function AgentModelItems({ agent }: { agent: Agent }) {
               heading never names one choice while another is ticked. */}
           <p className="agent-model-menu__heading">Routines · the model for its scheduled work</p>
           {routineModelChoices(agent.engine, choices).map((m) => {
-            const resolved =
+            const said =
               m.value === '' || m.value === 'same'
                 ? modelLabel(routineModelOf({ ...agent, routineModel: m.value }), choices)
                 : null;
+            // "Same as its chats" on chats left to the engine says nothing
+            // more: "(Default)" beside "Automatic (Fastest)" asked the reader
+            // to resolve two defaults (round 4).
+            const resolved = said === ENGINE_DEFAULT_LABEL ? null : said;
             const detail = m.detail ?? resolved;
             return (
               <DropdownItem

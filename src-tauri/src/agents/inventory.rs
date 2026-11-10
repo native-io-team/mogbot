@@ -89,6 +89,13 @@ pub struct AccountLine {
     /// adds no room: its limits are that account's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub same_as: Option<String>,
+    /// The name of an account earlier in the order that this one *may* be
+    /// the same account as: their weekly readings moved together with the
+    /// same reset while only one of them ran turns (`lockstep`). A question
+    /// for the user, never a verdict: it changes no total, failover or
+    /// spare capacity (those count only `same_as`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maybe_same_as: Option<String>,
     /// The organization's name, when the engine recorded it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub org_name: Option<String>,
@@ -350,6 +357,23 @@ pub fn build(parts: Parts) -> Inventory {
                 })
                 .collect::<Vec<_>>(),
         );
+        // Moving together: asked, never counted (`lockstep`).
+        let no_samples: Vec<forecast::Sample> = Vec::new();
+        let no_turns: Vec<usage_plan::TurnRecord> = Vec::new();
+        let maybe: Vec<Option<usize>> = (0..mine.len())
+            .map(|i| {
+                if twins[i].is_some() || !mine[i].signed_in {
+                    return None;
+                }
+                let sample = |k: usize| parts.samples.get(&keys[k]).unwrap_or(&no_samples);
+                let turns = |k: usize| parts.records.turns.get(&keys[k]).unwrap_or(&no_turns);
+                (0..i).find(|&j| {
+                    twins[j].is_none()
+                        && mine[j].signed_in
+                        && super::lockstep::together(sample(i), sample(j), turns(i), turns(j))
+                })
+            })
+            .collect();
         let names = TeamNames(&parts.agents);
         for (i, c) in mine.iter().enumerate() {
             let reading = reading_for(&parts, &c.account);
@@ -421,6 +445,7 @@ pub fn build(parts: Parts) -> Inventory {
                 pace: if out.is_some() { Vec::new() } else { pace },
                 check: parts.checks.get(&key).cloned(),
                 same_as: twins[i].map(|j| mine[j].account.name.clone()),
+                maybe_same_as: maybe[i].map(|j| mine[j].account.name.clone()),
                 org_name: parts.identities.get(&key).and_then(|i| i.org_name.clone()),
                 spent: usage_story::spent_by(&own, now - WEEK_MS, &names),
                 changes,
@@ -632,12 +657,14 @@ pub async fn local_compute() -> Vec<LocalCompute> {
 
 /// The inventory now, from disk, the engines and this Mac.
 pub async fn read() -> Inventory {
-    let engines = super::engine::overview().await;
-    let mut candidates = Vec::new();
-    for engine in Engine::ALL {
-        candidates.extend(wallet::candidates(engine).await);
-    }
-    let local = local_compute().await;
+    // The engines, each engine's accounts and this Mac's other compute are
+    // asked about at once: each waits on CLIs or the Keychain, not on the others.
+    let (engines, accounts, local) = tokio::join!(
+        super::engine::overview(),
+        futures_util::future::join_all(Engine::ALL.map(wallet::candidates)),
+        local_compute()
+    );
+    let candidates: Vec<_> = accounts.into_iter().flatten().collect();
     let now = super::store::now_ms();
     tokio::task::spawn_blocking(move || {
         let (archived, samples) = usage_plan::readings();

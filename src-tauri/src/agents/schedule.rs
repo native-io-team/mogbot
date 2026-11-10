@@ -153,6 +153,12 @@ pub struct CheckIn {
     /// A run waiting for the user's OK between two steps, with its card.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub waiting: Option<super::routine_steps::Waiting>,
+    /// The model this routine wakes its agent on, when not the agent's
+    /// routine model (`Agent::routine_model`): `"same"` is the agent's own
+    /// model, else one of its engine's (`store::normalize_routine_model`).
+    /// The Saver's biggest lever: an hourly check on a lighter model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     /// Fields a newer Ship Studio wrote that this build doesn't know: kept
     /// and written back as they were, so running an older build never
     /// strips what a newer one saved.
@@ -1124,22 +1130,27 @@ impl Firing {
 }
 
 pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
-    plan_with(tz, agents, now, &|_| false)
+    plan_with(tz, agents, now, &|_, _| false)
 }
 
-/// [`plan`], leaving out the check-ins `waits` holds back (inside quiet
-/// hours, `quiet::fires_anyway` says which don't): they stay due, and fire
-/// once when it lets them.
+/// [`plan`], leaving out the due check-ins `waits` holds back (inside quiet
+/// hours, `quiet::fires_anyway` says which don't; a usage limit to reset
+/// first, `saver`): they stay due, and fire once when it lets them. Asked
+/// only of check-ins that are due.
 pub fn plan_with<Tz: TimeZone>(
     tz: &Tz,
     agents: &[store::Agent],
     now: i64,
-    waits: &dyn Fn(&CheckIn) -> bool,
+    waits: &dyn Fn(&store::Agent, &CheckIn) -> bool,
 ) -> Plan {
     let mut plan = Plan::default();
     for agent in agents {
-        for check_in in agent.check_ins.iter().filter(|c| !waits(c)) {
-            match due(tz, check_in, now) {
+        for check_in in &agent.check_ins {
+            let due = due(tz, check_in, now);
+            if due.is_some() && waits(agent, check_in) {
+                continue;
+            }
+            match due {
                 None => {}
                 Some(Due::Retry) => {
                     let retry = check_in.retry.clone();
@@ -1170,7 +1181,7 @@ pub fn plan_with<Tz: TimeZone>(
                                 .filter(|c| {
                                     c.id != check_in.id && c.repeat.is_none() && c.watch.is_none()
                                 })
-                                .filter(|c| !c.paused && c.retry.is_none() && !waits(c))
+                                .filter(|c| !c.paused && c.retry.is_none() && !waits(agent, c))
                                 .filter(|c| now - c.next_at > LATE_AFTER_MS)
                                 .cloned()
                                 .collect()
@@ -1498,6 +1509,7 @@ where
         follow_up: false,
         then: Vec::new(),
         waiting: None,
+        model: None,
         extra: Default::default(),
     };
     let mut refused: Option<Refused> = None;
@@ -1753,6 +1765,34 @@ pub fn cancel(agent_id: &str, id: &str) -> Result<CheckIn, CommandError> {
     })
 }
 
+/// What one routine wakes its agent on: `""` like its other routines,
+/// `"same"` its own model, or one of its engine's. Answers the routine.
+pub fn set_model(agent_id: &str, id: &str, model: &str) -> Result<CheckIn, CommandError> {
+    let agent = store::get(agent_id)?;
+    let model = match model.trim() {
+        "" => None,
+        m => store::normalize_routine_model(agent.engine, m)?,
+    };
+    let mut found = None;
+    store::update(agent_id, |a| {
+        if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == id) {
+            c.model = model.clone();
+            found = Some(c.clone());
+        }
+    })?;
+    found.ok_or_else(|| CommandError::expected("That routine no longer exists."))
+}
+
+/// The model a routine's turn runs on: its own choice, else the agent's
+/// routine model (`Agent::routine_model`).
+pub fn model_for<'a>(agent: &'a store::Agent, routine: Option<&'a str>) -> Option<&'a str> {
+    match routine {
+        None => agent.routine_model(),
+        Some("same") => agent.model.as_deref(),
+        Some(m) => Some(m),
+    }
+}
+
 /// Pause or resume. A resumed routine picks up at its next time from now
 /// rather than firing for what it missed while paused.
 pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandError> {
@@ -1834,8 +1874,29 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     // set its time inside them (`quiet`). What they held is released here.
     let quiet = super::quiet::get();
     let holding = super::quiet::holding_now();
-    let waits = |c: &CheckIn| super::quiet::waits(c, quiet.as_ref(), holding);
+    // A usage limit to reset first (`saver`): every account the agent runs
+    // on is out until a known reset, or nearly out in "Save my limits".
+    // Held routines stay due, said once each, and fire when it lifts. Run
+    // now isn't planned here, so it still runs.
+    let holds = super::saver::Holds::new(super::usage_plan::mode().0);
+    let held: std::cell::RefCell<Vec<(store::Agent, CheckIn, super::saver::Hold)>> =
+        Default::default();
+    let waits = |a: &store::Agent, c: &CheckIn| {
+        if super::quiet::waits(c, quiet.as_ref(), holding) {
+            return true;
+        }
+        match holds.of(a, c, now) {
+            Some(h) => {
+                held.borrow_mut().push((a.clone(), c.clone(), h));
+                true
+            }
+            None => false,
+        }
+    };
     let mut plan = plan_with(&tz, &agents, now, &waits);
+    for (agent, check_in, h) in held.take() {
+        super::saver::say_held(app, &agent, &check_in, &h, now);
+    }
     if let (Some(f), Some(w)) = (plan.fire.as_mut(), quiet.as_ref()) {
         f.waited = f.late && f.retry.is_none() && w.contains(&tz, f.check_in.next_at);
     }
@@ -1866,6 +1927,8 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     }
     // "Use it all before reset": capacity about to expire wakes the Chief.
     super::usage_tools::maybe_nudge(app);
+    // Sign-ins looked at again, and one warning per window when nearly out.
+    super::saver::tick(app);
     // The morning brief: prepared ahead, posted at the user's time (`brief`).
     super::brief::tick(app);
     Ok(())
@@ -2353,6 +2416,7 @@ mod tests {
             follow_up: false,
             then: Vec::new(),
             waiting: None,
+            model: None,
             extra: Default::default(),
         }
     }

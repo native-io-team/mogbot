@@ -91,10 +91,20 @@
   gap: var(--spacing-lg);
 }
 
+/* Edit agent's second half: what it costs, can do and can reach, and how
+   independent it is. A hairline above it, so who the agent is (name, brief,
+   engine) and what it is allowed (read from the app) read as two parts of
+   the sheet instead of one long run of fields under Advanced. */
 .agent-editor__briefing {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-editor__briefing:empty {
+  display: none;
 }
 
 .agent-editor__label {
@@ -120,6 +130,13 @@
 
 .agent-editor__error {
   color: var(--accent-error-light);
+}
+
+/* A note about the field just above it: tucked under that field, small, so
+   it reads as the field's footnote and not as one more field. */
+.agent-editor__caption {
+  margin-top: calc(var(--spacing-lg) * -1 + var(--spacing-tight));
+  font-size: var(--font-size-body-sm);
 }
 
 /* Changing the project of an agent with an open copy: Keep / Discard / Cancel. */
@@ -270,6 +287,19 @@
 p.agent-schedule__place {
   margin: 0;
   padding: 0 var(--spacing-xs) var(--spacing-sm);
+}
+
+/* One routine's model, in its editor: a label and the choice, one line. */
+.agent-schedule__model {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-xs) var(--spacing-sm);
+}
+
+.agent-schedule__model-label {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
 }
 
 .agent-schedule__item[data-paused] .agent-schedule__note {

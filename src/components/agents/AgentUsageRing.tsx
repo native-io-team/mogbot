@@ -9,7 +9,10 @@
  * every limit is said as what is left.
  *
  * Nothing is filled in: no reading, no section; no 5-hour reading, the
- * control is the word "Usage" rather than a ring that wasn't reported.
+ * control is the word "Usage" rather than a ring that wasn't reported. With
+ * nothing read at all (a first run) there is no control: the sidebar's
+ * Usage row is the one way in, so the first screen doesn't say it twice.
+ * ⌘K still opens the popover (it shows while open).
  *
  * ⌘K "Show usage" opens it.
  *
@@ -40,6 +43,9 @@ export function AgentUsageRing({ agent, open, onOpenChange }: AgentUsageRingProp
   const left = ring ? 100 - ring.percent : null;
   const label =
     left !== null ? `Usage: ${left}% of the 5-hour limit left` : 'Usage: no 5-hour reading yet';
+  const anything =
+    ring !== null || contextMeter(agent.context) !== null || (quotas?.length ?? 0) > 0;
+  if (!anything && !open) return null;
   return (
     <Dropdown
       align="right"

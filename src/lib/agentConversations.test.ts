@@ -6,6 +6,7 @@ import {
   getAgentsSnapshot,
   loadMessages,
   openConversation,
+  readChat,
   startConversation,
   upsertMessage,
 } from './agentsStore';
@@ -103,6 +104,32 @@ describe('a conversation’s chat in the store', () => {
     await openConversation('a', 'first');
     expect(getAgentsSnapshot().viewing.a).toBe('first');
     expect(called).toContain('agents_conversation_select');
+  });
+
+  it('reads a chat’s log, its conversation and that page at once, each once', async () => {
+    const called: string[] = [];
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    mockIPC(async (cmd, args) => {
+      const a = args as Record<string, unknown>;
+      called.push(cmd === 'agents_messages' ? `messages:${(a.conversation as string) ?? ''}` : cmd);
+      if (cmd === 'agents_messages' && !a.conversation) await gate;
+      if (cmd === 'agents_conversations') return list('c2');
+      if (cmd === 'agents_messages') return [line('m1', 'c2')];
+      return null;
+    });
+    readChat('a');
+    // The chat's own ask, while the first is still out, asks nothing again.
+    const viewing = ensureViewing('a');
+    await viewing;
+    await new Promise((r) => setTimeout(r, 0));
+    // The conversation's page came back while the log was still being read.
+    expect(getAgentsSnapshot().messages[conversationKey('a', 'c2')]).toHaveLength(1);
+    expect(getAgentsSnapshot().messages.a).toBeUndefined();
+    release();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getAgentsSnapshot().messages.a).toHaveLength(1);
+    expect(called.sort()).toEqual(['agents_conversations', 'messages:', 'messages:c2']);
   });
 
   it('falls back to the first conversation when the Mac can’t say', async () => {

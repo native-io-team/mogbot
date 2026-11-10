@@ -178,24 +178,26 @@ export function CheckLine({ result, onCheckAgain, checking = false, checkedAt }:
         <span className="flow-check__line">
           <strong>{NOT_DONE}.</strong> {result.line}
         </span>
-        <span className="flow-check__fix">{result.fix}</span>
-        <div className="flow-check__actions">
-          {result.action && (
-            <Button
-              variant="secondary"
-              rightIcon={<ExternalLinkIcon size={12} />}
-              onClick={() => void openUrl(result.action!.url)}
-              data-flow-fix
-            >
-              {result.action.label}
-            </Button>
-          )}
-          {onCheckAgain && (
-            <Button variant="secondary" onClick={onCheckAgain} data-flow-check-again>
-              Check again
-            </Button>
-          )}
-        </div>
+        {result.fix && <span className="flow-check__fix">{result.fix}</span>}
+        {(result.action || onCheckAgain) && (
+          <div className="flow-check__actions">
+            {result.action && (
+              <Button
+                variant="secondary"
+                rightIcon={<ExternalLinkIcon size={12} />}
+                onClick={() => void openUrl(result.action!.url)}
+                data-flow-fix
+              >
+                {result.action.label}
+              </Button>
+            )}
+            {onCheckAgain && (
+              <Button variant="secondary" onClick={onCheckAgain} data-flow-check-again>
+                Check again
+              </Button>
+            )}
+          </div>
+        )}
         {checkedAt && <span className="flow-check__when">Checked at {timeOf(checkedAt)}</span>}
       </div>
     </div>

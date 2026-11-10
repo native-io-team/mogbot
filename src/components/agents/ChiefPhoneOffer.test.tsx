@@ -39,6 +39,17 @@ describe('reachedFirstResult', () => {
     expect(
       reachedFirstResult([msg('agent', 'greeting'), msg('user', 'u1'), msg('agent', 'a1')])
     ).toBe(true);
+    // A reply that asks the user something is the Chief waiting, not a result.
+    const asks = { ...msg('agent', 'a1'), text: 'Done. Want me to set that up every week?' };
+    expect(reachedFirstResult([msg('agent', 'greeting'), msg('user', 'u1'), asks])).toBe(false);
+    // ...unless it came back with a result card.
+    expect(
+      reachedFirstResult([
+        msg('agent', 'greeting'),
+        msg('user', 'u1'),
+        { ...asks, result: {} as AgentMessage['result'] },
+      ])
+    ).toBe(true);
     // A new question waits for its own reply.
     expect(
       reachedFirstResult([

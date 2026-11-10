@@ -64,10 +64,17 @@
   outline-offset: 0;
 }
 
-/* The pick: a neutral ring, never the accent (answers are neutral). */
+/* The pick: the key held pressed (the key's own state language) and a
+   neutral ring at 3:1, never the accent (answers are neutral). */
 .agent-look__choice[data-selected] {
   background: var(--surface-control);
-  box-shadow: inset 0 0 0 var(--focus-ring-width) var(--border-strong);
+  box-shadow: inset 0 0 0 var(--focus-ring-width) var(--text-secondary);
+}
+
+.agent-look__choice[data-selected] .agent-key:not([data-state='new']) {
+  --agent-key-ty: calc(var(--agent-key-rest-depth) - var(--agent-key-floor));
+  --agent-key-d: var(--agent-key-floor);
+  --agent-key-nudge: 0px; /* css-ok: a zero length */
 }
 
 .agent-look__bind {
@@ -126,6 +133,17 @@
 
 .agent-icons__filters > * {
   flex: 0 0 auto;
+}
+
+/* More holds a category picked from it, worn as the chips wear theirs. */
+.agent-icons__more-trigger[data-pressed] {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.ss-dropdown__menu.agent-icons__more-menu {
+  max-height: 320px; /* css-ok: a long list scrolls inside the menu */
+  overflow-y: auto;
 }
 
 .agent-icons__count {

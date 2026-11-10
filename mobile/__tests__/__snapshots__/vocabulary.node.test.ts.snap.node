@@ -53,6 +53,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "Each agent’s instructions are shown on your Mac before anything is created.",
   "Each app once, for every agent that asked. Connect signs in from here when the app allows it, or opens it on your Mac. The sign-in stays on your Mac; no password goes through a chat.",
   "Each one goes into the Keychain on your Mac, never the chat.",
+  "Each task shows the tokens Claude Code or Codex reported; a rise isn’t divided between tasks. Use of the same plan outside these agents counts too.",
   "Edit routine",
   "Every conversation with every agent, yours and theirs. Try a name, a topic or a phrase.",
   "Files from this conversation",

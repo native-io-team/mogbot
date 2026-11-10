@@ -575,7 +575,7 @@ export const agentsHeavyScenarios: Scenario[] = [
     looksRightWhen:
       'Settings on its Agents tab with the heavy roster behind it: nothing in Settings lists every agent, so 22 agents change nothing here; the Accounts & usage page is the Usage view’s panel, as in settings-agents-usage.',
     command: 'settings.page.accounts',
-    requires: '.usage-panel .usage-key',
+    requires: '.usage-panel .usage-row',
     commands: {
       ...commands,
       ...usageCommands(FULL_INVENTORY),

@@ -178,6 +178,8 @@ interface Props {
   listContent?: ReactNode;
   /** Agents mode's quiet line at the foot (the plan's usage), above the phone row. */
   footerContent?: ReactNode;
+  /** Agents mode's create actions: pinned under the list, outside its scroller. */
+  listActions?: ReactNode;
   /**
    * Switch to Agents mode. Shows the Projects | Agents toggle above Search;
    * without it there is no toggle.
@@ -427,6 +429,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   navContent,
   listContent,
   footerContent,
+  listActions,
   onGoHome,
   onOpenProjectPicker,
   isSidebarHidden,
@@ -1852,6 +1855,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
             projectGroups
           )}
         </div>
+
+        {listActions && <div className="workspace-sidebar-pinned-actions">{listActions}</div>}
 
         <div className="workspace-sidebar-footer">
           <UpdateBanner />

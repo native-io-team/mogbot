@@ -1881,3 +1881,43 @@ async fn a_panicking_request_is_answered_with_an_error() {
     let fine = super::caught("agents.overview", async { Ok(json!({"ok": true})) }).await;
     assert_eq!(fine.unwrap(), json!({"ok": true}));
 }
+
+/// A request stuck on something synchronous (the agents store's lock, a
+/// slow disk) used to sit on an async worker with no answer: enough of
+/// them and the server answered nothing, its sockets accepted and silent.
+/// It's answered as busy within its deadline now, and never holds the
+/// runtime: with one worker, another request still answers meanwhile.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn a_stuck_request_is_answered_as_busy_and_never_starves_the_rest() {
+    let started = std::time::Instant::now();
+    let stuck = tokio::spawn(super::bounded(
+        "agents.overview",
+        Duration::from_millis(300),
+        async {
+            // Blocks its thread, as a std mutex wait does.
+            std::thread::sleep(Duration::from_secs(3));
+            Ok(json!(null))
+        },
+    ));
+    tokio::task::yield_now().await;
+    let quick = tokio::time::timeout(
+        Duration::from_secs(1),
+        super::bounded("agents.overview", Duration::from_secs(1), async {
+            Ok(json!({"ok": true}))
+        }),
+    )
+    .await
+    .expect("a stuck request starved the runtime");
+    assert_eq!(quick.unwrap(), json!({"ok": true}));
+    let err = tokio::time::timeout(Duration::from_secs(2), stuck)
+        .await
+        .expect("the stuck request was never answered")
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(err.summary(), super::BUSY);
+    assert!(started.elapsed() < Duration::from_secs(2));
+    // The phone shows an `Other` error's message as it is (`describeError`).
+    let wire = serde_json::to_value(&err).unwrap();
+    assert_eq!(wire["type"], "Other");
+    assert_eq!(wire["message"], super::BUSY);
+}

@@ -72,8 +72,10 @@
   color: var(--accent-success);
 }
 
-.agents-board__state[data-state='needsOk'] .agents-board__word {
-  color: var(--accent-warning);
+/* Needs your OK is the status pill, as everywhere else: one style. */
+.agents-board__pill {
+  margin-right: var(--spacing-xs);
+  vertical-align: baseline;
 }
 
 /* The conversation's column and rhythm, as four quiet sections. */

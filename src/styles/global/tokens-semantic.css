@@ -84,6 +84,15 @@
      severity and "in progress". Fixed hues, never the accent — a red or orange
      user accent would otherwise make "running" read as an error. */
   --status-info: var(--color-blue-400);
+  /* A chart's series, in a fixed order (blocks.ts `slotOf`). */
+  --chart-series-1: var(--color-chart-dark-1);
+  --chart-series-2: var(--color-chart-dark-2);
+  --chart-series-3: var(--color-chart-dark-3);
+  --chart-series-4: var(--color-chart-dark-4);
+  --chart-series-5: var(--color-chart-dark-5);
+  --chart-series-6: var(--color-chart-dark-6);
+  --chart-series-7: var(--color-chart-dark-7);
+  --chart-series-8: var(--color-chart-dark-8);
   --status-running: var(--color-blue-400);
 
   /* Drawing ON the user's own page (preview overlays, comment pins, drop
@@ -273,6 +282,14 @@
  */
 :root[data-theme='light'] {
   --focus-ring-strength: 50%;
+  --chart-series-1: var(--color-chart-light-1);
+  --chart-series-2: var(--color-chart-light-2);
+  --chart-series-3: var(--color-chart-light-3);
+  --chart-series-4: var(--color-chart-light-4);
+  --chart-series-5: var(--color-chart-light-5);
+  --chart-series-6: var(--color-chart-light-6);
+  --chart-series-7: var(--color-chart-light-7);
+  --chart-series-8: var(--color-chart-light-8);
   --surface-app: var(--color-paper-100);
   --surface-panel: var(--color-paper-0);
   --surface-control: var(--color-paper-150);

@@ -19,6 +19,7 @@
 import { emit } from '@tauri-apps/api/event';
 import type { Scenario } from '../types';
 import { AGENTS_TAB, MIN, TEAM, agent, now, overview } from './agents';
+import { usagePerfCommands } from './agentsUsageView';
 
 const COLORS = [
   'white',
@@ -362,6 +363,8 @@ export const agentsStressScenarios: Scenario[] = [
     requires: '.agent-chat',
     mockEvents: true,
     commands: {
+      // The sidebar's usage row and the Usage view (perf-agents.mjs `usage`).
+      ...usagePerfCommands(),
       agents_overview: () => overview(team.map((a) => ({ ...a }))),
       agents_messages: (args: Record<string, unknown>) => page(logFor(String(args.agentId)), args),
       agents_turn_work: (args: Record<string, unknown>) =>

@@ -546,18 +546,24 @@ request, the diff and the photo viewer push over them. At
   scrolls and Deny · Allow stay pinned at the bottom. A key, a login or a
   question has its one action, which opens it in its chat. Answered or
   expired while open: it says so, with Open chat and Done.
-- **Usage** (`app/usage.tsx`, `lib/usageSheet.ts`): a small ring left of ⓘ
-  in a chat's header shows the agent's engine's current 5-hour window, only
-  once the engine has reported one (`agents.quota`). Tapping it opens the
-  Usage sheet: this agent's context ("90% used · 180K of 200K tokens",
-  only when its engine reported it), then each reading once: under "Plan
-  usage" the account this agent's next turns run on (its 5-hour limit, then
-  "Weekly · All models" and each model's week), and under "Other accounts"
-  every other account from `agents.usagePlan` with its limits or its state,
-  never the top one again (`usageSheet`, shared with the desk's popover);
-  ↻ reads it all again.
-  No pace warning: the Mac serves no forecast of when a window runs out,
-  and the phone doesn't guess one.
+- **Usage** (`app/usage.tsx`, `app/usage-account.tsx`,
+  `components/usageStack.tsx`), as the desk's Usage view says it
+  (`usageGlance`, the same words and figures): the Agents list's glance (one
+  compact card: the total and how many accounts it is of, a refill chip, the
+  total bar fullest first) and the ring left of ⓘ in a chat's header open it.
+  Under a putty gauge key: this agent's context when its engine reported it,
+  then the total first ("72% left across 2 Max accounts", "Next refill in …",
+  the bar with each account named under it), then **Accounts**, one list per
+  engine in the order turns try them (keycap, name, plan, room, pill, refill
+  chip). An account opens its own screen, the desk's account page: its place
+  and state, **Use this one now** and the ↑/↓ for its place (where the Mac
+  takes `agents.accounts.use|reorder`), then **Limits | Tokens**: each limit a
+  card (countdown chip, big "% left", the pace-marked bar, the Mac's run-out
+  estimate between now and the refill, said as one, the pace sentence), or
+  who used it this week with their keys and share; then "Where did my usage
+  go". A Mac with no accounts list falls back to the per-account sheet
+  (`usageSheet`, shared with the desk's popover). ↻ reads it all again.
+  Adding and signing in to accounts stay on the Mac.
 - **One at a time** (`app/one-at-a-time.tsx`, `lib/catchUp.ts`), from
   Catch up's **One at a time**: everything waiting, one card
   at a time, full screen. Setting up your team first, then every request

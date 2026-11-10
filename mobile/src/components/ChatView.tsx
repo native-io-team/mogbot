@@ -64,6 +64,7 @@ import { messageActions, plainText, type MessageAction } from '../lib/actions';
 import { canReadAloud, readAloud, stopReading, useReading } from '../lib/readAloud';
 import { announce } from '../lib/a11y';
 import { addQuote, setComposer } from '../lib/drafts';
+import { BlockRepliesContext, blockAnswers, type BlockReplies } from '../lib/blocks';
 import { preview } from '../lib/files';
 import { haptic } from '../lib/haptics';
 import {
@@ -351,6 +352,23 @@ export function ChatView({
   }, [messages, agent?.copy?.id]);
   // Each result's newest version is drawn in full; older ones fold.
   const newestResult = useMemo(() => new Set(newestResults(messages).values()), [messages]);
+  // Blocks that ask (choices, Pick this, a form): answered by the user's next
+  // message, a send still on its way included. An answer is an ordinary send;
+  // from outside text it only goes into the composer, for the user to send.
+  const answers = useMemo(() => blockAnswers(messages, pending), [messages, pending]);
+  const blockReplies = useMemo<BlockReplies>(
+    () => ({
+      answerOf: (messageId) => answers.get(messageId) ?? null,
+      reply: (agentId, text, stageOnly) => {
+        if (stageOnly) {
+          setComposer(agentId, { text });
+          return;
+        }
+        send(agentId, text).catch((e: unknown) => showError(describeError(e)));
+      },
+    }),
+    [answers, showError]
+  );
   // Every picture in the chat, for the viewer to page through.
   const gallery = useMemo(() => chatGallery(messages), [messages]);
   // The failure that ended the last turn, with nothing said since: only it
@@ -701,134 +719,136 @@ export function ChatView({
             }}
           />
         )}
-        <PathContext.Provider value={openPath}>
-          <GalleryContext.Provider value={gallery}>
-            <PaneContext.Provider value={pane}>
-              <Animated.FlatList
-                ref={list}
-                inverted
-                data={items}
-                keyExtractor={(i) => i.key}
-                itemLayoutAnimation={glide}
-                onLayout={(e: LayoutChangeEvent) => setListHeight(e.nativeEvent.layout.height)}
-                // Let go to read back: the rows on screen hold still while the
-                // newest grows or arrives below them. Following: none, so the
-                // inverted list keeps the newest line on the composer.
-                maintainVisibleContentPosition={holdFor(follow)}
-                renderItem={({ item, index }) => (
-                  <ItemView
-                    item={item}
-                    // Lines one after another sit at the Line gap, not a paragraph apart.
-                    afterLine={
-                      index + 1 < items.length
-                        ? isLineItem(items[index + 1])
-                        : !!chat?.loaded && !chat.more
-                    }
-                    agent={agent}
-                    liveCopyCard={liveCopyCard}
-                    newestResult={newestResult}
-                    latestFailure={latestFailure}
-                    onError={showError}
-                    onLongPress={onMessageAction}
-                    lit={!!target && isRowFor(item, target)}
-                    arrived={arrived.has(item.key)}
-                  />
-                )}
-                onScrollToIndexFailed={(info) => {
-                  // Not measured yet: get near it, then try again once it's laid out.
-                  list.current?.scrollToOffset({
-                    offset: info.averageItemLength * info.index,
-                    animated: false,
-                  });
-                  setTimeout(
-                    () =>
-                      list.current?.scrollToIndex({
-                        index: info.index,
-                        viewPosition: 0.5,
-                        animated: true,
-                      }),
-                    120
-                  );
-                }}
-                renderScrollComponent={renderScroll}
-                contentContainerStyle={[
-                  styles.content,
-                  { paddingLeft: space.lg + side.left, paddingRight: space.lg + side.right },
-                ]}
-                keyboardDismissMode="interactive"
-                keyboardShouldPersistTaps="handled"
-                onEndReached={older}
-                onEndReachedThreshold={0.6}
-                onViewableItemsChanged={onViewable}
-                viewabilityConfig={VIEWABILITY}
-                onScrollBeginDrag={() => {
-                  dragging.current = true;
-                }}
-                onScrollEndDrag={() => {
-                  dragging.current = false;
-                }}
-                onMomentumScrollBegin={() => {
-                  flinging.current = true;
-                }}
-                onMomentumScrollEnd={() => {
-                  flinging.current = false;
-                }}
-                onScroll={(e) => {
-                  const d = fromEnd(e.nativeEvent.contentOffset.y, insetTop.current);
-                  distance.current = d;
-                  const byUser = dragging.current || flinging.current;
-                  // Bail-outs keep these from re-rendering on every event.
-                  setFollow((now) => scrolled(now, d, newestRef.current, byUser));
-                  setFar(d > FAR);
-                }}
-                scrollEventThrottle={32}
-                initialNumToRender={16}
-                maxToRenderPerBatch={12}
-                windowSize={13}
-                // Inverted: the header sits at the newest end, under the welcome.
-                ListHeaderComponent={
-                  firstOpen && agent.starters ? (
-                    <Starters
-                      starters={agent.starters}
-                      onSend={(text) => {
-                        haptic.light();
-                        send(agent.id, text).catch((e: unknown) => showError(describeError(e)));
-                      }}
+        <BlockRepliesContext.Provider value={blockReplies}>
+          <PathContext.Provider value={openPath}>
+            <GalleryContext.Provider value={gallery}>
+              <PaneContext.Provider value={pane}>
+                <Animated.FlatList
+                  ref={list}
+                  inverted
+                  data={items}
+                  keyExtractor={(i) => i.key}
+                  itemLayoutAnimation={glide}
+                  onLayout={(e: LayoutChangeEvent) => setListHeight(e.nativeEvent.layout.height)}
+                  // Let go to read back: the rows on screen hold still while the
+                  // newest grows or arrives below them. Following: none, so the
+                  // inverted list keeps the newest line on the composer.
+                  maintainVisibleContentPosition={holdFor(follow)}
+                  renderItem={({ item, index }) => (
+                    <ItemView
+                      item={item}
+                      // Lines one after another sit at the Line gap, not a paragraph apart.
+                      afterLine={
+                        index + 1 < items.length
+                          ? isLineItem(items[index + 1])
+                          : !!chat?.loaded && !chat.more
+                      }
+                      agent={agent}
+                      liveCopyCard={liveCopyCard}
+                      newestResult={newestResult}
+                      latestFailure={latestFailure}
+                      onError={showError}
+                      onLongPress={onMessageAction}
+                      lit={!!target && isRowFor(item, target)}
+                      arrived={arrived.has(item.key)}
                     />
-                  ) : chiefFirst ? (
-                    <ChiefStarters
-                      onPick={(idea) => {
-                        haptic.select();
-                        // Typed in for you to finish: nothing goes until you press Send.
-                        setComposer(agent.id, { text: idea.text });
-                        setFocusKey((k) => k + 1);
-                      }}
-                    />
-                  ) : undefined
-                }
-                ListFooterComponent={
-                  chat?.loaded && !chat.more ? (
-                    <Line text={`Start of your conversation with ${agent.name}`} />
-                  ) : chat?.loaded ? (
-                    <View style={styles.start}>{loadingOlder && <Spinner />}</View>
-                  ) : undefined
-                }
-                ListEmptyComponent={
-                  chat?.loaded ? undefined : (
-                    <View style={[styles.start, { transform: [{ scaleY: -1 }] }]}>
-                      {connected ? (
-                        <Spinner />
-                      ) : (
-                        // Nothing saved for this chat and the Mac away: why, and what to do.
-                        <LinkProblem what="Your conversations" macName={macName} />
-                      )}
-                    </View>
-                  )
-                }
-              />
-            </PaneContext.Provider>
-          </GalleryContext.Provider>
-        </PathContext.Provider>
+                  )}
+                  onScrollToIndexFailed={(info) => {
+                    // Not measured yet: get near it, then try again once it's laid out.
+                    list.current?.scrollToOffset({
+                      offset: info.averageItemLength * info.index,
+                      animated: false,
+                    });
+                    setTimeout(
+                      () =>
+                        list.current?.scrollToIndex({
+                          index: info.index,
+                          viewPosition: 0.5,
+                          animated: true,
+                        }),
+                      120
+                    );
+                  }}
+                  renderScrollComponent={renderScroll}
+                  contentContainerStyle={[
+                    styles.content,
+                    { paddingLeft: space.lg + side.left, paddingRight: space.lg + side.right },
+                  ]}
+                  keyboardDismissMode="interactive"
+                  keyboardShouldPersistTaps="handled"
+                  onEndReached={older}
+                  onEndReachedThreshold={0.6}
+                  onViewableItemsChanged={onViewable}
+                  viewabilityConfig={VIEWABILITY}
+                  onScrollBeginDrag={() => {
+                    dragging.current = true;
+                  }}
+                  onScrollEndDrag={() => {
+                    dragging.current = false;
+                  }}
+                  onMomentumScrollBegin={() => {
+                    flinging.current = true;
+                  }}
+                  onMomentumScrollEnd={() => {
+                    flinging.current = false;
+                  }}
+                  onScroll={(e) => {
+                    const d = fromEnd(e.nativeEvent.contentOffset.y, insetTop.current);
+                    distance.current = d;
+                    const byUser = dragging.current || flinging.current;
+                    // Bail-outs keep these from re-rendering on every event.
+                    setFollow((now) => scrolled(now, d, newestRef.current, byUser));
+                    setFar(d > FAR);
+                  }}
+                  scrollEventThrottle={32}
+                  initialNumToRender={16}
+                  maxToRenderPerBatch={12}
+                  windowSize={13}
+                  // Inverted: the header sits at the newest end, under the welcome.
+                  ListHeaderComponent={
+                    firstOpen && agent.starters ? (
+                      <Starters
+                        starters={agent.starters}
+                        onSend={(text) => {
+                          haptic.light();
+                          send(agent.id, text).catch((e: unknown) => showError(describeError(e)));
+                        }}
+                      />
+                    ) : chiefFirst ? (
+                      <ChiefStarters
+                        onPick={(idea) => {
+                          haptic.select();
+                          // Typed in for you to finish: nothing goes until you press Send.
+                          setComposer(agent.id, { text: idea.text });
+                          setFocusKey((k) => k + 1);
+                        }}
+                      />
+                    ) : undefined
+                  }
+                  ListFooterComponent={
+                    chat?.loaded && !chat.more ? (
+                      <Line text={`Start of your conversation with ${agent.name}`} />
+                    ) : chat?.loaded ? (
+                      <View style={styles.start}>{loadingOlder && <Spinner />}</View>
+                    ) : undefined
+                  }
+                  ListEmptyComponent={
+                    chat?.loaded ? undefined : (
+                      <View style={[styles.start, { transform: [{ scaleY: -1 }] }]}>
+                        {connected ? (
+                          <Spinner />
+                        ) : (
+                          // Nothing saved for this chat and the Mac away: why, and what to do.
+                          <LinkProblem what="Your conversations" macName={macName} />
+                        )}
+                      </View>
+                    )
+                  }
+                />
+              </PaneContext.Provider>
+            </GalleryContext.Provider>
+          </PathContext.Provider>
+        </BlockRepliesContext.Provider>
         {/* Under the header: older words fade up into it. */}
         <EdgeFade edge="top" color={colors.surfaceApp} />
       </View>

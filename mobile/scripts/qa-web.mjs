@@ -1078,6 +1078,17 @@ const LIVE = [
       'Usage: context 90%, 5-hour with its pace line ("At this pace you’ll hit the limit in about an hour, before it resets at …" + "Estimate from 6 readings…"), weekly (All models, Opus), every account',
   },
   {
+    name: 'usage-plan-controls',
+    route: '/usage?id=site',
+    ready: 'Usage',
+    act: async (page) => {
+      await sleep(1500);
+      await scrollToText('Spare-capacity list')(page);
+    },
+    check:
+      'Usage, under the accounts: "How agents use your limits" as a segmented Normal / Save / Use it all (the mode in force raised, neutral), its full name and one line under it; then "Spare-capacity list" with how many wait, a field with Add, and "Give agents something to do"',
+  },
+  {
     name: 'catchup-done',
     route: '/one-at-a-time',
     ready: 'Catch up',
@@ -1148,6 +1159,30 @@ const LIVE = [
     pages: 6,
     check:
       'Every message kind: receipts, failure cards, diff tints span the box, To/From Ops, folded result line wraps',
+  },
+  // Blocks (`show`): every kind, in one chat (dev/mock-blocks.ts).
+  {
+    name: 'blocks-chat',
+    route: '/chat/blocks',
+    ready: 'Blocks',
+    pages: 10,
+    check:
+      'Every block kind: metric tiles with deltas and a sparkline, a two-series line chart with a legend, a stacked bar, a donut with its slices listed, a sortable table with Show all, facts, a checklist with its count, steps with done/current/failed marks, two callouts with icon and word, link chips with their domain, a tinted diff, an image; the comparison answered (Picked on Vercel), the choices and form still live with neutral answers',
+  },
+  {
+    name: 'blocks-tooltip',
+    route: '/chat/blocks',
+    ready: 'Blocks',
+    act: async (page) => {
+      await scrollToText('Signups per day')(page);
+      await page.clickWhere(
+        `() => document.querySelector('[data-testid="chart-plot"]')`,
+        'a chart'
+      );
+      await sleep(500);
+    },
+    check:
+      'Touching a chart: its column stands out (the others dim) and a tooltip names the day with every series’ value',
   },
   {
     name: 'chat-table',
@@ -2167,7 +2202,8 @@ const OFFLINE_CACHED = [
     name: 'offline-connection',
     route: '/connection',
     settle: 3000,
-    check: 'Check these first: three rows (Mac awake and app open, Tailscale on, paired: Yes), each with its fix; Details folded; no host in the first lines',
+    check:
+      'Check these first: three rows (Mac awake and app open, Tailscale on, paired: Yes), each with its fix; Details folded; no host in the first lines',
   },
 ];
 
@@ -3391,7 +3427,26 @@ async function main() {
         route: '/usage-account?engine=claude&account=default',
         ready: 'Usage',
         check:
-          '"‹ Usage" above the account’s name as the title; one card: keycap, name, plan, "In use", the 5-hour and Weekly limits with big "% left", the pace-marked bar and the pace sentence; then "Used by these agents this week" as a table (name, tokens, messages) with right-aligned figures.',
+          '"‹ Usage" above the account’s name as the title; a card with a large keycap, "In use", "1st in the order · Max plan · …" and its place arrows; then "Limits" with Limits | Tokens at its right, and each limit its own card: name and ⟳ chip, a big "% left", the pace-marked bar, a now → refills line when it runs out early, the pace sentence and "Refills …", as the desk’s account page.',
+      },
+      {
+        name: 'usage-account-tokens',
+        route: '/usage-account?engine=claude&account=default',
+        ready: 'Limits',
+        act: async (page) => {
+          await page.clickText('Tokens');
+          await sleep(700);
+        },
+        check:
+          '"Used by these agents this week" with Limits | Tokens; a table card: Agent / Tokens / Messages, each row an agent key, name, a thin share bar and right-aligned figures, then "Tokens as Claude Code or Codex reported them … Not a cost".',
+      },
+      {
+        name: 'usage-total-accounts',
+        route: '/usage',
+        ready: 'Usage',
+        act: scrollToText('Accounts'),
+        check:
+          '"Accounts" as a heading with "Work starts on the first account with room …" under it; one list per engine when there are two, each row: keycap, name and % left, its plan, a thin bar, the pill and a ⟳ chip, a chevron.',
       },
     ]);
     for (const variant of ['two-claude', 'one-read']) {

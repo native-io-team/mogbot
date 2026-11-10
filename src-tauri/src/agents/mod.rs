@@ -70,6 +70,7 @@ pub mod apps;
 pub mod arrival;
 pub mod attachments;
 pub mod autoallow;
+pub mod blocks;
 pub mod brief;
 pub mod briefing;
 pub mod broker;
@@ -125,6 +126,7 @@ pub mod inventory;
 pub mod keys;
 pub mod level_hint;
 pub mod local_links;
+pub mod lockstep;
 pub mod login_relay;
 pub mod logins;
 pub mod mac_apps;
@@ -162,6 +164,7 @@ pub mod routine_steps;
 pub mod routines_bulk;
 pub mod runner;
 pub mod runs;
+pub mod saver;
 pub mod schedule;
 pub mod search;
 pub mod secrets;
@@ -274,6 +277,7 @@ fn greet(agent_id: &str) {
         room: None,
         decide: Vec::new(),
         local_links: Vec::new(),
+        blocks: None,
         remembered: None,
         via: None,
         fix: None,

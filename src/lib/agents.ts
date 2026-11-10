@@ -330,6 +330,11 @@ export interface CheckIn {
   then?: RoutineStep[];
   /** A run waiting for the user's OK between two steps, with its card. */
   waiting?: RoutineWaiting;
+  /**
+   * The model this routine wakes its agent on (`CheckIn::model`): `same` is the
+   * agent's own, else one of its engine's; omitted for the agent's routine model.
+   */
+  model?: string;
 }
 
 /** Routines in steps and drafted agents; shared with the phone. */
@@ -368,6 +373,7 @@ export interface CheckInRun {
     | 'skipped'
     | 'waiting'
     | 'declined'
+    | 'held'
     | 'unknown';
   /** 1 for the run itself, 2 for its first retry. */
   attempt: number;
@@ -414,11 +420,12 @@ export type AgentEffort = 'low' | 'medium' | 'high';
 
 /**
  * How hard an agent thinks, said plainly: Claude Code's `--effort`, Codex's
- * reasoning effort. '' passes nothing (the engine's default). Applies to its
+ * reasoning effort. '' passes nothing: "Its own pick", the engine decides (the menu's
+ * one "Default" is the model's, round 4). Applies to its
  * conversation, not its routines. Must match `EFFORTS` in store.rs.
  */
 export const EFFORT_CHOICES: readonly { value: AgentEffort | ''; label: string }[] = [
-  { value: '', label: MODEL_DEFAULT },
+  { value: '', label: 'Its own pick' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -758,6 +765,11 @@ export interface AgentMessage {
    * "Chrome isn't reachable through Claude's extension" → Your Chrome).
    */
   fix?: NoteFix;
+  /**
+   * Blocks (`show`, `agents/blocks.rs`): charts, tables, choices, a form…
+   * drawn from data (`readBlocks`); `text` is their plain-text version.
+   */
+  blocks?: BlockSet;
   /** Which of the agent's conversations it was said in; absent: the first's (`conversationOf`). */
   conversation?: string;
 }
@@ -1979,6 +1991,9 @@ export const cancelCheckIn = (agentId: string, id: string) =>
   invoke<void>('agents_schedule_cancel', { agentId, id });
 export const pauseCheckIn = (agentId: string, id: string, paused: boolean) =>
   invoke<void>('agents_schedule_pause', { agentId, id, paused });
+/** One routine's model: `''` like its other routines, `'same'` its agent's own, or a model (`CheckIn::model`). */
+export const setRoutineModel = (agentId: string, id: string, model: string) =>
+  invoke<CheckIn>('agents_schedule_model', { agentId, id, model });
 /** `then` replaces its steps; leave it out to keep them. */
 export const updateCheckIn = (
   agentId: string,
@@ -2719,6 +2734,8 @@ export {
 } from '../../packages/companion-protocol/src/quotes';
 
 import type { ResultCard, ResultRef } from '../../packages/companion-protocol/src/results';
+import type { BlockSet } from '../../packages/companion-protocol/src/blocks';
+export type { BlockSet } from '../../packages/companion-protocol/src/blocks';
 export type {
   ComparePage,
   ResultCard,

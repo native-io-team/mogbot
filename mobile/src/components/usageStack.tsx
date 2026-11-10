@@ -22,15 +22,23 @@ import {
   ADD_ON_MAC,
   LOW_LEFT,
   OUT_OF_USAGE,
+  pinnedLine,
+  placeLabel,
   SIGN_IN_DIFFERENT,
+  USE_THIS_ONE_NOW,
   type AgentEngine,
+  type KeyLimit,
   type StackKey,
   type UsageGlance,
   type UsageTotal,
 } from '@shipstudio/companion-protocol';
 import { makeStyles, useColors } from '../lib/appearance';
-import { depthOf, iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
-import { Icon, StatusPill, T } from './ui';
+import { depthOf, iconSize, keySize, PRESSED, radius, space, type Palette } from '../lib/theme';
+import { AgentKey } from './AgentKey';
+import { Button, Icon, IconButton, Segmented, StatusPill, T } from './ui';
+
+/** The least a row can be tall and still take a thumb (Apple's 44pt). */
+const TAP = 44;
 
 const fillOf = (colors: Palette, tone: StackKey['tone']) =>
   tone === 'warning' ? colors.accentWarning : colors.textPrimary;
@@ -52,7 +60,7 @@ function roomWords(k: StackKey): string {
   return `${k.share}% left`;
 }
 
-/** The total as one bar: a segment per account, most room first. */
+/** The total as one bar: a segment per account, in the work order. */
 export function TotalBar({ total, tall = false }: { total: UsageTotal; tall?: boolean }) {
   const colors = useColors();
   const styles = useStyles();
@@ -183,7 +191,7 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
 
 /**
  * The total first: what is left across every account, of what, and when it
- * next refills; the bar, most room first, with each account named under its
+ * next refills; the bar, in the work order, with each account named under its
  * segment (a tap opens it); then what needs saying.
  */
 export function TotalCard({
@@ -200,19 +208,22 @@ export function TotalCard({
   const out = glance.tone === 'limited';
   const known = total.left !== null && !out;
   const figure = known ? total.figure : glance.unread ? glance.headline : glance.row.figure;
+  // As the desk's hero words it, with when as well as how long.
   const refill = out
     ? glance.row.refill
     : total.refill
-      ? `Next refill in ${total.refill.in}${total.counted > 1 ? ` · ${total.refill.account}` : ''}`
+      ? `Next refill in ${total.refill.in}${total.counted > 1 ? ` · ${total.refill.account}` : ''}, ${total.refill.at}`
       : null;
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, styles.hero]}>
       <View style={styles.answer}>
         <T variant="caption" color={colors.textMuted}>
           {total.counted > 1 ? 'All accounts' : 'Usage'}
         </T>
+        {/* "72% left across 2 Max accounts": the figure, and of what, as one headline. */}
         <T
           variant={known ? 'display' : 'title'}
+          accessibilityRole="header"
           color={
             glance.tone === 'warning'
               ? colors.accentWarning
@@ -222,12 +233,15 @@ export function TotalCard({
           }
         >
           {figure}
+          {known && !!total.across && (
+            <>
+              {' '}
+              <T variant="subhead" color={colors.textSecondary}>
+                {total.across}
+              </T>
+            </>
+          )}
         </T>
-        {known && !!total.across && (
-          <T variant="small" color={colors.textSecondary}>
-            {total.across}
-          </T>
-        )}
         {refill && (
           <T variant="small" color={colors.textSecondary}>
             {refill}
@@ -236,15 +250,15 @@ export function TotalCard({
       </View>
       <TotalBar total={total} tall />
       {/* Under the bar, in the same order, one account a line: a tap opens it. */}
-      <View style={styles.legend}>
-        {total.segments.map((s) => (
+      <View>
+        {total.segments.map((s, i) => (
           <Pressable
             key={s.key}
             accessibilityRole={onOpen ? 'button' : undefined}
             accessibilityLabel={s.words}
             disabled={!onOpen}
             onPress={() => onOpen?.(s.engine, s.id)}
-            style={({ pressed }) => [styles.legendRow, pressed && PRESSED]}
+            style={({ pressed }) => [styles.legendRow, i > 0 && styles.divided, pressed && PRESSED]}
           >
             <T variant="small" color={colors.textPrimary} style={styles.grow} numberOfLines={1}>
               {s.name}
@@ -252,12 +266,9 @@ export function TotalCard({
             <T variant="small" color={colors.textSecondary} style={styles.figure}>
               {s.left === null ? 'Not read yet' : `${s.left}% left`}
             </T>
-            {s.refill && (
-              <View style={styles.chip}>
-                <T variant="caption" color={colors.textSecondary}>
-                  ⟳ {s.refill}
-                </T>
-              </View>
+            {s.refill && <RefillChip text={s.refill} />}
+            {onOpen && (
+              <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
             )}
           </Pressable>
         ))}
@@ -317,7 +328,16 @@ export function TotalCard({
 }
 
 /** Every account as one row in turn order, in one grouped card; a tap opens its screen. */
-export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: StackKey) => void }) {
+export function AccountRows({
+  keys,
+  onOpen,
+  all = keys,
+}: {
+  keys: StackKey[];
+  onOpen: (k: StackKey) => void;
+  /** Every account listed (across engines), so a place names its engine when both are there. */
+  all?: readonly StackKey[];
+}) {
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -329,7 +349,7 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
           <Pressable
             key={k.key}
             accessibilityRole="button"
-            accessibilityLabel={`${k.position}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
+            accessibilityLabel={`${placeLabel(k, all)}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
               refill ? `, refills in ${refill}` : ''
             }`}
             onPress={() => onOpen(k)}
@@ -344,7 +364,7 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
                 variant="caption"
                 color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
               >
-                {String(k.position)}
+                {placeLabel(k, all)}
               </T>
             </View>
             <View style={styles.rowBody}>
@@ -363,6 +383,12 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
                   </T>
                 )}
               </View>
+              {/* What tells it apart, as the desk's row: its plan first. */}
+              {k.detail.length > 0 && (
+                <T variant="caption" color={colors.textMuted} numberOfLines={1}>
+                  {k.detail[0]}
+                </T>
+              )}
               <View style={[styles.miniBar, k.share === null && styles.segEmpty]}>
                 {k.share !== null && (
                   <View
@@ -379,11 +405,7 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
                   label={k.state === 'out' ? OUT_OF_USAGE : k.stateLabel}
                 />
                 <View style={styles.grow} />
-                {refill && (
-                  <T variant="caption" color={colors.textSecondary}>
-                    ⟳ {refill}
-                  </T>
-                )}
+                {refill && <RefillChip text={refill} />}
               </View>
             </View>
             <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
@@ -394,191 +416,364 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
   );
 }
 
-/** One account: its place, name, state, limits, who used it, and where its usage went. */
+/** What can be done with an account from its screen, when the Mac takes it. */
+export interface KeyActions {
+  /** "Use this one now": absent when it can't be (in use, out, the Mac doesn't take it). */
+  onUse?: () => void;
+  /** One place earlier or later in the order; absent at that end. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  /** A change is on its way: nothing else is taken until it lands. */
+  busy?: boolean;
+}
+
+/**
+ * One account, as the desk's account page (`AccountDetail`): its place,
+ * state and what tells it apart, with "Use this one now" and its place in
+ * the order; its fix; its limits each as a card against pace, or who used it
+ * (Limits | Tokens); and where its usage went. Its name is the screen's title.
+ */
 export function KeyCard({
   k,
-  titled = true,
+  actions = {},
+  all = [],
 }: {
   k: StackKey;
-  /** Its name is the screen's title already: the card leads with its place and state. */
-  titled?: boolean;
+  actions?: KeyActions;
+  /** Every account listed, so its place names its engine when both are there ("Claude 2"). */
+  all?: readonly StackKey[];
 }) {
   const colors = useColors();
   const styles = useStyles();
-  const [story, setStory] = useState(false);
+  const [view, setView] = useState<'limits' | 'tokens'>('limits');
+  const pinned = pinnedLine(k.pinnedBy);
+  const tokens = view === 'tokens' && k.agents.length > 0;
+  const moves = !!actions.onMoveUp || !!actions.onMoveDown;
   return (
-    <View style={[styles.card, (k.state === 'same' || k.state === 'off') && styles.cardQuiet]}>
-      <View style={styles.head}>
-        <View style={[styles.cap, k.state === 'in_use' && styles.capOn]}>
-          <T
-            variant="caption"
-            color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
-          >
-            {String(k.position)}
-          </T>
-        </View>
-        <View style={styles.title}>
-          {titled && (
-            <T variant="headline" color={colors.textStrong} numberOfLines={1}>
-              {k.name}
+    <View style={styles.detail}>
+      <View style={[styles.card, (k.state === 'same' || k.state === 'off') && styles.cardQuiet]}>
+        <View style={styles.head}>
+          <View style={[styles.cap, styles.capLarge, k.state === 'in_use' && styles.capOn]}>
+            <T
+              variant="headline"
+              color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
+              maxFontSizeMultiplier={CHIP_SCALE}
+            >
+              {placeLabel(k, all)}
             </T>
-          )}
-          {k.detail.length > 0 && (
-            <T variant="caption" color={colors.textMuted} numberOfLines={2}>
-              {k.detail.join(' · ')}
-            </T>
-          )}
-        </View>
-        {!titled && <StatusPill tone={pillOf(k)} label={k.stateLabel} />}
-      </View>
-      {titled && <StatusPill tone={pillOf(k)} label={k.stateLabel} style={styles.pill} />}
-      {k.limits.map((l, i) => (
-        <View key={l.key} style={[styles.limit, i > 0 && styles.limitNext]}>
-          <View style={styles.limitHead}>
-            <T variant="small" color={colors.textSecondary}>
-              {l.label}
-            </T>
-            {l.countdown && (
-              <T variant="caption" color={colors.textSecondary}>
-                ⟳ {l.countdown}
-              </T>
-            )}
           </View>
-          <T
-            variant="title"
-            color={l.tone === 'warning' ? colors.accentWarning : colors.textStrong}
-          >
-            {l.left}%
+          <View style={styles.title}>
+            <StatusPill tone={pillOf(k)} label={k.stateLabel} />
             <T variant="small" color={colors.textMuted}>
-              {' '}
-              left
+              {[`${ordinal(k.position)} in the order`, ...k.detail].join(' · ')}
             </T>
-          </T>
-          <View style={styles.bar}>
-            <View
-              style={[
-                styles.fill,
-                {
-                  width: `${l.left}%`,
-                  backgroundColor: l.tone === 'warning' ? colors.accentWarning : colors.textPrimary,
-                },
-              ]}
-            />
-            {l.evenLeft !== undefined && (
-              // Where it would stand at an even pace through the window.
-              <View
-                style={[
-                  styles.even,
-                  {
-                    left: `${l.evenLeft}%`,
-                    // Light on the fill, dark on the empty track: seen either way.
-                    backgroundColor: l.evenLeft < l.left ? colors.surfaceApp : colors.textSecondary,
-                  },
-                ]}
-              />
-            )}
           </View>
-          {l.paceWord && (
-            <T variant="small" color={colors.textSecondary}>
-              {l.paceWord}
-            </T>
-          )}
-          {l.resetsAt && (
-            <T variant="caption" color={colors.textMuted}>
-              Refills {l.resetsAt}
-            </T>
-          )}
-          {l.pace && (
-            // An estimate: secondary ink, with a small mark only when little is left.
-            <View style={styles.pace}>
-              {l.left <= LOW_LEFT && (
-                <Icon
-                  name="exclamationmark.triangle"
-                  size={iconSize.inline}
-                  color={colors.accentWarning}
+          {moves && (
+            // Its place in the order, as the desk's Move up / Move down.
+            <View style={styles.actions}>
+              {actions.onMoveUp && (
+                <IconButton
+                  name="arrow.up"
+                  size={iconSize.body}
+                  label={`Try ${k.name} earlier`}
+                  disabled={actions.busy}
+                  onPress={actions.onMoveUp}
                 />
               )}
-              <T variant="caption" color={colors.textSecondary} style={styles.grow}>
-                {l.runOut ? l.pace.basis : `${l.pace.text} · ${l.pace.basis}`}
-              </T>
+              {actions.onMoveDown && (
+                <IconButton
+                  name="arrow.down"
+                  size={iconSize.body}
+                  label={`Try ${k.name} later`}
+                  disabled={actions.busy}
+                  onPress={actions.onMoveDown}
+                />
+              )}
             </View>
           )}
         </View>
-      ))}
+        {actions.onUse && (
+          <Button
+            title={USE_THIS_ONE_NOW}
+            variant="secondary"
+            disabled={actions.busy}
+            accessibilityLabel={`Use ${k.name} now`}
+            onPress={actions.onUse}
+          />
+        )}
+      </View>
+
       {k.fix && (
         <View style={styles.low}>
           <T variant="small" color={colors.textPrimary}>
-            {k.fix.text}{' '}
+            {k.fix.text}
+          </T>
+          <T variant="caption" color={colors.textMuted}>
             {k.fix.action === 'sign_in_other'
               ? `${SIGN_IN_DIFFERENT}${k.thisMac ? '' : ', or remove it,'} on your Mac: Agents → Usage.`
               : 'On your Mac: Agents → Usage.'}
           </T>
         </View>
       )}
-      {k.agents.length > 0 && (
-        // Who used it: agent, tokens, turns, in aligned columns.
-        <View style={styles.table} accessibilityLabel={`Who used ${k.name} this week`}>
-          <View style={styles.tableRow}>
-            <T variant="caption" color={colors.textMuted} style={styles.grow}>
-              Used by these agents this week
-            </T>
-            <T variant="caption" color={colors.textMuted} style={styles.num}>
-              Tokens
-            </T>
-            <T variant="caption" color={colors.textMuted} style={styles.numNarrow}>
-              Messages
-            </T>
-          </View>
-          {k.agents.map((a) => (
-            <View key={a.key} style={[styles.tableRow, styles.tableLine]}>
-              <T variant="small" color={colors.textPrimary} style={styles.grow} numberOfLines={1}>
-                {a.name}
-              </T>
-              <T variant="small" color={colors.textSecondary} style={styles.num}>
-                {a.tokensText}
-              </T>
-              <T variant="small" color={colors.textSecondary} style={styles.numNarrow}>
-                {String(a.turns)}
-              </T>
-            </View>
-          ))}
-        </View>
+      {!!pinned && (
+        <T variant="small" color={colors.textMuted}>
+          {pinned}
+        </T>
       )}
-      {k.changes.length > 0 && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: story }}
-          onPress={() => setStory((s) => !s)}
-          style={({ pressed }) => pressed && PRESSED}
-        >
-          <T variant="small" color={colors.textPrimary}>
-            {story ? 'Hide where my usage went' : 'Where did my usage go'}
-          </T>
-        </Pressable>
-      )}
-      {story &&
-        k.changes.map((c) => (
-          <View key={c.key} style={styles.change}>
-            <T variant="small" color={colors.textPrimary}>
-              {c.title}
+
+      {k.state !== 'same' && k.signedIn && (
+        <View style={styles.part}>
+          {/* The section's name, and Limits | Tokens at its right, as the desk's. */}
+          <View style={styles.partHead}>
+            <T
+              variant="headline"
+              color={colors.textStrong}
+              accessibilityRole="header"
+              style={styles.grow}
+            >
+              {tokens ? 'Used by these agents this week' : 'Limits'}
             </T>
-            <T variant="caption" color={colors.textMuted}>
-              {c.when}
-            </T>
-            {c.runs.map((r) => (
-              <T key={r} variant="caption" color={colors.textSecondary}>
-                {r}
-              </T>
-            ))}
-            {c.elsewhere && (
-              <T variant="caption" color={colors.textSecondary}>
-                {c.elsewhere}
-              </T>
+            {k.agents.length > 0 && (
+              <View style={styles.switch}>
+                <Segmented
+                  value={view}
+                  onChange={setView}
+                  options={[
+                    { value: 'limits', label: 'Limits' },
+                    { value: 'tokens', label: 'Tokens' },
+                  ]}
+                />
+              </View>
             )}
           </View>
-        ))}
+          {tokens ? (
+            <AgentsTable k={k} />
+          ) : k.limits.length > 0 ? (
+            k.limits.map((l) => <LimitCard key={l.key} limit={l} />)
+          ) : (
+            <T variant="small" color={colors.textMuted}>
+              {k.state === 'out'
+                ? k.stateLabel
+                : 'Your usage shows here after an agent’s first reply.'}
+            </T>
+          )}
+        </View>
+      )}
+
+      {k.changes.length > 0 && (
+        <View style={styles.part}>
+          <T variant="headline" color={colors.textStrong} accessibilityRole="header">
+            Where it went
+          </T>
+          <View style={styles.card}>
+            {k.changes.map((c, i) => (
+              <View key={c.key} style={[styles.change, i > 0 && styles.changeNext]}>
+                <T variant="small" color={colors.textStrong}>
+                  {c.title}
+                </T>
+                <T variant="caption" color={colors.textMuted}>
+                  {c.when}
+                </T>
+                {c.runs.map((r) => (
+                  <T key={r} variant="small" color={colors.textSecondary}>
+                    {r}
+                  </T>
+                ))}
+                {c.elsewhere && (
+                  <T variant="small" color={colors.textSecondary}>
+                    {c.elsewhere}
+                  </T>
+                )}
+              </View>
+            ))}
+          </View>
+          <T variant="caption" color={colors.textMuted}>
+            Each task shows the tokens Claude Code or Codex reported; a rise isn’t divided between
+            tasks. Use of the same plan outside these agents counts too.
+          </T>
+        </View>
+      )}
     </View>
   );
+}
+
+/**
+ * A bar of what is left against the pace marker: where it would stand had
+ * it been spent evenly through the window. Left of the marker is ahead of
+ * pace; right of it, room to spare.
+ */
+function PaceBar({ limit: l }: { limit: KeyLimit }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View
+      style={styles.bar}
+      accessibilityRole="progressbar"
+      accessibilityLabel={`${l.label} limit left`}
+      accessibilityValue={{ min: 0, max: 100, now: l.left }}
+    >
+      <View
+        style={[
+          styles.fill,
+          {
+            width: `${l.left}%`,
+            backgroundColor: l.tone === 'warning' ? colors.accentWarning : colors.textPrimary,
+          },
+        ]}
+      />
+      {l.evenLeft !== undefined && (
+        <View
+          style={[
+            styles.even,
+            {
+              left: `${l.evenLeft}%`,
+              // Light on the fill, dark on the empty track: seen either way.
+              backgroundColor: l.evenLeft < l.left ? colors.surfaceApp : colors.textSecondary,
+            },
+          ]}
+        />
+      )}
+    </View>
+  );
+}
+
+/**
+ * One limit as a card, as the desk's: its name and countdown chip, the big
+ * figure, the pace-marked bar, the Mac's run-out estimate marked between now
+ * and the refill (said as one), what that means in words, and when it refills.
+ */
+function LimitCard({ limit: l }: { limit: KeyLimit }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={[styles.card, styles.limit]}>
+      <View style={styles.limitHead}>
+        <T variant="small" color={colors.textSecondary} style={styles.grow}>
+          {l.label}
+        </T>
+        {l.countdown && (
+          <RefillChip
+            text={l.countdown}
+            label={l.resetsAt ? `Refills ${l.resetsAt}` : `Refills in ${l.countdown}`}
+          />
+        )}
+      </View>
+      <T variant="display" color={l.tone === 'warning' ? colors.accentWarning : colors.textStrong}>
+        {l.left}%
+        <T variant="small" color={colors.textMuted}>
+          {' '}
+          left
+        </T>
+      </T>
+      <PaceBar limit={l} />
+      {l.runOut && (
+        <View accessible accessibilityLabel={`${l.runOut.text}, an estimate`}>
+          <View style={styles.timeline}>
+            <View style={[styles.timelineMark, { left: `${Math.round(l.runOut.along * 100)}%` }]} />
+          </View>
+          <View style={styles.timelineEnds} importantForAccessibility="no-hide-descendants">
+            <T variant="caption" color={colors.textMuted}>
+              Now
+            </T>
+            <T
+              variant="caption"
+              color={colors.textSecondary}
+              style={styles.timelineMid}
+              numberOfLines={2}
+            >
+              {l.runOut.text} · estimate
+            </T>
+            <T variant="caption" color={colors.textMuted}>
+              Refills
+            </T>
+          </View>
+        </View>
+      )}
+      {l.paceWord && (
+        <T variant="small" color={colors.textSecondary}>
+          {l.paceWord}
+        </T>
+      )}
+      {l.resetsAt && (
+        <T variant="caption" color={colors.textMuted}>
+          Refills {l.resetsAt}
+        </T>
+      )}
+      {l.pace && (
+        // An estimate: secondary ink, never amber; a small mark only when little is left.
+        <View style={styles.pace}>
+          {l.left <= LOW_LEFT && (
+            <Icon
+              name="exclamationmark.triangle"
+              size={iconSize.inline}
+              color={colors.accentWarning}
+            />
+          )}
+          <T variant="caption" color={colors.textSecondary} style={styles.grow}>
+            {l.runOut ? l.pace.basis : `${l.pace.text} · ${l.pace.basis}`}
+          </T>
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** Who used this account this week: agent key, name, its share, tokens, messages, aligned. */
+function AgentsTable({ k }: { k: StackKey }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={styles.card}>
+      <View style={styles.table} accessibilityLabel={`Who used ${k.name} this week`}>
+        <View style={styles.tableRow}>
+          <T variant="caption" color={colors.textMuted} style={styles.grow}>
+            Agent
+          </T>
+          <T variant="caption" color={colors.textMuted} style={styles.num}>
+            Tokens
+          </T>
+          <T variant="caption" color={colors.textMuted} style={styles.numNarrow}>
+            Messages
+          </T>
+        </View>
+        {k.agents.map((a) => (
+          <View key={a.key} style={[styles.tableRow, styles.tableLine]}>
+            <View style={[styles.grow, styles.agentCell]}>
+              <AgentKey id={a.agentId} name={a.name} size={keySize.sm} />
+              <View style={styles.grow}>
+                <T variant="small" color={colors.textPrimary} numberOfLines={1}>
+                  {a.name}
+                </T>
+                <View
+                  style={styles.share}
+                  accessible
+                  accessibilityLabel={`${a.share}% of its tokens`}
+                >
+                  <View style={[styles.fill, styles.shareFill, { width: `${a.share}%` }]} />
+                </View>
+              </View>
+            </View>
+            <T variant="small" color={colors.textSecondary} style={styles.num}>
+              {a.tokensText}
+            </T>
+            <T variant="small" color={colors.textSecondary} style={styles.numNarrow}>
+              {String(a.turns)}
+            </T>
+          </View>
+        ))}
+      </View>
+      <T variant="caption" color={colors.textMuted}>
+        Tokens as Claude Code or Codex reported them for what these agents did. Not a cost: your
+        plan isn’t billed per token.
+      </T>
+    </View>
+  );
+}
+
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
 const useStyles = makeStyles((colors) => ({
@@ -599,8 +794,10 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    minHeight: space['2xl'],
+    minHeight: TAP,
+    paddingVertical: space.xs,
   },
+  hero: { gap: space.lg, padding: space.xl },
   figure: { fontVariant: ['tabular-nums'] },
   chip: {
     flexDirection: 'row',
@@ -662,7 +859,6 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.borderStrong,
   },
   fill: { height: '100%', borderRadius: radius.pill },
-  legend: { gap: space['3xs'] },
   grow: { flex: 1, minWidth: 0 },
   pace: { flexDirection: 'row', alignItems: 'center', gap: space['2xs'] },
   card: {
@@ -677,7 +873,8 @@ const useStyles = makeStyles((colors) => ({
   cardQuiet: { backgroundColor: colors.surfaceApp, boxShadow: 'none', borderStyle: 'dashed' },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   cap: {
-    width: space.xl,
+    minWidth: space.xl,
+    paddingHorizontal: space['2xs'],
     height: space.xl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -689,13 +886,51 @@ const useStyles = makeStyles((colors) => ({
   capOn: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
   title: { flex: 1, minWidth: 0 },
   pill: { alignSelf: 'flex-start' },
-  limit: { gap: space['2xs'] },
-  limitNext: {
+  limit: { gap: space.sm },
+  limitHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  detail: { gap: space.xl },
+  part: { gap: space.md },
+  partHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  switch: { width: '50%' },
+  actions: { flexDirection: 'row', alignItems: 'center', marginRight: -space.sm },
+  capLarge: {
+    minWidth: keySize.lg,
+    height: keySize.lg,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.inner,
+  },
+  timeline: {
+    height: space['3xs'] * 2,
+    marginTop: space.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.borderDefault,
+  },
+  timelineMark: {
+    position: 'absolute',
+    top: -space.xs / 2 - space['3xs'],
+    width: space.sm,
+    height: space.sm,
+    marginLeft: -space.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.textSecondary,
+  },
+  timelineEnds: { flexDirection: 'row', gap: space.sm, marginTop: space.xs },
+  timelineMid: { flex: 1, textAlign: 'center' },
+  agentCell: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  share: {
+    height: space['3xs'] * 2,
+    marginTop: space['2xs'],
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceControl,
+    overflow: 'hidden',
+  },
+  shareFill: { backgroundColor: colors.textMuted },
+  changeNext: {
+    marginTop: space.sm,
     paddingTop: space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
   },
-  limitHead: { flexDirection: 'row', justifyContent: 'space-between' },
   bar: {
     height: space.xs,
     borderRadius: radius.pill,
@@ -709,10 +944,5 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.inner,
     backgroundColor: colors.surfaceControl,
   },
-  change: {
-    gap: space['3xs'],
-    paddingTop: space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-  },
+  change: { gap: space['2xs'] },
 }));

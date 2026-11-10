@@ -524,6 +524,98 @@ pub(crate) async fn dispatch_caught(
     caught(method, router::dispatch(c, caller, method, params)).await
 }
 
+/// The longest a phone request is worked on before it is answered as busy.
+/// Under the phone's own 30 s (`transport.ts`), so it hears why rather than
+/// timing out on a silent socket.
+pub(crate) const REQUEST_DEADLINE: Duration = Duration::from_secs(20);
+
+/// What the phone shows when its Mac couldn't answer in time.
+pub(crate) const BUSY: &str =
+    "Your Mac is busy and couldn't answer that in time. Try again in a moment.";
+
+/// A request's answer within [`REQUEST_DEADLINE`], or an error saying the
+/// Mac is busy. Handlers call the agents store and the disk synchronously,
+/// so the work runs on the blocking pool: one stuck on a lock or a slow
+/// disk holds a thread of its own, never one of the few async workers every
+/// socket (and every other request) needs to be answered at all.
+pub(crate) async fn dispatch_bounded(
+    c: Arc<Companion>,
+    caller: Caller,
+    method: String,
+    params: Value,
+) -> Result<Value, WireError> {
+    let name = method.clone();
+    bounded(&name, REQUEST_DEADLINE, async move {
+        dispatch_caught(&c, &caller, &method, params).await
+    })
+    .await
+}
+
+/// Run `answer` off the async workers and give up waiting on it after
+/// `deadline`. Past the deadline it carries on (a send the phone retries by
+/// clientId is better done once than cut in half) and its answer is
+/// dropped; if the caller itself is dropped (a revoke aborts the socket's
+/// requests) it stops at its next await, as it did on the async workers.
+pub(crate) async fn bounded<T>(
+    method: &str,
+    deadline: Duration,
+    answer: impl std::future::Future<Output = Result<T, WireError>> + Send + 'static,
+) -> Result<T, WireError>
+where
+    T: Send + 'static,
+{
+    /// Sends "stop" when dropped while armed.
+    struct Abort(Option<oneshot::Sender<()>>);
+    impl Drop for Abort {
+        fn drop(&mut self) {
+            if let Some(stop) = self.0.take() {
+                let _ = stop.send(());
+            }
+        }
+    }
+    let (stop_tx, stop_rx) = oneshot::channel::<()>();
+    let mut abort = Abort(Some(stop_tx));
+    let handle = tokio::runtime::Handle::current();
+    let work = tokio::task::spawn_blocking(move || {
+        handle.block_on(async move {
+            tokio::pin!(answer);
+            tokio::select! {
+                done = &mut answer => Some(done),
+                stop = stop_rx => match stop {
+                    Ok(()) => None,
+                    // No one is waiting any more: finish anyway.
+                    Err(_) => Some(answer.await),
+                },
+            }
+        })
+    });
+    let waited = tokio::time::timeout(deadline, work).await;
+    // Answered or timed out: never "stop" it from here.
+    drop(abort.0.take());
+    match waited {
+        Ok(Ok(Some(answer))) => answer,
+        // Stopped only when this was dropped, so never seen here.
+        Ok(Ok(None)) => Err(WireError::Command(crate::errors::CommandError::expected(
+            "This Mac stopped answering that.",
+        ))),
+        Ok(Err(e)) => {
+            tracing::error!("[Companion] {method} didn't finish: {e}");
+            Err(WireError::Command(crate::errors::CommandError::expected(
+                "This Mac hit a fault answering that. Try again.",
+            )))
+        }
+        Err(_) => {
+            tracing::error!(
+                "[Companion] {method} took longer than {:?}; answered as busy",
+                deadline
+            );
+            Err(WireError::Command(crate::errors::CommandError::expected(
+                BUSY,
+            )))
+        }
+    }
+}
+
 /// A request's answer, or an error answer if working it out panicked.
 pub(crate) async fn caught(
     method: &str,
@@ -968,7 +1060,7 @@ where
                     ClientFrame::Req { id, method, params } if method == "devices.unpairSelf" => {
                         // Answered before the socket closes, so the phone
                         // hears "done" rather than "removed".
-                        let result = router::dispatch(c, caller, &method, params).await;
+                        let result = dispatch_bounded(c.clone(), caller.clone(), method, params).await;
                         let _ = send(ws, &ServerFrame::response(id, result)).await;
                         let _ = ws.send(Message::Close(None)).await;
                         c.hub.signal(HubItem::Revoked { device_id: caller.device_id.clone() });
@@ -977,7 +1069,7 @@ where
                     ClientFrame::Req { id, method, params } => {
                         let (c, caller, done) = (c.clone(), caller.clone(), done_tx.clone());
                         work.spawn(async move {
-                            let result = dispatch_caught(&c, &caller, &method, params).await;
+                            let result = dispatch_bounded(c, caller, method, params).await;
                             let _ = done.send((id, result));
                         });
                     }

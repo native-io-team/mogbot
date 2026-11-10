@@ -45,7 +45,8 @@ const reply = (w: TurnWork): AgentMessage => ({
 describe('which account and model ran the turn', () => {
   it('sits beside the folded line, only as recorded', () => {
     render(<AgentBubble message={reply(work)} agent={agent} />);
-    expect(screen.getByText('Claude Code · work@acme.com · claude-opus-4-6')).toBeInTheDocument();
+    const line = screen.getByText('Claude Code · work@acme.com · Opus');
+    expect(line).toHaveAttribute('title', 'Ran on Claude Code · work@acme.com · claude-opus-4-6');
   });
 
   it('leaves out what the engine didn’t say', () => {
@@ -64,7 +65,7 @@ describe('which account and model ran the turn', () => {
   });
 });
 
-describe('Show exact command', () => {
+describe('a step’s exact command', () => {
   it('is offered only on a step whose command was kept, and reads it by its index', async () => {
     const asked: unknown[] = [];
     mockIPC((cmd, args) => {
@@ -76,19 +77,36 @@ describe('Show exact command', () => {
     });
     render(<AgentBubble message={reply(work)} agent={agent} />);
     fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
-    const shows = screen.getAllByRole('button', { name: 'Show exact command' });
+    // The step's own words are the toggle: no separate link per step.
+    const shows = screen.getAllByRole('button', { name: /Show exact command$/ });
     expect(shows).toHaveLength(1);
+    expect(shows[0]).toHaveTextContent(/^Ran npm test/);
+    expect(screen.queryByRole('button', { name: /^Show / })).toBeNull();
     fireEvent.click(shows[0]);
+    expect(shows[0]).toHaveAttribute('aria-expanded', 'true');
     expect(await screen.findByText('npm test -- --watch=false')).toBeInTheDocument();
     expect(asked).toEqual([{ agentId: 'acme', messageId: 'r1', step: 3 }]);
     expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+  });
+
+  it('says “details” on a step that ran no command', () => {
+    mockIPC(() => null);
+    const read = { ...work.steps[0], hasExact: true };
+    render(
+      <AgentBubble message={reply({ ...work, steps: [read, work.steps[1]] })} agent={agent} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
+    expect(screen.getAllByRole('button', { name: /, Show / }).map((b) => b.textContent)).toEqual([
+      'Read Hero.tsx, Show details',
+      'Ran npm test, Show exact command',
+    ]);
   });
 
   it('says so when it is no longer kept', async () => {
     mockIPC(() => null);
     render(<AgentBubble message={reply(work)} agent={agent} />);
     fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Show exact command' }));
+    fireEvent.click(screen.getByRole('button', { name: /Show exact command$/ }));
     expect(await screen.findByText('It isn’t kept for this step any more.')).toBeInTheDocument();
   });
 });
@@ -113,7 +131,7 @@ describe('What it was told', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
     fireEvent.click(screen.getByRole('button', { name: 'What it was told' }));
     expect(await screen.findByText('How much to do on your own')).toBeInTheDocument();
-    expect(screen.getByText('Its instructions and memory (CLAUDE.md)')).toBeInTheDocument();
+    expect(screen.getByText('Its instructions and memory')).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).toBeNull();
   });
 

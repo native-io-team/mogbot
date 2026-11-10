@@ -611,7 +611,7 @@ export const agentsUsageScenarios: Scenario[] = [
       'Settings → Accounts & usage is the Usage view’s own panel, not a second sheet: the hero (“Your accounts, together”, the stack’s line, a segmented meter with each account named and “N% left” under it, the next reset), “Get the most from your limits” with the three-way mode control, then each engine’s accounts as key cards with grips (drag, or the grip with the keyboard; no ↑/↓ buttons), every limit said as “N% left”, pace lines in secondary ink (never amber). This Mac’s own sign-in is named by its email, plan or engine, never “This Mac”. Then adding an account, the crossover choice, the spare-capacity list with its two items, the engines’ average-turn estimates and other compute. Nothing accent-coloured.',
     // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
-    requires: '.usage-panel .usage-key',
+    requires: '.usage-panel .usage-row',
     clipSelector: '.settings-window',
     viewport: { width: 1280, height: 2800 },
     commands: {
@@ -627,7 +627,7 @@ export const agentsUsageScenarios: Scenario[] = [
       'The same panel with a run-out estimate: the hero headline “Runs out …” in ink, not amber, with “Estimate from 13 readings across 2 accounts. An estimate, not a reading.” under it; each Claude key’s 5-hour bar amber only where it is nearly out, its pace line secondary ink with what it rests on.',
     // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
-    requires: '.usage-panel .usage-key',
+    requires: '.usage-panel .usage-row',
     clipSelector: '.settings-window',
     viewport: { width: 1280, height: 2800 },
     commands: {
@@ -643,7 +643,7 @@ export const agentsUsageScenarios: Scenario[] = [
       'The same panel: Claude keys in order, the out one with a neutral “Out of usage until …” pill, Codex’s unsigned sign-in with “Not signed in” and its fix line. No account is named “This Mac”.',
     // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
-    requires: '.usage-panel .usage-key',
+    requires: '.usage-panel .usage-row',
     clipSelector: '.settings-window',
     viewport: { width: 1280, height: 2800 },
     commands: {
@@ -659,7 +659,7 @@ export const agentsUsageScenarios: Scenario[] = [
       'The same panel: one key read with its 5-hour and Weekly “N% left” bars and one pace line in secondary ink under the Weekly bar; Personal says it has no reading yet; never a made-up figure.',
     // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
-    requires: '.usage-panel .usage-key',
+    requires: '.usage-panel .usage-row',
     clipSelector: '.settings-window',
     viewport: { width: 1280, height: 2800 },
     commands: {

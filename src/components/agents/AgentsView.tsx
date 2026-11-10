@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { flushSync } from 'react-dom';
 import { HomeSidebar } from '../workspace/HomeSidebar';
-import { AgentsSidebar, InFlightBell } from './AgentsSidebar';
+import { AgentsSidebar, AgentsSidebarActions, InFlightBell, RoutinesRow } from './AgentsSidebar';
 import { AgentsSearchPopover, AgentsTopSearch } from './AgentsSearchBox';
 import { EngineSignInModal, type EngineSetup } from './EngineSignInModal';
 import { AgentChat } from './AgentChat';
@@ -71,6 +71,7 @@ import {
   loadMessages,
   loadRoomMessages,
   openConversation,
+  readChat,
   refreshAgents,
   refreshRooms,
   startConversation,
@@ -288,8 +289,14 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     }
     writeSelected(selected.id);
     void focusAgent(selected.id);
-    if (!getAgentsSnapshot().messages[selected.id]) void loadMessages(selected.id);
+    readChat(selected.id);
   }, [selected?.id, teamOpen, usageOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // On launch the chat Agents reopens on is known before the list of agents
+  // is: its reads start now, beside the list's, rather than after it.
+  useEffect(() => {
+    const id = readSelected();
+    if (id && roomIdOf(id) === null) readChat(id);
+  }, []);
 
   // Leaving Agents mode: nothing is on screen any more, so new replies count as unread.
   useEffect(() => () => void focusAgent(null), []);
@@ -959,6 +966,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     () => (isCompact ? { onGoHome, onGoProjects } : undefined),
     [isCompact, onGoHome, onGoProjects]
   );
+  // Pages that aren't a chat stand in for the sidebar the same way.
+  const pageCompact = useMemo(
+    () => (isCompact ? { agents, onGoHome, onGoProjects } : undefined),
+    [isCompact, agents, onGoHome, onGoProjects]
+  );
 
   return (
     <div className="app workspace workspace-home agents-mode">
@@ -967,8 +979,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
           <HomeSidebar
             {...sidebarProps}
             activeNav="agents"
-            // Home, Workflows and the Inbox belong to the Projects side; here
-            // the one control is What's in flight, with how many need you.
+            // Home belongs to the Projects side; here the one control is
+            // What's in flight, with how many need you.
             navContent={
               <InFlightBell count={needsYouCount} current={teamOpen} onOpen={openInFlight} />
             }
@@ -980,8 +992,23 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onOpen={focusSearch}
               />
             }
+            listActions={
+              query.trim().length === 0 || popoverSearch ? (
+                <AgentsSidebarActions
+                  agentCount={listed.length}
+                  onNew={() => openNew()}
+                  onNewRoom={openNewRoom}
+                />
+              ) : undefined
+            }
             footerContent={
               <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
+                {/* Pages together: Routines beside Usage, actions above the list's end. */}
+                <RoutinesRow
+                  open={routinesOpen}
+                  collapsed={sidebarProps.isSidebarHidden ?? false}
+                  onOpen={() => openRoutines()}
+                />
                 <AccountSwitcher
                   collapsed={sidebarProps.isSidebarHidden ?? false}
                   open={usageOpen}
@@ -997,12 +1024,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   showHidden={showHidden}
                   onToggleShowHidden={toggleShowHidden}
                   onSelect={setSelectedId}
-                  onNew={() => openNew()}
                   rooms={roomRows}
                   roomActions={roomActions}
-                  onNewRoom={openNewRoom}
-                  onOpenRoutines={() => openRoutines()}
-                  routinesOpen={routinesOpen}
                   actions={actions}
                   query={popoverSearch ? '' : query}
                   searchRef={searchRef}
@@ -1051,21 +1074,14 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 room={room}
                 agentsById={agentsById}
                 onOpenAgent={openAgent}
-                compact={
-                  isCompact
-                    ? {
-                        agents,
-                        onGoHome: sidebarProps.onGoHome,
-                        onGoProjects: sidebarProps.onGoProjects,
-                      }
-                    : undefined
-                }
+                compact={pageCompact}
                 {...roomActions}
               />
             ) : usageOpen ? (
-              <AgentsUsageView />
+              <AgentsUsageView compact={pageCompact} onOpenAgent={openAgent} />
             ) : routinesOpen ? (
               <AgentsRoutinesView
+                compact={pageCompact}
                 onOpenAgent={openAgent}
                 ask={routinesAsk}
                 onAsked={clearRoutinesAsk}
@@ -1077,15 +1093,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onOpenMessage={openMessage}
                 onSignIn={signIn}
                 onInstallEngine={installEngine}
-                compact={
-                  isCompact
-                    ? {
-                        agents,
-                        onGoHome: sidebarProps.onGoHome,
-                        onGoProjects: sidebarProps.onGoProjects,
-                      }
-                    : undefined
-                }
+                compact={pageCompact}
               />
             ) : !shown ? (
               <div className="agents-main__state">

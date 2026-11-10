@@ -104,6 +104,24 @@ describe('usageGlance', () => {
     expect(g.summary).toMatch(/^1 account · /);
   });
 
+  it('two meters moving together are a question, never counted as one', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'sam@example.com' }), acct('w', { name: 'Work' })],
+      inv([
+        line('default', { windows: [week(42)] }),
+        line('w', { windows: [week(42)], maybeSameAs: 'default' }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.sameNotes).toEqual([
+      'Work and sam@example.com may be the same Claude account: their weekly limits have moved together and reset at the same moment. If they are, sign one in with a different account.',
+    ]);
+    // Still two accounts on the meter and in the totals.
+    expect(g.meterKeys.map((k) => k.id)).toEqual(['default', 'w']);
+    expect(g.keys[1].state).not.toBe('same');
+    expect(g.summary).toMatch(/^2 accounts · /);
+  });
+
   it('out everywhere says until when, in the one phrase', () => {
     const g = usageGlance(
       [acct('default', { out: true, limit: { at: NOW - H, resetsAt: NOW + 3 * H } })],
@@ -128,6 +146,21 @@ describe('usageGlance', () => {
     expect(g.tone).toBe('limited');
     expect(g.keys[0].stateLabel).toMatch(/^Out of usage until /);
     expect(g.low?.waitUntil).toMatch(/^Wait until /);
+  });
+
+  it('one account out and the rest never read is that account, not "out of usage"', () => {
+    const g = usageGlance(
+      [acct('default'), acct('work', { name: 'Work', out: true }), acct('p', { name: 'Personal' })],
+      inv([
+        line('default'),
+        line('work', { name: 'Work', out: true, windows: [week(100)] }),
+        line('p', { name: 'Personal' }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.headline).toBe('Work is out');
+    expect(g.row.figure).toBe('Work is out');
+    expect(g.low).toBeNull();
   });
 
   it('nearly empty everywhere offers the options', () => {
@@ -544,7 +577,7 @@ describe('this Mac signed in as another account', () => {
 });
 
 describe('the total, across every account', () => {
-  it('averages each account’s week, most room first: 100% and 44% read as 72%', () => {
+  it('averages each account’s week, in the work order: 100% and 44% read as 72%', () => {
     const g = usageGlance(
       [acct('default', { name: 'sam@example.com' }), acct('work', { name: 'Work' })],
       inv([
@@ -556,11 +589,11 @@ describe('the total, across every account', () => {
     expect(g.total.left).toBe(72);
     expect(g.total.figure).toBe('72% left');
     expect(g.total.across).toBe('across 2 accounts');
-    // The account in use (44%) is first in the order, but the roomier one leads the bar.
+    // The bar and the list below it share one order: the work order (round 4).
     expect(g.keys.map((k) => k.name)).toEqual(['sam@example.com', 'Work']);
     expect(g.total.segments.map((s) => [s.name, s.left])).toEqual([
-      ['Work', 100],
       ['sam@example.com', 44],
+      ['Work', 100],
     ]);
     // The next refill is the soonest of the weeks counted.
     expect(g.total.refill).toMatchObject({ in: '2d 0h', account: 'sam@example.com' });
@@ -624,7 +657,7 @@ describe('the total, across every account', () => {
     expect(none.total.across).toBe('');
   });
 
-  it('an account out of usage counts as nothing left, and sits last of the read ones', () => {
+  it('an account out of usage counts as nothing left, in its place in the order', () => {
     const g = usageGlance(
       [acct('default', { name: 'A' }), acct('b', { name: 'B' }), acct('c', { name: 'C' })],
       inv([
@@ -635,9 +668,9 @@ describe('the total, across every account', () => {
       { now: NOW }
     );
     expect(g.total.segments.map((s) => [s.name, s.left])).toEqual([
+      ['A', 0],
       ['B', 90],
       ['C', 40],
-      ['A', 0],
     ]);
     expect(g.total.left).toBe(43);
   });
