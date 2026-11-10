@@ -1002,6 +1002,23 @@ fn chief() -> Result<Agent, CommandError> {
         .ok_or_else(|| CommandError::expected("There's no Chief of Staff to post the brief."))
 }
 
+/// An agent's log without what it said before anything was said to it:
+/// the Chief's stored greeting and a new agent's welcome (`starters`) are
+/// written by the app when the agent is made, not work it did, so a brief
+/// the day after counted "Chief of Staff: 1 reply" for an agent nobody had
+/// talked to. Only when `whole` (the log reaches back to its first line):
+/// a window that starts mid-chat can't tell a greeting from a reply.
+pub fn after_greeting(log: &[AgentMessage], whole: bool) -> &[AgentMessage] {
+    if !whole {
+        return log;
+    }
+    let first_asked = log
+        .iter()
+        .position(|m| !matches!(m.kind, MessageKind::Agent | MessageKind::Note))
+        .unwrap_or(log.len());
+    &log[first_asked..]
+}
+
 /// How far back a log is read for the brief.
 const LOG_READ: usize = 400;
 
@@ -1019,7 +1036,11 @@ fn facts_now(prepared: Option<&Prepared>, since: i64, now: i64) -> Result<Facts,
     let records: Vec<AgentRecords> = agents
         .iter()
         .zip(logs.iter().zip(cards.iter()))
-        .map(|(agent, (log, cards))| AgentRecords { agent, log, cards })
+        .map(|(agent, (log, cards))| AgentRecords {
+            agent,
+            log: after_greeting(log, log.len() < LOG_READ),
+            cards,
+        })
         .collect();
     let mut facts = gather(&records, since, &chrono::Local, now);
     if let Some(p) = prepared {
