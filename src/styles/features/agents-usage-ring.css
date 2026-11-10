@@ -6,7 +6,8 @@
 :root {
   /* The ring's stroke: thin, like the phone's (an icon's line, doubled). */
   --agent-usage-ring-stroke: var(--stroke-2);
-  --agent-usage-bar-height: var(--spacing-xs);
+  /* The one meter (tokens-components.css, "One meter"). */
+  --agent-usage-bar-height: var(--meter-height);
 }
 
 /* A static meter, not an arc: a full-contrast outline with the used share
@@ -48,25 +49,27 @@
 .ss-dropdown__menu.agent-usage {
   border-color: var(--border-subtle);
   box-shadow: var(--shadow-md);
-  width: 340px; /* css-ok: popover width, as the schedule popover's 380px */
+  width: 320px; /* css-ok: popover width, as the schedule popover's 380px */
   max-width: calc(100vw - var(--spacing-2xl));
   max-height: min(
     600px,
     calc(100vh - var(--spacing-2xl) * 3)
   ); /* css-ok: as the schedule popover */
   overflow-y: auto;
-  padding: var(--spacing-xs);
+  padding: 0;
 }
 
+/* A title, then each section between hairlines, then the way into Usage in
+   a foot of its own: the same rhythm in every section, figures at the
+   right edge so they line up from one meter to the next. */
 .agent-usage__body {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
-  padding: var(--spacing-sm);
 }
 
 .agent-usage__title {
   margin: 0;
+  padding: var(--spacing-md) var(--spacing-lg) var(--spacing-xs);
   font-size: var(--font-size-body-lg);
   font-weight: var(--font-weight-title);
   color: var(--text-primary);
@@ -75,29 +78,19 @@
 .agent-usage__section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.agent-usage__section + .agent-usage__section {
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .agent-usage__heading {
-  margin: 0;
+  margin: 0 0 var(--spacing-3xs);
   font-size: var(--font-size-body-sm);
   font-weight: var(--font-weight-label);
   color: var(--text-muted);
-}
-
-.agent-usage__meter {
-  --agent-usage-ink: var(--text-secondary);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
-}
-
-.agent-usage__meter[data-tone='warning'] {
-  --agent-usage-ink: var(--accent-warning);
-}
-
-.agent-usage__meter[data-tone='limited'] {
-  --agent-usage-ink: var(--accent-error);
 }
 
 .agent-usage__meter-head {
@@ -117,28 +110,37 @@
 }
 
 .agent-usage__meter-figure {
-  font-size: var(--font-size-body-sm);
-  color: var(--text-secondary);
+  flex: none;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 
-.agent-usage__meter:is([data-tone='warning'], [data-tone='limited']) .agent-usage__meter-figure {
-  color: var(--agent-usage-ink);
+/* The warning role from 80% used, or when the user has something to do. */
+.agent-usage__meter-head:is([data-tone='warning'], [data-tone='limited']) .agent-usage__meter-figure {
+  color: var(--accent-warning);
 }
 
+/* The context meter: the one meter's look, as the accounts' bar. */
 .agent-usage__bar {
   height: var(--agent-usage-bar-height);
   overflow: hidden;
-  border-radius: var(--radius-pill);
-  background: var(--surface-control);
+  border-radius: var(--meter-radius);
+  background: var(--meter-track);
 }
 
 .agent-usage__fill {
   display: block;
   width: var(--agent-usage-fill);
+  min-width: var(--agent-usage-bar-height);
   height: 100%;
-  border-radius: var(--radius-pill);
-  background: var(--agent-usage-ink);
+  border-radius: var(--meter-radius);
+  background: var(--meter-fill);
+}
+
+.agent-usage__bar:is([data-tone='warning'], [data-tone='limited']) .agent-usage__fill {
+  background: var(--meter-fill-high);
 }
 
 .agent-usage__muted {
@@ -149,8 +151,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The stack's one line, as the Usage view says it: ink, and a status hue
-   only when the user has a choice to make. */
+.agent-usage__body > .agent-usage__muted {
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+/* No reading to put at the right: the stack's one line, in ink. */
 .agent-usage__headline {
   margin: 0;
   font-size: var(--font-size-body-md);
@@ -158,8 +163,12 @@
   color: var(--text-primary);
 }
 
-/* The warning role from 80% used, or when the user has something to do. */
 .agent-usage__headline[data-tone='warning'],
 .agent-usage__headline[data-tone='limited'] {
   color: var(--accent-warning);
+}
+
+.agent-usage__foot {
+  padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-md);
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }

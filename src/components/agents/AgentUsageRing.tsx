@@ -22,9 +22,9 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Dropdown } from '../primitives/Dropdown';
 import { Button } from '../primitives/Button';
-import { ActivityIcon } from '@/components/icons';
+import { ActivityIcon, ChevronRightIcon } from '@/components/icons';
 import type { Agent } from '../../lib/agents';
-import { contextMeter, ringPercent, totalWords, type UsageMeter } from '../../lib/agentsUsage';
+import { contextMeter, ringPercent, totalWords } from '../../lib/agentsUsage';
 import { requestSwitcher } from '../../lib/agentAccounts';
 import { useQuotas } from './AgentsQuota';
 import { useUsageGlance } from './AccountSwitcher';
@@ -94,25 +94,51 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const context = contextMeter(agent.context);
   const stacked = accounts !== null && glance.keys.length > 0;
   const words = totalWords(glance);
+  // "across 2 Max accounts" → "2 Max accounts"; "this week" → "This week".
+  const across = words.across ? words.across.replace(/^across /, '') : null;
+  const tone = glance.tone === 'calm' ? glance.total.tone : glance.tone;
 
   return (
     <div className="agent-usage__body">
       <p className="agent-usage__title">Usage</p>
       {context && (
         <Section title="Conversation length">
-          <Meter meter={context} title={`${agent.name}’s conversation`} />
+          <MeterHead
+            name={`${agent.name}’s conversation`}
+            figure={context.label}
+            tone={context.tone}
+          />
+          <div
+            className="agent-usage__bar"
+            data-tone={context.tone}
+            role="meter"
+            aria-label={`${agent.name}’s conversation`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={context.percent}
+          >
+            <span
+              className="agent-usage__fill"
+              style={{ '--agent-usage-fill': `${context.percent}%` } as CSSProperties}
+            />
+          </div>
+          <span className="agent-usage__muted">{context.detail}</span>
         </Section>
       )}
       {stacked && (
         <Section title={glance.keys.length === 1 ? 'Your account' : 'Your accounts'}>
           {/* The Usage view's hero, small: the same figure and the same refill. */}
-          <p
-            className="agent-usage__headline"
-            data-tone={glance.tone === 'calm' ? glance.total.tone : glance.tone}
-          >
-            {words.figure}
-            {words.across && <span className="agent-usage__muted"> {words.across}</span>}
-          </p>
+          {across ? (
+            <MeterHead
+              name={across.charAt(0).toUpperCase() + across.slice(1)}
+              figure={words.figure}
+              tone={tone}
+            />
+          ) : (
+            <p className="agent-usage__headline" data-tone={tone}>
+              {words.figure}
+            </p>
+          )}
           <TotalBar total={glance.total} />
           {words.refill && <span className="agent-usage__muted">{words.refill}</span>}
           {glance.estimate && (
@@ -131,17 +157,19 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
           Nothing reported yet. Figures appear once an engine reports them after a turn.
         </p>
       )}
-      <Button
-        variant="secondary"
-        size="compact"
-        width="fill"
-        onClick={() => {
-          onClose();
-          requestSwitcher('open');
-        }}
-      >
-        Usage and accounts
-      </Button>
+      <div className="agent-usage__foot">
+        <Button
+          variant="secondary"
+          width="fill"
+          rightIcon={<ChevronRightIcon size={12} />}
+          onClick={() => {
+            onClose();
+            requestSwitcher('open');
+          }}
+        >
+          Usage and accounts
+        </Button>
+      </div>
     </div>
   );
 }
@@ -155,28 +183,12 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** The conversation's context: "32% full", its bar, and how many tokens. */
-function Meter({ meter, title }: { meter: UsageMeter; title: string }) {
+/** A meter's first line: what it is at the left, its figure at the right. */
+function MeterHead({ name, figure, tone }: { name: string; figure: string; tone: string }) {
   return (
-    <div className="agent-usage__meter" data-tone={meter.tone}>
-      <div className="agent-usage__meter-head">
-        <span className="agent-usage__meter-name">{title}</span>
-        <span className="agent-usage__meter-figure">{meter.label}</span>
-      </div>
-      <div
-        className="agent-usage__bar"
-        role="meter"
-        aria-label={title}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={meter.percent}
-      >
-        <span
-          className="agent-usage__fill"
-          style={{ '--agent-usage-fill': `${meter.percent}%` } as CSSProperties}
-        />
-      </div>
-      <span className="agent-usage__muted">{meter.detail}</span>
+    <div className="agent-usage__meter-head" data-tone={tone}>
+      <span className="agent-usage__meter-name">{name}</span>
+      <span className="agent-usage__meter-figure">{figure}</span>
     </div>
   );
 }

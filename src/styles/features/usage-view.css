@@ -9,17 +9,22 @@
    key); the hero and the account's page are sheets. */
 
 :root {
-  --usage-stack-track: var(--surface-recessed);
-  --usage-stack-ink: var(--text-primary);
+  /* The one meter (tokens-components.css, "One meter"). */
+  --usage-stack-track: var(--meter-track);
+  --usage-stack-ink: var(--meter-fill);
   --usage-stack-ink-quiet: var(--text-muted);
-  --usage-total-height-small: var(--spacing-xs);
-  --usage-total-height-large: var(--spacing-lg);
+  --usage-total-height-small: var(--meter-height);
+  --usage-total-height-large: var(--meter-height-large);
   --usage-cap-size: var(--spacing-xl);
   --usage-cap-size-large: var(--spacing-2xl);
-  --usage-row-bar-width: 6em;
-  --usage-row-left-width: 7.5em;
-  --usage-row-state-width: 9.5em;
+  --usage-row-bar-width: 4.5em;
+  --usage-row-left-width: 5.5em;
+  --usage-row-state-width: 9.75em;
   --usage-row-refill-width: 5.5em;
+  /* The action column ("Use for new work", "Sign in"), held open on every
+     row of a list that has one; the chevron's 14px icon after it. */
+  --usage-row-action-width: 8em;
+  --usage-row-chevron: 14px; /* css-ok: the chevron icon's own size */
   --usage-hero-headline: var(--font-size-display);
 }
 
@@ -78,8 +83,7 @@
   margin-block-end: var(--spacing-2xs);
   overflow: hidden;
   background: var(--usage-stack-track);
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 var(--border-width-default) var(--border-subtle);
+  border-radius: var(--meter-radius);
 }
 
 .usage-used__fill {
@@ -94,7 +98,7 @@
 
 .usage-used[data-tone='high'] .usage-used__fill,
 .usage-used[data-tone='out'] .usage-used__fill {
-  background: var(--accent-warning);
+  background: var(--meter-fill-high);
 }
 
 .usage-glance__label {
@@ -410,15 +414,14 @@
   position: relative;
   display: block;
   width: 100%;
-  height: var(--spacing-sm);
+  height: var(--meter-height-large);
   /* What is left: the plain track. */
   background: var(--usage-stack-track);
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 var(--border-width-default) var(--border-subtle);
+  border-radius: var(--meter-radius);
 }
 
 .usage-pacebar[data-size='small'] {
-  height: var(--spacing-xs);
+  height: var(--meter-height);
 }
 
 /* What is used: solid ink, filling with use. */
@@ -628,13 +631,11 @@
   height: var(--usage-total-height-small);
   overflow: hidden;
   background: var(--usage-stack-track);
-  border-radius: var(--radius-pill);
+  border-radius: var(--meter-radius);
 }
 
 .usage-total[data-size='large'] {
   height: var(--usage-total-height-large);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-input-inset);
 }
 
 .usage-total__fill {
@@ -739,7 +740,7 @@
   grid-template-columns:
     var(--usage-cap-size) minmax(0, 1fr) var(--usage-row-bar-width)
     var(--usage-row-left-width) var(--usage-row-state-width) var(--usage-row-refill-width)
-    max-content;
+    var(--usage-row-chevron);
   align-items: center;
   gap: var(--spacing-md);
   width: 100%;
@@ -827,10 +828,10 @@
 .usage-row__bar {
   position: relative;
   display: block;
-  height: var(--spacing-xs);
+  height: var(--meter-height);
   overflow: hidden;
   background: var(--usage-stack-track);
-  border-radius: var(--radius-pill);
+  border-radius: var(--meter-radius);
 }
 
 .usage-row[data-unread] .usage-row__bar {
@@ -878,49 +879,46 @@
   color: var(--text-muted);
 }
 
-/* A signed-out row's Sign in, over its empty refill column (outside the row's
-   button, so it is its own control). */
+/* The action column. Empty unless some row in the list has an action
+   ("Use for new work", "Sign in"); then every row holds it open, so the
+   pills, figures and refill chips stay in one column. The action is
+   outside the row's button (its own control), laid over that column. */
+.usage-row__slot {
+  display: none;
+}
+
+.usage-rows__list:has(.usage-row__action) .usage-row {
+  grid-template-columns:
+    var(--usage-cap-size) minmax(0, 1fr) var(--usage-row-bar-width)
+    var(--usage-row-left-width) var(--usage-row-state-width) var(--usage-row-refill-width)
+    var(--usage-row-action-width) var(--usage-row-chevron);
+}
+
+.usage-rows__list:has(.usage-row__action) .usage-row__slot {
+  display: block;
+}
+
 .usage-row__item {
   position: relative;
 }
 
-.usage-row__sign-in {
+.usage-row__action {
   position: absolute;
   top: 50%;
-  right: calc(var(--spacing-lg) + var(--spacing-md) + 14px); /* css-ok: past the 14px chevron */
+  right: calc(var(--spacing-lg) + var(--usage-row-chevron) + var(--spacing-md));
+  max-width: var(--usage-row-action-width);
   transform: translateY(-50%);
 }
 
-/* Under a row: who uses it, and switching new work to it. The one new work
-   starts on says so in strong ink with a tick: unmistakable, never accent. */
-.usage-row__foot {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  min-height: var(--spacing-xl);
-  padding: 0 var(--spacing-lg) var(--spacing-md)
-    calc(var(--spacing-lg) + var(--usage-cap-size) + var(--spacing-md));
-  margin-top: calc(var(--spacing-xs) * -1);
+/* Quiet until the row is looked at: muted ink, the full ink on the row's
+   hover or focus, so a list of them reads as one column, not a wall of
+   buttons. Always there for the keyboard and VoiceOver. */
+.usage-row__action.button--ghost {
+  color: var(--text-secondary);
 }
 
-.usage-row__users {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: var(--font-size-body-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-row__current {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: var(--spacing-3xs);
+.usage-row__item:is(:hover, :focus-within) .usage-row__action.button--ghost {
   color: var(--text-primary);
-  font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-label);
 }
 
 /* Runs on: each agent and the account it runs on, changed in place. */
@@ -964,11 +962,20 @@
     grid-template-columns: var(--usage-cap-size) minmax(0, 1fr) max-content max-content;
   }
 
+  .usage-rows__list:has(.usage-row__action) .usage-row {
+    grid-template-columns:
+      var(--usage-cap-size) minmax(0, 1fr) max-content max-content
+      var(--usage-row-action-width);
+  }
+
   .usage-row__bar,
   .usage-row__refill,
-  .usage-row__chevron,
-  .usage-row__sign-in {
+  .usage-row__chevron {
     display: none;
+  }
+
+  .usage-row__action {
+    right: var(--spacing-lg);
   }
 }
 
@@ -1103,7 +1110,7 @@
 .usage-table__share {
   position: relative;
   flex: 0 1 var(--usage-row-bar-width);
-  height: var(--spacing-2xs);
+  height: var(--meter-height);
   margin-left: auto;
   overflow: hidden;
   background: var(--usage-stack-track);

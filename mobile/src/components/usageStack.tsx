@@ -23,6 +23,7 @@ import {
   ADD_ON_MAC,
   glanceUsed,
   NEW_WORK_HERE,
+  NEW_WORK_PILL,
   usersLine,
   type RunsOnRow,
   OUT_OF_USAGE,
@@ -39,7 +40,7 @@ import {
   usedTone,
 } from '@shipstudio/companion-protocol';
 import { makeStyles, useColors, useLargeText } from '../lib/appearance';
-import { depthOf, iconSize, keySize, PRESSED, radius, space, type Palette } from '../lib/theme';
+import { depthOf, iconSize, keySize, meter, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { AgentKey } from './AgentKey';
 import { Button, Icon, IconButton, Segmented, StatusPill, T } from './ui';
 
@@ -400,8 +401,8 @@ export function AccountRows({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${placeLabel(k, all)}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
-                refill ? `, refills in ${refill}` : ''
-              }`}
+                onUse && current ? `, ${NEW_WORK_HERE.toLowerCase()}` : ''
+              }${refill ? `, refills in ${refill}` : ''}`}
               onPress={() => onOpen(k)}
               style={({ pressed }) => [styles.accountRow, pressed && PRESSED]}
             >
@@ -446,9 +447,16 @@ export function AccountRows({
                   )}
                 </View>
                 <View style={styles.rowLine}>
+                  {/* The account new work starts on says so where its state is. */}
                   <StatusPill
                     tone={pillOf(k)}
-                    label={k.state === 'out' ? OUT_OF_USAGE : k.stateLabel}
+                    label={
+                      onUse && current
+                        ? NEW_WORK_PILL
+                        : k.state === 'out'
+                          ? OUT_OF_USAGE
+                          : k.stateLabel
+                    }
                   />
                   <View style={styles.grow} />
                   {refill && <RefillChip text={refill} />}
@@ -461,38 +469,18 @@ export function AccountRows({
               </View>
               <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
             </Pressable>
-            {/* Outside the row's button: a button can't hold another. */}
-            {onUse && (current || k.canUse) && (
+            {/* Outside the row's button: a button can't hold another. Under
+                the row's words, in the same column, never floated apart. */}
+            {onUse && !current && k.canUse && (
               <View style={styles.foot}>
-                {current && (
-                  <View style={styles.current}>
-                    <Icon
-                      name="checkmark"
-                      size={iconSize.micro}
-                      color={colors.textStrong}
-                      fallback={
-                        <T variant="caption" color={colors.textStrong}>
-                          ✓
-                        </T>
-                      }
-                    />
-                    <T variant="small" color={colors.textStrong}>
-                      {NEW_WORK_HERE}
-                    </T>
-                  </View>
-                )}
-                {!current && (
-                  <View style={styles.useRow}>
-                    <Button
-                      title={USE_THIS_ONE_NOW}
-                      variant="secondary"
-                      size="compact"
-                      disabled={busy}
-                      accessibilityLabel={`${USE_THIS_ONE_NOW}: ${k.name}`}
-                      onPress={() => onUse(k)}
-                    />
-                  </View>
-                )}
+                <Button
+                  title={USE_THIS_ONE_NOW}
+                  variant="secondary"
+                  size="compact"
+                  disabled={busy}
+                  accessibilityLabel={`${USE_THIS_ONE_NOW}: ${k.name}`}
+                  onPress={() => onUse(k)}
+                />
               </View>
             )}
           </View>
@@ -960,9 +948,8 @@ function ordinal(n: number): string {
 }
 
 const useStyles = makeStyles((colors) => ({
-  current: { flexDirection: 'row', alignItems: 'center', gap: space['2xs'] },
-  useRow: { flexDirection: 'row' },
   foot: {
+    flexDirection: 'row',
     marginTop: -space.xs,
     paddingBottom: space.md,
     paddingLeft: space.lg + space.xl + space.md,
@@ -1024,9 +1011,9 @@ const useStyles = makeStyles((colors) => ({
   rowBody: { flex: 1, minWidth: 0, gap: space.sm },
   rowLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   miniBar: {
-    height: space.xs,
+    height: meter.height,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceControl,
+    backgroundColor: colors.meterTrack,
     overflow: 'hidden',
   },
   table: { gap: space['2xs'] },
@@ -1040,12 +1027,12 @@ const useStyles = makeStyles((colors) => ({
   numNarrow: { width: space['2xl'] * 2, textAlign: 'right', fontVariant: ['tabular-nums'] },
   total: {
     alignSelf: 'stretch',
-    height: space.tight,
+    height: meter.height,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceControl,
+    backgroundColor: colors.meterTrack,
     overflow: 'hidden',
   },
-  segTall: { height: space.md, borderRadius: radius.sm },
+  segTall: { height: meter.large },
   segEmpty: {
     backgroundColor: colors.surfaceApp,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1112,10 +1099,10 @@ const useStyles = makeStyles((colors) => ({
   timelineMid: { flex: 1, textAlign: 'center' },
   agentCell: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   share: {
-    height: space['3xs'] * 2,
+    height: meter.height,
     marginTop: space['2xs'],
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceControl,
+    backgroundColor: colors.meterTrack,
     overflow: 'hidden',
   },
   shareFill: { backgroundColor: colors.textMuted },
@@ -1126,9 +1113,9 @@ const useStyles = makeStyles((colors) => ({
     borderTopColor: colors.borderSubtle,
   },
   bar: {
-    height: space.xs,
+    height: meter.height,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceControl,
+    backgroundColor: colors.meterTrack,
     overflow: 'hidden',
   },
   even: { position: 'absolute', top: 0, bottom: 0, width: space['3xs'] },

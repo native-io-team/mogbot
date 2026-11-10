@@ -203,10 +203,13 @@ describe('Usage view', () => {
     expect(within(hero).getByRole('meter')).toHaveAttribute('aria-valuenow', '38');
     expect(within(hero).queryAllByRole('button')).toHaveLength(0);
     expect(hero).toHaveTextContent('1 account not read yet, not counted');
-    await waitFor(() => expect(rows()[0]).toHaveTextContent('In use'));
-    // The one new work starts on is unmistakable; the other offers the switch.
+    await waitFor(() => expect(rows()[0]).toHaveAccessibleName(/In use/));
+    // The one new work starts on says so in its pill; the other offers the
+    // switch, beside its row's button rather than inside it.
     const items = document.querySelectorAll('.usage-row__item');
-    expect(items[0]).toHaveTextContent('New work starts here');
+    expect(items[0]).toHaveTextContent('Starts new work');
+    expect(rows()[0]).toHaveAccessibleName(/new work starts here/);
+    expect(within(items[0] as HTMLElement).queryByRole('button', { name: /^Use for new work/ })).toBeNull();
     expect(
       within(items[1] as HTMLElement).getByRole('button', { name: /^Use for new work/ })
     ).toBeInTheDocument();

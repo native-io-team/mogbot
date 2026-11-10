@@ -807,6 +807,11 @@ describe('who uses an account, and switching', () => {
     expect(g.keys[0].usedBy).toEqual(['Finance', 'Chief']);
     expect(usersLine(g.keys[0])).toBe('Used by Finance and Chief this week');
     expect(usersLine(g.keys[1])).toBe('Only Riley runs here');
+    // A row's short line: two names whole, three or more as the first and a count.
+    expect(usersLine(g.keys[0], { short: true })).toBe('Used by Finance and Chief this week');
+    const many = { pinnedBy: [], usedBy: ['A', 'B', 'C', 'D'] };
+    expect(usersLine(many, { short: true })).toBe('Used by A and 3 more this week');
+    expect(usersLine(many)).toBe('Used by A, B, C and 1 more this week');
   });
 
   it('lists each agent of an engine with two accounts and what it runs on', () => {
@@ -894,8 +899,21 @@ describe('glanceUsed (the glance, said as what is used)', () => {
     const u = glanceUsed({ total: total(92), tone: 'calm', row: row('92% left this week') });
     expect(u.used).toBe(8);
     expect(u.line).toBe('8% used · refills in 6d');
-    expect(u.detail).toBe('8% used this week. Refills in 6d 2h');
+    expect(u.detail).toBe('8% used this week · refills in 6d 2h');
     expect(u.tone).toBe('calm');
+  });
+
+  it('says each thing once: never "2 accounts" after "across 2 accounts"', () => {
+    const u = glanceUsed({
+      total: total(46, { counted: 2, across: 'across 2 accounts', refill: { in: '3d 18h', at: 'Fri', account: 'Work' } }),
+      tone: 'calm',
+      row: { ...row('54% used', 'Refills in 3d 18h'), count: '2 accounts', notRead: '1 account not read yet' },
+    });
+    expect(u.detail).toBe('54% used across 2 accounts · 1 account not read yet · refills in 3d 18h');
+    // No phrase of two or more words appears twice.
+    const words = u.detail.toLowerCase().replace(/[·.]/g, ' ').split(/\s+/).filter(Boolean);
+    const pairs = words.slice(1).map((w, i) => `${words[i]} ${w}`);
+    expect(new Set(pairs).size).toBe(pairs.length);
   });
 
   it('takes the warning role from 80% used', () => {
