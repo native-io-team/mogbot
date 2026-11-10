@@ -13,7 +13,7 @@ export const PAIR_YOUR_PHONE = 'Pair your phone';
 /** Where that row is on the desk. */
 export const PAIR_WHERE = 'at the bottom of the sidebar';
 
-/** The phone's one big button on its first screen. */
+/** The phone's big button that opens the camera (the step that sends the person to the desk). */
 export const SCAN_THE_CODE = 'Scan the code';
 
 /** The phone's button on its confirm screen. */
@@ -46,15 +46,14 @@ export const TAILSCALE_PHONE_TITLE = 'Turn on Tailscale on this phone';
 /** The same step, said from the desk about the phone. */
 export const TAILSCALE_YOUR_PHONE_TITLE = 'Turn on Tailscale on your phone';
 export const TAILSCALE_LINE = 'A free app that links your phone and your Mac privately.';
-export const SAME_ACCOUNT_TITLE = 'Same Tailscale account on both';
+/** Said wherever the phone's Tailscale is asked for: the one way pairing fails silently. */
+export const SAME_ACCOUNT_LINE = 'Sign in with the same account as your Mac.';
 
 /** The desk's switch that lets a phone reach it. */
 export const PHONE_ACCESS_TITLE = 'Turn on phone access';
 
-/** The phone's step that sends the person to the desk. */
+/** The phone's step that sends the person to the desk; its button is SCAN_THE_CODE. */
 export const CLICK_PAIR_TITLE = `On your Mac, click “${PAIR_YOUR_PHONE}” ${PAIR_WHERE}`;
-/** Its answer: the code is up. */
-export const SEE_THE_CODE = 'I see the code';
 
 /** The one line beside the desk's QR. */
 export const SCAN_LINE = `On your phone, open ${APP_NAME} and tap ${SCAN_THE_CODE}`;

@@ -266,15 +266,15 @@ function optionalParts(): Scenario[] {
     flow(
       'onboarding-agents-link',
       'agentsLink',
-      '3b. Turn on the private link',
-      '"Turn on the private link", one line (this Mac stays awake while remote access is on; keep it plugged in), a big "Turn on remote access", Skip for now.',
+      '3b. Turn on remote access',
+      '"Turn on remote access", one line (it lets your assistant reach your agents; the Mac stays awake, keep it plugged in), a big "Turn it on", Skip for now.',
       remote({ tailscale: TS })
     ),
     flow(
       'onboarding-agents-link-funnel',
       'agentsLink',
       '3b. The link needs Funnel switched on',
-      'An amber "Not done yet. One switch in Tailscale is off: Funnel." with why, "Open Tailscale ↗" and Check again. No big button.',
+      'An amber "Not done yet. Tailscale needs your OK to let your assistant in." with the fix (turn on Funnel on the Tailscale page), "Open the Tailscale page ↗" (which takes focus, so Enter opens it and never skips) and Check again. No big button.',
       remote({
         tailscale: TS,
         enabled: true,
@@ -286,7 +286,7 @@ function optionalParts(): Scenario[] {
       'onboarding-agents-link-live',
       'agentsLink',
       '3b. The link is live',
-      'A green-ticked "Done. The private link is live." and a big Continue.',
+      'A green-ticked "Done. Remote access is on." and a big Continue.',
       remote(REMOTE_ON)
     ),
     flow(
@@ -321,7 +321,7 @@ function optionalParts(): Scenario[] {
       'onboarding-agents-started',
       'agentsStart',
       '3d. The assistant asked to start',
-      'A green-ticked "Done. Grok is asking to start. You’ll say OK in your Chief of Staff’s chat, next." and a big Continue; no message box.',
+      '"Grok is ready to bring your agents", one line (OK it in the Chief of Staff’s chat next, choose which come over), a green-ticked "Done. Grok is asking to start the import." and a big Continue; no message box, and no title promising one.',
       {
         ...remote({ ...REMOTE_ON, everConnected: true }),
         agents_import_talk: gateWith({ state: 'awaiting_consent' }),

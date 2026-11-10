@@ -182,7 +182,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
     const check: CheckResult | null = !connection
       ? { state: 'checking', line: 'Checking remote access…' }
       : connection.kind === 'ready'
-        ? { state: 'pass', line: 'The private link is live.' }
+        ? { state: 'pass', line: 'Remote access is on.' }
         : connection.kind === 'off'
           ? null
           : connection.kind === 'publishing' || connection.kind === 'starting'
@@ -193,9 +193,9 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
             : connection.kind === 'approveFunnel'
               ? {
                   state: 'fail',
-                  line: 'One switch in Tailscale is off: Funnel.',
-                  fix: 'It lets your assistant reach this Mac. Turn it on, then come back.',
-                  action: { label: 'Open Tailscale', url: connection.url },
+                  line: 'Tailscale needs your OK to let your assistant in.',
+                  fix: 'Open the Tailscale page, turn on Funnel there, then come back. This screen notices by itself.',
+                  action: { label: 'Open the Tailscale page', url: connection.url },
                 }
               : connection.kind === 'unreachable'
                 ? { state: 'fail', line: 'The link isn’t reachable yet.', fix: connection.detail }
@@ -217,8 +217,8 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
       <FlowShell
         step={step}
         onBack={onBack}
-        title="Turn on the private link"
-        lede="Your assistant reaches your agents through this Mac, so it stays awake while remote access is on. Keep it plugged in while you’re away."
+        title="Turn on remote access"
+        lede="It lets your assistant reach your agents on this Mac. The Mac stays awake while it’s on, so keep it plugged in while you’re away."
         primary={
           off ? (
             <Primary
@@ -230,7 +230,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
                 })
               }
             >
-              Turn on remote access
+              Turn it on
             </Primary>
           ) : linkLive ? (
             <Primary onClick={() => go('agentsConnect')}>Continue</Primary>
@@ -291,7 +291,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
   const check: CheckResult | null = started
     ? {
         state: 'pass',
-        line: `${talk.source} is asking to start. You’ll say OK in your Chief of Staff’s chat, next.`,
+        line: `${talk.source} is asking to start the import.`,
       }
     : armed
       ? { state: 'checking', line: 'Waiting for your assistant to start the import…' }
@@ -300,11 +300,19 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
     <FlowShell
       step={step}
       onBack={onBack}
-      title={armed ? 'Send your assistant this message' : 'Start the import'}
+      title={
+        started
+          ? `${talk.source} is ready to bring your agents`
+          : armed
+            ? 'Send your assistant this message'
+            : 'Start the import'
+      }
       lede={
-        armed
-          ? 'It tells your Chief of Staff what each agent does. You see the plan, and choose what to import, before anything is created.'
-          : 'Start lets one import begin. Then you send your assistant a message, and you see the plan before anything is created.'
+        started
+          ? 'Next, your Chief of Staff asks you to OK it in its chat. You choose which agents come over before anything is created.'
+          : armed
+            ? 'It tells your Chief of Staff what each agent does. You see the plan, and choose what to import, before anything is created.'
+            : 'Your assistant can only start an import after you press Start. Then you send it one message, and you choose what comes over before anything is created.'
       }
       primary={
         started ? (

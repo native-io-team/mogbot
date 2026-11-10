@@ -21,13 +21,13 @@ import {
 } from '../src/lib/pairSteps';
 
 describe('pairSteps', () => {
-  it('walks mac → tailscale → account → code, then the camera', () => {
-    expect([...INTRO_STEPS]).toEqual(['mac', 'tailscale', 'account', 'code']);
+  it('walks mac → tailscale → code, then the camera', () => {
+    expect([...INTRO_STEPS]).toEqual(['mac', 'tailscale', 'code']);
     expect(nextIntro('mac')).toBe('tailscale');
-    expect(nextIntro('account')).toBe('code');
+    expect(nextIntro('tailscale')).toBe('code');
     expect(nextIntro('code')).toBeNull();
     expect(prevIntro('mac')).toBeNull();
-    expect(prevIntro('code')).toBe('account');
+    expect(prevIntro('code')).toBe('tailscale');
   });
 
   it('treats "Not yet" as the first question still, and goes on to Tailscale', () => {
@@ -37,14 +37,14 @@ describe('pairSteps', () => {
   });
 
   it('counts the camera and both answers on the bar', () => {
-    expect(PAIR_STAGES.length).toBe(7);
-    expect(progressOf('mac')).toEqual({ n: 1, of: 7 });
-    expect(progressOf('allow')).toEqual({ n: 7, of: 7 });
+    expect(PAIR_STAGES.length).toBe(6);
+    expect(progressOf('mac')).toEqual({ n: 1, of: 6 });
+    expect(progressOf('allow')).toEqual({ n: 6, of: 6 });
   });
 
   it('resumes where it stopped, and skips what a paired phone has done', () => {
     expect(startStep(null, false)).toBe('mac');
-    expect(startStep('account', false)).toBe('account');
+    expect(startStep('tailscale', false)).toBe('tailscale');
     expect(startStep(null, true)).toBe('code');
     expect(startStep('tailscale', true)).toBe('code');
   });
