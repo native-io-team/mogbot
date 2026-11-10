@@ -106,10 +106,12 @@ pub(crate) fn parse_block(raw: &str, label: &str) -> Result<Value, String> {
     } else if err.to_string().contains("trailing comma") {
         let line = comma_line(raw, err.line(), err.column()).unwrap_or(err.line());
         format!("{label} has a trailing comma at line {line} (a comma right before a }} or ]). Delete that comma, or ask the assistant to send it again as valid JSON.")
+    } else if err.to_string().contains("recursion limit") {
+        format!("{label} is nested too deeply to be an export. Ask the assistant to send it again in the shape it was asked for.")
     } else {
         let detail = err.to_string();
         let detail = detail.split(" at line").next().unwrap_or(&detail);
-        format!("{label} isn't valid JSON at {at}: {detail}.")
+        format!("{label} isn't valid JSON at {at}: {detail}. Ask the assistant to send it again as valid JSON.")
     })
 }
 

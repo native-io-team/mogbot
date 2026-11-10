@@ -205,8 +205,8 @@ fn clean_entry(name: &str) -> Option<String> {
 
 fn from_zip(path: &Path) -> Result<Files, String> {
     let file = std::fs::File::open(path).map_err(|e| format!("Couldn't open it: {e}"))?;
-    let mut zip =
-        zip::ZipArchive::new(file).map_err(|_| "That isn't a readable zip.".to_string())?;
+    let mut zip = zip::ZipArchive::new(file)
+        .map_err(|_| format!("That isn't a readable zip. {EXPORT_AGAIN}"))?;
     let mut files = Files::default();
     let mut total = 0;
     for i in 0..zip.len().min(MAX_ENTRIES) {
@@ -248,7 +248,7 @@ fn from_tar_gz(path: &Path) -> Result<Files, String> {
     let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(file));
     let entries = archive
         .entries()
-        .map_err(|_| "That isn't a readable .tar.gz.".to_string())?;
+        .map_err(|_| format!("That isn't a readable .tar.gz. {EXPORT_AGAIN}"))?;
     let mut files = Files::default();
     let mut total = 0;
     for (n, entry) in entries.enumerate() {
@@ -256,7 +256,9 @@ fn from_tar_gz(path: &Path) -> Result<Files, String> {
             break;
         }
         let Ok(entry) = entry else {
-            return Err("That .tar.gz is damaged part way through.".into());
+            return Err(format!(
+                "That .tar.gz is damaged part way through. {EXPORT_AGAIN}"
+            ));
         };
         if !entry.header().entry_type().is_file() {
             continue;
@@ -308,6 +310,17 @@ fn from_dir(root: &Path) -> Files {
                     .unwrap_or(true)
         });
     for entry in walk.take(MAX_ENTRIES).flatten() {
+        // Links are never followed (a loop, or a way out of the folder),
+        // but said, so nothing is left out quietly.
+        if entry.file_type().is_symlink() {
+            if let Ok(rel) = entry.path().strip_prefix(root) {
+                let rel = rel.to_string_lossy().replace('\\', "/");
+                if wanted(&rel) {
+                    files.skipped.push(format!("{rel} (a link, not followed)"));
+                }
+            }
+            continue;
+        }
         if !entry.file_type().is_file() {
             continue;
         }
@@ -331,14 +344,39 @@ fn from_dir(root: &Path) -> Files {
     files
 }
 
+/// The fix for a file that can't be read as it is.
+const EXPORT_AGAIN: &str = "Export again from the app it came from, or use Paste a reply instead.";
+const PICK_EXPORT: &str = "Pick the export itself (.json, .zip or .tar.gz) or the app's folder, or use Paste a reply instead.";
+const TOO_LARGE: &str = "That file is over 4 MB, too large to be one export. Pick the folder it came in (each file there is read on its own), or use Paste a reply instead.";
+
+/// One picked file, never more than [`MAX_FILE_BYTES`] of it read, whatever
+/// its size claims (a link, a device, a file still growing).
+fn read_capped(path: &Path) -> Result<Vec<u8>, String> {
+    let file = std::fs::File::open(path)
+        .map_err(|_| format!("That file couldn't be opened. {PICK_EXPORT}"))?;
+    let mut bytes = Vec::new();
+    file.take(MAX_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| format!("That file couldn't be read. {PICK_EXPORT}"))?;
+    if bytes.len() as u64 > MAX_FILE_BYTES {
+        return Err(TOO_LARGE.into());
+    }
+    Ok(bytes)
+}
+
 /// Everything in what the user picked, read by its format.
 pub fn read(path: &Path) -> Export {
     let mut out = Export::default();
-    let meta = match std::fs::symlink_metadata(path) {
+    // The user picked this path, so a link they picked is followed; what
+    // is read through it is still capped by what is read, never by what
+    // the link's own size says.
+    let meta = match std::fs::metadata(path) {
         Ok(m) => m,
         Err(_) => {
-            out.problems
-                .push("That file or folder isn't there any more.".into());
+            out.problems.push(
+                "That file or folder isn't there any more. Pick it again from where it is now."
+                    .into(),
+            );
             return out;
         }
     };
@@ -359,19 +397,31 @@ pub fn read(path: &Path) -> Export {
     {
         if denied(&name) {
             Err("That file holds credentials, so it isn't read. Pick the export or the folder instead.".into())
+        } else if !meta.is_file() {
+            Err(format!(
+                "That isn't a file an export can be read from. {PICK_EXPORT}"
+            ))
         } else if meta.len() > MAX_FILE_BYTES {
-            Err("That file is too large to be an export.".into())
+            Err(TOO_LARGE.into())
         } else {
-            std::fs::read(path)
-                .map_err(|e| format!("Couldn't read it: {e}"))
-                .map(|bytes| {
-                    let mut f = Files::default();
-                    f.add(name.clone(), bytes, &mut 0);
-                    f
-                })
+            read_capped(path).and_then(|bytes| {
+                if bytes.iter().all(u8::is_ascii_whitespace) {
+                    return Err(format!("That file is empty. {EXPORT_AGAIN}"));
+                }
+                let mut f = Files::default();
+                f.add(name.clone(), bytes, &mut 0);
+                if f.list.is_empty() {
+                    return Err(format!(
+                        "That file isn't text, so it isn't an export. {PICK_EXPORT}"
+                    ));
+                }
+                Ok(f)
+            })
         }
     } else {
-        Err("That isn't a kind of file an export comes in (.json, .zip, .tar.gz, .md or .txt), or a folder.".into())
+        Err(format!(
+            "That isn't a kind of file an export comes in (.json, .zip, .tar.gz, .md or .txt). {PICK_EXPORT}"
+        ))
     };
     match files {
         Ok(files) => {
@@ -402,8 +452,10 @@ pub fn read_files(files: &Files, out: &mut Export) {
                     }
                     _ => {}
                 },
-                Err(e) => {
-                    out.problems.push(format!("{path} isn't valid JSON: {e}."));
+                Err(_) => {
+                    if let Err(why) = super::paste::parse_block(text, path) {
+                        out.problems.push(why);
+                    }
                     return;
                 }
             }

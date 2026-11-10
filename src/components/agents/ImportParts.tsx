@@ -234,6 +234,10 @@ export function ImportProblems({ title, items }: { title: string; items: ReactNo
 export const PASTE_FORMAT_PROBLEM =
   'That reply isn’t in the format we asked for — copy the message again and ask your assistant to reply with just the code block.';
 
+/** The same, for a file or folder: the way out is a fresh export, or pasting. */
+export const FILE_FORMAT_PROBLEM =
+  'This can’t be read as an export. Export it again from the app it came from, or use Paste a reply instead.';
+
 /**
  * The problem itself, when it is one already said in plain words with its own
  * fix (a reply cut off: send that part again; no JSON: paste the whole reply;
@@ -244,7 +248,7 @@ export function pasteProblemInWords(problems: string[]): string | null {
   if (problems.length !== 1) return null;
   const [p] = problems;
   const parserLine = /\bline \d|valid JSON|should be|"[a-z_]+"/.test(p);
-  const saysTheFix = /\b(Ask|Paste|Send)\b/.test(p);
+  const saysTheFix = /\b(Ask|Paste|Send|Pick|Export again|Answer)\b/.test(p);
   return !parserLine && saysTheFix ? p : null;
 }
 
@@ -254,14 +258,21 @@ export function pasteProblemInWords(problems: string[]): string | null {
  * field that should be true or false) are for whoever wants them, behind
  * "Show details".
  */
-export function PasteProblems({ problems }: { problems: string[] }) {
+export function PasteProblems({
+  problems,
+  fallback = PASTE_FORMAT_PROBLEM,
+}: {
+  problems: string[];
+  /** The one sentence when the problems don't say their own fix. */
+  fallback?: string;
+}) {
   const [open, setOpen] = useState(false);
   const own = pasteProblemInWords(problems);
   return (
     <div className="agents-import-problems" role="alert">
       <WarningIcon size={14} className="agents-import-problems__icon" />
       <div>
-        <p className="agents-import-problems__title">{own ?? PASTE_FORMAT_PROBLEM}</p>
+        <p className="agents-import-problems__title">{own ?? fallback}</p>
         {own === null && (
           <TextButton
             tabIndex={0}
@@ -325,12 +336,12 @@ export function ExportPreview({
   const facts = about.reduce((n, [, count]) => n + count, 0);
   return (
     <div className="agents-import-preview" aria-live="polite">
-      {problems.length > 0 &&
-        (pasted ? (
-          <PasteProblems problems={problems} />
-        ) : (
-          <ImportProblems title="This can’t be read as it is" items={problems} />
-        ))}
+      {problems.length > 0 && (
+        <PasteProblems
+          problems={problems}
+          fallback={pasted ? PASTE_FORMAT_PROBLEM : FILE_FORMAT_PROBLEM}
+        />
+      )}
       {/* First, so going round again is the obvious next step. */}
       {pasted && gaps.length > 0 && followUp && (
         <div className="agents-import-followup">

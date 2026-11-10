@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { PASTE_FORMAT_PROBLEM, PasteProblems, pasteProblemInWords } from './ImportParts';
+import {
+  FILE_FORMAT_PROBLEM,
+  PASTE_FORMAT_PROBLEM,
+  PasteProblems,
+  pasteProblemInWords,
+} from './ImportParts';
 
 describe('a pasted reply that can’t be read', () => {
   const problems = [
@@ -40,5 +45,31 @@ describe('a pasted reply that can’t be read', () => {
         'There’s no JSON in what you pasted. Paste the assistant’s whole reply, including its ```json block.',
       ])
     ).toMatch(/^There’s no JSON/);
+  });
+});
+
+describe('an export file or folder that can’t be read', () => {
+  it('says one line with the way out, the parser’s lines behind Show details', () => {
+    render(
+      <PasteProblems
+        problems={[
+          'export.json isn’t valid JSON at line 3: expected value. Ask the assistant to send it again as valid JSON.',
+          '“A”: "is_main" should be true or false, not text.',
+        ]}
+        fallback={FILE_FORMAT_PROBLEM}
+      />
+    );
+    expect(screen.getByText(FILE_FORMAT_PROBLEM)).toBeVisible();
+    expect(screen.queryByText(/is_main/)).toBeNull();
+  });
+
+  it('a file problem that says its own fix is the line', () => {
+    for (const line of [
+      'That file is empty. Export again from the app it came from, or use Paste a reply instead.',
+      'That file is over 4 MB, too large to be one export. Pick the folder it came in (each file there is read on its own), or use Paste a reply instead.',
+      'That isn’t a readable zip. Export again from the app it came from, or use Paste a reply instead.',
+    ]) {
+      expect(pasteProblemInWords([line])).toBe(line);
+    }
   });
 });
