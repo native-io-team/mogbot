@@ -4848,15 +4848,16 @@ function.
 **The Usage view** (`AgentsUsageView`, `USAGE_ID`; opened by that row, ⌘K
 "Usage and accounts…", "Switch account…", "Add an account…"). Two levels.
 *The overview*: the total as a hero ("72% left across 2 Max accounts",
-"Next refill in 2d 4h · sam@example.com, Thu 3:15 AM", the bar with each
-account named under its segment and opening it); a calm bar when every
+"Next refill in 2d 4h · sam@example.com, Thu 3:15 AM", the bar, each
+segment opening its account; the rows below name them, so the bar doesn't); a calm bar when every
 account is nearly out (add an account, carry on with the other engine when
 it has room, or "Wait until …"); "Accounts", one row each in the order work
 tries them (`AccountRow`: keycap, name, a small bar, what it adds, In use /
 Next / "Out of usage", refill countdown; a signed-out row has its own Sign in
 beside it, the same sign-in as its page), with "Add an account" at the
-heading's right. With one account the hero has no eyebrow and its bar no name or
-room under it: the row says those once; "How agents use your limits" (the mode as a hugging
+heading's right. With one account the hero has no eyebrow. The hero's words
+(`totalWords`) are the phone's hero's and the chat header popover's too, so
+those three never word the total or its refill differently; "How agents use your limits" (the mode as a hugging
 control and its one line, then, when a window on the account in use resets
 soon with at least 25% left, a nudge: "62% of Work's week refills in 9 h",
 the first waiting items of the list of ideas for leftover usage, and "Give agents

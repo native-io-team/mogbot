@@ -2,7 +2,7 @@
  * Usage, drawn. The total first: one bar made of a segment per real
  * account, in the work order, each filled to what that account adds
  * (`TotalBar`), so 100% and 44% read at a glance as "most of my limit is
- * left". Then each account as one row (`AccountRow`) that opens its own
+ * left"; each segment opens its account. Then each account as one row (`AccountRow`) that opens its own
  * page (`AccountDetail`): its limit cards against pace, who used it, where
  * its usage went, and what to do with it.
  *
@@ -63,19 +63,17 @@ export const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
 
 /**
  * The total as one bar: a segment per account, in the work order, each filled
- * to what it adds. Large, each segment and its label are one button that
- * opens that account; small (the sidebar row), it is a picture.
+ * to what it adds. Large, each segment is a button that opens that account
+ * (its name and room are the account rows under it, never said twice);
+ * small (the sidebar row, the chat's popover), it is a picture.
  */
 export function TotalBar({
   total,
   size = 'small',
   onOpen,
-  labelled = true,
 }: {
   total: UsageTotal;
   size?: 'small' | 'large';
-  /** Each segment's name and room under it (the large bar); off when a row below says it. */
-  labelled?: boolean;
   /** Open an account's page (the large bar). */
   onOpen?: (engine: AgentEngine, id: string) => void;
 }) {
@@ -101,26 +99,10 @@ export function TotalBar({
             className="usage-total__part"
             data-account={s.id}
             aria-label={`${s.words}. Open ${s.name}`}
+            title={s.words}
             onClick={() => onOpen(s.engine, s.id)}
           >
             <Segment left={s.left} state={s.state} tone={s.tone} />
-            {labelled && <span className="usage-total__name">{s.name}</span>}
-            {labelled && (
-              <span className="usage-total__room">
-                <span className="usage-total__left">
-                  {s.left === null ? 'Not read yet' : `${s.left}% left`}
-                </span>
-                {s.refill && (
-                  <span
-                    className="usage-chip"
-                    title={s.refillAt ? `Refills ${s.refillAt}` : undefined}
-                  >
-                    <ResetIcon size={11} aria-hidden />
-                    {s.refill}
-                  </span>
-                )}
-              </span>
-            )}
           </button>
         </div>
       ))}
