@@ -205,6 +205,54 @@ fn grok_bot_export_as_the_hermes_importer_asks_for_it() {
 }
 
 #[test]
+fn a_grok_bot_export_the_bot_wrote_loosely_still_reads() {
+    // The bot writes this file itself, so lists arrive as one string, apps
+    // and skills as bare names, and the cron under another key.
+    let loose = r#"{"format":"grok-bot-export","version":1,"bots":[{
+        "name":"Scout","title":"Research","instructions":"Find sources.",
+        "memories":"- User reads on Sundays\n- Prefers PDFs",
+        "user_facts":"Works in climate policy",
+        "skills":["web-brief", {"name":"cite","description":"Cite","instructions":"APA style."}],
+        "routines":[{"name":"Digest","instruction":"Send it","schedule":"0 9 * * 1"}],
+        "apps":["Linear", {"name":"Notion"}]}]}"#;
+    let mut e = Export::default();
+    read_files(
+        &files_for_test(&[("grok-bot-export-scout.json", loose)]),
+        &mut e,
+    );
+    assert!(e.problems.is_empty(), "{:?}", e.problems);
+    let a = &e.agents[0];
+    assert_eq!(a.memory, "User reads on Sundays\nPrefers PDFs");
+    assert_eq!(e.about["personal"], vec!["Works in climate policy"]);
+    assert!(a.instructions.contains("## Skill: cite"));
+    assert_eq!(a.context, "Skills it had there:\n- web-brief");
+    assert_eq!(a.routines[0].0, "every monday at 09:00");
+    let apps: Vec<&str> = a.apps.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(apps, ["Linear", "Notion"]);
+}
+
+#[test]
+fn a_broken_export_file_says_where_not_that_it_isnt_an_export() {
+    let broken = "{\"format\":\"grok-bot-export\",\"bots\":[\n  {\"name\":\"Scout\"},\n]}";
+    let mut e = Export::default();
+    read_files(
+        &files_for_test(&[("grok-bot-export-scout.json", broken)]),
+        &mut e,
+    );
+    assert_eq!(e.problems.len(), 1, "{:?}", e.problems);
+    let p = &e.problems[0];
+    assert!(
+        p.contains("grok-bot-export-scout.json has a trailing comma at line 2"),
+        "{p}"
+    );
+    assert!(!p.contains("doesn't look like an export"), "{p}");
+    // Something that just isn't an export still says so.
+    let mut other = Export::default();
+    read_files(&files_for_test(&[("notes.md", "# My notes")]), &mut other);
+    assert!(other.problems[0].contains("doesn't look like an export"));
+}
+
+#[test]
 fn openbot_import_zip_manifest() {
     let manifest = r#"{"format":"openbot-agent-import","version":1,
       "source":{"app":"grok-bot","exportedAt":"2026-09-23T10:00:00Z"},

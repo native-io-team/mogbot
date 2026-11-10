@@ -3707,8 +3707,16 @@ the full threat model in docs/remote-access.md):
    plan is with the user the other assistant is told `STATUS: with_user`.
    The playback card expires on a restart (the interview is in memory).
 7. `finish` (once the user says that's everything) posts the review card: each agent ticked, with its role and the
-   first lines of its instructions in view (**Show all** for the rest), its
-   memory, routines (paused) and the logins it asks for a click away; a
+   first lines of its instructions in view (**Show all** for the rest; six
+   lines, three on a card bringing more than five agents, and a briefing
+   written as one long paragraph cut at a word after about 480 characters),
+   its memory, routines (paused) and the logins it asks for a click away.
+   Past five agents a muted tally over the rows says "All 12 ticked" / "9 of
+   12 ticked" with one **Untick all** / **Tick all** (`agents-import-review-many`). Once
+   imported, each name in the card's "Imported …" line that is an agent here
+   opens its chat, as the pills on the import's done screen do and the
+   phone's Import screen's **Say hi to <name>** buttons: an import ends with
+   the user talking to the agents. A
    name already taken (or a lookalike of one) comes in as "<Name> (from
    Grok)" unless the user picks **Replace**, which lists what it does to
    that agent: new instructions (the diff), a fresh conversation (memory
@@ -3825,7 +3833,7 @@ paste), and the phone's Import screen (`agents.import.exportPrompt` /
 
    | From | What's read | Source |
    |---|---|---|
-   | Grok Bot | `{"format": "grok-bot-export", "bots": […]}` (`name`, `title`, `instructions`, `memories`, `user_facts`, `skills`, `routines` with `trigger` / `schedule_cron` / `timezone`, `apps`), one file or several, a `.json` or a reply holding it. Grok Bot has no export of its own: this is the shape the Hermes `agent-importers` plugin asks the bot to write | hermes-official-plugins `agent-importers/grok_bot.py` |
+   | Grok Bot | `{"format": "grok-bot-export", "bots": […]}` (`name`, `title`, `instructions`, `memories`, `user_facts`, `skills`, `routines` with `trigger` / `schedule_cron` / `timezone`, `apps`), one file or several, a `.json` or a reply holding it. Grok Bot has no export of its own: this is the shape the Hermes `agent-importers` plugin asks the bot to write, so the bot's own looser writing is read too: a list as one string (an item a line), apps and skills as bare names (a named-only skill goes in its context), the cron under `cron` or `schedule`. A `.json` that doesn't parse says which file and where ("…has a trailing comma at line 2"), not "doesn't look like an export" | hermes-official-plugins `agent-importers/grok_bot.py` |
    | OpenBot | `openbot-import.json` (`"format": "openbot-agent-import"`, its Grok Bot migration zip, with `agents/<key>/skills/*/SKILL.md`) and `openbot-transfer.json` (`"format": "openbot-instance-transfer"`). Its own agents live in `openbot.db`, which isn't read | nightly-labs/openbot `resources/agent-import/grok-bot/SKILL.md`, `src/main/instance-transfer-manifest.ts` |
    | OpenClaw | A workspace (`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `HEARTBEAT.md`, `MEMORY.md`, `memory/YYYY-MM-DD.md` newest first, `USER.md` as facts about the user), or `~/.openclaw` (`workspace`, `workspace-<id>`, names from `openclaw.json` `agents.entries` or the legacy `agents.list`), or an `openclaw backup` `.tar.gz`. Scheduled jobs live in SQLite since 2026.6.1 and aren't read (the preview says so); a leftover `cron/jobs.json` is | docs.openclaw.ai agent-workspace, multi-agent; repo `docs/cli/cron.md`, `packages/gateway-protocol/src/schema/cron.ts` |
    | Hermes | `~/.hermes` or `profiles/<name>` or a profile export `.tar.gz`: `SOUL.md`, `memories/MEMORY.md` (entries split by `§`), `memories/USER.md`, `skills/<name>/SKILL.md` (names and descriptions), `cron/jobs.json` | hermes-agent `hermes_cli/profiles.py`, `cron/jobs.py` |

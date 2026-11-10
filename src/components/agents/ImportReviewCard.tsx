@@ -30,6 +30,7 @@ import { SegmentedControl } from '../primitives/SegmentedControl';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { requestAgentsIntent } from '../../commands/useAgentsCommands';
 import { useAsyncState } from '../../hooks/useAsyncState';
+import { useAgentsList } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   applyImportReview,
@@ -87,16 +88,37 @@ export function lineDiff(
 
 /** Lines of an agent's instructions shown before "Show all". */
 export const PREVIEW_LINES = 6;
+/** On a card bringing many agents, fewer lines each, so the list stays scannable. */
+export const PREVIEW_LINES_MANY = 3;
+/** More agents than this on one card and each one's instructions are shortened. */
+export const MANY_AGENTS = 5;
+/**
+ * Characters shown before "Show all", for instructions written as one long
+ * paragraph (common in exports): counting lines alone would show it whole.
+ */
+export const PREVIEW_CHARS = 480;
+
+/** The opening of `text`, at most `lines` lines and `chars` characters, cut at a word; null when that's all of it. */
+export function previewOf(text: string, lines: number, chars: number): string | null {
+  let head = text.split('\n').slice(0, lines).join('\n');
+  if (head.length > chars) {
+    const cut = head.slice(0, chars);
+    const space = cut.lastIndexOf(' ');
+    head = (space > chars * 0.6 ? cut.slice(0, space) : cut).trimEnd();
+  }
+  return head.length < text.trimEnd().length ? head : null;
+}
 
 /**
  * An agent's instructions, on the card before anything else about it: the
  * first lines inline and the rest one click away, so what an import would
  * run is read before Import, never hidden behind a row that has to be opened.
  */
-function Instructions({ name, text }: { name: string; text: string }) {
+function Instructions({ name, text, lines }: { name: string; text: string; lines: number }) {
   const [all, setAll] = useState(false);
-  const lines = text.split('\n');
-  const long = lines.length > PREVIEW_LINES;
+  const count = text.split('\n').length;
+  const head = previewOf(text, lines, PREVIEW_CHARS);
+  const long = head !== null;
   return (
     <div className="agent-import-review__instructions">
       {/* Prose, as written: instructions are read, not copied as code. */}
@@ -105,11 +127,12 @@ function Instructions({ name, text }: { name: string; text: string }) {
         data-all={all || undefined}
         aria-label={`${name}’s instructions`}
       >
-        {all || !long ? text : `${lines.slice(0, PREVIEW_LINES).join('\n')}…`}
+        {/* "…" only where a sentence was cut: "changed.…" reads as a typo. */}
+        {all || !long ? text : /[.!?:]$/.test(head) ? head : `${head}…`}
       </p>
       {long && (
         <TextButton onClick={() => setAll((v) => !v)} aria-expanded={all}>
-          {all ? 'Show less' : `Show all ${lines.length} lines`}
+          {all ? 'Show less' : count > 1 ? `Show all ${count} lines` : 'Show all'}
         </TextButton>
       )}
     </div>
@@ -213,6 +236,8 @@ interface RowProps {
   onKeep: (kept: boolean) => void;
   onChoice: (choice: Choice) => void;
   onKeepLogins: (keep: boolean) => void;
+  /** Lines of its instructions shown before "Show all". */
+  previewLines: number;
 }
 
 function ProposalRow({
@@ -225,6 +250,7 @@ function ProposalRow({
   onKeep,
   onChoice,
   onKeepLogins,
+  previewLines,
 }: RowProps) {
   const memory = p.memory.split('\n').filter((l) => l.trim());
   const arrivesAs = p.clash && choice === 'copy' ? copyName(p.name, source) : p.name;
@@ -265,7 +291,11 @@ function ProposalRow({
       role={p.role || undefined}
       counts={counts || (!p.instructions ? 'Name and role only' : undefined)}
       select={{ checked: kept, disabled, onChange: onKeep, label: `Import ${p.name}` }}
-      inline={p.instructions ? <Instructions name={p.name} text={p.instructions} /> : undefined}
+      inline={
+        p.instructions ? (
+          <Instructions name={p.name} text={p.instructions} lines={previewLines} />
+        ) : undefined
+      }
       detail={() => (
         <>
           {p.clash && kept && (
@@ -430,6 +460,41 @@ interface ImportReviewCardProps {
   onAnswer: (requestId: string, allow: boolean) => Promise<void>;
 }
 
+/**
+ * "Imported Finance (from Grok), Travel" with each name that is an agent here
+ * a link to its chat: the import ends with the user talking to them.
+ */
+function ImportedNames({ line }: { line: string }) {
+  const team = useAgentsList();
+  const rest = line.startsWith('Imported ') ? line.slice('Imported '.length) : null;
+  if (!rest) return <>{line}</>;
+  const names = rest.split(', ');
+  return (
+    <span>
+      Imported{' '}
+      {names.map((name, i) => {
+        const agent = team.find((a) => a.name === name);
+        return (
+          <span key={`${i}-${name}`}>
+            {agent ? (
+              <TextButton
+                tabIndex={0}
+                aria-label={`Open ${name}`}
+                onClick={() => requestAgentsIntent({ kind: 'open', agentId: agent.id })}
+              >
+                {name}
+              </TextButton>
+            ) : (
+              name
+            )}
+            {i < names.length - 1 ? ', ' : ''}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 export const ImportReviewCard = memo(function ImportReviewCard({
   message,
   card,
@@ -539,12 +604,19 @@ export const ImportReviewCard = memo(function ImportReviewCard({
           pending ? undefined : (
             <span className="agent-import-review__outcome" data-status={approval.status}>
               {approval.status === 'allowed' && <CheckIcon size={12} />}
-              {outcome}
+              {approval.status === 'allowed' && outcome ? (
+                <ImportedNames line={outcome} />
+              ) : (
+                outcome
+              )}
               {approval.status === 'allowed' && (
                 // Every app the imported agents need, one row each, in one place.
-                <TextButton tabIndex={0} onClick={() => requestAgentsIntent({ kind: 'logins' })}>
-                  Set up logins
-                </TextButton>
+                <>
+                  <span aria-hidden>·</span>
+                  <TextButton tabIndex={0} onClick={() => requestAgentsIntent({ kind: 'logins' })}>
+                    Set up logins
+                  </TextButton>
+                </>
               )}
             </span>
           )
@@ -561,6 +633,25 @@ export const ImportReviewCard = memo(function ImportReviewCard({
         {review?.summary && pending && (
           <p className="agent-import-review__summary-text">“{review.summary}”</p>
         )}
+        {pending && proposals.length > MANY_AGENTS && (
+          <div className="agent-import-review__tally">
+            <span aria-live="polite">
+              {count === proposals.length
+                ? `All ${proposals.length} ticked`
+                : `${count} of ${proposals.length} ticked`}
+            </span>
+            <TextButton
+              disabled={busy}
+              onClick={() =>
+                setKept(
+                  Object.fromEntries(proposals.map((p) => [p.key, count !== proposals.length]))
+                )
+              }
+            >
+              {count === proposals.length ? 'Untick all' : 'Tick all'}
+            </TextButton>
+          </div>
+        )}
         {pending && (
           <ul className="agents-import-preview__list">
             {proposals.map((p) => (
@@ -575,6 +666,7 @@ export const ImportReviewCard = memo(function ImportReviewCard({
                 onKeep={(v) => setKept((k) => ({ ...k, [p.key]: v }))}
                 onChoice={(c) => setChoice((x) => ({ ...x, [p.key]: c }))}
                 onKeepLogins={(v) => setKeepLogins((x) => ({ ...x, [p.key]: v }))}
+                previewLines={proposals.length > MANY_AGENTS ? PREVIEW_LINES_MANY : PREVIEW_LINES}
               />
             ))}
           </ul>

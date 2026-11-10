@@ -127,7 +127,7 @@ const EXPORT_PREVIEW_OPENCLAW = {
   about: [['Personal facts', 1]] as [string, number][],
   read: ['openclaw.json (agent names only)', 'workspace/AGENTS.md', 'workspace/SOUL.md'],
   skipped: [
-    'OpenClaw’s scheduled jobs: it keeps them in a database since 2026.6.1. Ask OpenClaw to list them, then add them here',
+    'OpenClaw’s scheduled jobs. Newer versions keep them in a database this can’t read: ask OpenClaw to list them, then ask each agent here to set up its own.',
   ],
 };
 
@@ -589,6 +589,49 @@ export const COVERAGE_REVIEW = {
     capped: true,
   },
 };
+
+/** A review bringing twelve agents, one briefed in a single long paragraph (fictional). */
+const MANY_NAMES = [
+  'Finance',
+  'Travel',
+  'Inbox',
+  'Health',
+  'Research',
+  'Outreach',
+  'Calendar',
+  'Home',
+  'Writing',
+  'Garden',
+  'Reading',
+  'Kids',
+];
+export const MANY_REVIEW = {
+  ...REVIEW,
+  proposals: MANY_NAMES.map((name, i) => ({
+    key: `m${i}`,
+    name,
+    role: `Looks after ${name.toLowerCase()}`,
+    instructions:
+      i === 2
+        ? 'Read every new email as it arrives and sort it into one of four piles: needs Sam today, needs Sam this week, can wait, and newsletters. Draft a reply for anything in the first pile, in Sam’s voice, short and warm, and never send it without asking. Unsubscribe from anything Sam has not opened in three months, but list them first. On Fridays, summarise what is still waiting and who has been waiting longest, and suggest which ones Sam could hand to someone else.'
+        : `Look after ${name.toLowerCase()} for Sam.\nAsk before spending anything.\nKeep a short weekly note of what changed.\nFlag anything urgent the same day.\nNever share Sam’s details.`,
+    memory: '- Sam prefers short replies',
+    routines: i % 3 === 0 ? [{ when: 'every monday at 9am', what: 'Weekly check' }] : [],
+    logins: [],
+  })),
+  summary: 'Twelve agents, one per part of Sam’s life.',
+};
+
+export const MANY_REVIEW_CARD = () =>
+  msg('approval', '', 0, {
+    approval: {
+      requestId: 'review3',
+      title: 'Bring in 12 agents from Grok',
+      detail: MANY_NAMES.join(', '),
+      status: 'pending',
+      connector: { kind: 'review', talkId: 'talk1', source: 'Grok', review: MANY_REVIEW },
+    },
+  });
 
 export const COVERAGE_REVIEW_CARD = () =>
   msg('approval', '', 0, {
@@ -2996,7 +3039,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-file',
     title: 'Agents — import, an OpenClaw folder picked',
     looksRightWhen:
-      'The drop area shows the folder’s name (.openclaw) with its path under it and “Use something else”; the message and paste steps are gone. “2 agents from OpenClaw”, rows for Molty and Desk with counts, and a neutral note: 1 fact about you offered as notes for Chief of Staff, and “Not read: OpenClaw’s scheduled jobs: it keeps them in a database…”. Review in Chief of Staff’s chat is enabled.',
+      'The drop area shows the folder’s name (.openclaw) with its path under it and “Use something else”; the message and paste steps are gone. “2 agents from OpenClaw”, rows for Molty and Desk with counts, and a neutral note: 1 fact about you offered as notes for Chief of Staff, and “Not read: OpenClaw’s scheduled jobs. Newer versions keep them in a database…”. Review in Chief of Staff’s chat is enabled.',
     requires: '.agents-import-drop[data-file]',
     clipSelector: '.agents-import',
     openSelector: AGENTS_TAB,
@@ -3232,6 +3275,21 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-import-review-many',
+    title: 'Agents — the review card bringing twelve agents',
+    looksRightWhen:
+      'One card, “Bring in 12 agents from Grok”. Above the rows a muted line “All 12 ticked” with a quiet “Untick all”. Each row shows only the first three lines of its instructions, then “Show all 5 lines”. Inbox, briefed in one long paragraph, shows its opening few lines cut at a word with “…” and a plain “Show all”, not the whole paragraph in a scrolling box.',
+    command: 'agents.open',
+    requires: '.agent-import-review__tally',
+    commands: {
+      agents_overview: overview([{ ...TEAM[0], pendingApprovals: 1 }]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? [MANY_REVIEW_CARD()] : messagesFor(args),
+      agents_import_talk: gateWith({ state: 'review' }),
+      agents_import_review_current: MANY_REVIEW,
+    },
+  },
+  {
     id: 'agents-handoff-card',
     title: 'Agents — an assistant’s handover over ask_chief: one card, not a reply per packet',
     looksRightWhen:
@@ -3273,7 +3331,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-review-done',
     title: 'Agents — the review card, imported',
     looksRightWhen:
-      'The same card, answered: no checkboxes ticked, no buttons, and at its foot a check mark with “Imported Finance (from Grok), Travel”. Under it a quiet note: imported from Grok, Finance (from Grok) and Travel, they start when you message them, routines paused. No bar above the composer; the sidebar lists Finance (from Grok) and Travel.',
+      'The same card, answered: no checkboxes ticked, no buttons, and at its foot a check mark with “Imported Finance (from Grok), Travel”, each name a link that opens that agent’s chat, then · Set up logins. Under it a quiet note: imported from Grok, Finance (from Grok) and Travel, they start when you message them, routines paused. No bar above the composer; the sidebar lists Finance (from Grok) and Travel.',
     command: 'agents.open',
     requires: '.agent-import-review__outcome',
     commands: {
