@@ -125,6 +125,7 @@ pub mod interview;
 pub mod inventory;
 pub mod keys;
 pub mod level_hint;
+pub mod links;
 pub mod local_links;
 pub mod lockstep;
 pub mod login_relay;

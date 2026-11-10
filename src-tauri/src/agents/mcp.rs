@@ -3356,6 +3356,33 @@ async fn decide_inner(
     if take_grant(&caller.id, tool, input) {
         return Decision::Allow;
     }
+    // A file call through a link is judged where it really lands (`links`):
+    // every rule below matches paths as text. A write a link carries into
+    // `.git` / `.shipstudio` is refused; one through a dangling link always
+    // gets a card.
+    let judged;
+    let note;
+    let (input, why) = match link_landing(caller, tool, input) {
+        super::links::Landing::Direct => (input, why),
+        super::links::Landing::Protected(why) => return Decision::Deny(why),
+        super::links::Landing::Dangling(n) => {
+            return link_card(app, caller, tool, input, why, &n).await;
+        }
+        super::links::Landing::Redirected {
+            input: real,
+            note: n,
+        } => {
+            if take_grant(&caller.id, tool, &real) {
+                return Decision::Allow;
+            }
+            judged = real;
+            note = match why.map(str::trim).filter(|w| !w.is_empty()) {
+                Some(w) => format!("{n}\n\n{w}"),
+                None => n,
+            };
+            (&judged, Some(note.as_str()))
+        }
+    };
     // What the agent's settings allow (`policy`): a project or folder it
     // may not use, an app or the browser it was kept from, is refused
     // without a card; reading where it may read needs none.
@@ -3503,6 +3530,52 @@ async fn decide_inner(
             Decision::Allow
         }
         Answer::Denied(note) => Decision::Deny(denied(note)),
+        Answer::NotYet => Decision::Deny(NOT_YET.to_string()),
+    }
+}
+
+/// Where a file call lands, from the turn's working folder (`links`).
+fn link_landing(caller: &store::Agent, tool: &str, input: &Value) -> super::links::Landing {
+    let Some(home) = dirs::home_dir() else {
+        return super::links::Landing::Direct;
+    };
+    let cwd = super::autoallow::Ctx::for_agent(caller)
+        .map(|c| c.cwd)
+        .unwrap_or_else(|| home.clone());
+    super::links::landing(tool, input, &cwd, &home)
+}
+
+/// A card for a write through a link that points nowhere: no level, plan or
+/// rule answers it, since nobody can say where it lands.
+async fn link_card(
+    app: &AppHandle,
+    caller: &store::Agent,
+    tool: &str,
+    input: &Value,
+    why: Option<&str>,
+    note: &str,
+) -> Decision {
+    let (title, mut detail) = describe_request(tool, input);
+    let why = why.map(str::trim).filter(|w| !w.is_empty());
+    if let Some(why) = why {
+        detail = format!("{detail}\n\n{why}");
+    }
+    let summary = match super::admin::summary_for(tool, input, why) {
+        Some(s) => format!("{note}\n\n{s}"),
+        None => note.to_string(),
+    };
+    match ask(
+        app,
+        caller,
+        title,
+        Some(summary),
+        detail,
+        Some((tool, input)),
+    )
+    .await
+    {
+        Answer::Allowed => Decision::Allow,
+        Answer::Denied(n) => Decision::Deny(denied(n)),
         Answer::NotYet => Decision::Deny(NOT_YET.to_string()),
     }
 }
