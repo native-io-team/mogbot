@@ -5319,8 +5319,10 @@ never slow down for limits unless the user chose that.
   (`lms` or the app), each asked over loopback for its model list
   (`127.0.0.1:11434/api/tags`, `127.0.0.1:1234/v1/models`, 800 ms, no proxy,
   no redirects, so nothing leaves this Mac) and said
-  "installed, not running" when it doesn't answer. Agents don't run on these;
-  they are listed so the Chief can say what's there.
+  "installed, not running" when it doesn't answer. None has plan limits to
+  read. OpenCode is an engine agents run on (its line counts them, and their
+  tokens are in each agent's usage); Ollama and LM Studio models reach agents
+  only through OpenCode. They are listed so the Chief can say what's there.
 
 **Readings vs estimates.** The rule "only what the engines report, never
 estimated" is about *readings* and stands unchanged. A forecast is an
