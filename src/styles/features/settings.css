@@ -193,7 +193,9 @@
   flex-wrap: wrap;
 }
 
-.settings-row:has(> .settings-row-actions) > .settings-row-info {
+/* Not in a stacked row: it is a column, where this basis is a height, and it
+   left 280px of empty card between the words and their buttons. */
+.settings-row:not(.settings-row--stacked):has(> .settings-row-actions) > .settings-row-info {
   flex-basis: var(--settings-row-info-min);
 }
 
