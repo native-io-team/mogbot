@@ -171,7 +171,9 @@ export function AccountSwitcher({
           <span className="usage-glance__label">Usage</span>
           <span className="usage-glance__headline">
             {words.figure}
-            {words.count && <span className="usage-glance__count"> · {words.count}</span>}
+            {words.count && glance.total.left !== null && (
+              <span className="usage-glance__count"> · {words.count}</span>
+            )}
           </span>
           <TotalBar total={glance.total} size="small" />
           {words.refill && <span className="usage-glance__summary">{words.refill}</span>}

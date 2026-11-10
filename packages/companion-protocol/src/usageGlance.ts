@@ -127,8 +127,13 @@ export interface StackKey {
   share: number | null;
   /** Which limit `share` is: the week, or (no weekly reading) the tighter one. */
   shareOf: 'week' | 'tight' | null;
-  /** The limit `share` is, for its refill countdown. */
+  /** The limit `share` is. */
   shareLimit: KeyLimit | null;
+  /**
+   * The refill that matters for it: out of usage, the used-up limit that
+   * refills first; otherwise `shareLimit`'s.
+   */
+  refillLimit: KeyLimit | null;
   changes: ChangeLine[];
   /**
    * The one fix for a sign-in problem. A duplicate's (`sign_in_other`) can
@@ -634,6 +639,13 @@ function keyOf(
     share: shareLimit ? shareLimit.left : left,
     shareOf: shareLimit ? (week ? 'week' : 'tight') : null,
     shareLimit,
+    refillLimit:
+      state === 'out'
+        ? ([...general]
+            .filter((l) => l.left === 0 && l.resetsAtMs !== undefined)
+            .sort((a, b) => (a.resetsAtMs as number) - (b.resetsAtMs as number))[0] ??
+          shareLimit)
+        : shareLimit,
     changes: changeLines(row.engine, line?.changes, now),
     fix,
     canUse: row.canUse && !same,
@@ -678,7 +690,7 @@ export function totalOf(
   const read = real.filter((k) => k.share !== null);
   const unread = real.filter((k) => k.share === null);
   const segment = (k: StackKey): TotalSegment => {
-    const l = k.shareLimit;
+    const l = k.refillLimit;
     const refill = l?.countdown ?? null;
     const room = k.share === null ? 'no reading yet' : `${k.share}% left`;
     return {

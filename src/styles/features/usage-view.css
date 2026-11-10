@@ -871,9 +871,7 @@
   border-radius: var(--radius-pill);
 }
 
-.usage-row[data-state='unread'] .usage-row__bar,
-.usage-row[data-state='same'] .usage-row__bar,
-.usage-row[data-state='off'] .usage-row__bar {
+.usage-row[data-unread] .usage-row__bar {
   background: transparent;
   outline: var(--border-width-default) dashed var(--border-strong);
   outline-offset: calc(var(--border-width-default) * -1);

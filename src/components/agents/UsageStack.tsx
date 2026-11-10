@@ -40,6 +40,7 @@ import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown'
 import type { AgentEngine } from '../../lib/agents';
 import {
   LOW_LEFT,
+  OUT_OF_USAGE,
   REMOVE_ACCOUNT,
   SIGN_IN_DIFFERENT,
   type KeyLimit,
@@ -182,7 +183,7 @@ export function roomWords(k: StackKey): string {
 /** One account in the overview's list: its place, name, room, state and refill; opens its page. */
 export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
   const Icon = ENGINE_ICON[k.engine];
-  const refill = k.shareLimit?.countdown;
+  const refill = k.refillLimit?.countdown;
   return (
     <li className="usage-row__item">
       <button
@@ -190,6 +191,7 @@ export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
         className="usage-row"
         data-state={k.state}
         data-tone={k.tone}
+        data-unread={k.share === null || undefined}
         data-account={k.id}
         aria-label={`${k.position}. ${k.name}, ${roomWords(k)}, ${k.stateLabel}${
           refill ? `, refills in ${refill}` : ''
@@ -214,13 +216,17 @@ export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
             />
           )}
         </span>
-        <span className="usage-row__left">{roomWords(k)}</span>
+        {/* Signed out, the pill says it once. */}
+        <span className="usage-row__left">{k.state === 'off' ? '' : roomWords(k)}</span>
         <span className="usage-row__state">
-          <StatusPill tone={PILL[k.state]}>{k.stateLabel}</StatusPill>
+          {/* The row says it short; its refill chip says when, its page in full. */}
+          <StatusPill tone={PILL[k.state]}>
+            {k.state === 'out' ? OUT_OF_USAGE : k.stateLabel}
+          </StatusPill>
         </span>
         <span className="usage-row__refill">
           {refill && (
-            <span className="usage-chip" title={`Refills ${k.shareLimit?.resetsAt ?? ''}`}>
+            <span className="usage-chip" title={`Refills ${k.refillLimit?.resetsAt ?? ''}`}>
               <ResetIcon size={11} aria-hidden />
               {refill}
             </span>
