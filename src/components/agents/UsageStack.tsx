@@ -70,9 +70,12 @@ export function TotalBar({
   total,
   size = 'small',
   onOpen,
+  labelled = true,
 }: {
   total: UsageTotal;
   size?: 'small' | 'large';
+  /** Each segment's name and room under it (the large bar); off when a row below says it. */
+  labelled?: boolean;
   /** Open an account's page (the large bar). */
   onOpen?: (engine: AgentEngine, id: string) => void;
 }) {
@@ -101,21 +104,23 @@ export function TotalBar({
             onClick={() => onOpen(s.engine, s.id)}
           >
             <Segment left={s.left} state={s.state} tone={s.tone} />
-            <span className="usage-total__name">{s.name}</span>
-            <span className="usage-total__room">
-              <span className="usage-total__left">
-                {s.left === null ? 'Not read yet' : `${s.left}% left`}
-              </span>
-              {s.refill && (
-                <span
-                  className="usage-chip"
-                  title={s.refillAt ? `Refills ${s.refillAt}` : undefined}
-                >
-                  <ResetIcon size={11} aria-hidden />
-                  {s.refill}
+            {labelled && <span className="usage-total__name">{s.name}</span>}
+            {labelled && (
+              <span className="usage-total__room">
+                <span className="usage-total__left">
+                  {s.left === null ? 'Not read yet' : `${s.left}% left`}
                 </span>
-              )}
-            </span>
+                {s.refill && (
+                  <span
+                    className="usage-chip"
+                    title={s.refillAt ? `Refills ${s.refillAt}` : undefined}
+                  >
+                    <ResetIcon size={11} aria-hidden />
+                    {s.refill}
+                  </span>
+                )}
+              </span>
+            )}
           </button>
         </div>
       ))}
@@ -184,7 +189,16 @@ export function roomWords(k: StackKey): string {
 /* ------------------------------------------------------- an account row */
 
 /** One account in the overview's list: its place, name, room, state and refill; opens its page. */
-export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
+export function AccountRow({
+  k,
+  onOpen,
+  onSignIn,
+}: {
+  k: StackKey;
+  onOpen: () => void;
+  /** A signed-out account's one action, beside the row (never inside its button). */
+  onSignIn?: () => void;
+}) {
   const Icon = ENGINE_ICON[k.engine];
   const refill = k.refillLimit?.countdown;
   return (
@@ -237,6 +251,17 @@ export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
         </span>
         <ChevronRightIcon size={14} className="usage-row__chevron" aria-hidden />
       </button>
+      {k.state === 'off' && onSignIn && (
+        <Button
+          variant="secondary"
+          size="compact"
+          className="usage-row__sign-in"
+          onClick={onSignIn}
+          aria-label={`Sign in to ${k.name}`}
+        >
+          Sign in
+        </Button>
+      )}
     </li>
   );
 }
