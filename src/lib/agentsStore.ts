@@ -44,6 +44,8 @@ import {
   moveRoutine as moveRoutineOnMac,
   newConversation as createConversation,
   renameConversation as renameOnMac,
+  rewindConversation as rewindOnMac,
+  forkConversation as forkOnMac,
   selectConversation,
   type Conversations,
 } from './agentConversations';
@@ -911,6 +913,33 @@ export async function renameConversation(
   title: string
 ): Promise<void> {
   setConversations(await renameOnMac(agentId, conversation, title));
+}
+
+/**
+ * "Rewind to here": the conversation carries on from just before the user's
+ * message. Its lines stay (the chat folds them, from `rewinds`); the line
+ * saying so arrives as any line does.
+ */
+export async function rewindConversation(
+  agentId: string,
+  conversation: string,
+  messageId: string
+): Promise<void> {
+  setConversations(await rewindOnMac(agentId, conversation, messageId));
+}
+
+/** "Fork from here": the new conversation, opened. */
+export async function forkConversation(
+  agentId: string,
+  conversation: string,
+  messageId: string
+): Promise<string> {
+  const list = await forkOnMac(agentId, conversation, messageId);
+  setConversations(list);
+  emit({ ...state, viewing: { ...state.viewing, [agentId]: list.current } });
+  const key = conversationKey(agentId, list.current);
+  if (!state.messages[key]) void loadMessages(key);
+  return list.current;
 }
 
 /** Run a routine in another of the agent's conversations from its next run. */

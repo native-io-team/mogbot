@@ -1514,6 +1514,116 @@ const CONVERSATIONS = {
     ],
   }),
   agents_conversation_rename: () => several('acme', now),
+  agents_conversation_rewind: () => several('acme', now),
+  agents_conversation_fork: () => several('acme', now),
+};
+
+/**
+ * Rewind, fork and edit (`agents/rewind.rs`): the launch email conversation
+ * after the user went back to before "Make it two sections", with what it
+ * passed over folded, the line saying so, and the conversation carrying on.
+ */
+const LAUNCH_SHORTER = msg('user', 'Make it two sections, drop the customer story.', 8, {
+  id: 'm-shorter',
+  agentId: 'acme',
+  conversation: 'c-launch',
+});
+const LAUNCH_SHORTER_REPLY = msg(
+  'agent',
+  'Two sections now: what’s new, then the ask. The customer story is gone.',
+  7,
+  { id: 'm-shorter-reply', agentId: 'acme', conversation: 'c-launch' }
+);
+const LAUNCH_REWOUND = [
+  ...LAUNCH_CHAT,
+  LAUNCH_SHORTER,
+  LAUNCH_SHORTER_REPLY,
+  msg(
+    'note',
+    'Went back to before “Make it two sections, drop the customer…”. It and the message after it are folded above, not deleted. Files it changed and anything it sent since aren’t undone.',
+    3,
+    { agentId: 'acme', conversation: 'c-launch' }
+  ),
+  msg('user', 'Keep three sections, but swap the customer story for a pricing table.', 2, {
+    agentId: 'acme',
+    conversation: 'c-launch',
+  }),
+  msg('agent', 'Done: what’s new, a pricing table with the three plans, then the ask.', 1, {
+    agentId: 'acme',
+    conversation: 'c-launch',
+  }),
+];
+const withLaunch = (
+  list: ReturnType<typeof several>,
+  over: Partial<ReturnType<typeof several>['items'][number]>
+) => ({
+  ...list,
+  items: list.items.map((c) => (c.id === 'c-launch' ? { ...c, ...over } : c)),
+});
+const GO_BACK = {
+  ...CONVERSATIONS,
+  agents_overview: acmeWith({ status: status('idle'), conversations: { loaded: 'c-launch' } }),
+};
+const REWOUND = {
+  ...GO_BACK,
+  agents_messages: (args: Record<string, unknown>) =>
+    args.agentId === 'acme' && args.conversation === 'c-launch'
+      ? LAUNCH_REWOUND
+      : CONVERSATIONS.agents_messages(args),
+  agents_conversations: (args: Record<string, unknown>) =>
+    args.agentId === 'acme'
+      ? withLaunch(several('acme', now), {
+          rewinds: [
+            {
+              id: 'r1',
+              at: 'm-shorter',
+              ts: now - 3 * MIN,
+              ids: ['m-shorter', 'm-shorter-reply'],
+            },
+          ],
+        })
+      : onlyFirst(args),
+};
+/** A fork of the launch email, made before "Make it two sections". */
+const FORK = {
+  ...GO_BACK,
+  agents_messages: (args: Record<string, unknown>) =>
+    args.agentId === 'acme' && args.conversation === 'c-fork'
+      ? [
+          ...LAUNCH_CHAT,
+          msg(
+            'note',
+            'Forked from “Plan the November launch email” before “Make it two sections, drop the customer…”. That one is unchanged. Files it changed and anything it sent since aren’t undone.',
+            1,
+            { agentId: 'acme', conversation: 'c-fork' }
+          ),
+        ]
+      : CONVERSATIONS.agents_messages(args),
+  agents_conversations: (args: Record<string, unknown>) => {
+    if (args.agentId !== 'acme') return onlyFirst(args);
+    const list = several('acme', now, 'c-fork');
+    return {
+      ...list,
+      items: [
+        {
+          id: 'c-fork',
+          title: 'Fork of Plan the November launch email',
+          named: true,
+          createdAt: now - MIN,
+          lastActivityAt: now - MIN,
+          current: true,
+          loaded: false,
+          waiting: 0,
+          forkedFrom: {
+            conversation: 'c-launch',
+            message: 'm-shorter',
+            title: 'Plan the November launch email',
+          },
+        },
+        ...list.items,
+      ],
+    };
+  },
 };
 
 /** The weekly metrics routine, set up in the first conversation. */
@@ -3691,6 +3801,77 @@ export const agentsScenarios: Scenario[] = [
       { click: '[role="menuitem"]', text: 'Rename this conversation' },
     ],
     commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-go-back-menu',
+    title: 'Agents — Edit, Fork and Rewind on your own message',
+    looksRightWhen:
+      'Acme Site’s launch email conversation. Beside your message “Plan the November launch email…” its hover actions show (Copy, Remember, a … button, the time), and under the … a small menu: “Edit and resend” with a pencil, “Fork from here” with a branch, “Rewind to here” with an undo arrow. Neutral text, never accent; nothing disabled (Acme is idle).',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__menu',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__row--user [aria-label="Go back to here"]' },
+    ],
+    commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-confirm',
+    title: 'Agents — Rewind to here?, the confirm',
+    looksRightWhen:
+      'A small dialog “Rewind to here?”: “Acme Site carries on from just before “Plan the November launch email: who it…”. That message and what came after it stay in the chat, folded, not deleted. Files it changed and anything it sent since aren’t undone.” Then Cancel and a neutral “Rewind” (with an undo arrow) on the right; nothing in accent.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__confirm',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__row--user [aria-label="Go back to here"]' },
+      { click: '[role="menuitem"]', text: 'Rewind to here' },
+    ],
+    commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-editing',
+    title: 'Agents — editing a sent message before resending it',
+    looksRightWhen:
+      'The launch email conversation. Over the composer, a quiet bar with a pencil: “Editing your message. Sending goes back to just before it. “Plan the November launch email: who it…”” and an × to stop editing. The composer holds the message’s words, ready to change and send. The chat above is unchanged.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__editing',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__row--user [aria-label="Go back to here"]' },
+      { click: '[role="menuitem"]', text: 'Edit and resend' },
+    ],
+    commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-rewound',
+    title: 'Agents — what a rewind passed over, folded',
+    looksRightWhen:
+      'The launch email conversation: your ask and the three-section outline, then one quiet centred line with a chevron, “Rewound · 2 messages” (the two-sections ask and its reply are not shown), then the note “Went back to before …”, then your pricing-table ask and its reply. Nothing deleted, nothing in accent.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__summary',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: REWOUND,
+  },
+  {
+    id: 'agents-go-back-rewound-open',
+    title: 'Agents — a rewound fold, opened',
+    looksRightWhen:
+      'As the folded one, but the “Rewound · 2 messages” line’s chevron points down and under it are the two lines it held: “Make it two sections, drop the customer story.” and its reply, in place, before the “Went back to before …” note.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__summary[data-open]',
+    steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-go-back__summary button' }],
+    commands: REWOUND,
+  },
+  {
+    id: 'agents-go-back-fork',
+    title: 'Agents — a fork of a conversation, opened',
+    looksRightWhen:
+      'Acme Site’s chat, the header’s conversation button reading “Fork of Plan the November launch email”. The chat holds the launch email’s history (your ask and the outline), then the quiet line “Forked from “Plan the November launch email” before …. That one is unchanged. Files it changed and anything it sent since aren’t undone.”',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__title',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: FORK,
   },
   {
     id: 'agents-conversations-search-hit',
