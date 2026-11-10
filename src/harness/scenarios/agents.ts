@@ -2311,7 +2311,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-scheduled',
     title: 'Agents — the schedule popover',
     looksRightWhen:
-      'Clicking “3 scheduled” in the Finance header opens a popover under it: the one-time check-in, the weekday routine with “Every weekday at 9:00 AM” and “Next: tomorrow at 9:00 AM” on two whole lines, and the paused Monday routine muted and last. “New routine” opens the picker below: When chips (Every day / Weekdays (selected) / Weekly / Every few hours / Once), “At 09:00”, What holding “Brief me on Acme”, then the echo “Every weekday at 9:00 AM — Brief me on Acme” with “First run tomorrow at 9:00 AM” under it, Cancel and Schedule right-aligned. No typed grammar anywhere. Then a one-sentence footnote ending in an inline “Keep this Mac awake” link.',
+      'Clicking “3 scheduled” in the Finance header opens a popover under it: the one-time check-in, the weekday routine with “Every weekday at 9:00 AM” and “Next: tomorrow at 9:00 AM” on two whole lines, and the paused Monday routine muted and last. “New routine” opens the picker below: How often chips (Every day / Weekdays (selected) / Weekly / Every few hours / Once), “At 09:00”, What holding “Brief me on Acme”, then the echo “Every weekday at 9:00 AM — Brief me on Acme” with “First run tomorrow at 9:00 AM” under it, Cancel and Schedule right-aligned. No typed grammar anywhere. Then a one-sentence footnote ending in an inline “Keep this Mac awake” link.',
     requires: '.agent-schedule__foot .text-button',
     openSelector: AGENTS_TAB,
     steps: [
@@ -2526,7 +2526,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-when-routines',
     title: 'Agents — “When…” routines in the schedule popover',
     looksRightWhen:
-      'New routine on Lead Gen’s routines: the editor stands in for the list (a back arrow and “New routine” at the top), then “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost; a “Then what?” field; Check every 5/10/30 min/every hour; the cost sentence; Cancel and a neutral Add (never Lead Gen’s teal). Readable in light and dark.',
+      'New routine on Lead Gen’s routines: the editor stands in for the list (a back arrow and “New routine” at the top), then “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost, under a “When this happens” label; Check every 5/10/30 min/every hour; a “What” field labelled like the time picker’s; the echo “When someone mentions you on GitHub — …” and the cost sentence; Cancel and a neutral Add (never Lead Gen’s teal). Readable in light and dark.',
     requires: '.agent-when__sources',
     openSelector: AGENTS_TAB,
     steps: [

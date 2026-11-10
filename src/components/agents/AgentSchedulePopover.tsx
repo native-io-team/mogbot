@@ -513,8 +513,9 @@ function RoutinePicker({
       aria-label={editing ? 'Edit routine' : 'New routine'}
     >
       <div className="agent-schedule__field">
+        {/* "How often", not "When": "When…" is the other kind of routine, right above. */}
         <span className="agent-schedule__label" id="agent-schedule-when">
-          When
+          How often
         </span>
         <div className="agent-schedule__chips" role="group" aria-labelledby="agent-schedule-when">
           {CADENCES.map((c) => (
@@ -634,7 +635,7 @@ function RoutinePicker({
       </div>
 
       <div className="agent-schedule__echo" aria-live="polite">
-        {when && <p className="agent-schedule__echo-line">{routineEcho(when, note || '…')}</p>}
+        {when && <p className="agent-schedule__echo-line">{routineEcho(when, note)}</p>}
         {steps.length > 0 && (
           <p className="agent-schedule__readback">{stepsLine({ note, then: steps })}</p>
         )}

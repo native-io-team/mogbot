@@ -152,7 +152,7 @@ export const agentsStepsScenarios: Scenario[] = [
     id: 'agents-steps-editor',
     title: 'Agents — editing a routine’s steps',
     looksRightWhen:
-      'The routine picker with When set to Weekly · Fri at 4:00 PM, What filled, and under it step 2 as a row: a muted “2”, the step’s words, a “Your OK first” checkbox ticked and a quiet ✕; then “Add a step”. The echo says “2 steps · your OK before step 2”.',
+      'The routine picker with How often set to Weekly · Fri at 4:00 PM, What filled, and under it step 2 as a row: a muted “2”, the step’s words, a “Your OK first” checkbox ticked and a quiet ✕; then “Add a step”. The echo says “2 steps · your OK before step 2”.',
     openSelector: AGENTS_TAB,
     requires: '.agent-steps__row',
     clipSelector: '.agent-schedule',

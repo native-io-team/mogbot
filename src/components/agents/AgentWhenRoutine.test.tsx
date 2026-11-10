@@ -94,9 +94,8 @@ describe('WhenComposer', () => {
     fireEvent.change(screen.getByLabelText('What to do when it happens'), {
       target: { value: 'Triage it' },
     });
-    expect(
-      screen.getByText('When someone mentions you on GitHub, Finance starts on it.')
-    ).toBeInTheDocument();
+    // Read back as the time picker's echo: what it waits for — what it does.
+    expect(screen.getByText('When someone mentions you on GitHub — Triage it')).toBeInTheDocument();
     await act(() => {
       fireEvent.click(add);
       return Promise.resolve();
@@ -164,6 +163,10 @@ describe('WhenComposer', () => {
     fireEvent.change(screen.getByLabelText('What to do when it happens'), {
       target: { value: 'Summarise it' },
     });
+    // The user's own words are quoted, so the echo reads whatever they typed.
+    expect(
+      screen.getByText('When Finance finds “a new page in the roadmap” — Summarise it')
+    ).toBeInTheDocument();
     await act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Add' }));
       return Promise.resolve();

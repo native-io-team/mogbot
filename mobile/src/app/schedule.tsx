@@ -81,11 +81,12 @@ type Reading =
   | { kind: 'ok'; preview: SchedulePreview }
   | { kind: 'bad'; reason: string };
 
-/** The Mac's reading: "First run tomorrow 9:00 AM", on the clock the echo uses. */
+/** The Mac's reading: "First run tomorrow at 9:00 AM" (the desk's words), on the clock the echo uses. */
 function firstRun(p: SchedulePreview, now = Date.now(), timeZone?: string): string {
-  const when = formatWhenIn(p.nextAt, now, timeZone).replace(/^(Today|Tomorrow)/, (w) =>
-    w.toLowerCase()
-  );
+  const when = formatWhenIn(p.nextAt, now, timeZone)
+    .replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())
+    // "Fri, Nov 13 9:00 AM" → "Fri, Nov 13 at 9:00 AM": the time is the last word or two.
+    .replace(/ (\d{1,2}[:.]\d{2}(?:\s?[^\s\d]+)?)$/, ' at $1');
   const zone = zoneDiffers(timeZone, now) ? ' Mac time' : '';
   return p.repeat ? `First run ${when}${zone}` : `Runs ${when}${zone}`;
 }
@@ -224,7 +225,7 @@ function Schedule() {
 
         <View style={styles.group}>
           <T variant="caption" color={colors.textMuted} style={styles.label}>
-            WHEN
+            HOW OFTEN
           </T>
           <ChipRow label="How often">
             {CADENCES.map((c) => (
