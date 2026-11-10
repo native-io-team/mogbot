@@ -354,7 +354,7 @@ export default function Settings() {
 
       <Section
         title="Voice"
-        footer={`Hold the mic to send a voice message: let go to send, slide away to cancel. Your words are recognised on this phone when it can. With this on, the recording goes to ${macName} with them, as a file the agent can keep; it's deleted from this phone once sent.`}
+        footer={`Hold the mic to send a voice message: let go to send, slide away to cancel. Your words are recognised on this phone when it can. With this on, the recording goes to ${macName} with them, as a file the agent can keep; it’s deleted from this phone once sent.`}
       >
         <Row
           label="Attach the recording"
