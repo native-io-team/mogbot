@@ -25,6 +25,7 @@ import {
   CopyIcon,
   DownloadIcon,
   GlobeIcon,
+  GraduationCapIcon,
   ErrorIcon,
   FolderIcon,
   HistoryIcon,
@@ -54,6 +55,12 @@ import { CrossoverCard } from './AgentCrossoverCard';
 import { checkInHead } from '../../../packages/companion-protocol/src/cardWords';
 import { viaLabel } from '../../../packages/companion-protocol/src/model';
 import { AgentSettingsChange } from './AgentSettingsChange';
+import { AgentSkillCardBody } from './AgentSkills';
+import {
+  SKILL_NOT_NOW,
+  SKILL_SAVE,
+  skillOutcome,
+} from '../../../packages/companion-protocol/src/skills';
 import { readPlan } from '../../lib/cardShapes';
 import { AgentPlanList } from './AgentPlanList';
 import { AgentGateBody } from './AgentRoutineSteps';
@@ -1053,6 +1060,10 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
   if (approval.handoff && approval.status === 'denied') {
     return 'Ignored · nothing was saved';
   }
+  if (approval.skill) {
+    const said = skillOutcome(approval.status);
+    if (said) return said;
+  }
   if (approval.gate && approval.status === 'allowed') {
     return `Going ahead · step ${approval.gate.done + 1} of ${approval.gate.total} is running`;
   }
@@ -1201,7 +1212,9 @@ const ApprovalCardBody = memo(function ApprovalCard({
   const handoff = !!approval.handoff;
   // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
   const gate = approval.gate;
-  const plainDeny = approval.connector?.kind === 'consent' || front || handoff || !!gate;
+  // "Save “…” as a skill?": Not now / Save, nothing broader.
+  const skill = approval.skill;
+  const plainDeny = approval.connector?.kind === 'consent' || front || handoff || !!gate || !!skill;
   // A plan is read field by field; one with no readable action has nothing
   // to allow, so it offers Deny only.
   const plan = approval.plan ? readPlan(approval.plan) : null;
@@ -1254,6 +1267,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
             <DownloadIcon size={14} />
           ) : gate ? (
             <RoutineIcon size={14} />
+          ) : skill ? (
+            <GraduationCapIcon size={14} />
           ) : plainDeny ? (
             <DownloadIcon size={14} />
           ) : approval.settings ? (
@@ -1273,11 +1288,13 @@ const ApprovalCardBody = memo(function ApprovalCard({
         note={
           pending && gate
             ? 'It waits for you, and closes if the routine runs again first.'
-            : pending && paused && !plainDeny && !approval.settings && !approval.slackReply
-              ? 'It paused here for you. Allow it and it picks up where it left off.'
-              : approval.status === 'expired'
-                ? approval.setAside
-                : undefined
+            : pending && skill
+              ? 'Nothing waits on it. Saved, it’s listed under What it knows how to do.'
+              : pending && paused && !plainDeny && !approval.settings && !approval.slackReply
+                ? 'It paused here for you. Allow it and it picks up where it left off.'
+                : approval.status === 'expired'
+                  ? approval.setAside
+                  : undefined
         }
         actions={
           pending && !noting ? (
@@ -1333,7 +1350,15 @@ const ApprovalCardBody = memo(function ApprovalCard({
                 onClick={() => void answer(false)}
                 aria-keyshortcuts={keys ? 'D' : undefined}
               >
-                {front ? 'Not now' : handoff ? 'Ignore' : gate ? GATE_DENY : 'Deny'}
+                {front
+                  ? 'Not now'
+                  : handoff
+                    ? 'Ignore'
+                    : gate
+                      ? GATE_DENY
+                      : skill
+                        ? SKILL_NOT_NOW
+                        : 'Deny'}
                 {keys && <KeyHint letter="D" />}
               </Button>
               {!nothingToAllow && (
@@ -1346,7 +1371,15 @@ const ApprovalCardBody = memo(function ApprovalCard({
                   onClick={guard(() => void answer(true))}
                   aria-keyshortcuts={keys ? 'A' : undefined}
                 >
-                  {front ? 'Check again' : handoff ? 'Save to memory' : gate ? GATE_ALLOW : 'Allow'}
+                  {front
+                    ? 'Check again'
+                    : handoff
+                      ? 'Save to memory'
+                      : gate
+                        ? GATE_ALLOW
+                        : skill
+                          ? SKILL_SAVE
+                          : 'Allow'}
                   {keys && <KeyHint letter="A" />}
                 </Button>
               )}
@@ -1359,6 +1392,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
       >
         {approval.settings ? (
           <AgentSettingsChange proposal={approval.settings} />
+        ) : skill ? (
+          <AgentSkillCardBody card={skill} />
         ) : gate ? (
           <AgentGateBody gate={gate} produced={approval.detail} />
         ) : plan ? (

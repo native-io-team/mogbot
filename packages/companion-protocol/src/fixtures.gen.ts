@@ -3438,6 +3438,18 @@ export const agentsPolicy = {
   ],
   "sameAsTeam": false
 } satisfies Result<'agents.policy'>;
+export const agentsSkills = {
+  "agentId": "a1",
+  "setting": "ask",
+  "skills": [
+    {
+      "name": "Export invoices from Xero",
+      "slug": "export-invoices-from-xero",
+      "steps": "1. Open Reports → Invoices.\n2. Filter to last month.\n3. Export as CSV and share it.",
+      "when": "When the user asks for last month's invoices"
+    }
+  ]
+} satisfies Result<'agents.skills'>;
 export const agentsOnItsOwn = {
   "agentId": "a1",
   "agentName": "Finance",
@@ -5101,6 +5113,9 @@ export const frames = [
       "agents.loginSaveKey",
       "agents.reach",
       "agents.policy",
+      "agents.skills",
+      "agents.skillEdit",
+      "agents.skillRemove",
       "agents.onItsOwn",
       "agents.onItsOwnTeam",
       "agents.onItsOwnNarrow",

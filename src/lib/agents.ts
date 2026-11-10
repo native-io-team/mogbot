@@ -16,6 +16,7 @@ import type {
   WatchSource,
 } from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
+import type { LearnSkills, SkillCard } from '../../packages/companion-protocol/src/skills';
 import type { CrossoverAsk, CrossoverAway } from '../../packages/companion-protocol/src/crossover';
 import type {
   AgentDraft,
@@ -231,6 +232,8 @@ export interface Agent {
   starters?: AgentStarter[];
   /** No OS notifications; unread and the Dock badge still count it. */
   muted: boolean;
+  /** "Save what it learns" (`agents/skills_learn.rs`); absent is `ask`. */
+  learnSkills?: LearnSkills;
   /** Omitted by the backend when there are none. */
   checkIns?: CheckIn[];
   /** "Always allow" rules; omitted when there are none. */
@@ -641,6 +644,8 @@ export interface Approval {
   accountSwitch?: { engine: 'claude' | 'codex'; id: string; name: string };
   /** "Reply in Slack?": the exact words and where; Allow posts them as you (`lib/slack`). Nothing waits on it. */
   slackReply?: { channel: string; threadTs: string; place: string; text: string };
+  /** "Save “…” as a skill?": Allow is Save, Deny is Not now (`lib/agentSkills`). Nothing waits on it. */
+  skill?: SkillCard;
   /**
    * How risky Allow is, decided on the Mac (`mcp::risk_of`, Bold's floor):
    * `high` is shown with the warning icon. Absent: unclassified.
@@ -1023,6 +1028,8 @@ export interface UpdateAgentInput {
   workDirectly?: boolean;
   /** "Runs on": one of its engine's accounts, or '' for any account. */
   account?: string;
+  /** "Save what it learns": Automatically, Ask me or Off. */
+  learnSkills?: LearnSkills;
 }
 
 /** The model choice that passes no model: whatever the engine itself defaults to. */
@@ -1718,6 +1725,8 @@ export interface ImportProposal {
   foreignTools?: { name: string; here?: string }[];
   /** A recipe's key look and the independence it suggests (applied only when stricter). */
   look?: { colorway?: string; icon?: string; key?: string; independence?: AgentIndependence };
+  /** Skills it comes with (a recipe's), cleaned on the Mac; saved into its home on Import. */
+  skills?: { slug: string; name: string; when: string; steps: string }[];
 }
 
 /** The agent here a proposal's name is taken by, with everything Replace would change. */

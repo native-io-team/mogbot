@@ -10,6 +10,7 @@
 import type { Conversations } from './conversations';
 import type { Cursor } from './frames';
 import type { AgentPolicyView } from './policy';
+import type { Skill, SkillsView } from './skills';
 import type { OnItsOwn, OnItsOwnNarrow, OnItsOwnTeam } from './onItsOwn';
 import type { QuietHours, QuietWindow } from './quiet';
 import type { MorningBrief } from './brief';
@@ -351,6 +352,15 @@ export interface Methods {
   'agents.reach': { params: { agentId: string }; result: AgentReach };
   /** "What it can do" (`agents/policy.rs`): its settings in plain words. Read-only; changed in chat. */
   'agents.policy': { params: { agentId: string }; result: AgentPolicyView };
+  /** "What it knows how to do" (`agents/skills_learn.rs`): its setting and saved skills. */
+  'agents.skills': { params: { agentId: string }; result: SkillsView };
+  /** The user's edit of one skill, cleaned as a new one is; a new name moves it. */
+  'agents.skillEdit': {
+    params: { agentId: string; slug: string; name: string; when: string; steps: string };
+    result: Skill;
+  };
+  /** One skill removed from its home. */
+  'agents.skillRemove': { params: { agentId: string; slug: string }; result: null };
   /** "What can it do on its own?" (`agents/on_its_own.rs`): every standing rule, in plain words. */
   'agents.onItsOwn': { params: { agentId: string }; result: OnItsOwn };
   /** The same for the team: its level, rules every agent shares, each agent in a line. */
@@ -816,6 +826,7 @@ export const READ_ONLY_METHODS = [
   'agents.memory',
   'agents.reach',
   'agents.policy',
+  'agents.skills',
   'agents.onItsOwn',
   'agents.onItsOwnTeam',
   'agents.loginsTeam',
