@@ -15,13 +15,24 @@
   text-align: inherit;
   white-space: normal;
   vertical-align: baseline;
+  /* The affordance: an action in prose is underlined at rest, faintly, so it
+     never reads as the end of the sentence; full strength on hover and focus. */
+  text-decoration-line: underline;
+  text-decoration-thickness: var(--border-width-default);
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color var(--transition-interaction);
 }
 
-.text-button.button:hover:not(:disabled) {
+.text-button.button:disabled {
+  text-decoration-line: none;
+}
+
+.text-button.button:hover:not(:disabled),
+.text-button.button:focus-visible {
   background: transparent;
   color: var(--text-primary);
-  text-decoration: underline;
-  text-underline-offset: var(--space-02);
+  text-decoration-color: currentColor;
 }
 
 .text-button.button:active:not(:disabled) {
@@ -47,12 +58,6 @@
    full text colour, never the accent, which means primary action, not status. */
 .text-button--strong.button {
   color: var(--text-primary);
-}
-
-/* Its hover can't be a colour change (it's full ink already): an underline. */
-.text-button--strong.button:hover:not(:disabled) {
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
 }
 
 /* Accent text is the accent pulled toward the text colour: the raw accent is
