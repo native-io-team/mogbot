@@ -123,6 +123,12 @@ export interface Scenario {
    */
   storage?: Record<string, string>;
   /**
+   * Leave the Chief's phone offer unanswered. Every other capture seeds it as
+   * answered ("later"): the offer shows under any Chief reply on a fresh
+   * install, so without this it sat in most agents scenarios as noise.
+   */
+  phoneOffer?: true;
+  /**
    * A selector that must be present for this capture to mean anything.
    *
    * A scenario is a claim about a surface. When that surface stops rendering —

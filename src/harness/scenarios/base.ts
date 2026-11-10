@@ -243,6 +243,16 @@ export const baseCommands: CommandMap = {
         ],
       },
     ],
+    // What a fresh install's overview carries (`agents::defaults::view_of`):
+    // nothing chosen, so new agents start on the ready engine at its default.
+    // Without it Settings → Agents drew no "What agents run on" section, and
+    // ⌘K "What new agents run on…" landed on the top of the page.
+    defaults: {
+      engine: null,
+      models: { claude: null, codex: null, opencode: null },
+      startsOn: 'claude',
+      model: null,
+    },
   },
   // A new Chief opens on its stored greeting (`agents::ensure_main`).
   agents_messages: (args: Record<string, unknown>) =>

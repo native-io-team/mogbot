@@ -276,7 +276,7 @@
   font-weight: var(--font-weight-label);
 }
 .agents-list__state-word[data-state='live'] {
-  color: var(--accent-success);
+  color: var(--text-success);
 }
 
 /* A state in a pill, then its words: one line, the words cut first. The pill

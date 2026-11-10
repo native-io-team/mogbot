@@ -174,6 +174,7 @@ value, consume a semantic role or an owner-appropriate component token.
 | Info blue | `--info(-hover/-light/-dark)` | Links, info banners, "open" PR state, focus accents. |
 | Purple | `--purple`, `--purple-light`, `--purple-deep-rgb` | AI / agent surfaces only (skills, MCP). |
 | Slack | `--slack-pink`, `--slack-lavender(-bright)` | Slack community CTA branding only (dashboard, setup, support panel). |
+| Status words | `--text-success`, `--text-warning`, `--text-error`, `--text-info` | A status word as text on a selected row or a status tint ("Live" on the open agent's row, a "Build failed" pill, a warning button). The status hue in dark; a deeper shade in light (and a paler red in dark), where the accent falls just under AA on those fills. `theme.test.ts` holds each to AA on the panel and the selected fill. |
 | RGB triplets | `--accent-success/warning/error*-rgb` and feature `--*-rgb` values | For alpha tints only, e.g. `rgba(var(--accent-error-rgb), 0.1)`. Each must stay in sync with its solid token. The accent has no triplet: tint it with `color-mix(in srgb, var(--accent-active) N%, transparent)` (`check:patterns` fails on the old `--accent-active-rgb`). |
 | Tints | `--tint-subtle` / `--tint` / `--tint-strong` | White hover/selection washes on dark surfaces (5/8/10% white). |
 | Overlays | `--overlay-30` … `--overlay-80` | Black scrims behind modals, image dimming. Suffix = alpha %. |
