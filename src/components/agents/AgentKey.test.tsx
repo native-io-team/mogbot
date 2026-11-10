@@ -45,14 +45,19 @@ describe('AgentKey', () => {
     expect(container.querySelector('.agent-key__pips')).toBeNull();
   });
 
-  it('is a socket with no cap when paused or new, its stem in its colour', () => {
-    const { container, rerender } = render(
+  it('is a socket with no cap when paused, its stem in its colour', () => {
+    const { container } = render(
       <AgentKey name="Inbox" colorway="teal" state="paused" size="xl" />
     );
     expect(container.querySelector('.agent-key__face')).toBeNull();
     expect(container.querySelector('.agent-key__stem')).not.toBeNull();
-    rerender(<AgentKey name="New" state="new" size="xl" />);
-    expect(container.querySelector('.agent-key[data-state="new"] .agent-key__stem')).not.toBeNull();
+  });
+
+  it('is an outlined plus for a new agent, never the paused socket', () => {
+    const { container } = render(<AgentKey name="New" state="new" size="xl" />);
+    expect(container.querySelector('.agent-key__plus')).not.toBeNull();
+    expect(container.querySelector('.agent-key__stem')).toBeNull();
+    expect(container.querySelector('.agent-key__face')).toBeNull();
   });
 
   it('draws an agent from an older Mac from its colour, name and role', () => {

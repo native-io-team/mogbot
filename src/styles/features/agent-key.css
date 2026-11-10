@@ -12,7 +12,8 @@
  * States are physical, never glows round the key or badge dots: pressed
  * while it works, the legend lit like a backlit cap while it's live, lit,
  * proud and slowly pulsing while it needs your OK (the only animation; none
- * with Reduce Motion), and a socket with the cap off when it's paused or new.
+ * with Reduce Motion), and a socket with the cap off when it's paused. A new
+ * agent is no socket: an outline where a key will go, with a plus.
  * Keys keep their colours in both themes; only the socket and the shadows
  * under them follow the theme.
  */
@@ -68,11 +69,16 @@
   --agent-key-ambient: rgba(0, 0, 0, 0.45);
   --agent-key-socket: #1d1c1a;
   --agent-key-socket-shade: rgba(0, 0, 0, 0.55);
-  --agent-key-socket-rim: rgba(255, 255, 255, 0.06);
+  /* The socket's rim at 3:1 on the plate, so a paused key never vanishes. */
+  --agent-key-socket-rim: rgba(255, 255, 255, 0.32);
   --agent-key-housing: #2a2926;
   --agent-key-housing-shade: rgba(0, 0, 0, 0.5);
   --agent-key-stem: #5b5850;
   --agent-key-stem-depth: #3a3833;
+  /* New agent: an outline where a key will go, and its plus. */
+  --agent-key-new-rim: rgba(255, 255, 255, 0.42);
+  --agent-key-new-fill: rgba(255, 255, 255, 0.03);
+  --agent-key-new-plus: #d6d2ca;
   /* The board the keys sit on (AgentsBoard): a warm neutral plate. */
   --agent-key-plate-top: #26241f;
   --agent-key-plate-bottom: #211f1b;
@@ -92,11 +98,14 @@
   --agent-key-ambient: rgba(60, 44, 20, 0.3);
   --agent-key-socket: #d9d1c0;
   --agent-key-socket-shade: rgba(70, 55, 30, 0.3);
-  --agent-key-socket-rim: rgba(70, 55, 30, 0.1);
+  --agent-key-socket-rim: rgba(70, 55, 30, 0.6);
   --agent-key-housing: #cbc2af;
   --agent-key-housing-shade: rgba(70, 55, 30, 0.28);
   --agent-key-stem: #b3aa96;
   --agent-key-stem-depth: #9c937f;
+  --agent-key-new-rim: rgba(70, 55, 30, 0.5);
+  --agent-key-new-fill: rgba(255, 255, 255, 0.35);
+  --agent-key-new-plus: #55524b;
   --agent-key-plate-top: #e2dbcb;
   --agent-key-plate-bottom: #ddd5c4;
   --agent-key-plate-shade: rgba(70, 55, 30, 0.18);
@@ -366,9 +375,8 @@
   }
 }
 
-/* ── the socket: the cap off (paused) or none yet (new) ── */
-.agent-key[data-state='paused'],
-.agent-key[data-state='new'] {
+/* ── the socket: the cap off (paused) ── */
+.agent-key[data-state='paused'] {
   --agent-key-ty: 0px; /* css-ok: a zero length */
   display: inline-grid;
   place-items: center;
@@ -392,6 +400,52 @@
     var(--agent-key-housing-shade);
 }
 
+/* A paused key's housing wears its skirt colour, so the socket reads as that
+   agent with its cap off, never as an Add button. */
+.agent-key[data-state='paused'] .agent-key__housing {
+  background: var(--agent-key-depth);
+}
+
+/* ── New agent: an outline where a key will go, and a plus ── */
+.agent-key[data-state='new'] {
+  --agent-key-ty: 0px; /* css-ok: a zero length */
+  display: inline-grid;
+  place-items: center;
+  margin-top: var(--agent-key-rest-depth);
+  margin-bottom: 0;
+  border: max(1.5px, calc(2 * var(--agent-key-u))) dashed var(--agent-key-new-rim); /* css-ok: a hairline floor */
+  background: var(--agent-key-new-fill);
+  box-shadow: none;
+}
+.agent-key__plus {
+  position: relative;
+  width: calc(36 * var(--agent-key-u));
+  height: calc(36 * var(--agent-key-u));
+}
+.agent-key__plus::before,
+.agent-key__plus::after {
+  content: '';
+  position: absolute;
+  border-radius: 1px;
+  background: var(--agent-key-new-plus);
+}
+.agent-key__plus::before {
+  left: 0;
+  right: 0;
+  top: calc(50% - max(1.5px, calc(3 * var(--agent-key-u))) / 2); /* css-ok: a hairline floor */
+  height: max(1.5px, calc(3 * var(--agent-key-u))); /* css-ok: a hairline floor */
+}
+.agent-key__plus::after {
+  top: 0;
+  bottom: 0;
+  left: calc(50% - max(1.5px, calc(3 * var(--agent-key-u))) / 2); /* css-ok: a hairline floor */
+  width: max(1.5px, calc(3 * var(--agent-key-u))); /* css-ok: a hairline floor */
+}
+.agents-board__key:hover .agent-key[data-state='new'],
+.agents-board__key:focus-visible .agent-key[data-state='new'] {
+  border-style: solid;
+}
+
 /* The switch stem: a cross, in the agent's colour while paused. */
 .agent-key__stem {
   --agent-key-stem-arm: calc(8 * var(--agent-key-u));
@@ -404,7 +458,7 @@
 }
 .agent-key[data-state='paused'] .agent-key__stem {
   --agent-key-stem-fill: var(--agent-key-face);
-  --agent-key-stem-shadow: var(--agent-key-depth);
+  --agent-key-stem-shadow: var(--agent-key-skirt);
 }
 .agent-key__stem::before,
 .agent-key__stem::after {

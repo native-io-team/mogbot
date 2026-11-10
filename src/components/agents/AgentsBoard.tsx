@@ -1,8 +1,8 @@
 /**
  * The team as a board of keys (docs/internal/agent-keys.md): every agent you
  * have, at full size on a plate, in the state it's in, with its name and the
- * state in words under it. Pressing one opens its chat, as its bound key
- * does from anywhere; the empty socket at the end makes a new agent.
+ * state in words under it when there is one worth reading (never "Idle"). Pressing one opens its chat, as its bound key
+ * does from anywhere; the outlined plus at the end makes a new agent.
  *
  * @module components/agents/AgentsBoard
  */
@@ -42,9 +42,12 @@ export function AgentsBoard({ agents, onOpenAgent, onNewAgent }: AgentsBoardProp
                 size="xl"
               />
               <span className="agents-board__name">{agent.name}</span>
-              <span className="agents-board__state" data-state={state}>
-                {KEY_STATE_LABEL[state]}
-              </span>
+              {/* Idle is the key at rest: only a state worth reading gets words. */}
+              {state !== 'idle' && (
+                <span className="agents-board__state" data-state={state}>
+                  {KEY_STATE_LABEL[state]}
+                </span>
+              )}
             </button>
           );
         })}
@@ -57,7 +60,6 @@ export function AgentsBoard({ agents, onOpenAgent, onNewAgent }: AgentsBoardProp
           >
             <AgentKey name="New agent" state="new" size="xl" />
             <span className="agents-board__name">New agent</span>
-            <span className="agents-board__state">Add one</span>
           </button>
         )}
       </div>

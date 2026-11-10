@@ -114,7 +114,7 @@ export function AgentKey({
   }, [team, id, name, role, color, colorway, icon, boundKey, level]);
   const way = colorwayOf(look.colorway);
   const big = BIG.has(size);
-  const socket = state === 'paused' || state === 'new';
+  const socket = state === 'paused';
   const pips = pipsFor(look.level);
   const drawing = iconDrawing(look.icon);
   return (
@@ -126,7 +126,11 @@ export function AgentKey({
       data-state={state}
       aria-hidden
     >
-      {socket ? (
+      {state === 'new' ? (
+        // Not a socket: an outline where a key will go, with a plus. It's an
+        // action, so it must never read as a paused agent's empty socket.
+        <span className="agent-key__plus" />
+      ) : socket ? (
         <span className="agent-key__housing">
           <span className="agent-key__stem" />
         </span>
