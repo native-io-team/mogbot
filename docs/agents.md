@@ -3549,6 +3549,79 @@ The backend decides, since it knows when a message is recorded and when a turn e
 - Clicking a notification focuses a window and emits `agents://open`; the app switches to Agents and opens that agent. Focusing a window clears the unread of the agent it shows.
 - Uses `tauri-plugin-notification` (2.8, click reporting on macOS). Not verified in a real build yet: the dev binary posts under another app's identity, so click-through should be checked in a signed build.
 
+## What it knows how to do (`src-tauri/src/agents/skills_learn.rs`)
+
+After a hard task an agent can keep how it did it as a skill, so next time
+the same request is one sentence. The agent calls `save_skill { name, when,
+steps }` at the end of the task; **the app, not the model, judges whether
+the turn took real effort**, from what it observed (`work::snapshot`): at
+least 8 tool steps, or 4 over three minutes, never counting its own
+narration, cards or plans (`skills_learn::effort`). A quick turn's call is
+refused ("This task was quick… Nothing was saved").
+
+**Per agent: Save what it learns — Automatically / Ask me / Off**
+(`Agent::learn_skills`, stored `auto` / `ask` / `off`, absent is `ask`).
+Automatically saves at once with the line "Learned a skill: <name>. Next time
+it follows these steps."; Ask me puts one card in the chat, "Save “<name>” as
+a skill?", showing when to use it and the steps exactly as they'd be saved,
+answered **Not now / Save** (Save neutral, nothing behind ⋯; nothing waits
+on it, it never expires); Off doesn't serve the tool. **A turn answering
+outside text, or in a conversation that read outside content
+(`exposure::read_outside`), always gets the card, whatever the setting**,
+marked high risk (the warning icon; never answered in place on the phone's
+list) with "It read outside content in this conversation: check nothing in it
+came from there." (`skills_learn::gate`, tested).
+
+**Never in one.** Every field goes through the Keychain redaction
+(`secrets::redact`) and the recipe scrub (`recipe::scrub`: credentials,
+home-folder paths, email addresses, phone numbers), each "[removed: …]" and
+counted on the card. Names are capped at 60 characters, when at 300, steps at
+6,000; a fence (`---`) in the steps can't end the file's header; 40 skills
+per agent.
+
+**Where it lives.** `<home>/.claude/skills/<slug>/SKILL.md`, Claude Code's
+own format (`name: <slug>`, `description: <when>`, then `# <Name>` and the
+steps). Claude Code in the agent's home reads that folder itself
+(`Placement::Native`). Codex and OpenCode aren't verified to, and a
+project-bound agent's turn runs in the project, so for those the system
+prompt carries "## Skills you saved": each skill's name, when, and its
+file's path, to read first (`Placement::Index`, `skills_learn::prompt_for`;
+no skills, no section, so the prompt budgets are unchanged). One set of
+files for every engine, so switching engines keeps them. A SKILL.md the
+user put there by hand is listed too.
+
+**Listed and changed.** Edit agent → "Save what it learns" (a segmented
+control, saved at once) and "What it knows how to do", each skill with Edit
+(name, when, steps; cleaned again, a new name moves its folder) and Remove
+(`agents_skills`, `agents_skill_edit`, `agents_skill_remove`;
+`agents-skills-changed` refreshes the list). Phone: the agent sheet's "What
+it knows how to do" (`agents.skills`, a menu for the setting through
+`agents.update` `learnSkills`, each skill's steps with Edit on its own sheet,
+`agents.skillEdit`, and Remove, `agents.skillRemove`). From chat:
+`update_agent` `learn_skills` (Chief): Ask me and Off apply at once;
+Automatically is more room, so it applies on the user's own message alone
+and is a card otherwise.
+
+**In recipes.** A recipe carries `skills: [{name, when, steps}]`, scrubbed
+like the rest and absent when there are none (version stays 1; older builds
+ignore it). On import each is cleaned again (`skills_learn::draft`), shown on
+the review card under "What it knows how to do" with its steps, and written
+into the new agent's home on Import ("It came with skills: …").
+
+**Residual.** The agent can still write a file into that folder with its
+own file tools, as it can any file in its home; `save_skill` is the path
+the app checks and shows. The effort thresholds are a judgement, not a
+measurement of difficulty.
+
+Tests: `cargo test --lib agents::skills_learn` (the gate, effort, redaction,
+each engine's placement, the card, recipes and imports),
+`pnpm vitest run src/components/agents/AgentSkills.test.tsx`,
+`mobile/__tests__/skillCard.test.tsx`, `scripts/agents-fake-e2e.sh skills`
+(a quick turn refused; a hard one's card, Save writing the file without the
+email; Automatically with no card; Off saving nothing), `node
+scripts/harness-capture.mjs agents-skill-card agents-editor-skills`, and
+`cd mobile && pnpm qa:web --only chat-skill-card` / `agent-sheet-skills`.
+
 ## Memory you can see (`src-tauri/src/agents/memory.rs`)
 
 The agent editor has two tabs, Agent and Memory. Memory lists the `## Memory`
@@ -3924,7 +3997,8 @@ a fork's recipes read the same):
   "watches": [{ "when": "a new file appears in [removed: a file path]", "what": "File it" }],
   "apps": ["Gmail", "Linear"],
   "look": { "colorway": "teal", "icon": "inbox", "key": "F" },
-  "independence": "often"
+  "independence": "often",
+  "skills": [{ "name": "Reconcile payouts", "when": "When asked to reconcile", "steps": "1. …" }]
 }
 ```
 
@@ -6225,6 +6299,7 @@ are `agents/settings_tools.rs`. Tests: `agents/settings_chat_tests.rs`,
 | Which account turns start on ("use my personal plan") | `use_account` (Chief): puts that signed-in account first in the order (`wallet::reorder`), failover unchanged | no when the user's own message asked; a card when another agent or a routine did; never for outside text |
 | Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
 | Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
+| Save what it learns (skills) | `update_agent` `learn_skills` (Chief) | Ask me and Off no; Automatically no on the user's own message alone, a card otherwise |
 | Name, role, look; unbinding from a project | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
 | Binding an agent to a project (more reach), changing its instructions | `update_agent` `project` / `instructions` (Chief) | no on the user's own message alone; a card otherwise ("Works in: shippy", "New instructions: …", with Runs on on the same card when it changes too; `mcp::update_widens`) |
 | Admin switch | `propose_settings_change` `admin` (admins) | yes |
