@@ -556,7 +556,10 @@ export function ChatView({
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
   const openUsage = () => router.push({ pathname: '/usage', params: { id } });
   const openConversations = () => router.push({ pathname: '/conversations', params: { id } });
-  const conversationsButton = offered && (
+  // One way into Conversations: the title row under the header once there
+  // are several; the header's icon only while there's one (to start another).
+  const switchRow = Boolean(offered && conversations && conversations.items.length > 1);
+  const conversationsButton = offered && !switchRow && (
     <IconButton name="bubble.left" label="Conversations" onPress={openConversations} />
   );
   const usageRing = ring && (
@@ -626,7 +629,7 @@ export function ChatView({
             {usageRing || <View />}
           </Stack.Toolbar.View>
           <Stack.Toolbar.Button
-            hidden={!offered}
+            hidden={!offered || switchRow}
             icon="bubble.left"
             accessibilityLabel="Conversations"
             tintColor={accent.accent}
@@ -640,7 +643,7 @@ export function ChatView({
           />
         </Stack.Toolbar>
       )}
-      {offered && conversations && conversations.items.length > 1 && (
+      {switchRow && conversations && (
         <ConversationSwitch
           list={conversations}
           viewing={viewing ?? conversations.current}

@@ -443,6 +443,9 @@ export const AgentChat = memo(function AgentChat({
   // under its own key. Unknown for a moment on first open, while the Mac
   // says which one the user was last in.
   const viewing = useAgentsSelector((s) => s.viewing[agent.id]);
+  const severalConversations = useAgentsSelector(
+    (s) => (s.conversations[agent.id]?.items.length ?? 0) > 1
+  );
   useEffect(() => {
     void ensureViewing(agent.id);
   }, [agent.id]);
@@ -1372,7 +1375,9 @@ export const AgentChat = memo(function AgentChat({
   // Identity only: who this is and what it's for. What it's doing is said
   // once in the sidebar row and once in the conversation (a bar, the working
   // line), never a third time up here.
-  const role = agent.role ? roleWithoutPath(agent.role) : '';
+  // With several conversations the title of the one on screen wins the room:
+  // the role is in the sidebar row already, and cut there it said nothing.
+  const role = agent.role && !severalConversations ? roleWithoutPath(agent.role) : '';
   const title = (
     <>
       <AgentKey

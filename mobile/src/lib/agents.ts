@@ -25,7 +25,12 @@ import {
   tokenCount,
   workingRowLine,
 } from '@shipstudio/companion-protocol';
-import { crossoverOutcome, previewText, stepInOutcome } from '@shipstudio/companion-protocol';
+import {
+  formatClock as clockOf,
+  crossoverOutcome,
+  previewText,
+  stepInOutcome,
+} from '@shipstudio/companion-protocol';
 import { drivenLine } from './bars';
 import { diffLineKind } from './diff';
 import { ENGINE_DEFAULT } from './newAgentDefaults';
@@ -331,7 +336,7 @@ export function usageLine(t: UsageTotals, onPlan = false): string {
 }
 
 /** "9:00 AM" / "09:00", as the Mac shows times (companion-protocol `clock`). */
-export { formatClock } from '@shipstudio/companion-protocol';
+export const formatClock = (ts: number): string => clockOf(ts);
 
 /**
  * A project's task, named by what it was asked: the first line of its
