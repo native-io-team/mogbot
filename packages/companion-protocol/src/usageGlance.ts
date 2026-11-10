@@ -827,6 +827,16 @@ function detailOf(a: UsageAccount, line: UsageAccountLine | undefined, name: str
   return out;
 }
 
+/**
+ * The name an account's row leads with. A name the app made up when the
+ * account was added ("Account 2") says nothing, so the account's email leads
+ * instead and the plan sits under it; a name the user chose is kept.
+ */
+export function accountDisplayName(name: string, email: string | null | undefined): string {
+  const generic = !name.trim() || /^Account\s+\d+$/i.test(name.trim());
+  return generic && email ? email : name;
+}
+
 function keyOf(
   row: SwitcherRow,
   position: number,
@@ -908,9 +918,9 @@ function keyOf(
     key: row.key,
     engine: row.engine,
     id: row.id,
-    name: row.name,
+    name: accountDisplayName(row.name, a.email),
     position,
-    detail: detailOf(a, line, row.name),
+    detail: detailOf(a, line, accountDisplayName(row.name, a.email)),
     state,
     stateLabel,
     sameAs: same ?? null,

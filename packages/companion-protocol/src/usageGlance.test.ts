@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { UsageAccount, UsageAccountLine, UsageInventory } from './model';
 import {
+  accountDisplayName,
   changeLines,
   glanceUsed,
   relativeIn,
@@ -987,5 +988,16 @@ describe('every usage surface says what is used', () => {
     });
     expect(high.keys[0].limits[0].tone).toBe('warning');
     expect(high.total.tone).toBe('warning');
+  });
+});
+
+describe('accountDisplayName', () => {
+  it('leads with the email when the name was made up by the app', () => {
+    expect(accountDisplayName('Account 2', 'julian@example.com')).toBe('julian@example.com');
+    expect(accountDisplayName('', 'julian@example.com')).toBe('julian@example.com');
+  });
+  it('keeps a name the user chose, and a made-up one with no email', () => {
+    expect(accountDisplayName('Work', 'julian@example.com')).toBe('Work');
+    expect(accountDisplayName('Account 2', null)).toBe('Account 2');
   });
 });
