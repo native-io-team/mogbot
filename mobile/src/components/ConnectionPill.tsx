@@ -16,33 +16,15 @@ import { CALM_MS, linkBar, pill, problemBody, type LinkBar } from '../lib/connec
 import { haptic } from '../lib/haptics';
 import { retryNow } from '../lib/session';
 import { useApp } from '../lib/store';
-import { useShowing } from '../lib/moving';
+import { useNow } from '../lib/moving';
 import { depthOf, fonts, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { TextAction } from './surfaces';
 import { Button, Dot, Icon, T } from './ui';
 
-/**
- * Re-render every `ms` for "last seen 2 min ago", while anyone can see it:
- * the clock stops in the background and on a screen under another (a stack
- * keeps them mounted), and catches up at once when it shows again.
- */
-export function useNow(ms = 15_000) {
-  const [now, setNow] = useState(Date.now);
-  const showing = useShowing();
-  useEffect(() => {
-    if (!showing) return;
-    const tick = () => setNow(Date.now());
-    const catchUp = setTimeout(tick, 0);
-    const id = setInterval(tick, ms);
-    return () => {
-      clearTimeout(catchUp);
-      clearInterval(id);
-    };
-  }, [ms, showing]);
-  return now;
-}
+/** Lives with `useShowing` now; still reachable from here, where the screens import it. */
+export { useNow } from '../lib/moving';
 
 /**
  * The time for `pill`: `useNow`, plus a tick the moment the calm first

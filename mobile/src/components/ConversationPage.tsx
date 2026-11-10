@@ -13,7 +13,7 @@
  * no page or the Mac keeps none.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import {
   pageAgo,
@@ -31,6 +31,7 @@ import {
 } from '@shipstudio/companion-protocol';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
+import { useNow } from '../lib/moving';
 import { pageVersion, pinPage, setFolded, useConversationPage } from '../lib/page';
 import { iconSize, PRESSED, radius, space } from '../lib/theme';
 import { Blocks } from './blocks/Blocks';
@@ -138,11 +139,8 @@ function PageBand({
   const [opened, setOpened] = useState<{ v: PageVersion; on: number } | null>(null);
   const older = opened?.on === page.version ? opened.v : null;
   const setOlder = (v: PageVersion | null) => setOpened(v ? { v, on: page.version } : null);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(t);
-  }, []);
+  // "Updated 4 min ago": a minute's clock, only while the chat shows.
+  const now = useNow(60_000);
 
   const shown: PageVersion = older ?? page;
   const set = useMemo(() => pageBlocks(shown), [shown]);

@@ -77,13 +77,13 @@ describe('the drafted agent, reviewed on the phone', () => {
         onKept={onKept}
       />
     );
-    expect(screen.getByText('Every Friday at 16:00')).toBeTruthy();
+    expect(screen.getByText('Every Friday at 4:00 PM')).toBeTruthy();
     expect(screen.getByText('After your OK: Post it to #team')).toBeTruthy();
     expect(screen.getByText('Can’t be scheduled as written.')).toBeTruthy();
     expect(screen.getByLabelText('Whenever: Tidy').props.disabled).toBe(true);
     expect(screen.getByText(/It asks you to connect it the first time it needs it/)).toBeTruthy();
     await fireEvent(
-      screen.getByLabelText('Every Friday at 16:00: Draft the weekly recap'),
+      screen.getByLabelText('Every Friday at 4:00 PM: Draft the weekly recap'),
       'valueChange',
       false
     );

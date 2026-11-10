@@ -83,11 +83,66 @@ export function keepCard(agent: Agent, messages: AgentMessage[] | undefined) {
   return undefined;
 }
 
+/**
+ * A chat's waiting cards, in order: only the newest stage of each import.
+ * Kept per `messages` array, which the store replaces whenever the chat
+ * changes, so a store change elsewhere (a draft, the link, another chat)
+ * never rescans every loaded chat. The tab bar's badge reads this on every
+ * store change.
+ */
+const cardsCache = new WeakMap<AgentMessage[], { m: AgentMessage; card: Approval }[]>();
+
+function waitingCards(messages: AgentMessage[]): { m: AgentMessage; card: Approval }[] {
+  const hit = cardsCache.get(messages);
+  if (hit) return hit;
+  // An import's newest waiting stage, per talk: the others aren't listed.
+  const newestStage = new Map<string, string>();
+  const pending: { m: AgentMessage; card: Approval }[] = [];
+  for (const m of messages) {
+    const card = pendingCard(m);
+    if (!card) continue;
+    pending.push({ m, card });
+    const talk = card.connector?.talkId;
+    if (talk) newestStage.set(talk, m.id);
+  }
+  const out = pending.filter(
+    ({ m, card }) => !card.connector?.talkId || newestStage.get(card.connector.talkId) === m.id
+  );
+  cardsCache.set(messages, out);
+  return out;
+}
+
+/** The last answer, for the same inputs: the badge, the landing and the tab ask in turn. */
+let last: {
+  args: [Agent[], Chats, TeamSetupView | null | undefined, boolean];
+  items: FeedItem[];
+} | null = null;
+
 export function feedItems(
   agents: Agent[],
   chats: Chats,
   setup: TeamSetupView | null | undefined,
   reviewHere = false
+): FeedItem[] {
+  if (
+    last &&
+    last.args[0] === agents &&
+    last.args[1] === chats &&
+    last.args[2] === setup &&
+    last.args[3] === reviewHere
+  ) {
+    return last.items;
+  }
+  const items = buildFeed(agents, chats, setup, reviewHere);
+  last = { args: [agents, chats, setup, reviewHere], items };
+  return items;
+}
+
+function buildFeed(
+  agents: Agent[],
+  chats: Chats,
+  setup: TeamSetupView | null | undefined,
+  reviewHere: boolean
 ): FeedItem[] {
   const hold = setupHold(setup);
   const visible = agents.filter((a) => !a.hidden && !hold.quiet.has(a.id));
@@ -99,17 +154,7 @@ export function feedItems(
   for (const agent of visible) {
     const messages = chats[agent.id]?.messages;
     let asks = 0;
-    // An import's newest waiting stage, per talk: the others aren't listed.
-    const newestStage = new Map<string, string>();
-    for (const m of messages ?? []) {
-      const talk = pendingCard(m)?.connector?.talkId;
-      if (talk) newestStage.set(talk, m.id);
-    }
-    for (const m of messages ?? []) {
-      const card = pendingCard(m);
-      if (!card) continue;
-      const talk = card.connector?.talkId;
-      if (talk && newestStage.get(talk) !== m.id) continue;
+    for (const { m, card } of messages ? waitingCards(messages) : []) {
       const here = answerableHere(card, reviewHere);
       items.push({
         key: `${here ? 'ask' : 'mac'}:${m.id}`,

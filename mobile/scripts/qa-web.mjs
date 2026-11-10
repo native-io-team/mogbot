@@ -1934,6 +1934,21 @@ const LIVE = [
       'Finance’s sheet: “Skills” with “Save new skills · Ask me” (a menu of Automatically, Ask me, Off), then “Export invoices from Xero” with when to use it, and a muted line saying anything that read outside content asks first',
   },
   {
+    name: 'skill-editor',
+    route: '/skill?id=fin&slug=export-invoices',
+    ready: 'When to use it',
+    check:
+      'The skill editor: “Skill” with Save (off: nothing changed yet), then Name, When to use it and Steps, each labelled above its field and still labelled while filled, and “Saved on your Mac with personal details and secrets taken out.”',
+  },
+  {
+    name: 'share-sheet',
+    route:
+      '/share?title=Launch%20checklist&url=https%3A%2F%2Fexample.com%2Flaunch&text=Ship%20the%20pricing%20page%20Thursday%20and%20email%20the%20waitlist%20first.',
+    ready: 'Send to agent…',
+    check:
+      'Send to agent: what was shared, “from a link. Read it before you send it.”, then “Put it in a chat for you to send” in sentence case over the agents, one grouped list',
+  },
+  {
     name: 'agent-sheet-site',
     route: '/agent/site',
     ready: 'Acme Site',
@@ -2230,14 +2245,14 @@ const LIVE = [
   {
     name: 'schedule-when',
     route: '/schedule?agentId=site&mode=when',
-    ready: 'WHEN THIS HAPPENS',
+    ready: 'When this happens',
     check:
-      'New routine, “At a time / When…” with When… on, then the desk’s “When…” composer: WHEN THIS HAPPENS over five sources (Linear among them, the Mac has a Linear app), each with how it’s checked (“Free · checked from your Mac”), the first ticked; CHECK EVERY 5/10/30 min/1 hour with 10 min on; WHAT; the echo box says “Which…”-free words: “When someone mentions you on GitHub” and “Checks are free. The first check only notes what’s already there…”; Cancel and a neutral Add (not the agent’s colour), off until What is filled',
+      'New routine, “At a time / When…” with When… on, then the desk’s “When…” composer: When this happens over five sources (Linear among them, the Mac has a Linear app), each with how it’s checked (“Free · checked from your Mac”), the first ticked; Check every 5/10/30 min/1 hour with 10 min on; What; the echo box says “Which…”-free words: “When someone mentions you on GitHub” and “Checks are free. The first check only notes what’s already there…”; Cancel and a neutral Add (not the agent’s colour), off until What is filled',
   },
   {
     name: 'schedule-when-folder',
     route: '/schedule?agentId=site&mode=when',
-    ready: 'WHEN THIS HAPPENS',
+    ready: 'When this happens',
     act: async (page) => {
       await page.clickText('A new file appears in a folder');
       await sleep(400);
@@ -2247,12 +2262,12 @@ const LIVE = [
       await sleep(400);
     },
     check:
-      'A new file appears in a folder ticked: chips of the Mac’s folders (~/Downloads on, ~/Desktop, ~/Documents) and “Folders your Mac offers. For another, set it up on your Mac.”; no path field; CHECK EVERY 1/5/10/30 min; the echo “When a new file appears in /Users/sam/Downloads — File the invoice and tell me the total” and “Checks are free…”; Add enabled',
+      'A new file appears in a folder ticked: chips of the Mac’s folders (~/Downloads on, ~/Desktop, ~/Documents) and “Folders your Mac offers. For another, set it up on your Mac.”; no path field; Check every 1/5/10/30 min; the echo “When a new file appears in /Users/sam/Downloads — File the invoice and tell me the total” and “Checks are free…”; Add enabled',
   },
   {
     name: 'schedule-when-custom',
     route: '/schedule?agentId=site&mode=when',
-    ready: 'WHEN THIS HAPPENS',
+    ready: 'When this happens',
     act: async (page) => {
       await page.clickText('Something else…');
       await sleep(400);
@@ -2262,12 +2277,12 @@ const LIVE = [
       await sleep(400);
     },
     check:
-      'Something else… ticked: the “What to look for” field filled, THROUGH with Gmail and Linear chips (Gmail on), CHECK EVERY 15/30 min/1 hour/4 hours with 30 min on; the echo “When Acme Site finds “a new email from Dana about the launch”” and “Each check uses a little of Acme Site’s usage and can only read that app, up to 24 a day. The first check…”',
+      'Something else… ticked: the “What to look for” field filled, Through with Gmail and Linear chips (Gmail on), Check every 15/30 min/1 hour/4 hours with 30 min on; the echo “When Acme Site finds “a new email from Dana about the launch”” and “Each check uses a little of Acme Site’s usage and can only read that app, up to 24 a day. The first check…”',
   },
   {
     name: 'schedule-when-mail',
     route: '/schedule?agentId=site&mode=when',
-    ready: 'WHEN THIS HAPPENS',
+    ready: 'When this happens',
     act: async (page) => {
       await page.clickText('An email arrives in Mail');
       await sleep(400);
@@ -2277,12 +2292,12 @@ const LIVE = [
       await sleep(400);
     },
     check:
-      'An email arrives in Mail ticked (“Free · reads Mail on your Mac”): a From field with billing@northwind.com and a words field with invoice, no Check again (the Mac can read Mail); CHECK EVERY 1/5/10/30 min; the echo “When an email arrives in Mail from billing@northwind.com mentioning “invoice” — File it and tell me the total” and “Checks are free. What a message says is only information to Acme Site, and it asks you before replying. The first check…”; Add enabled',
+      'An email arrives in Mail ticked (“Free · reads Mail on your Mac”): a From field with billing@northwind.com and a words field with invoice, no Check again (the Mac can read Mail); Check every 1/5/10/30 min; the echo “When an email arrives in Mail from billing@northwind.com mentioning “invoice” — File it and tell me the total” and “Checks are free. What a message says is only information to Acme Site, and it asks you before replying. The first check…”; Add enabled',
   },
   {
     name: 'schedule-when-text-access',
     route: '/schedule?agentId=site&mode=when',
-    ready: 'WHEN THIS HAPPENS',
+    ready: 'When this happens',
     act: async (page) => {
       await page.clickText('A text arrives in Messages');
       await sleep(400);
@@ -2298,7 +2313,7 @@ const LIVE = [
     ready: 'Acme Site',
     act: scrollToText('When something happens'),
     check:
-      'WHEN SOMETHING HAPPENS: one row with a bolt, “When someone mentions you on GitHub”, “Triage it and tell me if it’s urgent”, “Checks every 10 min · checked 4 min ago · last found 2 …” and an ellipsis (it can be acted on); no “Set up and changed on your Mac.” line',
+      'When something happens: one row with a bolt, “When someone mentions you on GitHub”, “Triage it and tell me if it’s urgent”, “Checks every 10 min · checked 4 min ago · last found 2 …” and an ellipsis (it can be acted on); no “Set up and changed on your Mac.” line',
   },
   {
     name: 'new-agent',

@@ -80,7 +80,7 @@ describe('Describe the agent you want', () => {
     expect(screen.getByDisplayValue(DRAFT.role)).toBeInTheDocument();
     expect(screen.getByDisplayValue(DRAFT.instructions)).toBeInTheDocument();
     // The time as the app read it; the step that waits, in words.
-    expect(screen.getByText('Every weekday at 08:00')).toBeInTheDocument();
+    expect(screen.getByText('Every weekday at 8:00 AM')).toBeInTheDocument();
     expect(screen.getByText('After your OK ·')).toBeInTheDocument();
     // One it couldn't read: said, and it can't be kept.
     expect(screen.getByText(/Can’t be scheduled as written/)).toBeInTheDocument();
@@ -91,7 +91,7 @@ describe('Describe the agent you want', () => {
     // Leave the morning brief out.
     fireEvent.click(
       screen.getByLabelText(
-        'Keep: Every weekday at 08:00, Read today’s newsletters and draft the brief'
+        'Keep: Every weekday at 8:00 AM, Read today’s newsletters and draft the brief'
       )
     );
     await act(() => {

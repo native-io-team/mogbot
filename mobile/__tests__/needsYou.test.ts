@@ -18,6 +18,7 @@ import {
 } from '../src/lib/needsYou';
 import { offersLine } from '../src/lib/catchUpTab';
 import { agent, msg } from './helpers';
+import { askingLine, skillSummary } from '../src/lib/agents';
 
 const a = (id: string, over: Partial<Agent> = {}) =>
   agent({ id, name: id, isMain: false, pinned: false, hidden: false, lastActivityAt: 0, ...over });
@@ -252,5 +253,35 @@ describe('answering a row', () => {
       kind: 'open',
       label: 'Open chat',
     });
+  });
+});
+
+describe('feedItems is cheap to ask again', () => {
+  it('answers the same inputs with the same list, and a changed chat afresh', () => {
+    const agents = [a('site')];
+    const chats = { site: { messages: [ask('s1', 'site', 5)] } };
+    const first = feedItems(agents, chats, null);
+    // The tab bar, the landing and the tab ask in turn on every store change.
+    expect(feedItems(agents, chats, null)).toBe(first);
+    const answered = {
+      site: { messages: [ask('s1', 'site', 5, { status: 'allowed' })] },
+    };
+    expect(keys(feedItems(agents, answered, null))).toEqual([]);
+    expect(keys(feedItems(agents, chats, null))).toEqual(['ask:s1']);
+  });
+});
+
+describe('a skill offer’s line', () => {
+  it('speaks to you, as its card does, and keeps what the Mac added after it', () => {
+    const offer = approval('k', {
+      title: 'Save “Reconcile payouts” as a skill?',
+      summary:
+        'When to use it: When the user asks to reconcile payouts 1 personal detail or secret removed.',
+      skill: { name: 'Reconcile payouts', when: 'When the user asks to reconcile payouts' },
+    } as Partial<Approval>);
+    expect(askingLine(offer)).toBe(
+      'When you ask to reconcile payouts. 1 personal detail or secret removed.'
+    );
+    expect(skillSummary(approval('x'))).toBeNull();
   });
 });

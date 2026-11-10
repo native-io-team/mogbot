@@ -66,6 +66,10 @@ describe('a card only the Mac can answer', () => {
   it('is never the card the chat pins or jumps to', () => {
     expect(pendingApproval([card('old'), review('new')])?.id).toBe('old');
     expect(pendingApproval([review('only')])).toBeUndefined();
+    // A newer skill offer never stands in for the card the agent is stopped on.
+    const offer = card('offer', { skill: { name: 'S', when: 'w', steps: 's' } } as never);
+    expect(pendingApproval([card('blocking'), offer])?.id).toBe('blocking');
+    expect(pendingApproval([offer])?.id).toBe('offer');
   });
 
   it('with only a review waiting, the agent waits on the Mac, not on this phone', () => {

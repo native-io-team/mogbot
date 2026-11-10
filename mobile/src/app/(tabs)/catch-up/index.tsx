@@ -48,6 +48,7 @@ import {
   failedTurn,
   failureLine,
   formatAgo,
+  skillSummary,
 } from '../../../lib/agents';
 import { makeStyles, useColors, useLargeText } from '../../../lib/appearance';
 import {
@@ -446,7 +447,11 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
   // Answered on the row: the row shows all of what it asks (its plain line,
   // else the exact command), never a paraphrase. Otherwise its short line,
   // said once when it repeats the title.
-  const whole = inline ? card?.approval?.summary?.trim() || card?.approval?.detail?.trim() : '';
+  const whole = inline
+    ? (card?.approval && skillSummary(card.approval)) ||
+      card?.approval?.summary?.trim() ||
+      card?.approval?.detail?.trim()
+    : '';
   const line = whole || (said === title ? '' : said);
   const copy = useCopyParts(
     item.kind === 'keep' && card?.changes?.copy
