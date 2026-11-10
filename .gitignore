@@ -65,6 +65,8 @@ coverage/
 
 # UI harness capture output (regenerate with scripts/harness-capture.mjs)
 harness/shots/
+# Accessibility scan output (regenerate with scripts/harness-a11y.mjs)
+harness/a11y/
 # Perf build of the harness (regenerate with scripts/perf-agents.mjs --build)
 harness/perf-build/
 
