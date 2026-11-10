@@ -93,29 +93,20 @@ const phone = (
 export const phoneScenarios: Scenario[] = [
   phone(
     'phone-off',
-    'Phone — off, nothing paired: install comes first',
-    'Titled “Phone”, the Settings section’s name. One line on what the phone is for, then three short numbered steps: ' +
-      '“Get the app” with a primary “Get the app…” and a secondary “I already have it”; ' +
-      '“Tailscale, on this Mac and your phone” saying a scan never gets here without it, a green ' +
-      'tick on “This Mac: set up.”, and “Your phone: Install Tailscale on your phone and sign in ' +
-      'as julian@example.com.” with “App Store ↗” and “Google Play ↗” links; and a muted “Pair”. ' +
-      'No Xcode, Apple ID, cable or USB debugging on this screen, no “Turn on phone access” ' +
-      'button and no QR.',
+    'Phone — nothing paired yet: the numbered setup steps',
+    'Titled “Phone”. One line, then five numbered step cards: 1 “Get the Mogbot app on your phone” (from your TestFlight invite) with a neutral “I have it” and a quiet “No invite? Get the app…”; 2 “Tailscale on this Mac” ticked with a green “Done”; 3 “Tailscale on your phone” saying sign in as julian@example.com, with “App Store ↗” and “Google Play ↗”; 4 “Turn on phone access” with its button; 5 “Scan the code”, saying the code shows here once the rest are done. No QR, no Xcode.',
     { tailscale: { state: 'connected', dnsName: DNS, login: 'julian@example.com' } }
   ),
   phone(
     'phone-install-tailscale',
-    'Phone — on, but Tailscale isn’t installed',
-    'A quiet panel titled "Install Tailscale" with "Turn off phone access" on the right, one ' +
-      'paragraph on why, and "Get Tailscale" plus "Check again" (nothing has failed yet). ' +
-      '"Paired phones" below says none are paired yet.',
+    'Phone — on, nothing paired, Tailscale missing on this Mac',
+    'The same five steps: step 2 “Tailscale on this Mac” not done, with “Get Tailscale for Mac ↗” and “Check again”; step 4 waits on step 2 and says so.',
     { enabled: true, running: true, tailscale: { state: 'notInstalled' } }
   ),
   phone(
     'phone-approve-https',
-    'Phone — Tailscale needs HTTPS certificates switched on',
-    '"Switch on HTTPS in Tailscale", one sentence on why, "Open Tailscale" and ' +
-      '"I’ve switched it on".',
+    'Phone — nothing paired, Tailscale needs HTTPS switched on',
+    'The five steps with 2 Done; step 4 says one switch in Tailscale (HTTPS), with “Open Tailscale ↗” and “I’ve switched it on”.',
     {
       enabled: true,
       running: true,
@@ -124,9 +115,8 @@ export const phoneScenarios: Scenario[] = [
   ),
   phone(
     'phone-failed',
-    'Phone — Tailscale refused, with its own words',
-    'The title says Tailscale didn’t start phone access, Tailscale’s message in red wraps ' +
-      'inside the panel, and "Try again" is offered.',
+    'Phone — nothing paired, Tailscale refused, in its own words',
+    'Step 4 says Tailscale didn’t start phone access, Tailscale’s message in red wraps inside the card, and “Try again” is offered.',
     {
       enabled: true,
       running: true,
@@ -180,8 +170,31 @@ export const phoneScenarios: Scenario[] = [
       pairing: { active: true, expiresAt: Date.now() + 5 * MIN },
     },
     {
-      // "Pair a phone" in Cmd+K opens the panel straight onto a code.
+      // "Pair your phone" in Cmd+K opens the panel straight onto a code.
       command: 'companion.pair',
+      commands: {
+        companion_pair_start: {
+          link: PHONE_PAIRING_LINK,
+          qr: PHONE_QR,
+          expiresAt: Date.now() + 5 * MIN,
+        },
+      },
+    }
+  ),
+  phone(
+    'phone-first-code',
+    'Phone — no phone paired, set up: opens straight on the code',
+    'Opened the plain way (Paired phones / the sidebar row), with nothing paired and phone access ' +
+      'ready: the QR is already on screen with no extra click, titled “Scan this with your phone”, ' +
+      'four steps beside it (the app from TestFlight, Tailscale on the phone signed in as ' +
+      'julian@example.com, tap Scan the code, tap Pair then Allow here). No setup steps above it.',
+    {
+      ...ON,
+      tailscale: { state: 'connected', dnsName: DNS, login: 'julian@example.com' },
+      pairing: { active: true, expiresAt: Date.now() + 5 * MIN },
+    },
+    {
+      requires: '[data-testid="phone-pair-code"]',
       commands: {
         companion_pair_start: {
           link: PHONE_PAIRING_LINK,

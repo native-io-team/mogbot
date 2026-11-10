@@ -31,7 +31,7 @@ describe('phoneIndicatorState', () => {
   it('invites pairing when no phone is paired', () => {
     expect(phoneIndicatorState(status({ enabled: false }), now)).toMatchObject({
       tone: 'off',
-      line: 'Get the phone app',
+      line: 'Pair your phone',
       pair: true,
     });
   });

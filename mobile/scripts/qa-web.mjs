@@ -476,10 +476,10 @@ async function prePairShots(page, d) {
   try {
     for (const theme of THEMES) {
       await setTheme(page, theme);
-      if (wanted(`pair-start-${theme}`)) {
+      if (wanted(`pair-start-${theme}`) || wanted(`pair-scan-${theme}`)) {
         await page.goto(`${WEB}/pair`);
         await page.waitFor(
-          `document.body.innerText.includes('Turn on Tailscale on this phone')`,
+          `document.body.innerText.includes('Pair with your Mac')`,
           180_000,
           'the welcome'
         );
@@ -487,28 +487,18 @@ async function prePairShots(page, d) {
         await capture(page, `pair-start-${theme}`, {
           route: '/pair',
           check:
-            '“Step 1 of 2”, “Turn on Tailscale on this phone”, why, three lines (installed, same account, switched on), Get/Open Tailscale, then one big “It’s on — next”',
+            '“Pair with your Mac”, then one card of four numbered steps: open the app on your Mac (with “Get … for Mac”), Tailscale on this phone and your Mac (Get/Open Tailscale), click “Pair your phone” at the bottom of the sidebar, tap Scan the code; one big “Scan the code” below',
           theme,
         });
-      }
-      if (wanted(`pair-scan-${theme}`)) {
-        await page.goto(`${WEB}/pair`);
-        await page.waitFor(
-          `document.body.innerText.includes('It’s on — next')`,
-          180_000,
-          'the welcome'
-        );
-        await page.clickText('It’s on — next');
-        await page.waitFor(
-          `document.body.innerText.includes('Scan the code on your Mac')`,
-          10_000,
-          'the scan step'
+        // The bottom of the same screen: the buttons under the steps.
+        await page.eval(
+          `[...document.querySelectorAll('div')].filter((e) => e.scrollHeight > e.clientHeight + 4).forEach((e) => (e.scrollTop = e.scrollHeight))`
         );
         await sleep(500);
         await capture(page, `pair-scan-${theme}`, {
-          route: '/pair (step 2)',
+          route: '/pair (scrolled)',
           check:
-            '“Step 2 of 2”, “Scan the code on your Mac”, where the code is on the Mac, one big “Scan the code”, then “Paste a pairing link instead” and Back',
+            'One big “Scan the code”, then “Paste a pairing link instead” and “Try the demo” with its one line; nothing cut off',
           theme,
         });
       }

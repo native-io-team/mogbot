@@ -36,9 +36,9 @@ export const PHONE_APP_ROUTE: PhoneAppRoute = phoneAppRouteFor(
 export function phoneOfferNote(route: PhoneAppRoute): string | null {
   switch (route) {
     case 'store':
-      return 'Chat, answer and approve from anywhere. Get the free app from the App Store, then scan a code from this Mac. Your phone talks only to this Mac.';
+      return 'Chat, answer and approve from anywhere. Get the free app from the App Store, then scan a code from this Mac. Your phone talks only to this Mac, through Tailscale on both.';
     case 'build':
-      return 'Chat, answer and approve from anywhere. Your phone talks only to this Mac. There’s no App Store app yet, so setting it up takes ten minutes to an hour.';
+      return 'Chat, answer and approve from anywhere. Your phone talks only to this Mac, through Tailscale on both. There’s no App Store app yet, so setting it up takes ten minutes to an hour.';
     case 'none':
       return null;
   }

@@ -271,7 +271,7 @@ export const remoteScenarios: Scenario[] = [
     id: 'remote-indicator-off',
     title: 'Sidebar — remote access never set up, no phone paired',
     looksRightWhen:
-      'At the foot of the sidebar, a phone icon and "Get the phone app" (the companion app), ' +
+      'At the foot of the sidebar, a phone icon and "Pair your phone" (the companion app, none paired yet), ' +
       'in the same icon column and colour as the Settings gear, and no remote access row: ' +
       'remote access shows ' +
       'there only while it is on. Clicking the phone row opens the Phone panel.',

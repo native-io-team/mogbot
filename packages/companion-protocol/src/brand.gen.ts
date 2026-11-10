@@ -22,3 +22,6 @@ export const TAILNET_HTTPS_PORT = 47463;
 
 /** The app's source repository, or null when it has none to link to. */
 export const SOURCE_URL: string | null = "https://github.com/native-io-team/mogbot";
+
+/** Where someone with only the phone gets the Mac app, or null when nowhere public. */
+export const MAC_DOWNLOAD_URL: string | null = "https://github.com/native-io-team/mogbot-releases";
