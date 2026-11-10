@@ -18,14 +18,14 @@ import {
   HistoryIcon,
   PaperclipIcon,
   PinIcon,
-  ResetIcon,
+  PlusIcon,
   ShieldCheckIcon,
   TerminalIcon,
   TrashIcon,
 } from '@/components/icons';
 import { ContextMenuItem, ContextMenuSeparator } from '../primitives/ContextMenu';
 import { DropdownDivider, DropdownItem } from '../primitives/Dropdown';
-import { canStartFresh, canTakeOver, contextPercent, type Agent } from '../../lib/agents';
+import { canTakeOver, contextPercent, type Agent } from '../../lib/agents';
 import { ON_ITS_OWN_MENU } from '../../lib/agentOnItsOwn';
 
 export interface AgentActions {
@@ -115,18 +115,13 @@ export function AgentActionItems({
     },
     ...withDivider([
       ...takeoverItems(agent, onTakeOver, onHandBack),
-      ...(canStartFresh(agent)
-        ? [
-            {
-              // How full it is, only when its engine said.
-              label: freshLabel(agent),
-              icon: <ResetIcon size={12} />,
-              run: () => onStartFresh(agent),
-              // Its turn is in the conversation it would leave.
-              disabled: agent.status.state !== 'idle',
-            },
-          ]
-        : []),
+      {
+        // How full this one is, only when its engine said. Never waits on a
+        // turn: the turn stays in its own conversation.
+        label: freshLabel(agent),
+        icon: <PlusIcon size={12} />,
+        run: () => onStartFresh(agent),
+      },
     ]),
   ];
   if (!agent.isMain) {
@@ -195,5 +190,7 @@ function takeoverItems(
 
 function freshLabel(agent: Agent): string {
   const percent = contextPercent(agent);
-  return percent === null ? 'Start fresh…' : `Start fresh (${percent < 1 ? '<1' : percent}% full)…`;
+  return percent === null
+    ? 'New conversation'
+    : `New conversation (this one ${percent < 1 ? '<1' : percent}% full)`;
 }

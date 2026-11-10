@@ -297,3 +297,65 @@
 :root[data-theme='light'] .agent-mention {
   color: color-mix(in srgb, var(--agents-tint, var(--text-secondary)) 40%, var(--text-primary));
 }
+
+/* ------------------------------------------------------- conversations */
+
+/* The header's conversation switcher: beside the agent's name, the one on
+   screen, ellipsised so a long title never pushes the name out. */
+.agent-conversations__trigger {
+  max-width: 220px;
+  min-width: 0;
+  gap: var(--spacing-xs);
+  color: var(--text-secondary);
+}
+
+.agent-conversations__title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ss-dropdown__menu.agent-conversations__menu {
+  width: 320px;
+}
+
+.agent-conversations__item {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.agent-conversations__name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-model-menu .agent-conversations__when {
+  flex: 0 0 auto;
+}
+
+.agent-conversations__elsewhere {
+  color: var(--text-muted);
+}
+
+.agent-conversations__rename-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-xl) var(--spacing-xl);
+}
+
+.agent-conversations__rename-hint {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-conversations__rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}

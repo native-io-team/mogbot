@@ -1530,7 +1530,7 @@ export function FreshHint({ agent, onStartFresh }: { agent: Agent; onStartFresh:
         className="agent-fresh-hint__action"
         onClick={onStartFresh}
       >
-        Start fresh (memory is kept)
+        Start a new conversation (memory is kept)
       </TextButton>
     </div>
   );

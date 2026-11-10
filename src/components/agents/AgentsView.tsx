@@ -45,7 +45,6 @@ import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import {
   answerApproval,
-  canStartFresh,
   canTakeOver,
   deleteAgent,
   focusAgent,
@@ -54,7 +53,6 @@ import {
   needsYou,
   noEngineInstalled,
   sortAgents,
-  startAgentFresh,
   stopAgent,
   TEAM_ID,
   updateAgent,
@@ -68,6 +66,7 @@ import {
   loadRoomMessages,
   refreshAgents,
   refreshRooms,
+  startConversation,
   useAgentsList,
   useAgentsSelector,
   useRoomsList,
@@ -93,7 +92,7 @@ import {
   EyeOffIcon,
   FolderIcon,
   PinIcon,
-  ResetIcon,
+  PlusIcon,
   ShieldCheckIcon,
   TrashIcon,
   TerminalIcon,
@@ -341,7 +340,6 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   /** The search hit last opened, marked in the results. */
   const [currentHit, setCurrentHit] = useState<string | null>(null);
   const [stopping, setStopping] = useState<Agent | null>(null);
-  const [freshening, setFreshening] = useState<Agent | null>(null);
   const searchOpen = query.trim().length > 0 || (popoverSearch && popoverOpen);
   const closeSearch = useCallback(() => {
     setPopoverOpen(false);
@@ -527,7 +525,12 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
       },
       onEdit: (a: Agent) => setEditor({ open: true, agent: a }),
       onDelete: setDeleting,
-      onStartFresh: setFreshening,
+      // A new conversation leaves nothing behind (the others stay in the
+      // switcher), so it needs no confirm, and never waits on a turn.
+      onStartFresh: (a: Agent) => {
+        setSelectedId(a.id);
+        void run(() => startConversation(a.id));
+      },
       onTakeOver: takeover?.takeOver,
       onHandBack: takeover?.handBack,
       onOnItsOwn: (a: Agent) => setOnItsOwnFor(a.id),
@@ -737,16 +740,27 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
           ],
           run: () => setOnItsOwnFor(a.id),
         })),
-      ...(selected && canStartFresh(selected) && selected.status.state === 'idle'
+      ...(selected
         ? [
             {
-              id: 'agents.startFresh',
-              // The same words as the … menu and the nudge.
-              title: 'Start fresh…',
-              icon: <ResetIcon size={14} />,
+              id: 'agents.newConversation',
+              // The same words as the … menu and the header's switcher.
+              title: `New conversation with ${selected.name}`,
+              icon: <PlusIcon size={14} />,
               category: 'action' as const,
-              keywords: ['agents', 'new conversation', 'reset', 'clear', 'context', 'session'],
-              run: () => setFreshening(selected),
+              keywords: [
+                'agents',
+                'start fresh',
+                'new chat',
+                'thread',
+                'reset',
+                'clear',
+                'context',
+                'session',
+              ],
+              run: () => {
+                void run(() => startConversation(selected.id));
+              },
             },
           ]
         : []),
@@ -821,13 +835,6 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     } catch (err) {
       showToast(formatCommandError(asCommandError(err)), 'error');
     }
-  };
-
-  const confirmFresh = async () => {
-    if (!freshening) return;
-    const agent = freshening;
-    setFreshening(null);
-    await run(() => startAgentFresh(agent.id));
   };
 
   const confirmDelete = async () => {
@@ -1152,27 +1159,6 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
             confirmVariant="danger"
             onCancel={() => setStopping(null)}
             onConfirm={() => void confirmStop()}
-          />
-        </AccentScope>
-      )}
-      {freshening && (
-        // In the agent's own colour: a confirm about Acme is Acme's.
-        <AccentScope color={freshening.color}>
-          <ProjectActionConfirmModal
-            title={`Start ${freshening.name} fresh?`}
-            body={
-              <p>
-                Its next message starts a new conversation. Its instructions and memory carry over;
-                anything it only knew from this conversation doesn’t.
-              </p>
-            }
-            hint="This chat stays here to scroll back through."
-            loading={false}
-            confirmLabel="Start fresh"
-            loadingLabel="Starting fresh…"
-            confirmVariant="primary"
-            onCancel={() => setFreshening(null)}
-            onConfirm={() => void confirmFresh()}
           />
         </AccentScope>
       )}

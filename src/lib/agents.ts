@@ -251,6 +251,12 @@ export interface Agent {
   context?: ContextFill;
   /** You're driving its session in a terminal; omitted otherwise. */
   takeover?: AgentTakeover;
+  /**
+   * Its conversations' sessions (`agents/conversations.rs`): `loaded` is the
+   * conversation its session fields (and a turn in progress) belong to;
+   * absent, the first. Omitted while it has only ever used the first.
+   */
+  conversations?: { loaded?: string };
 }
 
 /** Mirrors `takeover::View`: you're driving the agent's own session by hand. */
@@ -730,6 +736,8 @@ export interface AgentMessage {
    * "Chrome isn't reachable through Claude's extension" → Your Chrome).
    */
   fix?: NoteFix;
+  /** Which of the agent's conversations it was said in; absent: the first's (`conversationOf`). */
+  conversation?: string;
 }
 
 /** A fix a note offers: `user_chrome` opens Settings → Agents → Your Chrome. */
@@ -1223,6 +1231,8 @@ export const AGENT_EVENTS = {
   registry: 'agents://registry',
   /** A reply being written: `{ agentId, id, text }`, the text so far. */
   draft: 'agents://draft',
+  /** An agent's conversations changed (one named or started); payload is its id. */
+  conversations: 'agents://conversations',
   /** An engine reported its plan's limits; read `agents_quota` again. */
   quota: 'agents://quota',
   /** A notification was clicked; payload is the agent id to open. */
@@ -1253,11 +1263,22 @@ export const getAgentsWithProjects = () => invoke<Agent[]>('agents_with_projects
 export const getAgentMessages = (
   agentId: string,
   limit?: number,
-  { before, through }: { before?: string; through?: string } = {}
+  {
+    before,
+    through,
+    conversation,
+  }: { before?: string; through?: string; conversation?: string } = {}
 ) =>
   // Timelines come as their folded lines (`stepsOmitted`): the steps were
   // most of a page, and are read one turn at a time as one opens.
-  invoke<AgentMessage[]>('agents_messages', { agentId, limit, before, through, lazyWork: true });
+  invoke<AgentMessage[]>('agents_messages', {
+    agentId,
+    limit,
+    before,
+    through,
+    lazyWork: true,
+    conversation,
+  });
 /**
  * What the turn ending on `messageId` did, steps and all: a "What it did"
  * opened under a line its page sent with `stepsOmitted`. Null: not kept.
@@ -1270,7 +1291,9 @@ export const sendAgentMessage = (
   attachments: OutgoingAttachment[] = [],
   mentions: string[] = [],
   /** "Ask for changes": the id of the result this message revises. */
-  revises?: string
+  revises?: string,
+  /** The conversation on screen; absent, the one the user is in on the Mac. */
+  conversation?: string
 ) =>
   invoke<AgentMessage>('agents_send', {
     agentId,
@@ -1278,6 +1301,7 @@ export const sendAgentMessage = (
     attachments: attachments.length ? attachments : undefined,
     mentions: mentions.length ? mentions : undefined,
     revises,
+    conversation,
   });
 export const inspectFiles = (paths: string[]) =>
   invoke<FileInfo[]>('agents_inspect_files', { paths });
@@ -1413,12 +1437,20 @@ export const canStartFresh = (agent: Pick<Agent, 'sessionId' | 'newEngine'>) =>
  * pauses until handed back. `stopFirst` stops a turn in progress first, as
  * Stop does; without it a working agent is refused.
  */
-export const takeOverAgent = (agentId: string, cols: number, rows: number, stopFirst = false) =>
+export const takeOverAgent = (
+  agentId: string,
+  cols: number,
+  rows: number,
+  stopFirst = false,
+  /** The conversation on screen: its session is the one driven. */
+  conversation?: string
+) =>
   invoke<AgentTakeover>('agents_take_over', {
     agentId,
     cols: Math.max(2, Math.round(cols)),
     rows: Math.max(2, Math.round(rows)),
     stopFirst: stopFirst || undefined,
+    conversation,
   });
 /** Mirrors `takeover::HandBack`. `busy`: the terminal is printing, so ask, then `force`. */
 export type HandBackResult = 'handedBack' | 'notDriving' | 'busy';

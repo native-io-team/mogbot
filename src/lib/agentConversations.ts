@@ -1,0 +1,71 @@
+/**
+ * Several conversations with one agent: the invoke wrappers and the keys a
+ * conversation's chat is kept under in the agents store (`agentsStore`).
+ *
+ * An agent's chat used to be one list, `messages[agentId]`. That list stays
+ * as it was (every line, whatever its conversation), because the cards, the
+ * sidebar's "Needs your OK" and What's in flight read it. A conversation's
+ * own chat is kept beside it under `conversationKey(agentId, id)`, read from
+ * the Mac one conversation at a time (`agents_messages` with `conversation`).
+ *
+ * @module lib/agentConversations
+ */
+
+import { invoke } from '@tauri-apps/api/core';
+import {
+  FIRST_CONVERSATION,
+  conversationOf,
+  type Conversations,
+} from '../../packages/companion-protocol/src/conversations';
+import type { Agent, AgentMessage } from './agents';
+
+export {
+  FIRST_CONVERSATION,
+  CONVERSATION_TITLE_CHARS,
+  conversationOf,
+  conversationTitle,
+  filterConversations,
+  othersWaiting,
+  routineConversationLine,
+  type ConversationView,
+  type Conversations,
+} from '../../packages/companion-protocol/src/conversations';
+
+const SEP = '#conversation:';
+
+/** Where one conversation's chat is kept in the store. */
+export const conversationKey = (agentId: string, conversation: string) =>
+  `${agentId}${SEP}${conversation}`;
+
+/** The agent and conversation a store key names, or null for any other key. */
+export function conversationOfKey(
+  key: string | null | undefined
+): { agentId: string; conversation: string } | null {
+  if (!key) return null;
+  const at = key.indexOf(SEP);
+  if (at <= 0) return null;
+  return { agentId: key.slice(0, at), conversation: key.slice(at + SEP.length) };
+}
+
+/**
+ * The conversation a line belongs to. One sent by the Mac without saying
+ * (written before it said, or by a path that doesn't) was written to the
+ * conversation the agent's engine had loaded, which is what the Mac stamps.
+ */
+export function lineConversation(message: AgentMessage, agent: Agent | undefined): string {
+  if (message.conversation) return conversationOf(message);
+  return agent?.conversations?.loaded ?? FIRST_CONVERSATION;
+}
+
+/** The conversation the agent's engine has loaded: a turn in progress is in it. */
+export const loadedConversation = (agent: Pick<Agent, 'conversations'>) =>
+  agent.conversations?.loaded ?? FIRST_CONVERSATION;
+
+export const getConversations = (agentId: string) =>
+  invoke<Conversations>('agents_conversations', { agentId });
+export const newConversation = (agentId: string) =>
+  invoke<Conversations>('agents_conversation_new', { agentId });
+export const selectConversation = (agentId: string, conversationId: string) =>
+  invoke<Conversations>('agents_conversation_select', { agentId, conversationId });
+export const renameConversation = (agentId: string, conversationId: string, title: string) =>
+  invoke<Conversations>('agents_conversation_rename', { agentId, conversationId, title });
