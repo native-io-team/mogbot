@@ -1,5 +1,5 @@
 import type { NotificationResponse } from 'expo-notifications';
-import { agentFromResponse, pushLine } from '../src/lib/push';
+import { agentFromResponse, canReceivePush, pushLine } from '../src/lib/push';
 
 const response = (content: unknown, trigger: unknown) =>
   ({ notification: { request: { content: { data: content }, trigger } } }) as NotificationResponse;
@@ -34,5 +34,21 @@ describe('pushLine', () => {
     expect(pushLine('off', true)?.value).toBe('Off on your Mac');
     expect(pushLine('unavailable', true)?.value).toBe('Not on this Mac');
     expect(pushLine('pending', true)?.value).toBe('Connecting');
+  });
+});
+
+describe('push on Android', () => {
+  it('a self-build names Google Play there, not Apple', () => {
+    const footer = pushLine(null, false, 'android')?.footer ?? '';
+    expect(footer).toMatch(/Google Play/);
+    expect(footer).not.toMatch(/Apple|App Store/);
+    expect(pushLine(null, false, 'ios')?.footer).toMatch(/App Store/);
+  });
+
+  it('needs Firebase’s config compiled in before it can be woken', () => {
+    expect(canReceivePush(true, 'android', false)).toBe(false);
+    expect(canReceivePush(true, 'android', true)).toBe(true);
+    expect(canReceivePush(true, 'ios', false)).toBe(true);
+    expect(canReceivePush(false, 'android', true)).toBe(false);
   });
 });

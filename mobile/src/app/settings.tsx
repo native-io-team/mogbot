@@ -19,7 +19,7 @@ import { useUsageRows } from '../lib/usagePlan';
 import { appInfo } from '../lib/pairing';
 import { isDemo } from '../lib/demo';
 import { setPref } from '../lib/prefs';
-import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
+import { ALERTS_WHILE_OPEN, canReceivePush, isOfficialBuild, pushLine } from '../lib/push';
 import { canCall, enableAlerts, unpair } from '../lib/session';
 import { MAC_FEATURES, ON_ITS_OWN_TEAM_TITLE } from '@shipstudio/companion-protocol';
 import { useApp, useServed, type AppearancePref } from '../lib/store';
@@ -83,7 +83,9 @@ export default function Settings() {
   const voiceRecording = useApp((s) => s.prefs.voiceRecording);
   const recordingSwitch = useSwitchColors(voiceRecording);
   const push = useApp((s) => s.push);
-  const pushInfo = pushLine(push, isOfficialBuild());
+  // An official build that can't be woken (Android without Firebase) says only what arrives while open.
+  const pushInfo =
+    isOfficialBuild() && !canReceivePush() ? null : pushLine(push, isOfficialBuild());
   const [alerts, setAlerts] = useState<Notifications.PermissionStatus | null>(null);
   const [update, setUpdate] = useState<UpdateState>({ kind: 'idle' });
 

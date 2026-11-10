@@ -27,16 +27,30 @@ export const ALERTS_WHILE_OPEN =
 /** The App Store build (or an official EAS build): `extra.official` in app.config.ts. */
 export const isOfficialBuild = () => Boolean(Constants.expoConfig?.extra?.official);
 
+/**
+ * Whether this build can be woken by push at all. On Android that also needs
+ * Firebase's config compiled in (`extra.androidPush`, app.config.ts); a Play
+ * build without it works like a phone with the app open.
+ */
+export const canReceivePush = (
+  official: boolean = isOfficialBuild(),
+  os: string = Platform.OS,
+  androidPush: boolean = Boolean(Constants.expoConfig?.extra?.androidPush)
+) => official && (os !== 'android' || androidPush);
+
 /** What Settings says about push, from what is known. Null: say nothing yet. */
 export function pushLine(
   status: PushStatus | null,
-  official: boolean
+  official: boolean,
+  os: string = Platform.OS
 ): { value: string; footer: string } | null {
   if (!official || status === 'self_build') {
     return {
       value: 'Needs the official build',
       footer:
-        'With the app closed, notifications need the App Store app. This copy was built on your Mac, and Apple doesn’t let it receive them.',
+        os === 'android'
+          ? 'With the app closed, notifications need the Google Play app. This copy was built on your Mac.'
+          : 'With the app closed, notifications need the App Store app. This copy was built on your Mac, and Apple doesn’t let it receive them.',
     };
   }
   switch (status) {
@@ -86,6 +100,8 @@ export async function registerPush(
   call: (token: string | null, environment: PushEnvironment) => Promise<{ status: PushStatus }>
 ): Promise<void> {
   if (!isOfficialBuild()) return setApp({ push: 'self_build' });
+  // An official Android build without Firebase has no token to give.
+  if (!canReceivePush()) return;
   // Simulators have no APNs token.
   if (!Device.isDevice) return;
   const { granted } = await Notifications.getPermissionsAsync();

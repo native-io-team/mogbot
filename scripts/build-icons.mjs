@@ -25,7 +25,8 @@
  *   public/app-icon-{dark,light}   the Dock icon options (Settings → Dock icon)
  *   public/favicon.png
  *   mobile/assets/*                the companion app: icon (full bleed, opaque),
- *                                  iOS dark + tinted, Android adaptive foreground,
+ *                                  iOS dark + tinted, Android adaptive foreground
+ *                                  and monochrome (themed icons),
  *                                  splash, notification, web favicon
  *
  *   pnpm icons:build                 everything
@@ -470,6 +471,8 @@ function main() {
     render('android-foreground.svg', m('adaptive-icon.png'), 1024);
     render('splash.svg', m('splash-icon.png'), 1024);
     render(glyphOnly('#ffffff', 760), m('notification-icon.png'), 96);
+    // Android 13+ themed icons: the mark alone, white on transparent, inside the 66 dp safe zone.
+    render(glyphOnly('#ffffff', 440), m('adaptive-monochrome.png'), 1024);
     render('mac.svg', m('favicon.png'), 48);
 
     if (sheetAt > 0) sheet(process.argv[sheetAt + 1], work);
