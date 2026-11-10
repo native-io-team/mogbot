@@ -455,6 +455,109 @@ async fn plan(h: &H) -> Check {
     )
 }
 
+/// Saving how a hard task was done (`agents/skills_learn.rs`): a quick
+/// turn's `save_skill` is refused by what the app saw, a hard one's raises
+/// the card (Ask me, the default), Save writes `.claude/skills/<slug>/SKILL.md`
+/// with the email scrubbed; at Automatically it saves with no card; Off
+/// saves nothing.
+async fn skills(h: &H) -> Check {
+    let a = h.agent("Learner");
+    let skill = json!({"tool": "save_skill", "args": {
+        "name": "Tally the receipts",
+        "when": "When the user asks for this month's receipts total",
+        "steps": ["Read each receipt file", "Add the totals", "Email ops@acme.example the sum"]}});
+    let hard = |extra: Value| {
+        let mut steps: Vec<Value> = (0..8)
+            .map(|i| json!({"write": format!("r{i}.txt"), "text": format!("{i}")}))
+            .collect();
+        // The app reads the engine's stream as it goes: give it a beat to
+        // have seen the steps before the call asks what the turn did.
+        steps.push(json!({"sleep": 1.0}));
+        steps.push(extra);
+        steps.push(json!({"say": "done"}));
+        fake(Value::Array(steps))
+    };
+    // Quick: one step, then save_skill. Refused, no card.
+    h.send(
+        &a.id,
+        &fake(json!([{"write": "one.txt", "text": "1"}, skill, {"say": "ok"}])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    ensure(
+        approvals(&a.id).is_empty(),
+        "a quick turn raised a skill card",
+    )?;
+    let refused = h
+        .fake_log()
+        .into_iter()
+        .any(|e| e["tool"] == "save_skill" && e["reply"].to_string().contains("quick"));
+    ensure(
+        refused,
+        "the quick turn's save_skill wasn't refused as quick",
+    )?;
+
+    // Hard, Ask me: one card; Save writes the file, scrubbed.
+    h.send(&a.id, &hard(skill.clone())).await?;
+    let c = card(h, &a.id, 0).await?;
+    h.turn(&a.id).await?;
+    ensure(c.skill.is_some(), format!("not a skill card: {}", c.title))?;
+    answer(h, &a.id, &c, true).await?;
+    let home = store::agent_home(&a.id).unwrap();
+    let file = home.join(".claude/skills/tally-the-receipts/SKILL.md");
+    let text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    ensure(
+        text.contains("name: tally-the-receipts"),
+        format!("front matter: {text}"),
+    )?;
+    ensure(
+        !text.contains("ops@acme.example"),
+        "the email reached the skill",
+    )?;
+    ensure(
+        notes(&a.id)
+            .iter()
+            .any(|n| n.starts_with("Learned a skill: Tally the receipts")),
+        format!("no saved line: {:?}", notes(&a.id)),
+    )?;
+
+    // Automatically: saved with no card.
+    store::update(&a.id, |x| {
+        x.learn_skills = agents::skills_learn::Learning::Auto
+    })
+    .map_err(|e| e.to_string())?;
+    let auto = json!({"tool": "save_skill", "args": {
+        "name": "File the receipts", "when": "When receipts arrive",
+        "steps": "1. Move each receipt into receipts/<month>\n2. Note it in the log"}});
+    let cards = approvals(&a.id).len();
+    h.send(&a.id, &hard(auto)).await?;
+    h.turn(&a.id).await?;
+    ensure(
+        approvals(&a.id).len() == cards,
+        "Automatically still raised a card",
+    )?;
+    ensure(
+        home.join(".claude/skills/file-the-receipts/SKILL.md")
+            .is_file(),
+        "Automatically didn't save it",
+    )?;
+
+    // Off: nothing saved.
+    store::update(&a.id, |x| {
+        x.learn_skills = agents::skills_learn::Learning::Off
+    })
+    .map_err(|e| e.to_string())?;
+    let off = json!({"tool": "save_skill", "args": {
+        "name": "Never kept", "when": "Never", "steps": "1. This should not be saved at all"}});
+    h.send(&a.id, &hard(off)).await?;
+    h.turn(&a.id).await?;
+    ensure(
+        !home.join(".claude/skills/never-kept").exists(),
+        "Off saved a skill",
+    )?;
+    no_errors(&a.id)
+}
+
 /// A finished piece of work comes back as one result card.
 async fn result_card(h: &H) -> Check {
     let a = h.agent("Maker");
@@ -2322,6 +2425,7 @@ const ALL: &[&str] = &[
     "approvals",
     "plan",
     "result",
+    "skills",
     "delegation",
     "failover",
     "crash",
@@ -2457,6 +2561,7 @@ fn main() {
                 "approvals" => approvals_scenario(&h).await,
                 "plan" => plan(&h).await,
                 "result" => result_card(&h).await,
+                "skills" => skills(&h).await,
                 "delegation" => delegation(&h).await,
                 "failover" => failover(&h).await,
                 "crash" => crash(&h).await,
