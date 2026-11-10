@@ -22,6 +22,7 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { queueSubmitReview } from '../../lib/reviewHandoff';
 import { isFocusClick } from '../../lib/firstClick';
+import { useCopyCommands } from './useCopyCommands';
 import {
   discardCopy,
   keepCopy,
@@ -78,9 +79,12 @@ export function CopyActions({
   onReview,
   onPreview,
   onAskForChanges,
+  stat,
 }: {
   agent: Agent;
   copy: CopyRef;
+  /** "3 files, +40 −12", for the palette's titles; only what the card counted. */
+  stat?: string;
   /** The project's name, as the card shows it. */
   project: string;
   onReview?: () => void;
@@ -166,6 +170,17 @@ export function CopyActions({
     : working
       ? `${agent.name} is still working on it`
       : undefined;
+
+  // ⌘K: Keep / Review / Discard this card's changes, while it's the live one.
+  // Discard opens the card's own confirm, never discards from the palette.
+  useCopyCommands({
+    agentName: agent.name,
+    stat,
+    held,
+    onKeep: () => void keep(),
+    onReview,
+    onDiscard: () => setConfirming(true),
+  });
 
   if (otherBranch) {
     return (
