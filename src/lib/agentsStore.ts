@@ -212,7 +212,7 @@ function scheduleRoomsRefresh() {
 export function loadRoomMessages(roomId: string): Promise<void> {
   return loadNewest(roomKey(roomId), () => getRoomMessages(roomId, MESSAGE_PAGE), {
     roomId,
-  });
+  }).then(() => undefined);
 }
 
 /** The page before the oldest room line loaded. */
@@ -342,14 +342,17 @@ export function mergeNewest(
 
 /** Lines that arrived as events while a chat's newest page was being read. */
 const arriving = new Map<string, AgentMessage[]>();
-/** One newest-page read per chat at a time. */
-const loadingNewest = new Map<string, Promise<void>>();
+/** One newest-page read per chat at a time; each resolves to whether the read worked. */
+const loadingNewest = new Map<string, Promise<boolean>>();
+/** Chats whose last newest-page read failed: what they hold is only what arrived. */
+const newestFailed = new Set<string>();
 
 function loadNewest(
   key: string,
   read: () => Promise<AgentMessage[]>,
-  context: Record<string, string>
-): Promise<void> {
+  context: Record<string, string>,
+  olderThan = (page: AgentMessage[]) => page.length >= MESSAGE_PAGE
+): Promise<boolean> {
   const inFlight = loadingNewest.get(key);
   if (inFlight) return inFlight;
   arriving.set(key, []);
@@ -360,14 +363,18 @@ function loadNewest(
         page,
         arriving.get(key) ?? []
       );
-      const older = keptOlder ? (state.older[key] ?? false) : page.length >= MESSAGE_PAGE;
+      const older = keptOlder ? (state.older[key] ?? false) : olderThan(page);
+      newestFailed.delete(key);
       setMessages(key, messages, older);
+      return true;
     })
     .catch((error: unknown) => {
       logger.error('[Agents] messages failed', { ...context, error: String(error) });
       // Whatever arrived while it failed is still worth showing.
       const { messages } = mergeNewest(state.messages[key], [], arriving.get(key) ?? []);
+      newestFailed.add(key);
       setMessages(key, messages, state.older[key] ?? false);
+      return false;
     })
     .finally(() => {
       arriving.delete(key);
@@ -379,8 +386,14 @@ function loadNewest(
 
 /** (Re)load a chat's newest page: an agent's whole log, or one conversation's (its key). */
 export function loadMessages(key: string): Promise<void> {
+  return loadNewestOf(key).then(() => undefined);
+}
+
+function loadNewestOf(key: string): Promise<boolean> {
   const conv = conversationOfKey(key);
   if (conv) {
+    const shared = fromLog(key, conv.agentId, conv.conversation);
+    if (shared) return shared;
     return loadNewest(
       key,
       () => getAgentMessages(conv.agentId, MESSAGE_PAGE, { conversation: conv.conversation }),
@@ -388,6 +401,50 @@ export function loadMessages(key: string): Promise<void> {
     );
   }
   return loadNewest(key, () => getAgentMessages(key, MESSAGE_PAGE), { agentId: key });
+}
+
+/**
+ * An agent with one conversation: its log (read, or being read) is that
+ * conversation's page, so the chat takes it rather than reading the same
+ * lines again (a chat opening asks for both). Lines that arrive later reach
+ * both (`upsertMessage`). Null when the log isn't there to share, or the
+ * chat is already held.
+ */
+function fromLog(key: string, agentId: string, conversation: string): Promise<boolean> | null {
+  const pending = loadingNewest.get(key);
+  if (pending) return pending;
+  // Only a chat's first read: a re-read (after a missed event) asks the Mac.
+  if (state.messages[key]) return null;
+  const log =
+    loadingNewest.get(agentId) ??
+    (state.messages[agentId] ? Promise.resolve(!newestFailed.has(agentId)) : undefined);
+  if (!log || !logIsConversation(agentId, conversation)) return null;
+  let shared = false;
+  return loadNewest(
+    key,
+    () =>
+      log.then((ok) => {
+        const lines = state.messages[agentId];
+        if (!ok || !lines) return getAgentMessages(agentId, MESSAGE_PAGE, { conversation });
+        shared = true;
+        return lines;
+      }),
+    { agentId, conversation },
+    // Older lines exactly when the log has them (it may hold lines that arrived since).
+    (page) => (shared ? (state.older[agentId] ?? false) : page.length >= MESSAGE_PAGE)
+  );
+}
+
+/**
+ * Whether an agent's whole log and `conversation`'s page are the same lines:
+ * it has only its first conversation, so every line is that one's (the Mac
+ * tags an untagged line as the first, and a first conversation inherits none).
+ */
+function logIsConversation(agentId: string, conversation: string): boolean {
+  const items = state.conversations[agentId]?.items;
+  return (
+    conversation === FIRST_CONVERSATION && items?.length === 1 && items[0].id === FIRST_CONVERSATION
+  );
 }
 
 /** One request per chat at a time: a scroll and a search jump can both ask. */
@@ -818,6 +875,7 @@ export function __resetAgentsStore() {
   resyncTimer = null;
   loadingOlder.clear();
   loadingNewest.clear();
+  newestFailed.clear();
   askingViewing.clear();
   arriving.clear();
   finished.clear();

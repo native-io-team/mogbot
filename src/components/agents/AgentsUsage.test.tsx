@@ -42,6 +42,14 @@ describe('the list of ideas for leftover usage', () => {
 });
 
 describe('What’s in flight: spare capacity', () => {
+  it('reads the inventory once on mount', async () => {
+    const calls = serve(FULL_INVENTORY);
+    render(<AgentsSpareNote />);
+    await screen.findByText(/^Claude 5-hour limit refills/);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls.filter((c) => c.cmd === 'agents_usage_overview')).toHaveLength(1);
+  });
+
   it('says nothing without a spare window on the account turns run on', async () => {
     serve(EMPTY_INVENTORY);
     const { container } = render(<AgentsSpareNote />);

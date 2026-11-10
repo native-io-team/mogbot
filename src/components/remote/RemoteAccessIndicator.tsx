@@ -74,7 +74,8 @@ export function indicatorState(
 
 export function RemoteAccessIndicator({ isSidebarHidden }: { isSidebarHidden: boolean }) {
   const openModal = useOpenModal();
-  const brief = useAsyncState<RemoteAccessBrief>(getRemoteAccessBrief, { immediate: true });
+  // No `immediate`: the poll below reads on mount, and both made it two reads at once.
+  const brief = useAsyncState<RemoteAccessBrief>(getRemoteAccessBrief);
   const [now, setNow] = useState(() => Date.now());
   const { execute } = brief;
   usePolling(
