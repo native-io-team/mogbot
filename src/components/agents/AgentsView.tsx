@@ -34,6 +34,9 @@ import { TakeoverProvider, useTakeover } from './AgentTakeover';
 import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { AgentOnItsOwnModal } from './AgentOnItsOwn';
+import { AgentRecipeModal } from './AgentRecipeModal';
+import { useRecipeDrop } from './useRecipeDrop';
+import { recipeTitle } from '../../lib/agentRecipe';
 import { onItsOwnTitle } from '../../lib/agentOnItsOwn';
 import { ChiefIdeasModal } from './ChiefIdeasModal';
 import { TeamLoginsModal } from './TeamLogins';
@@ -97,6 +100,7 @@ import {
   ResetIcon,
   ShieldCheckIcon,
   TrashIcon,
+  UploadIcon,
   TerminalIcon,
 } from '@/components/icons';
 import { useAgentProjects } from './AgentProject';
@@ -199,6 +203,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const [appsFor, setAppsFor] = useState<string | null>(null);
   /** "What can it do on its own?" is open for this agent. */
   const [onItsOwnFor, setOnItsOwnFor] = useState<string | null>(null);
+  /** Its recipe is being shared. */
+  const [recipeFor, setRecipeFor] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Agent | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -425,7 +431,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     onIdeas: openIdeas,
     onLogins: openLogins,
     onBrowser: openBrowser,
+    onShareRecipe: setRecipeFor,
   });
+  // A recipe file dropped anywhere on the window (not on Import, which
+  // reads it itself): its review card goes up in the Chief's chat.
+  useRecipeDrop(!importOpen, (chiefId) => openAgent(chiefId));
   // Each agent's bound key opens it (outside text fields, dialogs and menus).
   useAgentKeyShortcuts(agents, openAgent);
 
@@ -534,6 +544,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
       onTakeOver: takeover?.takeOver,
       onHandBack: takeover?.handBack,
       onOnItsOwn: (a: Agent) => setOnItsOwnFor(a.id),
+      onShareRecipe: (a: Agent) => setRecipeFor(a.id),
     }),
     [run, takeover]
   );
@@ -739,6 +750,17 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
             'access',
           ],
           run: () => setOnItsOwnFor(a.id),
+        })),
+      // "Share <agent> as a recipe" for every agent but the Chief.
+      ...agents
+        .filter((a) => !a.isMain && (!a.hidden || a.id === selected?.id))
+        .map((a) => ({
+          id: `agents.shareRecipe.${a.id}`,
+          title: recipeTitle(a.name),
+          icon: <UploadIcon size={14} />,
+          category: 'action' as const,
+          keywords: ['agents', 'recipe', 'share', 'export', 'template', 'send', 'friend'],
+          run: () => setRecipeFor(a.id),
         })),
       ...(selected && canStartFresh(selected) && selected.status.state === 'idle'
         ? [
@@ -1096,6 +1118,9 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
         }}
       />
       <AgentOnItsOwnModal agentId={onItsOwnFor} onClose={() => setOnItsOwnFor(null)} />
+      {recipeFor && (
+        <AgentRecipeModal key={recipeFor} agentId={recipeFor} onClose={() => setRecipeFor(null)} />
+      )}
       <AgentAppsModal
         isOpen={appsOpen}
         onClose={() => setAppsOpen(false)}

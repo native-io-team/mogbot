@@ -19,6 +19,7 @@ import {
   PaperclipIcon,
   PinIcon,
   ResetIcon,
+  UploadIcon,
   ShieldCheckIcon,
   TerminalIcon,
   TrashIcon,
@@ -27,6 +28,7 @@ import { ContextMenuItem, ContextMenuSeparator } from '../primitives/ContextMenu
 import { DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { canStartFresh, canTakeOver, contextPercent, type Agent } from '../../lib/agents';
 import { ON_ITS_OWN_MENU } from '../../lib/agentOnItsOwn';
+import { RECIPE_MENU } from '../../lib/agentRecipe';
 
 export interface AgentActions {
   onTogglePin: (agent: Agent) => void;
@@ -43,6 +45,8 @@ export interface AgentActions {
   onHandBack?: (agent: Agent) => void;
   /** "What can it do on its own?": its level and every standing rule. */
   onOnItsOwn?: (agent: Agent) => void;
+  /** Share it as a recipe: its definition, never what it knows. */
+  onShareRecipe?: (agent: Agent) => void;
 }
 
 interface Item {
@@ -67,6 +71,7 @@ export function AgentActionItems({
   onTakeOver,
   onHandBack,
   onOnItsOwn,
+  onShareRecipe,
   onSchedule,
   onFiles,
 }: {
@@ -96,6 +101,9 @@ export function AgentActionItems({
       ? [{ label: 'Schedule a routine…', icon: <HistoryIcon size={12} />, run: onSchedule }]
       : []),
     ...(onFiles ? [{ label: 'Files', icon: <PaperclipIcon size={12} />, run: onFiles }] : []),
+    ...(onShareRecipe && !agent.isMain
+      ? [{ label: RECIPE_MENU, icon: <UploadIcon size={12} />, run: () => onShareRecipe(agent) }]
+      : []),
     {
       label: agent.pinned ? 'Unpin' : 'Pin',
       icon: <PinIcon size={12} />,

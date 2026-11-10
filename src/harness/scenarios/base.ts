@@ -16,6 +16,7 @@ import { phoneStatus } from './phone';
 import type { CommandMap } from '../types';
 import { BALANCED_TEAM, BALANCED_VIEW } from '../fixtures/policy';
 import { onItsOwnFor, TEAM_ON_ITS_OWN } from '../fixtures/onItsOwn';
+import { recipePreviewFor } from '../fixtures/recipe';
 
 export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 
@@ -567,6 +568,9 @@ export const baseCommands: CommandMap = {
   agents_import_file_preview: EMPTY_EXPORT_PREVIEW,
   agents_import_text_review: { chiefId: 'chief', requestId: 'export-review', agents: 0 },
   agents_import_file_review: { chiefId: 'chief', requestId: 'export-review', agents: 0 },
+  // Share an agent as a recipe (`agents/recipe.rs`).
+  agents_recipe_preview: recipePreviewFor,
+  agents_recipe_save: null,
   // Copied from PASTE_PROMPT in src-tauri/src/agents/paste.rs.
   agents_import_paste_prompt:
     'I\'m moving my agents to a new app on my computer. Please give me a complete copy of every agent you run for me, including the main one that manages the others.\n\nReply with one ```json code block in exactly this shape:\n\n{\n  "source": "your product\'s name, e.g. Grok Bot",\n  "agents": [\n    {\n      "name": "the agent\'s name",\n      "role": "one line: what it does",\n      "instructions": "its full instructions, word for word",\n      "memory": "everything it remembers that it still needs, one fact per line",\n      "is_main": false,\n      "color": "red",\n      "routines": [\n        { "when": "every weekday at 9am", "what": "what it does then, in a sentence or two" }\n      ]\n    }\n  ]\n}\n\nRules:\n- Include every agent. Set "is_main": true on the one that manages the others (at most one), false on the rest.\n- Copy instructions and memory in full, word for word. Don\'t summarize, shorten or paraphrase them. Long is fine.\n- "routines": everything the agent does on its own on a schedule (routines, automations, reminders, recurring check-ins), one entry each. Write "when" in plain words, like "every weekday at 9am", "every monday at 8:30am", "every day at 7pm", "every 2 hours" or, for a one-off, "friday at 2pm". Start repeating ones with "every". Write "what" so the agent knows exactly what to do when it fires. Use [] if it has none.\n- "color" is optional: if the agent has one, use the closest of white, brown, red, orange, amber, green, teal, blue, purple, pink, gray. Otherwise leave it out.\n- Never include passwords, API keys, tokens, card numbers or any other credentials. If an instruction or memory contains one, write [removed] in its place.\n- Valid JSON only: straight double quotes, line breaks written as \\n inside strings, no comments, no trailing commas.\n- If it\'s too long for one message, split it into numbered ```json blocks (Part 1 of 3, Part 2 of 3, ...), each in the same shape and each holding whole agents. Never split one agent across blocks. Send the next part when I say "continue".\n- Put nothing but the JSON inside each code block.',

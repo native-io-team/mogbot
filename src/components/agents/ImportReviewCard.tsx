@@ -43,6 +43,7 @@ import {
 } from '../../lib/agents';
 import { ImportAgentRow, ImportSection, plural } from './ImportParts';
 import { AgentCard } from './AgentCard';
+import { INDEPENDENCE_LABEL } from '../../lib/agentIndependence';
 
 /** Past this, a line diff isn't drawn: both texts are shown whole instead. */
 const MAX_DIFF_CHARS = 40_000;
@@ -335,7 +336,9 @@ function ProposalRow({
             </ImportSection>
           )}
           {apps.length > 0 && (
-            <ImportSection title={`Apps it used with ${source} · here it asks before connecting`}>
+            <ImportSection
+              title={`${p.look ? 'Apps it needs' : `Apps it used with ${source}`} · here it asks before connecting`}
+            >
               <ul className="agents-import-agent__memory">
                 {apps.map((a) => (
                   <li key={a.name}>
@@ -381,6 +384,14 @@ function ProposalRow({
                   </li>
                 ))}
               </ul>
+            </ImportSection>
+          )}
+          {p.look?.independence && (
+            <ImportSection title="Independence">
+              <p className="agents-import-agent__none">
+                Suggests {INDEPENDENCE_LABEL[p.look.independence]}. Used only if that’s stricter
+                than your team’s.
+              </p>
             </ImportSection>
           )}
           {p.logins.length > 0 && (

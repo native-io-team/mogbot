@@ -23,6 +23,7 @@ import { agentsUsageViewScenarios } from './agentsUsageView';
 import { agentsLoginsScenarios } from './agentsLogins';
 import { agentsMacAppsScenarios } from './agentsMacApps';
 import { agentsPolicyScenarios } from './agentsPolicy';
+import { agentsRecipeScenarios } from './agentsRecipe';
 import { settingsWindowScenarios } from './settingsWindow';
 import { agentsStepsScenarios } from './agentsSteps';
 import { agentsProbeScenarios } from './agentsProbe';
@@ -72,6 +73,7 @@ export const scenarios: Scenario[] = [
   ...agentsLoginsScenarios,
   ...agentsMacAppsScenarios,
   ...agentsPolicyScenarios,
+  ...agentsRecipeScenarios,
   ...settingsWindowScenarios,
   ...agentsStepsScenarios,
   ...agentsProbeScenarios,
