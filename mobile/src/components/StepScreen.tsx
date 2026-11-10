@@ -118,7 +118,9 @@ export function StepScreen({
       {(primary || secondary || footer) && (
         <View style={styles.actions}>
           {primary}
-          {secondary}
+          {/* The quiet way out's row is held open when there isn't one, so the
+              big button sits at the same height on every screen. */}
+          {secondary ?? (primary ? <View style={styles.secondarySlot} /> : null)}
           {footer}
         </View>
       )}
@@ -171,6 +173,7 @@ const useStyles = makeStyles((colors) => ({
   title: { flexShrink: 1 },
   busy: { height: lineHeight(type.display, 1.15), justifyContent: 'center' },
   actions: { gap: space.sm },
+  secondarySlot: { minHeight: MIN_TAP },
   done: {
     flexDirection: 'row',
     alignItems: 'center',

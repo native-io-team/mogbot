@@ -4,6 +4,29 @@
   --flow-body-width: 520px;
   --flow-body-width-wide: 720px;
   --flow-top-height: 64px;
+  /* The frame every screen is laid out in: the question at its top, the
+     answers at its foot, the same two places on every screen. Shorter on a
+     short window; a screen with more to show grows it downward. */
+  --flow-frame-height: clamp(360px, calc(100vh - 520px), 380px);
+  /* The welcome's key cap hangs above the title rather than pushing it down
+     (FlowShell's mark): the room it needs above the frame. */
+  --flow-mark-height: 120px;
+  --flow-mark-room: calc(var(--flow-mark-height) + var(--spacing-xl) + var(--spacing-lg));
+  /* Where the title sits: the frame centred under the top band, lifted a
+     little (the optical centre sits above the geometric one), and never so
+     high that the key cap meets the band. */
+  --flow-frame-top: max(
+    calc(var(--flow-top-height) + var(--flow-mark-room)),
+    calc(
+      var(--flow-top-height) + (100vh - var(--flow-top-height) - var(--flow-frame-height)) / 2 -
+        var(--spacing-xl)
+    )
+  );
+  /* The answers' region: the big button's row, then the quiet way out's. */
+  --flow-actions-height: calc(
+    var(--control-height-large) + var(--spacing-sm) + var(--control-height-standard)
+  );
+  --flow-action-width: 240px;
   /* The site's desk: a dot grid that fades toward the edges, under one warm
      pool of light from above. Feature-local: only these screens sit on it. */
   --flow-mat-dot: rgba(214, 210, 202, 0.07);
@@ -24,7 +47,8 @@
   position: relative;
   isolation: isolate;
   justify-content: flex-start;
-  padding-top: calc(var(--flow-top-height) + var(--spacing-2xl));
+  padding-top: var(--flow-frame-top);
+  padding-bottom: var(--spacing-2xl);
 }
 
 /* The desk under every screen: a dot grid, lit where the question sits (so
@@ -51,11 +75,15 @@
   mask-image: radial-gradient(ellipse 80% 75% at 50% 45%, var(--mask-opaque) 35%, transparent 100%);
 }
 
-/* The Chief's key cap above the welcome's title. */
+/* The Chief's key cap above the welcome's title: hung above the frame, so
+   the title still lands where every other screen's does. */
 .flow-mark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + var(--spacing-xl));
   display: flex;
   justify-content: center;
-  margin-bottom: var(--spacing-xs);
 }
 
 /* Back on the left, the progress bar in the middle; it stays put as screens change. */
@@ -109,14 +137,27 @@
   color: var(--text-muted);
 }
 
+/* One rhythm on every screen: the title, its one sentence close under it
+   (md), what the screen needs (xl), then the answers at the frame's foot
+   (at least xl). Fixed rows, so nothing jumps from one screen to the next. */
 .flow-body {
   width: 100%;
   max-width: var(--flow-body-width);
+  min-height: var(--flow-frame-height);
+  flex: none;
+  display: grid;
+  grid-template-rows: auto 1fr var(--flow-actions-height);
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--spacing-xl);
+  margin: 0;
+}
+
+.flow-head {
+  position: relative;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: var(--spacing-lg);
-  margin: auto 0;
+  gap: var(--spacing-md);
 }
 
 .flow-body--wide {
@@ -134,40 +175,59 @@
   text-wrap: balance;
 }
 
+/* One measure for every screen's sentence, the wide engine choice too. */
 .flow-lede {
-  margin: 0;
+  margin: 0 auto;
+  max-width: var(--flow-body-width);
   letter-spacing: var(--tracking-name);
-  text-wrap: pretty;
+  text-wrap: balance;
   font-size: var(--font-size-subhead-lg);
-  line-height: 1.5;
+  line-height: var(--line-height-help);
   color: var(--text-secondary);
   text-align: center;
 }
 
 .flow-content {
+  grid-row: 2;
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
 }
 
+/* The big button's row, then the quiet way out's; the first is held open
+   when empty, so a screen with only Skip puts it where Skip always is. A
+   second answer (I have it, then Skip) runs on below the frame rather than
+   lifting the big button. */
 .flow-actions {
+  grid-row: 3;
+  display: grid;
+  grid-template-rows: var(--control-height-large) auto;
+  row-gap: var(--spacing-sm);
+  justify-items: center;
+  align-content: start;
+}
+
+.flow-actions__primary,
+.flow-actions__secondary {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
 }
 
-.flow-actions > .button--large,
-.flow-actions > .button--size-large {
-  min-width: 240px;
+.flow-actions .button--large,
+.flow-actions .button--size-large {
+  min-width: var(--flow-action-width);
 }
 
 .flow-note,
 .flow-eyebrow {
   margin: 0;
   text-align: center;
+  text-wrap: balance;
   font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
   color: var(--text-muted);
 }
 

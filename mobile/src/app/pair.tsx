@@ -429,7 +429,7 @@ function IntroScreen({
           line="Your agents run there. This phone is how you reach them when you’re away from it."
           primary={<Button title="Yes" variant="primary" size="large" onPress={next} />}
           secondary={
-            <Button title="Not yet" variant="outline" size="large" onPress={() => go('getMac')} />
+            <Button title="Not yet" variant="ghost" onPress={() => go('getMac')} />
           }
           footer={<TryDemo />}
         />

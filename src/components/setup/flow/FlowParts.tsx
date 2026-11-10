@@ -144,18 +144,22 @@ export function FlowShell({
         <div className="flow-top__back" aria-hidden />
       </header>
       {/* Keyed by the screen, so each one arrives (the same short rise every
-          time) rather than its words swapping in place. */}
+          time) rather than its words swapping in place. Three fixed regions:
+          the question at the frame's top, what it needs under it, and the
+          answers at its foot, so the title and the big button land in the
+          same place on every screen and the eye and cursor never hunt. */}
       <main key={step} className={`flow-body${wide ? ' flow-body--wide' : ''}`}>
-        {mark && <div className="flow-mark">{mark}</div>}
-        <h1 className="flow-title">{title}</h1>
-        {lede && <p className="flow-lede">{lede}</p>}
+        <div className="flow-head">
+          {mark && <div className="flow-mark">{mark}</div>}
+          <h1 className="flow-title">{title}</h1>
+          {lede && <p className="flow-lede">{lede}</p>}
+        </div>
         {children && <div className="flow-content">{children}</div>}
-        {(primary || secondary) && (
-          <div className="flow-actions">
-            {primary}
-            {secondary}
-          </div>
-        )}
+        <div className="flow-actions">
+          {/* Held open when empty, so a lone Skip sits where Skip always does. */}
+          <div className="flow-actions__primary">{primary}</div>
+          {secondary && <div className="flow-actions__secondary">{secondary}</div>}
+        </div>
       </main>
     </div>
   );

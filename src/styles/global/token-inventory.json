@@ -1899,7 +1899,7 @@
       "layer": "components",
       "owner": "Control",
       "status": "canonical",
-      "consumerCount": 8
+      "consumerCount": 10
     },
     {
       "name": "--control-height-compact",
@@ -6083,7 +6083,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 124
+      "consumerCount": 126
     },
     {
       "name": "--line-height-reading",
@@ -6283,7 +6283,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 789
+      "consumerCount": 788
     },
     {
       "name": "--spacing-sm",
@@ -6291,7 +6291,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 965
+      "consumerCount": 966
     },
     {
       "name": "--spacing-md",
@@ -6307,7 +6307,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 279
+      "consumerCount": 278
     },
     {
       "name": "--spacing-xl",
@@ -6315,7 +6315,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 186
+      "consumerCount": 189
     },
     {
       "name": "--spacing-2xl",

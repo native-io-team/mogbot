@@ -806,17 +806,19 @@ export function PanelStepShell({
         </div>
         <div className="phone-flow__back" aria-hidden />
       </div>
+      {/* As onboarding's frame: the question at the top, the answers at the
+          foot, so neither moves from one screen to the next. */}
       <div key={step} className="phone-flow__body">
-        {view.mark}
-        <h2 className="phone-flow__title">{view.title}</h2>
-        {view.lede && <p className="phone-flow__lede">{view.lede}</p>}
+        <div className="phone-flow__head">
+          {view.mark}
+          <h2 className="phone-flow__title">{view.title}</h2>
+          {view.lede && <p className="phone-flow__lede">{view.lede}</p>}
+        </div>
         {view.children && <div className="phone-flow__content">{view.children}</div>}
-        {(view.primary || view.secondary) && (
-          <div className="phone-flow__actions">
-            {view.primary}
-            {view.secondary}
-          </div>
-        )}
+        <div className="phone-flow__actions">
+          <div className="phone-flow__primary">{view.primary}</div>
+          {view.secondary && <div className="phone-flow__secondary">{view.secondary}</div>}
+        </div>
       </div>
     </div>
   );
