@@ -873,6 +873,9 @@ conversation per agent and the chat is as it was.
   `routineConversationLine`), and its menu has "Run it in another
   conversation" on a Mac that lists `agents.conversationRoutine` (the most
   recent six, `routineMoveChoices`).
+- **Pages.** A conversation's living page ([agents.md](agents.md), "A
+  living page per conversation") sits above the messages on a Mac that lists
+  `agents.page` (`components/ConversationPage.tsx`, `lib/page.ts`).
 - **Rewind, fork and edit** (docs/agents.md, "Rewind, fork and edit").
   Long-press one of your own messages for Edit and resend, Fork from here
   and Rewind to here (on a Mac that serves `agents.conversationRewind` and

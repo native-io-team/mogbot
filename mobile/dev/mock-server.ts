@@ -95,6 +95,7 @@ import https from 'node:https';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { cafePage, iconSheet, pdf, signinPage, siteScreenshot } from './mock-assets';
 import { blocksMessages, briefMessages } from './mock-blocks';
+import { PAGE_AGENT, pageMock } from './mock-page';
 import { addHeavyAccount, heavyImportTalk } from './mock-heavy';
 import { addTortureAccount, tortureAction } from './mock-torture';
 import { STEP_IN_ON_YOUR_MAC, addProbeAccount, probeAccounts } from './mock-probe';
@@ -1006,6 +1007,19 @@ export function createMockServer(opts: MockOptions = {}) {
     unread: 0,
   });
   messages.set('brief', briefMessages(now));
+  // A conversation with a living page (`agents/page.rs`, dev/mock-page.ts).
+  const pages = pageMock(now);
+  agents.push({
+    ...structuredClone(sample),
+    id: PAGE_AGENT,
+    name: 'Budget',
+    pinned: false,
+    hidden: true,
+    status: { state: 'idle', activity: null, since: null },
+    pendingApprovals: 0,
+    unread: 0,
+  });
+  messages.set(PAGE_AGENT, pages.messages);
 
   const projects: ProjectSummary[] = seedProjects(now);
   const instructions = new Map<string, string>();
@@ -2470,6 +2484,10 @@ export function createMockServer(opts: MockOptions = {}) {
       routinePlaces.set(agentId, places);
       return convList(agentId);
     },
+    'agents.page': (p) =>
+      pages.get(String(p.agentId), p.conversationId ? String(p.conversationId) : undefined),
+    'agents.pageVersion': (p) => pages.version(String(p.agentId), Number(p.version)),
+    'agents.pagePin': (p) => pages.pin(String(p.agentId), p.pinned === true),
     // `rewind::rewind`: the lines from the message on folded, never deleted; refused mid-turn.
     'agents.conversationRewind': (p) => {
       const agentId = String(p.agentId);

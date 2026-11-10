@@ -443,11 +443,13 @@ pub fn rewind(agent_id: &str, conversation: &str, message: &str) -> Result<Done,
     );
     // The user's own message is folded too, but it's the one they chose:
     // the count is of what came after it.
-    let line = note(
-        agent_id,
-        conversation,
-        rewind_line(&quoted, folded, &branch),
-    );
+    let mut said = rewind_line(&quoted, folded, &branch);
+    // The page isn't part of the chat a rewind folds (`page::rewind_clause`).
+    if let Some(page) = super::page::rewind_clause(agent_id, conversation) {
+        said.push(' ');
+        said.push_str(&page);
+    }
+    let line = note(agent_id, conversation, said);
     Ok(Done {
         conversations: conversations::list(agent_id)?,
         line,
@@ -477,7 +479,19 @@ pub fn fork(agent_id: &str, conversation: &str, message: &str) -> Result<Done, C
         },
     );
     tracing::info!(agent = agent_id, from = conversation, to = %id, ?branch, "[Agents] forked a conversation");
-    let line = note(agent_id, &id, fork_line(&title, &quoted, &branch));
+    // The fork starts with the page as it was before that message, or none.
+    let mut said = fork_line(&title, &quoted, &branch);
+    match super::page::fork(agent_id, conversation, &id, lines[at].ts) {
+        Ok(Some((page, version))) => said.push_str(&format!(
+            " It starts with the page \u{201c}{page}\u{201d} as it was then (v{version})."
+        )),
+        Ok(None) => {}
+        Err(e) => tracing::warn!(
+            agent = agent_id,
+            "[Agents] a fork's page wasn't copied: {e}"
+        ),
+    }
+    let line = note(agent_id, &id, said);
     Ok(Done {
         conversations: conversations::list(agent_id)?,
         line,

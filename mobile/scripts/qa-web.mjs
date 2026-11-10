@@ -1281,6 +1281,41 @@ const LIVE = [
     check:
       'Touching a chart: its column stands out (the others dim) and a tooltip names the day with every series’ value',
   },
+  // A conversation's living page (dev/mock-page.ts): pinned above the messages.
+  {
+    name: 'page-chat',
+    route: '/chat/budget',
+    ready: 'Budget',
+    check:
+      'Above the messages, a band: a down chevron and “November budget”, “Updated 3 min ago · v4” muted at the right and an unpin glyph; under it two metric tiles, an amber note about eating out, a table and a checklist, scrolling inside the band; a hairline, then the chat',
+  },
+  {
+    name: 'page-history',
+    route: '/chat/budget',
+    ready: 'Budget',
+    act: async (page) => {
+      await page.clickWhere(
+        `() => document.querySelector('[data-testid="page-when"]')`,
+        'the page’s Updated line'
+      );
+      await sleep(400);
+    },
+    check:
+      'The page’s versions, newest first: “v4 · 3 min ago · by a routine” over what changed and the agent’s note, then v3, v2 and “Made the page — Started the month”; v4 marked as the one shown',
+  },
+  {
+    name: 'page-folded',
+    route: '/chat/budget',
+    ready: 'Budget',
+    act: async (page) => {
+      await page.clickWhere(
+        `() => document.querySelector('[data-testid="page-toggle"]')`,
+        'the page’s fold'
+      );
+      await sleep(400);
+    },
+    check: 'The page folded to its one line (chevron pointing right); the chat takes the rest',
+  },
   {
     name: 'chat-table',
     route: '/chat/chief',

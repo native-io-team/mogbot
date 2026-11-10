@@ -312,6 +312,12 @@ const TOOLS: &[Tool] = &[
         schema: super::blocks::schema,
     },
     Tool {
+        name: super::page::TOOL,
+        description: super::page::DESCRIPTION,
+        main_only: false,
+        schema: super::page::schema,
+    },
+    Tool {
         name: "schedule_check_in",
         description: "Have the app wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"every month on the 1st at 9:00\", \"every month on the last friday at 16:00\", \"every 3 months on the 15th at 9:00\"), in the user's local time. It only fires while the app is open; the answer says exactly when and what happens if it's closed. Tell the user that time. To the user these are routines (a one-time one is \"scheduled\"): never say \"check-in\" or a tool's name.",
         main_only: false,
@@ -811,6 +817,7 @@ async fn call(
         "share_file" => share_file(app, caller, args).await,
         "share_result" => share_result(app, caller, turn, args).await,
         super::blocks::TOOL => show(app, caller, turn, args).await,
+        super::page::TOOL => page(app, caller, turn, args).await,
         "create_agent" => create_agent(app, caller, args).await,
         "update_agent" => update_agent(app, caller, args).await,
         "delete_agent" => delete_agent(app, caller, args).await,
@@ -1659,6 +1666,71 @@ async fn show(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &
             }
             text(receipt)
         }
+        Err(e) => error(e.to_string()),
+    }
+}
+
+/// This conversation's living page (`agents/page.rs`): set or patched by
+/// block id, every version kept, beside the chat log. The conversation is
+/// the one the turn runs in (a routine's own, when a routine runs). A turn
+/// answering outside text changes it only after a card.
+async fn page(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &Value) -> Value {
+    use super::page;
+    let update = match page::parse(args) {
+        Ok(u) => u,
+        Err(e) => return error(e),
+    };
+    let conversation = super::conversations::loaded(caller).to_string();
+    let (agent_id, at) = (caller.id.clone(), conversation.clone());
+    let before = match tokio::task::spawn_blocking(move || page::read(&agent_id, &at)).await {
+        Ok(Ok(file)) => file,
+        Ok(Err(e)) => return error(e.to_string()),
+        Err(e) => return error(e.to_string()),
+    };
+    if update.is_read() {
+        return text(page::for_agent(before.as_ref()));
+    }
+    let by_routine = runner::in_routine(&caller.id);
+    // Checked in full first, so a card never asks about a change that can't be made.
+    let preview = match page::apply(
+        before.as_ref(),
+        &conversation,
+        &update,
+        store::now_ms(),
+        by_routine,
+    ) {
+        Ok(Some(next)) => next,
+        Ok(None) => {
+            return text(page::receipt(
+                before.as_ref().expect("no change means a page"),
+                false,
+            ))
+        }
+        Err(e) => return error(e),
+    };
+    if runner::from_outside(&caller.id) && super::broker::is_live(&caller.id, turn) {
+        let (title, detail) = page::card(before.as_ref(), &preview);
+        let answer = ask_user(app, caller, title, detail, None).await;
+        if let Some(refused) = refused_reply(&answer, "change the page") {
+            return error(refused);
+        }
+    }
+    let (agent_id, at) = (caller.id.clone(), conversation.clone());
+    let done =
+        tokio::task::spawn_blocking(move || page::update(&agent_id, &at, &update, by_routine))
+            .await;
+    match done {
+        Ok(Ok((file, changed))) => {
+            if changed {
+                let _ = tauri::Emitter::emit(
+                    app,
+                    page::EVENT,
+                    json!({ "agentId": caller.id, "conversation": conversation }),
+                );
+            }
+            text(page::receipt(&file, changed))
+        }
+        Ok(Err(e)) => error(e),
         Err(e) => error(e.to_string()),
     }
 }

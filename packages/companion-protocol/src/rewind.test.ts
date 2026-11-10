@@ -40,6 +40,11 @@ describe('going back, in the same words on desk and phone', () => {
     expect(fork.confirm).toBe('Fork');
     expect(fork.body).toContain(copyClause('acme-site'));
     expect(copyClause(null)).toBeNull();
+    // A conversation's living page isn't rewound, and the confirm says so.
+    expect(rewind.body).not.toContain('page');
+    expect(rewindConfirm('Finance', 'Sort it', null, 'Budget').body).toContain(
+      "The page “Budget” stays as it is now; it isn't rewound."
+    );
   });
 
   it('waits for a turn to go back in place, never to fork', () => {

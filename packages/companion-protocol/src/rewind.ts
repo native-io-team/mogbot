@@ -106,7 +106,9 @@ export function copyClause(project: string | null | undefined): string | null {
 export function rewindConfirm(
   agentName: string,
   text: string,
-  project?: string | null
+  project?: string | null,
+  /** The conversation's living page, if it has one: a rewind leaves it as it is. */
+  page?: string | null
 ): { title: string; body: string; confirm: string } {
   const parts = [
     `${agentName} carries on from just before “${goBackQuote(text)}”. That message and what came after it stay in the chat, folded, not deleted.`,
@@ -114,8 +116,13 @@ export function rewindConfirm(
   ];
   const copy = copyClause(project);
   if (copy) parts.push(copy);
+  if (page) parts.push(rewindPageClause(page));
   return { title: 'Rewind to here?', body: parts.join(' '), confirm: 'Rewind' };
 }
+
+/** A rewind leaves the conversation's page as it is: said in the confirm. */
+export const rewindPageClause = (title: string) =>
+  `The page “${title}” stays as it is now; it isn't rewound.`;
 
 /** The confirm for Fork from here. */
 export function forkConfirm(

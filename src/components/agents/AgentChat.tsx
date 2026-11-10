@@ -77,6 +77,8 @@ import {
 } from './useComposerAttachments';
 import { AgentSwitcher } from './AgentSwitcher';
 import { ConversationSwitcher } from './ConversationSwitcher';
+import { ConversationPage, ConversationPagePin } from './ConversationPage';
+import { useConversationPage } from '../../lib/agentPage';
 import {
   FIRST_CONVERSATION,
   conversationKey,
@@ -493,6 +495,8 @@ export const AgentChat = memo(function AgentChat({
     void ensureViewing(agent.id);
   }, [agent.id]);
   const chatKey = viewing ? conversationKey(agent.id, viewing) : null;
+  // This conversation's living page: a rewind's confirm says it stays as it is.
+  const livingPage = useConversationPage(agent.id, viewing);
   const chatLoaded = useAgentsSelector((s) => (chatKey ? Boolean(s.messages[chatKey]) : true));
   useEffect(() => {
     if (chatKey && !chatLoaded) void loadMessages(chatKey);
@@ -1921,6 +1925,7 @@ export const AgentChat = memo(function AgentChat({
                 <div className="agent-chat__actions">
                   {/* Compact: the title is the agent menu, so it sits with the actions. */}
                   {compact && conversationSwitcher}
+                  <ConversationPagePin agent={agent} conversation={viewing} />
                   {/* Nothing to schedule or pick a model for until Claude Code is here. */}
                   {engineReady && (
                     <>
@@ -1972,6 +1977,9 @@ export const AgentChat = memo(function AgentChat({
                   />
                 </div>
               </header>
+
+              {/* This conversation's living page, kept current by the agent. */}
+              <ConversationPage agent={agent} conversation={viewing} />
 
               {/* Unmounted while the chat shows (a hidden xterm would fit itself to
             nothing); showing it again replays the session's scrollback. */}
@@ -2256,6 +2264,7 @@ export const AgentChat = memo(function AgentChat({
                 ask={goBackAsk}
                 agentName={agent.name}
                 project={agent.project ? agent.project.split('/').filter(Boolean).pop() : null}
+                page={livingPage?.title}
                 busy={goingBack}
                 onCancel={() => setGoBackAsk(null)}
                 onConfirm={() => void confirmGoBack()}

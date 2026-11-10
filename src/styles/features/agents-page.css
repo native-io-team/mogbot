@@ -1,0 +1,124 @@
+/* A conversation's living page (components/agents/ConversationPage.tsx):
+ * a band under the chat header, in the conversation's column. The bar is
+ * one quiet line (fold, title, when it changed, unpin); the body is the
+ * page's blocks, drawn as any `show`, and scrolls on its own so the chat
+ * keeps most of the window. */
+
+.agent-page {
+  flex: 0 0 auto;
+  padding: var(--spacing-xs) var(--agents-column-inset) 0;
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-page__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: var(--spacing-2xl);
+  padding-bottom: var(--spacing-xs);
+}
+
+.agent-page__toggle {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  padding: var(--spacing-2xs) 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  text-align: start;
+  cursor: pointer;
+}
+
+.agent-page__toggle:focus-visible {
+  outline: var(--border-width-default) solid var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.agent-page__chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agent-page[data-folded] .agent-page__chevron {
+  transform: rotate(-90deg);
+}
+
+.agent-page__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-page__when {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-page__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  max-height: 42vh; /* css-ok: the page scrolls inside; the chat keeps the rest of the window */
+  overflow-y: auto;
+  padding-bottom: var(--spacing-md);
+}
+
+.agent-page__history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  margin: 0;
+  padding: var(--spacing-xs);
+  list-style: none;
+  border-radius: var(--radius-card);
+  background: var(--surface-recessed);
+}
+
+.agent-page__version {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  width: 100%;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.agent-page__version:hover {
+  background: var(--surface-control-hover);
+}
+
+.agent-page__version[aria-current] {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.agent-page__version:focus-visible {
+  outline: var(--border-width-default) solid var(--focus-ring);
+}
+
+.agent-page__version-head {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-page__older {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+}

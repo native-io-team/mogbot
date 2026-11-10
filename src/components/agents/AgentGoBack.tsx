@@ -116,6 +116,7 @@ export function GoBackConfirm({
   ask,
   agentName,
   project,
+  page,
   busy,
   onCancel,
   onConfirm,
@@ -124,6 +125,8 @@ export function GoBackConfirm({
   agentName: string;
   /** A project-bound agent's project, for what its copy keeps. */
   project?: string | null;
+  /** The conversation's living page's title, if it has one. */
+  page?: string | null;
   busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -133,7 +136,7 @@ export function GoBackConfirm({
   const words =
     ask.action === 'fork'
       ? forkConfirm(agentName, ask.text, project)
-      : rewindConfirm(agentName, ask.text, project);
+      : rewindConfirm(agentName, ask.text, project, page);
   return (
     <ModalFrame
       isOpen

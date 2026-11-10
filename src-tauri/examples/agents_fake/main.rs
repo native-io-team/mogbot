@@ -31,6 +31,7 @@ use app_lib::commands::agents as cmd;
 use store::{AgentMessage, MessageKind};
 use tauri::{AppHandle, Listener};
 
+mod page;
 mod real_chief;
 
 type Check = Result<(), String>;
@@ -2606,6 +2607,7 @@ const ALL: &[&str] = &[
     "untrusted-init",
     "brief",
     "blocks",
+    "page",
 ];
 
 /* --------------------------------------------------------------------- main */
@@ -2745,6 +2747,7 @@ fn main() {
                 "login" => login(&h).await,
                 "untrusted-init" => untrusted_init(&h).await,
                 "blocks" => blocks(&h).await,
+                "page" => page::page_scenario(&h).await,
                 "real-blocks" => real_blocks(&h).await,
                 "real-chief" => real_chief::real_chief(&h).await,
                 other => Err(format!("unknown scenario {other}")),
