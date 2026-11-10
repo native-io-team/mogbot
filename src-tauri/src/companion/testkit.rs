@@ -581,6 +581,8 @@ pub struct Stub {
     pub admins: Mutex<Vec<(String, bool)>>,
     /// `agents.accounts.use` / `.reorder` calls: (engine, ids in order).
     pub account_orders: Mutex<Vec<(String, Vec<String>)>>,
+    /// Usage changes from the phone: "mode save", "add <text>", "spend".
+    pub usage_changes: Mutex<Vec<String>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
     /// The agent's conversations: (id, title), the first first; and the current one.
@@ -675,6 +677,7 @@ impl Stub {
             import_choices: Mutex::new(Vec::new()),
             admins: Mutex::new(Vec::new()),
             account_orders: Mutex::new(Vec::new()),
+            usage_changes: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
             conversations: Mutex::new((
                 vec![
@@ -1900,6 +1903,27 @@ impl Backend for Stub {
         Ok(json!({ "on": on, "at": at, "always": always }))
     }
 
+    async fn usage_set_mode(&self, mode: &str) -> Result<Value, CommandError> {
+        self.usage_changes
+            .lock()
+            .unwrap()
+            .push(format!("mode {mode}"));
+        self.usage_plan().await
+    }
+
+    async fn spare_add(&self, text: &str, agent_id: Option<&str>) -> Result<Value, CommandError> {
+        self.usage_changes.lock().unwrap().push(match agent_id {
+            Some(a) => format!("add {text} for {a}"),
+            None => format!("add {text}"),
+        });
+        self.usage_plan().await
+    }
+
+    async fn spare_spend_now(&self) -> Result<Value, CommandError> {
+        self.usage_changes.lock().unwrap().push("spend".into());
+        Ok(json!({ "line": "Chief of Staff is starting your spare-capacity list (2 waiting)." }))
+    }
+
     async fn usage_plan(&self) -> Result<Value, CommandError> {
         use crate::agents::engine::Engine;
         use crate::agents::forecast::PerRun;
@@ -1952,6 +1976,7 @@ impl Backend for Stub {
                     via: None,
                 }),
                 same_as: None,
+                maybe_same_as: None,
                 org_name: Some("Example".into()),
                 spent: vec![crate::agents::usage_story::ChangeRun {
                     agent_id: "a1".into(),
@@ -2003,6 +2028,7 @@ impl Backend for Stub {
                 }],
                 check: None,
                 same_as: None,
+                maybe_same_as: None,
                 org_name: None,
                 spent: Vec::new(),
                 changes: Vec::new(),
@@ -2034,6 +2060,7 @@ impl Backend for Stub {
                     via: None,
                 }),
                 same_as: None,
+                maybe_same_as: None,
                 org_name: None,
                 spent: Vec::new(),
                 changes: Vec::new(),
@@ -2290,6 +2317,7 @@ impl Backend for Stub {
                     follow_up: false,
                     then: then.unwrap_or_default(),
                     waiting: None,
+                    model: None,
                     extra: Default::default(),
                 })
                 .unwrap()

@@ -909,6 +909,7 @@ pub fn run() {
             commands::agents::agents_schedule_create,
             commands::agents::agents_schedule_cancel,
             commands::agents::agents_schedule_pause,
+            commands::agents::agents_schedule_model,
             commands::agents::agents_schedule_update,
             commands::agents::agents_schedule_run_now,
             commands::agents::agents_watch_create,

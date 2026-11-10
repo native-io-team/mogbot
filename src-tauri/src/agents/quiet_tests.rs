@@ -152,7 +152,9 @@ fn the_scheduler_holds_a_sweep_and_lets_a_chosen_time_through() {
     agent.check_ins = vec![sweep.clone()];
     let w = night();
     let now = at(6, 34);
-    let held = |c: &CheckIn| waits(c, Some(&w), holds(Some(&w), &utc(), now, 0));
+    let held = |_: &crate::agents::store::Agent, c: &CheckIn| {
+        waits(c, Some(&w), holds(Some(&w), &utc(), now, 0))
+    };
     assert!(
         schedule::plan_with(&utc(), std::slice::from_ref(&agent), now, &held)
             .fire
@@ -166,7 +168,9 @@ fn the_scheduler_holds_a_sweep_and_lets_a_chosen_time_through() {
     // 07:05: over. The sweep runs once, late, because of quiet hours.
     agent.check_ins.retain(|c| c.id == "c1");
     let later = at(7, 5);
-    let open = |c: &CheckIn| waits(c, Some(&w), holds(Some(&w), &utc(), later, 0));
+    let open = |_: &crate::agents::store::Agent, c: &CheckIn| {
+        waits(c, Some(&w), holds(Some(&w), &utc(), later, 0))
+    };
     let mut fire = schedule::plan_with(&utc(), std::slice::from_ref(&agent), later, &open)
         .fire
         .unwrap();

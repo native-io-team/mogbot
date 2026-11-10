@@ -67,6 +67,11 @@ pub enum Outcome {
     /// A routine in steps the user stopped between two steps, or whose OK
     /// never came before its next run.
     Declined,
+    /// Waiting for a usage limit to reset instead of running: every account
+    /// it runs on is out until a known reset, or "Save my limits" holds it
+    /// while the account is nearly out (`saver`). It runs once the limit
+    /// is back; the detail says until when.
+    Held,
     /// Written by a newer build.
     #[serde(other)]
     Unknown,
@@ -284,6 +289,22 @@ pub fn settle(
         reason.push('.');
     }
     let sign = sign_in_line(sign_in);
+    // Out of usage until a known reset too far off to retry at (a weekly
+    // limit): not a failure of the routine. It waits for the reset, and its
+    // next time finds it held until then (`saver`), never a refused try.
+    if retry_at.is_none()
+        && failure.kind == failure::FailureKind::UsageLimit
+        && failure.resets_at.is_some_and(|r| r > now)
+    {
+        run.outcome = Outcome::Held;
+        return Settled {
+            run,
+            retry: None,
+            alert: Some((ticket.attempt == 1).then(|| {
+                format!("{what} “{name}” is waiting for the usage limit to reset: {reason}{sign}")
+            })),
+        };
+    }
     match retry_at {
         Some(at) => {
             run.outcome = Outcome::Retrying;
@@ -330,6 +351,20 @@ pub fn issue(ticket: Ticket) {
     let oldest = ticket.fired_at - 4 * 60 * MINUTE_MS;
     tickets.retain(|t| t.fired_at >= oldest);
     tickets.push(ticket);
+}
+
+/// The model chosen for the routine the tickets `ids` fire (`CheckIn::model`),
+/// when they agree on one. None: the agent's routine model.
+pub fn routine_model(agent_id: &str, ids: &[String]) -> Option<String> {
+    let tickets = TICKETS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut models = tickets
+        .iter()
+        .filter(|t| t.agent_id == agent_id && ids.contains(&t.id))
+        .map(|t| t.check_ins.first().and_then(|c| c.model.clone()));
+    let first = models.next()??;
+    models
+        .all(|m| m.as_deref() == Some(first.as_str()))
+        .then_some(first)
 }
 
 fn take(agent_id: &str, ids: &[String]) -> Vec<Ticket> {
@@ -773,6 +808,40 @@ mod tests {
             at,
         );
         assert_eq!(s.retry.unwrap().at, NOW + 51 * MIN);
+    }
+
+    /// Persona review 2026-11-09 (the Adversary): one account out for the
+    /// week made every due routine a failed run. A limit whose known reset
+    /// is too far off to retry at is waited for, not failed, and said once.
+    #[test]
+    fn a_weekly_limit_is_waited_for_not_failed() {
+        let week = Failure {
+            kind: FailureKind::UsageLimit,
+            resets_at: Some(NOW + 3 * 24 * 60 * MIN),
+        };
+        let line = "Personal has reached its usage limit. It's back Sun at 8:00 AM.";
+        let s = settle(&ticket(1), Some((line, &week)), &[], NOW, None, at);
+        assert_eq!(s.run.outcome, Outcome::Held);
+        assert_eq!(s.retry, None);
+        let said = s.alert.unwrap().unwrap();
+        assert!(
+            said.contains("is waiting for the usage limit to reset"),
+            "{said}"
+        );
+        // A limit that didn't say when it resets still fails as before.
+        let unknown = Failure {
+            kind: FailureKind::UsageLimit,
+            resets_at: None,
+        };
+        let mut late = ticket(8);
+        late.first_failed_at = Some(NOW - 3 * 60 * MIN);
+        let s = settle(&late, Some((line, &unknown)), &[], NOW, None, at);
+        assert_eq!(s.run.outcome, Outcome::Failed);
+        // Run now: the user is there; it says what happened, as ever.
+        let mut manual = ticket(1);
+        manual.manual = true;
+        let s = settle(&manual, Some((line, &week)), &[], NOW, None, at);
+        assert_eq!(s.run.outcome, Outcome::Failed);
     }
 
     #[test]

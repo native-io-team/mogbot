@@ -2415,6 +2415,21 @@ pub async fn agents_schedule_pause(
     Ok(())
 }
 
+/// What one routine wakes its agent on: `""` like its other routines,
+/// `"same"` its own model, or one of its engine's (`CheckIn::model`).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_schedule_model(
+    app: AppHandle,
+    agent_id: String,
+    id: String,
+    model: String,
+) -> Result<schedule::CheckIn, CommandError> {
+    let changed = schedule::set_model(&agent_id, &id, &model)?;
+    emit_registry(&app);
+    Ok(changed)
+}
+
 /// Change a check-in's when and what in place (same id, same paused state).
 #[tauri::command]
 #[tracing::instrument(skip(app, note))]
