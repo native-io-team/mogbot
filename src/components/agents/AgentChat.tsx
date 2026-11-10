@@ -24,6 +24,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -706,6 +707,23 @@ export const AgentChat = memo(function AgentChat({
     ],
     [agent.name, engineReady, pickFiles]
   );
+
+  // Typing with the history focused (a clicked message, the scroll area)
+  // writes in the composer, as in a messaging app: focus moves on the key
+  // down, so the character itself lands in the field. Space, arrows and
+  // shortcuts keep scrolling and acting where they are; a field inside a card
+  // (a secret, a note) keeps its own keys.
+  const typeIntoComposer = useCallback((event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key.length !== 1 || event.key === ' ' || event.nativeEvent.isComposing) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable="true"], [role="menu"]')) return;
+    const input = inputRef.current;
+    if (!input || input.readOnly || input.disabled) return;
+    input.focus({ preventScroll: true });
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  }, []);
 
   // Focus the composer on open (mounted once per agent, keyed by id, so the
   // draft starts empty) and again when dictation ends, wherever it started.
@@ -1801,6 +1819,7 @@ export const AgentChat = memo(function AgentChat({
                 className="agent-chat__scroll"
                 ref={scrollRef}
                 onScroll={onScroll}
+                onKeyDown={typeIntoComposer}
                 tabIndex={0}
                 role="region"
                 aria-label="Messages"
