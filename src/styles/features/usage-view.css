@@ -2,8 +2,8 @@
    the account rows and an account's page (UsageStack), and the view
    (AgentsUsageView).
 
-   The total is drawn in ink, not hue: one segment per account, most room
-   first, each filled to what it adds. A status hue only for an account that
+   The total is drawn in ink, not hue: one segment per account, in the work
+   order, each filled to what it adds. A status hue only for an account that
    is low (amber); out of usage is neutral, since it resets by itself. Never
    the accent. The position keycap is the site's key (the segmented tabs'
    key); the hero and the account's page are sheets. */
@@ -501,7 +501,7 @@
   list-style: none;
 }
 
-/* Where did my usage go. */
+/* Where it went. */
 .usage-key__story {
   display: flex;
   flex-direction: column;
@@ -1099,4 +1099,46 @@
    sidebar footer's own ink, like Settings beside it. */
 .usage-glance[data-quiet] .usage-glance__label {
   color: inherit;
+}
+
+/* An account's page: the page header is the breadcrumb ("Usage › Work"), in
+   the header's own type, the page name quieter and a way back. */
+.agent-chat__crumbs .breadcrumb__list {
+  overflow: hidden;
+}
+
+.agent-chat__crumbs .breadcrumb__link.button,
+.agent-chat__crumbs .breadcrumb__page {
+  max-width: none;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
+.agent-chat__crumbs .breadcrumb__link.button {
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.agent-chat__crumbs .breadcrumb__link.button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.agent-chat__crumbs .breadcrumb__separator {
+  padding-inline: var(--spacing-xs);
+}
+
+/* Read at 0%: nothing left, so no solid track (in dark the track is a dark
+   slab that read as full beside the dashed unread ones); an empty slot with
+   a solid hairline, told apart from "not read" by the dash. */
+.usage-total__seg[data-empty] {
+  background: transparent;
+  box-shadow: none;
+  outline: var(--border-width-default) solid var(--border-strong);
+  outline-offset: calc(var(--border-width-default) * -1);
 }

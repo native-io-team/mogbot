@@ -16,7 +16,7 @@
  * - **Estimates say so.** The one forward-looking line ("Runs out ~Thu") is
  *   the Mac's estimate across accounts (`totals.runOut`), labelled, and
  *   absent with too little history.
- * - **"Where did my usage go"** lists what this app ran while a meter rose
+ * - **"Where it went"** lists what this app ran while a meter rose
  *   and never splits points between runs; when nothing here ran, it says the
  *   account was used elsewhere.
  */
@@ -86,7 +86,7 @@ export interface KeyLimit {
   runOut?: { at: number; along: number; text: string };
 }
 
-/** One rise in a meter, said for "Where did my usage go". */
+/** One rise in a meter, said for "Where it went". */
 export interface ChangeLine {
   key: string;
   /** "Weekly 68% → 33% left": said as what is left, as every figure is. */
@@ -693,7 +693,7 @@ function planWord(plan: string | undefined): string | null {
 
 /**
  * The total across every real account: each read account's share, counted
- * equally, most room first; an account with no reading shown but never
+ * equally, in the work order; an account with no reading shown but never
  * counted as room.
  */
 export function totalOf(
@@ -704,7 +704,7 @@ export function totalOf(
   const real = keys.filter((k) => k.signedIn && k.state !== 'same');
   const read = real.filter((k) => k.share !== null);
   const unread = real.filter((k) => k.share === null);
-  const segment = (k: StackKey): TotalSegment => {
+  const segment =(k: StackKey): TotalSegment => {
     const l = k.refillLimit;
     const refill = l?.countdown ?? null;
     const room = k.share === null ? 'shows after its first reply' : `${k.share}% left`;
@@ -723,15 +723,9 @@ export function totalOf(
       words: `${k.name}: ${room}${refill ? `, refills in ${refill}` : ''}`,
     };
   };
-  const segments = [
-    ...[...read].sort(
-      (a, b) =>
-        (b.share as number) - (a.share as number) ||
-        a.engine.localeCompare(b.engine) ||
-        a.position - b.position
-    ),
-    ...unread,
-  ].map(segment);
+  // In the work order, as the list under it (round 4: the bar sorted by
+  // room and the list by order put the same accounts in two orders).
+  const segments = real.map(segment);
   const left =
     read.length > 0
       ? Math.round(read.reduce((n, k) => n + (k.share as number), 0) / read.length)

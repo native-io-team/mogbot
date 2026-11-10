@@ -1912,7 +1912,7 @@ export interface UsageAccountLine {
   /** Who used it in the last 7 days, from the turns this app ran on it. */
   spent?: UsageRun[];
   /**
-   * "Where did my usage go": each recent rise in its 5-hour and weekly
+   * "Where it went": each recent rise in its 5-hour and weekly
    * meters, newest first, with the turns this app ran on it in that time.
    */
   changes?: UsageChange[];

@@ -60,7 +60,7 @@ function roomWords(k: StackKey): string {
   return `${k.share}% left`;
 }
 
-/** The total as one bar: a segment per account, most room first. */
+/** The total as one bar: a segment per account, in the work order. */
 export function TotalBar({ total, tall = false }: { total: UsageTotal; tall?: boolean }) {
   const colors = useColors();
   const styles = useStyles();
@@ -191,7 +191,7 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
 
 /**
  * The total first: what is left across every account, of what, and when it
- * next refills; the bar, most room first, with each account named under its
+ * next refills; the bar, in the work order, with each account named under its
  * segment (a tap opens it); then what needs saying.
  */
 export function TotalCard({
@@ -563,7 +563,7 @@ export function KeyCard({
       {k.changes.length > 0 && (
         <View style={styles.part}>
           <T variant="headline" color={colors.textStrong} accessibilityRole="header">
-            Where did my usage go
+            Where it went
           </T>
           <View style={styles.card}>
             {k.changes.map((c, i) => (
@@ -588,8 +588,8 @@ export function KeyCard({
             ))}
           </View>
           <T variant="caption" color={colors.textMuted}>
-            Each task is listed with the tokens Claude Code or Codex reported; the points aren’t
-            split between them. Use of the same plan outside these agents counts too.
+            Each task shows the tokens its engine reported; a rise isn’t divided between tasks.
+            Use of the same plan outside these agents counts too.
           </T>
         </View>
       )}

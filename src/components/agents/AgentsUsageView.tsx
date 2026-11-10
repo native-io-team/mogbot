@@ -6,7 +6,7 @@
  * **The overview**, read top-down:
  * 1. **The total**: the room across every real account as one figure ("72%
  *    left across 2 accounts", each account counted equally), when the next
- *    refill is, and one bar made of a segment per account, most room first,
+ *    refill is, and one bar made of a segment per account, in the work order,
  *    each labelled under it and opening that account.
  * 2. **Nearly out everywhere**: one calm bar with the options.
  * 3. **Accounts**: one row each, in the order turns try them (its place,
@@ -78,7 +78,7 @@ import { onAccountSignIn, takeAccountSignIn } from '../../lib/settingsFromChat';
 import { ADD_ACCOUNT_WHY } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { AccountSignIn } from './AccountSignIn';
 import { EngineSignInModal } from './EngineSignInModal';
-import { AgentsPageHeader, type AgentsPageCompact } from './AgentsPageHeader';
+import { AgentsPageHeader, type AgentsPageCompact, type UsageCrumb } from './AgentsPageHeader';
 import { AgentsCrossover } from './AgentsCrossover';
 import { SpareList } from './AgentsUsage';
 import { useUsageGlance } from './AccountSwitcher';
@@ -93,6 +93,10 @@ export function AgentsUsageView({
   compact?: AgentsPageCompact;
   onOpenAgent?: (agentId: string) => void;
 } = {}) {
+  // On an account's page the header is the breadcrumb ("Usage › Work"): the
+  // header is where you are, so the page doesn't say it a second time. In a
+  // compact window the header is the agent switcher, so the page keeps its own.
+  const [crumb, setCrumb] = useState<UsageCrumb | null>(null);
   return (
     <section className="agent-chat agents-usage-view" aria-label="Usage">
       <AgentsPageHeader
@@ -101,6 +105,7 @@ export function AgentsUsageView({
         pageId={USAGE_ID}
         compact={compact}
         onOpenAgent={onOpenAgent}
+        crumb={compact ? null : crumb}
       />
       <div
         className="agent-chat__scroll"
@@ -109,7 +114,7 @@ export function AgentsUsageView({
         aria-label="Usage and accounts"
       >
         <div className="agents-usage-view__column">
-          <UsagePanel />
+          <UsagePanel onCrumb={compact ? undefined : setCrumb} />
         </div>
       </div>
     </section>
@@ -129,7 +134,14 @@ function swap(ids: readonly string[], a: number, b: number): string[] {
  * Settings it also answers what opens that page: ⌘K's "Add an account…"
  * for an engine, and the Chief starting an account's sign-in from chat.
  */
-export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
+export function UsagePanel({
+  inSettings = false,
+  onCrumb,
+}: {
+  inSettings?: boolean;
+  /** The header shows where you are: the open account's name and the way back. */
+  onCrumb?: (crumb: UsageCrumb | null) => void;
+}) {
   const { showToast } = useOptionalToast();
   const { accounts, all, glance, inventory, now, engines, attempt, remove, reload } =
     useUsageGlance({ look: true });
@@ -155,6 +167,12 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
   }, []);
 
   const key = open ? glance.keys.find((k) => k.engine === open.engine && k.id === open.id) : null;
+
+  const crumbName = key?.name ?? null;
+  useEffect(() => {
+    onCrumb?.(crumbName ? { name: crumbName, back: () => show(null) } : null);
+  }, [crumbName, onCrumb, show]);
+  useEffect(() => () => onCrumb?.(null), [onCrumb]);
 
   // Arriving on a page puts focus on its name; coming back, on the row it was opened from.
   useEffect(() => {
@@ -307,26 +325,28 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
     const reorder = (order: string[]) => void attempt(() => reorderUsageAccounts(k.engine, order));
     return (
       <>
-        <div className="usage-crumbs">
-          <IconButton
-            variant="ghost"
-            size="medium"
-            icon={<ArrowLeftIcon size={14} />}
-            aria-label="Back to Usage"
-            onClick={() => show(null)}
-          />
-          <Breadcrumb aria-label="Where you are">
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink onClick={() => show(null)}>Usage</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage aria-current="page">{k.name}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
+        {!onCrumb && (
+          <div className="usage-crumbs">
+            <IconButton
+              variant="ghost"
+              size="medium"
+              icon={<ArrowLeftIcon size={14} />}
+              aria-label="Back to Usage"
+              onClick={() => show(null)}
+            />
+            <Breadcrumb aria-label="Where you are">
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink onClick={() => show(null)}>Usage</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage aria-current="page">{k.name}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+        )}
         <AccountDetail
           key={k.key}
           k={k}
@@ -498,7 +518,13 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
             </section>
           )}
 
-          {installed.length > 0 && <AgentsCrossover installed={installed} now={now} />}
+          {installed.length > 0 && (
+            <AgentsCrossover
+              installed={installed}
+              signedIn={[...new Set(all.filter((a) => a.signedIn).map((a) => a.engine))]}
+              now={now}
+            />
+          )}
           {inventory && <SpareList inventory={inventory} onChanged={reload} />}
 
           {inventory && inventory.local.length > 0 && (
@@ -559,7 +585,7 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
 
 /**
  * The total first: what is left across every account, of what, and when it
- * next refills; then the bar, most room first, each account under its
+ * next refills; then the bar, in the work order, each account under its
  * segment. Out everywhere, or nothing read, it says that instead of a figure.
  */
 function TotalHero({
@@ -591,7 +617,9 @@ function TotalHero({
       data-testid="usage-hero"
     >
       <div className="usage-hero__answer">
-        <p className="usage-hero__eyebrow">{total.counted > 1 ? 'All accounts' : 'Usage'}</p>
+        <p className="usage-hero__eyebrow">
+          {total.segments.length > 1 ? 'All accounts' : 'Usage'}
+        </p>
         <h2 className="usage-hero__headline">
           {figure}
           {!out && total.left !== null && total.across && (

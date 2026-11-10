@@ -9,6 +9,14 @@
  */
 
 import type { ReactNode } from 'react';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '../primitives/Breadcrumb';
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { AgentKey } from './AgentKey';
 import { AgentSwitcher } from './AgentSwitcher';
@@ -30,14 +38,48 @@ interface Props {
   pageId: string;
   compact?: AgentsPageCompact;
   onOpenAgent: (id: string) => void;
+  /** A page under this one (an account under Usage): the title becomes "Usage › Work". */
+  crumb?: UsageCrumb | null;
   children?: ReactNode;
 }
 
-export function AgentsPageHeader({ name, icon, pageId, compact, onOpenAgent, children }: Props) {
+/** Where you are under a page, and the way back to it. */
+export interface UsageCrumb {
+  name: string;
+  back: () => void;
+}
+
+export function AgentsPageHeader({
+  name,
+  icon,
+  pageId,
+  compact,
+  onOpenAgent,
+  crumb,
+  children,
+}: Props) {
   const title = (
     <>
       <AgentKey name={name} colorway="putty" icon={icon} size="md" />
-      <h2 className="agent-chat__name">{name}</h2>
+      {crumb ? (
+        <h2 className="agent-chat__name agent-chat__crumbs">
+          <Breadcrumb aria-label="Where you are">
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink onClick={crumb.back} aria-label={`Back to ${name}`}>
+                  {name}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage aria-current="page">{crumb.name}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </h2>
+      ) : (
+        <h2 className="agent-chat__name">{name}</h2>
+      )}
     </>
   );
   return (

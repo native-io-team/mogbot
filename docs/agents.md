@@ -4791,7 +4791,7 @@ account as …", this Mac's sign-in having changed); "Limits" with Limits |
 Tokens at its right: the limit cards (5-hour, weekly, per-model, each with
 its countdown chip, pace marker, the Mac's labelled run-out estimate and the
 pace in words) or "Used by these agents this week" as a table (agent key,
-name, tokens, messages); and "Where did my usage go". Adding is one click
+name, tokens, messages); and "Where it went". Adding is one click
 per engine (a free name, then its sign-in). Onboarding offers adding right
 after the engine's sign-in ("Add another account?", skippable). The phone
 has the same two levels: the Usage sheet (the total, then a row per
@@ -4855,7 +4855,7 @@ do and when it refills (`usageGlance` `row`): the total ("72% left", or
 the total bar and "Refills in 2d 4h". Its corner dot shows only when the
 user must act or agents are out; the phone's Agents list says the same.
 
-**Where did my usage go** (`agents/usage_story.rs`). Each turn's tokens are
+**Where it went** (`agents/usage_story.rs`). Each turn's tokens are
 recorded per account with its agent, and its routine when it ran one alone
 (`usage_plan::add_turn`, `tag_routine`; kept 8 days). For each rise of at
 least 2 points in an account's 5-hour or weekly meter (consecutive readings
