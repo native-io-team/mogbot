@@ -50,12 +50,17 @@ With none, it runs `$FAKE_ENGINE_DEFAULT` (the same JSON), else replies
   {"result": true}                a `result` now, the process carrying on
                                   (a background task, a helper's round).
   {"raw": "text"}                 a raw stdout line (torn JSON, garbage).
+  {"list_tools": true}            log the app server's `tools/list` as this engine
+                                  reaches it (`served` in the log).
 
 Run as `codex` (a link named so), it is Codex's `exec` driver instead
 (`codex exec --json`, JSONL out, threads under `$CODEX_HOME/sessions`):
 the same steps, except that commands never ask (exec can't) and
 `usage_limit` applies to Codex only with `"codex": true`. The app runs it on `exec` when
-`SHIPSTUDIO_AGENTS_CODEX_EXEC` is set (debug builds).
+`SHIPSTUDIO_AGENTS_CODEX_EXEC` is set (debug builds); otherwise it is Codex's
+`app-server` (`AppServer`): replies stream as deltas, a `bash` step asks with
+`item/commandExecution/requestApproval` unless `"ask": false`, and a `write`
+step with `item/fileChange/requestApproval`.
 
 Run as `opencode`, it is OpenCode's `opencode acp` (the Agent Client
 Protocol on stdin/stdout, as observed on OpenCode 1.18.29,
@@ -362,6 +367,8 @@ class Turn:
                     resets = int(time.time()) + 3600
                     self.result(error="Claude AI usage limit reached|%d" % resets)
                     sys.exit(1)
+            elif "list_tools" in step:
+                log({"served": self.bridge.tools()})
             elif "sleep" in step:
                 time.sleep(float(step["sleep"]))
             elif "hang" in step:
@@ -520,6 +527,8 @@ class CodexTurn:
                     out({"type": "turn.failed", "error": {"message":
                         "You've hit your usage limit. Try again at 7:18 PM."}})
                     sys.exit(1)
+            elif "list_tools" in step:
+                log({"served": self.bridge.tools()})
             elif "sleep" in step:
                 time.sleep(float(step["sleep"]))
             elif "hang" in step:
@@ -588,6 +597,260 @@ def codex_turn(args):
                                              "output_tokens": 20, "reasoning_output_tokens": 0}})
 
 
+APP_SERVER_SCHEMA = {
+    "ClientRequest.json": ["thread/start", "thread/resume", "turn/start", "turn/steer",
+                           "turn/interrupt"],
+    "ServerRequest.json": ["item/commandExecution/requestApproval",
+                           "item/fileChange/requestApproval", "mcpServer/elicitation/request"],
+    "ServerNotification.json": ["item/agentMessage/delta", "item/started", "item/completed",
+                                "turn/completed", "thread/tokenUsage/updated"],
+}
+
+
+class AppServer:
+    """`codex app-server`, as observed on Codex 0.166
+    (`testdata/codex-app-server.jsonl`): JSON-RPC both ways. A `bash` step
+    asks with `item/commandExecution/requestApproval` (a command needing
+    more than the sandbox) unless `"ask": false`; a `write` step asks with
+    `item/fileChange/requestApproval`. A decline ends nothing: the model
+    reads the declined result (and any `turn/steer` the app sent) and the
+    turn carries on. Threads are rollouts under `$CODEX_HOME/sessions`, as
+    `exec`'s are, so either driver resumes the other's."""
+
+    def __init__(self, args):
+        import queue
+        import threading
+        self.args = args
+        self.inbox = queue.Queue()
+        self.next_id = 100
+        self.thread = None
+        self.turn = None
+        self.n = 0
+        self.interrupted = False
+        url = None
+        for i, a in enumerate(args):
+            if a == "-c" and i + 1 < len(args) and args[i + 1].startswith("mcp_servers.app="):
+                m = re.search(r'url="([^"]+)"', args[i + 1])
+                url = m.group(1) if m else None
+        self.bridge = Bridge(None)
+        self.bridge.url = url
+        self.bridge.headers = {"Authorization": "Bearer " +
+                               os.environ.get("SHIPSTUDIO_AGENTS_BRIDGE_TOKEN", "")}
+
+        def reader():
+            for line in sys.stdin:
+                line = line.strip()
+                if line:
+                    try:
+                        self.inbox.put(json.loads(line))
+                    except Exception:
+                        pass
+            self.inbox.put(None)
+
+        threading.Thread(target=reader, daemon=True).start()
+
+    def note(self, method, params):
+        out({"method": method, "params": params})
+
+    def ours(self, params):
+        return dict(params, threadId=self.thread, turnId=self.turn)
+
+    def take(self, block=True):
+        """The next message from the app; interrupts, steers and the rate
+        limit read are answered on the way."""
+        import queue
+        try:
+            msg = self.inbox.get(timeout=None if block else 0.05)
+        except queue.Empty:
+            return {}
+        if msg is None:
+            sys.exit(0)
+        method, rid = msg.get("method"), msg.get("id")
+        if method == "turn/interrupt":
+            self.interrupted = True
+            out({"id": rid, "result": {}})
+        elif method == "turn/steer":
+            text = "".join(p.get("text", "") for p in (msg.get("params") or {}).get("input") or [])
+            log({"engine": "codex-app", "steer": text})
+            out({"id": rid, "result": {"turnId": self.turn}})
+        elif method == "account/rateLimits/read":
+            out({"id": rid, "result": {"rateLimits": {
+                "limitId": "codex", "primary": {"usedPercent": 12, "windowDurationMins": 300,
+                                                "resetsAt": int(time.time()) + 3600},
+                "secondary": None, "credits": None, "planType": "plus"}}})
+        return msg
+
+    def ask(self, method, params):
+        rid = self.next_id
+        self.next_id += 1
+        out({"id": rid, "method": method, "params": self.ours(params)})
+        while True:
+            msg = self.take()
+            if msg.get("id") == rid and "method" not in msg:
+                break
+            if self.interrupted:
+                return False
+        decision = (msg.get("result") or {}).get("decision")
+        log({"engine": "codex-app", "asked": method, "answer": decision})
+        self.note("serverRequest/resolved", {"threadId": self.thread, "requestId": rid})
+        return decision == "accept"
+
+    def item(self, item):
+        self.n += 1
+        item = dict(item, id="item_%d" % self.n)
+        self.note("item/started", self.ours({"item": dict(item, status="inProgress")}))
+        return item
+
+    def completed(self, item):
+        self.note("item/completed", self.ours({"item": item}))
+
+    def say(self, text, every=0.0):
+        text = text.replace("{session}", self.thread).replace(
+            "{account}", os.path.basename(os.environ.get("CODEX_HOME", "")) or "this-mac")
+        text = text.replace("{turn}", str(rollout_turns(self.thread)))
+        item = self.item({"type": "agentMessage", "text": ""})
+        for piece in re.findall(r"\S+\s*", text) or [text]:
+            self.note("item/agentMessage/delta", self.ours({"itemId": item["id"], "delta": piece}))
+            if every:
+                time.sleep(every)
+        self.completed(dict(item, text=text))
+
+    def run(self, steps):
+        for step in steps:
+            self.take(block=False)
+            if self.interrupted:
+                return
+            if "say" in step:
+                self.say(step["say"])
+            elif "slow" in step:
+                self.say(step["slow"], every=float(step.get("every", 0.2)))
+            elif "tool" in step:
+                tool, args = step["tool"], step.get("args") or {}
+                item = self.item({"type": "mcpToolCall", "server": "app", "tool": tool,
+                                  "arguments": args, "result": None, "error": None})
+                text, is_error = self.bridge.call(tool, args)
+                self.completed(dict(item, status="failed" if is_error else "completed",
+                                    result={"content": [{"type": "text", "text": text}]}))
+            elif "bash" in step:
+                command = step["bash"]
+                shell = "/bin/zsh -lc '%s'" % command.replace("'", "'\\''")
+                item = self.item({"type": "commandExecution", "command": shell,
+                                  "cwd": os.getcwd(), "aggregatedOutput": None,
+                                  "exitCode": None})
+                if step.get("ask", True) and not self.ask(
+                        "item/commandExecution/requestApproval",
+                        {"itemId": item["id"], "reason": "Run outside the sandbox?",
+                         "command": shell, "cwd": os.getcwd()}):
+                    self.completed(dict(item, status="declined"))
+                    continue
+                run = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True)
+                self.completed(dict(item, aggregatedOutput=run.stdout + run.stderr,
+                                    exitCode=run.returncode,
+                                    status="completed" if run.returncode == 0 else "failed"))
+            elif "write" in step:
+                full = os.path.join(os.getcwd(), step["write"])
+                item = self.item({"type": "fileChange", "changes": [{"path": full,
+                                                                      "kind": "add"}]})
+                if not self.ask("item/fileChange/requestApproval", {"itemId": item["id"]}):
+                    self.completed(dict(item, status="declined"))
+                    continue
+                with open(full, "w") as f:
+                    f.write(step.get("text", ""))
+                self.completed(dict(item, status="completed"))
+            elif "rate_limit" in step:
+                self.note("account/rateLimits/updated", {"rateLimits": {
+                    "limitId": "codex", "primary": None,
+                    "secondary": {"usedPercent": int(float(step["rate_limit"]) * 100),
+                                  "windowDurationMins": 10080,
+                                  "resetsAt": int(time.time()) + 86400},
+                    "credits": None, "planType": "plus"}})
+            elif "list_tools" in step:
+                log({"served": self.bridge.tools()})
+            elif "sleep" in step:
+                time.sleep(float(step["sleep"]))
+            elif "hang" in step:
+                while not self.interrupted:
+                    self.take(block=False)
+                return
+            elif "crash" in step:
+                os.kill(os.getpid(), signal.SIGSEGV)
+            elif "stderr" in step:
+                sys.stderr.write(step["stderr"] + "\n")
+                sys.stderr.flush()
+            elif "exit" in step:
+                sys.exit(int(step["exit"]))
+            elif "error" in step:
+                raise RuntimeError(step["error"])
+
+    def open_thread(self, method, rid, params):
+        thread = params.get("threadId")
+        if method == "thread/resume":
+            if not thread or not rollout_of(thread):
+                out({"id": rid, "error": {"code": -32600,
+                                          "message": "no rollout found for thread id %s" % thread}})
+                return
+        else:
+            thread = str(uuid.uuid4())
+        self.thread = thread
+        log({"engine": "codex-app", "method": method, "thread": thread,
+             "approval": params.get("approvalPolicy"), "argv": self.args[1:],
+             "env_has_bearer": bool(os.environ.get("SHIPSTUDIO_AGENTS_BRIDGE_TOKEN"))})
+        out({"id": rid, "result": {"thread": {"id": thread},
+                                   "model": params.get("model") or "gpt-fake",
+                                   "approvalPolicy": params.get("approvalPolicy")}})
+
+    def start_turn(self, rid, params):
+        prompt = "".join(p.get("text", "") for p in params.get("input") or [])
+        path = rollout_of(self.thread)
+        if not path:
+            day = time.strftime("%Y/%m/%d")
+            stamp = time.strftime("%Y-%m-%dT%H-%M-%S")
+            folder = os.path.join(codex_home(), "sessions", day)
+            os.makedirs(folder, exist_ok=True)
+            path = os.path.join(folder, "rollout-%s-%s.jsonl" % (stamp, self.thread))
+        with open(path, "a") as f:
+            f.write(json.dumps({"type": "event_msg", "payload": {"type": "user_message",
+                                                                 "message": prompt}}) + "\n")
+        self.turn = "turn_%s" % uuid.uuid4().hex[:12]
+        log({"turn": self.thread, "engine": "codex-app", "cwd": os.getcwd(),
+             "account": os.environ.get("CODEX_HOME", "this-mac"), "prompt": prompt,
+             "effort": params.get("effort")})
+        out({"id": rid, "result": {"turn": {"id": self.turn, "status": "inProgress"}}})
+        self.note("turn/started", {"threadId": self.thread, "turn": {"id": self.turn}})
+        error = None
+        try:
+            self.run(script_of(prompt))
+        except RuntimeError as e:
+            error = str(e)
+        last = {"totalTokens": 120, "inputTokens": 150, "cachedInputTokens": 50,
+                "cacheWriteInputTokens": 0, "outputTokens": 20, "reasoningOutputTokens": 0}
+        self.note("thread/tokenUsage/updated", self.ours({"tokenUsage": {
+            "total": last, "last": last, "modelContextWindow": 200000}}))
+        status = "interrupted" if self.interrupted else ("failed" if error else "completed")
+        turn = {"id": self.turn, "status": status, "items": []}
+        if error:
+            turn["error"] = {"message": error}
+        self.note("turn/completed", {"threadId": self.thread, "turn": turn})
+
+    def serve(self):
+        while True:
+            msg = self.take()
+            method, rid, params = msg.get("method"), msg.get("id"), msg.get("params") or {}
+            if method == "initialize":
+                out({"id": rid, "result": {"userAgent": "fake/0.166.0"}})
+            elif method in ("thread/start", "thread/resume"):
+                self.open_thread(method, rid, params)
+            elif method == "turn/start":
+                self.start_turn(rid, params)
+            elif method == "thread/compact/start":
+                out({"id": rid, "result": {}})
+                self.note("item/completed", {"threadId": self.thread, "item": {
+                    "type": "contextCompaction", "id": "compact_1"}})
+            elif method is not None and rid is not None and method not in (
+                    "turn/interrupt", "turn/steer", "account/rateLimits/read"):
+                out({"id": rid, "error": {"code": -32601, "message": "no " + method}})
+
+
 def codex_main(args):
     if args[:1] == ["--version"]:
         print("codex-cli 0.166.0")
@@ -597,9 +860,21 @@ def codex_main(args):
         print("[]")
     elif args[:1] == ["exec"]:
         codex_turn(args)
+    elif args[:2] == ["app-server", "generate-json-schema"]:
+        # The methods the app checks for; with FAKE_CODEX_NO_APP_SERVER it
+        # has none, and the app falls back to `exec`.
+        folder = flag(args, "--out")
+        if os.environ.get("FAKE_CODEX_NO_APP_SERVER") or not folder:
+            sys.exit(2)
+        os.makedirs(folder, exist_ok=True)
+        for name, methods in APP_SERVER_SCHEMA.items():
+            with open(os.path.join(folder, name), "w") as f:
+                json.dump({"oneOf": [{"properties": {"method": {"enum": [m]}}}
+                                     for m in methods]}, f)
     elif args[:1] == ["app-server"]:
-        # No app-server here: the app falls back to `exec`.
-        sys.exit(2)
+        if os.environ.get("FAKE_CODEX_NO_APP_SERVER"):
+            sys.exit(2)
+        AppServer(args).serve()
     else:
         print("fake codex: nothing to do for %s" % " ".join(args), file=sys.stderr)
 
@@ -770,6 +1045,8 @@ class Acp:
                 with open(full, "w") as f:
                     f.write(step.get("text", ""))
                 self.done(cid, "Wrote file successfully.")
+            elif "list_tools" in step:
+                log({"served": self.bridge.tools()})
             elif "sleep" in step:
                 time.sleep(float(step["sleep"]))
             elif "hang" in step:
