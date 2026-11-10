@@ -137,7 +137,7 @@ function asAgent(raw: unknown): Agent | null {
   a.color = str(a.color);
   a.home = str(a.home);
   a.status = asStatus(a.status);
-  a.engine = a.engine === 'codex' ? 'codex' : 'claude';
+  a.engine = a.engine === 'codex' || a.engine === 'opencode' ? a.engine : 'claude';
   for (const k of ['shape', 'createdAt', 'lastActivityAt', 'unread', 'pendingApprovals'])
     a[k] = num(a[k]);
   for (const k of ['isMain', 'pinned', 'hidden', 'muted']) a[k] = a[k] === true;

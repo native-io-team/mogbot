@@ -12,8 +12,16 @@ import type { AgentEngine, Quota, QuotaWindow, UsageTotals } from './model';
 /** The share of a window at which the line turns amber. */
 export const QUOTA_WARN_PERCENT = 90;
 
-const ENGINE_SHORT: Record<AgentEngine, string> = { claude: 'Claude', codex: 'Codex' };
-const ENGINE_FULL: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
+const ENGINE_SHORT: Record<AgentEngine, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
+const ENGINE_FULL: Record<AgentEngine, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
 
 const CLOCK = { format: formatClock };
 const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'short' });

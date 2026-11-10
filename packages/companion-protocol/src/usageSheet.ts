@@ -269,7 +269,11 @@ export function ringPercent(
   return s ? { percent: s.percent, tone: s.tone } : null;
 }
 
-const ENGINE_NAME: Record<AgentEngine, string> = { claude: 'Claude', codex: 'Codex' };
+const ENGINE_NAME: Record<AgentEngine, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
 
 export interface AccountBlock {
   key: string;

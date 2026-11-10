@@ -405,7 +405,7 @@ describe('formatUsage', () => {
     // The user's defaults for new agents, as the overview says them.
     const chosen = {
       engine: 'codex' as const,
-      models: { claude: 'haiku', codex: 'gpt-5.5' },
+      models: { claude: 'haiku', codex: 'gpt-5.5', opencode: null },
       startsOn: 'codex' as const,
       model: 'gpt-5.5',
     };

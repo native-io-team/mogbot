@@ -407,7 +407,7 @@ export interface SchedulePreview {
   repeat: Repeat | null;
 }
 
-export type AgentEngine = 'claude' | 'codex';
+export type AgentEngine = 'claude' | 'codex' | 'opencode';
 
 /** Mirrors `store::EFFORTS`: the levels both engines take. */
 export type AgentEffort = 'low' | 'medium' | 'high';
@@ -461,7 +461,7 @@ export interface NewAgentDefaults {
   /** The engine the user chose; null when they never have (the rule decides). */
   engine: AgentEngine | null;
   /** Each engine's chosen model while it still offers it; null is the engine's own default. */
-  models: { claude: string | null; codex: string | null };
+  models: { claude: string | null; codex: string | null; opencode: string | null };
   /** Where a new agent starts now: the chosen engine when it's ready, else the first that is. */
   startsOn: AgentEngine;
   /** The model it starts on there; null is that engine's default. */
@@ -473,7 +473,16 @@ export interface NewAgentDefaultsChange {
   engine?: AgentEngine;
   claudeModel?: string;
   codexModel?: string;
+  opencodeModel?: string;
 }
+
+/** The change field for one engine's default model. Mirrors the protocol's. */
+export const MODEL_CHANGE_KEY: Record<AgentEngine, 'claudeModel' | 'codexModel' | 'opencodeModel'> =
+  {
+    claude: 'claudeModel',
+    codex: 'codexModel',
+    opencode: 'opencodeModel',
+  };
 
 export interface AgentsOverview {
   agents: Agent[];
@@ -1019,7 +1028,11 @@ export const AGENT_MODELS: readonly ModelChoice[] = [
   { value: 'haiku', label: MODEL_PURPOSE.haiku, detail: 'Haiku' },
 ];
 
-export const ENGINE_LABEL: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
+export const ENGINE_LABEL: Record<AgentEngine, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
 
 /** Engine's default first, then the engine's own models (Claude Code's aliases until the overview says). */
 export function modelChoices(engine: AgentEngine, engines: EngineInfo[]): readonly ModelChoice[] {
@@ -1129,6 +1142,9 @@ export function engineProtections(engine: AgentEngine, info?: EngineInfo): strin
   if (engine === 'claude') {
     return 'Claude Code enforces: file edits go ahead in its project and its own folder; everything else is decided by its independence.';
   }
+  if (engine === 'opencode') {
+    return "OpenCode enforces: file edits go ahead in its project and its own folder, never in git's or the app's folders; commands, web access and everything else are decided by its independence. Plugins you've added to OpenCode aren't limited by this.";
+  }
   const limits =
     "Codex enforces: its commands can only change files in your projects and its own folder, and can't reach the internet.";
   const apps = "Apps you've connected to Codex aren't limited by this.";
@@ -1166,7 +1182,7 @@ export function routineModelChoices(
   choices: readonly ModelChoice[]
 ): RoutineModelChoice[] {
   const models = choices.filter((m) => m.value).map((m) => ({ ...m, hint: null }));
-  if (engine === 'codex') {
+  if (engine !== 'claude') {
     return [{ value: '', label: 'Same as its chats', hint: null }, ...models];
   }
   return [
@@ -1181,7 +1197,7 @@ export function routineModelOf(
   agent: Pick<Agent, 'engine' | 'model' | 'routineModel'>
 ): string | null {
   const setting = agent.routineModel ?? '';
-  if (setting === '' && agent.engine !== 'codex') return agent.model ?? 'haiku';
+  if (setting === '' && agent.engine === 'claude') return agent.model ?? 'haiku';
   if (setting === '' || setting === 'same') return agent.model;
   return setting;
 }

@@ -18,7 +18,7 @@ import {
 } from '@shipstudio/companion-protocol';
 import { ENGINE_DEFAULT } from './newAgentDefaults';
 
-const ENGINE_NAME = { claude: 'Claude Code', codex: 'Codex' } as const;
+const ENGINE_NAME = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode' } as const;
 
 export const EFFORT_LABEL: Record<AgentEffort, string> = {
   low: 'Low',
@@ -73,7 +73,7 @@ export function modelShortName(
     const chosen = agent.model && FAMILY.test(agent.model) ? agent.model : null;
     if (read && (!chosen || chosen === read.family)) return read.name;
   }
-  if (agent.engine === 'codex' && reported && (!agent.model || agent.model === reported)) {
+  if (agent.engine !== 'claude' && reported && (!agent.model || agent.model === reported)) {
     return listed.find((m) => m.value === reported)?.label ?? reported;
   }
   if (agent.model) return listed.find((m) => m.value === agent.model)?.label ?? agent.model;

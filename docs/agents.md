@@ -5524,10 +5524,11 @@ not a non-activating panel), focus returning after send and Esc,
 `screencapture` and its permission prompt, and the quit guard from the icon
 with the window hidden.
 
-## Engines: Claude Code or Codex (`agents/engine.rs`, `agents/codex_app.rs`, `agents/codex.rs`)
+## Engines: Claude Code, Codex or OpenCode (`agents/engine.rs`, `agents/codex_app.rs`, `agents/codex.rs`, `agents/opencode.rs`)
 
-Each agent has `engine: "claude" | "codex"` (default `claude`), so it can run
-on a ChatGPT plan with the same chat, tools, memory and Chief around it. The
+Each agent has `engine: "claude" | "codex" | "opencode"` (default `claude`), so it can run
+on a ChatGPT plan, or on any provider OpenCode is set up with (a model on this
+Mac included), with the same chat, tools, memory and Chief around it. The
 editor's **Runs on** (`AgentEngine.tsx`) appears only once two engines are
 installed; with one there is nothing to choose, and the dialog's foot has a
 quiet "Also use Codex" that opens the same set-up terminal as the chat's. An
@@ -5558,7 +5559,7 @@ Settings → Agents → What agents run on (`AgentDefaultsSettings.tsx`) sets wh
 a new agent starts on when nobody picked, saved in the app's settings
 (`AppState::agent_defaults`: `engine`, `claudeModel`, `codexModel`):
 
-- **New agents start on** — Claude Code | Codex, only the engines
+- **New agents start on** — Claude Code | Codex | OpenCode, only the engines
   `agents::engine` runs. One that isn't installed and signed in is greyed out,
   and `agents_set_defaults` refuses it. Never chosen, the rule decides:
   Claude Code when ready, else the first engine that is
@@ -5587,7 +5588,7 @@ Settings on it. The phone reads it from the overview and sets it with
 `agents.setDefaults` (docs/mobile.md, "Settings").
 
 **The boundary.** `engine::Engine` is what an agent is on; `driver::Driver`
-is how one turn runs it (`ClaudePrint`, `CodexApp`, `CodexExec`), picked once
+is how one turn runs it (`ClaudePrint`, `CodexApp`, `CodexExec`, `OpenCodeAcp`), picked once
 per turn. It answers everything engine-specific about starting a turn (the
 sign-in check, who names a new session, the command line, whether stdin stays
 open, the leftover-process mark, capabilities read before the turn), and the
@@ -5716,6 +5717,123 @@ Not verified against a signed-in ChatGPT account (none on the build machine):
 real model behaviour on these prompts, the real usage-limit response (its
 wording was produced by Codex itself from a scripted 429), and a real reset
 time. The e2e Codex scenarios run on the account when one is signed in.
+
+### OpenCode (`agents/opencode.rs`)
+
+An agent can run on **OpenCode** (`engine: "opencode"`), on whichever
+providers the user set up in OpenCode itself: an API key, a subscription it
+supports, OpenCode's own free models, or a model served on this Mac (Ollama,
+LM Studio, llama.cpp). It is "ready" once `opencode models` lists a model it
+can run; there is no one sign-in to check, and "Sign in" opens `opencode auth
+login` to add a provider. The model picker lists `opencode models --verbose`
+(a minute's cache), each by its own name and provider; a model whose address
+(its catalogue `api.url`, or its provider's `baseURL` in `opencode debug
+config`) is a loopback one says "· on this Mac". Nothing else is called local.
+
+A turn is one `opencode acp` (the Agent Client Protocol: JSON-RPC on
+stdin/stdout), like Codex's app-server:
+
+```
+OPENCODE_CONFIG_CONTENT={model, instructions:[<0600 prompt file>, <cwd>/AGENTS.md|CLAUDE.md],
+                         permission:{…}, agent:{build:{permission:{…}}}, default_agent:"build",
+                         share:"disabled", autoupdate:false, experimental:{mcp_timeout}}
+OPENCODE_DISABLE_PROJECT_CONFIG=1  OPENCODE_DISABLE_AUTOUPDATE=1  OPENCODE_DISABLE_SHARE=1
+opencode acp
+→ initialize
+→ session/new {cwd, mcpServers:[{type:"http", name:"app", url:…/mcp/agent,
+                                  headers:[{Authorization: Bearer <turn secret>}]}, <its apps>]}
+  (or session/load {sessionId, …}, which replays the conversation first)
+→ session/prompt {sessionId, prompt:[text]}
+← session/update … ; session/request_permission … ; the prompt's answer {stopReason, usage}
+```
+
+- **No secret on argv or in a file.** The bridge secret is only in the
+  `session/new` headers, over stdin. The inline config carries no secret.
+- **Project config is off.** Checked on 1.18.29: a project's
+  `.opencode/agent/build.md` saying `bash: allow` let commands run without
+  asking. With `OPENCODE_DISABLE_PROJECT_CONFIG` a project can't loosen
+  anything; since that also stops OpenCode reading the folder's `AGENTS.md`,
+  the turn hands it over itself (then `CLAUDE.md`: an unbound agent's home,
+  its instructions and memory). The system prompt goes in a 0600 file of the
+  turn's, as an instruction file, removed when the turn ends.
+- **Permissions** (`opencode::permissions`): `"*": "ask"`; reading,
+  searching, LSP, todos and skills `allow`; `edit`, `bash`, `webfetch`,
+  `websearch`, `codesearch`, `external_directory` `ask`; `**/.git`,
+  `**/.git/**`, `**/.shipstudio`, `**/.shipstudio/**` edits `deny` (checked:
+  refused without an ask); `task` (a sub-agent, whose asks would run in a
+  session of its own), `question` and `doom_loop` `deny`. The app's own
+  server and the turn's given servers (its granted apps through the relay,
+  the browsers) are `<name>_*: allow`, as for the other engines, since each
+  decides its own calls. The same rules go on the `build` agent and it is
+  made the default, so the user's own agent files can't loosen them either.
+  The inline config outranks the user's global `opencode.json`.
+- **Every ask is ours.** `session/request_permission` is answered `once` or
+  `reject`, never `always`. Classified from what it carries
+  (`Conversation::classify`): a command → `Bash {command}`; an edit inside
+  the turn's folders → through, as `acceptEdits` (inside `.git` /
+  `.shipstudio` or a folder its settings keep read-only → refused); an edit
+  elsewhere → `Edit`/`Write {file_path}`; a folder outside its own → `Read
+  {file_path}` (its own folders pass); a URL → `WebFetch`; a query →
+  `WebSearch`; a tool of a user's own MCP server → `mcp__<server>__<tool>`;
+  anything it can't name → refused. Each goes through `mcp::decide`, so the
+  levels, "Always allow", plans, grants, outside-text caps and the broker's
+  live-turn check are exactly Claude Code's and Codex's.
+- **A no.** ACP's answer has no room for a message, and a reject ends
+  OpenCode's loop with nothing said, so what the agent is told ("the user
+  said no, and told you: …", "hasn't answered yet") goes as the next
+  `session/prompt` once the round ends, and its answer is the reply (at most
+  four follow-ups a turn). A reject also makes OpenCode refuse every other
+  ask still open in the session: asks are answered one at a time, and those
+  are answered without a card (`opencode::Gate`).
+- **Stream.** `agent_message_chunk` → a draft, the reply when the next tool
+  call or the round's end comes; `tool_call` names the tool,
+  `tool_call_update` with input → a "What it did" step (named as the matching
+  Claude Code tool: `bash` → Bash, `write` → Write, `webfetch` → WebFetch…),
+  its growing output → "Show output", `completed` / `failed` (a rejected one
+  → declined, a non-zero exit → failed) → its result. `usage_update`
+  `used`/`size` → the context meter. The prompt's `usage` → tokens (input,
+  output plus thinking, cache read/write), summed over follow-ups; OpenCode's
+  `cost` is its own estimate from list prices and is not kept.
+- **Sessions.** The session id is parked per conversation like any engine's;
+  `session/load` replays the history as updates before it answers, and none
+  of that is read as this turn's. A session it can't load ("Internal error:
+  OpenCode service failure") is said as "Session not found", so the runner
+  replaces it once with the recap, as for a lost Claude session.
+- **Stop** sends `session/cancel`; the round ends `cancelled`.
+- **Requests it makes of a client** (`fs/write_text_file`, which 1.18.29
+  sends after an edit is allowed even to a client that said it can't,
+  terminals) are refused: its own tools do the work.
+- **No plan, no crossover.** OpenCode reports no plan limits, so no usage
+  readings are ever shown for it, the wallet has only this Mac's OpenCode,
+  and carrying on with the other engine is only between Claude Code and
+  Codex. A model on this Mac has no limit of ours; nothing else is called
+  unlimited.
+- **Compaction.** ACP has no compact request: OpenCode's own automatic
+  compaction runs by its settings, and the app's tidy starts fresh (with
+  memory) instead, as for `codex exec`.
+
+What still differs, verified against OpenCode 1.18.29 with its free Zen
+models (the real output is `testdata/opencode-acp.jsonl`):
+
+- **What runs unasked.** Reading and searching files anywhere in its folders,
+  and the user's own OpenCode **plugins** (code in their global config,
+  which could answer an ask itself, as Claude Code hooks could). Project
+  plugins are off with project config.
+- **Effort** isn't passed (ACP has no field for it).
+- **Capabilities** list our tools, the given servers and OpenCode's shell,
+  edits, fetch and search; the user's own OpenCode MCP servers aren't listed
+  (their tools still ask, as `mcp__<server>__<tool>`).
+- **Take over** isn't offered for an OpenCode agent yet.
+- Not verified with a paid provider, a local model server, or a real
+  provider error or rate limit (its wording reaches the chat as OpenCode says
+  it).
+
+**What may be said about it** (for the site and README): agents can run on
+OpenCode with any provider it supports, including models on your own Mac;
+every command, web fetch and edit outside its folders asks through the same
+approvals; usage shows tokens only. Not: that OpenCode is sandboxed (it
+isn't; the approvals are the wall), that local models are free or unlimited
+unless they really are served from this Mac, or any usage limits for it.
 
 ## Search, model and usage
 

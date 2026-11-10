@@ -26,7 +26,7 @@ const DESKTOP_SETTINGS = {
 /** Codex chosen for new agents, on GPT-5.5; Claude Code's on Balanced (Sonnet). */
 const CHOSEN = {
   engine: 'codex' as const,
-  models: { claude: 'sonnet', codex: 'gpt-5.5' },
+  models: { claude: 'sonnet', codex: 'gpt-5.5', opencode: null },
   startsOn: 'codex' as const,
   model: 'gpt-5.5',
 };
@@ -34,14 +34,17 @@ const CHOSEN = {
 /** `agents_set_defaults`, answered as `agents::defaults::set` would. */
 const setDefaults = (args: Record<string, unknown>) => {
   const change = args.change as {
-    engine?: 'claude' | 'codex';
+    engine?: 'claude' | 'codex' | 'opencode';
     claudeModel?: string;
     codexModel?: string;
+    opencodeModel?: string;
   };
   const engine = change.engine ?? CHOSEN.engine;
   const models = {
     claude: change.claudeModel === undefined ? CHOSEN.models.claude : change.claudeModel || null,
     codex: change.codexModel === undefined ? CHOSEN.models.codex : change.codexModel || null,
+    opencode:
+      change.opencodeModel === undefined ? CHOSEN.models.opencode : change.opencodeModel || null,
   };
   return { engine, models, startsOn: engine, model: models[engine] };
 };

@@ -21,12 +21,14 @@ import { ACCOUNT_ENGINE_LABEL } from './accountSwitcher';
 export const ACCOUNT_KIND: Record<AgentEngine, string> = {
   claude: 'Claude',
   codex: 'ChatGPT',
+  opencode: 'OpenCode',
 };
 
 /** Where the browser is signed in. */
 const SITE: Record<AgentEngine, string> = {
   claude: 'claude.ai',
   codex: 'chatgpt.com',
+  opencode: 'opencode.ai',
 };
 
 export const SIGN_IN_DIFFERENT = 'Sign in with a different account';

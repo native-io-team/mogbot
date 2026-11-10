@@ -9,8 +9,8 @@ already pay for.**
 
 You talk to a **Chief of Staff**. It creates named agents for the work you hand
 it, briefs them, delegates, and comes back with results. Each agent remembers
-you, keeps its own instructions and routines, and runs on **Claude Code or
-Codex** (your pick, per agent) on your own machine. Anything that spends money,
+you, keeps its own instructions and routines, and runs on **Claude Code,
+Codex or OpenCode** (your pick, per agent) on your own machine. Anything that spends money,
 sends something as you, or changes what other people see waits for your
 **Allow**. Follow along and answer from your phone.
 
@@ -97,7 +97,8 @@ check for every step, is **[docs/INSTALL.md](docs/INSTALL.md)**.
 - A Mac on a recent macOS (14 or later expected; tested on 26), Apple Silicon
   or Intel, with **15 GB free** (about 25 GB to build the phone app with Xcode)
 - A paid **Claude plan (Pro or Max)** for Claude Code, or a paid **ChatGPT
-  plan** for Codex, or both
+  plan** for Codex, or both. Or **OpenCode**, with any provider you set up in
+  it (an API key, or a model served on this Mac)
 - For the phone: an iPhone (or Android phone) and a free **Tailscale** account,
   signed in on the Mac **and** the phone with the same account before you scan
   the pairing code
@@ -144,7 +145,7 @@ The app tells you what will and won't keep running.
 
 - **The experience is modelled on Grok Bot:** named agents you just talk to,
   approvals as a tap, a chat that feels like a team. The difference is what's
-  underneath: Claude Code and Codex, on your machine and your own accounts,
+  underneath: Claude Code, Codex or OpenCode, on your machine and your own accounts,
   with no usage ceiling of ours on top.
 - **Next to Claude Code or Codex in a terminal:** the same engines, plus a
   team with memory, approval cards, result cards, routines, usage across

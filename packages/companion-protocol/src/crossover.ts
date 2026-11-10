@@ -43,9 +43,15 @@ export interface CrossoverView {
   away: { agentId: string; name: string; home: AgentEngine; on: AgentEngine; until?: number }[];
 }
 
-const LABEL: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
+const LABEL: Record<AgentEngine, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
 
-export const otherEngine = (e: AgentEngine): AgentEngine => (e === 'claude' ? 'codex' : 'claude');
+/** The engine a plan engine carries on with. OpenCode has no plan to run out of, so none. */
+export const otherEngine = (e: AgentEngine): AgentEngine =>
+  e === 'claude' ? 'codex' : e === 'codex' ? 'claude' : e;
 
 /** The three answers, in the order the card shows them (the strong one last). */
 export const CROSSOVER_WAIT = 'Wait';
