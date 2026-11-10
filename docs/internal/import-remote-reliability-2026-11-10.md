@@ -85,8 +85,33 @@ What was broken:
 
 ## Without Remote Access (export file or folder, pasted reply)
 
-See the section below, from the parallel pass on `import_export.rs` /
-`import_formats.rs`.
+Tested in `agents/import_adversarial_tests.rs` (18 tests). Fixed:
+
+- **A picked symlink bypassed the 4 MB cap** (its own size was checked, then
+  the target, or `/dev/zero`, read whole). Picked files now go through a
+  capped read and anything not a regular file is refused.
+- Empty, binary, fake zip, fake or damaged `.tar.gz`, wrong extension, over
+  4 MB, a broken `openbot-import.json` (raw serde text), deep nesting and a
+  file that moved each now say what's wrong and the fix.
+- Links inside a picked folder were never followed, but skipped silently;
+  they're listed under "Not read".
+- **The same export posted twice while its card is still up** made a second
+  card, and importing both made "Finance" and "Finance (from Grok)". `post`
+  now refuses: "This is already waiting for your review in <Chief>'s chat.
+  Answer that card first …".
+- Lookalike names in one export: the refusal says how to bring the second in.
+- File and folder problems render like a pasted reply's: one line, the
+  parser's lines behind "Show details".
+
+Already fine and now covered: a 50 MB file refused in under 2 s; a 10k-file
+folder within caps; a 2M+ character paste ("Paste it in parts"); truncated
+JSON ("cut off … send that part again"); wrong types (where, review
+blocked); prose around JSON; parts out of order or pasted twice merging
+idempotently; case-only duplicate names merging; archive entries that climb
+out skipped.
+
+Each line the UI shows for these paths, word for word, is in commit
+92e46db40's tests (`import_adversarial_tests.rs`).
 
 ## Not verified
 
