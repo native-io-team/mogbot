@@ -235,6 +235,21 @@ export interface AgentKeyLook {
 }
 
 /**
+ * The colourway of an agent that has none yet: its colour's nearest, and for
+ * the Chief the mark's Graphite where that would be the old default (Putty,
+ * from its "white"), as the Mac's `keys::fill` then `chief_key_default`
+ * leave it. Without this a Chief seen before the Mac filled it in (the
+ * phone's demo, an older Mac) wore the mark on Putty.
+ */
+function fallbackColorway(agent: { color?: string | null; isMain?: boolean }): string {
+  const nearest = colorwayForColor(agent.color);
+  return agent.isMain && nearest === PAST_CHIEF_COLORWAY ? CHIEF_COLORWAY : nearest;
+}
+
+/** The Chief's default colourway before the mark (`keys.rs`, `PAST_CHIEF_COLORWAY`). */
+const PAST_CHIEF_COLORWAY = 'putty';
+
+/**
  * An agent's key: what it chose, else what an older Mac's fields say (its
  * colour's nearest colourway, an icon from its name and role).
  */
@@ -248,7 +263,7 @@ export function keyLookFor(agent: {
   boundKey?: string | null;
 }): AgentKeyLook {
   return {
-    colorway: isColorway(agent.colorway) ? agent.colorway : colorwayForColor(agent.color),
+    colorway: isColorway(agent.colorway) ? agent.colorway : fallbackColorway(agent),
     icon: isKeyIcon(agent.icon)
       ? agent.icon
       : iconFor(agent.name, agent.role ?? '', Boolean(agent.isMain)),
