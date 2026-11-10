@@ -470,6 +470,10 @@ export type WatchSource =
   | { kind: 'github_assigned' }
   | { kind: 'linear_assigned' }
   | { kind: 'new_file'; folder: string }
+  /** An email in an inbox in Mail on the Mac; `from`/`words` absent when not narrowed. */
+  | { kind: 'new_mail'; from?: string; words?: string }
+  /** An iMessage or SMS in Messages on the Mac; `from` a phone number or email. */
+  | { kind: 'new_text'; from?: string }
   /** `app`: the Claude Code app it checks through. Absent on older Macs' routines. */
   | { kind: 'custom'; check: string; app?: string }
   /** Written by a newer Mac. */

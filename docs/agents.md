@@ -4344,8 +4344,32 @@ every few minutes:
 | Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; one firing per new mention (thread id + latest comment, or `updated_at`) | free |
 | An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"`, 100 a page, up to 300 | free |
 | A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s; symlinks skipped); folders of at most 2,000 entries | free |
+| An email arrives in Mail (optionally from a sender, with some words) | Mail's own index on this Mac (`~/Library/Mail/V*/MailData/Envelope Index`, the newest `V`), read with `sqlite3 -readonly`: the newest 100 not-deleted messages in any account's inbox; sender matches part of the address or name, words the subject or Mail's preview; each known by sender, subject and time, so Mail rebuilding its index doesn't refire (`watch_mac.rs`) | free |
+| A text arrives in Messages (optionally from one phone number or email) | `~/Library/Messages/chat.db`, read-only as the Messages tools read it: the newest 100 received (not the user's own, not tapbacks), known by Messages' guid; a phone number matches however it's written (last ten digits) | free |
 | A Linear issue is assigned to me | one sealed headless model call through Linear (Claude Code on Haiku, or Codex on a small model: see "Which engine runs a check" below): ours first (connected under Apps or on a login card, given to this agent, reached through the relay with a secret that opens only that connection, for reads only, never a card: `conn_relay::Via::Sealed`), else the Linear server set up in Claude Code | a model call |
 | Something else… (in the user's words, through one named app) | the same sealed call, through that app | a model call |
+
+**Mail and Messages** (`watch_mac.rs`) need no account and nothing reachable
+from outside, only **Full Disk Access** for this app, which no prompt can
+give. `agents_watch_mac_access` (and `WatchOptions.mac` for the phone) says
+whether each can be read, from the folders alone: unlistable is Full Disk
+Access off, missing is "Mail isn't set up" / "Messages hasn't been used".
+The desk composer shows the Mac's own sentence ("Reading Mail needs Full Disk
+Access: System Settings → Privacy & Security → Full Disk Access, then turn on
+…"), opens that pane, and asks again every 3 s until it reads (Add stays off
+until then); the phone shows the same sentence with Check again, since only
+the Mac can switch it on. A text's sender is typed on either (the Mac sends
+no contacts list) and must be a phone number or email (`mac_apps::is_handle`,
+mirrored as `isHandle`). If permission goes away later, the check fails with
+that sentence and backs off and pauses like any failed check. What a message
+says reaches the agent only in the `<external_items>` envelope on a turn
+answering outside text (below): its level is capped at Steady, a Messages
+call in it asks every time (`mac_apps::Step::Once`), and nothing here sends
+or replies. The check itself is plain SQL, no model.
+*Not verified:* against a real Mail index and `chat.db` on this Mac (tests use
+fixture databases shaped like them; no test reads the user's own), and that
+Full Disk Access granted to the app reaches its `sqlite3` child (the
+Messages tools already rely on it).
 
 **The rules.** The first check is a baseline (it notes what's there and
 fires nothing). Nothing fires twice: ids seen are kept per routine; a

@@ -2607,6 +2607,42 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-when-mail-access',
+    title: 'Agents — “When an email arrives” before Full Disk Access is on',
+    looksRightWhen:
+      'New routine on Lead Gen, When… pressed, “An email arrives in Mail” picked (“Free · reads Mail on this Mac”), with “From (optional)” filled with billing@northwind.com and the words field empty; under them Check again and Open Full Disk Access side by side; Check every 1/5/10/30 min; no echo, and the line under it is the Mac’s own words, “Reading Mail needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on …”; Add disabled.',
+    requires: '.agent-when__sources',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="leadgen"]' },
+      { click: '.agent-chat__scheduled' },
+      { click: '.agent-schedule__add button' },
+      { click: '.agent-schedule__mode [aria-pressed="false"]' },
+      { click: '.agent-when__source:nth-child(5)' },
+      { fill: '.agent-when input[aria-label="Only from"]', value: 'billing@northwind.com' },
+      {
+        fill: '.agent-when input[aria-label="What to do when it happens"]',
+        value: 'File the invoice and tell me the total',
+      },
+    ],
+    commands: {
+      agents_overview: overview(WHEN_TEAM),
+      agents_messages: messagesFor,
+      agents_apps_list: agentApps(CONNECTED_APPS),
+      agents_usage: WHEN_USAGE,
+      agents_schedule_preview: schedulePreview,
+      agents_watch_mac_access: {
+        mail: {
+          state: 'full_disk_access',
+          words:
+            'Reading Mail needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot.',
+          settings: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+        },
+        messages: { state: 'ok' },
+      },
+    },
+  },
+  {
     id: 'agents-when-custom',
     title: 'Agents — adding a “When…” routine that checks through a connector',
     looksRightWhen:

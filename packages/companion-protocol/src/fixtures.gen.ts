@@ -4245,7 +4245,17 @@ export const watchOptions = {
       "label": "~/Desktop",
       "path": "/Users/sam/Desktop"
     }
-  ]
+  ],
+  "mac": {
+    "mail": {
+      "state": "ok"
+    },
+    "messages": {
+      "settings": "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+      "state": "full_disk_access",
+      "words": "Reading Messages needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot."
+    }
+  }
 } satisfies Result<'agents.watch.options'>;
 export const watchCreate = {
   "createdAt": 1762290000000,

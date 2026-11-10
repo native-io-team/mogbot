@@ -2131,7 +2131,10 @@ export {
 } from '../../packages/companion-protocol/src/routinePicker';
 
 // What Check now came to, in the phone's words too.
-import type { WatchCheckOutcome } from '../../packages/companion-protocol/src/whenComposer';
+import type {
+  MacAccess,
+  WatchCheckOutcome,
+} from '../../packages/companion-protocol/src/whenComposer';
 export {
   describeWatchCheck,
   type WatchCheckOutcome,
@@ -2152,6 +2155,8 @@ export const updateWatch = (
 ) => invoke<CheckIn>('agents_watch_update', { agentId, id, source, everyMinutes, note });
 export const checkWatchNow = (agentId: string, id: string) =>
   invoke<WatchCheckOutcome>('agents_watch_check_now', { agentId, id });
+/** Whether this Mac's Mail and Messages can be read, for an email or text routine. */
+export const getWatchMacAccess = () => invoke<MacAccess>('agents_watch_mac_access');
 
 export const searchAgents = (query: string) => invoke<SearchHit[]>('agents_search', { query });
 export const getAgentUsage = (agentId: string) => invoke<UsageSummary>('agents_usage', { agentId });

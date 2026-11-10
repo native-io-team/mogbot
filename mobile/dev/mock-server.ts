@@ -3302,6 +3302,16 @@ export function createMockServer(opts: MockOptions = {}) {
         { path: '/Users/sam/Desktop', label: '~/Desktop' },
         { path: '/Users/sam/Documents', label: '~/Documents' },
       ],
+      // Mail can be read; Messages waits on Full Disk Access, in the Mac's words.
+      mac: {
+        mail: { state: 'ok' },
+        messages: {
+          state: 'full_disk_access',
+          words:
+            'Reading Messages needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot.',
+          settings: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+        },
+      },
     }),
     'agents.watch.create': (p) => watchSave(p),
     'agents.watch.update': (p) => watchSave(p),

@@ -14,18 +14,24 @@
  * preferred, reached through the relay), else one set up in Claude Code
  * itself; a claude.ai connector can't be loaded into the sealed check, so it
  * isn't offered. Linear is offered only when such a Linear app is there.
+ * An email or a text is read from this Mac's own Mail or Messages, free and
+ * with no account, once Full Disk Access is on: until it is, the composer
+ * names the switch, opens its pane and checks again by itself until it can
+ * read (`watch_mac.rs`).
  * Backend: `src-tauri/src/agents/watch.rs`.
  *
  * @module components/agents/AgentWhenRoutine
  */
 
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../primitives/Button';
 import { SegmentedControl } from '../primitives/SegmentedControl';
 import { TextField } from '../primitives/TextField';
 import {
   createWatch,
   describeEvery,
+  getWatchMacAccess,
   updateWatch,
   type Agent,
   type CheckIn,
@@ -35,13 +41,17 @@ import { listConnections } from '../../lib/agentLogins';
 import { refreshAgents } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
+import { usePolling } from '../../hooks/usePolling';
 // The composer's words and rules, shared with the phone's.
 import {
   DEFAULT_WHEN_EVERY,
   everyAfterPick,
   shortEvery,
+  whenAccess,
   whenApps,
   whenEcho,
+  whenFilterOf,
+  whenKindReadsMac,
   whenIntervalChoices,
   whenMissing,
   whenNoApps,
@@ -49,6 +59,7 @@ import {
   whenSourceChoices,
   whenSourceOf,
   WHEN_WORDS,
+  type MacAccess,
   type WhenApp,
   type WhenKind,
 } from '../../../packages/companion-protocol/src/whenComposer';
@@ -79,6 +90,9 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
   const [folder, setFolder] = useState(start?.kind === 'new_file' ? start.folder : '');
   const [check, setCheck] = useState(start?.kind === 'custom' ? start.check : '');
   const [app, setApp] = useState(start?.kind === 'custom' ? (start.app ?? '') : '');
+  const [filter, setFilter] = useState(() => whenFilterOf(start));
+  // Whether Mail and Messages can be read here: null until asked.
+  const [mac, setMac] = useState<MacAccess | null>(null);
   // Apps connected under Apps for this agent, then Claude Code's own: a
   // claude.ai connector can't be loaded into the sealed check.
   const [apps, setApps] = useState<WhenApp[]>([]);
@@ -106,10 +120,31 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
     };
   }, [agent.id]);
 
+  // Mail and Messages: asked when picked, then again every few seconds
+  // until macOS lets this app read them, so turning on Full Disk Access
+  // shows here without a click.
+  const readsMac = whenKindReadsMac(kind);
+  const access = whenAccess(kind, mac);
+  const askMac = useCallback(async () => {
+    try {
+      setMac(await getWatchMacAccess());
+    } catch {
+      // Unknown: the routine's own check says so if it can't read.
+    }
+  }, []);
+  useEffect(() => {
+    if (readsMac) void askMac();
+  }, [readsMac, askMac]);
+  usePolling(askMac, {
+    intervalMs: 3000,
+    enabled: readsMac && access !== null,
+    name: 'when-mac-access',
+  });
+
   const choices = whenSourceChoices(hasLinear);
   const intervals = whenIntervalChoices(kind, every);
-  const source = whenSourceOf(kind, folder.trim(), check.trim(), app);
-  const missing = whenMissing(kind, folder, check, app);
+  const source = whenSourceOf(kind, folder.trim(), check.trim(), app, filter);
+  const missing = whenMissing(kind, folder, check, app, filter) ?? access?.words ?? null;
   const detailMissing = missing !== null;
 
   const pick = (next: Kind) => {
@@ -171,6 +206,42 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
             aria-label="Which folder"
             maxLength={500}
           />
+        )}
+        {readsMac && (
+          <TextField
+            value={filter.from}
+            onChange={(e) => setFilter((f) => ({ ...f, from: e.target.value }))}
+            onKeyDown={onKeyDown}
+            placeholder={
+              kind === 'new_mail' ? WHEN_WORDS.mailFromPlaceholder : WHEN_WORDS.textFromPlaceholder
+            }
+            aria-label="Only from"
+            maxLength={200}
+          />
+        )}
+        {kind === 'new_mail' && (
+          <TextField
+            value={filter.words}
+            onChange={(e) => setFilter((f) => ({ ...f, words: e.target.value }))}
+            onKeyDown={onKeyDown}
+            placeholder={WHEN_WORDS.mailWordsPlaceholder}
+            aria-label="Only with these words"
+            maxLength={200}
+          />
+        )}
+        {access?.settings && (
+          <div className="agent-when__actions">
+            <Button variant="secondary" size="compact" onClick={() => void askMac()}>
+              {WHEN_WORDS.checkAgain}
+            </Button>
+            <Button
+              variant="default"
+              size="compact"
+              onClick={() => void openUrl(access.settings ?? '')}
+            >
+              {WHEN_WORDS.openSettings}
+            </Button>
+          </div>
         )}
         {kind === 'custom' && (
           <TextField
