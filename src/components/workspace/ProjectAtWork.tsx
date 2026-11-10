@@ -30,7 +30,7 @@ export function ProjectAtWork({ lines }: { lines: AtWorkLine[] }) {
           id={line.agentId}
           name={line.name}
           color={line.color}
-          state={!line.waiting ? 'working' : 'idle'}
+          state={line.waiting ? 'needsOk' : 'working'}
           className="sidebar-project-at-work__avatar"
           size="xs"
         />

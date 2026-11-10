@@ -25,6 +25,8 @@ export interface ProjectTeamMember {
   color: string;
   /** Working there now. */
   working: boolean;
+  /** Waiting on your OK there: its key is raised and amber, as everywhere else. */
+  waiting?: boolean;
 }
 
 export interface ProjectTeamSummary {
@@ -55,7 +57,13 @@ export function projectTeam(
   );
   if (atWork.length === 0 && bound.length === 0) return null;
   const members: ProjectTeamMember[] = [
-    ...atWork.map((w) => ({ agentId: w.agentId, name: w.name, color: w.color, working: true })),
+    ...atWork.map((w) => ({
+      agentId: w.agentId,
+      name: w.name,
+      color: w.color,
+      working: true,
+      waiting: w.waiting,
+    })),
     ...bound.map((a) => ({ agentId: a.id, name: a.name, color: a.color, working: false })),
   ];
   let text: string;
@@ -91,7 +99,7 @@ export function ProjectTeam({ team, onOpenAgent }: ProjectTeamProps) {
           id={m.agentId}
           name={m.name}
           color={m.color}
-          state={m.working ? 'working' : 'idle'}
+          state={m.waiting ? 'needsOk' : m.working ? 'working' : 'idle'}
           size="xs"
           className="project-card-team-key"
         />

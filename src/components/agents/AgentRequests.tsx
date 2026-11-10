@@ -52,6 +52,7 @@ import { AgentKey } from './AgentKey';
 import { ConversationBar } from './AgentCard';
 import { ApprovalCard } from './AgentChatItems';
 import {
+  agentKeyState,
   agentColorway,
   answerApproval,
   needsYou,
@@ -525,7 +526,13 @@ function Group({
           aria-controls={expanded ? cardsId : undefined}
           onClick={onToggle}
         >
-          <AgentKey id={agent.id} name={agent.name} color={agent.color} size="md" />
+          <AgentKey
+            id={agent.id}
+            name={agent.name}
+            color={agent.color}
+            state={agentKeyState(agent)}
+            size="md"
+          />
           <span className="agent-requests-panel__text">
             <span className="agent-requests-panel__name">{agent.name}</span>
             <span className="agent-requests-panel__line" data-state={waiting ? 'waiting' : 'done'}>

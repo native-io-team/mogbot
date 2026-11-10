@@ -1414,7 +1414,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                           id={i.agentId}
                           name={i.label}
                           color={i.color}
-                          state={i.working && i.dotState !== 'waiting' ? 'working' : 'idle'}
+                          state={
+                            i.dotState === 'waiting' ? 'needsOk' : i.working ? 'working' : 'idle'
+                          }
                           size="xs"
                         />
                       ),
@@ -2796,7 +2798,7 @@ function agentWorkItems(
           id={l.agentId}
           name={l.name}
           color={l.color}
-          state={!l.waiting ? 'working' : 'idle'}
+          state={l.waiting ? 'needsOk' : 'working'}
           size="xs"
         />
       ),
