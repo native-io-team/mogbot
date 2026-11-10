@@ -702,7 +702,12 @@ const EXPIRY_OUTCOME = {
 
 /** An answered card in a line, as the desk words it (with the option picked on a session's question). */
 /** A step-in card on the phone: Step in happens at the Mac (worded once, with the desk). */
-export { STEP_IN_AT_MAC, STEP_IN_ON_YOUR_MAC } from '@shipstudio/companion-protocol';
+export {
+  STEP_IN_AT_MAC,
+  STEP_IN_FROM_HERE,
+  STEP_IN_ON_YOUR_MAC,
+  stepInOnPhone,
+} from '@shipstudio/companion-protocol';
 
 export function cardOutcome(approval: Approval): string {
   // Nobody answered: what the desk's receipt says.

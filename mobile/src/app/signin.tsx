@@ -10,6 +10,11 @@
  * whatever is focused, hidden when Password is on. What's typed lives only
  * in a ref, goes to the Mac once, and is wiped then, when the app leaves the
  * screen, and when the screen closes. Leaving the screen stops it on the Mac.
+ *
+ * `stepIn=1`: the same screen for a step-in card (`agents.stepInBegin`):
+ * the agent's own tab, held on the Mac so it can't use it, its window left
+ * parked there. Done is Hand back; leaving the screen hands back too, so the
+ * agent is always woken. Only where the page ends up reaches the agent.
  */
 
 import { Image } from 'expo-image';
@@ -31,6 +36,8 @@ import { haptic } from '../lib/haptics';
 import {
   canAct,
   canFallBack,
+  canHandBack,
+  doneLabel,
   endsIt,
   frameGap,
   initialView,
@@ -47,6 +54,7 @@ import {
   viaLabel,
 } from '../lib/signinView';
 import {
+  stepInBegin,
   signinBegin,
   signinDone,
   signinFallback,
@@ -66,7 +74,10 @@ export default function SignInFromPhone() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { agentId, requestId } = useLocalSearchParams<{ agentId: string; requestId: string }>();
+  const params = useLocalSearchParams<{ agentId: string; requestId: string; stepIn?: string }>();
+  const { agentId, requestId } = params;
+  // A step-in card's tab, not a sign-in: Done is Hand back.
+  const stepIn = params.stepIn === '1';
   const [view, dispatch] = useReducer(reduce, initialView);
   const [filled, setFilled] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -92,7 +103,9 @@ export default function SignInFromPhone() {
   // stopped there.
   useEffect(() => {
     let gone = false;
-    const begin = signinBegin(agentId, requestId, attempt.way);
+    const begin = stepIn
+      ? stepInBegin(agentId, requestId)
+      : signinBegin(agentId, requestId, attempt.way);
     begin.then(
       (begun) => {
         if (gone) void signinStop(begun.sessionId).catch(() => {});
@@ -111,7 +124,7 @@ export default function SignInFromPhone() {
     return () => {
       gone = true;
     };
-  }, [agentId, requestId, attempt]);
+  }, [agentId, requestId, attempt, stepIn]);
   const retry = (way?: SigninVia) => {
     haptic.select();
     dispatch({ t: 'retry' });
@@ -256,25 +269,31 @@ export default function SignInFromPhone() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]} testID="signin-screen">
       <View style={styles.bar}>
-        <Button
-          title={view.phase === 'ended' ? 'Close' : 'Stop'}
-          variant="outline"
-          size="compact"
-          onPress={() => (view.phase === 'ended' ? router.back() : void stop())}
-        />
+        {stepIn && view.phase === 'live' ? null : (
+          <Button
+            title={view.phase === 'ended' || stepIn ? 'Close' : 'Stop'}
+            variant="outline"
+            size="compact"
+            onPress={() =>
+              view.phase === 'ended' || stepIn ? router.back() : void stop()
+            }
+          />
+        )}
         <View style={styles.titleWrap}>
           <T variant="subhead" numberOfLines={1}>
             {title}
           </T>
           <T variant="caption" color={colors.textMuted} numberOfLines={1}>
-            {viaLabel(view.phase === 'live' ? view.via : undefined)}
+            {stepIn && view.phase === 'live'
+              ? view.begun.title
+              : viaLabel(view.phase === 'live' ? view.via : undefined)}
           </T>
         </View>
         <Button
-          title="Done"
+          title={doneLabel(stepIn)}
           variant="answer"
           size="compact"
-          disabled={!live}
+          disabled={stepIn ? !canHandBack(view) : !live}
           busy={view.phase === 'live' && view.check === 'checking'}
           onPress={() => void done()}
           testID="signin-done"
@@ -325,7 +344,7 @@ export default function SignInFromPhone() {
               testID="signin-fallback"
             />
           )}
-          {retryWays(view).map((r) => (
+          {retryWays(view, stepIn).map((r) => (
             <Button
               key={r.label}
               title={r.label}
@@ -335,7 +354,7 @@ export default function SignInFromPhone() {
               testID={r.way ? 'signin-retry-agents' : 'signin-retry'}
             />
           ))}
-          {view.phase === 'live' && view.check === 'unknown' && (
+          {!stepIn && view.phase === 'live' && view.check === 'unknown' && (
             <Button
               title="Hand it over anyway"
               variant="outline"

@@ -30,6 +30,9 @@ function guarded() {
 // Async throughout, so a refusal arrives as a rejected promise, never a throw.
 export const signinBegin = async (agentId: string, requestId: string, way?: SigninVia) =>
   guarded().request('agents.signinBegin', way ? { agentId, requestId, way } : { agentId, requestId });
+/** Step into an agent's own tab for its step-in card: the same screen, Done is Hand back. */
+export const stepInBegin = async (agentId: string, requestId: string) =>
+  guarded().request('agents.stepInBegin', { agentId, requestId });
 // Pictures too: what's on the page (an address, a name) stays on Tailscale.
 export const signinFrame = async (sessionId: string, after?: number) =>
   guarded().request('agents.signinFrame', after ? { sessionId, after } : { sessionId });

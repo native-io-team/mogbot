@@ -17,9 +17,16 @@ import {
   CROSSOVER_WAIT,
   GATE_ALLOW,
   GATE_DENY,
+  MAC_FEATURES,
   stepInSource,
 } from '@shipstudio/companion-protocol';
-import { STEP_IN_AT_MAC, STEP_IN_ON_YOUR_MAC } from '../lib/agents';
+import { router } from 'expo-router';
+import {
+  STEP_IN_AT_MAC,
+  STEP_IN_FROM_HERE,
+  STEP_IN_ON_YOUR_MAC,
+  stepInOnPhone,
+} from '../lib/agents';
 import { highRisk } from '../lib/needsYou';
 import {
   Children,
@@ -51,7 +58,7 @@ import {
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { answerApproval, call, describeError } from '../lib/session';
-import { useApp } from '../lib/store';
+import { useApp, useServed } from '../lib/store';
 import { fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
@@ -280,9 +287,15 @@ export function ApprovalCard({
 
   // "<source> sent what it knows": Ignore / Save to memory, nothing else.
   const handoff = !!approval.handoff;
-  // "Needs you in its browser": only Not now here; Step in is at the Mac
-  // (no remote control of the tab from the phone yet).
+  // "Needs you in its browser": Not now, and Step in here where the Mac lets
+  // the phone into the tab (`agents.stepInBegin`); else Step in is at the Mac.
   const stepIn = approval.stepIn;
+  const stepInHere = useServed('agents.stepInBegin', MAC_FEATURES.stepInPhone);
+  const stepInFromHere = () =>
+    router.push({
+      pathname: '/signin',
+      params: { agentId: message.agentId, requestId: approval.requestId, stepIn: '1' },
+    });
   const consentCard =
     approval.connector?.kind === 'consent' || !!approval.front || handoff || !!stepIn;
   // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
@@ -295,7 +308,7 @@ export function ApprovalCard({
   const [denyWord, allowWord] = approval.front
     ? ['Not now', 'Check again']
     : stepIn
-      ? ['Not now', '']
+      ? ['Not now', stepInHere ? 'Step in' : '']
       : handoff
         ? ['Ignore', 'Save to memory']
         : gate
@@ -388,6 +401,21 @@ export function ApprovalCard({
           />
         </>
       )}
+      {stepIn && stepInHere && (
+        <Button
+          title={allowWord}
+          variant="answer"
+          disabled={off}
+          focusable={armed}
+          onPress={() => {
+            haptic.select();
+            stepInFromHere();
+          }}
+          accessibilityHint="Its tab on your Mac shows here, and you do it by touch."
+          testID="step-in-here"
+          style={share}
+        />
+      )}
       {!stepIn && !crossover && (
         <Button
           title={allowWord}
@@ -442,8 +470,12 @@ export function ApprovalCard({
           ? OFFLINE_NOTE
           : stepIn
             ? stepIn.inSince
-              ? STEP_IN_AT_MAC
-              : STEP_IN_ON_YOUR_MAC
+              ? stepIn.onPhone
+                ? stepInOnPhone(stepIn.onPhone)
+                : STEP_IN_AT_MAC
+              : stepInHere
+                ? STEP_IN_FROM_HERE
+                : STEP_IN_ON_YOUR_MAC
             : gate
               ? 'It waits for you, and closes if the routine runs again first.'
               : paused &&
