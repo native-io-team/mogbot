@@ -1077,7 +1077,7 @@ impl Backend for Stub {
     }
 
     async fn check_on(&self, _agent_id: &str) -> Result<String, CommandError> {
-        Ok("Still going: running the Cypress tests is using the CPU right now.".into())
+        Ok("Still going: running the Cypress tests is busy right now.".into())
     }
 
     async fn answer_approval(&self, answer: ApprovalAnswer) -> Result<(), CommandError> {

@@ -170,7 +170,7 @@ function installFailures(): Scenario[] {
     failing(
       'onboarding-signin-failed',
       '2b. Sign-in failed',
-      '"Sign in to Claude Code", "Not done yet." with what the sign-in said ("Login was cancelled in the browser."), the generic fix, "Show details" and "Try again".',
+      '"Sign in to Claude Code", "Not done yet. The sign-in page was closed before it finished.", the fix naming the Claude Pro or Max plan, "Show details" and "Try again".',
       CLAUDE_INSTALLED,
       'signin',
       claude
@@ -198,7 +198,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-codex-prereqs',
     'engine',
     '2a. Codex on a bare Mac: get the Mac ready first',
-    'After choosing Codex: "Get your Mac ready for Codex", one line (a few minutes, maybe the Mac password), "Codex · 1 of 4", the steps "Getting ready to install Homebrew…" (spinner) then "Downloading and installing Homebrew" and "Checking it works" dimmed, and a bordered box: "Homebrew’s installer needs your Mac password", one line that it goes straight to the installer and isn’t kept, a masked field (focused) and a neutral "Continue". "Show details" and a quiet "Cancel" at the foot. No terminal window.',
+    'After choosing Codex: "Get your Mac ready for Codex", one line naming Homebrew and Node.js (a few minutes, maybe the Mac password), "Codex · 1 of 4", the steps "Getting ready to install Homebrew…" (spinner) then "Downloading and installing Homebrew" and "Checking it works" dimmed, and a bordered box: "Homebrew’s installer needs your Mac password", a hint saying what Homebrew is and that the password goes straight to the installer and isn’t kept, a masked field (focused) and a neutral "Continue". "Show details" and a quiet "Cancel" at the foot. No terminal window.',
     { ...machine(FRESH_ITEMS, true), ...STILL_GOING },
     {
       steps: [

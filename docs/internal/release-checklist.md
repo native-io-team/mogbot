@@ -60,6 +60,7 @@ Every null link turns its feature off and the UI hides it.
 | `links.errorReports` | No automatic error reports (Rust) | Endpoint |
 | `links.templateApi` | No template gallery | Ship Studio's services, or your own |
 | `links.companionSource` | Built `.app` can't build the phone app (above) | This repo's git URL |
+| `links.appStore` | The Chief's phone card is hidden and Settings → Phone says "The phone app isn't out yet" (a downloaded build has no build-on-this-Mac route either) | The App Store listing URL, the day it is live: the Phone panel then leads with "Get it on the App Store" |
 | `links.pushRelay` | No push | The deployed relay URL |
 | `telemetry.posthogKey` / `posthogHost` / `sentryDsn` | Nothing sent (compile-time) | Keys. Only with a privacy note to match, and the App Store answers change |
 | `links.starterRepoBase` | **Set** to `https://github.com/ship-studio`: project templates still clone from Ship Studio's org | Leave it (shared compat), or fork the starters |

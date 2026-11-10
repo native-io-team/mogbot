@@ -176,8 +176,9 @@ export function InstallProgress({
           </label>
           {prompt === 'password' && (
             <p className="install-ask__hint">
-              The one you log in to this Mac with. It goes straight to the installer; the app
-              doesn’t keep it.
+              {itemId === 'homebrew'
+                ? 'Homebrew is a free, widely used tool that installs what Codex runs on. Like any installer, it asks for the password you log in to this Mac with. It goes straight to the installer; the app doesn’t keep it.'
+                : 'The one you log in to this Mac with. It goes straight to the installer; the app doesn’t keep it.'}
             </p>
           )}
           <div className="install-ask__row">

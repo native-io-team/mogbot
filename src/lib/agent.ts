@@ -90,9 +90,9 @@ export const OPENCODE: AgentConfig = {
   supportsSkills: false,
   supportsMcp: true,
   supportsStatusDetection: false,
-  loadingMessage: 'Starting Opencode…',
-  notFoundMessage: 'Error starting Opencode',
-  installHint: 'Make sure Opencode is installed: curl -fsSL https://opencode.ai/install | bash',
+  loadingMessage: 'Starting OpenCode…',
+  notFoundMessage: 'Error starting OpenCode',
+  installHint: 'Make sure OpenCode is installed: curl -fsSL https://opencode.ai/install | bash',
 };
 
 /** Cursor CLI (`cursor-agent`) agent configuration. */

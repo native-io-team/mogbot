@@ -28,6 +28,7 @@
     "templateApi": null,
     "starterRepoBase": "https://github.com/ship-studio",
     "companionSource": null,
+    "appStore": null,
     "pushRelay": null
   },
   "chromeExtension": {

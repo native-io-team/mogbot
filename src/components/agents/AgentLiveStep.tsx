@@ -4,7 +4,7 @@
  * quiet hint a known slow tool gets after a minute. After ten minutes "Stop
  * this step" sits at the line's right end. Opening the line lists the steps,
  * ending on this one with its own timer, when it last showed life ("Last
- * activity 4s ago · using the CPU") and "Show output" (what the command has
+ * activity 4s ago · busy") and "Show output" (what the command has
  * printed so far, where the engine streams it): output lives inside its step.
  * Once the Mac says there's been no progress for too long, the line says so
  * instead, stops shimmering, and offers "Check on it" and "Stop". While it

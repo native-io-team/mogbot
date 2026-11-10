@@ -204,7 +204,7 @@ export const SETUP_FRIENDLY_NAMES: Record<string, string> = {
   codex: 'Codex',
   codex_auth: 'Codex Account',
   opencode: 'OpenCode',
-  opencode_auth: 'Opencode Account',
+  opencode_auth: 'OpenCode Account',
   cursor: 'Cursor',
   cursor_auth: 'Cursor Account',
   vercel: 'Vercel CLI',

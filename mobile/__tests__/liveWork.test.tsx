@@ -161,7 +161,7 @@ describe('the live step', () => {
     await render(<LiveStep agentId="qa" work={w} call={w.current} label="" now={5.5 * MIN} />);
     expect(screen.queryByTestId('life-line')).toBeNull();
     await fireEvent.press(screen.getByTestId('live-step'));
-    expect(screen.getByText('Last activity 4s ago · using the CPU')).toBeTruthy();
+    expect(screen.getByText('Last activity 4s ago · busy')).toBeTruthy();
   });
 
   it('offers to stop the step after ten minutes, and says what the Mac did', async () => {
@@ -185,7 +185,7 @@ describe('the live step', () => {
 
   it('goes quiet gently, and checks on it without stopping it', async () => {
     mockCall.mockResolvedValue(
-      'Still going: running the Cypress tests is using the CPU right now.'
+      'Still going: running the Cypress tests is busy right now.'
     );
     const w = work({ quietSince: 0 });
     await render(
@@ -207,7 +207,7 @@ describe('the live step', () => {
     expect(screen.getByTestId('key-cap').props.accessibilityState).toEqual({ busy: false });
     await fireEvent.press(screen.getByText('Check on it'));
     expect(
-      await screen.findByText('Still going: running the Cypress tests is using the CPU right now.')
+      await screen.findByText('Still going: running the Cypress tests is busy right now.')
     ).toBeTruthy();
     expect(mockCall).toHaveBeenCalledWith('agents.checkOn', { agentId: 'qa' });
   });

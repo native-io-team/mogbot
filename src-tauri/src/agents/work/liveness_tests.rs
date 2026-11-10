@@ -335,7 +335,7 @@ fn check_on_it_says_what_it_found() {
                 busy: true
             }))))
         ),
-        "Still going: running the Cypress tests is using the CPU right now."
+        "Still going: running the Cypress tests is busy right now."
     );
     assert!(check_line(
         "Claude Code",
@@ -346,7 +346,7 @@ fn check_on_it_says_what_it_found() {
             busy: false
         }))))
     )
-    .contains("isn't using the CPU, and its last progress was 5 min ago"));
+    .contains("sitting idle, and its last progress was 5 min ago"));
     assert_eq!(
         check_line(
             "Codex",

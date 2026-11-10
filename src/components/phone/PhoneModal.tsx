@@ -27,6 +27,7 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { TAILSCALE_DOWNLOAD_URL } from '../../lib/remoteAccess';
 import { BRAND } from '../../lib/brand';
+import { PHONE_APP_NOT_OUT, PHONE_APP_STORE_URL } from '../../lib/phoneApp';
 import {
   cancelPairing,
   COMPANION_CHANGED_EVENT,
@@ -367,12 +368,15 @@ function PhonePanel({
  * a cable, USB debugging) is the install screen's business, behind
  * "Install it yourself (advanced)", never a paragraph here.
  */
-function PhoneGetApp({
+export function PhoneGetApp({
   tailscale,
+  storeUrl = PHONE_APP_STORE_URL,
   onInstall,
   onHaveApp,
 }: {
   tailscale: PhoneStatus['tailscale'];
+  /** The App Store page; when known it comes first (only that build gets push). */
+  storeUrl?: string | null;
   onInstall?: () => void;
   onHaveApp: () => void;
 }) {
@@ -387,12 +391,23 @@ function PhoneGetApp({
           <h3 className="phone-step__title">Get the app</h3>
           <p className="phone-step__text">Put the {BRAND.name} app on your phone.</p>
           <div className="phone-step__actions">
-            {onInstall ? (
+            {storeUrl ? (
+              <Button
+                variant="primary"
+                rightIcon={<ExternalLinkIcon size={12} />}
+                onClick={() => void openUrl(storeUrl)}
+                data-app-store
+              >
+                Get it on the App Store
+              </Button>
+            ) : onInstall ? (
               <Button variant="primary" onClick={onInstall} data-install-open>
                 Get the app…
               </Button>
             ) : (
-              <p className="phone-step__text">Installing isn’t available in this version yet.</p>
+              <p className="phone-step__text" data-not-out>
+                {PHONE_APP_NOT_OUT}
+              </p>
             )}
             <Button variant="secondary" onClick={onHaveApp} data-have-app>
               I already have it

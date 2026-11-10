@@ -68,14 +68,14 @@ describe('live step words', () => {
     expect(quietLine(work({ quietSince: 0 }), 300_000)).toBe('No progress for 5 min');
   });
 
-  it('says when it last showed life, and whether its command uses the CPU', () => {
+  it('says when it last showed life, and whether its command is busy or idle', () => {
     expect(lifeLine(work(), 1)).toBeNull();
     expect(lifeLine(work({ lastSignAt: 1_000 }), 5_000)).toBe('Last activity 4s ago');
     expect(lifeLine(work({ lastSignAt: 4_500, current: call({ busy: true }) }), 5_000)).toBe(
-      'Last activity just now · using the CPU'
+      'Last activity just now · busy'
     );
     expect(lifeLine(work({ lastSignAt: 0, current: call({ busy: false }) }), 120_000)).toBe(
-      'Last activity 2m ago · not using the CPU'
+      'Last activity 2m ago · idle'
     );
   });
 

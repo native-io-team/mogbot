@@ -1,5 +1,5 @@
 //! Is it alive, or stuck? The signs a running turn gives, kept quietly and
-//! shown only on demand ("Last activity 4s ago · using the CPU"), and the
+//! shown only on demand ("Last activity 4s ago · busy"), and the
 //! check that turns the working line into "No progress for 5 min" once there
 //! have been none for too long.
 //!
@@ -217,10 +217,10 @@ pub fn check_line(engine: &str, now: i64, engine_alive: bool, live: Option<Check
     }
     match step.procs {
         Some(Procs { alive: true, busy: true }) => {
-            format!("Still going: {doing} is using the CPU right now.")
+            format!("Still going: {doing} is busy right now.")
         }
         Some(Procs { alive: true, busy: false }) => format!(
-            "Its command is still running but isn't using the CPU, and its last progress was {since} ago. It may be waiting on something, like a server or the network."
+            "It's still running but sitting idle, and its last progress was {since} ago. It may be waiting on a website or a download."
         ),
         Some(Procs { alive: false, .. }) if step.seen_proc => format!(
             "Its command has ended, but {engine} hasn't moved on yet."

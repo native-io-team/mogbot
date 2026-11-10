@@ -110,6 +110,8 @@ describe('the engine screens', () => {
     expect(engineItemCopy('codex', codex).action).toBe('Install Codex');
     expect(engineItemCopy('codex_auth', codex).title).toBe('Sign in to Codex');
     expect(engineItemCopy('node', codex).title).toBe('Get your Mac ready for Codex');
+    // The tools it installs are named before anything asks for a password.
+    expect(engineItemCopy('homebrew', codex).lede).toMatch(/Homebrew and Node\.js/);
     expect(engineItemCheck(item('codex', 'not_installed'), false)).toBeNull();
     expect(engineItemCheck(item('codex', 'in_progress'), false)?.state).toBe('checking');
     expect(engineItemCheck(item('codex', 'ready'), false)).toEqual({
