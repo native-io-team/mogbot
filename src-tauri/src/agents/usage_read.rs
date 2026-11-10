@@ -570,7 +570,7 @@ pub fn record(account: &Account, answer: Answer, of_engine: usize, now: i64) -> 
     );
     if let Answer::Read(reading) | Answer::ReadHeaders(reading) = answer {
         if let Some(at) = super::quota::limited_until(std::slice::from_ref(&reading), engine, now) {
-            wallet::reported_out(engine, &account.id, at, now);
+            wallet::reported_out_with_twins(engine, &account.id, at, now);
         }
         // The account's own reading, and a sample its pace learns from.
         usage_plan::archive(&account.id, &reading, now);

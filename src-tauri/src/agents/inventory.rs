@@ -422,9 +422,12 @@ pub fn build(parts: Parts) -> Inventory {
             });
         }
     }
+    // Spare capacity is only an account's that can run now: signed in, not
+    // out, and not a second sign-in of one already listed (its one window
+    // would be offered twice).
     let readings: Vec<AccountReading> = accounts
         .iter()
-        .filter(|a| !a.windows.is_empty())
+        .filter(|a| !a.windows.is_empty() && a.signed_in && !a.out && a.same_as.is_none())
         .map(|a| AccountReading {
             engine: a.engine,
             account_id: a.id.clone(),
@@ -1257,6 +1260,41 @@ mod tests {
         // Work's window is spare, but not where turns would run.
         assert_eq!(inv.spare.len(), 1);
         assert!(!inv.spare[0].next);
+    }
+
+    /// Persona review 2026-11-09 (the adversary): an account that can't run
+    /// now offers no spare capacity, however its last reading looked.
+    #[test]
+    fn an_account_that_cant_run_offers_no_spare_capacity() {
+        // Out until a reset the engine reported.
+        let mut p = parts();
+        p.candidates[1].account.limit = Some(super::super::wallet::LimitHit {
+            at: NOW - 60_000,
+            resets_at: Some(NOW + 20 * 60_000),
+        });
+        assert!(build(p).spare.is_empty());
+        // Signed out since it was read.
+        let mut p = parts();
+        p.candidates[1].signed_in = false;
+        assert!(build(p).spare.is_empty());
+        // A second sign-in of the account read first: one window, offered once.
+        let mut p = parts();
+        p.archived.insert(
+            "claude:default".into(),
+            Quota {
+                engine: Engine::Claude,
+                windows: vec![window("five_hour", 40.0, 30 * 60_000)],
+                plan: None,
+            },
+        );
+        p.identities
+            .insert("claude:default".into(), who("claude-org:o1", Some("Max")));
+        p.records
+            .orgs
+            .insert("claude:w1".into(), "claude-org:o1".into());
+        let inv = build(p);
+        assert_eq!(inv.spare.len(), 1);
+        assert_eq!(inv.spare[0].account_id, "default");
     }
 
     #[test]

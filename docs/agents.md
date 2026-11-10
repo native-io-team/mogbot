@@ -4593,7 +4593,8 @@ in use resets soon with at least 25% left, a nudge: "62% of Work's week
 resets in 9 h", the first waiting items of the spare-capacity list, and
 "Give agents something to do", which wakes the Chief with that list now:
 `agents_spare_spend_now` → `usage_tools::spend_now`, the same prompt "Use it
-all" sends, changing no approval); a calm bar when every account is nearly
+all" sends, changing no approval; a press while the Chief is still starting
+that window says so instead of queuing it twice, `usage_plan::already_starting`); a calm bar when every account is nearly
 out (add an account, carry on with the other engine when it has room, or
 "Wait until …"); then each engine's accounts as keys in order (`UsageKey`):
 a numbered keycap, name, plan, organization and who, a state pill (In use,
@@ -4626,7 +4627,12 @@ on a plan that isn't shared by seats (not Team, Enterprise, Business, Edu)
 is `sameAs` the first: it counts once in totals (`compute::totals`), its
 segment is hatched and holds nothing, and its key says "Same account as …"
 with the fix (sign in again with another account, signing out of claude.ai
-first, or remove it). The header is in Claude Code's own code but was not
+first, or remove it). When one sign-in of an account is marked out (a
+turn's limit, a `rejected` event, a used-up read), every other sign-in of it
+is too (`wallet::mark_out_with_twins`), so failover never switches to the
+same account under another name. The org is also kept from the one-token
+check at sign-in (`claude_token_check`), when its answer names one, and the
+add-account sign-in says that the browser decides who signs in. The header is in Claude Code's own code but was not
 yet observed on a setup token's answer here; without it nothing is marked.
 
 **Where did my usage go** (`agents/usage_story.rs`). Each turn's tokens are
@@ -5090,7 +5096,10 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   next is near its reset (within a fifth of its length, at most a day:
   `five_hour` → last hour, `seven_day` → last day; Codex's own
   `windowDurationMins`; a window we can't size is never spare) with at least
-  `SPARE_MIN_PERCENT` (25) points unused, work waits on the spare-capacity
+  `SPARE_MIN_PERCENT` (25) points unused (and the account's other 5-hour or
+  weekly window has as much left and isn't used up: spending a 5-hour window
+  spends the week too; only accounts signed in, not out and not a second
+  sign-in count), work waits on the spare-capacity
   list, and the Chief is free, the check-in tick (at most every 3 minutes)
   wakes the Chief once per window instance (`usage_plan::should_nudge`,
   `nudged`), with a quiet Note in its chat. The Chief hands items to agents,

@@ -132,3 +132,17 @@ export function takeUsageAdd(): boolean {
 
 /** The Usage view's place in Agents, as What's in flight has `TEAM_ID`. */
 export const USAGE_ID = '__usage';
+
+/**
+ * The sign-in runs in the browser, which signs in as whoever is already
+ * signed in to claude.ai / ChatGPT there: "adding" an account can add the one
+ * already here a second time (the owner's own case, 2026-11-09: two entries
+ * for one gmail account while the work account was never added). The email
+ * typed above is only a label; the browser decides who it is.
+ */
+export const SIGN_IN_BROWSER_NOTE = {
+  claude:
+    'Your browser signs in as whoever claude.ai is signed in as there. If that isn’t this account, sign out of claude.ai (or switch accounts there) first, or open the link the terminal shows in a private window.',
+  codex:
+    'It signs in as whoever ChatGPT is signed in as in that browser. If that isn’t this account, sign out of ChatGPT there first, or open the link in a private window.',
+} as const;
