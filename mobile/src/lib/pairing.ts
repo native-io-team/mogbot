@@ -28,7 +28,8 @@ export const PHONE_SETTINGS = 'Settings → Phone';
  * the same whether it's opened from Settings or the phone line at the foot of
  * the sidebar ("Get the phone app"), and is titled "Phone" both ways.
  */
-export const WHERE_TO_PAIR = 'Phone (in Settings, or the phone line at the foot of the sidebar) → Show code';
+export const WHERE_TO_PAIR =
+  'Phone (in Settings, or the phone line at the foot of the sidebar) → Show code';
 
 /** One paired Mac. Multiple Macs are P3. */
 export interface Credentials {
