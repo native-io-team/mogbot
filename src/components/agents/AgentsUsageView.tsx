@@ -225,19 +225,28 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
             </div>
           )}
           <div className="usage-hero" data-tone={glance.tone} data-testid="usage-hero">
-            <p className="usage-hero__eyebrow">
-              {glance.meterKeys.length === 1 ? 'Your account' : 'Your accounts, together'}
-            </p>
-            <h2 className="usage-hero__headline">{glance.headline}</h2>
+            {/* The answer first, in plain words: what's left and when it
+                refills; then the accounts; then the detail. */}
+            <div className="usage-hero__answer">
+              <p className="usage-hero__eyebrow">
+                {glance.row.count ? `Usage · ${glance.row.count}` : 'Usage'}
+              </p>
+              <h2 className="usage-hero__headline">{glance.row.figure}</h2>
+              {glance.row.refill && <p className="usage-hero__refill">{glance.row.refill}</p>}
+            </div>
             {glance.estimate && (
-              <p className="usage-hero__estimate">{glance.estimate}. An estimate, not a reading.</p>
+              <p className="usage-hero__estimate">
+                {glance.headline}. {glance.estimate}: an estimate, not a reading.
+              </p>
             )}
-            <StackMeter keys={glance.meterKeys} size="large" labelled paced />
-            <SameNotes notes={glance.sameNotes} />
-            {glance.soonest && (
+            <div className="usage-hero__stack">
+              <StackMeter keys={glance.meterKeys} size="large" labelled paced />
+              <SameNotes notes={glance.sameNotes} />
+            </div>
+            {glance.soonest && glance.meterKeys.length > 1 && (
               <p className="usage-hero__reset">
-                Next reset: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
-                {glance.soonest.resetsIn} ({glance.soonest.resetsAt})
+                Next to refill: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()}{' '}
+                limit, {glance.soonest.resetsIn} ({glance.soonest.resetsAt})
               </p>
             )}
           </div>
