@@ -30,10 +30,11 @@ the message column), not at the foot of an empty screen.
 
 In Agents mode the sidebar's top row is the toggle (Home belongs to the
 Projects side). **What's in flight** — the one name for
-the cross-agent overview — is reached from a **"Needs you · N"** row at the
-top of the agent list, shown only while an agent waits on you (a request, or a
-turn that didn't finish; the same set ⌘J visits), and from ⌘K. A usage limit
-is not waiting on you — it resets by itself — so it isn't counted: What's in
+the cross-agent overview — is reached from the bell beside the sidebar toggle,
+named **Needs you** and counting only while an agent waits on you (a request, or
+a turn that didn't finish; the same set ⌘J visits; see "Needs you: one place per
+surface"), and from ⌘K. A usage limit is not waiting on you — it refills by
+itself — so it isn't counted: What's in
 flight lists it under **Paused**, and in a chat it is a quiet centred line
 with "Retry at 4:45 AM" (and a quiet "Try now", since the limit may have
 lifted early), not a tinted box. There is no
@@ -363,8 +364,8 @@ From the stream:
 - an `is_error` result, or any exit without a `result` event (a crash, or
   output that wasn't stream-json, even with exit code 0), becomes an error
   line; a crash keeps what had streamed, marked `stopped`. `agents/failure.rs` words the two states people actually hit in
-  Agents' own terms and tags the line (`failure`): "Claude Code's usage limit
-  is reached. It resets at 3:00 PM." (`usage_limit`, with `resetsAt` only when
+  Agents' own terms and tags the line (`failure`): "Claude Code is out of
+  usage until 3:00 PM." (`usage_limit`, with `resetsAt` only when
   Claude Code printed an epoch, or a clock time in this Mac's zone; a time in
   another zone is quoted, never converted) and "Claude Code is signed out."
   (`signed_out`), and an engine that's gone from the Mac as `engine_missing`
@@ -641,7 +642,7 @@ or a model change clears it.
 
 ### Keeping context healthy (`src-tauri/src/agents/tidy.rs`)
 
-Two layers, both engines. **Every turn** has the engine's own compaction on
+Two layers. **Every turn** has the engine's own compaction on
 and tuned, so nothing in the user's config can leave an agent to run into
 the wall mid-task. **Between turns** the app tidies a conversation that has
 grown past 70% of its window or 200k tokens, whichever comes first, at a
@@ -2250,7 +2251,7 @@ aren't listed and every call is refused.
 **Nothing invisible.** Each answer leaves a line in the target's chat ("Chief
 of Staff allowed: look inside your KiteExport folder") and the admin's
 ("Allowed for Ledger: …"), each naming the other, and an entry in Settings →
-Agents → Admin activity (`admin-activity.jsonl`, last 500).
+Independence → Admin activity (`admin-activity.jsonl`, last 500).
 
 **Plain words on every card.** A permission card leads with what it does and
 why, from the tool and its input (`summary_for`: "Look inside your KiteExport
@@ -2363,7 +2364,7 @@ and change first (the agent it was opened for is ticked, else the Chief;
 never the whole team; none keeps it for a later card's "Use <account>"),
 then the provider's sign-in opens in this Mac's browser, the token goes into
 the Keychain, and the row says "Connected as …". Same states and words as a
-card (Open again · Copy link, Stop). Works for Claude Code and Codex agents
+card (Open again · Copy link, Stop). Works for agents on every engine
 (the relay). Who can use it is changed there too
 (`agents_connection_set_grants`: the user's own answer, so it can narrow).
 A granted agent's card waiting for that app is answered at once. Then
@@ -2445,7 +2446,7 @@ An app the catalogue doesn't know is declined by its title (`other:acme
 bank`), never as `other`, and gets a row of its own on the team list.
 Turning one back on: **Undo** (within 5 minutes the cards it closed come
 back as fresh cards), or "Turn back on" in "What it can reach" (desk and
-phone) and Settings → Agents, after which agents may simply ask again.
+phone) and Settings → Apps, after which agents may simply ask again.
 Commands: `agents_login_not_needed`, `agents_logins_not_needed(keys?)`,
 `agents_logins_undecline`, `agents_logins_declined`; on the phone
 `agents.loginNotNeeded`, `agents.loginsNotNeeded`, `agents.loginsUndecline`
@@ -2537,7 +2538,7 @@ equivalent here: Codex agents never get the browser and ask instead.
 **Or the app's own extension, for any engine** ("Your Chrome",
 `user_chrome/`, off by default): Settings → Chrome sets up a
 native host (the app's own binary) and the app's MV3 extension, and every
-turn, Claude Code or Codex on any account, gets `mcp__user_chrome__*` with the
+turn, on any engine and any account, gets `mcp__user_chrome__*` with the
 agents' browser's tool names. The same gate decides it (below), outside text
 never gets it, and a turn that has it runs `--no-chrome`. Design, trust and
 what's verified: docs/internal/own-browser-layer.md.
@@ -2812,7 +2813,7 @@ their own, and the person signs in to it from the phone.
   in the bottom-right corner, not minimized. Started on first use, closed
   after 15 idle minutes, when its Settings switch goes off, for a plain
   sign-in, and when the app quits.
-- **Settings → Agents → Agents' browser**, on by default
+- **Settings → Chrome → Agents' browser**, on by default
   (`agent-browser.json`). Off: no turn gets it and cards don't offer it.
   In every build unless built with the `no-agent-browser` cargo feature
   (an opt-out: as a default feature it was dropped by `tauri dev`, and the
@@ -2910,7 +2911,7 @@ sign-in on a site it's signed out of is still `request_login` with
   sees what's typed. **Not now** and **Step in** (neutral, never the
   accent). The tool returns at once; the agent stops and is woken later.
   One per agent at a time; asked again while one waits, it's told so.
-- **Step in** (`agents_step_in`, desk only) brings that tab's real Chrome
+- **Step in** at the desk (`agents_step_in`; the phone's is below) brings that tab's real Chrome
   window on screen and in front (`Service::show`), so the keyboard, the
   mouse and macOS's own passkey and Touch ID sheets work as in any Chrome:
   nothing is relayed through the app. If Chrome closed meanwhile (15 idle
@@ -3025,7 +3026,7 @@ closed and the same profile opens in a plain Chrome app window
 (`--app=<url>`, no debugging switch at all, `plain.rs`), which the phone sees
 through macOS window capture (`screencapture -l`) and drives with CGEvents
 (`macos.rs`). That needs Screen Recording and Accessibility for the app:
-Settings → Agents shows both with **Allow…** (Screen Recording's own prompt,
+Settings → Chrome shows both with **Allow…** (Screen Recording's own prompt,
 then the System Settings pane). Without them the phone says plainly that
 Google needs one sign-in at the Mac. At the desk the plain window just
 opens; quitting it (⌘Q) is when the card checks. Either way the agents'
@@ -3235,8 +3236,8 @@ already, nothing to connect.
 | `messages_recent`, `messages_search` | recent conversations with a chat id, one conversation, or words | `~/Library/Messages/chat.db`, read-only (Full Disk Access) |
 | `messages_send` | an iMessage to a phone number, an email or a chat id | Messages' scripting (Automation) |
 
-They're tools on the agent bridge (`/mcp/agent`), so Claude Code and Codex
-both get them, served to every agent; the app runs them itself, in a child
+They're tools on the agent bridge (`/mcp/agent`), so every engine gets
+them, served to every agent; the app runs them itself, in a child
 process (`mac_apps_os.rs`): JavaScript for Automation over EventKit and the
 Contacts framework (no app launched, macOS's prompt is this app's), the apps'
 own scripting for Notes and sending, `sqlite3 -readonly` for Messages'
@@ -3599,7 +3600,7 @@ The backend decides, since it knows when a message is recorded and when a turn e
 - Bursts across agents are capped (3 per 20s); the rest stay silent but still count. An approval is never capped, on the desk or a phone: the agent is blocked on it.
 - **Mute** (row context menu) stops OS notifications for that agent; a bell-off mark shows in its row. Unread and the badge still count it.
 - **Phones** hear each alert the desk decides on: over the socket of each connected phone that posts alerts (`companion/alerts.rs`) and through the push relay when it is on. Not while the user is **at the desk** (`at_desk`: one of the app's windows has focus), where the banner here is enough. Mute and quiet hours apply to phones as here (docs/mobile.md, "Notifications").
-- **Dock badge** = how many agents need you, the one count every surface shows: the sidebar bell's count, the review bar in the Chief's chat, the phone's Home bar, tab badge and icon badge (`needsYouCount`, `packages/companion-protocol/src/attention.ts`; Rust mirrors it in `notify::needs_you`, and both run `attention-cases.json`). The Chief counts like anyone; unread replies and usage limits don't. The mode toggle's badge is on whenever any non-hidden agent is waiting or unread. Approval cards don't add to unread; they count as pending until answered. It is refreshed whenever an agent's state changes, so a failed turn counts the moment it goes idle (its error line lands while it is still working).
+- **Dock badge** = how many agents need you, the same count as the sidebar bell, the review bar in the Chief's chat and the phone's icon badge (the phone's Catch up tab counts its rows instead, see "Needs you: one place per surface") (`needsYouCount`, `packages/companion-protocol/src/attention.ts`; Rust mirrors it in `notify::needs_you`, and both run `attention-cases.json`). The Chief counts like anyone; unread replies and usage limits don't. The mode toggle's badge is on whenever any non-hidden agent is waiting or unread. Approval cards don't add to unread; they count as pending until answered. It is refreshed whenever an agent's state changes, so a failed turn counts the moment it goes idle (its error line lands while it is still working).
 - Clicking a notification focuses a window and emits `agents://open`; the app switches to Agents and opens that agent. Focusing a window clears the unread of the agent it shows.
 - Uses `tauri-plugin-notification` (2.8, click reporting on macOS). Not verified in a real build yet: the dev binary posts under another app's identity, so click-through should be checked in a signed build.
 
@@ -4391,7 +4392,7 @@ and its answer post one notification per turn.
 The sidebar's Routines row and ⌘K "Routines" open one list of every agent's
 routines: the agent's key, the note, how it runs in words, its next run, its
 last run's outcome, **Change** and an on/off switch. Change opens that agent's
-chat with its schedule popover already on the routine's editor
+chat with its routines popover already on the routine's editor
 (`lib/routineHandoff.ts`, a one-slot ask its chat takes as it mounts). **Pause all routines…** and
 **Resume all routines…** (the list's buttons, or ⌘K) ask first. Resume all
 is the exact undo of Pause all: it wakes only routines marked
@@ -4675,7 +4676,7 @@ line in the chat. At most one model check starts per tick.
 
 They're `CheckIn`s with a `watch` (no `repeat`; `next_at` is the next check),
 so cancel, pause, list and the 12-per-agent cap are shared. The time tick
-ignores them. In the schedule popover, "At a time / When…" switches the
+ignores them. In the routines popover, "At a time / When…" switches the
 composer; a When… row shows what it waits for, what it does, how its last
 check went, its week's cost, Check now (`agents_watch_check_now`), Edit,
 Pause and Cancel. ⌘K: "Start work for <agent> when something happens…".
@@ -4947,13 +4948,13 @@ no window and no limit type (no plan on this login). The top-level
 `rateLimitType` of an event without `unifiedWindows` is read only when it is
 a known plan window, never e.g. `overage`.
 
-The sidebar foot, the foot of What's in flight, and the phone's agent list
-and Settings show "Claude usage 85% · resets Sat" for the fullest window,
-amber from 90% (Settings' rows too), and "Claude out of usage until Sat"
+The foot of What's in flight (`AgentsQuota`; the sidebar's usage row and the
+phone's usage glance are the stacked meter in "Usage wallets") shows "Claude
+usage 85% · refills Sat" for the fullest window, amber from 90%, and "Claude out of usage until Sat"
 for a used-up one. A figure stands until its reset even when no turn has run
 since, and use elsewhere isn't in it, so a reading's age is said: the tooltip
 names its day when it isn't today ("reported it Tue at 3:00 PM"), and once it
-is more than 6 hours old the line itself says so ("Claude usage 34% · resets
+is more than 6 hours old the line itself says so ("Claude usage 34% · refills
 Sat · read Tue"; the phone has no tooltip). The figure is kept rather than
 hidden: it is still the latest the engine said, now labelled as such. A
 used-up window needs no age, since it stays used up until the reset it names.
@@ -4963,7 +4964,7 @@ one (`failure::with_reported_reset`). Every reset is said by one rule for the
 day: today a clock time, then "tomorrow", the weekday within the week, the
 date beyond it. The chat's sentence ("Claude Code is out of usage until Sat at 2:00 PM.",
 `failure::clock_phrase`), the button ("Retry Sat 2:00 PM"), the sidebar row
-("Out of usage until Sat 2:00 PM") and the foot ("resets Sat") all name
+("Out of usage until Sat 2:00 PM") and the foot ("refills Sat") all name
 the same day. The wording lives once, in
 `packages/companion-protocol/src/quota.ts`, for the desk and the phone, and
 in `clock_phrase` for the Mac's own sentences.
@@ -4971,8 +4972,8 @@ in `clock_phrase` for the Mac's own sentences.
 ## Usage wallets (`agents/wallet.rs`)
 
 Answers: **when one subscription runs out, can the agents keep going on
-another?** Each engine has an ordered list of accounts (Settings → Agents →
-Accounts; the account row at the foot of the Agents sidebar; ⌘K "Switch
+another?** Each engine has an ordered list of accounts (Settings → Accounts &
+usage; the account row at the foot of the Agents sidebar; ⌘K "Switch
 account…", "Add an account…"). One of them is always
 **this Mac's own sign-in**: the `claude` / `codex` login already on the
 machine (`id: "default"`), which every turn used before wallets and still
@@ -5042,7 +5043,7 @@ per engine (a free name, then its sign-in). Onboarding offers adding right
 after the engine's sign-in ("Add another account?", skippable). The phone
 has the same two levels: the Usage sheet (the total, then a row per
 account) and an account's screen (`mobile/src/app/usage-account.tsx`);
-Settings → Accounts leads with the same total
+Settings → Accounts & usage leads with the same total
 (`mobile/src/components/usageStack.tsx`).
 
 **One account signed in twice** (`inventory::same_as`). A Claude account
@@ -5340,7 +5341,7 @@ the wallet's own loop (`run_on_engine`):
   runs the turn again on the other engine. The phone shows the same three
   answers and sends them the same way (`ApprovalCard`, the words from
   `companion-protocol` `crossover.ts`); Catch up opens the card rather than
-  answering it; Settings → Accounts there says "Claude Code out · on Codex
+  answering it; Settings → Accounts & usage there says "Claude Code out · on Codex
   until 4:00 PM" while agents are away. Older clients show Allow / Deny.
 - **Never** for an agent set to one account ("Runs on"), never for the app's
   own tidy turn, never silently: the chat gets "Carried on with Codex (Claude
@@ -5406,7 +5407,7 @@ never slow down for limits unless the user chose that.
 - **Every account read without a turn** (`agents/usage_read.rs`): on open
   (20 s after launch), every 10 minutes while the app is open (20 on
   battery, see "Low power"), and when
-  someone looks (the usage popover, Settings → Usage, the phone's
+  someone looks (the usage popover, Settings → Accounts & usage, the phone's
   `agents.usagePlan`, an agent's `usage_overview`, which waits up to 20 s for
   it) unless a check ran in the last 2 minutes; one at a time, never
   doubled. Each account's outcome is kept beside its reading
@@ -5502,12 +5503,13 @@ never slow down for limits unless the user chose that.
   `subscriptionType` does, so a Claude account read without a turn shows
   its plan.
 - **Other compute**, detected, never assumed (`inventory::local_compute`,
-  cached a minute): Opencode's binary; Ollama (binary or app) and LM Studio
+  cached a minute): OpenCode's binary; Ollama (binary or app) and LM Studio
   (`lms` or the app), each asked over loopback for its model list
   (`127.0.0.1:11434/api/tags`, `127.0.0.1:1234/v1/models`, 800 ms, no proxy,
   no redirects, so nothing leaves this Mac) and said
-  "installed, not running" when it doesn't answer. Agents don't run on these;
-  they are listed so the Chief can say what's there.
+  "installed, not running" when it doesn't answer. OpenCode is an engine
+  (agents can run on it, and through it on these local models), but it
+  reports no limits, so it is listed here rather than as an account.
 
 **Readings vs estimates.** The rule "only what the engines report, never
 estimated" is about *readings* and stands unchanged. A forecast is an
@@ -5544,9 +5546,9 @@ never a default.
   with at least 3 readings over at least 30 minutes, a rise of at least 1
   point, and a crossing after now and before the reset; an account that's out
   has none. Said as "At this pace you'll hit the limit this afternoon, before
-  it resets at 4:00 PM" with "Estimate from 6 readings over 2 hours" under it
+  it refills at 4:00 PM" with "Estimate from 6 readings over 2 hours" under it
   (a part of a day, never a minute it can't know), in the chat header's usage
-  popover on the desk (`AgentUsageRing`, ⌘K "Show usage"), Settings → Usage,
+  popover on the desk (`AgentUsageRing`, ⌘K "Show usage"), Settings → Accounts & usage,
   the phone's Usage sheet and `usage_overview`'s ESTIMATES. The words live
   once in `packages/companion-protocol/src/usageSheet.ts`, shared by the desk
   ring and the phone sheet.
@@ -5585,7 +5587,7 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   from the desk) and a line in the Chief's chat, with "Switch to Save my
   limits" outside Save. Recorded before it is said (`usage_plan::first_warning`,
   30 minutes of reset slack): never repeated for that window. Not in "Use it
-  all before reset".
+  all before the refill".
 - **A model per routine** (`CheckIn::model`; the routine editor's "Runs on",
   `agents_schedule_model`; the Chief's `set_routine_model`): like its other
   routines (`Agent::routine_model`, the default), the agent's own (`same`),
@@ -5636,13 +5638,14 @@ turn costs the engine's prompt cache on the whole conversation. Spare
 capacity reaches the Chief through the nudge, and the user through What's
 in flight.
 
-**UI.** Settings → Accounts & usage (⌘K "Usage limits and spare capacity…"):
+**UI.** Settings → Accounts & usage (⌘K "Usage and accounts…"):
 the mode, each account's reading or "No reading yet", tags ("Plus plan",
 "Next turns run here"), each engine's average turn (estimate), other
 compute, and the list. What's in flight ends with one muted line when a
 window on the next account is near its reset with capacity left ("Claude
-5-hour limit resets 3:00 PM · 62% unused"). The phone's Settings shows the
-same, read-only (`agents.usagePlan`, additive: an older phone never asks, an
+5-hour limit refills 3:00 PM · 62% left"). The phone's Settings shows the
+same and sets the mode and the list (`agents.usagePlan`, `agents.usage.setMode`,
+`agents.spare.add`, `agents.spare.spendNow`; additive: an older phone never asks, an
 older Mac doesn't list it in `welcome.methods`). Wording lives once in
 `packages/companion-protocol/src/usage.ts`.
 
@@ -5652,10 +5655,10 @@ older Mac doesn't list it in `welcome.methods`). Wording lives once in
   percentage, and any token→share conversion is learned and labelled.
 - Claude Code reports no plan name; neither engine reports a reading for an
   account no turn has run on. Those accounts say "No reading yet".
-- Opencode and local models aren't agent engines here; they're listed, not
-  used.
-- Choosing *accounts* by reset time is done only for "Use it all before
-  reset" (`spend_first`, until that window resets); otherwise the wallet's
+- OpenCode reports no limits, so it and the local models it can run appear
+  under other compute, never as an account with a reading.
+- Choosing *accounts* by refill time is done only for "Use it all before
+  the refill" (`spend_first`, until that window resets); otherwise the wallet's
   order is the user's, and failover keeps it. Agents choose between *engines*
   (an agent on Codex vs one on Claude Code) by what resets sooner.
 - **"These may be the same account"** (`agents/lockstep.rs`,
@@ -5831,8 +5834,8 @@ running when closed is on** (`AppState.menu_bar_icon`, `None` = that rule).
 message sent to any agent (`agents_send`, so quick entry too) or the first
 import (both import paths); an agent that already has a session counts, for
 installs from before the flag. Someone who never touches Agents gets no new
-icon in a crowded menu bar. Settings → General overrides it either way.
-Rows are engine-agnostic: Claude Code and Codex turns report through the
+icon in a crowded menu bar. Settings → Agents ("On this Mac") overrides it either way.
+Rows are engine-agnostic: every engine's turns report through the
 same runner status and approval cards. Quick entry stays opt-in (it follows
 Keep running only). Turning Keep running off *from the icon*
 pins the icon on, so it doesn't vanish under the pointer.
@@ -5854,7 +5857,7 @@ first, since it may be hidden. The updater's restart is untouched: it still
 waits for `agents_busy` to reach 0.
 
 **Quick entry.** A system-wide shortcut (`tauri-plugin-global-shortcut`,
-default ⌥Space, Settings → General) opens a small floating composer over any
+default ⌥Space, Settings → Agents) opens a small floating composer over any
 app: its own window (`quick-entry`), created hidden at launch so the shortcut
 only shows it, on the display under the pointer, a third of the way down.
 
@@ -5895,8 +5898,9 @@ composer and the phone's agent sheet says so under "Runs on"
 cached, so a slow moment doesn't stick as "can't ask". An
 agent on an engine other than Claude Code wears a small badge in the sidebar
 and the team view. Model offers
-that engine's own list: Claude Code's aliases, or Codex's own
-`models_cache.json` (`visibility: list`, its order). The Chief can set it on
+that engine's own list: Claude Code's aliases, Codex's own
+`models_cache.json` (`visibility: list`, its order), or OpenCode's
+`opencode models` (see "OpenCode"). The Chief can set it on
 `create_agent` / `update_agent`; both refuse an engine that isn't ready.
 Switching clears the session and the model, leaves a note ("Runs on Codex
 from its next message"), and the next turn gets the recent conversation
@@ -5906,17 +5910,19 @@ from its next message"), and the next turn gets the recent conversation
 
 Settings → Agents → What agents run on (`AgentDefaultsSettings.tsx`) sets what
 a new agent starts on when nobody picked, saved in the app's settings
-(`AppState::agent_defaults`: `engine`, `claudeModel`, `codexModel`):
+(`AppState::agent_defaults`: `engine`, `claudeModel`, `codexModel`,
+`opencodeModel`):
 
 - **New agents start on** — Claude Code | Codex | OpenCode, only the engines
   `agents::engine` runs. One that isn't installed and signed in is greyed out,
   and `agents_set_defaults` refuses it. Never chosen, the rule decides:
   Claude Code when ready, else the first engine that is
   (`engine::default_for`).
-- **Model on Claude Code / Model on Codex** — one row per installed engine:
+- **Model on Claude Code / Codex / OpenCode** — one row per installed engine:
   "Default" (no `--model`) and only the models that engine itself
   reports or accepts: Claude Code's aliases (said by what they're for, the
-  alias beside it), Codex's `models_cache.json`. An engine that lists none
+  alias beside it), Codex's `models_cache.json`, OpenCode's `opencode
+  models`. An engine that lists none
   has no menu, just "Codex hasn't listed its models, so new agents use its
   default."
 
@@ -7392,8 +7398,8 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
 
 ## Known limits / next
 
-- Claude Code and Codex (see "Engines"). Opencode would slot in the same
-  way: a command line and a mapping onto `stream::Step`.
+- Three engines: Claude Code, Codex and OpenCode (see "Engines"). Another
+  would slot in the same way: a command line and a mapping onto `stream::Step`.
 - Search scans files on every query. Fine at one person's scale (tens of
   agents, thousands of lines); an index would be needed well past that.
 - Turns at once are scaled to RAM (3–16, `agents::capacity`); the rest wait,

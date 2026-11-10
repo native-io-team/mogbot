@@ -9,7 +9,7 @@ Tailscale tailnet.
 | --- | --- |
 | Wire types (the contract) | [`packages/companion-protocol`](../packages/companion-protocol/src/index.ts) |
 | Desktop server | `src-tauri/src/companion/`, commands in `src-tauri/src/commands/companion*.rs` |
-| Desktop Phone panel | `src/components/phone/`, `src/lib/companion.ts`, `src/lib/companionInstall.ts` |
+| Desktop Phone page (Settings → Phone) | `src/components/phone/`, `src/lib/companion.ts`, `src/lib/companionInstall.ts` |
 | Expo app | `mobile/` (running it and the mock Mac: [mobile/README.md](../mobile/README.md)) |
 | Push relay | `services/push-relay/` ([push-relay.md](push-relay.md)) |
 
@@ -208,15 +208,24 @@ inside it.
   ready and starts a new session that carries the conversation over as a recap),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
-- `agents.create` (`name`, `role`, `color` only; idempotent by an optional
-  `clientId`; see "Starting things")
+- `agents.create` (`name`, `role`, `color`, and from a Mac listing
+  `agents.draft` a draft's `instructions` and `routines`; idempotent by an
+  optional `clientId`; see "Starting things"), `agents.draft|templates|setDefaults`
+- `agents.watch.options|create|update|checkNow` ("When…" routines),
+  `agents.conversations|conversationNew|conversationSelect|conversationRename|conversationRewind|conversationFork|conversationRoutine`,
+  `agents.page|pageVersion|pagePin`, `agents.skills|skillEdit|skillRemove`,
+  usage (`agents.quota|accounts|accounts.use|accounts.reorder|usagePlan|usage.setMode|spare.add|spare.spendNow`),
+  `agents.quietHours|setQuietHours|morningBrief|setMorningBrief`; the full list is
+  `router::METHODS`
 - `projects.list`, `sessions.read|send|key|start`, `preview.screenshot`
 - `rooms.list|messages|send|focus` (a Mac whose `welcome.features` has
   `rooms`; see "Rooms")
-- `agents.import.status|start|stop|review` (see "Starting things", Import)
+- `agents.import.status|start|stop|review` and, without Remote Access,
+  `agents.import.exportPrompt|exportPreview|exportReview` (a pasted reply;
+  see "Starting things", Import)
 
-Declared in the package but not served: `agents.delete`, the paste import
-methods. Pure reads (`READ_ONLY_METHODS`, mirrored in Rust) are not audited.
+Declared in the package but not served: `agents.delete` and
+`agents.import.pastePrompt|pastePreview|paste`. Pure reads (`READ_ONLY_METHODS`, mirrored in Rust) are not audited.
 
 ### Events, cursors and resync
 
@@ -311,7 +320,7 @@ CA and no trust-on-first-use.
 
 ## Pairing
 
-1. **Mac:** Phone panel (titled "Phone" whether opened from Settings or the
+1. **Mac:** Settings → Phone (the same panel, titled "Phone" whether opened from Settings or the
    sidebar's phone line, so the phone's "Phone (in Settings, or the phone line
    at the foot of the sidebar) → Show code", `WHERE_TO_PAIR`, names what's on
    screen) → **Show code** (or Cmd+K). A one-time code
@@ -456,7 +465,7 @@ server), and every link must carry a fingerprint.
   serve` to strip a client's own `Tailscale-User-*` headers, which is
   documented behaviour but not tested here against a real tailscaled.
 - The device is re-checked on every frame (a re-pair mints a new id, so this
-  is the token check). **Revoke** in the Phone panel deletes the hash and
+  is the token check). **Revoke** in Settings → Phone deletes the hash and
   closes that device's sockets at once, **aborts the requests those sockets
   had running**, stops an upload mid-body, and deletes its staged files
   right away; the phone says "This Mac removed this phone" and offers to
@@ -503,15 +512,13 @@ server), and every link must carry a fingerprint.
 request, the diff and the photo viewer push over them. At
 700 pt and wider (iPad, landscape) the Agents list and a chat sit side by side.
 
-- **Agents (home).** Needs you (approvals, signed out, usage limit) first,
-  then the Chief and pinned agents, then the rest by activity. Attention is
-  said once: the Needs you header, with **Open next** (straight to the first
-  card waiting) at its right, and each row's own words ("Needs your OK ·
-  …", the state word in amber). No summary card over the list and no dot
-  beside a row that already says it (rooms too); the tab badge counts it
-  from the other tabs. Every other state keeps its mark. Swipe to mute, hide (with Undo) or pin; hold for the
-  context menu. Quick actions on the icon: "Needs you" and "New message to
-  Chief of Staff".
+- **Agents (home).** The Chief first, then pinned agents, then the rest by
+  activity, then Rooms. What waits on you is Catch up's (below), counted on
+  its tab badge: here a waiting agent's row keeps only its own words
+  ("Needs your OK · …"), with no header, summary card or dot over it (rooms
+  too). Every other state keeps its mark. Swipe to mute, hide (with Undo) or pin; hold for the
+  context menu. Quick actions on the icon: "Needs your OK" (with how many,
+  while something waits) and "New message to Chief of Staff".
 - **Catch up** (`app/(tabs)/catch-up/index.tsx`, `lib/needsYou.ts`,
   `lib/catchUpTab.ts`), the first tab: the phone's inbox for its agents and
   its one place for everything waiting on you, across every agent. The tab
@@ -595,8 +602,11 @@ request, the diff and the photo viewer push over them. At
   takes `agents.accounts.use|reorder`), then **Limits | Tokens**: each limit a
   card (countdown chip, big "% left", the pace-marked bar, the Mac's run-out
   estimate between now and the refill, said as one, the pace sentence), or
-  who used it this week with their keys and share; then "Where did my usage
-  go". A Mac with no accounts list falls back to the per-account sheet
+  who used it this week with their keys and share; then "Where it went".
+  On a Mac that serves `agents.usage.setMode`, the Usage screen also has
+  "How agents use your limits" (Normal, Save my limits, Use it all before
+  the refill) and "Ideas for leftover usage" (Add, and "Give agents
+  something to do"; `components/usagePlanControls.tsx`). A Mac with no accounts list falls back to the per-account sheet
   (`usageSheet`, shared with the desk's popover). ↻ reads it all again.
   Adding and signing in to accounts stay on the Mac.
 - **One at a time** (`app/one-at-a-time.tsx`, `lib/catchUp.ts`), from
@@ -727,10 +737,14 @@ request, the diff and the photo viewer push over them. At
   Drafts, including uploaded files (kept 55 min), survive leaving the chat and
   a cold start (`lib/drafts.ts`). A mic in the field dictates into the draft
   (see "Dictation" below).
-- **Agent sheet.** "Claude · Opus" / "Codex · …", Runs on and Model read-only, Memory (view, edit, forget with
+- **Agent sheet.** "Claude · Opus" / "Codex · …" / "OpenCode · …", Runs on and Model shown (changed from the model chip's Agent controls, below), Memory (view, edit, forget with
   Undo, add; "Remember this" in a message's menu), Instructions (view and edit), pin/mute/hide, check-ins and
   routines (create and edit with the picker below, past runs, pause, run now,
-  cancel), usage, and "Allowed without asking" with Revoke.
+  cancel), usage, "What it knows how to do" (its saved skills, each opening
+  `app/skill.tsx` to correct or remove, and its Automatically / Ask me / Off
+  setting; docs/agents.md, "What it knows how to do"), and "Allowed without
+  asking" with Revoke. A skill offer arrives as a Save / Not now card that
+  never counts as needing your OK.
 - **Files** per agent; **search** across every chat, which pages a chat back
   (40 pages at most) to the hit and lights it.
 - **Projects and sessions.** Live from `projects.changed` events (the Mac
@@ -748,8 +762,10 @@ request, the diff and the photo viewer push over them. At
   right edge. You can type to it, start a new task or take a preview
   screenshot (a private blob, never a public link).
 - **Connection screen.** Every layer of the link (below).
-- **Settings.** The paired Mac, plan usage, what new agents start on, alerts
-  (with their limits), haptics, updates, about. **New agents start on** lists
+- **Settings.** The paired Mac; Accounts & usage (the Usage card, Without
+  asking, Logins, Bring agents in); New agents start on; Notifications, Quiet
+  hours and Morning brief; Appearance, Text size, Feel, Voice; Updates;
+  About. **New agents start on** lists
   the Mac's engines (one not installed or signed in is dimmed, saying which),
   and a **Model on …** section per installed engine offers "Default"
   and only the models that engine listed (`lib/newAgentDefaults.ts`). Read
@@ -976,6 +992,11 @@ The phone can start work as well as answer it. Each piece is gated by
   notes aren't added: Replace, with its diff and consequences, stays on the
   Mac's card. An older Mac's review card still says "Review on your Mac".
   **Stop import** is `agents.import.stop`.
+  Without Remote access, a Mac listing `import.export` also takes the old
+  assistant's reply pasted here (`components/ImportPaste.tsx`: Copy the
+  message, paste the reply back, `agents.import.exportReview`); a cut-off
+  or JSON-less paste says its own fix, and it ends on the same review card
+  in the Chief's chat (docs/agents.md, "Import").
 
 - **New agent** (the pencil on Agents, or the empty list's button;
   `app/new-agent.tsx`). On a Mac listing `MAC_FEATURES.draft` it opens as
@@ -1004,7 +1025,8 @@ The phone can start work as well as answer it. Each piece is gated by
   Otherwise the phone can't set the engine, model,
   project or instructions at creation (refused with `bad_params`): the
   instructions are edited afterwards from the agent sheet, on either side,
-  and the engine, model and project at the desk. The name and role are one
+  the engine and model from Agent controls (below) or the desk, and the
+  project at the desk. The name and role are one
   line each, without control characters, at most 40 and 500 characters, and
   a phone can make at most 10 agents a minute (refused with `rate_limited`). The create is audited as `create <name> — <role>`,
   and a retry with the same `clientId` returns the first agent. Once the
@@ -1034,7 +1056,9 @@ The phone can start work as well as answer it. Each piece is gated by
   routine opens with "At a time / When…" (`ROUTINE_MODES`), and When… is the
   desk's composer (`components/whenComposer.tsx`, words and rules from
   `whenComposer.ts` in companion-protocol): When this happens over the
-  sources, a folder chosen from the Mac's own list (`agents.watch.options`;
+  sources (including an email arriving in the Mac's Mail or a text in its
+  Messages, free once Full Disk Access is on there, which the phone can only
+  name), a folder chosen from the Mac's own list (`agents.watch.options`;
   never a typed path, which the Mac refuses), Through, Check every, What, the
   echo and what each check costs. A "When…" row on the agent sheet offers
   Check now, Pause, Edit and Cancel; on an older Mac it stays read-only.
@@ -1498,8 +1522,8 @@ only an opaque device handle, a kind (`needs_you`, `finished`, `message`), the
 agent's random id and the badge; the words are fixed in the Worker. An alert
 the desk would post (`agents::notify`, which already applies mute, on-screen
 and coalescing) is pushed to each phone not in front. It's for official builds
-only (a self-built app has no push entitlement), switched on in the Phone
-panel, and **built but not deployed**: design, threat model and deploy steps
+only (a self-built app has no push entitlement), switched on in Settings →
+Phone, and **built but not deployed**: design, threat model and deploy steps
 are in [push-relay.md](push-relay.md).
 
 **The live notifier** (`companion/alerts.rs`, `lib/liveAlerts.ts`). Every
@@ -1593,7 +1617,7 @@ yet"; when set, maintainers ship through EAS (`eas.json` profiles map to
 `expo-updates` channels), with a build at least every 60 days because
 TestFlight builds expire at 90.
 
-**Get the phone app** (sidebar, Phone panel or Cmd+K) is the route today, and follows
+**Get the phone app** (the sidebar's foot, Settings → Phone or Cmd+K) is the route today, and follows
 the agent-led onboarding pattern: **the agent drives, the app verifies.** It
 spawns the user's agent (their engine: Codex when that's the default agent,
 else Claude Code, `installAgent`) beside a checklist with a prescriptive prompt
@@ -1793,8 +1817,8 @@ the share extension, the camera, real keyboard behaviour).
   the app next opens). The live notifier is verified in Rust and jest only:
   a banner and its Allow / Deny on a real iPhone, backgrounded and locked,
   are not yet.
-- Paste import, deleting agents from the phone, and setting a new agent's
-  engine, model or project there.
+- Deleting agents from the phone, and setting a new agent's engine, model or
+  project there (it starts on the defaults for new agents).
 - Pushing to git from the phone: Remote Access gates it behind a PIN, and the
   phone gets nothing until the owner decides how.
 - A needs-you Home Screen widget. The Live Activity is built behind
