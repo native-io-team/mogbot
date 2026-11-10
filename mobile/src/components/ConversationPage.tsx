@@ -70,13 +70,16 @@ function PageBand({
   const colors = useColors();
   const { height } = useWindowDimensions();
   const [history, setHistory] = useState(false);
-  const [older, setOlder] = useState<PageVersion | null>(null);
+  // An older version opened, for the version the page was on then: a new
+  // version arriving shows the page as it is now.
+  const [opened, setOpened] = useState<{ v: PageVersion; on: number } | null>(null);
+  const older = opened?.on === page.version ? opened.v : null;
+  const setOlder = (v: PageVersion | null) => setOpened(v ? { v, on: page.version } : null);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
-  useEffect(() => setOlder(null), [page.version]);
 
   const shown: PageVersion = older ?? page;
   const set = useMemo(() => pageBlocks(shown), [shown]);
