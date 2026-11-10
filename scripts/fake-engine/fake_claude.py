@@ -420,6 +420,10 @@ def script_of(prompt):
 def stream_turn(args):
     prompt = sys.stdin.read()
     resume = flag(args, "--resume")
+    # As a Claude Code that dropped the hidden flag would: refused before any output.
+    if os.environ.get("FAKE_CLAUDE_NO_RESUME_AT") and "--resume-session-at" in args:
+        sys.stderr.write("error: unknown option '--resume-session-at'\n")
+        sys.exit(1)
     if resume and not find_transcript(resume):
         sys.stderr.write("No conversation found with session ID: %s\n" % resume)
         sys.exit(1)

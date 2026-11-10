@@ -95,7 +95,7 @@ fn a_turn_starts_from_its_session_its_branch_or_nothing() {
         Branch::Recap
     );
     assert_eq!(
-        start_point(Engine::Codex, true, "t1", Some("e9".into()), None, false),
+        start_point(Engine::OpenCode, true, "t1", Some("e9".into()), None, false),
         Branch::Recap
     );
     // A new session: the branch it was forked from, else blank or a recap.
@@ -355,4 +355,62 @@ fn quotes_and_titles_fit() {
     let t = conversations::fork_title(&long);
     assert_eq!(t.chars().count(), conversations::TITLE_CHARS);
     assert!(t.ends_with('…'));
+}
+
+#[test]
+fn codex_goes_back_by_forking_its_thread_through_the_turn_before() {
+    let codex = Branch::CodexFork {
+        thread: "t1".into(),
+        turn: "u3".into(),
+    };
+    assert_eq!(
+        start_point(Engine::Codex, true, "t1", Some("u3".into()), None, false),
+        codex
+    );
+    // No turn seen in that thread (an exec fallback, an older build): a recap.
+    assert_eq!(
+        start_point(Engine::Codex, true, "t1", None, None, false),
+        Branch::Recap
+    );
+    let points = vec![point(&["m1"], codex.clone())];
+    assert_eq!(plan(&points, "m1", Engine::Codex), codex);
+    assert_eq!(plan(&points, "m1", Engine::Claude), Branch::Recap);
+    // A fork that fell back starts from a recap, whatever was pending.
+    assert_eq!(
+        start_point(
+            Engine::Claude,
+            false,
+            "s2",
+            None,
+            Some(&Branch::Recap),
+            true
+        ),
+        Branch::Recap
+    );
+}
+
+#[test]
+fn codex_turn_ids_are_kept_per_thread_and_a_fallback_keeps_the_mark() {
+    scratch(|| {
+        let a = agent("Coder");
+        assert_eq!(codex_last_turn(&a.id, "t1"), None);
+        note_codex_turn(&a.id, "t1", "u1");
+        note_codex_turn(&a.id, "t1", "u2");
+        note_codex_turn(&a.id, "t2", "v1");
+        assert_eq!(codex_last_turn(&a.id, "t1").as_deref(), Some("u2"));
+        assert_eq!(codex_last_turn(&a.id, "t2").as_deref(), Some("v1"));
+
+        set_pending(
+            &a.id,
+            FIRST,
+            Pending {
+                branch: fork_at("s1", "e1"),
+                exposed: true,
+            },
+        );
+        fell_back(&a.id, FIRST);
+        let p = pending(&a.id, FIRST, false).unwrap();
+        assert_eq!(p.branch, Branch::Recap);
+        assert!(p.exposed, "a fallback dropped the outside-content mark");
+    });
 }

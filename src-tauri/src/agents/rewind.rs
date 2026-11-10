@@ -45,6 +45,9 @@ use crate::errors::CommandError;
 pub enum Branch {
     /// Claude Code: a new session forked from `session` at entry `at`.
     Fork { session: String, at: String },
+    /// Codex app-server: a new thread forked from `thread` through its turn
+    /// `turn` (`thread/fork` with `lastTurnId`, inclusive; schema of 0.166).
+    CodexFork { thread: String, turn: String },
     /// A new session with nothing before it (the agent's instructions and
     /// memory only).
     Blank,
@@ -146,13 +149,15 @@ pub fn plan(points: &[Point], message: &str, engine: Engine) -> Branch {
     }
     match &point.before {
         Branch::Fork { .. } if engine != Engine::Claude => Branch::Recap,
+        Branch::CodexFork { .. } if engine != Engine::Codex => Branch::Recap,
         b => b.clone(),
     }
 }
 
 /// The point a turn starts from, as [`note_turn`] keeps it. `resumed_at`:
-/// the last entry of the Claude Code session it resumes. `recap`: it was
-/// handed one (a new engine, a lost session).
+/// the last entry of the Claude Code session it resumes, or the last turn
+/// of the Codex thread ([`codex_last_turn`]). `recap`: it was handed one (a
+/// new engine, a lost session, a fork that fell back).
 pub fn start_point(
     engine: Engine,
     resuming: bool,
@@ -167,14 +172,70 @@ pub fn start_point(
                 session: session.to_string(),
                 at,
             },
+            (Engine::Codex, Some(turn)) => Branch::CodexFork {
+                thread: session.to_string(),
+                turn,
+            },
             _ => Branch::Recap,
         };
     }
     match pending {
-        Some(b) => b.clone(),
-        None if recap => Branch::Recap,
-        None => Branch::Blank,
+        Some(b) if !recap || *b == Branch::Recap => b.clone(),
+        _ if recap => Branch::Recap,
+        _ => Branch::Blank,
     }
+}
+
+/* -------------------------------------------------- Codex's turn ids */
+
+const CODEX_TURNS: &str = "codex_turns.json";
+/// Threads whose last turn is kept, per agent.
+const MAX_CODEX_THREADS: usize = 200;
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct CodexTurns {
+    /// Thread id → (its last turn's id, when).
+    #[serde(default)]
+    last: HashMap<String, (String, i64)>,
+}
+
+/// A Codex app-server turn `turn` ran in `thread`: what a fork of that
+/// thread through it names.
+pub fn note_codex_turn(agent_id: &str, thread: &str, turn: &str) {
+    let Some(home) = home(agent_id) else { return };
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let path = home.join(CODEX_TURNS);
+    let mut all: CodexTurns = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default();
+    all.last
+        .insert(thread.to_string(), (turn.to_string(), store::now_ms()));
+    while all.last.len() > MAX_CODEX_THREADS {
+        let Some(oldest) = all
+            .last
+            .iter()
+            .min_by_key(|(id, (_, at))| (*at, (*id).clone()))
+            .map(|(id, _)| id.clone())
+        else {
+            break;
+        };
+        all.last.remove(&oldest);
+    }
+    if let Ok(body) = serde_json::to_vec(&all) {
+        if let Err(e) = store::write_private(&path, &body) {
+            tracing::warn!("[Agents] couldn't keep a Codex turn's id: {e}");
+        }
+    }
+}
+
+/// The last turn the app saw in Codex thread `thread`.
+pub fn codex_last_turn(agent_id: &str, thread: &str) -> Option<String> {
+    let home = home(agent_id)?;
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let all: CodexTurns =
+        serde_json::from_str(&std::fs::read_to_string(home.join(CODEX_TURNS)).ok()?).ok()?;
+    all.last.get(thread).map(|(turn, _)| turn.clone())
 }
 
 /* ----------------------------------------------------------- branches */
@@ -220,6 +281,21 @@ pub fn pending(agent_id: &str, conversation: &str, has_session: bool) -> Option<
         return None;
     }
     all.get(conversation).cloned()
+}
+
+/// The engine refused to go back to the exact point (a Claude Code without
+/// `--resume-session-at`, a Codex that won't fork the thread): the
+/// conversation picks up from a recap instead, from this turn on.
+pub fn fell_back(agent_id: &str, conversation: &str) {
+    let exposed = pending(agent_id, conversation, false).is_some_and(|p| p.exposed);
+    set_pending(
+        agent_id,
+        conversation,
+        Pending {
+            branch: Branch::Recap,
+            exposed,
+        },
+    );
 }
 
 /// Whether the conversation's next turn starts from a session that had
