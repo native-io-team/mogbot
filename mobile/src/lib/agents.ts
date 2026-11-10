@@ -129,7 +129,7 @@ export function workingLine(agent: Agent, brief = false): string {
 export const engineName = (agent: Pick<Agent, 'engine'>) =>
   agent.engine === 'codex' ? 'Codex' : 'Claude Code';
 
-/** Its model as its engine names it ("Opus"), or "Engine’s default". */
+/** Its model as its engine names it ("Opus"), or "Default". */
 export function modelName(agent: Agent, engines: EngineInfo[] | undefined): string {
   if (!agent.model) return ENGINE_DEFAULT;
   const listed = engines?.find((e) => e.id === agent.engine)?.models;

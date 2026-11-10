@@ -227,7 +227,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents',
     title: 'Settings — the Agents page',
     looksRightWhen:
-      'The Settings window opens on Agents, first in the section list down the left. Quiet groups, each a small heading: On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, each with a switch), Engines and models (“New agents start on” with a Claude Code | Codex control, Claude Code pressed, the engines’ states on one line; “Model on Claude Code” and “Model on Codex”, each a menu button showing “Engine’s default”; Routines), Bring agents in (Import…). Every description is one short sentence; no paragraph anywhere.',
+      'The Settings window opens on Agents, first in the section list down the left. Quiet groups, each a small heading: On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, each with a switch), Engines and models (“New agents start on” with a Claude Code | Codex control, Claude Code pressed, the engines’ states on one line; “Model on Claude Code” and “Model on Codex”, each a menu button showing “Default”; Routines), Bring agents in (Import…). Every description is one short sentence; no paragraph anywhere.',
     command: 'agents.desktopSettings',
     requires: '.agents-settings .settings-group__title',
     clipSelector: '.settings-window',
@@ -446,7 +446,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-defaults-menu',
     title: 'Settings — picking the default model for Claude Code',
     looksRightWhen:
-      'The “Model on Claude Code” menu is open under its button: Engine’s default, Most capable (Opus), Balanced (Sonnet, marked as the current choice), Fastest (Haiku), each engine name small and muted at the right. Only Claude Code’s own models; nothing invented. Readable in both themes.',
+      'The “Model on Claude Code” menu is open under its button: Default, Smartest (Opus), Balanced (Sonnet, marked as the current choice), Fastest (Haiku), each engine name small and muted at the right. Only Claude Code’s own models; nothing invented. Readable in both themes.',
     // Steps run before a scenario's command, so the palette opens Settings here.
     openSelector: AGENTS_TAB,
     requires: '.agent-defaults-menu',
@@ -483,7 +483,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-defaults-no-models',
     title: 'Settings — Codex lists no models',
     looksRightWhen:
-      'Codex is installed and signed in but has not listed its models (no models cache yet): “Model on Codex” has no menu button, just the line “Codex hasn’t listed its models, so new agents use its default.” Claude Code’s row is unchanged with its menu showing “Engine’s default”. No made-up model names anywhere.',
+      'Codex is installed and signed in but has not listed its models (no models cache yet): “Model on Codex” has no menu button, just the line “Codex hasn’t listed its models, so new agents use its default.” Claude Code’s row is unchanged with its menu showing “Default”. No made-up model names anywhere.',
     command: 'agents.newAgentDefaults',
     requires: '.agent-defaults-settings [data-engine="claude"]',
     clipSelector: 'section[aria-labelledby="agents-settings-engines"]',

@@ -2542,7 +2542,7 @@ const ENGINE = [
     ready: 'Designer',
     act: openControls,
     check:
-      'Agent controls: “Designer · Opus 5.5 · High”, then Model (Engine’s default ticked, saying it is Opus 5.5 now; “Switch to Codex…” under it), Effort (High ticked), how much it does on its own, Usage, More about Designer',
+      'Agent controls: “Designer · Opus 5.5 · High”, then Model (Default ticked, saying it is Opus 5.5 now; “Switch to Codex…” under it), Effort (High ticked), how much it does on its own, Usage, More about Designer',
     pages: 3,
     after: closeAndClear,
   },

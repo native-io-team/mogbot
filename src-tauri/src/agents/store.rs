@@ -1134,7 +1134,7 @@ pub fn normalize_effort(effort: &str) -> Result<Option<String>, CommandError> {
     if !EFFORTS.contains(&effort.as_str()) {
         return Err(super::err_invalid(
             "effort",
-            "Pick Low, Medium, High or Engine's default (no effort).",
+            "Pick Low, Medium, High or Default.",
         ));
     }
     Ok(Some(effort))
@@ -1150,7 +1150,7 @@ pub fn normalize_model(model: &str) -> Result<Option<String>, CommandError> {
     if !MODELS.contains(&model) {
         return Err(super::err_invalid(
             "model",
-            "Pick Opus, Sonnet, Haiku or Engine's default (no model).",
+            "Pick Smartest (Opus), Balanced (Sonnet), Fastest (Haiku) or Default.",
         ));
     }
     Ok(Some(model.to_string()))

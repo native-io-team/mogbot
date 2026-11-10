@@ -353,8 +353,8 @@ describe('formatUsage', () => {
   });
 
   it('labels models by alias and passes unknown ids through', () => {
-    expect(modelLabel(null)).toBe('Engine’s default');
-    expect(modelLabel('opus')).toBe('Most capable');
+    expect(modelLabel(null)).toBe('Default');
+    expect(modelLabel('opus')).toBe('Smartest');
     expect(modelLabel('claude-x')).toBe('claude-x');
   });
 
@@ -378,8 +378,8 @@ describe('formatUsage', () => {
       },
     ];
     expect(modelChoices('claude', engines).map((m) => m.label)).toEqual([
-      'Engine’s default',
-      'Most capable',
+      'Default',
+      'Smartest',
       'Balanced',
       'Fastest',
     ]);

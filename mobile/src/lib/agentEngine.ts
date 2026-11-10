@@ -2,7 +2,7 @@
  * Switching what an agent runs on from Agent controls (the composer's chip):
  * pure, so it is tested. The choices are the desk's (Settings → Agents): only
  * engines the Mac reports as installed and signed in, only the models the
- * engine itself lists, "Engine's default" always (`lib/newAgentDefaults.ts`).
+ * engine itself lists, "Default" always (`lib/newAgentDefaults.ts`).
  * The Mac does the switch with `agents.update` (`MAC_FEATURES.engine`): a new
  * engine starts a new session and carries the conversation over as a recap.
  */

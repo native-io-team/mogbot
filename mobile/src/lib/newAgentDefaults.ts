@@ -2,26 +2,25 @@
  * What new agents start on, as Settings shows it: the Mac's own setting
  * (`agents.overview`'s `defaults`), changed with `agents.setDefaults` on a
  * Mac that serves it. Mirrors the desk's Settings → Agents: only engines the
- * Mac runs, only models an engine itself lists, "Engine's default" always.
+ * Mac runs, only models an engine itself lists, "Default" always.
  */
 
-import type {
-  AgentEngine,
-  EngineInfo,
-  NewAgentDefaults,
-  NewAgentDefaultsChange,
+import {
+  MODEL_DEFAULT,
+  MODEL_PURPOSE,
+  type AgentEngine,
+  type EngineInfo,
+  type NewAgentDefaults,
+  type NewAgentDefaultsChange,
 } from '@shipstudio/companion-protocol';
 
-export const ENGINE_DEFAULT = 'Engine’s default';
+/** No model or effort chosen: Claude Code's or Codex's own pick (the desk's word, `cardWords`). */
+export const ENGINE_DEFAULT = MODEL_DEFAULT;
 
 const ENGINE_NAME: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
 
-/** Claude Code's aliases said by what they're for, as on the desk. */
-const CLAUDE_PURPOSE: Record<string, string> = {
-  opus: 'Most capable',
-  sonnet: 'Balanced',
-  haiku: 'Fastest',
-};
+/** Claude Code's aliases said by what they're for, worded once with the desk. */
+const CLAUDE_PURPOSE: Readonly<Record<string, string>> = MODEL_PURPOSE;
 
 export interface EngineChoice {
   id: AgentEngine;
@@ -47,7 +46,7 @@ export interface ModelOption {
   detail?: string;
 }
 
-/** "Engine's default", then exactly the models the engine listed. */
+/** "Default", then exactly the models the engine listed. */
 export function modelOptions(engine: AgentEngine, engines: EngineInfo[]): ModelOption[] {
   const listed = engines.find((e) => e.id === engine)?.models ?? [];
   return [

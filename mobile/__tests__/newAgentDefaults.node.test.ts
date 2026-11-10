@@ -59,7 +59,7 @@ describe('new agents’ defaults, as Settings shows them', () => {
   it('offers the engine’s default and only the models it listed', () => {
     expect(modelOptions('claude', ENGINES)).toEqual([
       { value: '', label: ENGINE_DEFAULT },
-      { value: 'opus', label: 'Most capable', detail: 'Opus' },
+      { value: 'opus', label: 'Smartest', detail: 'Opus' },
       { value: 'sonnet', label: 'Balanced', detail: 'Sonnet' },
     ]);
     // Nothing listed: nothing invented.
