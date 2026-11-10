@@ -198,7 +198,7 @@
       "owner": "migration",
       "status": "migration",
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 5
+      "consumerCount": 4
     },
     {
       "name": "--transition-fast",
@@ -252,7 +252,7 @@
       "owner": "migration",
       "status": "migration",
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 5
+      "consumerCount": 4
     },
     {
       "name": "--info",
@@ -403,7 +403,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 2
+      "consumerCount": 3
     },
     {
       "name": "--size-control-medium",
@@ -1723,7 +1723,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "consumerCount": 9
+      "consumerCount": 10
     },
     {
       "name": "--button-active-scale",
@@ -4659,7 +4659,7 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "consumerCount": 80
+      "consumerCount": 81
     },
     {
       "name": "--stroke-1-5",
@@ -5083,7 +5083,7 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "consumerCount": 0
+      "consumerCount": 1
     },
     {
       "name": "--ease-arrive",
@@ -5091,7 +5091,7 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "consumerCount": 0
+      "consumerCount": 1
     },
     {
       "name": "--ease-press",
@@ -5243,7 +5243,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 923
+      "consumerCount": 924
     },
     {
       "name": "--text-faint",
@@ -5691,7 +5691,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 7
+      "consumerCount": 8
     },
     {
       "name": "--font-size-subhead",
@@ -5723,7 +5723,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 531
+      "consumerCount": 530
     },
     {
       "name": "--font-size-control",
@@ -5763,7 +5763,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 5
+      "consumerCount": 6
     },
     {
       "name": "--font-size-badge",
@@ -6051,7 +6051,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 748
+      "consumerCount": 750
     },
     {
       "name": "--spacing-sm",
@@ -6059,7 +6059,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 904
+      "consumerCount": 911
     },
     {
       "name": "--spacing-md",
@@ -6067,7 +6067,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 586
+      "consumerCount": 589
     },
     {
       "name": "--spacing-lg",
@@ -6075,7 +6075,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 236
+      "consumerCount": 239
     },
     {
       "name": "--spacing-xl",
@@ -6091,7 +6091,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 71
+      "consumerCount": 70
     },
     {
       "name": "--spacing-tight",
@@ -6443,7 +6443,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 33
+      "consumerCount": 34
     },
     {
       "name": "--shadow-lg",
@@ -6659,7 +6659,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 923
+      "consumerCount": 924
     },
     {
       "name": "--text-faint",
@@ -7003,7 +7003,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 33
+      "consumerCount": 34
     },
     {
       "name": "--shadow-lg",
