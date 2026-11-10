@@ -12,7 +12,17 @@ const dictation = {
   onComposerKeyDown: () => false,
 };
 
-function Chat({ id, onSend, renders }: { id: string; onSend: () => void; renders: () => void }) {
+function Chat({
+  id,
+  onSend,
+  renders,
+  unfilled,
+}: {
+  id: string;
+  onSend: () => void;
+  renders: () => void;
+  unfilled?: string;
+}) {
   renders();
   return (
     <>
@@ -36,6 +46,7 @@ function Chat({ id, onSend, renders }: { id: string; onSend: () => void; renders
         onStop={() => {}}
         onSend={onSend}
         onPickFiles={() => {}}
+        unfilled={unfilled}
       />
     </>
   );
@@ -79,5 +90,25 @@ describe('the composer owns what is typed', () => {
       target: { value: 'use sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH' },
     });
     expect(screen.getByRole('button', { name: 'Store it securely' })).toBeInTheDocument();
+  });
+});
+
+describe('a starter’s brief with its blank still empty', () => {
+  const brief = 'Every weekday at 8am, brief me. My topics: ';
+
+  it('can’t be sent until something is written in the blank', () => {
+    const onSend = vi.fn();
+    setComposerDraft('a1', brief);
+    render(<Chat id="a1" onSend={onSend} renders={() => {}} unfilled={brief} />);
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(screen.getByText('Fill in the end, then send')).toBeInTheDocument();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.change(box, { target: { value: `${brief}AI chips` } });
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+    expect(screen.queryByText('Fill in the end, then send')).toBeNull();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledWith(false);
   });
 });

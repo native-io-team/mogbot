@@ -577,7 +577,7 @@ describe('this Mac signed in as another account', () => {
 });
 
 describe('the total, across every account', () => {
-  it('averages each account’s week, most room first: 100% and 44% read as 72%', () => {
+  it('averages each account’s week, in the work order: 100% and 44% read as 72%', () => {
     const g = usageGlance(
       [acct('default', { name: 'sam@example.com' }), acct('work', { name: 'Work' })],
       inv([
@@ -589,11 +589,11 @@ describe('the total, across every account', () => {
     expect(g.total.left).toBe(72);
     expect(g.total.figure).toBe('72% left');
     expect(g.total.across).toBe('across 2 accounts');
-    // The account in use (44%) is first in the order, but the roomier one leads the bar.
+    // The bar and the list below it share one order: the work order (round 4).
     expect(g.keys.map((k) => k.name)).toEqual(['sam@example.com', 'Work']);
     expect(g.total.segments.map((s) => [s.name, s.left])).toEqual([
-      ['Work', 100],
       ['sam@example.com', 44],
+      ['Work', 100],
     ]);
     // The next refill is the soonest of the weeks counted.
     expect(g.total.refill).toMatchObject({ in: '2d 0h', account: 'sam@example.com' });
@@ -657,7 +657,7 @@ describe('the total, across every account', () => {
     expect(none.total.across).toBe('');
   });
 
-  it('an account out of usage counts as nothing left, and sits last of the read ones', () => {
+  it('an account out of usage counts as nothing left, in its place in the order', () => {
     const g = usageGlance(
       [acct('default', { name: 'A' }), acct('b', { name: 'B' }), acct('c', { name: 'C' })],
       inv([
@@ -668,9 +668,9 @@ describe('the total, across every account', () => {
       { now: NOW }
     );
     expect(g.total.segments.map((s) => [s.name, s.left])).toEqual([
+      ['A', 0],
       ['B', 90],
       ['C', 40],
-      ['A', 0],
     ]);
     expect(g.total.left).toBe(43);
   });

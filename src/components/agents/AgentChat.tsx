@@ -555,6 +555,8 @@ export const AgentChat = memo(function AgentChat({
     />
   ) : null;
   const [usageOpen, setUsageOpen] = useState(false);
+  /** A starter's brief typed in with its blank still empty: not sendable as it is. */
+  const [unfilled, setUnfilled] = useState<string | null>(null);
   // While you drive an agent with no project to open, its session is shown
   // here in place of the conversation, until you ask for the chat.
   const takeover = agent.takeover;
@@ -1303,7 +1305,12 @@ export const AgentChat = memo(function AgentChat({
   );
 
   /** An idea for the Chief: its brief typed out for the user to finish, nothing sent. */
-  const startIdea = (idea: ChiefIdea) => typeStarter(idea.text);
+  // The brief goes in with its blank at the end and the caret on it; until
+  // something is written there, it can't be sent (`unfilled`).
+  const startIdea = (idea: ChiefIdea) => {
+    setUnfilled(idea.text);
+    typeStarter(idea.text);
+  };
   const chiefStarters = <ChiefStarters onIdea={startIdea} onMore={onMoreIdeas} />;
   const template = agent.isMain ? null : templateOf(agent);
   const templateStarters = template && (
@@ -2017,6 +2024,7 @@ export const AgentChat = memo(function AgentChat({
                     onStop={stopNow}
                     onSend={send}
                     onPickFiles={pickFiles}
+                    unfilled={unfilled}
                   />
                 ) : (
                   <div className="agent-composer agent-composer--blocked" role="status">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { describe, expect, it, beforeEach } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { AgentKeyIconPicker } from './AgentKeyIconPicker';
 import { AgentKey } from './AgentKey';
 
@@ -86,7 +86,16 @@ describe('AgentKeyIconPicker', () => {
   it('narrows to a category, and remembers what was picked', async () => {
     const { unmount } = render(<Harness autoFocus={false} />);
     await loaded();
-    fireEvent.click(screen.getByRole('button', { name: 'Animals' }));
+    // The row leads with what people pick by; Lucide's others wait in More.
+    const chips = within(screen.getByRole('group', { name: 'Categories' }))
+      .getAllByRole('button')
+      .map((b) => b.textContent);
+    expect(chips.slice(0, 2)).toEqual(['All', 'Featured']);
+    expect(chips).not.toContain('Animals');
+    expect(chips[chips.length - 1]).toBe('More');
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Animals' }));
+    expect(screen.getByRole('button', { name: 'Animals' })).toBeTruthy();
     const names = screen.getAllByRole('radio').map((r) => r.getAttribute('aria-label'));
     expect(names).toContain('Dog');
     expect(names).not.toContain('Money');

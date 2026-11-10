@@ -420,11 +420,12 @@ export type AgentEffort = 'low' | 'medium' | 'high';
 
 /**
  * How hard an agent thinks, said plainly: Claude Code's `--effort`, Codex's
- * reasoning effort. '' passes nothing (the engine's default). Applies to its
+ * reasoning effort. '' passes nothing: "Its own pick", the engine decides (the menu's
+ * one "Default" is the model's, round 4). Applies to its
  * conversation, not its routines. Must match `EFFORTS` in store.rs.
  */
 export const EFFORT_CHOICES: readonly { value: AgentEffort | ''; label: string }[] = [
-  { value: '', label: MODEL_DEFAULT },
+  { value: '', label: 'Its own pick' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },

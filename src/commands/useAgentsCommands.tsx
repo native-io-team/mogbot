@@ -507,8 +507,10 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         category: 'navigation',
         keywords: ['logs', 'debug', 'why', 'died', 'error', 'finder', 'library', 'trace'],
         run: () => {
-          openLogs().catch((e: unknown) =>
-            showToast(`Couldn't open the logs: ${String(e)}`, 'error')
+          // Finder opens outside the app: a quiet line says it happened.
+          openLogs().then(
+            () => showToast('Opened the logs folder in Finder', 'success'),
+            (e: unknown) => showToast(`Couldn't open the logs: ${String(e)}`, 'error')
           );
         },
       },

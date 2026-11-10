@@ -23,6 +23,8 @@ interface HomeSidebarProps {
   listContent?: ReactNode;
   /** Agents mode's line at the sidebar's foot. */
   footerContent?: ReactNode;
+  /** Agents mode's create actions, pinned under the list (never scrolled away). */
+  listActions?: ReactNode;
   onGoHome: () => void;
   /** The Projects | Agents toggle: back to wherever you were on each side. */
   onGoProjects: () => void;
@@ -56,6 +58,7 @@ export function HomeSidebar({
   navContent,
   listContent,
   footerContent,
+  listActions,
   isSidebarHidden,
   onToggleSidebar,
   onOpenProjectPicker,
@@ -83,6 +86,7 @@ export function HomeSidebar({
       navContent={navContent}
       listContent={listContent}
       footerContent={footerContent}
+      listActions={listActions}
       onOpenProjectPicker={onOpenProjectPicker}
       isSidebarHidden={isSidebarHidden}
       onToggleSidebar={onToggleSidebar}

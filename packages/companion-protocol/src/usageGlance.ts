@@ -16,7 +16,7 @@
  * - **Estimates say so.** The one forward-looking line ("Runs out ~Thu") is
  *   the Mac's estimate across accounts (`totals.runOut`), labelled, and
  *   absent with too little history.
- * - **"Where did my usage go"** lists what this app ran while a meter rose
+ * - **"Where it went"** lists what this app ran while a meter rose
  *   and never splits points between runs; when nothing here ran, it says the
  *   account was used elsewhere.
  */
@@ -86,7 +86,7 @@ export interface KeyLimit {
   runOut?: { at: number; along: number; text: string };
 }
 
-/** One rise in a meter, said for "Where did my usage go". */
+/** One rise in a meter, said for "Where it went". */
 export interface ChangeLine {
   key: string;
   /** "Weekly 68% → 33% left": said as what is left, as every figure is. */
@@ -658,8 +658,7 @@ function keyOf(
       state === 'out'
         ? ([...general]
             .filter((l) => l.left === 0 && l.resetsAtMs !== undefined)
-            .sort((a, b) => (a.resetsAtMs as number) - (b.resetsAtMs as number))[0] ??
-          shareLimit)
+            .sort((a, b) => (a.resetsAtMs as number) - (b.resetsAtMs as number))[0] ?? shareLimit)
         : shareLimit,
     changes: changeLines(row.engine, line?.changes, now),
     fix,
@@ -693,7 +692,7 @@ function planWord(plan: string | undefined): string | null {
 
 /**
  * The total across every real account: each read account's share, counted
- * equally, most room first; an account with no reading shown but never
+ * equally, in the work order; an account with no reading shown but never
  * counted as room.
  */
 export function totalOf(
@@ -723,15 +722,9 @@ export function totalOf(
       words: `${k.name}: ${room}${refill ? `, refills in ${refill}` : ''}`,
     };
   };
-  const segments = [
-    ...[...read].sort(
-      (a, b) =>
-        (b.share as number) - (a.share as number) ||
-        a.engine.localeCompare(b.engine) ||
-        a.position - b.position
-    ),
-    ...unread,
-  ].map(segment);
+  // In the work order, as the list under it (round 4: the bar sorted by
+  // room and the list by order put the same accounts in two orders).
+  const segments = real.map(segment);
   const left =
     read.length > 0
       ? Math.round(read.reduce((n, k) => n + (k.share as number), 0) / read.length)
@@ -752,8 +745,7 @@ export function totalOf(
     .sort((a, b) => resetAt(a.l, now) - resetAt(b.l, now))[0];
   return {
     left,
-    figure:
-      left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not read yet',
+    figure: left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not read yet',
     across: left === null ? '' : across,
     unread:
       unread.length > 0 && read.length > 0

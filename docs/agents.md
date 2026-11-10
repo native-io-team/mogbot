@@ -976,13 +976,15 @@ steps has no line.
 
 For people who live in a terminal and want to see what ran:
 
-- **Ran on**: beside the folded line, "Claude Code · sam@acme.com ·
-  claude-opus-4-6". The engine and account are the ones the runner started
+- **Ran on**: beside the folded line, "Claude Code · sam@acme.com · Opus"
+  (the model in the Model menu's words, `modelWords`; the id as reported in
+  its tooltip). The engine and account are the ones the runner started
   the turn on (`work::on_ran_on`; the last try's, when a limit moved it).
   The model is only what the engine said: Claude Code's `system/init`
   event, Codex's `thread/start` result (`Step::Model`). Absent when it
   didn't say; nothing is inferred from the agent's settings.
-- **Show exact command**: under a step, the command line (or the tool and
+- **Exact command**: a kept step's own words open it (a chevron at their
+  trailing edge; no link per step), the command line (or the tool and
   its input) exactly as it ran. It is kept beside the timeline in
   `<home>/turn-detail/<message-id>.json`, never on the step (which carries
   only `hasExact`), so the status, the phone and notifications never see it.
@@ -4789,7 +4791,7 @@ account as …", this Mac's sign-in having changed); "Limits" with Limits |
 Tokens at its right: the limit cards (5-hour, weekly, per-model, each with
 its countdown chip, pace marker, the Mac's labelled run-out estimate and the
 pace in words) or "Used by these agents this week" as a table (agent key,
-name, tokens, messages); and "Where did my usage go". Adding is one click
+name, tokens, messages); and "Where it went". Adding is one click
 per engine (a free name, then its sign-in). Onboarding offers adding right
 after the engine's sign-in ("Add another account?", skippable). The phone
 has the same two levels: the Usage sheet (the total, then a row per
@@ -4853,7 +4855,7 @@ do and when it refills (`usageGlance` `row`): the total ("72% left", or
 the total bar and "Refills in 2d 4h". Its corner dot shows only when the
 user must act or agents are out; the phone's Agents list says the same.
 
-**Where did my usage go** (`agents/usage_story.rs`). Each turn's tokens are
+**Where it went** (`agents/usage_story.rs`). Each turn's tokens are
 recorded per account with its agent, and its routine when it ran one alone
 (`usage_plan::add_turn`, `tag_routine`; kept 8 days). For each rise of at
 least 2 points in an account's 5-hour or weekly meter (consecutive readings

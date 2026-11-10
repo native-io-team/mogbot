@@ -16,7 +16,6 @@ import {
   type AgentEffort,
   type EngineInfo,
 } from '@shipstudio/companion-protocol';
-import { ENGINE_DEFAULT } from './newAgentDefaults';
 
 const ENGINE_NAME = { claude: 'Claude Code', codex: 'Codex' } as const;
 
@@ -108,7 +107,7 @@ export function chipLabel(
 
 /** The effort rows: the engine's default, then the three levels. */
 export const effortRows = (): { value: AgentEffort | ''; label: string; detail?: string }[] => [
-  { value: '', label: ENGINE_DEFAULT },
+  { value: '', label: 'Its own pick' },
   ...AGENT_EFFORTS.map((e) => ({ value: e, label: EFFORT_LABEL[e], detail: EFFORT_DETAIL[e] })),
 ];
 

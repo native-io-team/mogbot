@@ -46,7 +46,14 @@ import { BrowserStill } from './AgentBrowserLive';
 import { stepLine } from '../../../packages/companion-protocol/src/work';
 import { useTurnSteps } from '../../lib/turnSteps';
 import { stepIndex } from '../../lib/agentDesk';
-import { BriefingLink, ExactCommand, RanOn, type ExactRef } from './AgentWorkDetail';
+import {
+  BriefingLink,
+  ExactBody,
+  ExactToggle,
+  RanOn,
+  useExact,
+  type ExactRef,
+} from './AgentWorkDetail';
 
 type IconComponent = ComponentType<{ size?: number }>;
 
@@ -99,12 +106,21 @@ function StepRow({
       data-detail={line !== step.label || undefined}
     >
       <StepIcon kind={step.kind} />
-      <span className="agent-work__label" title={line}>
-        {line}
-      </span>
-      <time className="agent-work__time" dateTime={new Date(step.at).toISOString()}>
-        {stepOffset(step, startedAt)}
-      </time>
+      {step.hasExact && exact ? (
+        <ExactStepParts
+          at={exact}
+          line={line}
+          command={step.kind === 'command'}
+          time={<StepTime step={step} startedAt={startedAt} />}
+        />
+      ) : (
+        <>
+          <span className="agent-work__label" title={line}>
+            {line}
+          </span>
+          <StepTime step={step} startedAt={startedAt} />
+        </>
+      )}
       {step.image && (
         <div className="agent-work__shot">
           <MessageAttachments agent={agent} attachments={[step.image]} side="agent" />
@@ -115,8 +131,37 @@ function StepRow({
           <StepOutput step={step} />
         </div>
       )}
-      {step.hasExact && exact && <ExactCommand at={exact} command={step.kind === 'command'} />}
     </li>
+  );
+}
+
+function StepTime({ step, startedAt }: { step: WorkStep; startedAt: number }) {
+  return (
+    <time className="agent-work__time" dateTime={new Date(step.at).toISOString()}>
+      {stepOffset(step, startedAt)}
+    </time>
+  );
+}
+
+/** A kept step: its words are the toggle, its time beside them, the command under both. */
+function ExactStepParts({
+  at,
+  line,
+  command,
+  time,
+}: {
+  at: ExactRef;
+  line: string;
+  command: boolean;
+  time: ReactNode;
+}) {
+  const exact = useExact(at);
+  return (
+    <>
+      <ExactToggle exact={exact} line={line} command={command} />
+      {time}
+      <ExactBody exact={exact} />
+    </>
   );
 }
 
@@ -156,10 +201,12 @@ interface StepListProps {
   live?: { activity: string | null | undefined; current?: CurrentStep | null };
   /** A finished turn: the line it's kept under, for each step's exact command. */
   kept?: { agentId: string; messageId: string };
+  /** A finished turn's footer, after the files: "What it was told". */
+  foot?: ReactNode;
 }
 
 /** The steps, oldest first, and the files the turn edited. */
-function StepList({ work, agent, live, kept }: StepListProps) {
+function StepList({ work, agent, live, kept, foot }: StepListProps) {
   const steps = live
     ? live.current
       ? withoutCall(work.steps, live.current.call)
@@ -187,11 +234,17 @@ function StepList({ work, agent, live, kept }: StepListProps) {
         ))}
         {live?.current && <CurrentRow current={live.current} />}
       </ol>
-      {!live && files.length > 0 && (
-        <p className="agent-work__files">
-          <span className="agent-work__files-label">Edited</span> {files.join(', ')}
-          {more > 0 && ` and ${more} more`}
-        </p>
+      {!live && (files.length > 0 || foot) && (
+        // Under a hairline, in the footer's ink: about the turn, not more steps.
+        <div className="agent-work__foot">
+          {files.length > 0 && (
+            <p className="agent-work__files">
+              <span className="agent-work__files-label">Edited</span> {files.join(', ')}
+              {more > 0 && ` and ${more} more`}
+            </p>
+          )}
+          {foot}
+        </div>
       )}
     </>
   );
@@ -240,8 +293,12 @@ function FinishedSteps({ work, agent, messageId, ownerId }: WorkTimelineProps) {
       return (
         <>
           <BrowserStill agent={agent} work={steps.work} />
-          <StepList work={steps.work} agent={agent} kept={{ agentId: ownerId, messageId }} />
-          <BriefingLink agentId={ownerId} messageId={messageId} />
+          <StepList
+            work={steps.work}
+            agent={agent}
+            kept={{ agentId: ownerId, messageId }}
+            foot={<BriefingLink agentId={ownerId} messageId={messageId} />}
+          />
         </>
       );
     case 'reading':

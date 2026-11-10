@@ -325,10 +325,11 @@
 /* New agent / New room start on the rows' column, not centred in space:
    the icon sits in a badge-wide box so its label lines up with the names.
    Actions, not rows: shorter than an agent, one after the other with no gap,
-   and in the secondary text colour so they read as available. */
+   and in the secondary text colour so they read as available. Pinned under
+   the list, outside its scroller (AgentsSidebarActions), so a long list or
+   project groups never push them under the footer (round 4, #10). */
 .workspace-sidebar:not(.is-hidden) .agents-list__new,
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room,
-.workspace-sidebar:not(.is-hidden) .agents-list__routines {
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room {
   justify-content: flex-start;
   gap: var(--spacing-sm);
   height: var(--control-height-standard);
@@ -338,18 +339,20 @@
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new:hover:not(:disabled),
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room:hover:not(:disabled),
-.workspace-sidebar:not(.is-hidden) .agents-list__routines:hover:not(:disabled) {
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room:hover:not(:disabled) {
   color: var(--text-primary);
 }
 
-.workspace-sidebar:not(.is-hidden) .agents-list__new {
-  margin-top: var(--spacing-xs);
+/* Pinned under the scroller, the actions sit on the list's hairline. */
+.workspace-sidebar-pinned-actions {
+  flex-shrink: 0;
+  padding-bottom: var(--spacing-xs);
 }
 
-/* Routines is a page, not an action: open, it wears the selected fill like
-   the agent rows and the Usage row (round 4). */
-.workspace-sidebar:not(.is-hidden) .agents-list__routines[aria-current='page'] {
+/* Routines is a page, not an action: in the footer beside Usage, in the
+   footer rows' shape; open, it wears the selected fill like the agent rows
+   and the Usage row (round 4). */
+.agents-list__routines[aria-current='page'] {
   background: var(--surface-selected);
   color: var(--text-primary);
 }
@@ -404,8 +407,7 @@
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room > svg,
-.workspace-sidebar:not(.is-hidden) .agents-list__routines > svg {
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room > svg {
   box-sizing: content-box;
   padding: 0 calc((var(--size-sidebar-project-shortcut) - 16px) / 2); /* css-ok: centre a 16px icon in the badge width */
 }

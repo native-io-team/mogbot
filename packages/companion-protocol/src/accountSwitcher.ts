@@ -351,7 +351,7 @@ export function workingLine(
     tone: tight && tight.tone !== 'calm' ? (tight.tone === 'limited' ? 'out' : 'warning') : 'ok',
     detail: tight
       ? `${lead} ${tight.left}% of its ${tight.label.toLowerCase()} limit left${tight.resets ? `, ${tight.resets}` : ''}.`
-      : `${lead} No usage reading yet.`,
+      : `${lead} Its usage is not read yet.`,
     several,
   };
 }

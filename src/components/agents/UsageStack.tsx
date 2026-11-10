@@ -1,6 +1,6 @@
 /**
  * Usage, drawn. The total first: one bar made of a segment per real
- * account, most room first, each filled to what that account adds
+ * account, in the work order, each filled to what that account adds
  * (`TotalBar`), so 100% and 44% read at a glance as "most of my limit is
  * left". Then each account as one row (`AccountRow`) that opens its own
  * page (`AccountDetail`): its limit cards against pace, who used it, where
@@ -60,7 +60,7 @@ export const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
 /* ------------------------------------------------------------ the total */
 
 /**
- * The total as one bar: a segment per account, most room first, each filled
+ * The total as one bar: a segment per account, in the work order, each filled
  * to what it adds. Large, each segment and its label are one button that
  * opens that account; small (the sidebar row), it is a picture.
  */
@@ -136,6 +136,7 @@ function Segment({
       data-state={state}
       data-tone={tone}
       data-unread={left === null || undefined}
+      data-empty={left === 0 || undefined}
       aria-hidden
     >
       <span
@@ -423,8 +424,15 @@ export function AccountDetail({
       aria-label={`${k.name}, ${k.stateLabel}`}
     >
       <header className="usage-account__head">
-        <span className="usage-cap" data-size="large" data-state={k.state} aria-hidden>
-          {k.position}
+        {/* The cap says its place; the line beside it doesn't say it again. */}
+        <span
+          className="usage-cap"
+          data-size="large"
+          data-state={k.state}
+          title={`${ordinal(k.position)} in the order`}
+        >
+          <span aria-hidden>{k.position}</span>
+          <span className="sr-only">{`${ordinal(k.position)} in the order`}</span>
         </span>
         <div className="usage-account__title">
           <div className="usage-account__name-row">
@@ -454,9 +462,7 @@ export function AccountDetail({
             )}
             <StatusPill tone={PILL[k.state]}>{k.stateLabel}</StatusPill>
           </div>
-          <span className="usage-account__detail">
-            {[`${ordinal(k.position)} in the order`, ...k.detail].join(' · ')}
-          </span>
+          <span className="usage-account__detail">{k.detail.join(' · ')}</span>
         </div>
         <div className="usage-account__actions">
           {k.canUse && (
@@ -601,7 +607,7 @@ export function AccountDetail({
       )}
 
       {k.changes.length > 0 && (
-        <Section id={`usage-account-${k.id}-story`} title="Where did my usage go">
+        <Section id={`usage-account-${k.id}-story`} title="Where it went">
           <ol className="usage-key__story" aria-label={`Where ${k.name}’s usage went`}>
             {k.changes.map((c) => (
               <li
@@ -625,8 +631,8 @@ export function AccountDetail({
             ))}
           </ol>
           <p className="usage-section__muted">
-            Each task is listed with the tokens Claude Code or Codex reported; the points aren’t
-            split between them. Use of the same plan outside these agents counts too.
+            Each task shows the tokens its engine reported; a rise isn’t divided between tasks. Use
+            of the same plan outside these agents counts too.
           </p>
         </Section>
       )}

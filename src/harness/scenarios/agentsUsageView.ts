@@ -550,7 +550,7 @@ function trio(
 }
 
 const PAGE =
-  'A breadcrumb with a back arrow, “Usage › <name>”. A sheet with a large keycap, the name, a status pill and “1st in the order · Max plan · …”, with “Use this one now” (when it isn’t in use) and ⋯ at the right. Then “Limits” with Limits | Tokens at its right, the limit cards (5-hour, Weekly, per-model) with countdown chips, a big “% left”, the pace-marked bar and the pace sentence, then “Where did my usage go” when there is something to say.';
+  'The page header is the breadcrumb, “Usage › <name>” (Usage a quieter link back), with no second breadcrumb line under it. A sheet with a large keycap holding its place in the order, the name, a status pill and “Max plan · …” (the place not said again), with “Use this one now” (when it isn’t in use) and ⋯ at the right. Then “Limits” with Limits | Tokens at its right, the limit cards (5-hour, Weekly, per-model) with countdown chips, a big “% left”, the pace-marked bar and the pace sentence, then “Where it went” when there is something to say.';
 
 export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(

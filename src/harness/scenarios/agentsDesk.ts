@@ -136,7 +136,7 @@ export const agentsDeskScenarios: Scenario[] = [
     id: 'agents-desk-ran-on',
     title: 'Agents — which account and model ran a turn, and a step’s exact command',
     looksRightWhen:
-      'Acme Site’s chat. Beside the folded “Worked 6 min · 4 steps · edited 1 file” line, in quieter muted text: “Claude Code · sam@acme.com · claude-opus-4-6”. The line is open: four steps, each with a quiet disclosure under its label (“Show details” under the read and the edit, “Show exact command” under the two commands); under “Ran npm test” it is open, showing “npm test -- --watch=false” in a small recessed monospace box with Copy under it. At the end, a quiet “What it was told” link.',
+      'Acme Site’s chat. Beside the folded “Worked 6 min · 4 steps · edited 1 file” line, in quieter muted text: “Claude Code · sam@acme.com · Opus” (the model id only in its tooltip). The line is open: four steps, one line each, no link under any; each kept step ends in a small muted chevron after its words, and the step’s words open it. “Ran npm test” is open (its chevron turned down), showing “npm test -- --watch=false” in a small recessed monospace box with a Copy icon and word, not underlined. After the steps, a hairline at the steps’ text edge, then the footer in muted ink: “Edited pricing.css” and an underlined “What it was told”: neither reads as one more step.',
     requires: '.agent-work__exact-text',
     openSelector: AGENTS_TAB,
     steps: [
@@ -144,7 +144,7 @@ export const agentsDeskScenarios: Scenario[] = [
       openSteps,
       {
         click:
-          '[data-message-ids="desk-pricing"] .agent-work__step:nth-child(3) .agent-work__exact button',
+          '[data-message-ids="desk-pricing"] .agent-work__step:nth-child(3) .agent-work__exact-toggle',
       },
     ],
     commands: deskCommands,
@@ -153,7 +153,7 @@ export const agentsDeskScenarios: Scenario[] = [
     id: 'agents-desk-briefing',
     title: 'Agents — what a turn was told, read-only',
     looksRightWhen:
-      'A dialog titled “What it was told” with Copy all and a close button in its header. A muted line says when it was given, that the app wrote it on top of the agent’s own instructions, that it is read-only and secrets are blanked. Then folding sections: “Who it is” open with its text in a recessed box in the reading face, the body inset on the header’s edges; “How you talk”, “How much to do on your own”, “Secrets” (whose text shows [secret:STRIPE_KEY], never a value) and “Its instructions and memory” folded. Nothing is editable.',
+      'A dialog titled “What it was told” with Copy all and a close button in its header. A muted line says when it was given, that the app wrote it on top of the agent’s own instructions, that it is read-only and secrets are blanked. Then folding sections, each led by the app’s small chevron (never the browser’s black triangle), turned down when open: “Who it is” open with its text in a recessed box in the reading face, the body inset on the header’s edges; “How you talk”, “How much to do on your own”, “Secrets” (whose text shows [secret:STRIPE_KEY], never a value) and “Its instructions and memory” folded. Nothing is editable.',
     requires: '.agent-briefing__section',
     openSelector: AGENTS_TAB,
     steps: [openAcme, openSteps, { click: '.agent-work .text-button', text: 'What it was told' }],
@@ -163,7 +163,7 @@ export const agentsDeskScenarios: Scenario[] = [
     id: 'agents-desk-routines',
     title: 'Agents — every routine in one list, with Pause all asking first',
     looksRightWhen:
-      'The main pane is “Routines”. A muted count (“… on · 1 paused, across … agents”), then the confirm panel: “Pause all … running routines? Nothing runs until you resume them.” with Cancel and a neutral (not accent) Pause all at the card’s trailing edge, 8px apart. Below, one row per routine on hairlines: the agent’s small key, its name as a link and the routine’s note cut to one line, then a muted line in words (“Every weekday at 9:00 AM · next tomorrow at 9:00 AM”, “Every 4 hours · paused · last: didn’t run after 2 tries”: lower case after the first word) and an on/off switch on the right; the paused one is off and quieter. The sidebar’s Routines row wears the selected fill.',
+      'The main pane is “Routines”. A muted count (“… on · 1 paused, across … agents”), then the confirm panel: “Pause all … running routines? Nothing runs until you resume them.” with Cancel and a neutral (not accent) Pause all at the card’s trailing edge, 8px apart. Below, one row per routine on hairlines: the agent’s small key, its name as a link and the routine’s note cut to one line, then a muted line in words (“Every weekday at 9:00 AM · next tomorrow at 9:00 AM”, “Every 4 hours · paused · last: didn’t run after 2 tries”: lower case after the first word) and an on/off switch on the right; the paused one is off and quieter. The sidebar’s Routines row, in the footer beside Usage (pages together; New agent and New room pinned under the list), wears the selected fill.',
     requires: '.agents-routines__confirm',
     openSelector: AGENTS_TAB,
     steps: [
@@ -186,7 +186,7 @@ export const agentsDeskScenarios: Scenario[] = [
     id: 'agents-desk-groups',
     title: 'Agents — the agent list grouped by project',
     looksRightWhen:
-      'The sidebar: the Chief of Staff first and ungrouped, then folding group headers in the Hidden toggle’s quiet style, each with a chevron turned down and a count on the right: “acme-marketing 1” over Acme Site, “northwind-crm 1” over Lead Gen, then “Not in a project” over the rest. Rows look exactly as they do ungrouped.',
+      'The sidebar: New agent and New room are pinned under the list, never under the Usage footer, and Routines sits in the footer with Usage. The list: the Chief of Staff first and ungrouped, then folding group headers in the Hidden toggle’s quiet style, each with a chevron turned down and a count on the right: “acme-marketing 1” over Acme Site, “northwind-crm 1” over Lead Gen, then “Not in a project” over the rest. Rows look exactly as they do ungrouped.',
     requires: '.agents-list__group-toggle',
     openSelector: AGENTS_TAB,
     storage: {
