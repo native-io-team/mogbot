@@ -18,8 +18,8 @@ import {
   syncQuickActions,
   type QuickTarget,
 } from '../lib/quickActions';
-import { answerFromNotification, boot, startDemo, watchLifecycle } from '../lib/session';
-import { answerOf, requestIdOf } from '../lib/actionable';
+import { answerFromNotification, boot, send, startDemo, watchLifecycle } from '../lib/session';
+import { answerOf, replyOf, requestIdOf } from '../lib/actionable';
 import { screenshotRoute } from '../lib/screenshots';
 import { useApp } from '../lib/store';
 import { sheet, useStackOptions } from '../lib/navigation';
@@ -184,6 +184,12 @@ export default function RootLayout() {
         response && `${response.notification.request.identifier}@${response.notification.date}`;
       if (!target || !key || seen.current.has(key)) return;
       seen.current.add(key);
+      // Reply typed on the notification: to that agent, as from its chat.
+      const reply = replyOf(response.actionIdentifier, response.userText);
+      if (reply !== null) {
+        void send(target.agentId, reply).catch(() => {});
+        return;
+      }
       // Allow / Deny on the notification: answered without opening anything.
       const allow = answerOf(response.actionIdentifier);
       if (allow !== null) {

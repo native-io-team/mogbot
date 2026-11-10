@@ -18,6 +18,7 @@ import type { Agent, Alert, TeamSetupView } from '@shipstudio/companion-protocol
 import { needsYouCount } from '@shipstudio/companion-protocol';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { REPLY_CATEGORY } from './actionable';
 
 /** What a notification is about, from a local alert's data or a push's payload. */
 export interface Target {
@@ -88,6 +89,8 @@ export async function post(alert: Alert) {
       title: alert.title,
       body: alert.body,
       threadIdentifier: alert.agentId,
+      // An agent's reply can be answered on the notification (`REPLY_CATEGORY`).
+      ...(alert.kind === 'reply' ? { categoryIdentifier: REPLY_CATEGORY } : {}),
       data: { agentId: alert.agentId, messageId: alert.messageId ?? null, kind: alert.kind },
     },
     trigger:

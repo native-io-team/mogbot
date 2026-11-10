@@ -27,6 +27,9 @@ describe('voice in the app config', () => {
 
   it('has no Live Activity extension unless asked for, and keeps expo-widgets out', () => {
     expect(liveActivity({})).toBe(false);
+    // The store build (a paid team) has it, unless turned off.
+    expect(liveActivity({ COMPANION_STORE_BUILD: '1' })).toBe(true);
+    expect(liveActivity({ COMPANION_STORE_BUILD: '1', SHIPSTUDIO_LIVE_ACTIVITY: '0' })).toBe(false);
     const c = appConfig();
     expect(pluginNames(c)).not.toContain('expo-widgets');
     expect(c.extra?.liveActivity).toBe(false);

@@ -40,7 +40,7 @@ import { answersInPlace } from './needsYou';
 import type { Target } from './notify';
 
 /** Action ids, as the response hands them back. */
-export const ACTION = { allow: 'allow', deny: 'deny', review: 'review' } as const;
+export const ACTION = { allow: 'allow', deny: 'deny', review: 'review', reply: 'reply' } as const;
 
 /** One category per pair of words, and Review for the rest. */
 export const CATEGORY = {
@@ -51,6 +51,14 @@ export const CATEGORY = {
   review: 'ask-review',
 } as const;
 export type CategoryId = (typeof CATEGORY)[keyof typeof CATEGORY];
+
+/**
+ * An agent's reply (a question, mostly): **Reply** types an answer on the
+ * notification, sent to that agent as a message from its chat would be
+ * (`send`, the outbox when the Mac is away). Sending is telling an agent to
+ * act, so on iOS it asks for Face ID / the passcode first, as Allow does.
+ */
+export const REPLY_CATEGORY = 'agent-reply';
 
 const WORDS: Record<Exclude<CategoryId, 'ask-review'>, [deny: string, allow: string]> = {
   [CATEGORY.answer]: ['Deny', 'Allow'],
@@ -93,6 +101,20 @@ export function categories(platform: string): Notifications.NotificationCategory
   });
   return [
     ...answerCats,
+    {
+      identifier: REPLY_CATEGORY,
+      actions: [
+        {
+          identifier: ACTION.reply,
+          buttonTitle: 'Reply',
+          textInput: { submitButtonTitle: 'Send', placeholder: 'Reply' },
+          options: ios
+            ? { opensAppToForeground: false, isAuthenticationRequired: true }
+            : { opensAppToForeground: false },
+        },
+      ],
+      options: { showTitle: true },
+    },
     {
       identifier: CATEGORY.review,
       actions: [
@@ -251,6 +273,13 @@ export function approvalNotice(
 // ---- Answering ------------------------------------------------------------------
 
 /** What tapping a button means. Null: a plain tap (or Review), which opens the app. */
+/** The words typed on an agent reply's notification, if that's what this was. */
+export function replyOf(actionIdentifier: string, userText: string | undefined): string | null {
+  if (actionIdentifier !== ACTION.reply) return null;
+  const text = (userText ?? '').trim();
+  return text ? text : null;
+}
+
 export function answerOf(actionIdentifier: string): boolean | null {
   if (actionIdentifier === ACTION.allow) return true;
   if (actionIdentifier === ACTION.deny) return false;

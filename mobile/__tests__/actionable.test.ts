@@ -16,6 +16,8 @@ import {
   categories,
   redact,
   type AnswerDeps,
+  REPLY_CATEGORY,
+  replyOf,
 } from '../src/lib/actionable';
 import { msg } from './helpers';
 
@@ -38,7 +40,9 @@ const card = (over: Partial<Approval> = {}, status: Approval['status'] = 'pendin
 
 describe('categories', () => {
   it.each(['ios', 'android'])('%s: Deny never opens the app; every pair has both', (os) => {
-    for (const c of categories(os).filter((x) => x.identifier !== CATEGORY.review)) {
+    for (const c of categories(os).filter(
+      (x) => x.identifier !== CATEGORY.review && x.identifier !== REPLY_CATEGORY
+    )) {
       const deny = c.actions.find((x) => x.identifier === ACTION.deny);
       const allow = c.actions.find((x) => x.identifier === ACTION.allow);
       expect(deny?.options?.opensAppToForeground).toBe(false);
@@ -58,6 +62,17 @@ describe('categories', () => {
       const allow = c.actions.find((x) => x.identifier === ACTION.allow);
       if (allow) expect(allow.options?.opensAppToForeground).toBe(true);
     }
+  });
+
+  it('Reply types an answer on the notification, after Face ID on iOS', () => {
+    const reply = categories('ios').find((c) => c.identifier === REPLY_CATEGORY);
+    expect(reply?.actions.map((a) => a.identifier)).toEqual([ACTION.reply]);
+    expect(reply?.actions[0].textInput?.submitButtonTitle).toBe('Send');
+    expect(reply?.actions[0].options?.isAuthenticationRequired).toBe(true);
+    expect(reply?.actions[0].options?.opensAppToForeground).toBe(false);
+    expect(replyOf(ACTION.reply, '  Designer first ')).toBe('Designer first');
+    expect(replyOf(ACTION.reply, '   ')).toBeNull();
+    expect(replyOf(ACTION.allow, 'x')).toBeNull();
   });
 
   it('Review only opens, and has no Allow', () => {

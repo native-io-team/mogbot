@@ -118,7 +118,8 @@ export const UPLOAD_KEY_PROPS = [
   'COMPANION_UPLOAD_KEY_ALIAS',
   'COMPANION_UPLOAD_KEY_PASSWORD',
 ] as const;
-const RELEASE_DEBUG_SIGNING = /(release \{\n(?:\s*\/\/.*\n)*\s*)signingConfig signingConfigs\.debug/;
+const RELEASE_DEBUG_SIGNING =
+  /(release \{\n(?:\s*\/\/.*\n)*\s*)signingConfig signingConfigs\.debug/;
 export const UPLOAD_SIGNING_MARK = '// Upload key (docs/play-store.md, "Signing")';
 export function withUploadSigning(gradle: string): string {
   if (gradle.includes(UPLOAD_SIGNING_MARK)) return gradle;
@@ -239,11 +240,13 @@ const shareExtension = process.env.SHIPSTUDIO_SHARE_EXTENSION === '1';
  * The Live Activity while an agent works (src/lib/liveActivity.ts) is a
  * widget extension, which expo-widgets adds, with an App Group a free Apple
  * team can't always sign. Off unless asked for, as the share extension is,
- * so `expo prebuild` for a free-team self-build is unchanged. The flag also
- * reaches the app as `extra.liveActivity`, which is what it checks.
+ * so `expo prebuild` for a free-team self-build is unchanged. The store
+ * build (the owner's paid team signs the App Group) has it unless
+ * `SHIPSTUDIO_LIVE_ACTIVITY=0`. The flag also reaches the app as
+ * `extra.liveActivity`, which is what it checks.
  */
 export const liveActivity = (env: Record<string, string | undefined> = process.env): boolean =>
-  env.SHIPSTUDIO_LIVE_ACTIVITY === '1';
+  env.SHIPSTUDIO_LIVE_ACTIVITY === '1' || (storeBuild(env) && env.SHIPSTUDIO_LIVE_ACTIVITY !== '0');
 /**
  * Without the Live Activity, expo-widgets isn't linked into the app at all:
  * autolinking would otherwise add its pod to every build, with a build phase
