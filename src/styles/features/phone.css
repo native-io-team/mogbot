@@ -127,8 +127,6 @@
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-heading);
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .phone-dot {

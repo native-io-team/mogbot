@@ -23,8 +23,12 @@ import { Linking, Platform } from 'react-native';
 
 /** Where the desk keeps the phone (its Settings section, `lib/settingsPages.ts`). */
 export const PHONE_SETTINGS = 'Settings → Phone';
-/** Where the desk shows a pairing code: the Phone section's button. */
-export const WHERE_TO_PAIR = `${PHONE_SETTINGS} → Show code`;
+/**
+ * Where the desk shows a pairing code: the Phone panel's button. The panel is
+ * the same whether it's opened from Settings or the phone line at the foot of
+ * the sidebar ("Get the phone app"), and is titled "Phone" both ways.
+ */
+export const WHERE_TO_PAIR = 'Phone (in Settings, or the phone line at the foot of the sidebar) → Show code';
 
 /** One paired Mac. Multiple Macs are P3. */
 export interface Credentials {
