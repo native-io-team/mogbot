@@ -77,6 +77,7 @@ import { onAccountSignIn, takeAccountSignIn } from '../../lib/settingsFromChat';
 import { ADD_ACCOUNT_WHY } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { AccountSignIn } from './AccountSignIn';
 import { EngineSignInModal } from './EngineSignInModal';
+import { AgentKey } from './AgentKey';
 import { AgentsCrossover } from './AgentsCrossover';
 import { SpareList } from './AgentsUsage';
 import { useUsageGlance } from './AccountSwitcher';
@@ -88,7 +89,10 @@ export function AgentsUsageView() {
   return (
     <section className="agent-chat agents-usage-view" aria-label="Usage">
       <header className="agent-chat__header">
-        <div className="agent-chat__title">Usage</div>
+        <div className="agent-chat__title">
+          <AgentKey name="Usage" colorway="putty" icon="lucide:gauge" size="md" />
+          <h2 className="agent-chat__name">Usage</h2>
+        </div>
       </header>
       <div
         className="agent-chat__scroll"

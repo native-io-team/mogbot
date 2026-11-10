@@ -90,7 +90,7 @@ export function AgentsRoutinesView({
     <section className="agent-chat agents-team agents-routines" aria-label="Routines">
       <header className="agent-chat__header">
         <div className="agent-chat__title">
-          <AgentKey name="Routines" colorway="putty" icon="people" size="md" />
+          <AgentKey name="Routines" colorway="putty" icon="lucide:calendar-clock" size="md" />
           <h2 className="agent-chat__name">Routines</h2>
         </div>
       </header>

@@ -23,6 +23,8 @@ const store = vi.hoisted(() => ({
 vi.mock('../../lib/agentsStore', () => ({
   refreshAgents: () => Promise.resolve(),
   useAgentsSelector: (select: (s: unknown) => unknown) => select(store),
+  subscribeAgents: () => () => {},
+  getAgentsSnapshot: () => store,
 }));
 
 import { AccountSwitcher, AgentAccountChip, glanceStatus, rowPill } from './AccountSwitcher';
