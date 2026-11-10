@@ -32,7 +32,7 @@
     "appStore": null,
     "testFlight": "https://testflight.apple.com/join/fsm64m5E",
     "pushRelay": null,
-    "macDownload": "https://github.com/native-io-team/mogbot-releases"
+    "macDownload": "https://mogbot.app/start"
   },
   "chromeExtension": {
     "webStoreId": null

@@ -330,7 +330,7 @@ keep running on your Mac.`
 for the marketing site (`~/ShipStudio/mogbot-site`, `src/pages/support.astro`
 and `src/pages/privacy.astro`, contact juliangalluzzois@gmail.com) but not
 deployed. Once it is live they are `<site>/support` and `<site>/privacy`
-(the site's `astro.config.mjs` says `https://mogbot-site.vercel.app` until a
+(the site's `astro.config.mjs` says `https://mogbot.app` until a
 domain is picked); put the site in `brand.json` (`links.website`). The
 store won't accept a listing without both. The short version of the policy:
 
