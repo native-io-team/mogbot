@@ -34,6 +34,20 @@ export function stepInOutcome(approval: Pick<Approval, 'status' | 'setAside'>): 
 
 // --- Accounts: "Use this one now" and "Runs on" ---------------------------
 
+// --- First run: bringing agents from another assistant --------------------
+
+/**
+ * The one-time card under the Chief's greeting (`ImportChoiceCard`, desk and
+ * phone). Asked as "already have…?" because a first-timer read "Bring your
+ * agents…?" with the bright button as the step they were meant to take, and
+ * they have no agents anywhere (docs/internal/persona-beginners-2026-11-09.md).
+ */
+export const IMPORT_CHOICE_TITLE = 'Already have agents in another assistant?';
+export const IMPORT_CHOICE_NOTE =
+  'Bring them from Grok, ChatGPT, Claude or anything else. Nothing is created until you say so. New to agents? Start fresh.';
+export const IMPORT_CHOICE_DECLINE = 'No thanks, start fresh';
+export const IMPORT_CHOICE_BRING = 'Bring my agents';
+
 /** Puts an account first in its engine's order (desk popover, Settings, phone). */
 export const USE_THIS_ONE_NOW = 'Use this one now';
 

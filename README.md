@@ -110,6 +110,13 @@ It installs the tools, builds the app (10 to 25 minutes the first time), and
 stops for the few things only you can do: your Mac password, signing in,
 installing apps on your phone, scanning a code.
 
+**Never used Claude Code or a terminal?** Install the Claude desktop app
+([claude.ai/download](https://claude.ai/download)) and open its **Code** tab
+(or the Codex app), sign in, and say: *"Download
+https://github.com/native-io-team/mogbot into a folder in my home folder,
+then set it up on my Mac and phone. Follow docs/INSTALL.md."* See
+[WELCOME.md](docs/WELCOME.md).
+
 **By hand** (Xcode Command Line Tools, Node 22+, pnpm 9 and Rust first; see
 steps 2 to 5 of [INSTALL.md](docs/INSTALL.md)):
 

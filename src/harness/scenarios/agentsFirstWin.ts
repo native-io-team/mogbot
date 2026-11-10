@@ -174,7 +174,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-first-win-morning-brief',
     title: 'Agents — first run: “Brief me every morning”',
     looksRightWhen:
-      'The greeting with its starters still under it (Brief me every morning, Run an inbox triage crew, Run my launch as a team, left-aligned under the greeting, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
+      'The greeting with its starters still under it (Brief me every morning, Sort my inbox, draft replies, Run my launch as a team, left-aligned under the greeting, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
     steps: [{ click: '.agent-chat__starters > [data-idea="morning-brief"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
@@ -192,7 +192,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
   },
   {
     id: 'agents-first-win-inbox',
-    title: 'Agents — first run: “Run an inbox triage crew”',
+    title: 'Agents — first run: “Sort my inbox, draft replies”',
     looksRightWhen:
       'The composer holds the whole brief, “Set up an inbox crew: through the day, one agent sorts my new email … My email is in: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
@@ -308,7 +308,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-first-run-import-choice',
     title: 'Agents — first run, straight from onboarding: the Chief speaks first',
     looksRightWhen:
-      'The Chief’s greeting, its three starters and More ideas… directly under it, and only then one calm card, “Bring your agents from another assistant?”, with “No thanks, start fresh” and a neutral “Bring my agents”. The import question used to be its own onboarding screen; here it waits under the greeting and nothing above the greeting competes with it.',
+      'The Chief’s greeting, its three starters and More ideas… directly under it, and only then one calm card, “Already have agents in another assistant?”, with “No thanks, start fresh” and a neutral “Bring my agents”. The import question used to be its own onboarding screen; here it waits under the greeting and nothing above the greeting competes with it.',
     command: 'agents.open',
     requires: '.agent-chat__starters ~ [data-testid="agent-import-choice"]',
     commands: { agents_overview: { ...BASE_OVERVIEW, importChoice: 'undecided' } },

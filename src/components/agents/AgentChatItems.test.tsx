@@ -217,7 +217,7 @@ describe('ErrorLine', () => {
     expect(screen.getByRole('button', { name: /retry at/i })).toBeEnabled();
   });
 
-  it('keeps “Try anyway” beside the retry at the reset', () => {
+  it('keeps “Try now” beside the retry at the reset', () => {
     // Midday, so "in an hour" is today ("Retry at …"), whatever time the suite runs.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 0, 15, 12, 0));
@@ -232,7 +232,7 @@ describe('ErrorLine', () => {
     };
     render(<ErrorLine message={message} onRetry={onRetry} onRetryAt={vi.fn()} />);
     expect(screen.getByRole('button', { name: /retry at/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Try anyway' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try now' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 

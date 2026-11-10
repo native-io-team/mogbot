@@ -35,7 +35,7 @@ top of the agent list, shown only while an agent waits on you (a request, or a
 turn that didn't finish; the same set ⌘J visits), and from ⌘K. A usage limit
 is not waiting on you — it resets by itself — so it isn't counted: What's in
 flight lists it under **Paused**, and in a chat it is a quiet centred line
-with "Retry at 4:45 AM" (and a quiet "Try anyway", since the limit may have
+with "Retry at 4:45 AM" (and a quiet "Try now", since the limit may have
 lifted early), not a tinted box. There is no
 icon for it: an unlabeled one was three names for one place. Its foot has the Phone row (the companion
 app: pair, or which phone is connected); remote access, for driving the app
@@ -54,7 +54,7 @@ user answers, on the desk or the phone. Three starters and **More ideas…**,
 from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
 with one blank at its end; none sends by itself.
 
-The chips are **Brief me every morning…**, **Run an inbox triage crew…** and
+The chips are **Brief me every morning…**, **Sort my inbox, draft replies…** and
 **Run my launch as a team…**: one per group, recognisable to someone who
 isn't a developer, and two of them need nothing set up, so the first result
 can land in the first minutes (the morning brief asks for its first one
@@ -81,9 +81,14 @@ asks for GitHub before showing anything; they are in the gallery.
   your team…"), grouped On a schedule / When something happens / Agents
   together: watch competitors weekly (researcher + analyst, one brief), babysit
   errors hourly (reproduce, fix in a copy, a card to keep; one line when
-  nothing broke, since a routine always leaves its line), an inbox triage
-  crew (sorter + drafter through the user's email app; sending is always an
-  Allow card), and two agents arguing it out. Its foot links Ready-made
+  nothing broke, since a routine always leaves its line), chase unpaid
+  invoices every Monday (finder + reminder drafter, one card, nothing sent
+  without Allow), sort the inbox and draft replies (sorter + drafter through
+  the user's email app; sending is always an Allow card), research it and
+  write it up (researcher + writer, every source linked, a weekly update),
+  and two agents arguing it out. Invoices and research were added after a
+  beginner walk-through (docs/internal/persona-beginners-2026-11-09.md):
+  a small-business owner and a student found nothing that was theirs. Its foot links Ready-made
   agents and the Phone panel.
 
 **Setup is step one, never a dead end.** An idea may need what this Mac
@@ -3470,7 +3475,7 @@ review card in the Chief's chat, and the user imports what they keep
 
 **Asked once, then in the background.** Onboarding no longer asks: it
 ends on the Chief's greeting, and under the greeting and its starters one
-card asks "Bring your agents from another assistant?" (`ImportChoiceCard`;
+card asks "Already have agents in another assistant?" (`ImportChoiceCard`;
 at the top of the chat once there is a conversation), as does the phone's
 home, once. The answer is the Mac's
 (`agents::import_choice`, `import-choice.json` beside the agents; carried on

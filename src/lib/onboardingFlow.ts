@@ -246,7 +246,11 @@ export function engineItemCheck(
       return {
         state: 'fail',
         line: item.errorMessage ?? 'It didn’t finish.',
-        fix: 'Press Try again. If it fails twice, quit and reopen the app, then try once more.',
+        // A network failure has a fix the person can do themselves; "quit
+        // and reopen" doesn't help when the Wi-Fi is down.
+        fix: /network|timed? ?out|reach|offline|connection/i.test(item.errorMessage ?? '')
+          ? 'Check this Mac is online (open any website), then press Try again.'
+          : 'Press Try again. If it fails twice, quit and reopen the app, then try once more.',
       };
     default:
       return stopped

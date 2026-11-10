@@ -849,7 +849,7 @@ The phone can start work as well as answer it. Each piece is gated by
 `welcome.methods`, so an older Mac shows less instead of failing.
 
 - **Import agents** (the ⋯ menu beside New agent on Agents, or the home's
-  one-time "Bring your agents from another assistant?" card while the Mac
+  one-time "Already have agents in another assistant?" card while the Mac
   says it's undecided and serves `agents.setImportChoice`;
   `app/import.tsx`, on a Mac that serves `agents.import.status`). Three
   steps, one screen at a time (`lib/importChoice.ts`, "Step n of 3"),
@@ -875,7 +875,7 @@ The phone can start work as well as answer it. Each piece is gated by
 - **New agent** (the pencil on Agents, or the empty list's button;
   `app/new-agent.tsx`). On a Mac listing `MAC_FEATURES.draft` it opens as
   the desk's dialog does, describe-first: "Describe the agent you want", one
-  big box and **Draft it** alone, with "Its name, briefing and routines, for
+  big box and **Draft it** alone, with "Its name, what it does and when it runs, for
   you to check before anything is made." under it, then the other ways in as
   quiet links in the desk's words: "Or fill it in yourself, start from
   <ready-made agents>, or ask your Chief of Staff." Fill it in yourself (or

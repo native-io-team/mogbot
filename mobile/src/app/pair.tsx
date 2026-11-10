@@ -455,8 +455,8 @@ function BeforeYouScan({ onNext }: { onNext: () => void }) {
         Turn on Tailscale on this phone
       </T>
       <T color={colors.textSecondary}>
-        This phone reaches your Mac only through Tailscale. Without it, the Mac never sees the
-        request.
+        Tailscale is a free app that links this phone to your Mac privately. It’s the only way this
+        phone reaches your Mac, so it needs to be on first.
       </T>
       <View style={styles.checks}>
         {[
