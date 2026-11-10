@@ -111,8 +111,8 @@ export function AgentTeamPolicySettings() {
         <div className="agent-team-policy__reset">
           <span className="agent-team-policy__lead">
             {own.length === 0
-              ? 'No agent has settings of its own.'
-              : `${own.length === 1 ? '1 agent has' : `${own.length} agents have`} settings of ${own.length === 1 ? 'its' : 'their'} own: ${own.join(', ')}.`}
+              ? 'Every agent uses these.'
+              : `${own.length === 1 ? '1 agent has its' : `${own.length} agents have their`} own: ${own.join(', ')}.`}
           </span>
           {own.length > 0 && (
             <Button

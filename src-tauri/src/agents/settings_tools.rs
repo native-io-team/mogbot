@@ -1,7 +1,8 @@
 //! Settings from chat that aren't what an agent may do (that is
 //! `propose_settings_change`) or usage (`usage_tools`): the user's accounts
-//! (order, names, adding one), Slack, the app's own switches (theme, slowing
-//! down on battery) and freeing disk space. All the Chief's.
+//! (order, names, adding one), Slack, the app's own settings (theme, slowing
+//! down on battery, new agents' engine and model, Settings' switches:
+//! `SWITCHES`) and freeing disk space. All the Chief's.
 //!
 //! The rule is the one every setting from chat follows (docs/agents.md,
 //! "Settings from chat"): more room for agents, or anything reaching outside
@@ -27,7 +28,8 @@ pub const EVENT_OPEN_SETTINGS: &str = "agents-open-settings";
 /// The desk's theme follows a change made from chat: payload is the theme.
 pub const EVENT_THEME: &str = "app-theme-changed";
 
-/// Settings → Agents → On this Mac reads its switches again on this.
+/// Settings reads its switches again on this, and every window follows
+/// them: payload is `{ key: on }` for each of `SWITCHES` changed.
 pub const EVENT_APP_SETTINGS: &str = "app-settings-changed";
 
 pub struct Def {
@@ -75,13 +77,26 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "change_app_setting",
-        description: "Change one of the app's own settings when the user asks: `theme` (system, light or dark: \"dark mode\"), or `slow_on_battery` (on by default: background checks slow down on battery; off keeps their usual pace). Applies at once with a line. Quiet hours are set_quiet_hours; one agent's notifications are update_agent `muted`.",
+        description: "Change the app's own settings when the user asks (several at once is fine): `theme` (system, light or dark: \"dark mode\"); `slow_on_battery` (on by default: background checks slow down on battery); `new_agents_engine` (claude, codex or opencode: what new agents start on) and `new_agents_model` (a model that engine lists, or \"default\"; for `new_agents_engine`, else for the engine new agents start on now); `menu_bar_icon`; `quick_message` (the shortcut that messages agents from any app); and Settings' switches `compact_toolbar`, `element_breadcrumb`, `terminal_gpu`, `keep_dev_servers_running`, `project_thumbnails`, `spotify_controls`, `commit_message` (your agent writes the commit message when you push), `credit_in_commits` (a Made-With trailer naming the agent), `analytics` (anonymous usage and error reports). Turning analytics, commit_message or credit_in_commits on writes outside this Mac and turning slow_on_battery off spends battery: those are a card unless the user's own message asked. The rest applies at once with a line. Existing agents keep their engine and model (update_agent). Quiet hours are set_quiet_hours; the accent colour is the Chief's own colour (update_agent); one agent's notifications are update_agent `muted`; the projects folder and the quick-message keys are picked on the Mac (open_settings).",
         schema: || {
             json!({
                 "type": "object",
                 "properties": {
                     "theme": { "type": "string", "enum": ["system", "light", "dark"] },
-                    "slow_on_battery": { "type": "boolean" }
+                    "slow_on_battery": { "type": "boolean" },
+                    "new_agents_engine": { "type": "string", "enum": ["claude", "codex", "opencode"] },
+                    "new_agents_model": { "type": "string" },
+                    "menu_bar_icon": { "type": "boolean" },
+                    "quick_message": { "type": "boolean" },
+                    "compact_toolbar": { "type": "boolean" },
+                    "element_breadcrumb": { "type": "boolean" },
+                    "terminal_gpu": { "type": "boolean" },
+                    "keep_dev_servers_running": { "type": "boolean" },
+                    "project_thumbnails": { "type": "boolean" },
+                    "spotify_controls": { "type": "boolean" },
+                    "commit_message": { "type": "boolean" },
+                    "credit_in_commits": { "type": "boolean" },
+                    "analytics": { "type": "boolean" }
                 }
             })
         },
@@ -723,22 +738,112 @@ pub fn slow_widens(now_on: bool, slow: Option<bool>) -> bool {
     now_on && slow == Some(false)
 }
 
+/// Settings' plain switches the Chief can flip, in the order a line names
+/// them: `(key, label as Settings shows it, writes outside this Mac when on)`.
+pub const SWITCHES: &[(&str, &str, bool)] = &[
+    ("menu_bar_icon", "Agents in the menu bar", false),
+    ("quick_message", "Quick message", false),
+    ("compact_toolbar", "Compact toolbar", false),
+    ("element_breadcrumb", "Element breadcrumb", false),
+    ("terminal_gpu", "Terminal GPU acceleration", false),
+    (
+        "keep_dev_servers_running",
+        "Keep dev servers running",
+        false,
+    ),
+    ("project_thumbnails", "Project thumbnails", false),
+    ("spotify_controls", "Spotify controls", false),
+    (
+        "commit_message",
+        "Your agent writes the commit message",
+        true,
+    ),
+    ("credit_in_commits", "Credit the agent in commits", true),
+    ("analytics", "Usage analytics & error reports", true),
+];
+
+/// The switches asked for, as `(key, on)`, in `SWITCHES` order. Pure.
+pub fn switches_asked(args: &Value) -> Vec<(&'static str, bool)> {
+    SWITCHES
+        .iter()
+        .filter_map(|(key, _, _)| args.get(*key).and_then(Value::as_bool).map(|on| (*key, on)))
+        .collect()
+}
+
+/// "Compact toolbar on" / "Project thumbnails off". Pure.
+pub fn switch_line(key: &str, on: bool) -> String {
+    let label = SWITCHES
+        .iter()
+        .find(|(k, _, _)| *k == key)
+        .map_or(key, |(_, l, _)| l);
+    format!("{label} {}", if on { "on" } else { "off" })
+}
+
+/// Whether these switches write outside this Mac: one that does, turned on. Pure.
+pub fn switches_widen(asked: &[(&str, bool)]) -> bool {
+    asked
+        .iter()
+        .any(|(key, on)| *on && SWITCHES.iter().any(|(k, _, outside)| k == key && *outside))
+}
+
+/// The Settings switches that aren't the menu bar's: each written by the
+/// same command Settings calls.
+fn set_switch(app: &AppHandle, key: &str, on: bool) -> Result<(), String> {
+    use crate::commands::settings as app_settings;
+    let done = match key {
+        "compact_toolbar" => app_settings::set_compact_workspace_toolbar_enabled(on),
+        "element_breadcrumb" => app_settings::set_element_breadcrumb_enabled(on),
+        "terminal_gpu" => app_settings::set_terminal_gpu_enabled(on),
+        "keep_dev_servers_running" => app_settings::set_keep_dev_servers_running(app.clone(), on),
+        "project_thumbnails" => app_settings::set_thumbnails_enabled(on),
+        "spotify_controls" => app_settings::set_spotify_widget_enabled(on),
+        "commit_message" => app_settings::set_team_sharing_enabled(on),
+        "credit_in_commits" => app_settings::set_commit_attribution_enabled(on),
+        "analytics" => crate::commands::analytics::set_analytics_enabled(on),
+        _ => return Err(format!("There's no switch called {key}.")),
+    };
+    done.map_err(|e| e.to_string())
+}
+
+/// "New agents start on Codex with gpt-5.5" (or "… with its default model"). Pure.
+pub fn new_agents_line(view: &super::defaults::View) -> String {
+    let model = view.model.as_deref().unwrap_or("its default model");
+    format!(
+        "New agents start on {} with {model}",
+        view.starts_on.label()
+    )
+}
+
 async fn change_app_setting(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
     let theme = arg(args, "theme");
     let slow = args.get("slow_on_battery").and_then(Value::as_bool);
-    if theme.is_none() && slow.is_none() {
-        return error("Say what to change: `theme` or `slow_on_battery`.");
-    }
-    // Keeping full pace on battery spends the user's battery: only on their
-    // own message, else a card.
-    if slow_widens(crate::power::low_power_enabled(), slow)
-        && !super::runner::users_own_ask(&caller.id)
+    let engine = arg(args, "new_agents_engine");
+    let model = arg(args, "new_agents_model");
+    let switches = switches_asked(args);
+    if theme.is_none()
+        && slow.is_none()
+        && engine.is_none()
+        && model.is_none()
+        && switches.is_empty()
     {
+        return error(
+            "Say what to change: `theme`, `slow_on_battery`, `new_agents_engine`, `new_agents_model`, or one of Settings' switches.",
+        );
+    }
+    // Keeping full pace on battery spends the user's battery, and the
+    // switches that write outside this Mac (reports, words in a shared
+    // repository) reach past it: only on their own message, else a card.
+    let widens = slow_widens(crate::power::low_power_enabled(), slow) || switches_widen(&switches);
+    if widens && !super::runner::users_own_ask(&caller.id) {
+        let mut asked: Vec<String> = switches.iter().map(|(k, on)| switch_line(k, *on)).collect();
+        if let Some(on) = slow {
+            asked.insert(0, slow_line(on).to_string());
+        }
         let answer = super::mcp::ask_user(
             app,
             caller,
-            "Keep background checks at full pace on battery?".to_string(),
-            slow_line(false).to_string(),
+            "Change these settings?".to_string(),
+            asked.join("; "),
             None,
         )
         .await;
@@ -747,6 +852,38 @@ async fn change_app_setting(app: &AppHandle, caller: &store::Agent, args: &Value
         }
     }
     let mut lines = Vec::new();
+    if engine.is_some() || model.is_some() {
+        let engine = engine.map(str::to_ascii_lowercase);
+        let target = match engine.as_deref() {
+            Some(e) => match Engine::parse(e) {
+                Ok(e) => e,
+                Err(err) => return error(err.to_string()),
+            },
+            None => super::defaults::view().await.starts_on,
+        };
+        let model = model.map(|m| {
+            if m.eq_ignore_ascii_case("default") {
+                String::new()
+            } else {
+                m.to_string()
+            }
+        });
+        let mut change = super::defaults::Change {
+            engine,
+            ..Default::default()
+        };
+        match target {
+            Engine::Claude => change.claude_model = model,
+            Engine::Codex => change.codex_model = model,
+            Engine::OpenCode => change.opencode_model = model,
+        }
+        match super::defaults::set(change).await {
+            Ok(view) => lines.push(new_agents_line(&view)),
+            Err(e) => return error(e.to_string()),
+        }
+        // The overview carries the defaults: Settings, New agent and the phone follow.
+        let _ = app.emit(super::runner::EVENT_REGISTRY, ());
+    }
     if let Some(t) = theme {
         let t = t.to_ascii_lowercase();
         if let Err(e) = crate::commands::settings::set_app_theme(app.clone(), t.clone()) {
@@ -759,9 +896,33 @@ async fn change_app_setting(app: &AppHandle, caller: &store::Agent, args: &Value
         if let Err(e) = crate::power::set_low_power(on) {
             return error(e.to_string());
         }
-        let _ = app.emit(EVENT_APP_SETTINGS, ());
         lines.push(slow_line(on).to_string());
     }
+    let switch = |key: &str| switches.iter().find(|(k, _)| *k == key).map(|(_, on)| *on);
+    let (menu_bar, quick) = (switch("menu_bar_icon"), switch("quick_message"));
+    if menu_bar.is_some() || quick.is_some() {
+        if let Err(e) =
+            crate::commands::agents::agents_set_desktop_settings(app.clone(), menu_bar, quick, None)
+                .await
+        {
+            return error(e.to_string());
+        }
+    }
+    for (key, on) in &switches {
+        if !matches!(*key, "menu_bar_icon" | "quick_message") {
+            if let Err(e) = set_switch(app, key, *on) {
+                return error(e);
+            }
+        }
+        lines.push(switch_line(key, *on));
+    }
+    // Settings reads its rows again, and the workspace follows its switches
+    // (`lib/settingsFromChat.ts`): the payload is each switch changed.
+    let changed: serde_json::Map<String, Value> = switches
+        .iter()
+        .map(|(k, on)| (k.to_string(), json!(on)))
+        .collect();
+    let _ = app.emit(EVENT_APP_SETTINGS, Value::Object(changed));
     let line = lines.join("; ");
     said(app, caller, "change_app_setting", &line);
     text(format!("{line}. Say so in one line."))
