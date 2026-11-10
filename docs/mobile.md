@@ -169,7 +169,10 @@ inside it.
   `agents.loginStart|loginsConnect`; Mac feature `signin.phone`:
   `agents.signinBegin|signinFrame|signinInput|signinDone|signinStop|signinFallback` (signing
   in to a site from the phone, in a window of the agents' own Chrome on the Mac, streamed with
-  `after: seq`; never audited by the router, see docs/agents.md, "The agents' browser"); "Not
+  `after: seq`; never audited by the router, see docs/agents.md, "The agents' browser"); Mac
+  feature `stepIn.phone`: `agents.stepInBegin` (step into an agent's own held tab for its
+  step-in card, then the same frames and input; `signinDone` answers `handed_back`; see
+  docs/agents.md, "Step in"); "Not
   needed" for the team (docs/agents.md, "Not needed"):
   `agents.loginNotNeeded|loginsNotNeeded|loginsUndecline` (shown only when the Mac lists them),
   `agents.reach`'s `declined` (each with "Turn back on"), and `agents.loginsRecheck` when the app
@@ -671,6 +674,16 @@ request, the diff and the photo viewer push over them. At
   sees Allow / Deny, and its Allow starts the first way in on the Mac.
   "What your team needs" (`agents.loginsTeam`) and "What it can reach"
   (`agents.reach`, read-only) are on the phone too.
+- **Step-in cards** (`approval.stepIn`): "<Agent> needs you in its browser:
+  <reason>". With a Mac that has `stepIn.phone`, **Step in** opens the
+  sign-in screen (`app/signin.tsx`, `stepIn=1`) on the agent's own tab: the
+  Mac holds it so the agent can't use it, its window stays parked there, and
+  the page shows here, driven by touch, on the card's site and the sign-in
+  providers only. The top button is **Hand back**; leaving the screen hands
+  back too, so the agent is always woken (with where the page ended up,
+  never what was typed). While any device is in it the card offers nothing
+  and names where ("Sam's iPhone is in its browser"). An older Mac: Not now
+  only, and "Step in on your Mac".
 - **Secret cards** (`SecretCard`): masked fields straight to the Mac's
   Keychain via `agents.saveSecret`. Only over HTTPS on Tailscale, and only on
   a socket where the Mac proved the pinned identity (refused on the

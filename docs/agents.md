@@ -2887,13 +2887,38 @@ sign-in on a site it's signed out of is still `request_login` with
   app to put a card in (`tools::dispatch`). An admin can't answer it
   (`admin::classify`: "only you can step into its browser"); the sweep puts
   an unanswered one away like a login card, never while the user is in it.
-- **The phone** shows the card with "Step in on your Mac: its tab opens
-  there." and **Not now** only; a plain Allow from an older phone is refused
-  with "Step in on your Mac". No remote control of the tab in v1 (the
-  sign-in screen's frames-and-taps could carry it; not built).
+- **From the phone** (Mac feature `stepIn.phone`): **Step in** on the
+  phone's card opens its sign-in screen on the agent's own tab
+  (`agents.stepInBegin` → `phone_signin::begin_step_in`). The tab is held
+  exactly as at the desk (`step_in::begin_from_phone`, the same answer
+  gate), but its window stays parked; the phone gets its screencast and
+  sends taps, typing, keys and scrolls through the same `agents.signin*`
+  calls, lent the tab by `SigninWindow::borrow` (ending it stops the
+  pictures and leaves the tab open). Same rules as a phone sign-in: only the
+  paired device that began it, one session per Mac, the card's site and the
+  sign-in providers only (`Scope`; elsewhere the phone sees nothing and may
+  go Back or Hand back), typed text never logged, audited or kept, frames
+  only over the verified Tailscale route. No "another way in": it's the
+  agent's tab. **Done is Hand back**; Stop, leaving the screen, the session's
+  five idle minutes (handed back by itself, with the minutes) and a
+  replaced session all hand back too (`finish_live`), so the agent is always
+  woken. Hand back, Not now, the tab closing or the 15-minute limit on the
+  Mac end the phone's session (`end_step_in`), never twice. While a phone is
+  in it, the desk's card and bar name the phone ("Sam's iPhone is in
+  Finance's browser", `onPhone`, laid over like `inSince`) without Show
+  window; Hand back there works. Stepping in from the phone while the user
+  is in it at the desk is refused ("Hand it back there first"). The chat's
+  live picture of a held tab stays off, and its lapsing lease no longer stops
+  the phone's screencast (`live::stop_session`). An older Mac: the phone
+  shows "Step in on your Mac: its tab opens there." and **Not now** only; a
+  plain Allow is refused with "Step in on your Mac".
 - **Not verified**: a real SSO, passkey, 2FA or CAPTCHA page; a live turn
   calling the tool on either engine; the window coming forward in a built
-  app (tested against the fake Chrome only, `step_in_tests.rs`).
+  app (tested against the fake Chrome only, `step_in_tests.rs`). From the
+  phone: the hold, the borrowed screencast and the end paths are tested
+  against the fake Chrome and the companion stub; no real phone has stepped
+  into a real tab, and a passkey or Touch ID prompt can't be answered from
+  the phone (it's the Mac's own sheet).
 
 **Signing in from the phone** (`agents/phone_signin.rs`, `Via::AgentsBrowser`):
 
