@@ -43,3 +43,4 @@ export * from './quiet';
 export * from './usageGlance';
 export * from './brief';
 export * from './conversations';
+export * from './failures';

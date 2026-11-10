@@ -200,6 +200,17 @@ pub fn line(user_chrome_on: bool, agents_browser: bool) -> String {
     s
 }
 
+/// The button under [`line`]: "Set up Your Chrome" only when it isn't set
+/// up; on but not connected, "Check Your Chrome" (the words say opening
+/// Chrome reconnects it, so "Set up" would contradict them).
+pub fn fix_for(user_chrome_on: bool) -> store::NoteFix {
+    if user_chrome_on {
+        store::NoteFix::UserChromeCheck
+    } else {
+        store::NoteFix::UserChrome
+    }
+}
+
 /// Before a turn of `agent` builds what it can reach: ask whether Claude in
 /// Chrome answers when the turn would use it, and say so once when it
 /// doesn't. `quiet` turns (the app's own) never ask.
@@ -213,12 +224,13 @@ pub async fn before_turn(app: &AppHandle, agent: &Agent, outside: bool) {
     if !health().take_line(&agent.id) {
         return;
     }
+    let on = crate::user_chrome::settings::enabled();
     let text = line(
-        crate::user_chrome::settings::enabled(),
+        on,
         super::connections::agents_browser_for_turn(agent, outside),
     );
     let mut m = super::runner::new_message(&agent.id, MessageKind::Note, text);
-    m.fix = Some(store::NoteFix::UserChrome);
+    m.fix = Some(fix_for(on));
     if let Err(e) = super::runner::record(app, m) {
         tracing::warn!("[Agents] couldn't say Chrome isn't reachable: {e}");
     }
@@ -233,6 +245,19 @@ mod tests {
         assert_eq!(Reach::from_probe(None), Reach::Unknown);
         assert_eq!(Reach::from_probe(Some(0)), Reach::Down);
         assert_eq!(Reach::from_probe(Some(2)), Reach::Up);
+    }
+
+    /// docs/internal/failure-states.md: the button never contradicts the
+    /// note (on but not connected says opening Chrome reconnects it).
+    #[test]
+    fn the_button_matches_the_note() {
+        assert_eq!(fix_for(false), store::NoteFix::UserChrome);
+        assert!(line(false, false).contains("Set up Your Chrome"));
+        assert_eq!(fix_for(true), store::NoteFix::UserChromeCheck);
+        assert!(!line(true, false).contains("Set up"));
+        let wire = serde_json::to_value(store::NoteFix::UserChromeCheck).unwrap();
+        assert_eq!(wire, "user_chrome_check");
+        assert_eq!(serde_json::to_value(store::NoteFix::Disk).unwrap(), "disk");
     }
 
     #[test]

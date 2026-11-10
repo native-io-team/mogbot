@@ -17,7 +17,7 @@
  */
 
 import type { Agent, AgentMessage } from '@shipstudio/companion-protocol';
-import { previewText } from '@shipstudio/companion-protocol';
+import { failurePill, previewText } from '@shipstudio/companion-protocol';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
@@ -385,9 +385,14 @@ function rowWords(
       return [SETUP_TITLE, setupLine ?? `In ${agent.name}’s chat`];
     case 'stuck': {
       const failure = failedTurn(agent);
-      return failure
-        ? ['Didn’t finish', failureLine(failure, previewText(agent.preview), engineName(agent))]
-        : ['Needs your OK', 'Open its chat to see what it’s asking'];
+      if (!failure) return ['Needs your OK', 'Open its chat to see what it’s asking'];
+      // The state as the title ("Signed out", "Didn't finish"), the reason
+      // under it: said once, as the desk's pill says it.
+      const pill = failurePill(failure, previewText(agent.preview), engineName(agent));
+      return [
+        pill.label,
+        pill.rest || failureLine(failure, previewText(agent.preview), engineName(agent)),
+      ];
     }
   }
 }

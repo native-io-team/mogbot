@@ -291,7 +291,7 @@ export interface ContextFill {
 export interface Failure {
   /** `interrupted`: cut off part-way (a restart, its engine dying) and not
    * picked up by itself; Continue carries on in the same conversation. */
-  kind: 'usage_limit' | 'signed_out' | 'interrupted' | 'other';
+  kind: 'usage_limit' | 'signed_out' | 'interrupted' | 'engine_missing' | 'other';
   /** When the usage limit resets (epoch ms), only when Claude Code said so. */
   resetsAt?: number;
 }
@@ -750,8 +750,9 @@ export interface AgentMessage {
   conversation?: string;
 }
 
-/** A fix a note offers: `user_chrome` opens Settings → Agents → Your Chrome. */
-export type NoteFix = 'user_chrome';
+/** A fix a note offers (`store::NoteFix`), worded once for desk and phone. */
+export type { NoteFix } from '../../packages/companion-protocol/src/failures';
+import type { NoteFix } from '../../packages/companion-protocol/src/failures';
 
 /** "Remembered: Lead Gen can always …": the rule behind the line (`agents/remember.rs`). */
 /** Where a message came in from, when not this app: "From Slack · #launch". */
@@ -2135,8 +2136,20 @@ export {
 import {
   apiPrice as apiPriceWords,
   fullyPriced as fullyPricedTotals,
-  resetPhrase as resetWords,
 } from '../../packages/companion-protocol/src/quota';
+// A failed turn and a note's fix, worded once for the desk and the phone.
+export {
+  CONTINUE_TEXT,
+  failureFix,
+  failureFixLabel,
+  noteFixLabel,
+  type FailureFix,
+} from '../../packages/companion-protocol/src/failures';
+import {
+  failureFix as sharedFailureFix,
+  failureLine as sharedFailureLine,
+  failurePill as sharedFailurePill,
+} from '../../packages/companion-protocol/src/failures';
 
 /**
  * A hit's snippet cut to start a few words before its first match, so the
@@ -2323,23 +2336,16 @@ export const usageLimited = (agent: Agent) =>
   !needsYou(agent) && failedTurn(agent)?.kind === 'usage_limit';
 
 /**
- * The text of a failure's first clause: "Didn't finish: Couldn't start Claude
- * Code". `engine`: what the agent runs on, so a Codex agent is never said to
- * be signed out of Claude Code (the phone's rule).
+ * A failed turn in one line: "Couldn't reach Anthropic · didn't finish".
+ * `engine`: what the agent runs on, so a Codex agent is never said to be
+ * signed out of Claude Code. Worded once for desk and phone (`failures.ts`).
  */
 export function failureLine(
   failure: Failure,
   preview: string | null,
   engine: AgentEngine = 'claude'
 ): string {
-  if (failure.kind === 'usage_limit') {
-    return failure.resetsAt ? `Out of usage until ${resetWords(failure.resetsAt)}` : 'Out of usage';
-  }
-  if (failure.kind === 'signed_out') return `${ENGINE_LABEL[engine]} is signed out`;
-  if (failure.kind === 'interrupted') return 'Interrupted · Continue to pick it up';
-  // The reason first: two lines in the sidebar, and the reason is what matters.
-  const clause = (preview ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
-  return clause ? `${clause} · didn’t finish` : 'Didn’t finish';
+  return sharedFailureLine(failure, preview, ENGINE_LABEL[engine]);
 }
 
 /** A status pill's kind (primitives/StatusPill): never the accent, always a status role. */
@@ -2355,21 +2361,7 @@ export function failurePill(
   preview: string | null,
   engine: AgentEngine = 'claude'
 ): { tone: StatusTone; label: string; rest: string } {
-  if (failure.kind === 'usage_limit') {
-    return {
-      tone: 'out',
-      label: 'Out of usage',
-      rest: failure.resetsAt ? `until ${resetWords(failure.resetsAt)}` : '',
-    };
-  }
-  if (failure.kind === 'signed_out') {
-    return { tone: 'failed', label: 'Signed out', rest: ENGINE_LABEL[engine] };
-  }
-  if (failure.kind === 'interrupted') {
-    return { tone: 'failed', label: 'Interrupted', rest: 'Continue to pick it up' };
-  }
-  const clause = (preview ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
-  return { tone: 'failed', label: 'Didn’t finish', rest: clause };
+  return sharedFailurePill(failure, preview, ENGINE_LABEL[engine]);
 }
 
 const FILE_EXT =
@@ -2748,8 +2740,13 @@ export function formatExactTime(ts: number): string {
  * message (commands/ai.rs), never on a bare "sign in", which turns up in
  * ordinary prose.
  */
-export function errorRemedy(message: Pick<AgentMessage, 'text' | 'failure'>): 'sign-in' | null {
-  if (message.failure) return message.failure.kind === 'signed_out' ? 'sign-in' : null;
+export function errorRemedy(
+  message: Pick<AgentMessage, 'text' | 'failure'>
+): 'sign-in' | 'install' | null {
+  if (message.failure) {
+    const fix = sharedFailureFix(message.failure.kind);
+    return fix === 'sign-in' || fix === 'install' ? fix : null;
+  }
   const lower = message.text.toLowerCase();
   return /isn't signed in anymore|please run \/login|oauth token has expired|invalid api key|not logged in|session expired/.test(
     lower
@@ -2777,9 +2774,6 @@ export function continuesFrom(messages: AgentMessage[]): boolean {
   const last = messages[messages.length - 1];
   return last?.kind === 'error' && last.failure?.kind === 'interrupted';
 }
-
-/** What Continue says. */
-export const CONTINUE_TEXT = 'Continue';
 
 /**
  * What Retry sends again: the user's message before the newest line, when

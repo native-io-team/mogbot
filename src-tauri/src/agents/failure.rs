@@ -24,6 +24,9 @@ pub enum FailureKind {
     /// Cut off part-way (the app restarted, or its engine died) and not
     /// picked up on its own: Continue carries on in the same conversation.
     Interrupted,
+    /// Its engine isn't on this Mac any more (uninstalled, moved, or it
+    /// won't run): the fix is installing it again, not retrying.
+    EngineMissing,
     Other,
 }
 
@@ -153,7 +156,153 @@ where
             Failure::OTHER,
         );
     }
-    (detail.to_string(), Failure::OTHER)
+    if is_engine_missing(&lower) {
+        return (
+            missing_engine_line(who),
+            Failure {
+                kind: FailureKind::EngineMissing,
+                resets_at: None,
+            },
+        );
+    }
+    (plain_other(engine, detail), Failure::OTHER)
+}
+
+/// The one sentence for an engine this Mac can't run: what happened and the
+/// fix, which the chat's Install button does.
+pub fn missing_engine_line(who: &str) -> String {
+    format!("{who} isn't on this Mac any more, or the app can't find it. Install it again, then send this again.")
+}
+
+fn is_engine_missing(lower: &str) -> bool {
+    [
+        // `missing_engine_line`, and older builds' sentences.
+        "isn't on this mac any more",
+        "isn't installed, or the app can't find it",
+        "isn't installed on this mac",
+    ]
+    .iter()
+    .any(|w| lower.contains(w))
+}
+
+/// Who runs the model an engine talks to, for "couldn't reach Anthropic".
+fn provider(engine: Engine) -> &'static str {
+    match engine {
+        Engine::Claude => "Anthropic",
+        Engine::Codex => "OpenAI",
+    }
+}
+
+/// Anything else, in a sentence a person can act on. The network and the
+/// provider's own trouble are named (and still read as temporary to
+/// `is_temporary`, so a routine tries again); a sentence the app already
+/// wrote is kept; raw output (exit codes, stack traces, JSON, os errors) is
+/// logged, never put in the chat.
+fn plain_other(engine: Engine, detail: &str) -> String {
+    let who = engine.label();
+    let by = provider(engine);
+    let lower = detail.to_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| lower.contains(w));
+    if has(&[
+        "enotfound",
+        "eai_again",
+        "getaddrinfo",
+        "network is unreachable",
+        "no route to host",
+        "not connected to the internet",
+        "internet connection appears to be offline",
+        "dns error",
+        "failed to lookup address",
+        "error sending request",
+        "fetch failed",
+        "connection error",
+        "connection refused",
+        "connection reset",
+        "econnreset",
+        "econnrefused",
+        "etimedout",
+        "socket hang up",
+        "stream disconnected",
+        "request timed out",
+    ]) {
+        return format!(
+            "{who} couldn't reach {by} over the network. Retry once this Mac is back online."
+        );
+    }
+    if has(&["overloaded", "api error: 529", "status 529"]) {
+        return format!(
+            "{by}'s servers are overloaded right now, so {who} stopped. Retry in a few minutes."
+        );
+    }
+    if has(&[
+        "api error: 5",
+        "api error (5",
+        "status 5",
+        "status: 5",
+        "status code 5",
+        "internal server error",
+        "service unavailable",
+        "bad gateway",
+        "gateway timeout",
+    ]) {
+        return format!("{by} is temporarily unavailable (a problem on their side), so {who} stopped. Retry in a few minutes.");
+    }
+    if has(&[
+        "prompt is too long",
+        "context_length_exceeded",
+        "maximum context length",
+    ]) {
+        return format!("This conversation is too long for {who} to carry on. Start fresh (the agent keeps its memory), then send this again.");
+    }
+    if is_raw(detail) {
+        tracing::warn!(
+            "[Agents] {who} failed with output we can't name: {}",
+            detail.trim()
+        );
+        return format!("{who} stopped with an error it didn't explain. Retry; if it happens again, start a fresh conversation.");
+    }
+    detail.trim().to_string()
+}
+
+/// Output meant for a developer, not a sentence: several lines, an exit
+/// code, an os error, a stack frame, JSON, a typed error code.
+fn is_raw(detail: &str) -> bool {
+    let t = detail.trim();
+    if t.is_empty() {
+        return true;
+    }
+    let lower = t.to_lowercase();
+    let typed_code = t
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .any(|w| {
+            w.len() > 4
+                && w.contains('_')
+                && w.chars()
+                    .all(|c| c.is_ascii_uppercase() || c == '_' || c.is_ascii_digit())
+        });
+    t.lines().filter(|l| !l.trim().is_empty()).count() > 2
+        || t.contains('{')
+        || t.contains('\u{1b}')
+        || typed_code
+        || [
+            "os error",
+            "exit code",
+            "exit status",
+            "errno",
+            "panicked",
+            "traceback",
+            "stack backtrace",
+            "    at ",
+            "error[",
+            "thread '",
+            "signal: ",
+            "sigkill",
+            "sigsegv",
+            "no such file or directory",
+            "permission denied",
+        ]
+        .iter()
+        .any(|w| lower.contains(w))
 }
 
 /// Agents' own words for the CLI failures people hit that aren't the usage
@@ -236,8 +385,9 @@ fn is_rate_limited(lower: &str) -> bool {
 pub fn is_temporary(detail: &str, failure: &Failure) -> bool {
     match failure.kind {
         FailureKind::UsageLimit => true,
-        // Not run again by itself: it may have done half its work.
-        FailureKind::SignedOut | FailureKind::Interrupted => false,
+        // Not run again by itself: it may have done half its work; or
+        // only installing the engine fixes it.
+        FailureKind::SignedOut | FailureKind::Interrupted | FailureKind::EngineMissing => false,
         FailureKind::Other => {
             let lower = detail.to_lowercase();
             let server_error = [
@@ -767,5 +917,86 @@ mod tests {
             describe(Engine::Claude, credits, &Utc, None, NOW),
             (credits.to_string(), Failure::OTHER)
         );
+    }
+
+    /// docs/internal/failure-states.md: the network, the provider's own
+    /// trouble and an engine that's gone each get one plain sentence with
+    /// its fix, and still read as temporary (or not) as before.
+    #[test]
+    fn the_network_the_provider_and_a_missing_engine_are_said_plainly() {
+        let said = |e: Engine, d: &str| describe(e, d, &Utc, None, NOW);
+        for raw in [
+            "fetch failed: getaddrinfo ENOTFOUND api.anthropic.com",
+            "API Error: Connection error.",
+            "API Error (Request timed out.)",
+            "Error: connect ECONNREFUSED 127.0.0.1:443",
+        ] {
+            let (text, f) = said(Engine::Claude, raw);
+            assert_eq!(
+                text,
+                "Claude Code couldn't reach Anthropic over the network. Retry once this Mac is back online.",
+                "{raw}"
+            );
+            assert_eq!(f.kind, FailureKind::Other);
+            assert!(is_temporary(&text, &f), "retried: {text}");
+        }
+        let (text, f) = said(
+            Engine::Codex,
+            "stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses)",
+        );
+        assert!(text.starts_with("Codex couldn't reach OpenAI"), "{text}");
+        assert!(is_temporary(&text, &f));
+
+        let (text, f) = said(
+            Engine::Claude,
+            "API Error: 529 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\"}}",
+        );
+        assert_eq!(
+            text,
+            "Anthropic's servers are overloaded right now, so Claude Code stopped. Retry in a few minutes."
+        );
+        assert!(is_temporary(&text, &f));
+        let (text, f) = said(Engine::Codex, "unexpected status 502 Bad Gateway");
+        assert!(
+            text.starts_with("OpenAI is temporarily unavailable"),
+            "{text}"
+        );
+        assert!(is_temporary(&text, &f));
+
+        // Gone since it was found: the os error never reaches the chat.
+        for raw in [
+            &missing_engine_line("Claude Code"),
+            "Claude Code isn't installed, or the app can't find it. Install it, or move this agent to another engine in Edit agent, then send this again.",
+        ] {
+            let (text, f) = said(Engine::Claude, raw);
+            assert_eq!(f.kind, FailureKind::EngineMissing, "{raw}");
+            assert_eq!(text, missing_engine_line("Claude Code"));
+            assert!(!is_temporary(&text, &f));
+        }
+
+        let (text, _) = said(
+            Engine::Claude,
+            "API Error: 400 invalid_request_error: prompt is too long: 210000 tokens > 200000 maximum",
+        );
+        assert!(text.contains("Start fresh"), "{text}");
+    }
+
+    #[test]
+    fn raw_output_never_reaches_the_chat_but_a_sentence_does() {
+        let said = |d: &str| describe(Engine::Claude, d, &Utc, None, NOW).0;
+        let unexplained = "Claude Code stopped with an error it didn't explain. Retry; if it happens again, start a fresh conversation.";
+        for raw in [
+            "exit code Some(1), no output",
+            "No such file or directory (os error 2)",
+            "thread 'main' panicked at src/main.rs:4:5",
+            "TypeError: x is undefined\n    at run (cli.js:1:2)\n    at main (cli.js:3:4)",
+            "ERR_INVALID_ARG_TYPE",
+            "",
+        ] {
+            assert_eq!(said(raw), unexplained, "{raw:?}");
+        }
+        // The app's own sentences are kept as they are.
+        let own = "Claude Code stopped before it replied. Retry, and if it happens again, check it's still signed in.";
+        assert_eq!(said(own), own);
     }
 }

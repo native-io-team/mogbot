@@ -347,7 +347,11 @@ fn an_engine_that_dies_is_picked_up_once_and_only_when_it_can_be() {
     assert!(!died_mid_turn(true, FailureKind::SignedOut));
     assert!(!died_mid_turn(true, FailureKind::UsageLimit));
     let line = died_again_line(Engine::Claude, "Killed: 9\nmore");
-    assert!(line.starts_with("Interrupted: Claude Code stopped unexpectedly again (Killed: 9)"));
+    assert!(line.starts_with("Interrupted: Claude Code stopped unexpectedly again, so"));
+    assert!(
+        !line.contains("Killed"),
+        "raw output stays in the log: {line}"
+    );
     assert!(line.contains("Continue"));
     // Cut off and not picked up: said as interrupted, once.
     set_cut_off("ghost");

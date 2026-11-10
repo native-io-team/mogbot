@@ -569,8 +569,13 @@ pub struct AgentMessage {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum NoteFix {
-    /// Settings → Agents → Your Chrome.
+    /// Settings → Agents → Your Chrome: set it up.
     UserChrome,
+    /// Settings → Agents → Your Chrome, when it's on but not connected:
+    /// the button says to check it, not to set it up again.
+    UserChromeCheck,
+    /// Settings → Agents → Disk space, with Free up space.
+    Disk,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't

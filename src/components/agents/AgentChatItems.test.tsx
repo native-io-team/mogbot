@@ -281,6 +281,30 @@ describe('ErrorLine', () => {
       off();
     }
   });
+
+  // docs/internal/failure-states.md: an engine that's gone offers Install,
+  // not only Retry, which would fail the same way.
+  it('offers Install when its engine isn’t on this Mac', () => {
+    const onInstall = vi.fn();
+    render(
+      <ErrorLine
+        engine="codex"
+        onInstall={onInstall}
+        onRetry={vi.fn()}
+        message={{
+          id: 'e5',
+          agentId: 'acme',
+          ts: Date.now(),
+          kind: 'error',
+          text: "Codex isn't on this Mac any more, or the app can't find it. Install it again, then send this again.",
+          failure: { kind: 'engine_missing' },
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }));
+    expect(onInstall).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
 });
 
 describe('Start fresh', () => {

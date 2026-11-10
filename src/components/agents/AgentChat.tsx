@@ -368,6 +368,8 @@ interface AgentChatProps extends AgentActions {
   onSetUpEngine: () => void;
   /** The expired-login remedy on an error line. */
   onSignIn: () => void;
+  /** An error line's remedy when its engine isn't on this Mac: install it. */
+  onInstallEngine?: () => void;
   onImport: () => void;
   /** The Chief's phone offer, once the first result is in: open the Phone panel. */
   onSetUpPhone?: () => void;
@@ -426,6 +428,7 @@ export const AgentChat = memo(function AgentChat({
   onOpenAgent,
   onSetUpEngine,
   onSignIn,
+  onInstallEngine,
   onImport,
   onSetUpPhone,
   onEscape,
@@ -1520,6 +1523,7 @@ export const AgentChat = memo(function AgentChat({
                 agent={rowAgent}
                 engine={agent.engine}
                 onSignIn={onSignIn}
+                onInstall={onInstallEngine ?? onSetUpEngine}
                 onRetry={m.id === retryId ? retryLast : undefined}
                 onRetryAt={retryLater}
                 retryScheduled={Boolean(
@@ -1587,6 +1591,8 @@ export const AgentChat = memo(function AgentChat({
       rowsPaused,
       onAnswer,
       onSignIn,
+      onInstallEngine,
+      onSetUpEngine,
       retryId,
       retryLast,
       retryLater,

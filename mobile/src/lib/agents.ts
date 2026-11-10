@@ -20,7 +20,6 @@ import {
   apiPrice,
   keyStateOf,
   needsYouCount,
-  resetPhrase,
   secretTitle,
   tokenCount,
   workingRowLine,
@@ -28,6 +27,8 @@ import {
 import {
   formatClock as clockOf,
   crossoverOutcome,
+  failureLine as sharedFailureLine,
+  failurePill,
   previewText,
   stepInOutcome,
 } from '@shipstudio/companion-protocol';
@@ -51,8 +52,6 @@ export const needsYou = (agent: Agent) =>
 export const failedTurn = (agent: Agent): Failure | null =>
   agent.failure && agent.status.state === 'idle' ? agent.failure : null;
 
-export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(agent) !== null;
-
 /** Stopped by a usage limit: paused until it resets, not waiting on you. */
 export const usageLimited = (agent: Agent) =>
   !needsYou(agent) && failedTurn(agent)?.kind === 'usage_limit';
@@ -75,19 +74,11 @@ export function agentKeyState(
 }
 
 /**
- * A failed turn in a line. `engine`: what the agent runs on ("Codex"), so a
- * Codex agent is never said to be signed out of Claude Code.
+ * A failed turn in a line, as the desk says it (`failures.ts`): "Out of
+ * usage until 3:00 PM", "Codex is signed out", "<reason> · didn't finish".
  */
 export function failureLine(failure: Failure, preview: string | null, engine?: string): string {
-  if (failure.kind === 'usage_limit') {
-    return failure.resetsAt
-      ? `Out of usage until ${resetPhrase(failure.resetsAt)}`
-      : 'Out of usage';
-  }
-  if (failure.kind === 'signed_out') return `${engine ?? 'Its engine'} is signed out`;
-  if (failure.kind === 'interrupted') return 'Interrupted · Continue to pick it up';
-  const clause = (preview ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
-  return clause ? `Didn’t finish: ${clause}` : 'Didn’t finish';
+  return sharedFailureLine(failure, preview, engine ?? 'Its engine');
 }
 
 /**
@@ -108,21 +99,7 @@ export function rowPill(
   }
   const failure = state === 'failed' || state === 'limited' ? failedTurn(agent) : null;
   if (!failure) return null;
-  if (failure.kind === 'usage_limit') {
-    return {
-      tone: 'out',
-      label: 'Out of usage',
-      rest: failure.resetsAt ? `until ${resetPhrase(failure.resetsAt)}` : '',
-    };
-  }
-  if (failure.kind === 'signed_out') {
-    return { tone: 'failed', label: 'Signed out', rest: engineName(agent) };
-  }
-  if (failure.kind === 'interrupted') {
-    return { tone: 'failed', label: 'Interrupted', rest: 'Continue to pick it up' };
-  }
-  const clause = (previewText(agent.preview) ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
-  return { tone: 'failed', label: 'Didn’t finish', rest: clause };
+  return failurePill(failure, previewText(agent.preview), engineName(agent));
 }
 
 /**

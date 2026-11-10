@@ -1763,6 +1763,18 @@ pub async fn check_now(
     run_check(app, agent_id, id).await
 }
 
+/// "“Triage mentions” paused itself after 3 runs in a row didn't finish: …"
+/// — once, not "paused itself. Paused after …".
+pub(crate) fn paused_words(what: &str, note: &str) -> String {
+    let rest = note.trim().strip_prefix("Paused ").unwrap_or(note.trim());
+    let end = if rest.ends_with(['.', '!', '?', '…']) {
+        ""
+    } else {
+        "."
+    };
+    format!("“{what}” paused itself {rest}{end} Resume it from the schedule when it's fixed.")
+}
+
 /// "Paused “Triage mentions”: …" in the agent's chat.
 fn paused_line(app: &AppHandle, agent_id: &str, check_ins: &[CheckIn], id: &str, note: &str) {
     let what = check_ins
@@ -1770,11 +1782,7 @@ fn paused_line(app: &AppHandle, agent_id: &str, check_ins: &[CheckIn], id: &str,
         .find(|c| c.id == id)
         .map(|c| short(c.note.lines().next().unwrap_or(""), 60))
         .unwrap_or_default();
-    let line = runner::new_message(
-        agent_id,
-        MessageKind::Note,
-        format!("“{what}” paused itself. {note} Resume it from the schedule when it's fixed."),
-    );
+    let line = runner::new_message(agent_id, MessageKind::Note, paused_words(&what, note));
     let _ = runner::record(app, line);
 }
 

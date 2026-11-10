@@ -27,6 +27,7 @@ import { agentsRecipeScenarios } from './agentsRecipe';
 import { settingsWindowScenarios } from './settingsWindow';
 import { agentsStepsScenarios } from './agentsSteps';
 import { agentsProbeScenarios } from './agentsProbe';
+import { agentsFailureScenarios } from './agentsFailures';
 import { agentsStepInScenarios } from './agentsStepIn';
 import { agentsHeavyScenarios } from './agentsHeavy';
 import { agentsCrossoverScenarios } from './agentsCrossover';
@@ -77,6 +78,7 @@ export const scenarios: Scenario[] = [
   ...settingsWindowScenarios,
   ...agentsStepsScenarios,
   ...agentsProbeScenarios,
+  ...agentsFailureScenarios,
   ...agentsStepInScenarios,
   ...agentsHeavyScenarios,
   ...agentsCrossoverScenarios,

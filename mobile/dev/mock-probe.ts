@@ -36,6 +36,15 @@ export const PROBE_LONG_NAME =
 /** The Mac's words for a plain Allow on a step-in card (`agents::step_in::ON_YOUR_MAC`). */
 export const STEP_IN_ON_YOUR_MAC = 'Step in on your Mac: press Step in on the card there.';
 
+/** `failure::plain_other` for a network error mid-turn. */
+export const FAILED_OFFLINE =
+  "Claude Code couldn't reach Anthropic over the network. Retry once this Mac is back online.";
+/** `failure::missing_engine_line`. */
+export const FAILED_GONE =
+  "Claude Code isn't on this Mac any more, or the app can't find it. Install it again, then send this again.";
+/** `failure::describe` for a sign-in that expired. */
+export const FAILED_SIGNED_OUT = 'Claude Code is signed out.';
+
 /** The line a turn the app cut off ends on (`runner::RESTART_LINE`). */
 export const RESTART_LINE =
   'Interrupted: the app closed while this agent was working, so the turn stopped part-way. Continue picks it up where it was.';
@@ -300,6 +309,38 @@ export function addProbeAccount(
         : []),
     ]
   );
+
+  // When things go wrong (docs/internal/failure-states.md): the network
+  // gone mid-turn (Retry), its engine gone from the Mac (install there),
+  // and signed out (sign in there). The Mac's own sentences.
+  const failed = (
+    id: string,
+    name: string,
+    ask: string,
+    kind: 'other' | 'engine_missing' | 'signed_out',
+    text: string
+  ) =>
+    put(
+      base(id, name, 'Keeps the shop running', 'blue', {
+        status: { state: 'idle', activity: null, since: null },
+        lastActivityAt: now - 2 * MIN,
+        preview: text,
+        failure: { kind },
+      }),
+      [
+        { ts: now - 3 * MIN, kind: 'user', text: ask },
+        { ts: now - 2 * MIN, kind: 'error', text, failure: { kind } },
+      ]
+    );
+  failed(
+    'offline',
+    'Stock Check',
+    'Check stock levels for the spring range.',
+    'other',
+    FAILED_OFFLINE
+  );
+  failed('gone', 'Invoicer', 'Send this month’s invoices.', 'engine_missing', FAILED_GONE);
+  failed('signedout', 'Returns', 'Process today’s returns.', 'signed_out', FAILED_SIGNED_OUT);
 
   // Long both ways.
   put(
