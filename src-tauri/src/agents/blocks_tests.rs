@@ -559,3 +559,85 @@ fn a_show_call_is_recognised_from_every_engines_events() {
     assert_eq!(other.len(), 2);
     assert!(other.iter().all(|a| !is_call(a)), "{other:?}");
 }
+
+/// What a usage `show` puts in the chat, as the Chief posts it.
+fn usage_shown() -> String {
+    message_text(
+        &parse(&json!({
+            "text": "Here's your usage this week.",
+            "blocks": [
+                {"kind": "metrics", "title": "Claude (Max)", "items": [
+                    {"label": "Weekly limit used", "value": 62, "suffix": "%", "delta": 9, "vs": "vs last week"},
+                    {"label": "Tokens", "value": 12500},
+                    {"label": "Resets", "value": "Friday 9am"}
+                ]},
+                {"kind": "table", "title": "By agent",
+                 "columns": ["Agent", {"label": "Share", "suffix": "%"}],
+                 "rows": [["Chief of Staff", 41], ["Researcher", 21]]}
+            ]
+        }))
+        .unwrap(),
+    )
+}
+
+/// After a `show` that asks nothing, a line that only closes or restates it
+/// goes in "What it did" (`restates`); lines as Claude Code wrote them.
+#[test]
+fn a_line_only_restating_what_was_shown_is_filler() {
+    let shown = usage_shown();
+    for line in [
+        "That's everything there is to show for now.",
+        "That's all for now.",
+        "Here's your usage.",
+        "Here's your usage for this week.",
+        "You've used 62% of your weekly limit; it resets Friday.",
+        "The Chief of Staff is at 41% and the Researcher at 21%.",
+        "Tokens are at 12.5K.",
+        "Tokens: 12,500.",
+        "Done.",
+        "  Hope that helps!  ",
+    ] {
+        assert!(restates(&shown, line), "{line:?} should fold\n{shown}");
+    }
+}
+
+/// Anything new stays in the chat: a number or a word not shown, a
+/// question, a link, code, a long or multi-line follow-up.
+#[test]
+fn a_follow_up_with_anything_new_stays_in_the_chat() {
+    let shown = usage_shown();
+    let long = "That's all for now. ".repeat(12);
+    for line in [
+        "You've used 70% of your weekly limit.",
+        "I'd switch the Researcher to your second account before Friday.",
+        "Usage is not near the limit.",
+        "Want me to move the Researcher's routines to the weekend?",
+        "Details: https://claude.ai/settings/usage",
+        "Run `claude /usage` to check.",
+        "That's everything.\n\n- Chief of Staff 41%\n- Researcher 21%",
+        long.as_str(),
+        "Opus is cheaper on Mondays.",
+        "",
+    ] {
+        assert!(!restates(&shown, line), "{line:?} should stay");
+    }
+    // Nothing shown, nothing to restate.
+    assert!(!restates("", "Quick update: the deploy is green."));
+    assert!(!restates_shown("nobody-showed", "That's all for now."));
+}
+
+/// The runner's view: what a live turn showed, per agent, until the next
+/// turn clears it; a second `show` adds to the first.
+#[test]
+fn what_a_turn_showed_is_kept_per_agent_until_cleared() {
+    let id = "restates-test-agent";
+    clear_shown(id);
+    assert!(!restates_shown(id, "Here's your usage."));
+    note_shown(id, "Usage this week");
+    note_shown(id, "- Researcher: 21%");
+    assert!(restates_shown(id, "Here's your usage."));
+    assert!(restates_shown(id, "The Researcher is at 21%."));
+    assert!(!restates_shown("another-agent", "Here's your usage."));
+    clear_shown(id);
+    assert!(!restates_shown(id, "Here's your usage."));
+}
