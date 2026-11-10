@@ -4,8 +4,14 @@
  *
  * The mark is the site's: the "M" (a dome with two slot eyes) on a Graphite
  * agent key (docs/internal/agent-keys.md): three shades of one hue (face,
- * skirt, depth), a hard depth band, the cream legend. The light Dock option is
- * the same key in the site's putty (`.key` in the site's global.css).
+ * skirt, depth) and the cream legend. The light Dock option is the same key in
+ * the site's putty (`.key` in the site's global.css).
+ *
+ * The outline is exactly Apple's icon shape (on macOS the 824 px continuous-
+ * corner body on the 1024 grid) and nothing is drawn outside it: the key's
+ * depth is the lower part of that shape shading softly darker, never a band
+ * of its own. A separate dark band read, in a real Dock beside Safari, as the
+ * bottom of the icon being cut off.
  *
  * The drawing lives here, as numbers, and is written out as SVG sources in
  * `src-tauri/icons/source/` so it can be opened and inspected. Everything else
@@ -58,10 +64,10 @@ const GRAPHITE = {
   faceHi: '#7d8188',
   skirtTop: '#45484e',
   skirt: '#34373C',
-  skirtBot: '#2c2f33',
+  skirtBot: '#303338',
   skirtHi: '#5a5d63',
   lip: '#2a2d31',
-  depth: '#131417',
+  depth: '#2a2c30',
   legend: '#F2EEE4',
   legendBot: '#e9e3d6',
 };
@@ -75,7 +81,7 @@ const PUTTY = {
   skirtBot: '#d3cab8',
   skirtHi: '#f7f3eb',
   lip: '#cbc1ad',
-  depth: '#b3a891',
+  depth: '#cec4b0',
   legend: '#1d1c1a',
   legendBot: '#1d1c1a',
 };
@@ -133,29 +139,31 @@ function squircle(x, y, w, h, r) {
 }
 
 /**
- * One key inside the box (x, y, s × s): depth band, skirt, face, legend.
- * Proportions follow the site's favicon and AgentKey: depth ~6.5%, side
- * walls ~6.5%, top lip ~2%, front band ~13%, legend ~56% of the face.
+ * One key inside the box (x, y, s × s): skirt, face, legend. The box's outline
+ * is the whole silhouette; the key's depth is shading inside it (the skirt
+ * darkens over its lowest fifth), so the icon never gains a second edge.
+ * Proportions follow the site's favicon and AgentKey: side walls ~6.5%, top
+ * lip ~2%, front band ~19.5%, legend ~56% of the face.
  */
 function key(id, { x, y, s, r, c, outline = true, glyphScale = 0.56, square = false }) {
-  const depth = s * 0.066;
   const side = s * 0.066;
   const top = s * 0.02;
-  const front = s * 0.128;
-  const skirtH = s - depth;
+  const front = s * 0.194;
   const fx = x + side,
     fy = y + top,
     fw = s - side * 2,
-    fh = skirtH - top - front;
+    fh = s - top - front;
   const fr = Math.max(4, r - side * 0.9);
   const body = square ? `M${x},${y} h${s} v${s} h${-s} Z` : squircle(x, y, s, s, r);
-  const skirt = square ? `M${x},${y} h${s} v${r2(skirtH)} h${-s} Z` : squircle(x, y, s, skirtH, r);
   const face = squircle(fx, fy, fw, fh, fr);
   const hair = s / 1024;
   return `
   <defs>
     <linearGradient id="${id}-skirt" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${c.skirtTop}"/><stop offset=".42" stop-color="${c.skirt}"/><stop offset="1" stop-color="${c.skirtBot}"/>
+      <stop offset="0" stop-color="${c.skirtTop}"/><stop offset=".42" stop-color="${c.skirt}"/><stop offset=".8" stop-color="${c.skirtBot}"/><stop offset="1" stop-color="${c.depth}"/>
+    </linearGradient>
+    <linearGradient id="${id}-rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${c.skirtHi}" stop-opacity=".75"/><stop offset=".5" stop-color="${c.skirtHi}" stop-opacity=".18"/><stop offset="1" stop-color="${c.skirtHi}" stop-opacity=".16"/>
     </linearGradient>
     <linearGradient id="${id}-walls" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#000" stop-opacity=".14"/><stop offset=".07" stop-color="#000" stop-opacity=".05"/><stop offset=".22" stop-color="#000" stop-opacity="0"/>
@@ -168,16 +176,12 @@ function key(id, { x, y, s, r, c, outline = true, glyphScale = 0.56, square = fa
       <stop offset="0" stop-color="${c.legend}"/><stop offset="1" stop-color="${c.legendBot}"/>
     </linearGradient>
     <clipPath id="${id}-body"><path d="${body}"/></clipPath>
-    <clipPath id="${id}-skirtclip"><path d="${skirt}"/></clipPath>
     <clipPath id="${id}-faceclip"><path d="${face}"/></clipPath>
   </defs>
   <g clip-path="url(#${id}-body)">
-    <path d="${body}" fill="${c.depth}"/>
-    <path d="${skirt}" fill="url(#${id}-skirt)"/>
-    <g clip-path="url(#${id}-skirtclip)">
-      <rect x="${x}" y="${y}" width="${s}" height="${s}" fill="url(#${id}-walls)"/>
-      ${outline ? `<path d="${skirt}" fill="none" stroke="${c.skirtHi}" stroke-opacity=".7" stroke-width="${r2(hair * 6)}" transform="translate(0 ${r2(hair * 3)})" clip-path="url(#${id}-skirtclip)"/>` : ''}
-    </g>
+    <path d="${body}" fill="url(#${id}-skirt)"/>
+    <rect x="${x}" y="${y}" width="${s}" height="${s}" fill="url(#${id}-walls)"/>
+    ${outline ? `<path d="${body}" fill="none" stroke="url(#${id}-rim)" stroke-width="${r2(hair * 6)}"/>` : ''}
     <path d="${face}" fill="${c.lip}" transform="translate(0 ${r2(hair * 5)})"/>
     <path d="${face}" fill="url(#${id}-face)"/>
     <g clip-path="url(#${id}-faceclip)">
@@ -265,8 +269,12 @@ function macSmall(px, c) {
   return svg(
     1024,
     `
-  <path d="${squircle(x * u, y * u, s * u, s * u, r * u)}" fill="${c.depth}"/>
-  <path d="${squircle(x * u, y * u, s * u, (s - g.depth) * u, r * u)}" fill="${c.skirt}"/>
+  <defs>
+    <linearGradient id="s-body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${c.skirt}"/><stop offset="${r2(1 - (g.depth + 1) / s)}" stop-color="${c.skirt}"/><stop offset="1" stop-color="${c.depth}"/>
+    </linearGradient>
+  </defs>
+  <path d="${squircle(x * u, y * u, s * u, s * u, r * u)}" fill="url(#s-body)"/>
   <path d="${squircle(fx * u, y * u, fw * u, fh * u, (r - 1) * u)}" fill="${c.face}"/>
   <path fill="${c.legend}" fill-rule="evenodd" d="${pixelGlyph(g.gx, g.gy, g.m, u)}"/>`
   );
@@ -285,12 +293,15 @@ function iosIcon(c) {
 function androidForeground(c) {
   const inner = 1024 * (72 / 108);
   const o = (1024 - inner) / 2;
-  const depthTop = o + inner * (1 - 0.066);
   return svg(
     1024,
     `
-  <rect width="1024" height="${r2(depthTop)}" fill="${c.skirt}"/>
-  <rect y="${r2(depthTop)}" width="1024" height="${r2(1024 - depthTop)}" fill="${c.depth}"/>
+  <defs>
+    <linearGradient id="a-bg" gradientUnits="userSpaceOnUse" x1="0" y1="${r2(o)}" x2="0" y2="${r2(o + inner)}">
+      <stop offset="0" stop-color="${c.skirtTop}"/><stop offset=".42" stop-color="${c.skirt}"/><stop offset=".8" stop-color="${c.skirtBot}"/><stop offset="1" stop-color="${c.depth}"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#a-bg)"/>
   <g transform="translate(${r2(o)} ${r2(o)}) scale(${r4(inner / 1024)})">${key('k', { x: 0, y: 0, s: 1024, r: 229, c, square: true, glyphScale: 0.54 })}
   </g>`
   );
@@ -484,6 +495,25 @@ function sheet(out, work) {
     `<span class="other" style="background:linear-gradient(hsl(${hue} 55% 62%),hsl(${hue} 50% 44%))"></span>`;
   const ios = (hue, label) =>
     `<figure><span class="ios other" style="background:linear-gradient(hsl(${hue} 60% 60%),hsl(${hue} 55% 45%))"></span><figcaption>${label}</figcaption></figure>`;
+  // Apple's own icons beside ours, when this Mac has them: same size, same Dock.
+  const apple = [
+    ['Finder', '/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns'],
+    ['Safari', '/Applications/Safari.app/Contents/Resources/AppIcon.icns'],
+  ]
+    .filter(([, icns]) => existsSync(icns))
+    .map(([name, icns]) => {
+      const png = path.join(work, `apple-${name}.png`);
+      const r = spawnSync('sips', ['-s', 'format', 'png', '-Z', '256', icns, '--out', png], {
+        stdio: 'pipe',
+      });
+      return r.status === 0 && existsSync(png) ? png : null;
+    })
+    .filter(Boolean);
+  const ours = path.join(work, 'mac-256.png');
+  const besideDock = (bg, size) => `
+    <div class="beside" style="background:${bg}">
+      <div class="dock real">${[...apple, ours, ...apple.slice().reverse()].map((f) => `<img src="${u(f)}" style="width:${size}px;height:${size}px">`).join('')}</div>
+    </div>`;
   const html = `<!doctype html><meta charset="utf-8"><style>
     body{margin:0;font:13px/1.3 -apple-system,system-ui,sans-serif;background:#e9e4da;width:1300px}
     h2{font-size:13px;font-weight:600;margin:24px 24px 8px;color:#1d1c1a}
@@ -504,6 +534,9 @@ function sheet(out, work) {
     .phone{width:340px;height:330px;border-radius:14px;overflow:hidden;padding:26px 22px;box-sizing:border-box;display:grid;grid-template-columns:repeat(4,1fr);gap:18px 10px;align-content:start;background:linear-gradient(160deg,#20304a,#5b4a6e 60%,#c58b7a);color:#fff}
     .phone img,.phone .ios{width:62px;height:62px;border-radius:14px;display:block}
     .phone figcaption{opacity:1;font-size:11px}
+    .beside{flex:1;height:170px;border-radius:14px;position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;box-sizing:border-box}
+    .dock.real{position:static;translate:none;gap:2px;padding:4px 8px;border-radius:22px}
+    .dock.real img{display:block}
     .phone.light{background:linear-gradient(160deg,#f3e9dc,#d7c9e6 60%,#bcd3e8);color:#1d1c1a}
   </style>
   <h2>Desktop icon at its real pixel sizes (16 and 32 are the hand-tuned art), light and dark</h2>${strip('#faf8f4', '#1d1c1a')}<h2></h2>${strip('#1e1e1e', '#f2eee4')}
@@ -517,6 +550,10 @@ function sheet(out, work) {
     <div class="phone">${ios(205, 'Mail')}${ios(120, 'Maps')}<figure><img src="${A('mobile/assets/icon.png')}"><figcaption>Mogbot</figcaption></figure>${ios(35, 'Notes')}${ios(0, 'Music')}${ios(260, 'Podcasts')}${ios(180, 'Files')}${ios(50, 'Photos')}</div>
     <div class="phone light">${ios(205, 'Mail')}${ios(120, 'Maps')}<figure><img src="${A('mobile/assets/icon.png')}"><figcaption>Mogbot</figcaption></figure>${ios(35, 'Notes')}${ios(0, 'Music')}${ios(260, 'Podcasts')}${ios(180, 'Files')}${ios(50, 'Photos')}</div>
   </div>
+  <h2>Beside Apple's own icons (Finder, Safari): the Dock at its default size (64), then at 128, on light and dark wallpapers</h2>
+  <div class="ctx">${besideDock('linear-gradient(160deg,#dfe8f3,#f6efe4)', 64)}${besideDock('linear-gradient(160deg,#101521,#2b2238)', 64)}</div>
+  <div class="ctx">${besideDock('linear-gradient(160deg,#dfe8f3,#f6efe4)', 128)}</div>
+  <div class="ctx">${besideDock('linear-gradient(160deg,#101521,#2b2238)', 128)}</div>
   <h2>Phone extras: iOS dark, tinted, Android adaptive (circle and squircle masks), splash, notification</h2>
   <div class="strip" style="background:#151413;color:#f2eee4;margin-bottom:24px">
     <figure><img src="${A('mobile/assets/icon-dark.png')}" style="width:96px;height:96px;border-radius:22px;background:linear-gradient(#2a2a2c,#111)"><figcaption>iOS dark</figcaption></figure>
@@ -537,7 +574,7 @@ function sheet(out, work) {
       '--hide-scrollbars',
       '--force-device-scale-factor=1',
       `--user-data-dir=${tmp}`,
-      '--window-size=1300,1890',
+      '--window-size=1300,2560',
       `--screenshot=${path.resolve(out)}`,
       u(page),
     ],
