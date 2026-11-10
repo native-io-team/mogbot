@@ -33,6 +33,7 @@ import {
   routineInPast,
   routineWhenOf,
   routineWhenPhrase,
+  ROUTINES_NEED_THE_MAC,
   zoneDiffers,
   type CheckInRun,
   type MonthDay,
@@ -376,6 +377,9 @@ function Schedule() {
             style={{ flex: 1 }}
           />
         </View>
+        <T variant="caption" color={colors.textMuted}>
+          {ROUTINES_NEED_THE_MAC}
+        </T>
         {!!editing?.runs?.length && <RunHistory runs={editing.runs} />}
       </ScrollView>
     </SheetPage>

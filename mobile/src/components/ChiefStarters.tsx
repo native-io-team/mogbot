@@ -6,12 +6,22 @@
  * press Send. They go once you've said anything.
  */
 
-import { CHIEF_CHIPS, type ChiefIdea } from '@shipstudio/companion-protocol';
+import {
+  CHIEF_CHIPS,
+  ideaRepeats,
+  ROUTINES_NEED_THE_MAC,
+  type ChiefIdea,
+} from '@shipstudio/companion-protocol';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useColors } from '../lib/appearance';
 import { space } from '../lib/theme';
-import { Button } from './ui';
+import { Button, T } from './ui';
 
 export function ChiefStarters({ onPick }: { onPick: (idea: ChiefIdea) => void }) {
+  const colors = useColors();
+  // One that sets up a routine says, once picked, where routines run.
+  const [picked, setPicked] = useState<ChiefIdea | null>(null);
   return (
     <View style={styles.row} testID="chief-starters">
       {CHIEF_CHIPS.map((idea) => (
@@ -22,10 +32,18 @@ export function ChiefStarters({ onPick }: { onPick: (idea: ChiefIdea) => void })
           size="compact"
           lines={2}
           accessibilityHint="Types this into the message box for you to finish"
-          onPress={() => onPick(idea)}
+          onPress={() => {
+            setPicked(idea);
+            onPick(idea);
+          }}
           testID={`chief-idea-${idea.id}`}
         />
       ))}
+      {picked && ideaRepeats(picked) && (
+        <T variant="caption" color={colors.textMuted} style={styles.note}>
+          {ROUTINES_NEED_THE_MAC}
+        </T>
+      )}
     </View>
   );
 }
@@ -51,4 +69,5 @@ const styles = StyleSheet.create({
     paddingTop: space.sm,
     paddingBottom: space.md,
   },
+  note: { flexBasis: '100%' },
 });

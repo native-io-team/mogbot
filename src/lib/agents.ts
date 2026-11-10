@@ -2102,6 +2102,7 @@ export {
   routineInPast,
   routineWhenOf,
   routineWhenPhrase,
+  ROUTINES_NEED_THE_MAC,
   scheduleWhenPhrase,
   sortCheckIns,
   splitScheduleInput,
