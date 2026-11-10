@@ -4490,6 +4490,13 @@ the desk banner and the phone notification say.
   reported reset; an account nobody read is "not reported", never counted
   as having room). `brief::compose` writes it from a template. Nothing is
   inferred: an agent that did nothing isn't named.
+- **Drawn as blocks.** `brief::compose_blocks` builds the same facts as
+  blocks (the gist as the intro; Needs you and Usage as facts, Didn't work
+  as a warning callout, Today and Since… as tables with counts as numbers,
+  the user's checks as facts whose outside text is drawn as plain text),
+  through `blocks::parse` like an agent's. The message's text stays the
+  composed one (notification, search, Copy, older clients); a set `parse`
+  refuses leaves the brief as text alone.
 - **Prepared ahead.** 20 minutes before the time the slow parts (the usage
   inventory and the user's checks) are read into `morning-brief-state.json`;
   at the time the brief is posted at once with fresh local records. Once a
@@ -6522,7 +6529,29 @@ view. Comparison, choices and form answers are neutral (`strong` /
 
 **Teaching the agents.** The tool description carries each kind's fields and
 an example; the system prompt has one line ("Show, don't describe…"), which
-took the prompt budgets to 13,500 / 14,100 / 17,500.
+took the prompt budgets to 13,500 / 14,100 / 17,500. Where a built-in flow
+has numbers, it asks for them as blocks: `usage_overview`'s description
+(each account's used share as metrics, a bar chart to compare), and a
+routine's wake prompt ("numbers, records or progress as `show` blocks").
+The morning brief is blocks without a model ("Morning brief").
+
+End to end: the fake-engine scenario `blocks` (`examples/agents_fake`) runs
+a turn whose `show` carries metrics, a chart, a table and a choice, checks
+the kept message, its text fallback and the receipt, answers the choice as
+the user's message, and compares both messages with
+`packages/companion-protocol/src/blocks-turn.json`
+(`AGENTS_FAKE_WRITE_FIXTURES=1` rewrites it), which the desk's and the
+phone's tests draw and answer. `real-blocks` runs the same ask on the real
+Claude Code (`AGENTS_REAL_CLAUDE=<path>`; never in the default run): the
+app's state stays in the throwaway HOME, Claude Code runs on the real one
+for its sign-in, and the run's transcript folder is removed once read. On
+its first live run (Claude Code 2.1.322, 2026-11-10) the model called `show`
+first try with a valid table and choices, then added a bubble repeating the
+question ("Tap a fruit above"), and again ("I put up a table with…") with
+the receipt saying to end the turn with no more text. So once a live turn's
+`show` asks (`blocks::asks`, `runner::note_blocks_asked`), the turn's
+further words go in "What it did" as notes and the question stays the
+chat's last word; the scenario `blocks` holds this.
 
 Harness: `agents-blocks-*` (numbers, a chart's tooltip, a sorted table, more
 charts, deciding, a form left empty, progress, answered, outside text).

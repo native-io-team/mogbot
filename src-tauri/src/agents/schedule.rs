@@ -1341,7 +1341,7 @@ where
         );
     }
     format!(
-        "[Scheduled check-in you set: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says. {SWEEP} Then tell the user in a few lines what you did and what's left. If nothing changed since your last check-in and nothing needs them, reply with exactly {NOTHING_NEW} and nothing else: no post goes in their chat.]",
+        "[Scheduled check-in you set: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says. {SWEEP} Then tell the user in a few lines what you did and what's left (numbers, records or progress as `show` blocks: metrics, a table, a checklist). If nothing changed since your last check-in and nothing needs them, reply with exactly {NOTHING_NEW} and nothing else: no post goes in their chat.]",
         c.note,
         format_time(tz, now)
     )

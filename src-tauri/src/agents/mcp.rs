@@ -1611,8 +1611,15 @@ async fn show(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &
         Err(e) => return error(e.to_string()),
     };
     let receipt = super::blocks::receipt(&set);
+    let asks = super::blocks::asks(&set);
     match runner::record(app, message) {
-        Ok(_) => text(receipt),
+        Ok(_) => {
+            // The rest of this turn's words go in "What it did" (`runner`).
+            if asks && super::broker::is_live(&caller.id, turn) {
+                runner::note_blocks_asked(&caller.id);
+            }
+            text(receipt)
+        }
         Err(e) => error(e.to_string()),
     }
 }

@@ -5542,6 +5542,36 @@ fn took_action(agent_id: &str) -> bool {
         .contains(agent_id)
 }
 
+/// Agents whose live turn has asked the user with blocks (`show` with a
+/// choice, comparison or form). Observed live (Claude Code, 2026-11-10):
+/// told to stop, the model still wrote "Tap a fruit above" or "I put up a
+/// table with…" under the question, a second bubble saying it again. Once
+/// asked, the turn's further words go in "What it did" and the question
+/// stays the chat's last word.
+static BLOCKS_ASKED: LazyLock<Mutex<std::collections::HashSet<String>>> =
+    LazyLock::new(Default::default);
+
+pub fn note_blocks_asked(agent_id: &str) {
+    BLOCKS_ASKED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(agent_id.to_string());
+}
+
+fn blocks_asked(agent_id: &str) -> bool {
+    BLOCKS_ASKED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(agent_id)
+}
+
+fn clear_blocks_asked(agent_id: &str) {
+    BLOCKS_ASKED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id);
+}
+
 fn clear_acted(agent_id: &str) {
     ACTED
         .lock()
@@ -6050,6 +6080,7 @@ async fn run_turn(
     draft_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     // Short lines written mid-turn go to the timeline (`narration`).
     let mut narration = super::narration::Narration::default();
+    clear_blocks_asked(agent_id);
     // When the engine's process tree was last looked at (`dev_servers`).
     let mut tree_seen_at = 0_i64;
     // `claude` exited. Its output normally closes with it, but a child that
@@ -6216,6 +6247,16 @@ async fn run_turn(
                                 );
                                 continue;
                             }
+                            // Asked with blocks: the question is the last word.
+                            if !text.is_empty() && !quiet && blocks_asked(agent_id) {
+                                said_anything = true;
+                                let fold = super::narration::Fate::Fold(super::narration::Held {
+                                    draft_id,
+                                    text,
+                                });
+                                settle_narration(app, agent_id, Some(fold), &mut said_anything).await;
+                                continue;
+                            }
                             if !text.is_empty() && !quiet {
                                 let (before, held) = narration.reply(draft_id.clone(), &text);
                                 settle_narration(app, agent_id, before, &mut said_anything).await;
@@ -6323,7 +6364,7 @@ async fn run_turn(
                             turn_end.on_done();
                             timing.mark_result();
                             // The turn's last word, if it was held back.
-                            settle_narration(app, agent_id, narration.end(said_anything), &mut said_anything).await;
+                            settle_narration(app, agent_id, narration.end(said_anything || blocks_asked(agent_id)), &mut said_anything).await;
                             // The engine is still up: what it started is still under it.
                             if let Some(pid) = pid {
                                 note_engine_tree(agent_id, pid).await;
@@ -6458,10 +6499,12 @@ async fn run_turn(
     settle_narration(
         app,
         agent_id,
-        narration.end(said_anything),
+        narration.end(said_anything || blocks_asked(agent_id)),
         &mut said_anything,
     )
     .await;
+    // Its question is in the chat: not a silent turn.
+    said_anything |= blocks_asked(agent_id);
     let (status, settled) = match exited {
         Some(status) => (status, false),
         None => finish(&mut child, pid, saw_result, agent_id, stopped.is_none()).await,
