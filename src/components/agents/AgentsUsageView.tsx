@@ -4,8 +4,8 @@
  * chip). Two levels:
  *
  * **The overview**, read top-down:
- * 1. **The total**: the room across every real account as one figure ("72%
- *    left across 2 accounts", each account counted equally, said how), when
+ * 1. **The total**: what is used across every real account as one figure ("28%
+ *    used across 2 accounts", each account counted equally, said how), when
  *    the next refill is, and ONE ordinary bar filled to that figure (never a
  *    segment per account: two at 50% are one bar half full).
  * 2. **Nearly out everywhere**: one calm bar with the options.
@@ -603,7 +603,7 @@ export function UsagePanel({
 }
 
 /**
- * The total first: what is left across every account, of what, and when it
+ * The total first: what is used across every account, of what, and when it
  * next refills (`totalWords`, as the phone and the chat's popover say it);
  * then ONE bar filled to that figure, and how it is weighted. The accounts'
  * names, bars and room are the rows right under it, so the hero doesn't say
@@ -615,8 +615,8 @@ function TotalHero({ glance }: { glance: UsageGlance }) {
   return (
     <div
       className="usage-hero"
-      data-tone={glance.tone}
-      data-unread={total.left === null || undefined}
+      data-tone={glance.tone === 'calm' ? total.tone : glance.tone}
+      data-unread={total.used === null || undefined}
       data-testid="usage-hero"
     >
       <div className="usage-hero__answer">

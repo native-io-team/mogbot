@@ -17,9 +17,9 @@ describe('the usage meter', () => {
     expect(piePath(10, 10, 6, 1)).toContain('A 6 6 0 1 1 16 10 A 6 6 0 1 1 4 10');
   });
 
-  it('says what is left, and has no arc stroke to spin', async () => {
+  it('says what is used, and has no arc stroke to spin', async () => {
     await render(<UsageRing percent={30} tone="calm" onPress={() => {}} />);
-    expect(screen.getByLabelText('Usage: 70% of the 5-hour limit left')).toBeTruthy();
+    expect(screen.getByLabelText('Usage: 30% of the 5-hour limit used')).toBeTruthy();
     expect(screen.getByTestId('usage-meter')).toBeTruthy();
   });
 });

@@ -57,10 +57,10 @@ describe('What’s in flight: spare capacity', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('one quiet line when a reset is near with capacity left, said as what is left', async () => {
+  it('one quiet line when a reset is near with capacity left, said as what goes unused', async () => {
     serve(FULL_INVENTORY);
     render(<AgentsSpareNote />);
-    const line = await screen.findByText(/^Claude 5-hour limit refills .* · 62% left$/);
+    const line = await screen.findByText(/^Claude 5-hour limit refills .* · 62% unused$/);
     expect(line.getAttribute('title')).toContain('ideas for leftover usage (1 waiting)');
     // "This Mac" is where it's signed in, never named as the account.
     expect(line.getAttribute('title')).not.toMatch(/On This Mac/);

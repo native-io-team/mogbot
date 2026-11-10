@@ -193,7 +193,7 @@ describe('total compute', () => {
     expect(v?.detail).toBe('Claude · Work has room again at 3:00 PM');
     expect(v?.tone).toBe('limited');
     expect(v?.rows).toEqual([]);
-    expect(v?.quiet[0].state).toMatch(/^Out of usage until/);
+    expect(v?.quiet[0].state).toMatch(/^Out until/);
     expect(computeView(inventory([unread], totals({ read: 0, room: 0 })), NOW)?.headline).toBe(
       'No limits read yet'
     );
@@ -241,7 +241,7 @@ describe('total compute', () => {
     expect(rows[1].session?.percent).toBe(90);
     // The Mac's own words for why.
     expect(rows[2].state).toBe('Its why');
-    expect(rows[3].state).toMatch(/^Out of usage until/);
+    expect(rows[3].state).toMatch(/^Out until/);
     expect(rows[3].session).toBeNull();
     expect(rows[4].state).toBe('Not signed in');
     expect(rows[4].tone).toBe('calm');

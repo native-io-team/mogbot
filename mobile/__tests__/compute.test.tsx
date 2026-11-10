@@ -34,8 +34,8 @@ describe('total compute, on the phone', () => {
     expect(screen.getByText(/Used next/)).toBeTruthy();
     expect(screen.queryByText('Next turn')).toBeNull();
     expect(screen.getByText('5-hour')).toBeTruthy();
-    // Said as what is left, as every usage figure is.
-    expect(screen.getByText('62% left')).toBeTruthy();
+    // Said as what is used, as every usage figure is.
+    expect(screen.getByText('38% used')).toBeTruthy();
     expect(screen.getByText(/^At this pace it runs out /)).toBeTruthy();
 
     await render(<ComputeAccount row={work} />);
@@ -47,7 +47,7 @@ describe('total compute, on the phone', () => {
     const view = computeView(served, served.now);
     await render(<ComputeQuiet rows={view?.quiet ?? []} />);
     expect(screen.getByText('Codex · Plus')).toBeTruthy();
-    expect(screen.getByText(/^Out of usage until /)).toBeTruthy();
+    expect(screen.getByText(/^Out until /)).toBeTruthy();
     expect(screen.queryByText('100%')).toBeNull();
   });
 });

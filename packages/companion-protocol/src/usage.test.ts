@@ -58,14 +58,14 @@ describe('the capacity inventory, in words', () => {
       limited: false,
       observedAt: NOW - 60_000,
     };
-    expect(windowLine(fresh, NOW)).toMatch(/^5-hour 38% · refills /);
+    expect(windowLine(fresh, NOW)).toMatch(/^5-hour 38% used · refills /);
     const old = {
       ...fresh,
       kind: 'seven_day',
       resetsAt: NOW + 3 * 24 * HOUR,
       observedAt: NOW - 30 * HOUR,
     };
-    expect(windowLine(old, NOW)).toMatch(/^Weekly 38% · refills \w+ · read yesterday$/);
+    expect(windowLine(old, NOW)).toMatch(/^Weekly 38% used · refills \w+ · read yesterday$/);
     const warm = accountUsage(account({ windows: [{ ...fresh, usedPercent: 93 }] }), NOW);
     expect(warm.tone).toBe('warning');
   });
@@ -123,7 +123,7 @@ describe('the capacity inventory, in words', () => {
       }),
       NOW
     );
-    expect(line?.text).toMatch(/^Claude 5-hour limit refills .+ · 62% left$/);
+    expect(line?.text).toMatch(/^Claude 5-hour limit refills .+ · 62% unused$/);
     expect(line?.detail).toContain('ideas for leftover usage (1 waiting)');
     // A reset that has passed is history.
     expect(

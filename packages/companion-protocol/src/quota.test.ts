@@ -59,26 +59,26 @@ describe('quotaLines', () => {
     expect(quotaLines([claude(win({ resetsAt: saturday }))], NOW)).toEqual([]);
   });
 
-  it('says the fullest window, calm below 90%', () => {
+  it('says the fullest window, calm below 80%', () => {
     const [line] = quotaLines(
       [
         claude(
-          win({ usedPercent: 85, resetsAt: saturday }),
+          win({ usedPercent: 75, resetsAt: saturday }),
           win({ kind: 'five_hour', usedPercent: 12, resetsAt: NOW + HOUR })
         ),
       ],
       NOW
     );
-    expect(line.text).toMatch(/^Claude usage 85% · refills Sat/);
+    expect(line.text).toMatch(/^Claude usage 75% · refills Sat/);
     expect(line.tone).toBe('calm');
     expect(line.detail).toMatch(/weekly limit/);
   });
 
-  it('turns amber at 90% and floors the figure', () => {
-    const [at] = quotaLines([claude(win({ usedPercent: 90, resetsAt: saturday }))], NOW);
+  it('turns amber at 80% and floors the figure', () => {
+    const [at] = quotaLines([claude(win({ usedPercent: 80, resetsAt: saturday }))], NOW);
     expect(at.tone).toBe('warning');
-    const [under] = quotaLines([claude(win({ usedPercent: 89.9, resetsAt: saturday }))], NOW);
-    expect(under.text).toMatch(/usage 89%/);
+    const [under] = quotaLines([claude(win({ usedPercent: 79.9, resetsAt: saturday }))], NOW);
+    expect(under.text).toMatch(/usage 79%/);
     expect(under.tone).toBe('calm');
   });
 

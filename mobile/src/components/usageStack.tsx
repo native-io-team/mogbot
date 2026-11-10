@@ -1,8 +1,9 @@
 /**
  * Usage on the phone, as the desk's sidebar row and Usage view say it
- * (`companion-protocol/usageGlance`): the total first, the room across every
- * account ("72% left across 2 accounts"), one bar made of a segment per
- * account in the work order, then each account as a row that opens
+ * (`companion-protocol/usageGlance`), said as what is USED everywhere:
+ * "N% used", every bar filling with use, the warning role from 80%, "Out
+ * until <refill>" at 100%. The total first ("28% used across 2 accounts"),
+ * one bar, then each account as a row that opens
  * its own screen (`KeyCard`): its limits, who used it this week and "Where
  * did my usage go". `GlanceRow` is the Agents list's line, the desk
  * sidebar's row on the phone.
@@ -21,7 +22,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import {
   ADD_ON_MAC,
   glanceUsed,
-  LOW_LEFT,
   NEW_WORK_HERE,
   usersLine,
   type RunsOnRow,
@@ -36,14 +36,16 @@ import {
   type UsageGlance,
   type UsageTotal,
   totalWords,
+  usedTone,
 } from '@shipstudio/companion-protocol';
 import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import { depthOf, iconSize, keySize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { AgentKey } from './AgentKey';
 import { Button, Icon, IconButton, Segmented, StatusPill, T } from './ui';
 
+/** A bar's ink by what it has used: the warning role from 80% (`usedTone`), never accent. */
 const fillOf = (colors: Palette, tone: StackKey['tone']) =>
-  tone === 'warning' ? colors.accentWarning : colors.textPrimary;
+  tone === 'warning' || tone === 'limited' ? colors.accentWarning : colors.textPrimary;
 
 const pillOf = (k: Pick<StackKey, 'state'>) =>
   k.state === 'in_use'
@@ -54,17 +56,14 @@ const pillOf = (k: Pick<StackKey, 'state'>) =>
         ? 'waiting'
         : 'idle';
 
-/** What an account adds, in a row's words. */
+/** What an account adds, in a row's words: "62% used" (`StackKey.figure`); signed out, the pill says it. */
 function roomWords(k: StackKey): string {
-  if (k.state === 'same') return 'Adds no room';
-  if (k.state === 'off') return '';
-  if (k.share === null) return 'Not read yet';
-  return `${k.share}% left`;
+  return k.state === 'off' ? '' : k.figure;
 }
 
 /**
- * The total as ONE ordinary bar, filled to what is left across every
- * account, as the figure says it ("55% left" is a bar 55% full). Never a
+ * The total as ONE ordinary bar, filled to what is used across every
+ * account, as the figure says it ("45% used" is a bar 45% full). Never a
  * segment per account: two at 50% read as one bar half full, not two
  * quarter-bars. Nothing read: an empty outlined track, never a full one.
  */
@@ -72,22 +71,22 @@ export function TotalBar({ total, tall = false }: { total: UsageTotal; tall?: bo
   const colors = useColors();
   const styles = useStyles();
   if (total.segments.length === 0) return null;
-  const left = total.left;
+  const used = total.used;
   return (
     <View
-      style={[styles.total, tall && styles.segTall, left === null && styles.segEmpty]}
+      style={[styles.total, tall && styles.segTall, used === null && styles.segEmpty]}
       accessible
       accessibilityRole="progressbar"
-      accessibilityLabel="Usage left, across accounts"
+      accessibilityLabel="Usage used, across accounts"
       accessibilityValue={
-        left === null
+        used === null
           ? { text: 'Not read yet' }
-          : { min: 0, max: 100, now: left, text: `${left}% left` }
+          : { min: 0, max: 100, now: used, text: `${used}% used` }
       }
     >
-      {left !== null && (
+      {used !== null && (
         <View
-          style={[styles.fill, { width: `${left}%`, backgroundColor: fillOf(colors, total.tone) }]}
+          style={[styles.fill, { width: `${used}%`, backgroundColor: fillOf(colors, total.tone) }]}
         />
       )}
     </View>
@@ -193,7 +192,14 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
   const count = total.left !== null ? row.count : null;
   // Out everywhere, the refill is a moment ("Refills Sat 10:00 AM"); otherwise a countdown.
   const out = glance.tone === 'limited';
-  const chip = out ? row.refill : total.refill ? total.refill.in : null;
+  // "Out until Sat 10:00 AM" says when itself: no chip saying it again.
+  const chip = out
+    ? used.figure.startsWith('Out until')
+      ? null
+      : row.refill
+    : total.refill
+      ? total.refill.in
+      : null;
   const notRead = total.left !== null ? row.notRead : null;
   const label = `Usage: ${used.detail}`;
   const warn = row.needsYou || used.tone === 'high' || used.tone === 'out';
@@ -238,7 +244,7 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
 }
 
 /**
- * The total first: what is left across every account, of what, and when it
+ * The total first: what is used across every account, of what, and when it
  * next refills (`totalWords`, as the desk's hero and the chat's popover say
  * it); the bar, in the work order; then what needs saying. The accounts'
  * names and room are the rows right under this card, so it doesn't list them.
@@ -265,12 +271,12 @@ export function TotalCard({
         <T variant="caption" color={colors.textMuted}>
           {words.eyebrow ?? 'Usage'}
         </T>
-        {/* "72% left across 2 Max accounts": the figure, and of what, as one headline. */}
+        {/* "28% used across 2 Max accounts": the figure, and of what, as one headline. */}
         <T
           variant={words.known ? 'display' : 'title'}
           accessibilityRole="header"
           color={
-            glance.tone === 'warning'
+            glance.tone !== 'calm' || total.tone === 'warning'
               ? colors.accentWarning
               : words.known
                 ? colors.textStrong
@@ -429,12 +435,12 @@ export function AccountRows({
                     {k.detail[0]}
                   </T>
                 )}
-                <View style={[styles.miniBar, k.share === null && styles.segEmpty]}>
-                  {k.share !== null && (
+                <View style={[styles.miniBar, k.used === null && styles.segEmpty]}>
+                  {k.used !== null && (
                     <View
                       style={[
                         styles.fill,
-                        { width: `${k.share}%`, backgroundColor: fillOf(colors, k.tone) },
+                        { width: `${k.used}%`, backgroundColor: fillOf(colors, usedTone(k.used)) },
                       ]}
                     />
                   )}
@@ -775,9 +781,9 @@ export function KeyCard({
 }
 
 /**
- * A bar of what is left against the pace marker: where it would stand had
- * it been spent evenly through the window. Left of the marker is ahead of
- * pace; right of it, room to spare.
+ * A bar that fills with use, against the pace marker: where it would stand
+ * had it been spent evenly through the window. A fill past the marker is
+ * ahead of pace; short of it, room to spare.
  */
 function PaceBar({ limit: l }: { limit: KeyLimit }) {
   const colors = useColors();
@@ -786,26 +792,26 @@ function PaceBar({ limit: l }: { limit: KeyLimit }) {
     <View
       style={styles.bar}
       accessibilityRole="progressbar"
-      accessibilityLabel={`${l.label} limit left`}
-      accessibilityValue={{ min: 0, max: 100, now: l.left }}
+      accessibilityLabel={`${l.label} limit used`}
+      accessibilityValue={{ min: 0, max: 100, now: l.used, text: l.figure }}
     >
       <View
         style={[
           styles.fill,
           {
-            width: `${l.left}%`,
-            backgroundColor: l.tone === 'warning' ? colors.accentWarning : colors.textPrimary,
+            width: `${l.used}%`,
+            backgroundColor: fillOf(colors, l.tone),
           },
         ]}
       />
-      {l.evenLeft !== undefined && (
+      {l.evenUsed !== undefined && (
         <View
           style={[
             styles.even,
             {
-              left: `${l.evenLeft}%`,
+              left: `${l.evenUsed}%`,
               // Light on the fill, dark on the empty track: seen either way.
-              backgroundColor: l.evenLeft < l.left ? colors.surfaceApp : colors.textSecondary,
+              backgroundColor: l.evenUsed < l.used ? colors.surfaceApp : colors.textSecondary,
             },
           ]}
         />
@@ -835,11 +841,11 @@ function LimitCard({ limit: l }: { limit: KeyLimit }) {
           />
         )}
       </View>
-      <T variant="display" color={l.tone === 'warning' ? colors.accentWarning : colors.textStrong}>
-        {l.left}%
+      <T variant="display" color={l.tone !== 'calm' ? colors.accentWarning : colors.textStrong}>
+        {l.used >= 100 ? 'Out' : `${l.used}%`}
         <T variant="small" color={colors.textMuted}>
           {' '}
-          left
+          {l.used >= 100 ? (l.resetsAt ? `until ${l.resetsAt}` : 'of usage') : 'used'}
         </T>
       </T>
       <PaceBar limit={l} />
@@ -871,15 +877,15 @@ function LimitCard({ limit: l }: { limit: KeyLimit }) {
           {l.paceWord}
         </T>
       )}
-      {l.resetsAt && (
+      {l.resetsAt && l.used < 100 && (
         <T variant="caption" color={colors.textMuted}>
           Refills {l.resetsAt}
         </T>
       )}
       {l.pace && (
-        // An estimate: secondary ink, never amber; a small mark only when little is left.
+        // An estimate: secondary ink, never amber; a small mark only from 80% used.
         <View style={styles.pace}>
-          {l.left <= LOW_LEFT && (
+          {l.tone !== 'calm' && (
             <Icon
               name="exclamationmark.triangle"
               size={iconSize.inline}

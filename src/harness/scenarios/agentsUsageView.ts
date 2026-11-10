@@ -540,7 +540,7 @@ function trio(
       id: `usage-${id}-row`,
       title: `Usage — ${title} (the sidebar row)`,
       looksRightWhen:
-        'At the foot of the Agents sidebar: “Usage”, then the total (“72% left · 2 accounts”), ONE ordinary bar filled to that figure (never a segment per account) and “Refills in …” (with “· 1 account not read” when one is left out). Nothing accent-coloured; nothing wraps.',
+        'At the foot of the Agents sidebar: “Usage”, then the total (“28% used · 2 accounts”), ONE ordinary bar filled to that figure (never a segment per account) and “Refills in …” (with “· 1 account not read” when one is left out). Nothing accent-coloured; nothing wraps.',
       openSelector: AGENTS_TAB,
       requires: '[data-testid="account-switcher"]',
       clipSelector: '.workspace-sidebar-footer',
@@ -556,14 +556,14 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'two',
     'two accounts, 100% and 44%',
-    'The hero leads with the total: “All accounts”, a large “72% left across 2 Max accounts”, “Next refill in 2d 4h · sam@example.com, …”. ONE ordinary bar, 72% filled, no segments, then “Both on Max, so each counts the same.” Then “Accounts” with “Add …” at the right, two rows in order (1 sam@example.com In use, 2 Work), figures aligned, each with its own small bar; under the first a ticked “New work starts here”, under Work a “Use for new work” button, each with who used it this week. Then “Runs on” with one row per agent and its account in a menu button. Then “How agents use your limits”, a hugging three-option control and its one line.',
+    'The hero leads with the total: “All accounts”, a large “28% used across 2 Max accounts”, “Next refill in 2d 4h · sam@example.com, …”. ONE ordinary bar, 28% filled, no segments, then “Both on Max, so each counts the same.” Then “Accounts” with “Add …” at the right, two rows in order (1 sam@example.com In use, 2 Work), figures aligned, each with its own small bar; under the first a ticked “New work starts here”, under Work a “Use for new work” button, each with who used it this week. Then “Runs on” with one row per agent and its account in a menu button. Then “How agents use your limits”, a hugging three-option control and its one line.',
     TWO,
     { account: 'default', looksRightWhen: PAGE }
   ),
   ...trio(
     'one',
     'one account',
-    'The hero: “Usage”, “53% left this week”, “Next refill in …”, one bar 53% filled. One row, with no “Use for new work” (nothing to switch to) and no Runs on section. No “All accounts”.',
+    'The hero: “Usage”, “47% used this week”, “Next refill in …”, one bar 47% filled. One row, with no “Use for new work” (nothing to switch to) and no Runs on section. No “All accounts”.',
     ONE,
     { account: 'default', looksRightWhen: PAGE }
   ),
@@ -577,12 +577,12 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'one-out',
     'one account out',
-    'One bar of the total, counting the out account as nothing left; sam@example.com’s row says “Out of usage until …” in a neutral pill, with no “Use for new work”.',
+    'One bar of the total, counting the out account as fully used; sam@example.com’s row says “Out of usage until …” in a neutral pill, with no “Use for new work”.',
     ONE_OUT,
     {
       account: 'default',
       looksRightWhen:
-        'The out account’s page: its pill reads “Out of usage until …”; its limit cards say 0% left.',
+        'The out account’s page: its pill reads “Out until …”; its used-up limit cards say “Out until …” over a full bar.',
     }
   ),
   ...trio(

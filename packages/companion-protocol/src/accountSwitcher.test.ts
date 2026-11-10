@@ -125,11 +125,11 @@ describe('which account is working', () => {
     const [claude] = switcherView([mac, work], inventory([line('default', 38, 95)]), { now: NOW });
     const row = workingLine(claude)!;
     expect(row.name).toBe('sam@example.com');
-    expect(row.room).toBe('5% left');
+    expect(row.room).toBe('95% used');
     expect(row.tone).toBe('warning');
     expect(row.several).toBe(true);
     expect(row.detail).toMatch(
-      /^Agents on Claude Code are using sam@example.com\. 5% of its weekly/
+      /^Agents on Claude Code are using sam@example.com\. 95% of its weekly/
     );
 
     const out = switcherView(

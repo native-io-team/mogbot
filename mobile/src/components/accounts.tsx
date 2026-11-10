@@ -30,16 +30,16 @@ import { useApp } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { Button, Icon, IconButton, InsetDivider, Section, StatusPill, T } from './ui';
 
-/** Its room, after the state pill: "5-hour 62% left, resets 2:07 AM". */
+/** Its room, after the state pill: "5-hour 38% used, refills 2:07 AM". */
 function roomLine(r: SwitcherRow): string {
   return r.room
-    .map((l) => `${l.label} ${l.left}% left${l.resets ? `, ${l.resets}` : ''}`)
+    .map((l) => `${l.label} ${l.used}% used${l.resets ? `, ${l.resets}` : ''}`)
     .join(' · ');
 }
 
 /** The muted lines under an account's name (as read aloud, and in tests). */
 export function accountRowLines(r: SwitcherRow): string[] {
-  const room = r.room.map((l) => `${l.label} ${l.left}% left${l.resets ? `, ${l.resets}` : ''}`);
+  const room = r.room.map((l) => `${l.label} ${l.used}% used${l.resets ? `, ${l.resets}` : ''}`);
   return [
     r.detail.join(' · '),
     [r.state, ...room].join(' · '),

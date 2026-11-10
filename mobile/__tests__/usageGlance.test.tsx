@@ -108,7 +108,7 @@ describe('usage at a glance, on the phone', () => {
     const onPress = jest.fn();
     await render(<GlanceRow glance={glance} onPress={onPress} />);
     // The total across both accounts, said as USED as the desk sidebar says
-    // it (60% left is 40% used; never the account in use's 30%), then when
+    // it (40% used; never the account in use's 30%), then when
     // it next refills, as a chip; the button says it in words.
     expect(screen.getByText(/40% used · 2 accounts/)).toBeTruthy();
     expect(screen.queryByText(/left/)).toBeNull();
@@ -148,14 +148,14 @@ describe('usage at a glance, on the phone', () => {
     });
     await render(<TotalCard glance={glance} />);
     // One headline, as the desk's hero: the figure, then of what.
-    expect(screen.getByRole('header').props.children[0]).toBe('60% left');
+    expect(screen.getByRole('header').props.children[0]).toBe('40% used');
     expect(screen.getByText('across 2 accounts')).toBeTruthy();
     // ONE bar of the total (never a segment per account); the card doesn't
     // list the accounts (the rows under it do).
-    const bar = screen.getByLabelText('Usage left, across accounts');
-    expect(bar.props.accessibilityValue).toMatchObject({ now: 60, text: '60% left' });
+    const bar = screen.getByLabelText('Usage used, across accounts');
+    expect(bar.props.accessibilityValue).toMatchObject({ now: 40, text: '40% used' });
     expect(screen.queryAllByRole('button')).toHaveLength(0);
-    expect(screen.queryByText('70% left')).toBeNull();
+    expect(screen.queryByText('30% used')).toBeNull();
     expect(screen.queryByText(/This Mac|Signed in on t/)).toBeNull();
   });
 
@@ -201,7 +201,7 @@ describe('usage at a glance, on the phone', () => {
     const onOpen = jest.fn();
     await render(<AccountRows keys={glance.keys} onOpen={onOpen} />);
     const rows = screen.getAllByRole('button');
-    expect(rows[0].props.accessibilityLabel).toMatch(/^1\. Claude Code account, 70% left, In use/);
+    expect(rows[0].props.accessibilityLabel).toMatch(/^1\. Claude Code account, 30% used, In use/);
     await fireEvent.press(rows[1]);
     expect(onOpen.mock.calls[0][0].id).toBe('w');
     await render(<KeyCard k={glance.keys[0]} />);

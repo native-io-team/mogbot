@@ -4,9 +4,13 @@
  * it, worded once here so the two never disagree. Pure.
  *
  * The rules (Never Assume Data):
- * - **Room is only what a reading said.** Each account is a segment of the
- *   stack, filled to what is left of its tighter limit (5-hour or weekly).
- *   An account with no reading is an empty, dashed segment, never full.
+ * - **One meaning everywhere: what is USED.** Every figure says "N% used"
+ *   and every bar fills with use, so a full bar is out ("92% left" beside a
+ *   nearly full bar read as "92% used", owner, round 5). The warning role
+ *   from `HIGH_USED`; at 100%, "Out until <refill>" (`usedFigure`).
+ * - **Room is only what a reading said.** `used` is 100 minus what a
+ *   reading left. An account with no reading is an empty, dashed track,
+ *   never full and never empty-as-room.
  * - **A second sign-in of the same account** (`UsageAccountLine.sameAs`,
  *   from the engines' own records) adds no room: its key says so plainly
  *   with the one fix, and the meter leaves it out, with one line under it
@@ -55,6 +59,24 @@ export const PLENTY_LEFT = 50;
 /** "Out of usage": the one phrase for an account at its limit, everywhere. */
 export const OUT_OF_USAGE = 'Out of usage';
 
+/** At or over this much used, a bar and its figure take the warning role: every usage surface. */
+export const HIGH_USED = QUOTA_WARN_PERCENT;
+
+/** "Out until Sat 10:00 AM"; "Out of usage" when no refill was reported. */
+export function outUntil(refillAt: string | null | undefined): string {
+  return refillAt ? `Out until ${refillAt}` : OUT_OF_USAGE;
+}
+
+/** A figure said as what is used: "62% used"; at 100%, "Out until Sat 10:00 AM". */
+export function usedFigure(used: number, refillAt?: string | null): string {
+  return used >= 100 ? outUntil(refillAt) : `${used}% used`;
+}
+
+/** A bar's tone by what is used: warning from `HIGH_USED`, limited at 100, quiet unread. Never accent. */
+export function usedTone(used: number | null): KeyTone {
+  return used === null ? 'quiet' : used >= 100 ? 'limited' : used >= HIGH_USED ? 'warning' : 'calm';
+}
+
 export type AccountKeyState = 'in_use' | 'next' | 'ready' | 'out' | 'off' | 'same' | 'unread';
 export type KeyTone = 'calm' | 'warning' | 'limited' | 'quiet';
 
@@ -65,6 +87,11 @@ export interface KeyLimit {
   label: string;
   /** 0–100 left, never more than reported. */
   left: number;
+  /** 0–100 used: `100 - left`. What the figure says and the bar fills to. */
+  used: number;
+  /** "62% used", "Out until Sat 10:00 AM". */
+  figure: string;
+  /** By what is used (`usedTone`): warning from `HIGH_USED`, limited when used up. */
   tone: 'calm' | 'warning' | 'limited';
   /** "in 3 h", "in 5 days"; absent when no reset was reported. */
   resetsIn?: string;
@@ -78,8 +105,10 @@ export interface KeyLimit {
   countdown?: string;
   /** When it refills, as the engine reported it (ms). */
   resetsAtMs?: number;
-  /** What would be left now had it been spent evenly through the window (the pace marker), 0–100. */
+  /** What would be left now had it been spent evenly through the window, 0–100. */
   evenLeft?: number;
+  /** What would be used by now at an even pace: where the pace marker sits on a bar that fills with use. */
+  evenUsed?: number;
   paceState?: 'ahead' | 'on' | 'under';
   /** "On pace — lasts until it refills", "Ahead of pace — at this rate it runs out Thu, 2 days before it refills". */
   paceWord?: string;
@@ -90,7 +119,7 @@ export interface KeyLimit {
 /** One rise in a meter, said for "Where it went". */
 export interface ChangeLine {
   key: string;
-  /** "Weekly 68% → 33% left": said as what is left, as every figure is. */
+  /** "Weekly 32% → 67% used": said as what is used, as every figure is. */
   title: string;
   /** "Sat 11:40 PM – Sun 7:10 AM". */
   when: string;
@@ -111,7 +140,7 @@ export interface StackKey {
   /** What tells it apart: plan, organization, who it's signed in as, this Mac's own. */
   detail: string[];
   state: AccountKeyState;
-  /** "In use", "Next", "Ready", "Out of usage until Sat 10:00 AM", "Not signed in", "Same account", "Not read yet". */
+  /** "In use", "Next", "Ready", "Out until Sat 10:00 AM", "Not signed in", "Same account", "Not read yet". */
   stateLabel: string;
   /** The account it is a second sign-in of, by the name that one's key shows. */
   sameAs: string | null;
@@ -119,6 +148,10 @@ export interface StackKey {
   tight: KeyLimit | null;
   /** Left of its tighter limit, 0–100; null with no reading (or adding no room). */
   left: number | null;
+  /** Used of what it adds (`100 - share`): what its row's bar fills to; null with no reading. */
+  used: number | null;
+  /** Its row's words: "62% used", "Not read yet", "Not signed in", "Adds no room". */
+  figure: string;
   tone: KeyTone;
   limits: KeyLimit[];
   /** "Riley · 1.2M tokens · 14 messages", this week, most first. */
@@ -179,6 +212,8 @@ export interface TotalSegment {
   position: number;
   /** Its `share`; null when it has no reading (an empty, dashed segment, never room). */
   left: number | null;
+  /** `100 - left`; null with no reading. */
+  used: number | null;
   state: AccountKeyState;
   stateLabel: string;
   tone: KeyTone;
@@ -186,18 +221,18 @@ export interface TotalSegment {
   refill: string | null;
   /** "Sat 10:00 AM". */
   refillAt: string | null;
-  /** "sam@example.com: 100% left, refills in 3d 12h". */
+  /** "sam@example.com: 0% used, refills in 3d 12h". */
   words: string;
 }
 
 /**
  * Everything at once: the room across every real account, so two accounts
- * at 100% and 44% read as "72% left", not as the one in use. Each account
+ * at 0% and 56% used read as "28% used", not as the one in use. Each account
  * counts equally (plans' sizes aren't reported, so none is guessed); a
  * second sign-in of an account and an account with no reading add nothing.
  *
- * Drawn as ONE ordinary bar filled to `left` (what's left, as the figure
- * says it), never a segment per account: two accounts at 50% read as one
+ * Drawn as ONE ordinary bar filled to `used` (as the figure says it),
+ * never a segment per account: two accounts at 50% read as one
  * bar half full, not as two quarter-bars. The accounts, each with its own
  * bar, are one level down (the Usage view's rows). `segments` stays for
  * words and tests; no glance draws it.
@@ -205,7 +240,9 @@ export interface TotalSegment {
 export interface UsageTotal {
   /** 0–100, the mean of each read account's share; null when none is read. */
   left: number | null;
-  /** "72% left", "Not read yet". */
+  /** `100 - left`: what the one bar fills to; null when none is read. */
+  used: number | null;
+  /** "28% used", "Not read yet". */
   figure: string;
   /** "across 2 accounts", "across 2 Max accounts", "this week", "for now". */
   across: string;
@@ -216,12 +253,13 @@ export interface UsageTotal {
   /**
    * How the total is weighted, said honestly, with two or more counted:
    * plan sizes aren't reported, so it is the plain average of each
-   * account's % left ("Both on Max, so each counts the same.").
+   * account's % used ("Both on Max, so each counts the same.").
    */
   weighting: string | null;
   /**
-   * The one bar's tone: `warning` at or under `LOW_LEFT`, `limited` at 0,
-   * `quiet` with nothing read. Never per account at this level.
+   * The one bar's tone, by what is used (`usedTone`): `warning` from
+   * `HIGH_USED`, `limited` at 100, `quiet` with nothing read. Never per
+   * account at this level.
    */
   tone: KeyTone;
   /** The accounts counted (read). */
@@ -273,7 +311,7 @@ export interface SignInChangedNotice {
  * reads. "Usage" is the label the row carries; these are its figures.
  */
 export interface GlanceRowWords {
-  /** "57% left this week", "57% left for now", "Out of usage", "Not read yet". */
+  /** "43% used this week", "43% used for now", "Out until Sat 10:00 AM", "Not read yet". */
   figure: string;
   /** "Refills in 3d 12h" ("Refills Sat 10:00 AM" when out); absent when no reset was reported. */
   refill: string | null;
@@ -320,12 +358,12 @@ function rowWords(
     const at = back ? resetPhrase(back, now) : (soonest?.resetsAt ?? null);
     // Out everywhere only when every account was read: one out and three
     // never read is not "out of usage", it's that one account (round 4).
-    const figure = read.length < counted.length ? outOf(read) : OUT_OF_USAGE;
+    const figure = read.length < counted.length ? outOf(read) : outUntil(at);
     return { figure, refill: at ? `Refills ${at}` : null, count, notRead: null, needsYou };
   }
   // The total across every account, as the Usage view's hero says it, and
   // the accounts that figure is of: an account not read yet isn't in it, so
-  // "72% left · 4 accounts" would claim two it never counted.
+  // "28% used · 4 accounts" would claim two it never counted.
   return {
     figure: total.counted > 1 ? total.figure : `${total.figure} ${total.across}`,
     refill: total.refill ? `Refills in ${total.refill.in}` : null,
@@ -344,7 +382,7 @@ function rowWords(
 export interface TotalWords {
   /** "All accounts" over the figure, with more than one account in the bar. */
   eyebrow: string | null;
-  /** "72% left", "Out of usage", "Your usage shows here after an agent’s first reply." */
+  /** "28% used", "Out until Sat 10:00 AM", "Your usage shows here after an agent’s first reply." */
   figure: string;
   /** "across 2 Max accounts", "this week": only beside a reading. */
   across: string | null;
@@ -375,15 +413,12 @@ export function totalWords(
   };
 }
 
-/** At or over this much used, the glance's bar and figure take the warning role. */
-export const HIGH_USED = 80;
-
 /**
  * The sidebar's and the phone list's glance, said as what is USED: its bar
  * fills with use, so 8% used is a short fill and a full bar means out.
  * "92% left" beside a nearly full bar read as "92% used" (owner, round 5);
- * a bar filling up is how every meter people know reads. The Usage view
- * itself still says what's left, in words, beside its own bars.
+ * a bar filling up is how every meter people know reads. The Usage view,
+ * its accounts and limits say it the same way.
  *
  * Only what the engines reported: `used` is 100 minus the total's `left`,
  * absent when nothing was read, and the words are the row's own for every
@@ -392,7 +427,7 @@ export const HIGH_USED = 80;
 export interface GlanceUsed {
   /** 0–100, null with nothing read. */
   used: number | null;
-  /** "8% used", "Out of usage", "Not read yet", "Not signed in". */
+  /** "8% used", "Out until Sat 10:00 AM", "Not read yet", "Not signed in". */
   figure: string;
   /** "refills in 6d", "refills Sat 10:00 AM": lower case, to follow the figure. */
   refill: string | null;
@@ -415,14 +450,21 @@ export function glanceUsed(glance: Pick<UsageGlance, 'total' | 'tone' | 'row'>):
   const reading = total.left !== null && !out;
   const used = out ? 100 : total.left === null ? null : Math.max(0, 100 - total.left);
   const figure = reading ? `${used}% used` : row.figure;
+  // "Out until Sat 10:00 AM" already says when: no refill said twice.
+  const saysWhen = figure.startsWith('Out until');
   const refill =
     reading && total.refill
       ? `refills in ${shortCountdown(total.refill.in)}`
-      : row.refill
+      : row.refill && !saysWhen
         ? row.refill.charAt(0).toLowerCase() + row.refill.slice(1)
         : null;
   const of = reading ? `${figure} ${total.across}`.trim() : figure;
-  const detail = [of, reading ? row.count : null, reading ? row.notRead : null, row.refill]
+  const detail = [
+    of,
+    reading ? row.count : null,
+    reading ? row.notRead : null,
+    saysWhen ? null : row.refill,
+  ]
     .filter(Boolean)
     .join('. ');
   const tone: GlanceUsed['tone'] =
@@ -514,7 +556,7 @@ export interface UsageGlance {
   engines: StackEngine[];
   /** The room across every account, first: the Usage view's hero and the sidebar row. */
   total: UsageTotal;
-  /** The row's plain words: what's left, when it refills. */
+  /** The row's plain words: what's used, when it refills. */
   row: GlanceRowWords;
   /** Every key, engine by engine, in order. */
   keys: StackKey[];
@@ -523,7 +565,7 @@ export interface UsageGlance {
   /** One line each for those left out: "Personal is the same Claude account as Work — adds no extra room". */
   sameNotes: string[];
   signInChanged: SignInChangedNotice | null;
-  /** "Plenty of room", "Runs out ~Thu, 2 days before reset", "Out of usage until 3:20 PM". */
+  /** "Plenty of room", "Runs out ~Thu, 2 days before reset", "Out until 3:20 PM". */
   headline: string;
   /**
    * Signed in but nothing read yet: the headline is a quiet line, not the
@@ -642,7 +684,7 @@ function paceOf(
   left: number,
   estimate: UsagePace | undefined,
   now: number
-): Pick<KeyLimit, 'evenLeft' | 'paceState' | 'paceWord' | 'runOut'> {
+): Pick<KeyLimit, 'evenLeft' | 'evenUsed' | 'paceState' | 'paceWord' | 'runOut'> {
   const length = windowLength(w);
   if (!length || w.resetsAt === undefined || left <= 0) return {};
   const remaining = Math.max(0, Math.min(1, (w.resetsAt - now) / length));
@@ -670,7 +712,13 @@ function paceOf(
   } else {
     paceWord = 'On pace — lasts until it refills';
   }
-  return { evenLeft, paceState, paceWord, ...(runOut ? { runOut } : {}) };
+  return {
+    evenLeft,
+    evenUsed: 100 - evenLeft,
+    paceState,
+    paceWord,
+    ...(runOut ? { runOut } : {}),
+  };
 }
 
 function limitsOf(line: UsageAccountLine | undefined, now: number): KeyLimit[] {
@@ -695,13 +743,16 @@ function limitsOf(line: UsageAccountLine | undefined, now: number): KeyLimit[] {
         Math.abs(x.resetsAt - pick.resetsAt) <= 30 * MINUTE_MS
     );
     const pace = left > 0 && !line.out ? paceFor(line.pace, pick, now) : undefined;
+    const used = 100 - left;
     out.push({
       key: `${line.engine}:${line.id}:${pick.kind}`,
       label,
       left,
+      used,
+      figure: usedFigure(used, pick.resetsAt ? resetPhrase(pick.resetsAt, now) : null),
       ...(model ? { model: true } : {}),
-      // Amber only when nearly out: a pace estimate is information, never an alarm.
-      tone: left <= 0 ? 'limited' : 100 - left >= QUOTA_WARN_PERCENT ? 'warning' : 'calm',
+      // Amber from HIGH_USED: a pace estimate is information, never an alarm.
+      tone: usedTone(used) as KeyLimit['tone'],
       ...(pick.resetsAt
         ? {
             resetsIn: relativeIn(pick.resetsAt, now),
@@ -742,7 +793,7 @@ export function changeLines(
     const label = isSession(c) ? '5-hour' : isWeek(c) ? 'Weekly' : c.kind.replace(/_/g, ' ');
     return {
       key: `${c.kind}:${c.since}`,
-      title: `${label} ${100 - Math.ceil(c.from)}% → ${100 - Math.ceil(c.to)}% left`,
+      title: `${label} ${Math.ceil(c.from)}% → ${Math.ceil(c.to)}% used`,
       when: whenSpan(c.since, c.until, now),
       runs: c.runs.map(runLine),
       elsewhere: c.nothingHere ? elsewhereLine(engine) : null,
@@ -810,7 +861,7 @@ function keyOf(
     // A reading says a limit is used up before a turn has hit it.
     const spent = limits.find((l) => l.left === 0);
     state = 'out';
-    stateLabel = spent?.resetsAt ? `${OUT_OF_USAGE} until ${spent.resetsAt}` : OUT_OF_USAGE;
+    stateLabel = outUntil(spent?.resetsAt);
   } else if (row.inUse) {
     state = 'in_use';
     stateLabel = 'In use';
@@ -831,6 +882,16 @@ function keyOf(
           : 'calm';
   const week = general.find((l) => l.label === 'Weekly');
   const shareLimit = left === null ? null : (week ?? tightest);
+  const share = shareLimit ? shareLimit.left : left;
+  const used = share === null ? null : 100 - share;
+  const figure =
+    state === 'same'
+      ? 'Adds no room'
+      : state === 'off'
+        ? 'Not signed in'
+        : used === null
+          ? 'Not read yet'
+          : `${used}% used`;
   const fix: StackKey['fix'] = !row.signedIn
     ? { action: 'sign_in', text: 'Sign in to use it.' }
     : same
@@ -847,6 +908,8 @@ function keyOf(
     stateLabel,
     sameAs: same ?? null,
     left,
+    used,
+    figure,
     tight: same || left === null || left === 0 ? null : tightest,
     tone,
     limits: same ? [] : limits,
@@ -855,7 +918,7 @@ function keyOf(
       .map((r) => `${r.name} · ${tokensShortly(r.tokens)} tokens · ${plural(r.turns, 'message')}`),
     agents: agentsOf(line),
     usedBy: usedByOf(line),
-    share: shareLimit ? shareLimit.left : left,
+    share,
     shareOf: shareLimit ? (week ? 'week' : 'tight') : null,
     shareLimit,
     refillLimit:
@@ -920,7 +983,7 @@ export function totalOf(
   const segment = (k: StackKey): TotalSegment => {
     const l = k.refillLimit;
     const refill = l?.countdown ?? null;
-    const room = k.share === null ? 'shows after its first reply' : `${k.share}% left`;
+    const room = k.share === null ? 'shows after its first reply' : `${100 - k.share}% used`;
     return {
       key: k.key,
       engine: k.engine,
@@ -928,6 +991,7 @@ export function totalOf(
       name: k.name,
       position: k.position,
       left: k.share,
+      used: k.share === null ? null : 100 - k.share,
       state: k.state,
       stateLabel: k.stateLabel,
       tone: k.tone,
@@ -954,15 +1018,16 @@ export function totalOf(
       : `across ${plural(read.length, 'account')}`;
   }
   const weighting = read.length > 1 ? weightingOf(read.map((k) => planWord(plans(k)))) : null;
-  const tone: KeyTone =
-    left === null ? 'quiet' : left <= 0 ? 'limited' : left <= LOW_LEFT ? 'warning' : 'calm';
+  const used = left === null ? null : 100 - left;
+  const tone = usedTone(used);
   const soon = read
     .filter((k) => k.shareLimit?.resetsAt && k.shareLimit.countdown)
     .map((k) => ({ k, l: k.shareLimit as KeyLimit }))
     .sort((a, b) => resetAt(a.l, now) - resetAt(b.l, now))[0];
   return {
     left,
-    figure: left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not read yet',
+    used,
+    figure: used !== null ? `${used}% used` : real.length === 0 ? 'Not signed in' : 'Not read yet',
     across: left === null ? '' : across,
     unread:
       unread.length > 0 && read.length > 0
@@ -983,7 +1048,7 @@ export function totalOf(
 /**
  * How the total weighs its accounts. The engines report each limit as a
  * percentage and never a plan's size, so the total is the plain average of
- * each account's % left; said so, and when the plans differ, that a bigger
+ * each account's % used; said so, and when the plans differ, that a bigger
  * plan counts no more than a smaller one here.
  */
 export function weightingOf(plans: (string | null)[]): string | null {
@@ -994,9 +1059,9 @@ export function weightingOf(plans: (string | null)[]): string | null {
     return `${all} on ${first}, so each counts the same.`;
   const named = [...new Set(plans.filter((p): p is string => !!p))];
   if (named.length > 1) {
-    return `An average of each account’s % left. Plan sizes aren’t reported, so ${named.join(' and ')} count the same here.`;
+    return `An average of each account’s % used. Plan sizes aren’t reported, so ${named.join(' and ')} count the same here.`;
   }
-  return 'An average of each account’s % left: plan sizes aren’t reported, so each counts the same.';
+  return 'An average of each account’s % used: plan sizes aren’t reported, so each counts the same.';
 }
 
 /** A limit's reset, from its countdown's source: kept on the key as `resetsAtMs`. */
@@ -1170,7 +1235,7 @@ export function usageGlance(
       read.length < counted.length
         ? outOf(read)
         : back
-          ? `${OUT_OF_USAGE} until ${resetPhrase(back.at, now)}`
+          ? outUntil(resetPhrase(back.at, now))
           : `${OUT_OF_USAGE} everywhere`;
   } else if (runOut.length > 0) {
     const r = runOut.reduce((a, b) => (b.reachesAt < a.reachesAt ? b : a));

@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { rowLine } from '../src/lib/agents';
 
-const runner = readFileSync(join(__dirname, '../../src-tauri/src/agents/runner.rs'), 'utf8');
+const runner = readFileSync(join(__dirname, '../../src-tauri/src/agents/runner/slots.rs'), 'utf8');
 
 describe('rowLine', () => {
   it('matches the sentences the Mac writes', () => {

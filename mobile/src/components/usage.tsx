@@ -1,8 +1,8 @@
 /**
- * The chat header's usage meter (what is left of the current 5-hour window,
+ * The chat header's usage meter (what is used of the current 5-hour window,
  * as the engine reported it) and the bars the Usage sheet draws from an
  * older Mac, with the Mac's pace estimate under a bar when it sent one.
- * Every limit is said and drawn as what is left, as the stack says it; an
+ * Every limit is said and drawn as what is used, as the stack says it; an
  * estimate is secondary ink, never amber (amber means "needs you"). Figures
  * from lib/usageSheet.ts; colours from the palette, light and dark.
  */
@@ -14,12 +14,9 @@ import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usag
 import { depthOf, iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { T } from './ui';
 
+/** The warning role from 80% used and when used up (it refills by itself: never error red). */
 const inkOf = (colors: Palette, tone: UsageTone) =>
-  tone === 'limited'
-    ? colors.accentErrorLight
-    : tone === 'warning'
-      ? colors.accentWarning
-      : colors.textSecondary;
+  tone === 'limited' || tone === 'warning' ? colors.accentWarning : colors.textSecondary;
 
 /** The meter's diameter: an icon button's glyph. */
 const RING = iconSize.button;
@@ -46,7 +43,7 @@ export function piePath(cx: number, cy: number, r: number, share: number): strin
 
 /**
  * The header's usage meter, as the desk draws it: a static outline with
- * what is left as a pie inside it. A thin arc read as a loading spinner; a
+ * what is used as a pie inside it. A thin arc read as a loading spinner; a
  * filled wedge in a whole circle reads as a gauge.
  */
 export function UsageRing({
@@ -60,14 +57,14 @@ export function UsageRing({
 }) {
   const colors = useColors();
   const styles = useStyles();
-  // Filled to what is left, as every usage figure is said.
-  const shown = 100 - Math.max(0, Math.min(100, percent));
+  // Filled to what is used, as every usage figure is said.
+  const shown = Math.max(0, Math.min(100, percent));
   const c = RING / 2;
   const pie = piePath(c, c, c - OUTLINE - GAP, shown / 100);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Usage: ${shown}% of the 5-hour limit left`}
+      accessibilityLabel={`Usage: ${shown}% of the 5-hour limit used`}
       accessibilityHint="Context, plan limits and every account"
       hitSlop={space.sm}
       onPress={onPress}
@@ -108,15 +105,14 @@ export function UsageBar({ percent, tone }: { percent: number; tone: UsageTone }
 }
 
 /**
- * A limit: "5-hour limit  62% left", its bar filled to what is left, and
- * "Resets at 3:20 PM". With `title`, the conversation's context, said as
- * its own label ("32% full": a conversation fills, a limit runs down).
+ * A limit: "5-hour limit  38% used", its bar filled to what is used, and
+ * "Refills at 3:20 PM". With `title`, the conversation's context, said as
+ * its own label ("32% full": a conversation fills, a limit is used).
  */
 export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }) {
   const colors = useColors();
   const styles = useStyles();
-  const left = 100 - meter.percent;
-  const figure = title ? meter.label : `${left}% left`;
+  const figure = title ? meter.label : (meter.figure ?? `${meter.percent}% used`);
   // At accessibility sizes the name takes its own line, whole, the figure under it.
   const large = useLargeText();
   return (
@@ -143,7 +139,7 @@ export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }
           {figure}
         </T>
       </View>
-      <UsageBar percent={title ? meter.percent : left} tone={meter.tone} />
+      <UsageBar percent={meter.percent} tone={meter.tone} />
       <T variant="small" color={colors.textSecondary}>
         {meter.detail}
       </T>

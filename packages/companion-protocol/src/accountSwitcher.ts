@@ -103,13 +103,15 @@ export function ranOnName(agent: { engine?: AgentEngine; ranOn?: { name: string 
   return isPlaceName(agent.ranOn.name) ? 'this Mac’s own sign-in' : agent.ranOn.name;
 }
 
-/** One limit's room: "62% left", with its reset. */
+/** One limit's room, said as what is used: "38% used", with its reset. */
 export interface RoomLimit {
   key: string;
   /** "5-hour" or "Weekly". */
   label: string;
   /** 0–100 left, floored the other way: never more room than reported. */
   left: number;
+  /** `100 - left`: what its figure says and its bar fills to. */
+  used: number;
   /** "resets 3:20 PM", "resets Sat 2:00 PM"; absent when not reported. */
   resets?: string;
   tone: UsageTone;
@@ -124,7 +126,7 @@ export interface SwitcherRow {
   detail: string[];
   /** The team's next turn starts on it. */
   inUse: boolean;
-  /** "In use", "Ready", "Out of usage until Sat 2:00 PM", "Not signed in". */
+  /** "In use", "Ready", "Out until Sat 2:00 PM", "Not signed in". */
   state: string;
   tone: 'ok' | 'out' | 'off';
   /** The 5-hour and the all-models week, as last reported; empty: no reading. */
@@ -162,6 +164,7 @@ function limitOf(w: QuotaWindow | undefined, label: string, now: number): RoomLi
     key: label,
     label,
     left,
+    used,
     resets: w.resetsAt ? `refills ${resetPhrase(w.resetsAt, now)}` : undefined,
     tone: left <= 0 ? 'limited' : used >= QUOTA_WARN_PERCENT ? 'warning' : 'calm',
   };
@@ -192,7 +195,7 @@ function stateOf(
     return {
       state:
         a.limit?.resetsAt && a.limit.resetsAt > now
-          ? `Out of usage until ${resetPhrase(a.limit.resetsAt, now)}`
+          ? `Out until ${resetPhrase(a.limit.resetsAt, now)}`
           : 'Out of usage · refill time not reported',
       tone: 'out',
     };
@@ -267,7 +270,7 @@ export function switcherView(
     .filter((e) => e.rows.length > 0);
 }
 
-/** "62% left": the tighter of the 5-hour and the week, the one that stops a turn first. */
+/** "38% used": the tighter of the 5-hour and the week, the one that stops a turn first. */
 export function roomShort(room: RoomLimit[]): RoomLimit | null {
   if (room.length === 0) return null;
   return room.reduce((a, b) => (b.left < a.left ? b : a));
@@ -278,7 +281,7 @@ export interface WorkingLine {
   engine: AgentEngine;
   /** "Work", "sam@example.com". */
   name: string;
-  /** "62% left", "Out of usage until 3:20 PM", "Not signed in"; absent: no reading. */
+  /** "38% used", "Out until 3:20 PM", "Not signed in"; absent: no reading. */
   room?: string;
   tone: 'ok' | 'warning' | 'out' | 'off';
   /** For the tooltip and screen readers, in a sentence. */
@@ -321,7 +324,7 @@ export function workingLine(
   }
   if (!row) return null;
   if (view.allOut) {
-    const back = view.rows.map((r) => r.state).find((s) => s.startsWith('Out of usage until'));
+    const back = view.rows.map((r) => r.state).find((s) => s.startsWith('Out until'));
     return {
       engine: view.engine,
       name: row.name,
@@ -356,10 +359,10 @@ export function workingLine(
   return {
     engine: view.engine,
     name: row.name,
-    room: tight ? `${tight.left}% left` : undefined,
+    room: tight ? `${tight.used}% used` : undefined,
     tone: tight && tight.tone !== 'calm' ? (tight.tone === 'limited' ? 'out' : 'warning') : 'ok',
     detail: tight
-      ? `${lead} ${tight.left}% of its ${tight.label.toLowerCase()} limit left${tight.resets ? `, ${tight.resets}` : ''}.`
+      ? `${lead} ${tight.used}% of its ${tight.label.toLowerCase()} limit used${tight.resets ? `, ${tight.resets}` : ''}.`
       : `${lead} Its usage is not read yet.`,
     several,
   };
