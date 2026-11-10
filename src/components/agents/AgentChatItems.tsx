@@ -65,6 +65,11 @@ import { ImportPlaybackCard } from './ImportPlaybackCard';
 import { WorkTimeline } from './AgentWork';
 export { WorkingIndicator } from './AgentWorkingIndicator';
 import { RevisesBar } from './AgentResult';
+import { AgentBlocks } from './blocks/AgentBlocks';
+import {
+  attachmentsOutsideBlocks,
+  readBlocks,
+} from '../../../packages/companion-protocol/src/blocks';
 import { NoteFixLine } from './AgentNoteFix';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { requestSwitcher, switcherMounted } from '../../lib/agentAccounts';
@@ -233,7 +238,9 @@ export const AgentBubble = memo(function AgentBubble({
   onRemember,
 }: AgentBubbleProps) {
   const onClick = useProseLinks(agent.id);
-  const attachments = message.attachments ?? [];
+  // Blocks (`show`) draw in place of the text, which is their plain version.
+  const blocks = streaming ? null : readBlocks(message);
+  const attachments = attachmentsOutsideBlocks(message.attachments, blocks);
   const actions = !streaming && (
     <MessageActions
       text={message.text}
@@ -252,22 +259,29 @@ export const AgentBubble = memo(function AgentBubble({
       data-stopped={message.stopped || undefined}
       data-attachments={attachments.length > 0 || undefined}
       data-local-links={(message.localLinks?.length ?? 0) > 0 || undefined}
+      data-blocks={blocks ? true : undefined}
       data-work={message.work ? true : undefined}
       data-message-ids={message.id}
     >
-      {(streaming || message.text) && (
-        <div
-          className="agent-bubble agent-bubble--agent agent-markdown"
-          data-streaming={streaming || undefined}
-          aria-busy={streaming || undefined}
-          onClick={onClick}
-        >
-          {streaming ? (
-            <DraftProse agentId={message.agentId} id={message.id} />
-          ) : (
-            <FinishedProse id={message.id} text={message.text} />
-          )}
+      {blocks ? (
+        <div className="agent-blocks__frame" onClick={onClick}>
+          <AgentBlocks messageId={message.id} agent={agent} set={blocks} />
         </div>
+      ) : (
+        (streaming || message.text) && (
+          <div
+            className="agent-bubble agent-bubble--agent agent-markdown"
+            data-streaming={streaming || undefined}
+            aria-busy={streaming || undefined}
+            onClick={onClick}
+          >
+            {streaming ? (
+              <DraftProse agentId={message.agentId} id={message.id} />
+            ) : (
+              <FinishedProse id={message.id} text={message.text} />
+            )}
+          </div>
+        )
       )}
       {message.stopped && <span className="agent-bubble__stopped">Stopped</span>}
       {!streaming && <LocalLinks message={message} />}
