@@ -330,6 +330,15 @@
   background: color-mix(in srgb, var(--surface-app) 40%, transparent);
 }
 
+/* Dim text (SGR 2: "Starting Claude Code…", a CLI's hints) in xterm's DOM
+   renderer, which runs wherever WebGL doesn't: it paints the default
+   foreground at 50% and skips minimumContrastRatio, 3.2:1 on light and 3.9:1
+   on dark. The terminal's own quiet ink clears AA in both. Coloured dim text
+   keeps xterm's rule. */
+.xterm .xterm-rows span.xterm-dim:not([class*='xterm-fg-']) {
+  color: var(--text-terminal);
+}
+
 .terminal-tab-content:not([data-agent-id='opencode']) .terminal-instance {
   left: -12px;
   width: calc(100% + 12px) !important;

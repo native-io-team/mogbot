@@ -130,7 +130,7 @@
 
 .team-status[data-status='broken'] {
   background: rgba(var(--accent-error-rgb), 0.12);
-  color: var(--accent-error-light);
+  color: var(--text-error);
 }
 
 /* The line people came for. */

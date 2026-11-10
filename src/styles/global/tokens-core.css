@@ -94,6 +94,8 @@
 
   --color-red-500: #ff5f56;
   --color-red-400: #ff6b6b;
+  /* An error word on a selected dark fill, where red-400 is 4.2:1. */
+  --color-red-300: #f99a9a;
   --color-red-error: #f44747;
   --color-red-error-light: #ef4444;
   --color-red-error-deep: #dc2626;
@@ -128,12 +130,17 @@
 
   /* Status and syntax hues deep enough to read as text on white (WCAG AA). */
   --color-green-900: #157532;
+  /* Status words on selected and tinted light fills, where the -900s fall
+     just under AA (4.3:1 on a selected row or the warning tint). */
+  --color-green-950: #126a2d;
   --color-orange-900: #8a5800;
+  --color-orange-950: #764b00;
   --color-orange-800: #9a6200;
   --color-orange-700: #b86e00;
   --color-red-700: #cf222e;
   --color-red-800: #a40e26;
   --color-blue-800: #0a63c9;
+  --color-blue-900: #0550ae;
   --color-purple-800: #6639ba;
   --color-pink-700: #bf3989;
   --color-pink-800: #a8327c;

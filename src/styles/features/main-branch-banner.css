@@ -70,7 +70,7 @@
 
 .main-branch-banner-action.button--default {
   background: var(--button-warning-surface);
-  color: var(--accent-warning);
+  color: var(--button-warning-text);
 }
 
 .main-branch-banner-action.button--default:hover:not(:disabled) {
