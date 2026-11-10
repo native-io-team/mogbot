@@ -112,7 +112,7 @@ export interface Palette {
    * keys' hues (blue, orange, teal, mustard, pink, green, violet, brick),
    * stepped per appearance and validated as a set (the dataviz method: the
    * lightness band, chroma, colour-blind separation of neighbours, 3:1 on
-   * dark's panel). The desk's `--chart-series-1…8` are the same values.
+   * the app, a panel and a control in both appearances). The desk's `--chart-series-1…8` are the same values.
    * Marks only: words beside them stay in text roles.
    */
   chart1: string;
@@ -262,10 +262,10 @@ const light: Palette = {
   diffDelBg: 'rgba(212, 42, 32, 0.08)',
   scrim: 'rgba(29, 28, 26, 0.24)',
   chart1: '#3f6fd8',
-  chart2: '#ec6a2e',
-  chart3: '#2e9e8f',
-  chart4: '#e0a520',
-  chart5: '#e37b9b',
+  chart2: '#db632b',
+  chart3: '#2c9688',
+  chart4: '#ac7f19',
+  chart5: '#c56b87',
   chart6: '#3e8a3e',
   chart7: '#7357c9',
   chart8: '#c2452c',

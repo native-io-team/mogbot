@@ -177,6 +177,18 @@ describe('every kind', () => {
     expect(screen.getByTestId('callout-warning')).toBeTruthy();
   });
 
+  it('tells VoiceOver what a chart shows, not only its title', async () => {
+    await draw(message(ALL.slice(0, 2)), null);
+    expect(
+      screen.getByRole('image', {
+        name: 'Signups (line chart, Mon to Wed). Signups: Mon 1, Tue 2, Wed 3. Trials: Mon 2, Wed 1.',
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('image', { name: /Ads 3, 30%; Search 7, 70%\. Total 10\./ })
+    ).toBeTruthy();
+  });
+
   it('says a chart with nothing in it has nothing to chart', async () => {
     await draw(
       message([

@@ -977,6 +977,54 @@ export function chartLabel(block: ChartBlock): string {
   return `${what} (${kind}${span})`;
 }
 
+/** At most this many points read one by one; past it, a series is summed up. */
+const SAY_EACH = 8;
+
+/**
+ * What a chart shows, in words, for a screen reader: the picture alone told
+ * VoiceOver only its title. A pie says each slice and its share; a series of
+ * a few points says each; a longer one says where it started and ended, and
+ * its low and high.
+ */
+export function chartSummary(block: ChartBlock): string {
+  const units = { prefix: block.prefix, suffix: block.suffix };
+  const say = (v: number) => formatValue(v, units, true);
+  if (block.chart === 'pie' || block.chart === 'donut') {
+    const values = block.series[0]?.values ?? [];
+    const slices = block.labels
+      .map((label, i) => ({ label, v: values[i] }))
+      .filter((s): s is { label: string; v: number } => typeof s.v === 'number' && s.v > 0);
+    const total = slices.reduce((a, s) => a + s.v, 0);
+    const shown = slices.slice(0, SAY_EACH);
+    const parts = shown.map(
+      (s) => `${s.label} ${say(s.v)}${total > 0 ? `, ${Math.round((s.v / total) * 100)}%` : ''}`
+    );
+    const more = slices.length - shown.length;
+    if (more > 0) parts.push(`and ${more} more`);
+    return `${parts.join('; ')}. Total ${say(total)}.`;
+  }
+  const lines = block.series.map((s) => {
+    const points = block.labels
+      .map((label, i) => ({ label, v: s.values[i] }))
+      .filter((p): p is { label: string; v: number } => typeof p.v === 'number');
+    if (!points.length) return '';
+    const name = block.series.length > 1 || block.chart !== 'sparkline' ? `${s.name}: ` : '';
+    if (points.length <= SAY_EACH) {
+      return name + points.map((p) => (p.label ? `${p.label} ${say(p.v)}` : say(p.v))).join(', ');
+    }
+    const first = points[0]!;
+    const last = points[points.length - 1]!;
+    const low = points.reduce((a, p) => (p.v < a.v ? p : a));
+    const high = points.reduce((a, p) => (p.v > a.v ? p : a));
+    const at = (p: { label: string; v: number }) => (p.label ? ` (${p.label})` : '');
+    return (
+      `${name}from ${say(first.v)}${at(first)} to ${say(last.v)}${at(last)}, ` +
+      `low ${say(low.v)}${at(low)}, high ${say(high.v)}${at(high)}`
+    );
+  });
+  return lines.filter(Boolean).join('. ') + '.';
+}
+
 /** The host a link goes to, without "www.". */
 export function domainOf(url: string): string {
   const m = /^https?:\/\/([^/?#:]+)/i.exec(url.trim());
