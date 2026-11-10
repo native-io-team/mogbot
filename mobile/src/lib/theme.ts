@@ -104,6 +104,9 @@ export interface Palette {
   diffAddBg: string;
   diffDel: string;
   diffDelBg: string;
+  /** The words that changed inside a paired line: a stronger band over the line's. */
+  diffAddWord: string;
+  diffDelWord: string;
   /** Behind a menu or a dialog, over the app. */
   scrim: string;
   /** On a photo or the camera, in either appearance: white words, a dark scrim, the viewfinder. */
@@ -192,6 +195,8 @@ const dark: Palette = {
   diffAddBg: 'rgba(53, 211, 93, 0.1)',
   diffDel: '#ef4444',
   diffDelBg: 'rgba(244, 71, 71, 0.1)',
+  diffAddWord: 'rgba(53, 211, 93, 0.28)',
+  diffDelWord: 'rgba(244, 71, 71, 0.3)',
   scrim: 'rgba(0, 0, 0, 0.75)', // --color-black-o75
   chart1: '#5a86e6',
   chart2: '#e86a34',
@@ -267,6 +272,8 @@ const light: Palette = {
   diffAddBg: 'rgba(21, 128, 61, 0.1)',
   diffDel: '#b0221a',
   diffDelBg: 'rgba(212, 42, 32, 0.08)',
+  diffAddWord: 'rgba(21, 128, 61, 0.22)',
+  diffDelWord: 'rgba(212, 42, 32, 0.2)',
   scrim: 'rgba(29, 28, 26, 0.24)',
   chart1: '#3f6fd8',
   chart2: '#db632b',

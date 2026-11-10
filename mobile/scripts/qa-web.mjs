@@ -1949,7 +1949,24 @@ const LIVE = [
       await page.clickLabel('Review changes');
       await sleep(2000);
     },
-    check: 'Diff screen: row tints span the full box width',
+    check:
+      'Review, Overview: “N files changed”, the project and +/−, “0 of N reviewed” over a thin bar, Overview · Files N, what the agent said, then each file (a tick, its name over New/Changed · folder, +/− with five blocks, a chevron)',
+  },
+  {
+    name: 'diff-files',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await page.clickLabel('Review changes');
+      await sleep(1200);
+      await page.clickWhere(
+        `() => [...document.querySelectorAll('[role=tab]')].find((e) => e.innerText?.trim().startsWith('Files'))`,
+        'Files'
+      );
+      await sleep(2500);
+    },
+    check:
+      'Review, Files: each file’s name and folder in a header with +/− and a tick, its diff under it with line numbers, +/− marks, tinted rows spanning the box, the edited words lit stronger, and “N unchanged lines” where a long run is folded',
   },
   {
     name: 'chat-skill-card',
