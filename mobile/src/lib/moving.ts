@@ -62,3 +62,24 @@ export function useMoving(still: boolean): boolean {
   const showing = useShowing();
   return !still && !reduced && showing;
 }
+
+/**
+ * Re-render every `ms` for "last seen 2 min ago", while anyone can see it:
+ * the clock stops in the background and on a screen under another (a stack
+ * keeps them mounted), and catches up at once when it shows again.
+ */
+export function useNow(ms = 15_000) {
+  const [now, setNow] = useState(Date.now);
+  const showing = useShowing();
+  useEffect(() => {
+    if (!showing) return;
+    const tick = () => setNow(Date.now());
+    const catchUp = setTimeout(tick, 0);
+    const id = setInterval(tick, ms);
+    return () => {
+      clearTimeout(catchUp);
+      clearInterval(id);
+    };
+  }, [ms, showing]);
+  return now;
+}

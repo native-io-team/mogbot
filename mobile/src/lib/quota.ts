@@ -7,9 +7,10 @@
  */
 
 import { quotaLines, type Quota, type QuotaLine } from '@shipstudio/companion-protocol';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { callFresh, canCall, lastRead, READ_FRESH_MS } from './session';
 import { useApp } from './store';
+import { useNow } from './moving';
 import { usePolling } from './usePolling';
 
 /**
@@ -23,16 +24,16 @@ export function useQuotas(): { quotas: Quota[] | null; now: number; read: () => 
   const [quotas, setQuotas] = useState<Quota[] | null>(
     () => (serves && lastRead('agents.quota', {})) || null
   );
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(id);
-  }, []);
+  // A minute's clock only while the screen shows (a chat under another keeps
+  // this mounted); a fresh reading moves it on at once.
+  const ticked = useNow(60_000);
+  const [readAt, setReadAt] = useState(0);
+  const now = Math.max(ticked, readAt);
   const read = useCallback(async () => {
     if (!serves) return;
     try {
       setQuotas(await callFresh('agents.quota', {}, READ_FRESH_MS));
-      setNow(Date.now());
+      setReadAt(Date.now());
     } catch {
       // Unanswered: keep what was last read rather than flicker it away.
     }
