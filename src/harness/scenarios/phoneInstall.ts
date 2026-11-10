@@ -2,7 +2,11 @@
  * "Install on my phone" in the Phone panel: the route choice, the iPhone
  * checklist on this Mac as the real checks read it (Xcode 26.1, too old),
  * no phone plugged in, Claude Code building, done and straight into
- * pairing, Android, and the Reinstall entry with its expiry.
+ * pairing, Android, and the Reinstall entry with its expiry. Then each thing
+ * a first self-build trips over, as the checks or the build's log read it:
+ * not signed in to Xcode, signed in with no certificate yet, a phone that
+ * hasn't trusted the Mac, Developer Mode off, a locked phone, a Reinstall
+ * that failed (with the one fix), and a Codex-only Mac.
  */
 
 import type { Scenario, ScenarioStep } from '../types';
@@ -18,6 +22,7 @@ const source = {
   present: false,
   installed: false,
   desktopVersion: '1.7.0',
+  buildLog: '/Users/julian/Library/Application Support/Mogbot/companion-build/last-build.log',
 };
 
 /** This Mac, as `companion_install_ios_status` read it on 4 Nov 2026. */
@@ -30,7 +35,9 @@ export const THIS_MAC = {
   devices: [],
   signing: {
     teamId: 'TEAM000001',
+    teamName: null,
     identity: 'Apple Development: julian@example.com (CERT000001)',
+    free: null,
     bundleId: 'io.native.mogbot.companion.87be70',
   },
   source,
@@ -92,7 +99,16 @@ const AGENT_SCREEN = [
   ' \x1b[38;5;173m✶\x1b[0m \x1b[2mBuilding… (3m 12s · esc to interrupt)\x1b[0m',
 ].join('\r\n');
 
-function fakePty(screen: string) {
+/** A Reinstall whose build failed signing because Xcode's sign-in lapsed. */
+const FAILED_BUILD_LOG = [
+  '› Planning build',
+  `› Compiling ${BRAND.appDirName} » AppDelegate.swift`,
+  `error: No Account for Team "TEAM000001". Add a new account in Accounts settings or verify that your accounts have valid credentials. (in target '${BRAND.appDirName}' from project '${BRAND.appDirName}')`,
+  '** BUILD FAILED **',
+].join('\r\n');
+
+/** A fake PTY showing `screen`; with `exitCode`, it exits with that once shown. */
+function fakePty(screen: string, exitCode?: number) {
   let sent = false;
   return {
     'plugin:pty|spawn': 7,
@@ -101,7 +117,10 @@ function fakePty(screen: string) {
       sent = true;
       return screen;
     },
-    'plugin:pty|exitstatus': () => new Promise<never>(() => {}),
+    'plugin:pty|exitstatus': () =>
+      exitCode === undefined
+        ? new Promise<never>(() => {})
+        : new Promise<number>((resolve) => setTimeout(() => resolve(exitCode), 400)),
     'plugin:pty|resize': null,
     'plugin:pty|write': null,
     'plugin:pty|kill': null,
@@ -254,6 +273,120 @@ export const phoneInstallScenarios: Scenario[] = [
       'Claude Code" enabled.',
     {},
     viaSettings(ANDROID, SET_UP)
+  ),
+  install(
+    'phone-install-not-signed-in',
+    'Install — no Apple ID in Xcode yet',
+    'Xcode, CocoaPods, the iPhone and Developer Mode ticked. "Signed in to Xcode with your ' +
+      'Apple ID" amber, "You", saying Open Xcode → Settings → Accounts, click +, choose Apple ID ' +
+      'and sign in, and that a free Apple ID works. The build marked for the agent.',
+    {
+      companion_install_ios_status: { ...XCODE_OK, devices: [IPHONE], signing: null },
+    },
+    viaSettings(SET_UP)
+  ),
+  install(
+    'phone-install-signed-in-no-certificate',
+    'Install — signed in to Xcode, no certificate made yet',
+    'The Apple ID row ticked green the moment the account is in Xcode, reading "Sam Doe ' +
+      '(Personal Team) · its certificate is made by the first build", not stuck on "You" until ' +
+      'a build makes one. Everything but the build ticked.',
+    {
+      companion_install_ios_status: {
+        ...XCODE_OK,
+        devices: [IPHONE],
+        signing: {
+          teamId: 'TEAM000001',
+          teamName: 'Sam Doe (Personal Team)',
+          identity: null,
+          free: true,
+          bundleId: 'io.native.mogbot.companion.87be70',
+        },
+      },
+      companion_install_ios_app: NOT_INSTALLED,
+    },
+    viaSettings(SET_UP)
+  ),
+  install(
+    'phone-install-untrusted',
+    'Install — the phone hasn’t trusted this Mac',
+    '"Your iPhone, plugged in" amber, "You": unlock Sam’s iPhone and tap Trust, and if no ' +
+      'prompt shows, unplug it and plug it back in. Developer Mode waiting.',
+    {
+      companion_install_ios_status: { ...XCODE_OK, devices: [{ ...IPHONE, paired: false }] },
+    },
+    viaSettings(SET_UP)
+  ),
+  install(
+    'phone-install-devmode-off',
+    'Install — Developer Mode off on the phone',
+    'The phone ticked. "Developer Mode on" amber, "You": the Settings path, that it restarts ' +
+      'and to tap Turn On, and what to do if it isn’t in the list (open Xcode once with the ' +
+      'phone plugged in).',
+    {
+      companion_install_ios_status: {
+        ...XCODE_OK,
+        devices: [{ ...IPHONE, developerMode: 'disabled' }],
+      },
+      companion_install_ios_app: { installed: null, version: null, expiresAt: null },
+    },
+    viaSettings(SET_UP)
+  ),
+  install(
+    'phone-install-locked',
+    'Install — the phone is locked, so it can’t be asked',
+    'Everything ticked but "Built and installed", which is amber and "You": unlock Sam’s ' +
+      'iPhone so this app can check whether it’s on there. Not a silent grey row.',
+    {
+      companion_install_ios_status: { ...XCODE_OK, devices: [IPHONE] },
+      companion_install_ios_app: { installed: null, version: null, expiresAt: null },
+    },
+    viaSettings(SET_UP)
+  ),
+  install(
+    'phone-install-codex',
+    'Install — on a Mac whose engine is Codex',
+    'Same checklist, but the build row is marked "Codex", the card says "Codex does the work" ' +
+      'and the button reads "Start Codex", never Claude Code.',
+    {
+      get_default_agent_id: 'codex',
+      companion_install_ios_status: { ...XCODE_OK, devices: [IPHONE] },
+      companion_install_ios_app: NOT_INSTALLED,
+    },
+    viaSettings(SET_UP)
+  ),
+  install(
+    'phone-install-reinstall-failed',
+    'Reinstall — the build failed, and the panel says the one fix',
+    'Title "Reinstall · iPhone". The terminal shows the build ending in “No Account for Team”. ' +
+      'Over its foot, a bar: “The build failed. Xcode’s sign-in to your Apple ID has lapsed. ' +
+      'Open Xcode → Settings → Accounts, select your Apple ID and sign in again, then ' +
+      'Reinstall.” with "Reinstall" and "Hand it to Claude Code" beside it.',
+    {
+      companion_install_ios_status: {
+        ...XCODE_OK,
+        devices: [IPHONE],
+        source: { ...source, present: true, installed: true },
+      },
+      companion_install_ios_app: NOT_INSTALLED,
+      companion_install_build_log: FAILED_BUILD_LOG,
+      ...fakePty(FAILED_BUILD_LOG, 65),
+    },
+    {
+      command: 'companion.devices',
+      afterCommand: [{ click: '[data-install-open]' }],
+      requires: '[data-build-ended="failed"]',
+      storage: {
+        'shipstudio.companionInstall': JSON.stringify({
+          platform: 'ios',
+          deviceName: 'Sam’s iPhone',
+          deviceId: IPHONE.udid,
+          teamId: 'TEAM000001',
+          installedAt: Date.now() - 8 * DAY,
+          expiresAt: Date.now() - DAY,
+        }),
+      },
+    }
   ),
   install(
     'phone-install-reinstall-entry',
