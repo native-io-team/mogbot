@@ -18,12 +18,15 @@ interface ImportTypePickerProps {
   onSelectLocalFolder: () => void;
   /** Callback to close the picker */
   onClose: () => void;
+  /** Signed in to GitHub; when not, the GitHub choice says it signs in first. */
+  githubConnected?: boolean;
 }
 
 export function ImportTypePicker({
   onSelectGitHub,
   onSelectLocalFolder,
   onClose,
+  githubConnected = true,
 }: ImportTypePickerProps) {
   return (
     <ModalFrame isOpen onClose={onClose} title="Import project" className="import-picker-modal">
@@ -34,7 +37,9 @@ export function ImportTypePicker({
           </div>
           <div className="import-picker-text">
             <span className="import-picker-title">GitHub repository</span>
-            <span className="import-picker-subtitle">Clone from GitHub</span>
+            <span className="import-picker-subtitle">
+              {githubConnected ? 'Clone from GitHub' : 'Connect GitHub first, then clone'}
+            </span>
           </div>
         </button>
         <button className="import-picker-card" onClick={onSelectLocalFolder}>
@@ -44,7 +49,7 @@ export function ImportTypePicker({
           <div className="import-picker-text">
             <span className="import-picker-title">Local folder</span>
             <span className="import-picker-subtitle">
-              Open an existing project from your computer
+              Open a project that's already on this Mac
             </span>
           </div>
         </button>
