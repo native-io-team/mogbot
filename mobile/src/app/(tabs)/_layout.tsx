@@ -5,7 +5,8 @@
  */
 
 import { NativeTabs } from 'expo-router/native-tabs';
-import { attentionCounts } from '../../lib/agents';
+import { feedItems } from '../../lib/needsYou';
+import { canCall } from '../../lib/session';
 import { useApp } from '../../lib/store';
 import { useColors } from '../../lib/appearance';
 
@@ -15,10 +16,19 @@ export default function TabsLayout() {
   // is live news, so it shows only while the Mac is answering: offline the
   // rows say "as of …", and a red number would claim more than is known.
   const live = useApp((s) => s.link.kind === 'connected');
-  // The same number as Home's "N agents need your OK" and every count on the
-  // desk, on the tab that lists them.
+  // What the tab lists, counted: one per row (a card, changes to keep, a
+  // turn to fix), so the number always matches the list it opens on. The
+  // one place a waiting request is counted on the phone; the agents' rows
+  // only label theirs.
   const waiting = useApp((s) =>
-    s.overview ? attentionCounts(s.overview.agents, s.teamSetup).needYou : 0
+    s.overview
+      ? feedItems(
+          s.overview.agents,
+          s.chats,
+          s.teamSetup,
+          canCall('agents.import.review', s.welcome)
+        ).length
+      : 0
   );
   const asking = useApp(
     (s) =>

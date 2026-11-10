@@ -47,8 +47,7 @@ import { DemoCard } from '../../../components/DemoCard';
 import { Button, Dot, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
 import { formatAgo, needsYou, pendingApproval } from '../../../lib/agents';
-import { barWords, buildHome, type HomeBar } from '../../../lib/home';
-import { progress } from '../../../lib/teamSetup';
+import { buildHome } from '../../../lib/home';
 import { haptic } from '../../../lib/haptics';
 import {
   call,
@@ -69,7 +68,6 @@ import {
   agentColorKeys,
   avatarSize,
   chromeScale,
-  depthOf,
   iconSize,
   PRESSED,
   radius,
@@ -81,7 +79,6 @@ type Row =
   | { kind: 'header'; key: string; title: string; team?: number }
   | { kind: 'team'; key: string; working: number }
   | { kind: 'agent'; key: string; agent: Agent; quiet?: boolean }
-  | { kind: 'bar'; key: string; bar: HomeBar }
   | { kind: 'room'; key: string; room: RoomView }
   | { kind: 'hidden'; key: string; count: number };
 
@@ -204,7 +201,8 @@ export default function Agents() {
   const rows = useMemo<Row[]>(() => {
     // A Mac that removed this phone shows nothing of its agents: only the way back.
     if (!overview || removed) return [];
-    // The Chief first, always; one bar for what waits on you; pinned; the rest (lib/home).
+    // The Chief first, always; pinned; the rest (lib/home). What waits on you is
+    // the Needs you tab's, counted on its badge: no bar for it here too.
     const home = buildHome(overview.agents, live ? teamSetup : null);
     const out: Row[] = [];
     const add = (a: Agent) =>
@@ -217,7 +215,6 @@ export default function Agents() {
       out.push({ kind: 'header', key: 'h-rest', title: 'Agents', team: working });
     else if (working !== undefined) out.push({ kind: 'team', key: 'team', working });
     if (home.chief) add(home.chief);
-    if (home.bar) out.push({ kind: 'bar', key: 'bar', bar: home.bar });
     home.pinned.forEach(add);
     home.rest.forEach(add);
     const hidden = home.hidden;
@@ -368,13 +365,6 @@ export default function Agents() {
           <View style={styles.team}>
             <TeamLine working={item.working} />
           </View>
-        ) : item.kind === 'bar' ? (
-          <AttentionBar
-            bar={item.bar}
-            onOpenChief={(id) =>
-              split ? setSelected(id) : router.push({ pathname: '/chat/[id]', params: { id } })
-            }
-          />
         ) : item.kind === 'hidden' ? (
           <Pressable
             onPress={() => {
@@ -532,50 +522,6 @@ function TeamLine({ working }: { working: number }) {
   );
 }
 
-/**
- * One calm row for everything waiting on you, under the Chief: "A few things
- * to finish setting up your team" (opens the Chief's chat, where the
- * checklist is) or "N agents need your OK" (opens them grouped in a sheet).
- * Never a section listing every agent.
- */
-function AttentionBar({ bar, onOpenChief }: { bar: HomeBar; onOpenChief: (id: string) => void }) {
-  const colors = useColors();
-  const styles = useStyles();
-  const ripple = useRipple();
-  const router = useRouter();
-  const chief = useApp((s) => s.overview?.agents.find((a) => a.isMain) ?? null);
-  const setup = useApp((s) => s.teamSetup);
-  const [title, line] = barWords(
-    bar,
-    chief?.name ?? 'Chief of Staff',
-    setup ? progress(setup) : undefined
-  );
-  return (
-    <Pressable
-      onPress={() => {
-        haptic.select();
-        // Everything waiting lives in one place: the Needs you tab.
-        if (bar.kind === 'needs') router.navigate('/needs');
-        else if (chief) onOpenChief(chief.id);
-      }}
-      android_ripple={ripple}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}. ${line}`}
-      style={({ pressed }) => [styles.bar, pressed && PRESSED]}
-    >
-      <View style={styles.barText}>
-        <T variant="headline" color={colors.textStrong} numberOfLines={2}>
-          {title}
-        </T>
-        <T variant="small" color={colors.textSecondary} numberOfLines={1}>
-          {line}
-        </T>
-      </View>
-      <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
-    </Pressable>
-  );
-}
-
 /** The Mac said no for good: removed, or one side needs updating. */
 function Refused() {
   const colors = useColors();
@@ -691,26 +637,6 @@ const useStyles = makeStyles((colors) => ({
   teamLine: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   quota: { paddingHorizontal: space.lg, paddingTop: space.md },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
-  bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    marginHorizontal: space.lg,
-    marginTop: space.sm,
-    // The card's drop reaches ~30px under it; the row below is opaque and
-    // drawn later, so the gap has to hold the whole shadow.
-    marginBottom: space['2xl'],
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-    minHeight: 56,
-    borderRadius: radius.card,
-    backgroundColor: colors.surfacePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.cardBorder,
-    boxShadow: depthOf(colors).card,
-    overflow: 'hidden',
-  },
-  barText: { flex: 1, gap: space.xs },
   hiddenToggle: {
     flexDirection: 'row',
     alignItems: 'center',

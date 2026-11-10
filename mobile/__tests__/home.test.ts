@@ -1,7 +1,8 @@
 import type { Agent, TeamSetupView } from '@shipstudio/companion-protocol';
 import { attentionCounts, nextNeedsYou } from '../src/lib/agents';
-import { barWords, buildHome, quietAgentIds } from '../src/lib/home';
-import { agent } from './helpers';
+import { buildHome, quietAgentIds } from '../src/lib/home';
+import { feedItems } from '../src/lib/needsYou';
+import { agent, msg } from './helpers';
 
 const a = (id: string, over: Partial<Agent> = {}) =>
   agent({ id, name: id, isMain: false, pinned: false, hidden: false, lastActivityAt: 0, ...over });
@@ -37,7 +38,7 @@ function imported(n = 16) {
   return { team, setup };
 }
 
-describe('Home: the Chief first, one calm bar', () => {
+describe('Home: the Chief first, then pinned, then the rest', () => {
   const chief = a('chief', { isMain: true, pinned: true, lastActivityAt: 1 });
 
   it('the Chief is always the first row, even when it is the oldest and others need you', () => {
@@ -47,32 +48,20 @@ describe('Home: the Chief first, one calm bar', () => {
     expect([...home.pinned, ...home.rest].some((x) => x.id === 'chief')).toBe(false);
   });
 
-  it('agents being set up are quiet: one "setting up your team" bar, not a Needs you section', () => {
+  it('agents being set up are quiet, and leave the counts to the checklist', () => {
     const { team, setup } = imported();
     const home = buildHome([chief, ...team], setup);
-    expect(home.bar).toEqual({ kind: 'setup' });
     expect(home.quiet.size).toBe(16);
-    expect(barWords(home.bar!, 'Chief of Staff', '0 of 1 done')[0]).toBe(
-      'A few things to finish setting up your team'
-    );
-    // The tab badge and "Open next" leave them to the checklist too.
     expect(attentionCounts([chief, ...team], setup).needYou).toBe(0);
     expect(nextNeedsYou([chief, ...team], {}, home.quiet)).toBeNull();
   });
 
-  it('others waiting: "N agents need your OK", which also points at setup', () => {
-    const { team, setup } = imported();
+  it('no bar for what waits on you: the Needs you tab says it, once', () => {
     const designer = a('Designer', { lastActivityAt: 50, ...waiting });
-    const writer = a('Writer', {
-      lastActivityAt: 60,
-      status: { state: 'waiting', activity: null, since: 1 },
-    });
-    const home = buildHome([chief, designer, writer, ...team], setup);
-    expect(home.bar?.kind).toBe('needs');
-    expect(barWords(home.bar!, 'Chief of Staff')).toEqual([
-      '2 agents need your OK',
-      'Writer, Designer · and setting up your team',
-    ]);
+    const home = buildHome([chief, designer], null);
+    expect(home).not.toHaveProperty('bar');
+    // The waiting agent still sorts up, where its row's own label says why.
+    expect(home.rest.map((x) => x.id)).toEqual(['Designer']);
   });
 
   it('pinned next, then the rest: what needs you first, then most recent', () => {
@@ -85,36 +74,38 @@ describe('Home: the Chief first, one calm bar', () => {
     expect(home.pinned.map((x) => x.id)).toEqual(['Pinned']);
     expect(home.rest.map((x) => x.id)).toEqual(['Asking', 'Fresh', 'Old']);
     expect(home.hidden.map((x) => x.id)).toEqual(['Hidden']);
-    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('Asking needs your OK');
-  });
-
-  it('nothing waiting and no setup: no bar', () => {
-    expect(buildHome([chief, a('x')], null).bar).toBeNull();
   });
 
   it('a finished or dismissed setup quiets no one', () => {
-    const { team, setup } = imported(3);
+    const { setup } = imported(3);
     expect(quietAgentIds({ ...setup, complete: true }).size).toBe(0);
     expect(quietAgentIds({ ...setup, dismissed: true }).size).toBe(0);
-    expect(buildHome([chief, ...team], { ...setup, complete: true }).bar?.kind).toBe('needs');
   });
 });
 
-describe('one count everywhere', () => {
-  it('Home’s bar and the tab badge say the same number, the Chief included', () => {
-    const chief = a('chief', { isMain: true, pinned: true, ...waiting });
-    const team = Array.from({ length: 13 }, (_, i) =>
-      a(`t${i}`, { lastActivityAt: i, ...waiting })
-    );
-    const home = buildHome([chief, ...team], null);
-    expect(home.bar?.kind === 'needs' && home.bar.agents.length).toBe(14);
-    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('14 agents need your OK');
-    expect(attentionCounts([chief, ...team]).needYou).toBe(14);
+describe('one count: the cards the list shows', () => {
+  const card = (id: string, agentId: string, ts: number) =>
+    msg(id, ts, {
+      agentId,
+      kind: 'approval',
+      text: '',
+      approval: { requestId: id, title: 'Run a command', detail: 'ls', status: 'pending' },
+    });
+
+  it('counts cards, not agents: the Chief with three requests is three', () => {
+    const chief = a('chief', { isMain: true, pendingApprovals: 3 });
+    const team = Array.from({ length: 4 }, (_, i) => a(`t${i}`, { lastActivityAt: i, ...waiting }));
+    const chats = {
+      chief: { messages: [card('c1', 'chief', 1), card('c2', 'chief', 2), card('c3', 'chief', 3)] },
+      ...Object.fromEntries(team.map((t, i) => [t.id, { messages: [card(`m${i}`, t.id, i)] }])),
+    };
+    // Five agents wait, seven requests: the badge says what the list shows.
+    expect(attentionCounts([chief, ...team]).needYou).toBe(5);
+    expect(feedItems([chief, ...team], chats, null)).toHaveLength(7);
   });
 
-  it('the Chief alone waiting still gets the bar', () => {
-    const chief = a('chief', { isMain: true, ...waiting });
-    const home = buildHome([chief, a('x')], null);
-    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('chief needs your OK');
+  it('an agent whose cards this phone hasn’t loaded yet is one row until they are', () => {
+    const designer = a('Designer', { pendingApprovals: 2 });
+    expect(feedItems([designer], {}, null)).toHaveLength(1);
   });
 });
