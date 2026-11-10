@@ -5646,7 +5646,7 @@ async fn run_turn(
         tracing::info!("[Agents] put {agent_id}'s conversation back where its engine looks for it");
     }
     if let Some(caps) = driver
-        .capabilities_before(&agent, &binary, store::now_ms())
+        .capabilities_before(&agent, &binary, store::now_ms(), &access)
         .await
     {
         agent.capabilities = Some(caps.clone());

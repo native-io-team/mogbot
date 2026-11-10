@@ -1657,7 +1657,8 @@ search result (WebFetch, WebSearch, Codex's web search, `curl` / `wget` to
 anything but `localhost`), issue or pull request comments (`gh issue view`,
 `gh pr view --comments` or `--json …comments…`, `gh api
 …/comments|reviews|issues…`), a cloned repository, mail, chat or documents
-through a connection, or a page in the browser that isn't this Mac's own —
+through a connection (a claude.ai connector, or on Codex the ChatGPT apps it
+serves as `codex_apps`), or a page in the browser that isn't this Mac's own —
 the turn is marked, and for the rest of it two things ask on a card even at
 Bold (`autoallow::after_outside_asks`): **sending to the network** beyond
 a read, to anywhere but this Mac (a `curl` body, form or upload, a non-GET,
@@ -2986,6 +2987,13 @@ What a turn gets (`connections::for_turn`, before the process starts):
   relay puts it on a card itself. So Codex's `exec` fallback, which has no
   approval channel, can't write through a connection unasked. A take-over
   is answered at the keyboard, so only the read-only rule applies there.
+  Because the relay (and the browsers' gate) decides every call, Codex gets
+  each of these servers pre-approved (`default_tools_approval_mode =
+  "approve"`) with the card's timeout (`tool_timeout_sec`): Codex otherwise
+  wants an approval for any tool not marked read-only, which `exec`'s
+  "never" refuses outright (seen on 0.166: "MCP tool call requires
+  approval, but approval policy is never"), and its own 60s per call would
+  give up on a card still waiting.
 - **Outside text**: in a turn answering a "When…" routine's items (or a
   message carrying that taint), connection reads ask on a card too
   (`connections::gate(.., outside)`): outside text can't make an agent
@@ -3004,10 +3012,10 @@ What a turn gets (`connections::for_turn`, before the process starts):
 - **Claude Code's own apps** (user scope, every agent): "Block for this
   agent" adds `--disallowedTools mcp__<name>`.
 
-Taking over (`takeover.rs`) gives a Claude Code agent its connection
-servers and their prompt lines too; its blocks and `--no-chrome` aren't
-applied there (the person at the keyboard answers every prompt), and a
-Codex take-over gets no connection servers.
+Taking over (`takeover.rs`) gives an agent its connection servers and their
+prompt lines too (Claude Code in its config file, Codex as the same `-c`
+values a turn gets); its blocks and `--no-chrome` aren't applied there (the
+person at the keyboard answers every prompt).
 
 ### What it can reach
 
@@ -5398,6 +5406,8 @@ codex app-server
   -c mcp_servers.app={url=…/mcp/agent,bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",
        tool_timeout_sec=300,default_tools_approval_mode="approve"}
   -c project_doc_fallback_filenames=["CLAUDE.md"]
+  -c mcp_servers.<granted app | browser | user_chrome>={url=…,bearer_token_env_var=…,
+       tool_timeout_sec=300,default_tools_approval_mode="approve"}
 → initialize, initialized
 → thread/start {cwd, approvalPolicy:"on-request", model, developerInstructions}
                (or thread/resume {threadId, …})
@@ -5408,7 +5418,11 @@ The permissions profile (Codex 0.166+, read off `codex --version`) is what
 keeps `.git` and `.shipstudio` read-only: Codex accepts a glob only to deny
 *reading*, so the folders are listed by path (`reach::protected_paths`: the
 roots, the projects in them and copies under `.worktrees/<project>/`, three
-levels deep, at most 400). Verified on 0.166 with `codex sandbox -P`: a nested
+levels deep, at most 400). A root, a project or a folder git works in also
+lists the ones it doesn't have yet, so a turn can't create a `.shipstudio`
+(or `.git`) there either, as Claude Code's pattern rules already ensure
+(checked on 0.166: a "read" entry for a missing `.shipstudio` refuses its
+`mkdir`; without one it is created). Verified on 0.166 with `codex sandbox -P`: a nested
 project's `.git` and `.shipstudio` refuse a write while the project stays
 writable, and `thread/start` answers with the profile active. Re-checked on
 0.166: a `"<root>/**/.git"="read"` entry is refused ("filesystem glob path …
@@ -5475,8 +5489,10 @@ forces approvals to "never"), and the prompt says so instead
 (`prompts::for_codex_exec`). Debug builds force it with
 `SHIPSTUDIO_AGENTS_CODEX_EXEC=1`.
 
-Capabilities come from what we serve it, its built-ins and `codex mcp list
---json`, read before each turn (Codex announces no tools). Failures read as
+Capabilities come from what we serve it, its built-ins, `codex mcp list
+--json` and the servers the turn is given on its command line (its granted
+apps and the browsers, which Claude Code's `init` lists itself), read before
+each turn (Codex announces no tools). Failures read as
 "Codex is out of usage until 7:18 PM." (from its "try again
 at 7:18 PM", this Mac's time) and "Codex is signed out." (checked before the
 turn, which otherwise spends 20s retrying a 401), with "Sign in to Codex"

@@ -144,6 +144,10 @@ pub struct Context<'a> {
     pub secret: &'a str,
     /// Codex with permission profiles: folders kept read-only.
     pub protected: Option<&'a [PathBuf]>,
+    /// Codex: its connection and browser servers, as a turn's `-c` values
+    /// (`connections::TurnAccess::codex_config`). Claude Code's are in its
+    /// config file.
+    pub codex_servers: &'a [String],
     /// With the secrets section, as a turn's.
     pub system_prompt: &'a str,
     pub layout: &'a super::project::Layout,
@@ -165,15 +169,26 @@ pub fn spawn_for(ctx: &Context) -> Spawn {
             ctx.system_prompt,
             &ctx.layout.add_dirs,
         ),
-        Engine::Codex => super::codex::interactive_args(
-            ctx.model,
-            ctx.session,
-            ctx.url,
-            &super::prompts::for_codex_exec(ctx.system_prompt),
-            &ctx.layout.add_dirs,
-            ctx.protected,
-            &cwd,
-        ),
+        Engine::Codex => {
+            let mut args = super::codex::interactive_args(
+                ctx.model,
+                ctx.session,
+                ctx.url,
+                &super::prompts::for_codex_exec(ctx.system_prompt),
+                &ctx.layout.add_dirs,
+                ctx.protected,
+                &cwd,
+            );
+            // Its apps and browsers, as a turn has them: with the other
+            // overrides, ahead of `-C <cwd> <thread>`.
+            let at = args.iter().position(|a| a == "-C").unwrap_or(args.len());
+            let servers = ctx
+                .codex_servers
+                .iter()
+                .flat_map(|c| ["-c".to_string(), c.clone()]);
+            args.splice(at..at, servers);
+            args
+        }
     };
     let mut env = BTreeMap::new();
     env.insert("PATH".to_string(), ctx.path.clone());
@@ -396,10 +411,14 @@ async fn open(
     // refused. It's revoked when the terminal is handed back.
     let access = super::broker::grant(&agent.id, None);
     let url = super::reach::agent_url(port);
-    // Its connection servers too (Claude Code), so taking over doesn't
+    // Its connection servers too, on either engine, so taking over doesn't
     // lose the apps it was granted. Blocks and `--no-chrome` aren't applied
     // here: the person at the keyboard answers every prompt themselves.
     let reach = super::connections::for_turn(agent, port, false).await;
+    let codex_servers = match agent.engine {
+        Engine::Codex => reach.codex_config(),
+        Engine::Claude => Vec::new(),
+    };
     let mcp_config = match agent.engine {
         Engine::Claude => Some(super::reach::write_config(
             &super::reach::claude_config_with(
@@ -428,7 +447,7 @@ async fn open(
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&have);
     }
-    if agent.engine == Engine::Claude && !reach.prompt.is_empty() {
+    if !reach.prompt.is_empty() {
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&reach.prompt);
     }
@@ -459,6 +478,7 @@ async fn open(
         mcp_config: &mcp_config_arg,
         secret: access.secret(),
         protected: protected.as_deref(),
+        codex_servers: &codex_servers,
         system_prompt: &system_prompt,
         layout: &layout,
         path: crate::utils::get_extended_path(),
@@ -905,6 +925,7 @@ mod tests {
             mcp_config: "/s/agent-bridge/mcp-a1.json",
             secret: "s3cret",
             protected: None,
+            codex_servers: &[],
             system_prompt: "you are Finance",
             layout,
             path: "/opt/bin:/usr/bin".into(),
@@ -1041,6 +1062,36 @@ mod tests {
         assert!(!codex
             .args
             .contains(&"approval_policy=\"never\"".to_string()));
+    }
+
+    /// A Claude Code take-over keeps the apps it was granted (its config
+    /// file); a Codex one gets the same servers as `-c` values, ahead of the
+    /// working folder and the thread, and never a token.
+    #[test]
+    fn a_codex_take_over_keeps_its_connection_servers() {
+        use crate::agents::connections::{TurnAccess, TurnServer};
+        let reach = TurnAccess {
+            servers: vec![TurnServer {
+                key: "linear".into(),
+                url: "http://127.0.0.1:9/mcp/conn/linear".into(),
+            }],
+            ..Default::default()
+        };
+        let servers = reach.codex_config();
+        let l = layout(None);
+        let mut c = ctx(Engine::Codex, &l, vec![]);
+        c.codex_servers = &servers;
+        let codex = spawn_for(&c);
+        let at = codex
+            .args
+            .iter()
+            .position(|a| a.starts_with("mcp_servers.linear="))
+            .expect("its connection server");
+        assert_eq!(codex.args[at - 1], "-c");
+        assert!(codex.args[at].contains("bearer_token_env_var"));
+        assert!(at < codex.args.iter().position(|a| a == "-C").unwrap());
+        assert_eq!(codex.args.last().map(String::as_str), Some("sess-1"));
+        assert!(!codex.args.iter().any(|a| a.contains("s3cret")));
     }
 
     #[test]

@@ -737,9 +737,12 @@ fn quoted(message: &str) -> Option<String> {
 /// same way on the activity line and in the timeline.
 fn activity(item: &Value) -> Option<super::work::Action> {
     match item.get("type")?.as_str()? {
-        "commandExecution" | "fileChange" | "mcpToolCall" | "webSearch" | "plan" => {
-            super::codex::action(&as_exec(item))
-        }
+        "commandExecution"
+        | "fileChange"
+        | "mcpToolCall"
+        | "webSearch"
+        | "plan"
+        | "collabAgentToolCall" => super::codex::action(&as_exec(item)),
         _ => None,
     }
 }
@@ -753,6 +756,7 @@ pub(super) fn as_exec(item: &Value) -> Value {
         Some("mcpToolCall") => "mcp_tool_call",
         Some("webSearch") => "web_search",
         Some("plan") => "todo_list",
+        Some("collabAgentToolCall") => "collab_agent_tool_call",
         _ => return item.clone(),
     };
     let mut item = item.clone();
@@ -764,7 +768,9 @@ pub(super) fn as_exec(item: &Value) -> Value {
 fn result_of(item: &Value) -> Vec<Out> {
     let tool_item = matches!(
         item.get("type").and_then(Value::as_str),
-        Some("commandExecution" | "fileChange" | "mcpToolCall" | "webSearch")
+        Some(
+            "commandExecution" | "fileChange" | "mcpToolCall" | "webSearch" | "collabAgentToolCall"
+        )
     );
     if !tool_item {
         return Vec::new();
@@ -1263,6 +1269,35 @@ mod tests {
             ask.allow,
             json!({ "permissions": { "network": { "enabled": true } }, "scope": "turn" })
         );
+    }
+
+    /// A sub-agent Codex starts is a step, as Claude Code's `Task` is; its
+    /// other calls (waiting on it) aren't new steps.
+    #[test]
+    fn a_sub_agent_codex_starts_is_a_step_like_claude_codes() {
+        let (mut c, _) = conversation(None);
+        started(&mut c);
+        let spawn = |tool: &str, id: &str| {
+            json!({ "method": "item/started", "params": { "threadId": "t1", "item": {
+                "type": "collabAgentToolCall", "id": id, "tool": tool, "status": "inProgress",
+                "prompt": "Check the pricing page\nthen report", "senderThreadId": "t1",
+                "receiverThreadIds": [], "agentsStates": {} } } })
+        };
+        let out = c.on_message(&spawn("spawnAgent", "s1"));
+        let [Out::Step(Step::Action(a))] = &out[..] else {
+            panic!("{out:?}")
+        };
+        let claude = crate::agents::work::describe_tool(
+            "Task",
+            Some(&json!({ "description": "Check the pricing page" })),
+        )
+        .unwrap();
+        assert_eq!(a.label, claude.label);
+        assert_eq!(a.id.as_deref(), Some("s1"));
+        assert!(c.on_message(&spawn("wait", "w1")).is_empty());
+        let done = c.on_message(&json!({ "method": "item/completed", "params": { "threadId": "t1", "item": {
+            "type": "collabAgentToolCall", "id": "s1", "tool": "spawnAgent", "status": "completed" } } }));
+        assert!(matches!(&done[..], [Out::Step(Step::Result(r))] if r.id == "s1"));
     }
 
     #[test]

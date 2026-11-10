@@ -386,6 +386,16 @@ pub(super) fn call(item: &Value) -> Option<(String, Value)> {
             serde_json::json!({ "query": field("query") }),
         ),
         "todo_list" => ("TodoWrite".to_string(), Value::Null),
+        // A sub-agent it started (the app server's `collabAgentToolCall`):
+        // Claude Code's `Task`. Its other calls (waiting on one, sending it
+        // input) are the same sub-task, not new steps.
+        "collab_agent_tool_call" => match item.get("tool")?.as_str()? {
+            "spawnAgent" | "spawn_agent" => (
+                "Task".to_string(),
+                serde_json::json!({ "description": item.get("prompt").and_then(Value::as_str).unwrap_or("").lines().next().unwrap_or("") }),
+            ),
+            _ => return None,
+        },
         _ => return None,
     };
     Some((name, input))
@@ -511,7 +521,17 @@ pub fn steps(value: &Value) -> Vec<Step> {
 /// built-in shell, file edits and web search (seen in what it sends its
 /// model), and the user's Codex MCP servers as `codex mcp list` reports them.
 /// `asks`: the turn runs on app-server, where going past the sandbox asks.
-pub async fn capabilities(caller: &Agent, binary: &Path, now: i64, asks: bool) -> Capabilities {
+/// `given`: the servers this turn is given on its command line (its granted
+/// apps and the browsers, `connections::TurnAccess`), which `codex mcp list`
+/// can't see; Claude Code's `init` lists the same servers, so both engines'
+/// lists name them.
+pub async fn capabilities(
+    caller: &Agent,
+    binary: &Path,
+    now: i64,
+    asks: bool,
+    given: &[String],
+) -> Capabilities {
     let ours: Vec<String> = super::mcp::tool_names(caller)
         .into_iter()
         .map(|name| format!("mcp__{}__{name}", super::prompts::SERVER_KEY))
@@ -526,6 +546,7 @@ pub async fn capabilities(caller: &Agent, binary: &Path, now: i64, asks: bool) -
         .ok()
         .map(|out| servers_from(&String::from_utf8_lossy(&out.stdout)))
         .unwrap_or_default();
+    let servers = with_given(servers, given);
     let mut lines = capabilities::lines(Engine::Codex, &tools, &servers);
     if asks {
         for line in &mut lines {
@@ -539,6 +560,21 @@ pub async fn capabilities(caller: &Agent, binary: &Path, now: i64, asks: bool) -
         seen_at: now,
         lines,
     }
+}
+
+/// The user's Codex servers and the ones the turn is given, each once (a
+/// given one, reached through the app, is connected).
+fn with_given(mut servers: Vec<Server>, given: &[String]) -> Vec<Server> {
+    for key in given {
+        match servers.iter_mut().find(|s| &s.name == key) {
+            Some(s) => s.connected = true,
+            None => servers.push(Server {
+                name: key.clone(),
+                connected: true,
+            }),
+        }
+    }
+    servers
 }
 
 /// How the capability line ends for the sandbox (see `capabilities::lines`).
@@ -722,6 +758,27 @@ mod tests {
         let servers = servers_from(raw);
         assert_eq!(servers.len(), 2);
         assert!(servers[0].connected && !servers[1].connected);
+    }
+
+    /// Claude Code's `init` names the granted apps and the browsers it was
+    /// given; `codex mcp list` can't see them (they're on the turn's command
+    /// line), so they're added, and a Codex agent's list says the same.
+    #[test]
+    fn the_servers_a_turn_is_given_are_on_its_list() {
+        let listed = servers_from(
+            r#"[{"name":"Sanity","enabled":true,"auth_status":"bearer_token"},
+            {"name":"linear","enabled":true,"auth_status":"not_logged_in"}]"#,
+        );
+        let given = vec!["linear".to_string(), "browser".to_string()];
+        let servers = with_given(listed, &given);
+        assert_eq!(servers.len(), 3);
+        assert!(servers.iter().all(|s| s.connected));
+        let lines = capabilities::lines(Engine::Codex, &["Bash"], &servers);
+        let connectors = lines.iter().find(|l| l.what == "Connectors").unwrap();
+        let claude = capabilities::lines(Engine::Claude, &["Bash"], &servers);
+        let claude_connectors = claude.iter().find(|l| l.what == "Connectors").unwrap();
+        assert_eq!(connectors.detail, claude_connectors.detail);
+        assert!(!lines.iter().any(|l| l.what == "Needs sign-in"));
     }
 
     #[test]
