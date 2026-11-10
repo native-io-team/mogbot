@@ -42,7 +42,7 @@ export function indicatorState(
     return {
       tone: 'down',
       line: 'Remote access stopped',
-      detail: 'Your assistant can’t reach this computer. Open Remote access to restart it.',
+      detail: 'Your assistant can’t reach this Mac. Open Remote access to restart it.',
     };
   }
   if (brief.power.onAc === false) {
@@ -60,7 +60,7 @@ export function indicatorState(
       last !== null
         ? `Remote on · ${brief.activity.lastClient ?? 'used'} ${agoText(last, now)}`
         : 'Remote on',
-    detail: 'Your assistant can reach this computer while it stays on, awake and online.',
+    detail: 'Your assistant can reach this Mac while it stays on, awake and online.',
   };
 }
 

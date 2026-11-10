@@ -56,9 +56,9 @@ export function RemoteLive({ ctl, projects, onProjectChange, activity }: Props) 
       ? (lastRequest ?? 'Waiting for your assistant’s next message')
       : state === 'down'
         ? status.reachability?.state === 'noPublicDns'
-          ? 'Tailscale is still publishing this computer’s address.'
-          : 'Remote access is on, but the internet can’t reach this computer right now.'
-        : 'Your assistant can’t reach this computer.';
+          ? 'Tailscale is still publishing this Mac’s address.'
+          : 'Remote access is on, but the internet can’t reach this Mac right now.'
+        : 'Your assistant can’t reach this Mac.';
 
   return (
     <div className="remote-live">
