@@ -5227,7 +5227,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 610
+      "consumerCount": 609
     },
     {
       "name": "--text-secondary",
@@ -5235,7 +5235,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 581
+      "consumerCount": 580
     },
     {
       "name": "--text-muted",
@@ -5707,7 +5707,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 164
+      "consumerCount": 163
     },
     {
       "name": "--font-size-body-md",
@@ -5715,7 +5715,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 331
+      "consumerCount": 330
     },
     {
       "name": "--font-size-body-sm",
@@ -5803,7 +5803,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 16
+      "consumerCount": 15
     },
     {
       "name": "--tracking-title",
@@ -5835,7 +5835,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 145
+      "consumerCount": 144
     },
     {
       "name": "--font-weight-heading",
@@ -6043,7 +6043,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 280
+      "consumerCount": 279
     },
     {
       "name": "--spacing-xs",
@@ -6051,7 +6051,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 756
+      "consumerCount": 754
     },
     {
       "name": "--spacing-sm",
@@ -6059,7 +6059,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 914
+      "consumerCount": 913
     },
     {
       "name": "--spacing-md",
@@ -6635,7 +6635,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 610
+      "consumerCount": 609
     },
     {
       "name": "--text-secondary",
@@ -6643,7 +6643,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 581
+      "consumerCount": 580
     },
     {
       "name": "--text-quiet",

@@ -157,13 +157,7 @@
   color: var(--text-primary);
 }
 
-.agent-usage__headline:is([data-tone='warning'], [data-tone='limited']) {
+/* Amber only when the user has something to do; out of usage refills by itself. */
+.agent-usage__headline[data-tone='warning'] {
   color: var(--accent-warning);
-}
-
-/* A narrow popover: an account's name wraps rather than cut to a stub. */
-.agent-usage .usage-stack__label-name {
-  overflow: visible;
-  white-space: normal;
-  overflow-wrap: anywhere;
 }

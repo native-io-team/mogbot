@@ -2210,26 +2210,26 @@ const LIVE = [
   {
     name: 'settings-accounts',
     route: '/settings',
-    ready: 'Personal',
-    act: scrollToText('CLAUDE CODE ACCOUNTS'),
+    ready: 'Accounts & usage',
+    act: scrollToText('Accounts & usage'),
     check:
-      'CLAUDE CODE ACCOUNTS: sam@example.com with a neutral tick (Max plan · this Mac’s own sign-in; In use · 5-hour …% left), Work (me@work.example · Max plan; Ready · 5-hour 20% left; “QA 2 runs only on this one”) and Personal, each Ready with Use now and up/down arrows (none past the ends); then Codex accounts; the footer saying agents carry on with the next and that accounts are added on the Mac',
+      'ACCOUNTS & USAGE: the same compact card as the Agents list (“Usage” over the total and how many accounts, a refill chip, a chevron, the bar in the work order), opening Usage; no second account list in other words, no read-only Usage rows (the mode and the list are on Usage)',
   },
   {
     name: 'settings-accounts-swapped',
-    route: '/settings',
-    ready: 'Personal',
+    route: '/usage-account?engine=claude&account=w1',
+    ready: 'Limits',
     act: async (page) => {
-      await scrollToText('CLAUDE CODE ACCOUNTS')(page);
       await page.clickLabel('Use Work now');
       await sleep(900);
     },
     after: async (page) => {
-      await page.clickLabel('Use sam@example.com now');
+      await page.goto(`${WEB}/usage-account?engine=claude&account=default`);
+      await sleep(1500);
+      await page.clickLabel('Use sam@example.com now').catch(() => undefined);
       await sleep(600);
     },
-    check:
-      'After Use now on Work: Work first with the tick and In use, sam@example.com second and Ready with Use now',
+    check: 'After Use this one now on Work’s page: its keycap 1 and “In use”, no Use this one now',
   },
   {
     name: 'controls-runs-on',
@@ -2238,14 +2238,6 @@ const LIVE = [
     act: scrollToText('RUNS ON'),
     check:
       'Agent controls: RUNS ON with Any account (“In order, carrying on with the next when one runs out”), sam@example.com, Work ticked (“Only this one, never another”) and Personal',
-  },
-  {
-    name: 'settings-usage',
-    route: '/settings',
-    ready: 'Use it all before the refill',
-    act: scrollToText('Ideas for leftover usage'),
-    check:
-      'Usage: "Use it all before the refill" with its line; "Claude 5-hour limit refills … · 62% left"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
   },
   {
     name: 'connection',
@@ -2413,7 +2405,12 @@ async function linkDownShots(page) {
         'One quiet line, “Back in touch with your Mac”, where the bar was'
       );
       await sleep(3500);
-      await shot(`link-back-gone-${tab}`, theme, `${route} (a moment later)`, 'Nothing: the list as usual');
+      await shot(
+        `link-back-gone-${tab}`,
+        theme,
+        `${route} (a moment later)`,
+        'Nothing: the list as usual'
+      );
     }
 
     // The app on the Mac stuck: the socket is taken and nothing is said.
@@ -2431,13 +2428,28 @@ async function linkDownShots(page) {
     );
     await open('/catch-up');
     await sleep(1500);
-    await shot('link-stuck-catch-up', theme, '/catch-up (the Mac’s app hung)', 'The same bar, same words, on Catch up');
+    await shot(
+      'link-stuck-catch-up',
+      theme,
+      '/catch-up (the Mac’s app hung)',
+      'The same bar, same words, on Catch up'
+    );
     await page.clickText('What to check').catch((e) => page.errors.push(e.message));
     await sleep(600);
-    await shot('link-stuck-checks-catch-up', theme, '/catch-up (What to check)', 'Quit it and open it again; it may catch up by itself');
+    await shot(
+      'link-stuck-checks-catch-up',
+      theme,
+      '/catch-up (What to check)',
+      'Quit it and open it again; it may catch up by itself'
+    );
     await open('/chat/chief');
     await sleep(2000);
-    await shot('link-stuck-chat', theme, '/chat/chief (the Mac’s app hung)', 'The chat’s bar over the composer says the same words');
+    await shot(
+      'link-stuck-chat',
+      theme,
+      '/chat/chief (the Mac’s app hung)',
+      'The chat’s bar over the composer says the same words'
+    );
 
     // The app said goodbye as it closed (a quit, an update's restart).
     await startMock();
@@ -3719,14 +3731,14 @@ async function main() {
         route: '/agents',
         ready: 'Agents',
         check:
-          'Under the Agents title, one compact card before the first row: "Usage" over "72% left · 2 accounts", a refill chip and a chevron at the right, then a bar of one segment per account, the fullest first, with gaps and rounded ends; air above and below, neutral ink',
+          'Under the Agents title, one compact card before the first row: "Usage" over "72% left · 2 accounts", a refill chip and a chevron at the right, then a bar of one segment per account in the work order, with gaps and rounded ends; air above and below, neutral ink',
       },
       {
         name: 'usage-total',
         route: '/usage',
         ready: 'Usage',
         check:
-          'The total first: "All accounts", a large "72% left", "across 2 accounts", "Next refill in …". One bar of two segments, Personal (full) on the left, then the account in use (44%); under it each account named with its % left and a ⟳ chip. Then "ACCOUNTS": one grouped card with a row each (keycap 1 filled for the one in use, name, % left, a thin bar, the pill and ⟳ countdown, a chevron).',
+          'The total first: "All accounts", a large "72% left", "across 2 accounts", "Next refill in …". One bar, a segment per account in the work order (the one in use first); nothing listed under it in the card. Then "ACCOUNTS": one grouped card with a row each (keycap 1 filled for the one in use, name, % left, a thin bar, the pill and ⟳ countdown, a chevron).',
       },
       {
         name: 'usage-account',
@@ -3766,7 +3778,7 @@ async function main() {
           ready: 'Usage',
           act: scrollToText('Accounts'),
           check:
-            'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) with each account named and its room under it, and the next reset; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
+            'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) and the next refill; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
         },
       ]);
     }

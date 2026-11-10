@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UsageAccount, UsageAccountLine, UsageInventory } from './model';
-import { changeLines, relativeIn, usageGlance } from './usageGlance';
+import { changeLines, relativeIn, totalWords, usageGlance } from './usageGlance';
 
 const NOW = new Date(2026, 10, 9, 12, 0).getTime();
 const H = 3_600_000;
@@ -709,5 +709,42 @@ describe('the total, across every account', () => {
       ['Chief', '750k', '9 messages', 75],
       ['Finance', '250k', '2 messages', 25],
     ]);
+  });
+});
+
+describe('totalWords', () => {
+  const session = (used: number, resetsIn: number) => ({
+    kind: 'five_hour',
+    usedPercent: used,
+    resetsAt: NOW + resetsIn,
+    limited: false,
+    observedAt: NOW - 60_000,
+  });
+
+  it('says the total and the refill it counts, never a sooner limit it doesn’t', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'sam@example.com' }), acct('work', { name: 'Work' })],
+      inv([
+        line('default', { windows: [week(56, 50 * H), session(80, 1 * H)] }),
+        line('work', { windows: [week(0, 146 * H)] }),
+      ]),
+      { now: NOW }
+    );
+    const w = totalWords(g);
+    expect(w.eyebrow).toBe('All accounts');
+    expect(w.figure).toBe('72% left');
+    expect(w.across).toBe('across 2 accounts');
+    // The week the total counts, not the 5-hour limit an hour away.
+    expect(w.refill).toMatch(/^Next refill in 2d 2h · sam@example\.com, /);
+    expect(w.known).toBe(true);
+  });
+
+  it('nothing read: the quiet line, no figure, no refill', () => {
+    const g = usageGlance([acct('default')], inv([line('default')]), { now: NOW });
+    const w = totalWords(g);
+    expect(w.known).toBe(false);
+    expect(w.across).toBeNull();
+    expect(w.eyebrow).toBeNull();
+    expect(w.figure).toBe(g.headline);
   });
 });
