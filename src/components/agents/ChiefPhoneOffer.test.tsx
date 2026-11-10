@@ -67,7 +67,7 @@ describe('reachedFirstResult', () => {
 
 describe('ChiefPhoneOffer', () => {
   it('says up front that it runs through Tailscale, on every route that offers it', () => {
-    for (const route of ['store', 'build'] as const) {
+    for (const route of ['store', 'testflight', 'build'] as const) {
       expect(phoneOfferNote(route)).toMatch(/Tailscale on both/);
     }
     if (PHONE_OFFER_NOTE) expect(PHONE_OFFER_NOTE).toMatch(/Tailscale/);

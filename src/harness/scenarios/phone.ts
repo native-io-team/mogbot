@@ -119,7 +119,7 @@ export const phoneScenarios: Scenario[] = [
     'phone-off',
     'phoneGetApp',
     'Phone — nothing paired yet: 1. Get the app',
-    'Titled “Phone”. One screen, not a list: Back hidden, a thin bar at 1 of 7, “Get Mogbot on your phone”, one line (TestFlight on your iPhone, or the invite), a quiet “Build it on this Mac…” in a dev build, a big “I have it” and a quiet “Skip for now”.',
+    'Titled “Phone”. One screen, not a list: Back hidden, a thin bar at 1 of 7, “Get Mogbot on your phone”, one line (a free beta on TestFlight; point the iPhone’s camera at the code), the TestFlight link’s QR code on white paper, a big “Get it on TestFlight ↗”, an outlined “I have it” and a quiet “Skip for now”. No tick.',
     { tailscale: LOGIN }
   ),
   flowStep(

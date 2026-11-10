@@ -37,6 +37,11 @@ export interface BrandLinks {
    * never links to a store page that may not exist yet.
    */
   appStore: string | null;
+  /**
+   * The phone app's public TestFlight link (the beta). Offered when there is
+   * no App Store page yet.
+   */
+  testFlight: string | null;
   pushRelay: string | null;
   /** Where the Mac app is downloaded from (the phone's pairing screen links it). */
   macDownload: string | null;

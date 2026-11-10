@@ -22,10 +22,11 @@ import { BRAND, BRAND_LINKS } from './brand';
 export type InstallPlatform = 'ios' | 'android';
 
 /**
- * The maintainers' public TestFlight link and the official APK. `null` until
- * they exist; the panel says "not available yet" rather than hiding the route.
+ * The maintainers' public TestFlight link (`links.testFlight` in brand.json)
+ * and the official APK. `null` until they exist; the panel says "not
+ * available yet" rather than hiding the route.
  */
-export const TESTFLIGHT_URL: string | null = null;
+export const TESTFLIGHT_URL: string | null = BRAND_LINKS.testFlight ?? null;
 export const ANDROID_APK_URL: string | null = null;
 
 /** Xcode in the Mac App Store; App Store updates are something only the user can do. */

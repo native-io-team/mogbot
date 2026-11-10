@@ -26,6 +26,7 @@ export const ALL_LINKS: BrandModule.BrandLinks = {
   starterRepoBase: 'https://github.com/ship-studio',
   companionSource: 'https://github.com/ship-studio/ship-studio.git',
   appStore: 'https://apps.apple.com/app/id0000000000',
+  testFlight: 'https://testflight.apple.com/join/example',
   pushRelay: null,
   macDownload: null,
 };

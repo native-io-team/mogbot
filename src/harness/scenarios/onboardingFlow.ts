@@ -339,7 +339,7 @@ function optionalParts(): Scenario[] {
       'onboarding-phone-app',
       'phoneGetApp',
       '4a. Get the app',
-      '"Get Mogbot on your phone", one line (TestFlight or the invite you were sent), "Build it on this Mac…" only in a dev build, a big "I have it", Skip for now. No tick.',
+      '"Get Mogbot on your phone", one line (a free beta on TestFlight; point the iPhone\u2019s camera at the code), the TestFlight link\u2019s QR code, a big "Get it on TestFlight ↗", an outlined "I have it", Skip for now. No tick.',
       phone()
     ),
     flow(

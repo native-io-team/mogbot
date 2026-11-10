@@ -11,13 +11,17 @@ const getPhoneStatus = vi.hoisted(() => vi.fn());
 const getTailnetPhones = vi.hoisted(() => vi.fn());
 const startPairing = vi.hoisted(() => vi.fn());
 const decidePairing = vi.hoisted(() => vi.fn());
+const getLinkQr = vi.hoisted(() => vi.fn());
+const openUrl = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/companion', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/companion')>();
-  return { ...actual, getPhoneStatus, getTailnetPhones, startPairing, decidePairing };
+  return { ...actual, getPhoneStatus, getTailnetPhones, startPairing, decidePairing, getLinkQr };
 });
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl }));
 
 import { PanelStepShell, PhoneFlow, prevPhoneStep, type PhoneFlowStep } from './PhoneFlow';
 import { SCAN_LINE } from '../../../packages/companion-protocol/src/pairWords';
+import { PHONE_APP_TESTFLIGHT_URL } from '../../lib/phoneApp';
 
 const status = (over: Partial<PhoneStatus> = {}): PhoneStatus => ({
   enabled: true,
@@ -58,6 +62,8 @@ describe('PhoneFlow', () => {
       expiresAt: Date.now() + 300_000,
     });
     decidePairing.mockReset().mockResolvedValue(undefined);
+    getLinkQr.mockReset().mockResolvedValue({ size: 21, modules: '0'.repeat(441) });
+    openUrl.mockReset().mockResolvedValue(undefined);
   });
 
   it('asks for the app on the person’s word, never a tick', () => {
@@ -65,6 +71,16 @@ describe('PhoneFlow', () => {
     expect(screen.queryByText(/Done\./)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'I have it' }));
     expect(go).toHaveBeenCalledWith('phoneMacTailscale');
+  });
+
+  it('offers TestFlight as the big button with a code of its link', async () => {
+    show('phoneGetApp');
+    fireEvent.click(screen.getByRole('button', { name: /Get it on TestFlight/ }));
+    expect(openUrl).toHaveBeenCalledWith(PHONE_APP_TESTFLIGHT_URL);
+    expect(
+      await screen.findByRole('img', { name: 'Code for the phone app on TestFlight' })
+    ).toBeInTheDocument();
+    expect(getLinkQr).toHaveBeenCalledWith(PHONE_APP_TESTFLIGHT_URL);
   });
 
   it('ticks Tailscale on this Mac from its own status, with the account', async () => {
