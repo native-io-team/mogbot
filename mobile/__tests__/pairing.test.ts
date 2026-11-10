@@ -3,7 +3,13 @@
  * replace. A link is untrusted: any page or message can open one.
  */
 
-import { formatPairingLink, type PairingLink } from '@shipstudio/companion-protocol';
+import {
+  formatPairingLink,
+  OTHER_APP_PAIRING_SCHEME,
+  PAIRING_SCHEME,
+  PREVIOUS_PAIRING_SCHEME,
+  type PairingLink,
+} from '@shipstudio/companion-protocol';
 import { cleanName, linkHost, linkProblem, pairPlan, parseLink } from '../src/lib/pairing';
 
 const link: PairingLink = {
@@ -40,6 +46,15 @@ describe('pairing links', () => {
       /^Update the app on your Mac to pair/
     );
     expect(linkProblem('hello')).toMatch(/isn’t a pairing code/);
+  });
+
+  // A Mac still on the build from before the app's rename: its code says why.
+  it('say to update the Mac when its code is from before the rename', () => {
+    const body = formatPairingLink(link).slice(PAIRING_SCHEME.length);
+    expect(linkProblem(`${PREVIOUS_PAIRING_SCHEME}${body}`)).toMatch(
+      /^Update the app on your Mac to pair.*before the app was renamed/
+    );
+    expect(linkProblem(`${OTHER_APP_PAIRING_SCHEME}${body}`)).toMatch(/different app’s phone app/);
   });
 
   it('show names without invisible or reordering characters', () => {

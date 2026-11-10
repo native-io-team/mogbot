@@ -13,6 +13,7 @@ import {
   type PairingLink,
   type Route,
 } from '@shipstudio/companion-protocol';
+import { brand } from './brand';
 import { pairWith, PairError, type PairFailure, type PairStep } from './pairFlow';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
@@ -73,9 +74,19 @@ export function parseLink(text: string): PairingLink | null {
 /** What to say about text that isn't a link this app can pair from. */
 export function linkProblem(text: string): string {
   const read = readLink(text);
-  return !read.ok && read.problem === 'old_mac'
-    ? 'Update the app on your Mac to pair. This code comes from an older version that can’t prove it’s your Mac; once it’s updated, make a new code there.'
-    : `That isn’t a pairing code. Make one on your Mac: ${WHERE_TO_PAIR}.`;
+  if (read.ok) return `That isn’t a pairing code. Make one on your Mac: ${WHERE_TO_PAIR}.`;
+  switch (read.problem) {
+    case 'old_mac':
+      return 'Update the app on your Mac to pair. This code comes from an older version that can’t prove it’s your Mac; once it’s updated, make a new code there.';
+    case 'renamed_mac':
+      // The Mac runs a copy from before the app's last rename, which still
+      // shows its old name: updating it is the fix, not this phone.
+      return 'Update the app on your Mac to pair. This code comes from an older copy, from before the app was renamed, so it shows the old name there too. Once it’s updated, make a new code there.';
+    case 'other_app':
+      return `That code is for a different app’s phone app. Make one in ${brand.name} on your Mac: ${WHERE_TO_PAIR}.`;
+    default:
+      return `That isn’t a pairing code. Make one on your Mac: ${WHERE_TO_PAIR}.`;
+  }
 }
 
 /**

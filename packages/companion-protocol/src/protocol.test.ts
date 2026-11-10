@@ -3,7 +3,9 @@ import {
   formatPairingLink,
   isTailnetUrl,
   negotiate,
+  OTHER_APP_PAIRING_SCHEME,
   PAIRING_SCHEME,
+  PREVIOUS_PAIRING_SCHEME,
   hostOf,
   macProofMessage,
   pairProofMessage,
@@ -83,6 +85,24 @@ describe('pairing links', () => {
     expect(
       readPairingLink(formatPairingLink({ ...without, routes: [] } as unknown as PairingLink))
     ).toEqual({ ok: false, problem: 'invalid' });
+  });
+
+  // A Mac still on the build from before the rename makes `<old>-companion://`
+  // codes: that phone app is this one, so say "update the Mac", never "not a code".
+  it('names a code from the Mac’s pre-rename build, and one for the other app', () => {
+    const body = formatPairingLink(link).slice(PAIRING_SCHEME.length);
+    expect(PREVIOUS_PAIRING_SCHEME).toBeTruthy();
+    expect(PREVIOUS_PAIRING_SCHEME).not.toBe(PAIRING_SCHEME);
+    expect(readPairingLink(`${PREVIOUS_PAIRING_SCHEME}${body}`)).toEqual({
+      ok: false,
+      problem: 'renamed_mac',
+    });
+    expect(parsePairingLink(`${PREVIOUS_PAIRING_SCHEME}${body}`)).toBeNull();
+    expect(readPairingLink(`${OTHER_APP_PAIRING_SCHEME}${body}`)).toEqual({
+      ok: false,
+      problem: 'other_app',
+    });
+    expect(readPairingLink(formatPairingLink(link)).ok).toBe(true);
   });
 
   // The confirm screen shows one host: a second, unshown route could be anyone's.

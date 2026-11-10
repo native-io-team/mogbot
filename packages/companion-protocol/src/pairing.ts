@@ -8,10 +8,16 @@
 
 import type { DevicePlatform, Route } from './model';
 import type { ProtocolRange } from './version';
-import { PAIRING_SCHEME } from './brand.gen';
+import { PAIRING_SCHEME, PREVIOUS_PAIRING_SCHEME } from './brand.gen';
 
 // From brand.json, through the generated file both apps build against.
-export { PAIRING_SCHEME };
+export { PAIRING_SCHEME, PREVIOUS_PAIRING_SCHEME };
+
+/**
+ * The other app's pairing scheme (the one this app grew out of). Its phone
+ * app is a different app: a code from it is never paired with, only named.
+ */
+export const OTHER_APP_PAIRING_SCHEME = 'shipstudio-companion';
 export const PAIRING_CODE_TTL_MS = 5 * 60 * 1000;
 
 /**
@@ -135,7 +141,15 @@ export type LinkProblem =
    * A pairing link from a Mac too old to prove who it is (no identity
    * fingerprint): the Mac's app needs updating before this phone pairs.
    */
-  | 'old_mac';
+  | 'old_mac'
+  /**
+   * A pairing link from this app's Mac build from before its last rename
+   * (`PREVIOUS_PAIRING_SCHEME`): the Mac is running an old copy, which shows
+   * the old name everywhere. Update the app on the Mac, then make a new code.
+   */
+  | 'renamed_mac'
+  /** A pairing link for the other app's phone app (`OTHER_APP_PAIRING_SCHEME`). */
+  | 'other_app';
 
 export type ParsedLink = { ok: true; link: PairingLink } | { ok: false; problem: LinkProblem };
 
@@ -147,7 +161,12 @@ export type ParsedLink = { ok: true; link: PairingLink } | { ok: false; problem:
  */
 export function readPairingLink(text: string, options: ParseOptions = {}): ParsedLink {
   const invalid = { ok: false, problem: 'invalid' } as const;
-  const match = new RegExp(`^${PAIRING_SCHEME}://pair\\?d=([A-Za-z0-9_-]+)$`).exec(text.trim());
+  const trimmed = text.trim();
+  const isLink = (scheme: string | null) =>
+    !!scheme && scheme !== PAIRING_SCHEME && trimmed.startsWith(`${scheme}://pair?`);
+  if (isLink(PREVIOUS_PAIRING_SCHEME)) return { ok: false, problem: 'renamed_mac' };
+  if (isLink(OTHER_APP_PAIRING_SCHEME)) return { ok: false, problem: 'other_app' };
+  const match = new RegExp(`^${PAIRING_SCHEME}://pair\\?d=([A-Za-z0-9_-]+)$`).exec(trimmed);
   if (!match) return invalid;
   try {
     const link = JSON.parse(fromBase64Url(match[1])) as Partial<PairingLink>;

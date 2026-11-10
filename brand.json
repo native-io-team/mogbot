@@ -14,7 +14,8 @@
     "name": "Dashbot",
     "slug": "dashbot",
     "identifier": "io.native.dashbot",
-    "appDirName": "Dashbot"
+    "appDirName": "Dashbot",
+    "companionScheme": "dashbot-companion"
   },
   "links": {
     "issueRepo": null,

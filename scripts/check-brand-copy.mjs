@@ -10,6 +10,13 @@
  *      fixtures quote real backend messages and compat paths.
  *   2. Files: nothing under src/ or public/ may be named after it
  *      (ship_studio_full.png, ShipStudio_IconBrand.png, …).
+ *   3. The name before the last rename (`previous` in brand.json): nowhere in
+ *      anything shipped (desk, phone, protocol, Chrome extension, Info.plist,
+ *      tauri.conf.json) or in the docs a new user installs from, comments
+ *      included. Only brand.json says it.
+ *
+ * (1) covers the desk's src/, the phone's mobile/src/ and the shared
+ * packages/companion-protocol/src/.
  *
  * Not copy, so allowed (the shared compat names, CLAUDE.md "Shared compat"):
  * `.shipstudio/`, `.shipstudio-team/`, `~/ShipStudio` and other `/ShipStudio`
@@ -98,7 +105,11 @@ function stripComments(src) {
 
 const problems = [];
 
-for (const file of walk(join(root, 'src'))) {
+// The desk's frontend, the phone app and the protocol package they share
+// (whose strings reach the phone as copy): the same rules for all three.
+const COPY_DIRS = ['src', 'mobile/src', 'packages/companion-protocol/src'];
+const copyFiles = COPY_DIRS.flatMap((d) => walk(join(root, d)));
+for (const file of copyFiles) {
   const path = rel(file);
   if (!/\.(ts|tsx)$/.test(path)) continue;
   // Harness scenarios are fixtures and captions for reviewers, not shipped UI;
@@ -119,6 +130,66 @@ for (const dir of ['src', 'public']) {
     const base = path.split('/').pop();
     if (!FILE_NAME.test(base)) continue;
     problems.push(`${path}: brand artwork/file named after the old app`);
+  }
+}
+
+// 3. The name before the last rename (`previous` in brand.json) anywhere a
+// user or an agent could meet it: every shipped source on the desk, the
+// phone, the Chrome extension, the app's own Info.plist and config, and the
+// docs a new user installs from. Comments too: the old name belongs only in
+// brand.json, which every rename-aware path (migration, keychain carry-over,
+// the old Funnel mount, the old pairing scheme) already reads it from.
+// A user saw "Dashbot" after the rename; this keeps any literal from coming back.
+{
+  const brand = JSON.parse(readFileSync(join(root, 'brand.json'), 'utf8'));
+  const prev = brand.previous ?? {};
+  const words = [prev.name, prev.slug, prev.appDirName]
+    .filter((w) => typeof w === 'string' && w.length > 0)
+    .filter((w) => w.toLowerCase() !== String(brand.name).toLowerCase());
+  if (words.length > 0) {
+    const OLD = new RegExp(
+      `\\b(?:${[...new Set(words.map((w) => w.toLowerCase()))].map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`,
+      'i'
+    );
+    const SHIPPED = [
+      'src',
+      'public',
+      'mobile/src',
+      'mobile/app-intents',
+      'mobile/app.config.ts',
+      'packages/companion-protocol/src',
+      'chrome-extension/extension',
+      'src-tauri/src',
+      'src-tauri/Info.plist',
+      'src-tauri/tauri.conf.json',
+      'index.html',
+      'README.md',
+      'docs/INSTALL.md',
+      'docs/WELCOME.md',
+      'docs/mobile.md',
+      'docs/app-store.md',
+    ];
+    // Generated from brand.json, so it may carry the old pairing scheme.
+    const GENERATED = new Set(['packages/companion-protocol/src/brand.gen.ts']);
+    const TEXT = /\.(ts|tsx|js|mjs|cjs|rs|json|md|html|plist|swift|css|txt)$/;
+    for (const start of SHIPPED) {
+      const abs = join(root, start);
+      let files;
+      try {
+        files = statSync(abs).isDirectory() ? walk(abs) : [abs];
+      } catch {
+        continue;
+      }
+      for (const file of files) {
+        const path = rel(file);
+        if (!TEXT.test(path) || GENERATED.has(path)) continue;
+        const lines = readFileSync(file, 'utf8').split('\n');
+        lines.forEach((line, i) => {
+          const m = OLD.exec(line);
+          if (m) problems.push(`${path}:${i + 1}: "${m[0]}" (the name before the rename)`);
+        });
+      }
+    }
   }
 }
 
