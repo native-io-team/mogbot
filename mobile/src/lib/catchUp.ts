@@ -19,7 +19,14 @@
  * Pure, so the rules are tested without a screen (`__tests__/catchUp.test.ts`).
  */
 
-import { GATE_ALLOW, GATE_DENY, agentNeedsYou, setupHold } from '@shipstudio/companion-protocol';
+import {
+  GATE_ALLOW,
+  GATE_DENY,
+  SKILL_NOT_NOW,
+  SKILL_SAVE,
+  agentNeedsYou,
+  setupHold,
+} from '@shipstudio/companion-protocol';
 import type { Agent, AgentMessage, TeamSetupView } from '@shipstudio/companion-protocol';
 import { answerableHere, failedTurn } from './agents';
 import { shows } from './teamSetup';
@@ -203,6 +210,8 @@ export function askAction(m: AgentMessage | undefined): AskAction {
   // Its card's own words: Stop here · Go ahead, Ignore · Save to memory.
   if (a.gate) return { kind: 'answer', allow: GATE_ALLOW, deny: GATE_DENY };
   if (a.handoff) return { kind: 'answer', allow: 'Save to memory', deny: 'Ignore' };
+  // "Save … as a skill?": the card's own Save / Not now, as in its chat and on the desk.
+  if (a.skill) return { kind: 'answer', allow: SKILL_SAVE, deny: SKILL_NOT_NOW };
   // Step in happens at the Mac: open the card, which says so.
   if (a.stepIn) return { kind: 'open', label: 'Open' };
   // Three answers (Wait, Just this time, Always): the card in its chat has them.
