@@ -937,13 +937,15 @@ fn take_cut_off(agent_id: &str) -> bool {
 }
 
 /// Its engine died a second time in the same turn: not picked up again.
+/// What it printed ("Killed: 9") goes to the log, never the chat.
 fn died_again_line(engine: Engine, detail: &str) -> String {
-    let first = detail.lines().map(str::trim).find(|l| !l.is_empty());
-    let why = first
-        .map(|l| format!(" ({})", l.chars().take(160).collect::<String>()))
-        .unwrap_or_default();
+    tracing::warn!(
+        "[Agents] {} stopped unexpectedly again: {}",
+        engine.label(),
+        detail.trim()
+    );
     format!(
-        "Interrupted: {} stopped unexpectedly again{why}, so this turn stopped part-way. Continue picks it up where it was.",
+        "Interrupted: {} stopped unexpectedly again, so this turn stopped part-way. Continue picks it up where it was.",
         engine.label()
     )
 }
@@ -4000,7 +4002,16 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
                 }
                 let mut line = new_message(&agent_id, MessageKind::Error, text.clone());
                 line.failure = Some(failure);
-                let _ = record_in_turn(&app, line);
+                // Nothing goes silent: a line the disk couldn't take is still
+                // said, as an alert (desk and phone), with the disk as the why.
+                if let Err(e) = record_in_turn(&app, line) {
+                    let why = if super::is_disk_full(&e.to_string()) {
+                        super::DISK_FULL_LINE.to_string()
+                    } else {
+                        text.clone()
+                    };
+                    notify::alert_user(&app, &agent_id, &why);
+                }
                 super::work::finish(&app, &agent_id, store::now_ms());
                 return_results(&app, &agent_id, since, Some(text));
             }
@@ -5544,7 +5555,7 @@ async fn run_turn(
     let home = store::agent_home(agent_id)?;
     std::fs::create_dir_all(&home).map_err(super::err_io)?;
     let binary = super::engine::binary(engine).await.ok_or_else(|| {
-        CommandError::expected(format!("{} isn't installed, or the app can't find it. Install it, or move this agent to another engine in Edit agent, then send this again.", engine.label()))
+        CommandError::expected(super::failure::missing_engine_line(engine.label()))
     })?;
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
@@ -5772,7 +5783,18 @@ async fn run_turn(
     procs::own_group(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| {
         super::engine::forget_binary(engine);
-        CommandError::expected(format!("Couldn't start {}: {e}", engine.label()))
+        tracing::warn!("[Agents] Couldn't start {}: {e}", engine.label());
+        // Moved or deleted since it was found: installing it again is the
+        // fix (never the os error). Still there, it's something else (the
+        // folder it runs in went), which installing wouldn't fix.
+        if std::path::Path::new(&binary).exists() {
+            CommandError::expected(format!(
+                "{} couldn't start on this Mac. Retry; if it happens again, restart the app.",
+                engine.label()
+            ))
+        } else {
+            CommandError::expected(super::failure::missing_engine_line(engine.label()))
+        }
     })?;
     let pid = child.id();
     if let Some(pid) = pid {

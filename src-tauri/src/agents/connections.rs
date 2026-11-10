@@ -845,17 +845,14 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
                     continue;
                 }
                 match fresh_token(c).await {
-                    Some(_) => {
+                    Ok(_) => {
                         access.servers.push(TurnServer {
                             key: c.server_key.clone(),
                             url: super::reach::connection_url(port, &c.server_key),
                         });
                         lines.push(line(c, g.access));
                     }
-                    None => lines.push(format!(
-                        "- {} ({}) couldn't be reached this turn: its sign-in needs renewing. If you need it, ask with request_login for \"{}\".",
-                        c.title, c.account, c.service
-                    )),
+                    Err(gap) => lines.push(unreached_line(c, gap)),
                 }
             }
             _ => {}
@@ -971,9 +968,7 @@ pub async fn relay_target(agent_id: &str, key: &str) -> Result<RelayTarget, &'st
     if c.needs_sign_in {
         return Err("Its sign-in needs renewing. Ask with request_login to connect it again.");
     }
-    let token = fresh_token(&c)
-        .await
-        .ok_or("Its sign-in needs renewing. Ask with request_login to connect it again.")?;
+    let token = fresh_token(&c).await.map_err(TokenGap::relay_words)?;
     Ok(RelayTarget {
         connection_id: c.id.clone(),
         title: c.title.clone(),
@@ -1080,25 +1075,65 @@ fn line(c: &Connection, access: Access) -> String {
     )
 }
 
+/// Why a connection has no usable token this turn: its sign-in really needs
+/// renewing, or its provider couldn't be reached to renew it (offline),
+/// which a sign-in card wouldn't fix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TokenGap {
+    SignIn,
+    Unreachable,
+}
+
+impl TokenGap {
+    /// What the relay tells the agent.
+    fn relay_words(self) -> &'static str {
+        match self {
+            TokenGap::SignIn => {
+                "Its sign-in needs renewing. Ask with request_login to connect it again."
+            }
+            TokenGap::Unreachable => UNREACHABLE_WORDS,
+        }
+    }
+}
+
+/// The turn prompt's line for a connection it can't use this turn: a real
+/// sign-in gap asks with `request_login`; an offline refresh must not (a
+/// sign-in card the user can't do anything with is the wrong fix).
+fn unreached_line(c: &Connection, gap: TokenGap) -> String {
+    match gap {
+        TokenGap::SignIn => format!(
+            "- {} ({}) couldn't be reached this turn: its sign-in needs renewing. If you need it, ask with request_login for \"{}\".",
+            c.title, c.account, c.service
+        ),
+        TokenGap::Unreachable => format!(
+            "- {} ({}) couldn't be reached this turn: its sign-in server didn't answer (this Mac may be offline). Don't ask for a sign-in; if you need it, say it couldn't be reached.",
+            c.title, c.account
+        ),
+    }
+}
+
+/// An offline refresh, in the agent's words: not a sign-in to ask for.
+const UNREACHABLE_WORDS: &str = "Couldn't reach the app's sign-in server to renew its access (this Mac may be offline). Don't ask for a sign-in: tell the user it couldn't be reached and try again later.";
+
 /// A usable access token, refreshed when it expires within two minutes.
-async fn fresh_token(c: &Connection) -> Option<String> {
-    let t = tokens(&c.id)?;
+async fn fresh_token(c: &Connection) -> Result<String, TokenGap> {
+    let t = tokens(&c.id).ok_or(TokenGap::SignIn)?;
     let soon = store::now_ms() + 120_000;
     if t.expires_at.is_none_or(|at| at > soon) {
         mark(&c.id, |c| c.last_used_at = Some(store::now_ms()));
-        return Some(t.access_token);
+        return Ok(t.access_token);
     }
     match super::oauth::refresh(&t).await {
         Ok(new) => {
             let _ = store_tokens(&c.id, &new);
             mark(&c.id, |c| c.last_used_at = Some(store::now_ms()));
-            Some(new.access_token)
+            Ok(new.access_token)
         }
         Err(super::oauth::RefreshError::Refused) => {
             mark(&c.id, |c| c.needs_sign_in = true);
-            None
+            Err(TokenGap::SignIn)
         }
-        Err(super::oauth::RefreshError::Unreachable) => None,
+        Err(super::oauth::RefreshError::Unreachable) => Err(TokenGap::Unreachable),
     }
 }
 
@@ -1136,6 +1171,33 @@ mod tests {
             .unwrap()
             .contains("What it can reach"));
         assert!(!agents_browser_allowed(true, true, &a, false));
+    }
+
+    /// docs/internal/failure-states.md: offline while a token needed
+    /// renewing is not an expired sign-in, so it never asks for one.
+    #[test]
+    fn an_offline_refresh_is_not_called_an_expired_sign_in() {
+        let c = Connection {
+            id: "c1".into(),
+            service: "linear".into(),
+            title: "Linear".into(),
+            account: "sam@acme.com".into(),
+            kind: oauth("https://mcp.linear.app/mcp"),
+            server_key: "linear".into(),
+            created_at: 0,
+            grants: vec![],
+            needs_sign_in: false,
+            last_used_at: None,
+            extra: Default::default(),
+        };
+        let offline = unreached_line(&c, TokenGap::Unreachable);
+        assert!(offline.contains("may be offline"), "{offline}");
+        assert!(!offline.contains("request_login"), "{offline}");
+        assert!(!TokenGap::Unreachable
+            .relay_words()
+            .contains("request_login"));
+        assert!(unreached_line(&c, TokenGap::SignIn).contains("request_login"));
+        assert!(TokenGap::SignIn.relay_words().contains("request_login"));
     }
 
     fn oauth(url: &str) -> Kind {

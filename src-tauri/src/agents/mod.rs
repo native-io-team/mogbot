@@ -201,8 +201,36 @@ pub(crate) fn err_other(message: impl std::fmt::Display) -> CommandError {
 }
 
 pub(crate) fn err_io(e: impl std::fmt::Display) -> CommandError {
-    CommandError::Io {
-        message: e.to_string(),
+    let message = e.to_string();
+    // A full disk is the one write failure people hit, and "I/O error: No
+    // space left on device (os error 28)" names neither it nor the fix.
+    if is_disk_full(&message) {
+        tracing::warn!("[Agents] Write failed, disk full: {message}");
+        return CommandError::expected(DISK_FULL_LINE);
+    }
+    CommandError::Io { message }
+}
+
+/// The sentence for a write that failed because this Mac's disk is full.
+pub(crate) const DISK_FULL_LINE: &str = "This Mac is out of disk space, so the app couldn't save that. Free up some space (Settings → Agents shows the largest agent folders), then try again.";
+
+pub(crate) fn is_disk_full(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    lower.contains("os error 28")
+        || lower.contains("no space left on device")
+        || message == DISK_FULL_LINE
+}
+
+#[cfg(test)]
+mod err_io_tests {
+    #[test]
+    fn a_full_disk_is_said_with_its_fix_never_the_os_error() {
+        let e = super::err_io(std::io::Error::from_raw_os_error(28));
+        let said = e.to_string();
+        assert!(said.contains("out of disk space"), "{said}");
+        assert!(!said.contains("os error"), "{said}");
+        let other = super::err_io("Permission denied (os error 13)").to_string();
+        assert!(other.contains("os error 13"));
     }
 }
 

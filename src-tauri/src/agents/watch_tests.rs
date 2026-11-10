@@ -1,6 +1,22 @@
 use super::*;
 use crate::agents::failure::Failure;
 
+/// docs/internal/failure-states.md: the pause is said once, with its fix.
+#[test]
+fn a_routine_that_paused_itself_says_so_once() {
+    let line = paused_words(
+        "Triage mentions",
+        "Paused after 3 runs in a row didn't finish: Claude Code is signed out.",
+    );
+    assert_eq!(
+        line,
+        "“Triage mentions” paused itself after 3 runs in a row didn't finish: Claude Code is signed out. Resume it from the schedule when it's fixed."
+    );
+    let line = paused_words("Inbox", "Paused after 5 checks in a row failed: boom");
+    assert!(line.contains("failed: boom. Resume"), "{line}");
+    assert_eq!(line.matches("aused").count(), 1, "{line}");
+}
+
 fn connection(
     service: &str,
     key: &str,
