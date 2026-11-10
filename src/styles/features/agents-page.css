@@ -68,7 +68,13 @@
 }
 
 .agent-page__when {
-  flex: none;
+  /* "Updated 3 min ago by <routine>": gives way to the title, then ellipsises. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-muted);
   font-size: var(--font-size-body-sm);
   font-variant-numeric: tabular-nums;
@@ -84,9 +90,16 @@
   padding-bottom: var(--spacing-md);
 }
 
-/* The versions: a popover off "Updated … · v4", so the page doesn't move. */
+/* The versions: a popover off "Updated …", so the page doesn't move. */
 .agent-page__history-menu {
   width: min(380px, calc(100vw - var(--spacing-2xl))); /* css-ok: a popover's width */
+}
+
+.agent-page__kept {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-2xs);
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-sm);
 }
 
 .agent-page__history {

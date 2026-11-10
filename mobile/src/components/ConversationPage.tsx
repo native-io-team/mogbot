@@ -1,7 +1,9 @@
 /**
- * The living page above the messages (`agents/page.rs`): a one-line bar
- * (fold, title, "Updated 3 min ago · v4", Unpin) and the page's blocks under
- * it, drawn by `Blocks` as any `show`. Tapping the "Updated" line lists the
+ * The living page above the messages (`agents/page.rs`): a bar (fold,
+ * title, Unpin) with "Updated 3 min ago by Log the day’s card spend" on a
+ * line of its own under the title (402pt has no room for both on one), and
+ * the page's blocks under it, drawn by `Blocks` as any `show`. Tapping the
+ * "Updated" line lists the
  * kept versions with what changed; tapping one shows it as it was. The page
  * scrolls inside a band capped at the smaller of 40% of the screen and 320pt,
  * and on a phone-height screen it starts folded to its bar until the user
@@ -18,7 +20,11 @@ import {
   pageByLine,
   pageBlocks,
   pageChangeLine,
+  pageKeptByLine,
+  pageOlderLine,
   pageUpdatedLine,
+  pageVersionName,
+  PAGE_BACK_TO_LATEST,
   type AgentMessage,
   type ConversationPage as Page,
   type PageVersion,
@@ -196,21 +202,6 @@ function PageBand({
             {page.title}
           </T>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${pageUpdatedLine(page, now)}. What changed`}
-          onPress={() => {
-            haptic.select();
-            setHistory(!history);
-            if (folded) setFolded(page.agentId, page.conversation, false);
-          }}
-          style={({ pressed }) => pressed && PRESSED}
-          testID="page-when"
-        >
-          <T variant="caption" color={colors.textMuted}>
-            {pageUpdatedLine(page, now)}
-          </T>
-        </Pressable>
         <IconButton
           name="pin.slash"
           label="Unpin the page"
@@ -218,13 +209,30 @@ function PageBand({
           size={iconSize.inline}
         />
       </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${pageUpdatedLine(page, now)}. What changed`}
+        onPress={() => {
+          haptic.select();
+          setHistory(!history);
+          if (folded) setFolded(page.agentId, page.conversation, false);
+        }}
+        style={({ pressed }) => [styles.when, pressed && PRESSED]}
+        testID="page-when"
+      >
+        <T variant="caption" color={colors.textMuted} numberOfLines={1}>
+          {pageUpdatedLine(page, now)}
+        </T>
+      </Pressable>
       {!folded && (
-        <ScrollView
-          style={{ maxHeight: Math.min(height * BAND, BAND_MAX) }}
-          nestedScrollEnabled
-        >
+        <ScrollView style={{ maxHeight: Math.min(height * BAND, BAND_MAX) }} nestedScrollEnabled>
           {history && (
             <View style={styles.history} testID="page-history">
+              {!!pageKeptByLine(page) && (
+                <T variant="small" color={colors.textSecondary} style={styles.kept}>
+                  {pageKeptByLine(page)}
+                </T>
+              )}
               {page.history.map((h, i) => (
                 <Pressable
                   key={h.version}
@@ -238,7 +246,7 @@ function PageBand({
                   ]}
                 >
                   <T variant="caption" color={colors.textMuted}>
-                    {`v${h.version} · ${pageAgo(h.at, now)}${pageByLine(h) ? ` · ${pageByLine(h)}` : ''}`}
+                    {`${pageVersionName(h.version)} · ${pageAgo(h.at, now)}${pageByLine(h) ? ` · ${pageByLine(h)}` : ''}`}
                   </T>
                   <T variant="small" color={colors.textSecondary}>
                     {(h.version === 1 && !page.history[i + 1]
@@ -258,7 +266,7 @@ function PageBand({
               testID="page-older"
             >
               <T variant="small" color={colors.textMuted}>
-                {`v${older.version}, as it was ${pageAgo(older.at, now)}. Back to v${page.version}`}
+                {`${pageOlderLine(older, now)} ${PAGE_BACK_TO_LATEST}`}
               </T>
             </Pressable>
           )}
@@ -299,6 +307,9 @@ const useStyles = makeStyles((colors) => ({
     minWidth: 0,
   },
   title: { flexShrink: 1 },
+  // Under the title, past the chevron, so it reads as the title's second line.
+  when: { paddingLeft: iconSize.inline + space.xs, paddingBottom: space['2xs'] },
+  kept: { paddingHorizontal: space.sm, paddingBottom: space['2xs'] },
   pinTitle: { flex: 1, minWidth: 0 },
   history: {
     gap: space['2xs'],

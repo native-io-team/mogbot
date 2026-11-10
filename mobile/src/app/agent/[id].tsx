@@ -20,6 +20,8 @@ import {
   MAC_FEATURES,
   onClaudePlan,
   routineConversationLine,
+  routinePageLine,
+  FIRST_CONVERSATION,
   routineMoveChoices,
   routineWeekLine,
   sortCheckIns,
@@ -30,6 +32,7 @@ import {
   type UsageSummary,
 } from '@shipstudio/companion-protocol';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useConversationPage } from '../../lib/page';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
@@ -387,6 +390,7 @@ function AgentSheet() {
                   checkIn={c}
                   spent={routineWeekLine(usage?.routines?.find((r) => r.id === c.id)?.week, onPlan)}
                   place={routineConversationLine(conversations, c.id)}
+                  conversation={conversations?.routines[c.id] ?? FIRST_CONVERSATION}
                   moveTo={canMoveRoutines ? routineMoveChoices(conversations, c.id) : []}
                   last={i === checkIns.length - 1}
                   // Offline its menu's actions would all fail: it waits for the Mac.
@@ -431,6 +435,7 @@ function CheckInRow({
   checkIn: c,
   spent,
   place,
+  conversation,
   moveTo,
   last,
   enabled,
@@ -442,6 +447,8 @@ function CheckInRow({
   spent: string | null;
   /** "In “Launch plan”": the conversation it runs in, when the agent has several. */
   place: string | null;
+  /** The conversation it runs in: its page, when a run of this routine changed it, is named. */
+  conversation: string;
   /** The other conversations it could run in instead (a Mac that moves routines). */
   moveTo: { id: string; title: string }[];
   last: boolean;
@@ -453,6 +460,7 @@ function CheckInRow({
   const router = useRouter();
   const now = useNow(30_000);
   const [busy, setBusy] = useState(false);
+  const keepsPage = routinePageLine(useConversationPage(agent.id, conversation, '').page, c.note);
   const act = (run: () => Promise<unknown>) => () => {
     setBusy(true);
     onError(null);
@@ -525,6 +533,11 @@ function CheckInRow({
         {!!place && (
           <T variant="caption" color={colors.textMuted} numberOfLines={1}>
             {place}
+          </T>
+        )}
+        {!!keepsPage && (
+          <T variant="caption" color={colors.textMuted} numberOfLines={1}>
+            {keepsPage}
           </T>
         )}
         {c.waiting && (

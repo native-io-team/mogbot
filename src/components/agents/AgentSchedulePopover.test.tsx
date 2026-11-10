@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { clearMocks, mockIPC as mockCommands } from '@tauri-apps/api/mocks';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import type { Agent, CheckIn } from '../../lib/agents';
+import { resetPageCache } from '../../lib/agentPage';
 
 /** Commands, and the store's event listeners (it reads the agent's conversations). */
 const mockIPC = (handler: Parameters<typeof mockCommands>[0]) =>
@@ -22,6 +23,57 @@ const COVERAGE =
   'Covers the 300 most recently updated of 412 assigned; an older one that changes may start work as if new.';
 
 describe('AgentSchedulePopover', () => {
+  it('says which routine keeps the conversation’s page, and that a new one could', async () => {
+    resetPageCache();
+    const change = { added: [], changed: [], removed: [] };
+    const page = {
+      agentId: 'a2',
+      conversation: 'first',
+      pinned: true,
+      version: 2,
+      at: Date.now(),
+      title: 'November budget',
+      changes: change,
+      blocks: {
+        v: 1,
+        items: [{ id: 'm', kind: 'checklist', summary: '', items: [{ text: 'Rent', done: true }] }],
+      },
+      history: [
+        {
+          version: 2,
+          at: Date.now(),
+          title: 'November budget',
+          changes: change,
+          byRoutine: true,
+          routine: 'Log the day’s card spend',
+        },
+      ],
+    };
+    mockIPC((cmd) => (cmd === 'agents_page' ? page : null));
+    const routine = (id: string, note: string) =>
+      ({
+        id,
+        note,
+        repeat: { kind: 'days', days: [1], hour: 9, minute: 0 },
+        nextAt: Date.now() + 86_400_000,
+        createdAt: 0,
+        paused: false,
+      }) as unknown as CheckIn;
+    const agent = {
+      id: 'a2',
+      name: 'Finance',
+      checkIns: [routine('r1', 'Log the day’s card spend'), routine('r2', 'Brief me')],
+    } as Agent;
+    render(<AgentSchedulePopover agent={agent} open onOpenChange={vi.fn()} />);
+    expect(await screen.findAllByText('Keeps “November budget” up to date')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'New routine' }));
+    expect(
+      await screen.findByText(
+        'Runs in this conversation, so it can keep “November budget” up to date'
+      )
+    ).toBeVisible();
+  });
+
   it('shows a “When…” routine’s coverage caveat as text, not behind hover', async () => {
     mockIPC(() => null);
     const watching = {

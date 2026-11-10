@@ -289,6 +289,11 @@ p.agent-schedule__place {
   padding: 0 var(--spacing-xs) var(--spacing-sm);
 }
 
+/* "Runs in this conversation, so it can keep … up to date": said whole. */
+.agent-schedule__place[data-wrap] {
+  white-space: normal;
+}
+
 /* One routine's model, in its editor: a label and the choice, one line. */
 .agent-schedule__model {
   display: flex;

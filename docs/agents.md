@@ -6934,7 +6934,8 @@ point-in-time messages and result cards.
   unpinned until they pin it back, and the agent is told so in its receipt.
 - **Desk** (`components/agents/ConversationPage.tsx`, `lib/agentPage.ts`):
   under the chat header, in the conversation's column: a bar (fold, title,
-  "Updated 3 min ago · v4", unpin) over the page's blocks, which scroll inside
+  "Updated 3 min ago by Log the day's card spend", unpin) over the page's
+  blocks, which scroll inside
   a band capped at the smaller of 40% of the window and 320px, so the chat
   keeps the window. It is furniture, not a reply: the band is a tint off the
   chat and its tiles lie flat (a hairline, no lift), so a metric on the page
@@ -6942,12 +6943,26 @@ point-in-time messages and result cards.
   line opens a popover listing every kept version, newest first, with what
   changed in words (`pageChangeLine`, block titles where they have one) and
   the note, so the page itself doesn't move; pressing one shows it as it was,
-  read-only, with "Back to v4". Folding is remembered per conversation on
+  read-only, with "Back to the latest". Folding is remembered per conversation on
   this Mac; until the user picks, a window 820px tall or less starts it
   folded (`SHORT_WINDOW`). Unpinned, the header has a pin button to bring it back; ⌘K has
   "Pin / Unpin this conversation's page".
+- **The page and its routine name each other.** The bar names the routine
+  only when the newest version was its run ("by a routine" when the Mac
+  couldn't tell which); the version number is for the history ("Version 4 ·
+  3 min ago"), never the bar. The history opens on "“Log the day's card
+  spend” keeps this page up to date" (`pageKeptByLine`: the newest named
+  routine in the history). The other way round, a routine's row (desk
+  popover, phone agent screen) says "Keeps “November budget” up to date" when
+  the page of the conversation it runs in has a version made by it
+  (`routinePageLine`, matching the name the Mac records,
+  `routine_steps::routine_name`); nothing is claimed for one that hasn't
+  touched it. A new routine (or one being changed) in a conversation with a
+  page says "Runs in this conversation, so it can keep “November budget” up
+  to date" over the picker (`routineCanKeepPageLine`).
 - **Phone** (`components/ConversationPage.tsx`, `lib/page.ts`): the same band
-  above the messages, on a Mac that lists `agents.page`; read again when the
+  above the messages, on a Mac that lists `agents.page` (the "Updated" line
+  on a second line under the title: 402pt has no room for both); read again when the
   conversation on screen changes and as the agent's turn moves on. Fold
   (for as long as the app runs), versions, an older one, Unpin. The same
   tinted band and flat tiles (`FlatBlocks`), capped at 40% of the screen and

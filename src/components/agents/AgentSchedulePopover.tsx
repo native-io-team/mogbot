@@ -122,7 +122,12 @@ import {
   refreshConversations,
   useAgentsSelector,
 } from '../../lib/agentsStore';
-import { routineConversationLine, routineMoveChoices } from '../../lib/agentConversations';
+import {
+  FIRST_CONVERSATION,
+  routineConversationLine,
+  routineMoveChoices,
+} from '../../lib/agentConversations';
+import { routineCanKeepPageLine, routinePageLine, useConversationPage } from '../../lib/agentPage';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
 
@@ -252,6 +257,14 @@ function ScheduleBody({
   const usage = useAsyncState<UsageSummary>(() => getAgentUsage(agent.id), { immediate: true });
   const weekOf = (id: string) => usage.data?.routines?.find((r) => r.id === id)?.week;
   const onPlan = onClaudePlan(useQuotaLines());
+  // The page of the conversation a new routine (or the one being changed) runs in.
+  const pageHere = useConversationPage(
+    agent.id,
+    editing
+      ? (conversations?.routines[editing.id] ?? FIRST_CONVERSATION)
+      : (conversations?.current ?? FIRST_CONVERSATION)
+  );
+  const canKeepPage = routineCanKeepPageLine(pageHere);
   const { execute: run, isLoading: busy } = useAsyncState(
     async (change: () => Promise<void>): Promise<boolean> => {
       setError(null);
@@ -288,6 +301,11 @@ function ScheduleBody({
         {editing && routineConversationLine(conversations, editing.id) && (
           <p className="agent-schedule__place">
             Runs {routineConversationLine(conversations, editing.id)}
+          </p>
+        )}
+        {canKeepPage && (
+          <p className="agent-schedule__place" data-wrap>
+            {canKeepPage}
           </p>
         )}
         {!editing && (
@@ -374,6 +392,8 @@ function ScheduleBody({
               busy={busy}
               editing={editing?.id === c.id}
               place={routineConversationLine(conversations, c.id)}
+              agentId={agent.id}
+              conversation={conversations?.routines[c.id] ?? FIRST_CONVERSATION}
               moveTo={routineMoveChoices(conversations, c.id)}
               onMove={(to) => void run(() => moveRoutineTo(agent.id, c.id, to))}
               onRunNow={() =>
@@ -744,6 +764,8 @@ function ScheduleRow({
   busy,
   editing,
   place,
+  agentId,
+  conversation,
   moveTo,
   onMove,
   onRunNow,
@@ -755,6 +777,9 @@ function ScheduleRow({
   item: CheckIn;
   /** "In “Launch plan”": the conversation it runs in, when the agent has several. */
   place: string | null;
+  agentId: string;
+  /** The conversation it runs in: its page, when one of its runs changed it, is named under it. */
+  conversation: string;
   /** The other conversations it could run in instead. */
   moveTo: { id: string; title: string }[];
   onMove: (conversation: string) => void;
@@ -771,6 +796,7 @@ function ScheduleRow({
   onCancel: () => void;
 }) {
   const runs = item.runs ?? [];
+  const keepsPage = routinePageLine(useConversationPage(agentId, conversation), item.note);
   const [showRuns, setShowRuns] = useState(false);
   const [confirming, setConfirming] = useState(false);
   // A repeating routine on its schedule reads as two lines that each stay
@@ -831,6 +857,7 @@ function ScheduleRow({
         )}
         {!watch && <AgentStepsList item={item} afterNote />}
         {place && <span className="agent-schedule__place">{place}</span>}
+        {keepsPage && <span className="agent-schedule__place">{keepsPage}</span>}
         {item.waiting && (
           <span className="agent-schedule__waiting">Waiting for your OK in the chat</span>
         )}
