@@ -13,13 +13,15 @@
 //! `account_reach::chrome_as_this_mac` the only account-dependent step, and
 //! `Driver::args` the command line.
 
-use super::account_reach;
-use super::chrome_route::{decide, facts_for, Facts, Now, Route, Why, CLAUDE_IN_CHROME_BLOCK};
-use super::connections::{lay_in_chrome, TurnAccess, TurnServer, USER_CHROME_PROMPT};
-use super::driver::{Driver, TurnSpec};
-use super::engine::Engine;
-use super::store::Agent;
-use super::wallet::{self, Account, Candidate, Choice, LimitHit};
+use crate::agents::account_reach;
+use crate::agents::chrome_route::{
+    decide, facts_for, Facts, Now, Route, Why, CLAUDE_IN_CHROME_BLOCK,
+};
+use crate::agents::connections::{lay_in_chrome, TurnAccess, TurnServer, USER_CHROME_PROMPT};
+use crate::agents::driver::{Driver, TurnSpec};
+use crate::agents::engine::Engine;
+use crate::agents::store::Agent;
+use crate::agents::wallet::{self, Account, Candidate, Choice, LimitHit};
 use serde_json::json;
 
 const PORT: u16 = 4321;
@@ -158,7 +160,7 @@ fn assert_your_chrome_only(engine: Engine, this_mac: bool, access: &TurnAccess, 
                 // Its servers go in `session/new` from `access.servers`, and
                 // its inline permissions let the server decide its own calls.
                 let given: Vec<String> = access.servers.iter().map(|s| s.key.clone()).collect();
-                let p = super::opencode::permissions(&given);
+                let p = crate::agents::opencode::permissions(&given);
                 assert_eq!(p[format!("{server}_*")], "allow", "{on}");
             }
         }
@@ -208,13 +210,15 @@ fn a_turn_the_wallet_moves_to_another_claude_account_keeps_your_chrome() {
 
 /// The account a turn runs on isn't an input to the route at all: the same
 /// agent set to this Mac, to an added account, or to any account reads the
-/// same facts.
+/// same facts. (Only the agent's own facts are compared: the switches are
+/// app-wide and other tests running at the same time may flip them.)
 #[test]
 fn the_route_reads_nothing_about_the_account() {
+    let own = |f: Facts| (f.claude_engine, f.agent_off, f.policy, f.outside);
     for engine in [Engine::Claude, Engine::Codex, Engine::OpenCode] {
-        let any = facts_for(&agent(engine, None), false);
+        let any = own(facts_for(&agent(engine, None), false));
         for pinned in [wallet::THIS_MAC, "work-max", "personal"] {
-            assert_eq!(facts_for(&agent(engine, Some(pinned)), false), any);
+            assert_eq!(own(facts_for(&agent(engine, Some(pinned)), false)), any);
         }
     }
 }
@@ -244,7 +248,7 @@ fn a_turn_carried_over_to_the_other_engine_keeps_your_chrome() {
         (Engine::Claude, Engine::Codex),
         (Engine::Codex, Engine::Claude),
     ] {
-        let carried = super::crossover::as_on(agent(home, Some("work-max")), to);
+        let carried = crate::agents::crossover::as_on(agent(home, Some("work-max")), to);
         assert_eq!(carried.engine, to);
         assert_eq!(carried.account, None, "an account is per engine");
         let route = decide(Facts {
@@ -302,7 +306,7 @@ fn claude_in_chrome_down_runs_without_a_browser_and_says_so() {
     assert!(!access.browser);
     assert!(access
         .prompt
-        .contains(super::connections::CHROME_DOWN_PROMPT));
+        .contains(crate::agents::connections::CHROME_DOWN_PROMPT));
     let a = args(Driver::ClaudePrint, &access);
     assert!(a.contains(&"--no-chrome".to_string()));
     assert!(!access
