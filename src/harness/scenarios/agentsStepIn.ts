@@ -20,7 +20,7 @@ const STEP_IN = {
   tab: 2,
 };
 
-const card = (status: 'pending' | 'allowed', inside: boolean) =>
+const card = (status: 'pending' | 'allowed', inside: boolean, onPhone?: string) =>
   msg('approval', '', status === 'pending' ? 2 : 9, {
     agentId: 'finance',
     approval: {
@@ -30,41 +30,48 @@ const card = (status: 'pending' | 'allowed', inside: boolean) =>
         'Its tab on login.microsoftonline.com opens on this Mac for you to do this yourself; Hand back when you’re done. It never sees what you type, only where the page ends up.',
       status,
       stepIn: inside
-        ? { ...STEP_IN, inSince: now - 4 * MIN, until: now - 4 * MIN + 15 * MIN }
+        ? {
+            ...STEP_IN,
+            inSince: now - 4 * MIN,
+            until: now - 4 * MIN + 15 * MIN,
+            ...(onPhone ? { onPhone } : {}),
+          }
         : STEP_IN,
     },
   });
 
-const chat = (status: 'pending' | 'allowed', inside: boolean) => (args: Record<string, unknown>) =>
-  args.agentId === 'finance'
-    ? [
-        msg('user', 'Pull last month’s invoices from the Acme billing portal.', 12, {
-          agentId: 'finance',
-        }),
-        msg(
-          'agent',
-          'The portal sends me to Acme’s Microsoft sign-in, and it wants a tap on your phone to verify it’s you. I can’t do that one, so I’ve asked you to step in.',
-          3,
-          { agentId: 'finance' }
-        ),
-        card(status, inside),
-        ...(status === 'allowed'
-          ? [
-              msg(
-                'note',
-                'You handed Finance its browser back after 4 min · billing.acme.example',
-                2,
-                {
+const chat =
+  (status: 'pending' | 'allowed', inside: boolean, onPhone?: string) =>
+  (args: Record<string, unknown>) =>
+    args.agentId === 'finance'
+      ? [
+          msg('user', 'Pull last month’s invoices from the Acme billing portal.', 12, {
+            agentId: 'finance',
+          }),
+          msg(
+            'agent',
+            'The portal sends me to Acme’s Microsoft sign-in, and it wants a tap on your phone to verify it’s you. I can’t do that one, so I’ve asked you to step in.',
+            3,
+            { agentId: 'finance' }
+          ),
+          card(status, inside, onPhone),
+          ...(status === 'allowed'
+            ? [
+                msg(
+                  'note',
+                  'You handed Finance its browser back after 4 min · billing.acme.example',
+                  2,
+                  {
+                    agentId: 'finance',
+                  }
+                ),
+                msg('agent', 'Thanks, I’m in. Downloading October’s 14 invoices now.', 1, {
                   agentId: 'finance',
-                }
-              ),
-              msg('agent', 'Thanks, I’m in. Downloading October’s 14 invoices now.', 1, {
-                agentId: 'finance',
-              }),
-            ]
-          : []),
-      ]
-    : messagesFor(args);
+                }),
+              ]
+            : []),
+        ]
+      : messagesFor(args);
 
 const withCard = overview(
   TEAM.map((a) => (a.id === 'finance' ? { ...a, pendingApprovals: 1 } : a))
@@ -96,6 +103,19 @@ export const agentsStepInScenarios: Scenario[] = [
     commands: {
       agents_overview: withCard,
       agents_messages: chat('pending', true),
+    },
+  },
+  {
+    id: 'agents-step-in-from-phone',
+    title: 'Agents — your phone is in an agent’s browser',
+    looksRightWhen:
+      'Above the composer, one bar with a globe: “Sam’s iPhone is in Finance’s browser” and, muted, the site and when it hands back by itself, with only Hand back (no Show window: the window stays parked on the Mac). The card above says “Sam’s iPhone is in its browser now. Hand back there, or here.” with Hand back.',
+    openSelector: AGENTS_TAB,
+    requires: '[data-testid="agent-step-in-bar"]',
+    steps: [{ click: '[data-agent-id="finance"]' }],
+    commands: {
+      agents_overview: withCard,
+      agents_messages: chat('pending', true, 'Sam’s iPhone'),
     },
   },
   {
