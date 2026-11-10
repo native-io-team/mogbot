@@ -160,9 +160,13 @@
   position: relative;
 }
 
+/* Just under the card, inside the row's own shadow room: at top: 100% they
+   were past the row's box, which its paint containment
+   (agents-chat-history.css) clips, so a failure's Copy and time never showed.
+   What follows starts clear of them (agents-chat-history.css). */
 .agent-chat__messages > .agent-chat__row--card[data-failed] > .agent-message__actions {
   position: absolute;
-  top: 100%;
+  top: calc(100% - var(--agents-chat-row-room-end) + var(--spacing-2xs));
 }
 
 .agent-card.agent-bubble--error {

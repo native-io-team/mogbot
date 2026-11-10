@@ -118,3 +118,21 @@
   ):has(+ .agent-chat__row--working) {
   margin-bottom: 0;
 }
+
+/* A reply's Copy, pin and time hang in the room under it, a control's
+   height, which is more than the gap before what follows a reply: the next
+   paragraph of the answer, a card, or the Chief's starters. Hovered, they
+   sat on that line's first words, the card's top edge or the chips. What
+   follows a reply that has them starts clear of them, by the same small gap
+   in each case (the reply gives its room back, so this is the whole gap). */
+.agent-chat__messages
+  > .agent-chat__row--agent:not(.agent-chat__row--card):has(> .agent-message__actions)
+  + :is(.agent-chat__row--agent:not(.agent-chat__row--working), .agent-chat__starters) {
+  margin-top: calc(var(--button-height-compact) + var(--spacing-xs));
+}
+
+/* The same under a failure card, whose Copy and time hang just under the
+   card (agents-control.css). */
+.agent-chat__messages > .agent-chat__row--card[data-failed]:has(> .agent-message__actions) + * {
+  margin-top: calc(var(--button-height-compact) + var(--spacing-xs) + var(--spacing-2xs));
+}

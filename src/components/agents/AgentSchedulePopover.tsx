@@ -889,7 +889,7 @@ function ScheduleRow({
         <Dropdown
           align="right"
           portal
-          menuClassName="agent-schedule__row-menu"
+          menuClassName="agent-schedule__row-menu agent-model-menu"
           ariaLabel={`More for “${item.note}”`}
           trigger={(p) => (
             <IconButton

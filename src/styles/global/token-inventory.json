@@ -1683,7 +1683,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "consumerCount": 19
+      "consumerCount": 21
     },
     {
       "name": "--button-padding",
@@ -6275,7 +6275,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 290
+      "consumerCount": 292
     },
     {
       "name": "--spacing-xs",
@@ -6283,7 +6283,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 790
+      "consumerCount": 792
     },
     {
       "name": "--spacing-sm",
@@ -6299,7 +6299,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 637
+      "consumerCount": 638
     },
     {
       "name": "--spacing-lg",

@@ -34,6 +34,16 @@
   margin-top: var(--spacing-2xs);
 }
 
+/* Under a card (a result, a failure, a project's copy, a reply drawn as
+   blocks) the fold sits below a box edge and its shadow, not a line of
+   prose with its own leading, so it keeps a real gap rather than the 4px
+   that left the card's rounded bottom on top of the words. */
+/* (An earlier version folded to its one line is prose, not a box.) */
+.agent-chat__row--card > :not(.agent-result-past) + .agent-work > .agent-work__head,
+.agent-chat__row--agent[data-blocks] > .agent-work > .agent-work__head {
+  margin-top: var(--spacing-md);
+}
+
 /* Quieter than a TextButton's default; hover brings it up. */
 .text-button.button.agent-work__toggle {
   gap: var(--spacing-xs);
@@ -58,6 +68,26 @@
    cap sat while it worked, so its words start on the steps' label edge. */
 .text-button.button.agent-work__head-toggle {
   gap: var(--spacing-sm);
+}
+
+/* "Worked 14 min · 24 steps · edited 2 files" stays one line. Beside it,
+   what it ran on gives way first (it ellipsises); the summary is cut only
+   when the column is too narrow for it alone. */
+.text-button.button.agent-work__head-toggle {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.agent-work__head-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-work__head > .agent-work__ran-on {
+  flex: 0 1000 auto;
 }
 
 .text-button.button.agent-work__head-toggle .button__icon {

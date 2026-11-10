@@ -130,6 +130,8 @@ export const baseCommands: CommandMap = {
   log_frontend_event: null,
   // Each view names its window (hooks/useNativeMenu).
   set_window_title: null,
+  // File → New Window returns the new window's label (`window-<ms>`).
+  open_new_window: 'window-1731250000000',
 
   // ---- dashboard --------------------------------------------------------
   get_dashboard_projects: projects,

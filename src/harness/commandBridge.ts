@@ -77,3 +77,24 @@ export function whenRegistryStable(quietMs = 600, timeoutMs = 15_000): Promise<H
     void Promise.resolve().then(() => unsubscribe);
   });
 }
+
+/**
+ * Resolve once a command with this id is registered, or after `timeoutMs`.
+ * A project's commands arrive when its workspace mounts, which can be well
+ * after the registry's first quiet spell.
+ */
+export function whenCommandRegistered(id: string, timeoutMs = 15_000): Promise<void> {
+  return new Promise((resolve) => {
+    const has = () => getSnapshot().some((c) => c.id === id);
+    if (has()) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve();
+    };
+    const unsubscribe = subscribe(() => {
+      if (has()) done();
+    });
+    const timer = window.setTimeout(done, timeoutMs);
+  });
+}
