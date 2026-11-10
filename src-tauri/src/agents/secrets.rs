@@ -676,6 +676,7 @@ mod tests {
             room: None,
             decide: Vec::new(),
             local_links: Vec::new(),
+            blocks: None,
             remembered: None,
             via: None,
             fix: None,

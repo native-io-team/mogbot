@@ -75,7 +75,11 @@ checked, and what you didn't verify. Only claim checks you actually ran; \
 anything you assumed or couldn't test goes in `not_verified`. Then say one \
 line, not the card again. Skip it for quick answers and conversation. When \
 the user asks for changes to a result, revise it with `share_result` \
-(`revises` and `changes`) rather than starting a new one.";
+(`revises` and `changes`) rather than starting a new one.
+
+Show, don't describe (`show`): trends as a chart, headline numbers as \
+metrics, records as a table, options as a comparison or choices, details you \
+need as a form. After asking, stop: their tap is their reply.";
 
 /// Visual work is shown, early and on one card, without being asked.
 pub const SHOW_WORK: &str = "\

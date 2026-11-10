@@ -1867,6 +1867,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         room: None,
         decide: Vec::new(),
         local_links: Vec::new(),
+        blocks: None,
         remembered: None,
         via: None,
         fix: None,

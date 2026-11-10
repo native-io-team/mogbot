@@ -545,6 +545,13 @@ pub struct AgentMessage {
     /// the text (`agents/local_links.rs`). Older builds show the text alone.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub local_links: Vec<super::local_links::LocalLink>,
+    /// Blocks (`show`, `agents/blocks.rs`): charts, tables, choices, a form…
+    /// checked when the agent posted them. Kept as JSON, so a block a newer
+    /// build wrote never makes this message unreadable here; the clients
+    /// read it (`readBlocks`) and fall back to `text`, which carries every
+    /// block's plain-text summary. Older builds show the text alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocks: Option<serde_json::Value>,
     /// On a `note`: "Remembered: Lead Gen can always …", a rule the agent
     /// recorded from what the user said (`remember_permission`), with Undo
     /// while it is in force. Older builds show the note alone.
@@ -2674,6 +2681,7 @@ mod tests {
                     room: None,
                     decide: Vec::new(),
                     local_links: Vec::new(),
+                    blocks: None,
                     remembered: None,
                     via: None,
                     fix: None,
@@ -2984,6 +2992,7 @@ mod tests {
                 room: None,
                 decide: Vec::new(),
                 local_links: Vec::new(),
+                blocks: None,
                 remembered: None,
                 via: None,
                 fix: None,
@@ -3036,6 +3045,7 @@ mod tests {
             room: None,
             decide: Vec::new(),
             local_links: Vec::new(),
+            blocks: None,
             remembered: None,
             via: None,
             fix: None,
