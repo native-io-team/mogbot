@@ -873,6 +873,9 @@ conversation per agent and the chat is as it was.
   `routineConversationLine`), and its menu has "Run it in another
   conversation" on a Mac that lists `agents.conversationRoutine` (the most
   recent six, `routineMoveChoices`).
+- **Pages.** A conversation's living page ([agents.md](agents.md), "A
+  living page per conversation") sits above the messages on a Mac that lists
+  `agents.page` (`components/ConversationPage.tsx`, `lib/page.ts`).
 
 ### Rooms
 

@@ -6700,6 +6700,80 @@ charts, deciding, a form left empty, progress, answered, outside text).
 `agents-blocks-brief*` (the morning brief) and `agents-blocks-in-chat*` (blocks among bubbles, a result card and “What it did”), each at 1280 and 760.
 Phone: the qa:web shots `blocks-chat-*`, `blocks-brief-*` (a hidden “Brief” agent) and `blocks-tooltip-*` (a hidden "Blocks" agent in the mock Mac, `mobile/dev/mock-blocks.ts`). One question per message: a `show` with two of choices, comparison or form is refused, since the next message answers it.
 
+## A living page per conversation (`src-tauri/src/agents/page.rs`)
+
+Answers: **where do I look for work that goes on?** A job search, a project's
+status, a reading list, a running budget: the conversation gets one page,
+pinned above its chat on desk and phone, that the agent and the routines
+running in that conversation keep current, instead of a trail of
+point-in-time messages and result cards.
+
+- **Blocks, nothing new to draw.** The `page` tool takes blocks exactly as
+  `show` does, each through `blocks::parse` (so the same limits, no HTML,
+  http(s) links with no credentials), plus an `id` the agent picks
+  (`applications`, `next-steps`). Nothing on a page answers: choices,
+  comparison and form are `show`'s, images `share_result`'s. A page holds
+  at most 12 blocks and 96 KB.
+- **Patched by id.** A call sets the blocks it gives (an id already there is
+  replaced in place, a new one goes at the end), removes the ids in `remove`,
+  and `replace: true` makes the given blocks the whole page. A new page needs
+  a `title`. A call with nothing in it reads the page back (its blocks and
+  ids). Leaving the page empty is refused: unpinning is the user's.
+- **Every version kept.** A change is the next version, with what changed
+  (`Changes`: blocks added, changed, removed, renamed), the agent's
+  one-line `note`, and whether a routine's turn made it (`by_routine`, from
+  the run's ticket). An update that changes nothing makes no version. The
+  last 30 versions are kept, oldest dropped first; the numbers keep counting.
+- **Beside the log, never in it.** `<home>/pages/<conversation>.json`, one
+  file per conversation; `messages.jsonl` is untouched. The trace in the chat
+  is the step in "What it did" ("Updated the page"). `agents://page`
+  (`{ agentId, conversation }`) tells the desk to read it again.
+- **Which conversation.** The one the turn runs in (`conversations::loaded`),
+  so a routine set up in a conversation updates that conversation's page.
+  A turn in a conversation with a page opens with one line naming it, its
+  version and its block ids (`page::turn_note`, only when there is one): the
+  rule is taught in the tool's description, and the system prompt is
+  unchanged, so the budgets in `prompt_budget_tests.rs` stand.
+- **Safety.** On top of blocks' checks, nothing that looks like a key, a
+  token or a password (`connector::looks_like_secret`) or a value the user
+  stored as a secret (`secrets::redact`) goes on a page, title and note
+  included. A turn answering outside text changes the page only after a
+  card ("Update this conversation's page?" / "Pin a page to this
+  conversation?", saying what would change); refused, nothing changes. The
+  whole update is checked before the card, so a card never asks about a
+  change that can't be made.
+- **Pinned, or not.** A new page is pinned. The user can unpin it (desk or
+  phone, `agents_page_pin` / `agents.pagePin`); updates carry on and it stays
+  unpinned until they pin it back, and the agent is told so in its receipt.
+- **Desk** (`components/agents/ConversationPage.tsx`, `lib/agentPage.ts`):
+  under the chat header, in the conversation's column: a bar (fold, title,
+  "Updated 3 min ago · v4", unpin) over the page's blocks, which scroll inside
+  a band so the chat keeps the window. Pressing the "Updated" line lists every
+  kept version, newest first, with what changed in words (`pageChangeLine`,
+  block titles where they have one) and the note; pressing one shows it as it
+  was, read-only, with "Back to v4". Folding is remembered per conversation on
+  this Mac. Unpinned, the header has a pin button to bring it back; ⌘K has
+  "Pin / Unpin this conversation's page".
+- **Phone** (`components/ConversationPage.tsx`, `lib/page.ts`): the same band
+  above the messages, on a Mac that lists `agents.page`; read again when the
+  conversation on screen changes and as the agent's turn moves on. Fold
+  (for as long as the app runs), versions, an older one, Unpin.
+- **Wire**: `agents.page` and `agents.pageVersion` (read-only, not audited)
+  and `agents.pagePin` (audited "pinned/unpinned the page of …"); types and
+  the pure rules (`readPage`, `pageUpdatedLine`, `pageChangeLine`) in
+  `packages/companion-protocol/src/page.ts`.
+
+Tests: `page_tests.rs` (validation, patches by id, history and its cap,
+storage beside the log, pinning, the card's words), the fake-engine scenario
+`page` (a turn pins one, a routine updates it as v2 and is told it's there,
+unpinning stands, outside text waits on a card and a no changes nothing),
+vitest (`ConversationPage.test.tsx`, `page.test.ts` against the Mac's
+fixtures), jest (`conversationPage.test.tsx`). Harness `agents-page`,
+`-history`, `-older`, `-folded`, `-unpinned`; qa:web `page-chat`,
+`page-history`, `page-folded` (the mock Mac's hidden "Budget" agent).
+Not built: a library of every page across agents, and re-pinning from the
+phone (the desk's header button and ⌘K do it).
+
 ## Result cards (`src-tauri/src/agents/results.rs`)
 
 A finished piece of work comes back as **one** card, not prose plus a pile
