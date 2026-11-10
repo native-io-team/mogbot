@@ -272,7 +272,7 @@ function Toggle({
       leftIcon={<ChevronRightIcon size={12} />}
       onClick={onToggle}
     >
-      {label}
+      <span className="agent-work__head-label">{label}</span>
     </TextButton>
   );
 }
