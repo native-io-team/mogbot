@@ -231,7 +231,7 @@ fn one_edit(a: &str, b: &str) -> bool {
     edits + (a.len() - i) + (b.len() - j) <= 1
 }
 
-fn word_score(e: &Entry, t: &str) -> i64 {
+fn word_score(e: &Entry, t: &str, fuzzy: bool) -> i64 {
     if e.name_words.iter().any(|w| w == t) {
         return 100;
     }
@@ -244,7 +244,8 @@ fn word_score(e: &Entry, t: &str) -> i64 {
     if t.len() >= 3 && e.tag_words.iter().any(|w| w.starts_with(t)) {
         return 30;
     }
-    if t.len() >= 4
+    if fuzzy
+        && t.len() >= 4
         && e.name_words
             .iter()
             .chain(&e.tag_words)
@@ -258,9 +259,9 @@ fn word_score(e: &Entry, t: &str) -> i64 {
 fn score(e: &Entry, tokens: &[String]) -> i64 {
     let mut total = 0;
     for t in tokens {
-        let mut best = word_score(e, t) * 10;
+        let mut best = word_score(e, t, true) * 10;
         for s in PACK.synonyms.get(t).into_iter().flatten() {
-            best = best.max(word_score(e, s) * 7);
+            best = best.max(word_score(e, s, false) * 7);
         }
         if best == 0 {
             return 0;
