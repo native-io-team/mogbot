@@ -227,7 +227,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents',
     title: 'Settings — the Agents page',
     looksRightWhen:
-      'The Settings window opens on Agents, first in the section list down the left. Quiet groups, each a small heading: On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, each with a switch), Engines and models (“New agents start on” with a Claude Code | Codex control, Claude Code pressed, the engines’ states on one line; “Model on Claude Code” and “Model on Codex”, each a menu button showing “Default”; Routines), Bring agents in (Import…). Every description is one short sentence; no paragraph anywhere.',
+      'The Settings window opens on Agents, first in the section list down the left. Quiet groups, each a small heading: On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, each with a switch), What agents run on (“New agents start on” with a Claude Code | Codex control, Claude Code pressed, the engines’ states on one line; “Model on Claude Code” and “Model on Codex”, each a menu button showing “Default”; Routines), Bring agents in (Import…). Every description is one short sentence; no paragraph anywhere.',
     command: 'agents.desktopSettings',
     requires: '.agents-settings .settings-group__title',
     clipSelector: '.settings-window',
@@ -240,7 +240,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-user-chrome',
     title: 'Settings — Your Chrome, on, one profile connected',
     looksRightWhen:
-      'Opened from ⌘K “Let agents use your Chrome (any engine)…”, scrolled to Your Chrome: a switch, on, with “On. Agents can use your Chrome, in tabs of their own.”; “Chrome can reach this app” — “Done. Chrome can reach this app.”; “Add the extension to Chrome” — “Done. The extension is connected.” with no buttons; then one row “Work” — “Connected (extension 0.1.0).” Nothing in the accent colour.',
+      'Opened from ⌘K “Let agents use your Chrome (Claude Code or Codex)…”, scrolled to Your Chrome: a switch, on, with “On. Agents can use your Chrome, in tabs of their own.”; “Chrome can reach this app” — “Done. Chrome can reach this app.”; “Add the extension to Chrome” — “Done. The extension is connected.” with no buttons; then one row “Work” — “Connected (extension 0.1.0).” Nothing in the accent colour.',
     command: 'agents.userChrome',
     requires: '[data-testid="user-chrome-steps"]',
     clipSelector: 'section[aria-labelledby="agents-settings-user-chrome"]',
@@ -432,7 +432,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-defaults',
     title: 'Settings — new agents start on Codex, on GPT-5.5',
     looksRightWhen:
-      'Opened from ⌘K “Engine and model for new agents…”. Under Engines and models: “New agents start on” with Codex pressed in the Claude Code | Codex control and the line “Claude Code ready · Codex ready”; “Model on Claude Code” shows “Balanced” with a small muted “Sonnet” beside it; “Model on Codex” shows “GPT-5.5”. Both rows say each agent can pick its own in Edit agent. Neutral controls, no accent fill except the pressed segment’s usual treatment; nothing about existing agents changing.',
+      'Opened from ⌘K “What new agents run on, and their model…”. Under What agents run on: “New agents start on” with Codex pressed in the Claude Code | Codex control and the line “Claude Code ready · Codex ready”; “Model on Claude Code” shows “Balanced” with a small muted “Sonnet” beside it; “Model on Codex” shows “GPT-5.5”. Both rows say each agent can pick its own in Edit agent. Neutral controls, no accent fill except the pressed segment’s usual treatment; nothing about existing agents changing.',
     command: 'agents.newAgentDefaults',
     requires: '.agent-defaults-settings [data-engine="codex"]',
     clipSelector: 'section[aria-labelledby="agents-settings-engines"]',
@@ -452,7 +452,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     requires: '.agent-defaults-menu',
     steps: [
       { key: 'mod+k' },
-      { fill: '.command-palette-input', value: 'Engine and model for new agents' },
+      { fill: '.command-palette-input', value: 'What new agents run on' },
       { click: '.command-palette [role="option"]', text: 'Engine and model' },
       { click: '.agent-defaults-settings [data-engine="claude"]' },
     ],

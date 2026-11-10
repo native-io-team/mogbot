@@ -626,7 +626,9 @@ function ClaudeCodeRow({
       <div className="agent-apps__text" title={appTarget(app.target)}>
         <span className="agent-apps__name">{appTitle(app)}</span>
         {ours ? (
-          <span className="agent-apps__meta">Connect it above to use it on every engine</span>
+          <span className="agent-apps__meta">
+            Connect it above to use it on Claude Code and Codex alike
+          </span>
         ) : (
           managed && <span className="agent-apps__meta">{managed}</span>
         )}

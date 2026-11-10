@@ -5491,7 +5491,7 @@ from its next message"), and the next turn gets the recent conversation
 
 ### Defaults for new agents (`agents/defaults.rs`)
 
-Settings → Agents → Engines and models (`AgentDefaultsSettings.tsx`) sets what
+Settings → Agents → What agents run on (`AgentDefaultsSettings.tsx`) sets what
 a new agent starts on when nobody picked, saved in the app's settings
 (`AppState::agent_defaults`: `engine`, `claudeModel`, `codexModel`):
 
@@ -5519,7 +5519,7 @@ model, and switching engine there takes the other engine's default model;
 model is a choice, the engine's own); the Chief's `create_agent` (which takes
 no model) and the phone's `agents.create` use both. **Existing agents never
 change** with it, and an existing agent moved to another engine goes to that
-engine's own default, as before. ⌘K "Engine and model for new agents…" opens
+engine's own default, as before. ⌘K "What new agents run on, and their model…" opens
 Settings on it. The phone reads it from the overview and sets it with
 `agents.setDefaults` (docs/mobile.md, "Settings").
 

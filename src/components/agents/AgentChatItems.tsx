@@ -1027,7 +1027,7 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
     return approval.settings ? `Not changed · ${approval.setAside}` : SET_ASIDE_OUTCOME;
   }
   if (approval.settings && approval.status === 'allowed') {
-    return 'Changed · from each agent’s next turn';
+    return 'Changed · from each agent’s next message';
   }
   if (approval.plan && approval.status === 'allowed') {
     return 'Allowed · each step runs without asking for an hour';

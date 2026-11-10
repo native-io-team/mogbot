@@ -22,7 +22,7 @@ describe('quitPrompt', () => {
   it('leads with how many are working; open requests are said to wait', () => {
     const p = quitPrompt({ working: ['Acme Site', 'Native App'], waiting: ['Lead Gen'] }, bg);
     expect(p?.title).toBe('2 agents are still working. Quit anyway?');
-    expect(p?.body).toContain('Quitting stops Acme Site and Native App mid-turn');
+    expect(p?.body).toContain('Quitting stops Acme Site and Native App mid-task');
     expect(p?.body).toContain('Lead Gen’s request will still be here when you reopen.');
     expect(p?.offerBackground).toBe(true);
   });
