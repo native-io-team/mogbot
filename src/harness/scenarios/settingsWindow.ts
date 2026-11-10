@@ -22,7 +22,8 @@ const WHAT_EACH_SHOWS: Record<SettingsPage, string> = {
     'The usage and accounts groups exactly as they are elsewhere: this page only places them.',
   phone:
     'Your phone: the phone panel itself (get the app, or turn on phone access, pair and the paired phones) right on the page; then Other assistants: Remote access’s own setup or live view. No Open buttons and no dialog on top.',
-  notifications: 'From your agents: Replies and requests, Quiet hours, and Mute an agent.',
+  notifications:
+    'From your agents: Replies, Requests for your OK, Quiet hours, Morning brief, Your phone, Dock badge and Mute an agent.',
   chrome: 'The agents’ own browser, then Your Chrome with its switch.',
   apps: 'Slack, then apps you said no to when there are any.',
   projects:

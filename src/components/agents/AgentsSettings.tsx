@@ -231,8 +231,12 @@ export function NotificationsPage() {
         </h3>
         <div className="settings-section">
           <Row
-            label="Replies and requests"
-            description="Each reply notifies once; a request for your OK comes with a sound."
+            label="Replies"
+            description="One notification when a turn ends, with its latest line. None for the chat you’re looking at."
+          />
+          <Row
+            label="Requests for your OK"
+            description="At once, with a sound, even in quiet hours."
           />
           <SectionBoundary name="quiet-hours">
             <AgentQuietHoursSetting />
@@ -241,8 +245,16 @@ export function NotificationsPage() {
             <AgentMorningBriefSetting />
           </SectionBoundary>
           <Row
+            label="Your phone"
+            description="While you’re using this Mac, only this Mac notifies. Away from it, a paired phone gets the same ones."
+          />
+          <Row
+            label="Dock badge"
+            description="How many agents need you: a request to answer, or a turn that failed. Unread replies don’t count."
+          />
+          <Row
             label="Mute an agent"
-            description="From its … menu. Muted agents still count in the Dock badge."
+            description="From its … menu. Nothing from it notifies, requests included, here or on your phone. It still counts in the Dock badge."
           />
         </div>
       </section>

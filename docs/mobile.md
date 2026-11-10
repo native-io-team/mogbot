@@ -1420,7 +1420,7 @@ some dev clients may log reconnect attempts.
 `lib/notify.ts` keeps them honest: one per alert, grouped per agent
 (`threadIdentifier`, the same thread id the relay sets), taken back once
 handled anywhere (an approval answered or a chat read, here or at the desk),
-the icon badge equal to the desk's Dock badge (`notify::badge_now`, who needs you), and all cleared on Forget
+the icon badge equal to the desk's Dock badge (`needsYouCount`, the rule `notify::badge_now` mirrors; it once added unread replies and every open card, and disagreed with the Dock), and all cleared on Forget
 this Mac. Android has "Needs you" (high) and "Replies" channels. A tap waits
 for fonts and credentials, opens at the message, and replaces a chat already
 on top instead of stacking.
@@ -1474,7 +1474,7 @@ ids, the agent's name and one line through `secrets::redact` and
   deployed, a phone in the background or killed gets nothing until it opens;
   then the badge and Catch up say what's waiting.
 
-Settings says plainly what arrives when.
+Settings says plainly what arrives when, including that only the Mac notifies while you're using it.
 
 **Answering from the Lock Screen** (`lib/actionable.ts`). An approval the Mac
 alerts for (above), or with an older Mac a new card the phone hears in the
