@@ -500,31 +500,25 @@ async function prePairShots(page, d) {
           'pair-start',
           null,
           'Do you have',
-          '“Do you have Mogbot on your Mac?” under the Chief’s key, the bar at 1 of 7 with no Back; big Yes, an outline Not yet, then a quiet “Try the demo” with its one line',
+          '“Do you have Mogbot on your Mac?” under the Chief’s key, the bar at 1 of 6 with no Back; big Yes, an outline Not yet, then a quiet “Try the demo” with its one line',
         ],
         [
           'pair-getmac',
           'Not yet',
           'first',
-          '“Get Mogbot on your Mac first”, its one line, the download address in a panel; big “Send the link to my Mac”, quiet “I have it now”; Back, the bar still 1 of 7',
+          '“Get Mogbot on your Mac first”, its one line, the download address in a panel; big “Send the link to my Mac”, quiet “I have it now”; Back, the bar still 1 of 6',
         ],
         [
           'pair-tailscale',
           'I have it now',
           'Turn on Tailscale on this phone',
-          '“Turn on Tailscale on this phone”, one line; a Done tick only if the phone saw it installed; one big button (Get/Open Tailscale, or It’s on) and one quiet one; bar 2 of 7',
-        ],
-        [
-          'pair-account',
-          '__next',
-          'Same Tailscale account',
-          '“Same Tailscale account on both”, one line; big Same account, quiet Open Tailscale; bar 3 of 7',
+          '“Turn on Tailscale on this phone”, one line that says what it is and to sign in with the same account as the Mac; a Done tick only if the phone saw it installed; one big button (Get/Open Tailscale, or It’s on) and one quiet one; bar 2 of 6',
         ],
         [
           'pair-code',
-          'Same account',
+          '__next',
           'Pair your phone',
-          '“On your Mac, click “Pair your phone” at the bottom of the sidebar”, “A code appears on your Mac.”; big I see the code, quiet Paste a pairing link instead; bar 4 of 7',
+          '“On your Mac, click “Pair your phone” at the bottom of the sidebar”, “Already looking at a code on your Mac? Scan it now.”; big Scan the code (the words the Mac’s QR screen says), quiet Paste a pairing link instead; bar 3 of 6',
         ],
       ];
       if (steps.some(([n]) => wanted(`${n}-${theme}`))) {
@@ -561,7 +555,7 @@ async function prePairShots(page, d) {
       await capture(page, `pair-reaching-${theme}`, {
         route: '/pair?d=… (Mac never answers)',
         check:
-          '“Reaching <Mac>…” with a spinner, the host, “Nothing has been sent to it yet”; never “Allow on your Mac”',
+          '“Reaching <Mac>…” with a spinner, “Nothing is sent to it until it proves that” and no address; never “Allow on your Mac”',
         theme,
       });
       await page.waitFor(`document.body.innerText.includes('Try again')`, 30_000, 'the failure');
@@ -3997,7 +3991,9 @@ async function main() {
   await prePairShots(page, d);
   if (phase('demo')) await demoShots(page);
 
-  // Pair through the real confirm screen.
+  // Pair through the real confirm screen. The demo's shots end on the last
+  // theme: put the first back, or "pair-confirm-light" is drawn dark.
+  await setTheme(page, THEMES[0]);
   await page.goto(`${WEB}/pair?d=${d}`);
   await page.waitFor(
     `[...document.querySelectorAll('body *')].some((e) => e.innerText?.trim() === 'Pair')`,

@@ -21,7 +21,7 @@ import { listen } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
-import { CheckIcon, ExternalLinkIcon, WarningIcon } from '@/components/icons';
+import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon, WarningIcon } from '@/components/icons';
 import { CheckLine, ADVANCE_MS } from '../setup/flow/FlowParts';
 import { PhoneQr } from './PhoneQr';
 import { usePolling } from '../../hooks/usePolling';
@@ -727,7 +727,13 @@ export function PanelStepShell({
       <div className="phone-flow__top">
         <div className="phone-flow__back">
           {onBack && (
-            <Button variant="ghost" size="compact" onClick={onBack} data-flow-back>
+            <Button
+              variant="ghost"
+              size="compact"
+              leftIcon={<ArrowLeftIcon size={14} />}
+              onClick={onBack}
+              data-flow-back
+            >
               Back
             </Button>
           )}

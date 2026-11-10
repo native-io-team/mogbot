@@ -499,8 +499,8 @@ export function AgentsSidebarActions({
         onClick={onNew}
         aria-label="New agent"
         title={`New agent (${kbd('mod', 'N')})`}
+        leftIcon={<FooterRowIcon icon={<AddIcon size={14} />} status="off" />}
       >
-        <AddIcon size={16} />
         <span>New agent</span>
       </Button>
       {room && (
@@ -511,8 +511,8 @@ export function AgentsSidebarActions({
           onClick={onNewRoom}
           aria-label="New room"
           title={ROOM_WHAT}
+          leftIcon={<FooterRowIcon icon={<CollaboratorsIcon size={14} />} status="off" />}
         >
-          <CollaboratorsIcon size={16} />
           <span>New room</span>
         </Button>
       )}

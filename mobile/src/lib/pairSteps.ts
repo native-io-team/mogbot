@@ -5,14 +5,18 @@
  * words both sides say):
  *
  * 1. Do you have the app on your Mac? (Not yet: where to get it.)
- * 2. Turn on Tailscale on this phone.
- * 3. The same Tailscale account on both.
- * 4. On your Mac, click "Pair your phone": I see the code.
- * 5. The camera.
- * 6. Pair with <Mac>? (Pair.)
- * 7. Click Allow on your Mac (waits, ticks by itself).
+ * 2. Turn on Tailscale on this phone, signed in as your Mac is.
+ * 3. On your Mac, click "Pair your phone": Scan the code.
+ * 4. The camera.
+ * 5. Pair with <Mac>? (Pair.)
+ * 6. Click Allow on your Mac (waits, ticks by itself).
  *
- * The first four are saved as they change, so leaving the app halfway (to
+ * "Same Tailscale account on both" was its own screen, with a "Same
+ * account" button nobody could answer honestly before pairing (the Mac only
+ * says which account at the confirm). It is one clause of step 2 now, and a
+ * phone saved on it resumes at step 3.
+ *
+ * The first three are saved as they change, so leaving the app halfway (to
  * install Tailscale, say) opens on the same screen. Pure, for the tests;
  * the screen is `app/pair.tsx`.
  *
@@ -22,14 +26,13 @@
 import { readJson, writeJson } from './persist';
 
 /** The screens before the camera, in order. `getMac` is the "Not yet" answer to `mac`. */
-export const INTRO_STEPS = ['mac', 'tailscale', 'account', 'code'] as const;
+export const INTRO_STEPS = ['mac', 'tailscale', 'code'] as const;
 export type IntroStep = (typeof INTRO_STEPS)[number] | 'getMac';
 
-/** Every place the bar counts, the intro's four then the camera and the two answers. */
+/** Every place the bar counts, the intro's three then the camera and the two answers. */
 export const PAIR_STAGES = [
   'mac',
   'tailscale',
-  'account',
   'code',
   'scan',
   'pair',
@@ -42,7 +45,7 @@ export function stageOf(step: IntroStep): PairStage {
   return step === 'getMac' ? 'mac' : step;
 }
 
-/** "Step n of 7", for the bar and for a screen reader. */
+/** "Step n of 6", for the bar and for a screen reader. */
 export function progressOf(stage: PairStage): { n: number; of: number } {
   return { n: PAIR_STAGES.indexOf(stage) + 1, of: PAIR_STAGES.length };
 }
@@ -61,7 +64,7 @@ export function prevIntro(step: IntroStep): IntroStep | null {
 
 /**
  * Where the screen opens. A phone that has paired before (to pair another
- * Mac, or again after a reset) has done the first three already: straight
+ * Mac, or again after a reset) has done the first two already: straight
  * to the Mac's button. Otherwise the saved screen, else the first question.
  */
 export function startStep(saved: IntroStep | null, pairedBefore: boolean): IntroStep {
@@ -75,6 +78,8 @@ const isStep = (s: unknown): s is IntroStep =>
 
 export async function readSavedStep(): Promise<IntroStep | null> {
   const saved = await readJson<{ v?: number; step?: unknown }>(FILE).catch(() => null);
+  // The retired "Same account" screen: on to the one after it.
+  if (saved?.v === 1 && saved.step === 'account') return 'code';
   return saved?.v === 1 && isStep(saved.step) ? saved.step : null;
 }
 

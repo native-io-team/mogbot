@@ -381,20 +381,29 @@
   color: var(--status-running);
 }
 
-/* New agent / New room start on the rows' column, not centred in space:
-   the icon sits in a badge-wide box so its label lines up with the names.
-   Actions, not rows: shorter than an agent, one after the other with no gap,
-   and in the secondary text colour so they read as available. Pinned under
-   the list, outside its scroller (AgentsSidebarActions), so a long list or
-   project groups never push them under the footer (round 4, #10). */
+/* New agent / New room sit in the foot between Usage and the phone row, so
+   they take the foot rows' column: the same 14px icon in the Button's icon
+   slot (FooterRowIcon) and the same padding, so all four icons and labels
+   line up. (They used to line up with the agent names above, a column the
+   foot doesn't use, which put them ~11px off every row around them.) In the
+   secondary text colour so they read as available. Pinned under the list,
+   outside its scroller (AgentsSidebarActions), so a long list or project
+   groups never push them under the footer (round 4, #10). */
 .workspace-sidebar:not(.is-hidden) .agents-list__new,
 .workspace-sidebar:not(.is-hidden) .agents-list__new-room {
   justify-content: flex-start;
   gap: var(--spacing-sm);
   height: var(--control-height-standard);
   min-height: var(--control-height-standard);
-  padding: 0 var(--spacing-md) 0 var(--spacing-sm);
+  padding-inline-start: 0;
   color: var(--text-secondary);
+}
+
+/* The foot rows' icon box (sidebar-footer.css, "One icon column"). */
+.workspace-sidebar:not(.is-hidden) .agents-list__new > .button__icon,
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room > .button__icon {
+  box-sizing: content-box;
+  padding-inline: calc((var(--size-sidebar-project-shortcut) - var(--size-icon-button)) / 2);
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new:hover:not(:disabled),
@@ -463,12 +472,6 @@
 
 .agents-list__rail-mark {
   display: contents;
-}
-
-.workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room > svg {
-  box-sizing: content-box;
-  padding: 0 calc((var(--size-sidebar-project-shortcut) - 16px) / 2); /* css-ok: centre a 16px icon in the badge width */
 }
 
 /* "Hidden (2)": a quiet disclosure at the end of the list, not a footer. */
@@ -717,16 +720,10 @@
   white-space: nowrap;
 }
 
-/* Side by side, each half centres its icon and label: the badge-wide icon
-   box of a full-width row would leave the label no room. */
+/* Side by side (or stacked when narrow), each half starts on the foot's icon
+   column like the rows around it; centred halves put New agent's icon off
+   Usage's and, stacked, both off every other row. */
 .workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .agents-list__new,
 .workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .agents-list__new-room {
-  justify-content: center;
-  gap: var(--spacing-xs);
-  padding-inline: var(--spacing-xs);
-}
-
-.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .button > svg {
-  flex-shrink: 0;
-  padding: 0;
+  justify-content: flex-start;
 }

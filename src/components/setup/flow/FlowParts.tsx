@@ -28,12 +28,16 @@ export const ADVANCE_MS = 1200;
 
 /**
  * What takes focus on a screen, best first: its big button, the first
- * answer when the big button is a choice of cards, then any action.
+ * answer when the big button is a choice of cards, the fix a failed check
+ * names, then any action but the way out. "Skip for now" never takes focus
+ * on its own: Enter on a screen whose only button was Skip skipped the step
+ * (the Funnel switch, the pairing code) for someone who meant to go on.
  */
 export const FLOW_FOCUS_TARGET = [
   '.flow-actions [data-flow-primary]:not(:disabled)',
   '.flow-content .agent-pick-card:not(:disabled)',
-  '.flow-actions button:not(:disabled)',
+  '.flow-content [data-flow-fix]:not(:disabled)',
+  '.flow-actions button:not(:disabled):not([data-flow-skip])',
 ] as const;
 
 interface FlowShellProps {

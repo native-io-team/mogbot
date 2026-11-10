@@ -643,7 +643,7 @@
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
-      "consumerCount": 56
+      "consumerCount": 57
     },
     {
       "name": "--size-icon-md",
@@ -6195,7 +6195,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 780
+      "consumerCount": 778
     },
     {
       "name": "--spacing-sm",
@@ -6203,7 +6203,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 957
+      "consumerCount": 956
     },
     {
       "name": "--spacing-md",
@@ -6211,7 +6211,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 632
+      "consumerCount": 631
     },
     {
       "name": "--spacing-lg",

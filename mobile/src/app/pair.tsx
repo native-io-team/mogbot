@@ -3,8 +3,8 @@
  * one big button, Back and a progress bar on every screen.
  *
  * Do you have the app on your Mac? (Not yet: where to get it) → Tailscale on
- * this phone (ticks Done when this phone can see it) → the same account on
- * both → "On your Mac, click Pair your phone" (I see the code) → the camera
+ * this phone, signed in as the Mac is (ticks Done when this phone can see
+ * it) → "On your Mac, click Pair your phone" (Scan the code) → the camera
  * → "Pair with <Mac>?" → "Reaching <Mac>…" while it proves itself → "Click
  * Allow on your Mac" (said only once the code has really gone; ticks by
  * itself) → "Paired with <Mac>", and alerts once if they're undecided.
@@ -29,8 +29,8 @@ import {
   PAIR_BUTTON,
   PAIRED_TITLE,
   PAIRING_SCHEME,
-  SAME_ACCOUNT_TITLE,
-  SEE_THE_CODE,
+  SAME_ACCOUNT_LINE,
+  SCAN_THE_CODE,
   TAILSCALE_LINE,
   TAILSCALE_PHONE_TITLE,
   type PairingLink,
@@ -262,7 +262,7 @@ export default function Pair() {
         testID="pair-reaching"
         busy={<Spinner size={iconSize.body} color={colors.textPrimary} />}
         title={`Reaching ${cleanName(phase.link.name)}…`}
-        line={`Looking for it at ${linkHost(phase.link)} over Tailscale, and checking it’s the Mac this code came from. Nothing has been sent to it yet.`}
+        line="Finding it over Tailscale and checking it’s the Mac this code came from. Nothing is sent to it until it proves that."
         secondary={<Button title="Cancel" variant="ghost" onPress={toCode} />}
       />
     );
@@ -378,10 +378,10 @@ export default function Pair() {
 }
 
 /**
- * The four screens before the camera, one question each. Each says only
+ * The three screens before the camera, one question each. Each says only
  * what to do next and has one big button for it. Only what this phone can
  * see gets a tick (Tailscale installed here); the rest is the person's word,
- * and the button says so ("I did it", "Same account").
+ * and the button says so ("I did it", "It’s on").
  */
 function IntroScreen({
   step,
@@ -482,8 +482,8 @@ function IntroScreen({
           title={TAILSCALE_PHONE_TITLE}
           line={
             installed
-              ? 'Open it, sign in, and switch it on.'
-              : `${TAILSCALE_LINE} Install it, sign in, and switch it on. It asks to add a VPN configuration: tap Allow.`
+              ? `${TAILSCALE_LINE} Open it and switch it on. ${SAME_ACCOUNT_LINE}`
+              : `${TAILSCALE_LINE} Install it and switch it on; it asks to add a VPN configuration: tap Allow. ${SAME_ACCOUNT_LINE}`
           }
           primary={
             installed ? (
@@ -514,32 +514,15 @@ function IntroScreen({
           {installed && <DoneLine>Tailscale is installed on this phone.</DoneLine>}
         </StepScreen>
       );
-    case 'account':
-      return (
-        <StepScreen
-          {...common}
-          title={SAME_ACCOUNT_TITLE}
-          line="Sign in to Tailscale on this phone with the account your Mac uses. Your Mac shows which one when you pair."
-          primary={<Button title="Same account" variant="primary" size="large" onPress={next} />}
-          secondary={
-            <Button
-              title="Open Tailscale"
-              variant="ghost"
-              icon="network"
-              onPress={() => void openTailscale()}
-            />
-          }
-        />
-      );
     case 'code':
       return (
         <StepScreen
           {...common}
           title={CLICK_PAIR_TITLE}
-          line="A code appears on your Mac. The first time, this phone asks to use the camera, to read it."
+          line="Already looking at a code on your Mac? Scan it now. The first time, this phone asks to use the camera."
           primary={
             <Button
-              title={SEE_THE_CODE}
+              title={SCAN_THE_CODE}
               variant="primary"
               size="large"
               icon="qrcode.viewfinder"

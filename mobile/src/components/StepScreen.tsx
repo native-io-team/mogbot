@@ -14,7 +14,7 @@ import { ScrollView, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconButton, T } from './ui';
-import { iconSize, radius, space } from '../lib/theme';
+import { iconSize, lineHeight, MIN_TAP, radius, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 
 interface Props {
@@ -98,7 +98,7 @@ export function StepScreen({
         {mark}
         {notice}
         <View style={[styles.titleRow, centered && styles.centeredRow]}>
-          {busy}
+          {busy && <View style={styles.busy}>{busy}</View>}
           <T
             variant="display"
             color={colors.textStrong}
@@ -150,7 +150,9 @@ export function DoneLine({ children }: { children: ReactNode }) {
 
 const useStyles = makeStyles((colors) => ({
   page: { paddingHorizontal: space.xl, gap: space['2xl'], flexGrow: 1 },
-  top: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  // As tall as Back's tap target whether or not Back is there, so the bar
+  // stays put from one screen to the next (Reaching and Allow have no Back).
+  top: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: MIN_TAP },
   back: { width: iconSize.hero, alignItems: 'flex-start' },
   track: {
     flex: 1,
@@ -164,8 +166,10 @@ const useStyles = makeStyles((colors) => ({
   centered: { justifyContent: 'center', alignItems: 'center' },
   centeredRow: { justifyContent: 'center' },
   centeredText: { textAlign: 'center' },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  // The spinner sits by the title's first line, not the middle of a wrapped one.
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
   title: { flexShrink: 1 },
+  busy: { height: lineHeight(type.display, 1.15), justifyContent: 'center' },
   actions: { gap: space.sm },
   done: {
     flexDirection: 'row',
