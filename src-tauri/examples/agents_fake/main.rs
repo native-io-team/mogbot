@@ -1157,7 +1157,7 @@ async fn interrupt(h: &H) -> Check {
     )
 }
 
-/// The same on Codex (`exec`, the fake as `codex`): a reply, a command, a
+/// The same on Codex's `exec` fallback (the fake as `codex`): a reply, a command, a
 /// tool of the bridge, the thread resumed, a failure said.
 async fn codex(h: &H) -> Check {
     let a = h.agent("Codexer");
@@ -1202,6 +1202,189 @@ async fn codex(h: &H) -> Check {
     ensure(
         !errors(&a.id).is_empty(),
         "a failed Codex turn said nothing",
+    )
+}
+
+/// Codex on its app-server, the driver the app prefers (the fake as `codex`,
+/// `SHIPSTUDIO_AGENTS_CODEX_EXEC` lifted for this scenario): the schema
+/// check passes, a command asks and runs on Allow, a tool of the bridge, the
+/// reply streamed, the thread resumed; a denied command never runs and the
+/// agent is told why with a steer; Stop interrupts a hung turn; a failed
+/// turn and a lost thread each end in a line; the bridge secret never on
+/// its command line.
+async fn codex_app(h: &H) -> Check {
+    std::env::remove_var("SHIPSTUDIO_AGENTS_CODEX_EXEC");
+    let result = codex_app_inner(h).await;
+    std::env::set_var("SHIPSTUDIO_AGENTS_CODEX_EXEC", "1");
+    result
+}
+
+async fn codex_app_inner(h: &H) -> Check {
+    let a = h.agent("Appy");
+    store::update(&a.id, |a| a.engine = Engine::Codex).unwrap();
+    let home = store::agent_home(&a.id).unwrap();
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "echo from-app > app.txt"},
+            {"tool": "list_agents"},
+            {"slow": "codex app {session} {turn}", "every": 0.05}
+        ])),
+    )
+    .await?;
+    let c = card(h, &a.id, 0).await?;
+    ensure(
+        c.tool.as_deref() == Some("Bash"),
+        format!("card for {:?}", c.tool),
+    )?;
+    answer(h, &a.id, &c, true).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let opened: Vec<Value> = h
+        .fake_log()
+        .into_iter()
+        .filter(|e| e["engine"] == "codex-app" && e.get("method").is_some())
+        .collect();
+    ensure(
+        !opened.is_empty(),
+        "the turn didn't run on the app-server (the schema check failed?)",
+    )?;
+    ensure(
+        std::fs::read_to_string(home.join("app.txt"))
+            .unwrap_or_default()
+            .trim()
+            == "from-app",
+        "the allowed command didn't run",
+    )?;
+    let thread = store::get(&a.id)
+        .unwrap()
+        .session_id
+        .ok_or("no thread kept")?;
+    ensure(
+        last_reply(&a.id) == format!("codex app {thread} 1"),
+        format!("{:?}", last_reply(&a.id)),
+    )?;
+    ensure(h.drafting(&a.id, 5), "the reply never streamed as a draft")?;
+    ensure(
+        timeline(&a.id).len() >= 2,
+        format!("timeline {:?}", timeline(&a.id)),
+    )?;
+    for e in &opened {
+        ensure(
+            !e["argv"].to_string().contains("Bearer"),
+            "the secret is on its command line",
+        )?;
+        ensure(
+            e["params"]["approvalPolicy"] == "on-request",
+            format!("approvals not asked: {}", e["params"]),
+        )?;
+    }
+
+    // Resumed: the same thread, the second turn in it.
+    h.send(&a.id, &fake(json!([{"say": "again {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == format!("again {thread} 2"),
+        format!("not resumed: {:?}", last_reply(&a.id)),
+    )?;
+
+    // Denied: nothing runs, and the agent is told why in a steer.
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "echo no > denied.txt"},
+            {"say": "carried on"}
+        ])),
+    )
+    .await?;
+    let c = card(h, &a.id, 1).await?;
+    answer(h, &a.id, &c, false).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(!home.join("denied.txt").exists(), "a denied command ran")?;
+    let steers: Vec<Value> = h
+        .fake_log()
+        .into_iter()
+        .filter(|e| e["engine"] == "codex-app" && e.get("steer").is_some())
+        .collect();
+    ensure(
+        steers.iter().any(|s| {
+            s["expected"] == true
+                && s["steer"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains("Note from the app")
+        }),
+        format!("the agent wasn't told: {steers:?}"),
+    )?;
+    ensure(
+        last_reply(&a.id) == "carried on",
+        format!("{:?}", last_reply(&a.id)),
+    )?;
+
+    // Stop: a hung turn is interrupted and ends.
+    h.send(
+        &a.id,
+        &fake(json!([{"say": "about to hang"}, {"hang": true}])),
+    )
+    .await?;
+    h.until("the hang", Duration::from_secs(20), || {
+        !h.turns_with("about to hang").is_empty()
+    })
+    .await?;
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    ensure(runner::in_turn(&a.id), "the hung turn ended on its own")?;
+    ensure(
+        cmd::agents_stop(h.app.clone(), a.id.clone())
+            .await
+            .unwrap_or(false),
+        "stop found nothing to stop",
+    )?;
+    h.turn(&a.id).await?;
+
+    // A failed turn and a crash each end in a line.
+    for (name, script) in [
+        ("error", json!([{"error": "stream error: something broke"}])),
+        ("crash", json!([{"crash": true}])),
+    ] {
+        let before = log(&a.id).len();
+        h.send(&a.id, &fake(script)).await?;
+        h.turn(&a.id).await.map_err(|e| format!("{name}: {e}"))?;
+        let new: Vec<AgentMessage> = log(&a.id).into_iter().skip(before).collect();
+        ensure(
+            new.iter().any(|m| {
+                matches!(m.kind, MessageKind::Error | MessageKind::Note)
+                    && !m.text.trim().is_empty()
+            }),
+            format!(
+                "{name}: the turn ended without a line: {:?}",
+                new.iter()
+                    .map(|m| (m.kind, m.text.clone()))
+                    .collect::<Vec<_>>()
+            ),
+        )?;
+    }
+
+    // A thread Codex can't resume is replaced.
+    store::update(&a.id, |a| {
+        a.session_id = Some("00000000-0000-0000-0000-000000000000".into())
+    })
+    .unwrap();
+    h.send(&a.id, &fake(json!([{"say": "fresh {session}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    let now = store::get(&a.id).unwrap().session_id.unwrap_or_default();
+    ensure(
+        now != "00000000-0000-0000-0000-000000000000"
+            && last_reply(&a.id) == format!("fresh {now}"),
+        format!(
+            "lost thread not replaced: {:?} / {:?} / errors {:?}",
+            now,
+            last_reply(&a.id),
+            errors(&a.id)
+        ),
     )
 }
 
@@ -2431,6 +2614,7 @@ const ALL: &[&str] = &[
     "queue-card",
     "interrupt",
     "codex",
+    "codex-app",
     "opencode",
     "lingering",
     "rounds",
@@ -2456,6 +2640,81 @@ const ALL: &[&str] = &[
 /* --------------------------------------------------------------------- main */
 
 /// The fake on PATH as `claude` (and a `gh` that only prints), first.
+/// Not in the default run: real engines and real usage (`real-*`), or the
+/// network (`opencode-real`).
+const OPT_IN: &[&str] = &["opencode-real", "real-blocks", "real-chief"];
+
+/// The engine a scenario runs its agents on.
+fn engine_of(scenario: &str) -> &'static str {
+    match scenario {
+        "codex" => "codex (exec)",
+        "codex-app" => "codex (app-server)",
+        "opencode" | "opencode-real" => "opencode",
+        _ => "claude",
+    }
+}
+
+/// What ran, by engine, for a CI log: a line per engine on stdout, and the
+/// same as a Markdown table appended to `$GITHUB_STEP_SUMMARY` (GitHub
+/// Actions) and/or `$AGENTS_FAKE_SUMMARY`.
+fn summarize(ran: &[(String, bool)]) {
+    let mut engines: Vec<&str> = Vec::new();
+    for (name, _) in ran {
+        if !engines.contains(&engine_of(name)) {
+            engines.push(engine_of(name));
+        }
+    }
+    let skipped: Vec<&str> = OPT_IN
+        .iter()
+        .copied()
+        .filter(|s| !ran.iter().any(|(n, _)| n == s))
+        .collect();
+    let passed = ran.iter().filter(|(_, ok)| *ok).count();
+    println!("Summary: {passed}/{} scenarios passed", ran.len());
+    let mut md = format!(
+        "### Agents fake-engine e2e\n\n{passed}/{} scenarios passed.\n\n| Engine | Passed | Failed |\n|---|---|---|\n",
+        ran.len()
+    );
+    let list = |names: &[&str]| {
+        if names.is_empty() {
+            "-".to_string()
+        } else {
+            names.join(", ")
+        }
+    };
+    for engine in &engines {
+        let of: Vec<_> = ran
+            .iter()
+            .filter(|(n, _)| engine_of(n) == *engine)
+            .collect();
+        let ok: Vec<&str> = of.iter().filter(|r| r.1).map(|r| r.0.as_str()).collect();
+        let bad: Vec<&str> = of.iter().filter(|r| !r.1).map(|r| r.0.as_str()).collect();
+        let failed = if bad.is_empty() {
+            String::new()
+        } else {
+            format!(", failed: {}", bad.join(", "))
+        };
+        println!("  {engine:<20} {}/{} passed{failed}", ok.len(), of.len());
+        md.push_str(&format!("| {engine} | {} | {} |\n", list(&ok), list(&bad)));
+    }
+    if !skipped.is_empty() {
+        println!("  skipped (opt-in): {}", skipped.join(", "));
+        md.push_str(&format!("\nSkipped (opt-in): {}\n", skipped.join(", ")));
+    }
+    for var in ["GITHUB_STEP_SUMMARY", "AGENTS_FAKE_SUMMARY"] {
+        if let Some(path) = std::env::var_os(var) {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+            {
+                let _ = f.write_all(md.as_bytes());
+            }
+        }
+    }
+}
+
 fn install_fake(home: &Path) {
     let bin = home.join("fakebin");
     std::fs::create_dir_all(&bin).unwrap();
@@ -2545,6 +2804,7 @@ fn main() {
     println!("HOME for this run: {}", home.display());
     let started = Instant::now();
     let mut failed = 0;
+    let mut ran: Vec<(String, bool)> = Vec::new();
     tauri::async_runtime::block_on(async {
         for name in wanted {
             let t = Instant::now();
@@ -2568,6 +2828,7 @@ fn main() {
                 "queue-card" => queue_on_card(&h).await,
                 "interrupt" => interrupt(&h).await,
                 "codex" => codex(&h).await,
+                "codex-app" => codex_app(&h).await,
                 "opencode" => opencode(&h).await,
                 "opencode-real" => opencode_real(&h).await,
                 "lingering" => lingering(&h).await,
@@ -2593,6 +2854,7 @@ fn main() {
                 other => Err(format!("unknown scenario {other}")),
             };
             let took = t.elapsed().as_secs_f32();
+            ran.push((name.to_string(), result.is_ok()));
             match result {
                 Ok(()) => println!("PASS  {name:<16} {took:>5.1}s"),
                 Err(e) => {
@@ -2603,6 +2865,7 @@ fn main() {
         }
     });
     println!("{failed} failed · {}s", started.elapsed().as_secs());
+    summarize(&ran);
     if std::env::var("AGENTS_FAKE_KEEP").is_err() {
         let _ = std::fs::remove_dir_all(&home);
     }
