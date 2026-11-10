@@ -388,9 +388,34 @@ export function linkHost(url: string): string {
   }
 }
 
-/** A picture this much taller than wide is a phone screen: it gets a device frame. */
+/** A picture must be at least this much taller than wide to be a phone screen. */
 export const PORTRAIT_RATIO = 1.3;
+/** Widest a phone screen is in pixels (a 3x Pro Max is 1320); wider is a desktop shot. */
+const PHONE_MAX_PX = 1320;
+/** At most this wide, a picture is a phone at 1x (CSS pixels), whatever its length. */
+const PHONE_1X_PX = 500;
+/** A phone's screen, between 1x and 3x, is this shape (16:9 up to today's tall ones). */
+const PHONE_SCREEN = { min: 1.7, max: 2.4 };
+const DESK_WORDS = /\b(desktop|laptop|tablet|ipad|wide|widescreen|monitor)\b/i;
+const PHONE_WORDS = /\b(phone|mobile|iphone|android)\b/i;
 
-export function isPortrait(size: { width: number; height: number } | null | undefined): boolean {
-  return Boolean(size && size.width > 0 && size.height / size.width >= PORTRAIT_RATIO);
+/**
+ * Whether a picture is a phone screen, so it gets a device frame. The agent's
+ * own words (caption, page or file name) decide first: "desktop" never gets a
+ * phone frame, "phone" does when the picture is tall. Without them, the size
+ * decides: a full-page desktop shot is tall too, so tall alone is not enough.
+ */
+export function isPortrait(
+  size: { width: number; height: number } | null | undefined,
+  words?: string
+): boolean {
+  if (!size || size.width <= 0) return false;
+  const ratio = size.height / size.width;
+  if (ratio < PORTRAIT_RATIO) return false;
+  const said = (words ?? '').replace(/[-_.]/g, ' ');
+  if (DESK_WORDS.test(said)) return false;
+  if (PHONE_WORDS.test(said)) return true;
+  if (size.width <= PHONE_1X_PX) return true;
+  if (size.width > PHONE_MAX_PX) return false;
+  return ratio >= PHONE_SCREEN.min && ratio <= PHONE_SCREEN.max;
 }

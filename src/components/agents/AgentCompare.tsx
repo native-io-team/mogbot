@@ -34,10 +34,10 @@ const MODES = [
 
 type Size = { width: number; height: number };
 
-/** Whether a picture is a phone screen, once it has loaded. */
-function useShape(): [boolean, (size: Size) => void] {
+/** Whether a picture is a phone screen, once it has loaded; `words` are its caption and name. */
+function useShape(words: string): [boolean, (size: Size) => void] {
   const [portrait, setPortrait] = useState(false);
-  return [portrait, (size) => setPortrait(isPortrait(size))];
+  return [portrait, (size) => setPortrait(isPortrait(size, words))];
 }
 
 export function CompareShot({
@@ -54,7 +54,7 @@ export function CompareShot({
   /** The caption sits on the picture as a label (a before/after pair). */
   tagged?: boolean;
 }) {
-  const [portrait, measure] = useShape();
+  const [portrait, measure] = useShape(`${caption} ${file.name}`);
   return (
     <figure className="agent-result__shot" data-portrait={portrait || undefined}>
       <button
@@ -90,7 +90,10 @@ function Slider({
   const [at, setAt] = useState(50);
   // The picture's own proportions, once known: the slider takes its shape.
   const [size, setSize] = useState<Size | null>(null);
-  const portrait = isPortrait(size);
+  const portrait = isPortrait(
+    size,
+    `${beforeCaption} ${afterCaption} ${before.name} ${after.name}`
+  );
   return (
     <div className="agent-compare__stage" data-portrait={portrait || undefined}>
       <div

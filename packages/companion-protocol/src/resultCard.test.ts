@@ -84,4 +84,21 @@ describe('isPortrait', () => {
     expect(isPortrait(null)).toBe(false);
     expect(isPortrait({ width: 0, height: 10 })).toBe(false);
   });
+
+  it('never frames a desktop shot as a phone', () => {
+    // A full-page desktop capture is tall too.
+    expect(isPortrait({ width: 1440, height: 4200 })).toBe(false);
+    expect(isPortrait({ width: 2880, height: 5600 })).toBe(false);
+    expect(isPortrait({ width: 1280, height: 1800 })).toBe(false);
+    // The agent's words decide first.
+    expect(isPortrait({ width: 1179, height: 2556 }, 'Light headline · desktop')).toBe(false);
+    expect(isPortrait({ width: 800, height: 6000 }, 'home-mobile.png')).toBe(true);
+  });
+
+  it('still frames phone screens', () => {
+    expect(isPortrait({ width: 1179, height: 2556 })).toBe(true); // 3x
+    expect(isPortrait({ width: 780, height: 1688 })).toBe(true); // 2x
+    expect(isPortrait({ width: 390, height: 3000 })).toBe(true); // 1x full page
+    expect(isPortrait({ width: 1179, height: 2556 }, 'Light · phone')).toBe(true);
+  });
 });
