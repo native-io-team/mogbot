@@ -27,6 +27,11 @@ export interface Palette {
   surfaceControl: string;
   surfaceControlHover: string;
   surfaceSelected: string;
+  /**
+   * The one meter's track (usage and context bars), the desk's
+   * `--meter-track`: see-through, so it shows on any surface it sits on.
+   */
+  meterTrack: string;
   /** Your own messages. Dark lifts them to the selected grey; light keeps them a quiet step off white, as iMessage's grey is. */
   surfaceBubble: string;
   /** The strongest text: titles, names, what must be read first. White in dark, near-black in light. */
@@ -142,6 +147,7 @@ const dark: Palette = {
   surfaceControl: '#292725',
   surfaceControlHover: '#31302d',
   surfaceSelected: '#3a3835',
+  meterTrack: 'rgba(255, 255, 255, 0.15)',
   surfaceBubble: '#3a3835',
   textStrong: '#ffffff',
   // A reply is read in near-white with a warm cast: a whole reply in the
@@ -218,6 +224,7 @@ const light: Palette = {
   surfaceControl: '#efede8',
   surfaceControlHover: '#e9e6e0',
   surfaceSelected: '#e3dfd8',
+  meterTrack: 'rgba(0, 0, 0, 0.1)',
   surfaceBubble: '#f1efeb',
   // The desk's ink (--color-ink-900, -800, -700, -600, -525).
   textStrong: '#1c1c1c',
@@ -502,6 +509,14 @@ export const squircle = (size: number) => Math.round(size * 0.28);
  * - `hero` 28: an empty state.
  * - `micro` 10: only the × on a tile too small for 12.
  */
+/**
+ * The one meter, the desk's `--meter-height` / `--meter-height-large`: a
+ * usage or context bar is 6pt and fully rounded (the hero's and a limit's
+ * 12pt), on `meterTrack`, filling in ink or the warning role. Never a
+ * 2-4pt hairline: those read as weak.
+ */
+export const meter = { height: 6, large: 12 } as const;
+
 export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, hero: 28 } as const;
 
 /**

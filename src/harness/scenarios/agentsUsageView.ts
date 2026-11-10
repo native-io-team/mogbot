@@ -7,6 +7,7 @@
  * fictional.
  */
 
+import { emit } from '@tauri-apps/api/event';
 import type { Scenario } from '../types';
 import { AGENTS_TAB, TEAM, messagesFor, now, overview } from './agents';
 
@@ -556,7 +557,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'two',
     'two accounts, 100% and 44%',
-    'The hero leads with the total: “All accounts”, a large “28% used across 2 Max accounts”, “Next refill in 2d 4h · sam@example.com, …”. ONE ordinary bar, 28% filled, no segments, then “Both on Max, so each counts the same.” Then “Accounts” with “Add …” at the right, two rows in order (1 sam@example.com In use, 2 Work), figures aligned, each with its own small bar; under the first a ticked “New work starts here”, under Work a “Use for new work” button, each with who used it this week. Then “Runs on” with one row per agent and its account in a menu button. Then “How agents use your limits”, a hugging three-option control and its one line.',
+    'The hero leads with the total: “All accounts”, a large “28% used across 2 Max accounts”, “Next refill in 2d 4h · sam@example.com, …”. ONE ordinary bar, 28% filled, no segments, then “Both on Max, so each counts the same.” Then “Accounts” with “Add …” at the right, two rows in order (1 sam@example.com In use, 2 Work), figures aligned, each with its own bar (6px, rounded, on a visible track). Every row the same height: under each name its plan and who used it this week. The first’s pill reads “Starts new work”; Work offers a quiet “Use for new work” in the action column just left of its chevron, lined up with the other rows’ columns; nothing floats under a row. Then “Runs on” with one row per agent and its account in a menu button. Then “How agents use your limits”, a hugging three-option control and its one line.',
     TWO,
     { account: 'default', looksRightWhen: PAGE }
   ),
@@ -570,7 +571,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'three',
     'three accounts',
-    'One bar filled to the mean of the three (Side project 95%, Work 78%, sam@example.com 39%), with the line saying how it is averaged. Three rows in order 1, 2, 3: In use (“New work starts here”), Next and Ready (each “Use for new work”).',
+    'One bar filled to the mean of the three (Side project 95%, Work 78%, sam@example.com 39%), with the line saying how it is averaged. Three rows in order 1, 2, 3: “Starts new work”, Next and Ready (each with “Use for new work” in the action column, aligned).',
     THREE,
     { account: 'a1work', looksRightWhen: PAGE }
   ),
@@ -672,4 +673,81 @@ export const agentsUsageViewScenarios: Scenario[] = [
       },
     },
   },
+  ...signInStates(),
 ];
+
+/**
+ * The sign-in dialog after the browser sign-in returns: the terminal's
+ * capture is played (`claude-connect-captured`), then the one check of which
+ * account it is answers (or never does, for "checking").
+ */
+function signInStates(): Scenario[] {
+  const states: Array<{
+    id: string;
+    title: string;
+    looksRightWhen: string;
+    check: unknown;
+    requires: string;
+  }> = [
+    {
+      id: 'checking',
+      title: 'checking which account it is',
+      looksRightWhen:
+        'A compact dialog (about 420px wide, no big empty body): centred, the Claude Code icon on a keycap with a small spinner at its corner, the account under it in muted ink, “Checking which account this is…”, one short secondary line, and Close at the bottom right. Same height as the done, same-account and failed states.',
+      check: () => new Promise(() => {}),
+      requires: '[data-testid="account-signin-checking"]',
+    },
+    {
+      id: 'done',
+      title: 'signed in, a new account',
+      looksRightWhen:
+        'The same compact layout as checking: the icon with a green tick at its corner, “Account 3 is signed in”, a line on where its usage shows, and Done. The dialog did not change size from checking.',
+      check: {},
+      requires: '[data-testid="account-signin-done"]',
+    },
+    {
+      id: 'same',
+      title: 'signed in as an account already here',
+      looksRightWhen:
+        'The same layout: the icon with an amber warning mark, “That’s an account already here”, the sentence naming sam@example.com and how to sign in as another, then “Remove it” (quiet) and “Try again with a different account”.',
+      check: { sameAs: 'default' },
+      requires: '[data-testid="account-signin-same"]',
+    },
+    {
+      id: 'failed',
+      title: 'signed in, the check failed',
+      looksRightWhen:
+        'The same layout: the amber mark, “Signed in, but not checked”, a line saying Usage will say if it is one already here, and Done.',
+      check: () => Promise.reject(new Error('not read')),
+      requires: '[data-testid="account-signin-failed"]',
+    },
+  ];
+  return states.map((st) => ({
+    id: `usage-signin-${st.id}`,
+    title: `Usage — adding an account: ${st.title}`,
+    looksRightWhen: st.looksRightWhen,
+    openSelector: AGENTS_TAB,
+    steps: [
+      ...OPEN,
+      { click: '[data-add-account="claude"]' },
+      { click: '.connect-modal-actions button:last-child' },
+    ],
+    requires: st.requires,
+    clipSelector: '.modal-frame-content',
+    viewport: { width: 1280, height: 900 },
+    mockEvents: true,
+    commands: {
+      ...commands(SIGNIN_CHANGED.accounts, SIGNIN_CHANGED.inv),
+      agents_account_add: { id: 'a5new', engine: 'claude', name: 'Account 3', named: true },
+      claude_connect_start: (args: Record<string, unknown>) => {
+        const sessionId = args.sessionId;
+        setTimeout(() => void emit('claude-connect-captured', { sessionId }), 300);
+        return null;
+      },
+      claude_connect_write: null,
+      claude_connect_resize: null,
+      claude_connect_close: null,
+      agents_usage_check_account: st.check,
+    },
+  }));
+}

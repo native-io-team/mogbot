@@ -22,7 +22,8 @@
  * @module components/agents/AccountSignIn
  */
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { CheckIcon, WarningIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
@@ -37,8 +38,15 @@ import {
   browserWarning,
   checkNewAccount,
 } from '../../lib/agentsUsage';
+import { ENGINE_ICON } from './UsageStack';
 
-type Phase = 'before' | 'terminal' | 'checking' | 'same';
+/**
+ * `checking`, `done`, `same` and `failed` are one status card each, drawn
+ * by `SignInStatus` in one compact, fixed-height layout (the engine's icon
+ * with the state's mark, the account, one line, one hint, the actions), so
+ * the dialog doesn't jump from one to the next.
+ */
+type Phase = 'before' | 'terminal' | 'checking' | 'done' | 'same' | 'failed';
 
 export function AccountSignIn({
   account,
@@ -80,10 +88,11 @@ export function AccountSignIn({
         setPhase('same');
         return;
       }
+      setPhase('done');
     } catch {
-      // Not read this time: Usage says so once it is.
+      // Signed in, not read this time: said plainly, and Usage says so once it is.
+      setPhase('failed');
     }
-    onDone();
   };
 
   if (account.thisMac) {
@@ -102,12 +111,13 @@ export function AccountSignIn({
     );
   }
 
+  const status = phase === 'checking' || phase === 'done' || phase === 'same' || phase === 'failed';
   return (
     <ModalFrame
       isOpen
       onClose={onDone}
       title={`Sign in “${account.name}” to ${label}`}
-      className={phase === 'terminal' ? 'agents-panel-terminal-modal' : undefined}
+      className={phase === 'terminal' ? 'agents-panel-terminal-modal' : 'account-signin-modal'}
     >
       {phase === 'before' ? (
         <div className="connect-modal-email-phase">
@@ -140,33 +150,72 @@ export function AccountSignIn({
             <Button variant="secondary" onClick={onDone}>
               Later
             </Button>
-            <Button variant="strong" onClick={() => setPhase('terminal')}>
+            <Button
+              variant="strong"
+              data-testid="account-signin-continue"
+              onClick={() => setPhase('terminal')}
+            >
               Continue
             </Button>
           </div>
         </div>
-      ) : phase === 'checking' ? (
-        <div className="connect-modal-email-phase">
-          <p className="connect-modal-instructions">
-            <Spinner size="sm" /> Checking which account this is…
-          </p>
-        </div>
-      ) : phase === 'same' ? (
-        <div className="connect-modal-email-phase" data-testid="account-signin-same">
-          <p className="connect-modal-instructions">
-            {addedSameAccount(account.engine, twin ?? 'another account here')}
-          </p>
-          <div className="connect-modal-actions">
-            {onRemove && (
-              <Button variant="ghost" onClick={onRemove}>
-                Remove it
+      ) : status ? (
+        phase === 'checking' ? (
+          <SignInStatus
+            phase="checking"
+            account={account}
+            line="Checking which account this is…"
+            hint={`Signed in. Reading it once from ${label}, to catch an account that’s already here.`}
+            actions={
+              <Button variant="secondary" onClick={onDone}>
+                Close
               </Button>
-            )}
-            <Button variant="strong" onClick={restart}>
-              {TRY_AGAIN_DIFFERENT}
-            </Button>
-          </div>
-        </div>
+            }
+          />
+        ) : phase === 'done' ? (
+          <SignInStatus
+            phase="done"
+            account={account}
+            line={`${account.name} is signed in`}
+            hint="It’s a new account, so it adds room. Its usage shows in Usage after its first reading."
+            actions={
+              <Button variant="strong" autoFocus onClick={onDone}>
+                Done
+              </Button>
+            }
+          />
+        ) : phase === 'same' ? (
+          <SignInStatus
+            phase="same"
+            account={account}
+            line="That’s an account already here"
+            hint={addedSameAccount(account.engine, twin ?? 'another account here')}
+            actions={
+              <>
+                {onRemove && (
+                  <Button variant="ghost" onClick={onRemove}>
+                    Remove it
+                  </Button>
+                )}
+                <Button variant="strong" autoFocus onClick={restart}>
+                  {TRY_AGAIN_DIFFERENT}
+                </Button>
+              </>
+            }
+          />
+        ) : (
+          <SignInStatus
+            phase="failed"
+            account={account}
+            line="Signed in, but not checked"
+            hint="Which account this is couldn’t be read just now. If it’s one already here, Usage says so once it reads it."
+            actions={
+              <Button variant="strong" autoFocus onClick={onDone}>
+                Done
+              </Button>
+            }
+          />
+        )
       ) : (
         <div className="connect-modal-terminal-phase">
           <p className="connect-modal-instructions">
@@ -216,5 +265,57 @@ export function AccountSignIn({
         </div>
       )}
     </ModalFrame>
+  );
+}
+
+/**
+ * After the sign-in returns: one compact card, the same for every outcome.
+ * The engine's icon carries the state's mark (a spinner while checking, a
+ * tick, a warning), then the account, one line saying what happened, one
+ * hint, and the actions. Fixed height, so changing state never moves the
+ * dialog.
+ */
+function SignInStatus({
+  phase,
+  account,
+  line,
+  hint,
+  actions,
+}: {
+  phase: 'checking' | 'done' | 'same' | 'failed';
+  account: UsageAccount;
+  line: string;
+  hint: string;
+  actions: ReactNode;
+}) {
+  const Icon = ENGINE_ICON[account.engine];
+  return (
+    <div
+      className="account-signin__status"
+      data-phase={phase}
+      data-testid={phase === 'same' ? 'account-signin-same' : `account-signin-${phase}`}
+    >
+      <div className="account-signin__status-body" role="status" aria-live="polite">
+        <span className="account-signin__badge" aria-hidden>
+          <Icon size={22} />
+          <span className="account-signin__mark">
+            {phase === 'checking' ? (
+              <Spinner size="sm" label="Checking" />
+            ) : phase === 'done' ? (
+              <CheckIcon size={11} />
+            ) : (
+              <WarningIcon size={11} />
+            )}
+          </span>
+        </span>
+        {/* The title names the account; its email only when there is one. */}
+        {account.email && account.email !== account.name && (
+          <span className="account-signin__account">{account.email}</span>
+        )}
+        <p className="account-signin__line">{line}</p>
+        <p className="account-signin__hint">{hint}</p>
+      </div>
+      <div className="account-signin__actions">{actions}</div>
+    </div>
   );
 }

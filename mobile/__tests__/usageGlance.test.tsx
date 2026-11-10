@@ -118,7 +118,7 @@ describe('usage at a glance, on the phone', () => {
       screen.getByRole('progressbar', { includeHiddenElements: true }).props.accessibilityValue
     ).toMatchObject({ now: 40, text: '40% used' });
     expect(screen.getByText(glance.total.refill!.in, { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.getByRole('button').props.accessibilityLabel).toMatch(/Refills in /);
+    expect(screen.getByRole('button').props.accessibilityLabel).toMatch(/ · refills in /);
     expect(screen.queryByText('Plenty of room')).toBeNull();
     await fireEvent.press(screen.getByRole('button'));
     expect(onPress).toHaveBeenCalled();

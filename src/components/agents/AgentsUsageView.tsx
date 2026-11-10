@@ -11,8 +11,9 @@
  * 2. **Nearly out everywhere**: one calm bar with the options.
  * 3. **Accounts**: one row each, in the order turns try them (its place,
  *    name, a small bar, what it adds, In use / Next, refill), opening its
- *    page; under it who uses it and "Use for new work", or "New work starts
- *    here" on the one in use.
+ *    page; its plan and who used it under the name, "Starts new work" in the
+ *    pill of the one new work starts on, and "Use for new work" in an action
+ *    column on the others (`AccountRow`).
  * 3b. **Runs on**: each agent with the account it runs on (any, in order, or
  *    one only), changed in place (`agents_update` with `account`).
  * 4. **How agents use your limits**: Normal / Save my limits / Use it all

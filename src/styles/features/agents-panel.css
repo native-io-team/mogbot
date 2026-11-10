@@ -457,3 +457,112 @@ button.dashboard-card-row {
 .connect-modal-instructions strong {
   color: var(--text-primary);
 }
+
+/* --------------------------------------------- an account's sign-in */
+
+/* Every step but the terminal: a compact dialog, the width of a confirm,
+   so nothing waits in a big empty sheet. */
+:root {
+  --account-signin-width: 420px; /* css-ok: a compact dialog, narrower than the 480px default */
+  --account-signin-badge: var(--spacing-2xl);
+  --account-signin-mark: var(--spacing-lg);
+  /* One height for checking, done, same account and failed, so the dialog
+     doesn't jump when one becomes the next. */
+  --account-signin-status-height: 10.5rem;
+}
+
+.modal-frame-content.account-signin-modal {
+  width: var(--account-signin-width);
+}
+
+.account-signin__status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
+}
+
+.account-signin__status-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  min-height: var(--account-signin-status-height);
+  padding-top: var(--spacing-sm);
+  text-align: center;
+}
+
+/* The engine's icon on a keycap, the state's mark at its corner. */
+.account-signin__badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--account-signin-badge);
+  height: var(--account-signin-badge);
+  margin-bottom: var(--spacing-sm);
+  color: var(--text-primary);
+  background: var(--tabs-key-surface);
+  border-radius: var(--radius-control);
+  box-shadow: var(--tabs-key-shadow);
+}
+
+.account-signin__mark {
+  position: absolute;
+  right: calc(var(--spacing-xs) * -1);
+  bottom: calc(var(--spacing-xs) * -1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--account-signin-mark);
+  height: var(--account-signin-mark);
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 var(--border-width-default) var(--border-subtle);
+}
+
+/* Status, never the accent: done in the success role, a problem in warning. */
+.account-signin__status[data-phase='checking'] .account-signin__mark {
+  color: var(--text-primary);
+}
+
+.account-signin__status[data-phase='done'] .account-signin__mark {
+  color: var(--accent-success);
+}
+
+.account-signin__status:is([data-phase='same'], [data-phase='failed']) .account-signin__mark {
+  color: var(--accent-warning);
+}
+
+.account-signin__account {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-signin__line {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-label);
+}
+
+.account-signin__hint {
+  max-width: 38ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+}
+
+.account-signin__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--button-gap);
+}

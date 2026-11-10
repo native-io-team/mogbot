@@ -11,7 +11,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usageSheet';
-import { depthOf, iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
+import { depthOf, iconSize, meter as meterSize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { T } from './ui';
 
 /** The warning role from 80% used and when used up (it refills by itself: never error red). */
@@ -272,13 +272,12 @@ const useStyles = makeStyles((colors) => ({
   quietRow: { gap: space['2xs'], paddingHorizontal: space.lg, paddingVertical: space.md },
   divided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
   ring: { alignItems: 'center', justifyContent: 'center', padding: space['3xs'] },
-  // The site's meter: 8pt, so a share reads at a glance across the room.
+  // The one meter (theme `meter`, the desk's `--meter-*`), on its
+  // see-through track, which shows on a dark group as on a light one.
   track: {
-    height: space.sm,
+    height: meterSize.height,
     borderRadius: radius.pill,
-    // Selected, not control: on a dark group the control grey is a shade
-    // apart, and left the empty part of a meter invisible.
-    backgroundColor: colors.surfaceSelected,
+    backgroundColor: colors.meterTrack,
     overflow: 'hidden',
   },
   fill: { height: '100%', borderRadius: radius.pill },

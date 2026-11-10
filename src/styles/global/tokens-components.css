@@ -558,6 +558,27 @@
   --progress-indicator: var(--status-running);
 }
 
+/* One meter, everywhere usage or context is drawn (the sidebar glance, the
+   chat header's popover, the Usage page's hero and rows, an account's
+   limits; the phone's `theme.meter` matches): a confident, fully rounded
+   bar on a track you can see in both themes, filling in ink, the warning
+   role from 80% used. Never the accent. Hairline 2-4px bars read as weak. */
+:root {
+  --meter-height: var(--space-06);
+  --meter-height-large: var(--space-12);
+  --meter-radius: var(--radius-pill);
+  /* A see-through track, so it shows on any surface it sits on: a card, the
+     sidebar, a selected row (an opaque grey matched the selected sidebar
+     row and vanished). */
+  --meter-track: var(--color-white-o15);
+  --meter-fill: var(--text-primary);
+  --meter-fill-high: var(--accent-warning);
+}
+
+:root[data-theme='light'] {
+  --meter-track: var(--color-black-o10);
+}
+
 /* Component roles derived from the accent. Declared on [data-accent-scope] as
    well as :root for the same reason as the accent block in
    tokens-semantic.css: a scoped accent must re-derive these, or a primary

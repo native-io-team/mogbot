@@ -25,7 +25,6 @@ import { useState, type CSSProperties, type ReactNode, type Ref } from 'react';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
-  CheckIcon,
   ChevronRightIcon,
   ClaudeIcon,
   CodexIcon,
@@ -54,6 +53,7 @@ import {
 } from '../../lib/agentsUsage';
 import {
   NEW_WORK_HERE,
+  NEW_WORK_PILL,
   USE_THIS_ONE_NOW,
 } from '../../../packages/companion-protocol/src/cardWords';
 import {
@@ -169,7 +169,16 @@ export function roomWords(k: StackKey): string {
 
 /* ------------------------------------------------------- an account row */
 
-/** One account in the overview's list: its place, name, room, state and refill; opens its page. */
+/**
+ * One account in the overview's list: its place, name, room, state and
+ * refill; opens its page. Every row has the same two lines and the same
+ * columns: under the name, its plan and who used it this week; the account
+ * new work starts on says so in its state pill ("Starts new work"); every
+ * other one that can take it offers "Use for new work" in the action column,
+ * just left of the chevron, where a signed-out row's "Sign in" goes too.
+ * The actions sit beside the row's button, never inside it, so each is its
+ * own control for the keyboard and VoiceOver.
+ */
 export function AccountRow({
   k,
   onOpen,
@@ -189,10 +198,34 @@ export function AccountRow({
   const Icon = ENGINE_ICON[k.engine];
   const refill = k.refillLimit?.countdown;
   const users = usersLine(k);
-  const current = k.state === 'in_use';
-  const foot = users || (onUse && (current || k.canUse));
+  const startsHere = Boolean(onUse) && k.state === 'in_use';
+  const second = [k.detail[0], usersLine(k, { short: true })].filter(Boolean).join(' · ');
+  const secondFull = [k.detail[0], users].filter(Boolean).join(' · ');
+  const action =
+    k.state === 'off' && onSignIn ? (
+      <Button
+        variant="secondary"
+        size="compact"
+        className="usage-row__action"
+        onClick={onSignIn}
+        aria-label={`Sign in to ${k.name}`}
+      >
+        Sign in
+      </Button>
+    ) : onUse && !startsHere && k.canUse ? (
+      <Button
+        variant="ghost"
+        size="compact"
+        className="usage-row__action"
+        data-testid="usage-use-for-new-work"
+        onClick={onUse}
+        aria-label={`${USE_THIS_ONE_NOW}: ${k.name}`}
+      >
+        {USE_THIS_ONE_NOW}
+      </Button>
+    ) : null;
   return (
-    <li className="usage-row__item" data-current={(onUse && current) || undefined}>
+    <li className="usage-row__item" data-current={startsHere || undefined}>
       <button
         type="button"
         className="usage-row"
@@ -202,8 +235,8 @@ export function AccountRow({
         data-unread={k.used === null || undefined}
         data-account={k.id}
         aria-label={`${k.position}. ${k.name}, ${roomWords(k)}, ${k.stateLabel}${
-          refill ? `, refills in ${refill}` : ''
-        }. Open`}
+          startsHere ? `, ${NEW_WORK_HERE.toLowerCase()}` : ''
+        }${refill ? `, refills in ${refill}` : ''}${users ? `. ${users}` : ''}. Open`}
         onClick={onOpen}
       >
         <span className="usage-cap" aria-hidden>
@@ -214,7 +247,10 @@ export function AccountRow({
             <Icon size={13} aria-hidden />
             <span className="usage-row__name-text">{k.name}</span>
           </span>
-          {k.detail.length > 0 && <span className="usage-row__detail">{k.detail[0]}</span>}
+          <span className="usage-row__detail" title={secondFull || undefined}>
+            {/* Always a second line, so every row is the same height. */}
+            {second || '\u00a0'}
+          </span>
         </span>
         <span className="usage-row__bar" aria-hidden>
           {k.used !== null && (
@@ -229,7 +265,7 @@ export function AccountRow({
         <span className="usage-row__state">
           {/* The row says it short; its refill chip says when, its page in full. */}
           <StatusPill tone={PILL[k.state]}>
-            {k.state === 'out' ? OUT_OF_USAGE : k.stateLabel}
+            {startsHere ? NEW_WORK_PILL : k.state === 'out' ? OUT_OF_USAGE : k.stateLabel}
           </StatusPill>
         </span>
         <span className="usage-row__refill">
@@ -240,40 +276,12 @@ export function AccountRow({
             </span>
           )}
         </span>
+        {/* The action column, held open on every row of a list that has an
+            action, so the columns line up whichever rows carry one. */}
+        <span className="usage-row__slot" aria-hidden />
         <ChevronRightIcon size={14} className="usage-row__chevron" aria-hidden />
       </button>
-      {k.state === 'off' && onSignIn && (
-        <Button
-          variant="secondary"
-          size="compact"
-          className="usage-row__sign-in"
-          onClick={onSignIn}
-          aria-label={`Sign in to ${k.name}`}
-        >
-          Sign in
-        </Button>
-      )}
-      {foot && (
-        <div className="usage-row__foot">
-          <span className="usage-row__users">{users}</span>
-          {onUse && current && (
-            <span className="usage-row__current" data-testid="usage-new-work-here">
-              <CheckIcon size={12} aria-hidden />
-              {NEW_WORK_HERE}
-            </span>
-          )}
-          {onUse && !current && k.canUse && (
-            <Button
-              variant="secondary"
-              size="compact"
-              onClick={onUse}
-              aria-label={`${USE_THIS_ONE_NOW}: ${k.name}`}
-            >
-              {USE_THIS_ONE_NOW}
-            </Button>
-          )}
-        </div>
-      )}
+      {action}
     </li>
   );
 }

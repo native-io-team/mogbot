@@ -459,14 +459,14 @@ export function glanceUsed(glance: Pick<UsageGlance, 'total' | 'tone' | 'row'>):
         ? row.refill.charAt(0).toLowerCase() + row.refill.slice(1)
         : null;
   const of = reading ? `${figure} ${total.across}`.trim() : figure;
-  const detail = [
-    of,
-    reading ? row.count : null,
-    reading ? row.notRead : null,
-    saysWhen ? null : row.refill,
-  ]
+  // One sentence, each thing said once: "54% used across 2 accounts ·
+  // refills in 3d 18h". The count is never added: "across 2 accounts"
+  // already says it (the owner read "2 accounts" twice), and a lone
+  // account's figure says "this week" instead.
+  const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+  const detail = [of, reading ? row.notRead : null, saysWhen || !row.refill ? null : lower(row.refill)]
     .filter(Boolean)
-    .join('. ');
+    .join(' · ');
   const tone: GlanceUsed['tone'] =
     used === null ? 'quiet' : used >= 100 || out ? 'out' : used >= HIGH_USED ? 'high' : 'calm';
   return {
@@ -532,15 +532,22 @@ export function runsOnRows(
  * Who an account is for, under its row: who runs only on it, and who used
  * it this week. Absent with neither.
  */
-export function usersLine(k: Pick<StackKey, 'pinnedBy' | 'usedBy'>): string | null {
+export function usersLine(
+  k: Pick<StackKey, 'pinnedBy' | 'usedBy'>,
+  /** A row's second line: "Used by Chief of Staff and 9 more this week". */
+  opts: { short?: boolean } = {}
+): string | null {
   const pinned =
     k.pinnedBy.length > 0
       ? `Only ${list(k.pinnedBy)} ${k.pinnedBy.length === 1 ? 'runs' : 'run'} here`
       : null;
   const others = k.usedBy.filter((n) => !k.pinnedBy.includes(n));
+  // Short: two names read whole, three or more as the first "and N more".
+  const keep = opts.short ? 1 : 3;
+  const most = opts.short ? 2 : 3;
   const who =
-    others.length > 3
-      ? `${others.slice(0, 3).join(', ')} and ${others.length - 3} more`
+    others.length > most
+      ? `${others.slice(0, keep).join(', ')} and ${others.length - keep} more`
       : list(others);
   const used = others.length > 0 ? `${pinned ? 'also used by' : 'Used by'} ${who} this week` : null;
   return [pinned, used].filter(Boolean).join(' · ') || null;

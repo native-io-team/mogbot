@@ -69,6 +69,12 @@ export const IMPORT_CHOICE_BRING = 'Bring my agents';
 export const USE_THIS_ONE_NOW = 'Use for new work';
 /** Beside the account new work starts on: the one "Use for new work" made first. */
 export const NEW_WORK_HERE = 'New work starts here';
+/**
+ * The same, as a row's state pill (desk Usage rows, phone account rows): the
+ * account new work starts on is marked where its state is, not on a line of
+ * its own floated under the row.
+ */
+export const NEW_WORK_PILL = 'Starts new work';
 
 /** "Runs on": the default, the team's order. */
 export const RUNS_ON_ANY = 'Any account';
