@@ -65,10 +65,14 @@ export function withTimeout<T>(p: Promise<T>, ms: number, message: string): Prom
   });
 }
 
-/** What a failed start offers: try again, and the agents' browser by name. */
-export function retryWays(view: SigninView): { label: string; way?: SigninVia }[] {
+/**
+ * What a failed start offers: try again, and the agents' browser by name.
+ * A step-in is always the agent's own tab: just Try again.
+ */
+export function retryWays(view: SigninView, stepIn = false): { label: string; way?: SigninVia }[] {
   if (view.phase !== 'ended' || !view.retry) return [];
   const ways: { label: string; way?: SigninVia }[] = [{ label: 'Try again' }];
+  if (stepIn) return ways;
   // The Mac said the agents' browser isn't there: don't offer it.
   if (!/agents.? browser isn.?t on/.test(view.message)) {
     ways.push({ label: 'Try the agents’ browser', way: 'agents_browser' });
@@ -95,7 +99,25 @@ export function signinRouteProblem(
 }
 
 /** How the screen ended. */
-export type EndReason = 'signed_in' | 'stopped' | 'ended' | 'failed';
+export type EndReason = 'signed_in' | 'handed_back' | 'stopped' | 'ended' | 'failed';
+
+/** This screen is in an agent's own tab for its step-in card (`agents.stepInBegin`). */
+export const isStepIn = (view: SigninView): boolean => view.phase === 'live' && !!view.begun.stepIn;
+
+/** What the screen's buttons say: a step-in's Done is Hand back. */
+export const doneLabel = (stepIn: boolean) => (stepIn ? 'Hand back' : 'Done');
+
+/** The line once a step-in is handed back. */
+export const handedBackLine = (domain: string) =>
+  `Handed back. Your agent carries on from ${domain}, and never saw what you typed.`;
+
+/**
+ * Hand back can be pressed whenever the tab is showing or outside the step:
+ * the page needn't be on the site for the agent to have it back.
+ */
+export function canHandBack(view: SigninView): boolean {
+  return view.phase === 'live' && view.check !== 'checking';
+}
 
 export type SigninView =
   /** Asking the Mac to open the page. */
@@ -187,6 +209,14 @@ export function reduce(view: SigninView, e: SigninEvent): SigninView {
     case 'checking':
       return { ...view, check: 'checking', note: null };
     case 'outcome':
+      if (e.outcome === 'handed_back') {
+        return {
+          phase: 'ended',
+          reason: 'handed_back',
+          message: handedBackLine(view.begun.domain),
+          domain: view.begun.domain,
+        };
+      }
       if (e.outcome === 'signed_in') {
         return {
           phase: 'ended',
@@ -203,7 +233,8 @@ export function reduce(view: SigninView, e: SigninEvent): SigninView {
 export function statusLine(view: SigninView): string | null {
   if (view.phase === 'starting') return 'Opening it on your Mac…';
   if (view.phase === 'ended') return view.message;
-  if (view.check === 'checking') return 'Checking on your Mac…';
+  if (view.check === 'checking')
+    return view.begun.stepIn ? 'Handing it back…' : 'Checking on your Mac…';
   if (view.switching) return 'Opening it in a plain Chrome window on your Mac…';
   if (view.frame?.state === 'blocked')
     return `${view.frame.blocked ?? 'This site won’t sign in to this window.'} Sign in another way below.`;
@@ -211,6 +242,8 @@ export function statusLine(view: SigninView): string | null {
     return 'It’s still asking you to sign in. Finish here, then Done.';
   if (view.check === 'unknown')
     return 'Your Mac couldn’t tell whether you’re signed in. If you are, hand it over anyway.';
+  if (view.frame?.state === 'outside' && view.begun.stepIn)
+    return `That’s outside this step${view.frame.host ? ` (${view.frame.host})` : ''}, so it isn’t shown. Go back, or Hand back if you’re done.`;
   if (view.frame?.state === 'outside')
     return `That’s outside the sign-in${view.frame.host ? ` (${view.frame.host})` : ''}, so it isn’t shown. Go back to carry on.`;
   return view.note;

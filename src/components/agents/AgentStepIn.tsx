@@ -8,6 +8,8 @@
  * - **While you're in it**: the card says so with Show window, and one bar
  *   above the composer, "You're in <Agent>'s browser · Hand back", with the
  *   site and when it hands back by itself. ⌘K "Hand <Agent> its browser back".
+ *   From the phone, both name the phone instead and drop Show window (its
+ *   window stays parked); Hand back here ends it on the phone too.
  * - **Closed**: one line (Handed back, Not now, or why it ended by itself).
  *
  * @module components/agents/AgentStepIn
@@ -28,6 +30,7 @@ import {
   handBackAgentBrowser,
   showStepInWindow,
   STEP_IN_NOTE,
+  stepInNowNote,
   stepInBarDetail,
   stepInBarTitle,
   stepIntoAgentBrowser,
@@ -90,20 +93,22 @@ export function StepInCard({
           !pending
             ? undefined
             : inNow
-              ? 'You’re in its browser now. Hand back when you’re done.'
+              ? stepInNowNote(card.onPhone)
               : STEP_IN_NOTE
         }
         actions={
           !pending ? undefined : inNow ? (
             <>
-              <Button
-                tabIndex={0}
-                variant="secondary"
-                disabled={busy}
-                onClick={() => void run(() => showStepInWindow(agentId))}
-              >
-                Show window
-              </Button>
+              {!card.onPhone && (
+                <Button
+                  tabIndex={0}
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => void run(() => showStepInWindow(agentId))}
+                >
+                  Show window
+                </Button>
+              )}
               <Button
                 tabIndex={0}
                 variant="strong"
@@ -163,6 +168,7 @@ export function StepInBar({
   const requestId = active?.requestId;
   // Read before any hook, so nothing after them touches `active`.
   const detail = active?.stepIn ? stepInBarDetail(active.stepIn, now) : null;
+  const onPhone = active?.stepIn?.onPhone;
   const { busy, run } = useStepInAction();
   const handBack = useCallback(() => {
     if (requestId) void run(() => handBackAgentBrowser(agent.id, requestId));
@@ -189,17 +195,19 @@ export function StepInBar({
       state="active"
       icon={<GlobeIcon size={12} />}
       data-testid="agent-step-in-bar"
-      title={stepInBarTitle(agent.name)}
+      title={stepInBarTitle(agent.name, onPhone)}
       detail={detail}
       actions={
         <>
-          <TextButton
-            tabIndex={0}
-            disabled={busy}
-            onClick={() => void run(() => showStepInWindow(agent.id))}
-          >
-            Show window
-          </TextButton>
+          {!onPhone && (
+            <TextButton
+              tabIndex={0}
+              disabled={busy}
+              onClick={() => void run(() => showStepInWindow(agent.id))}
+            >
+              Show window
+            </TextButton>
+          )}
           <Button size="compact" variant="secondary" disabled={busy} onClick={handBack}>
             Hand back
           </Button>

@@ -1631,6 +1631,7 @@ impl Backend for Stub {
                 idle_seconds: 300,
                 via: Via::AgentsBrowser,
                 frame_gap_ms: 30,
+                step_in: false,
             })
             .unwrap(),
             Op::Fallback { .. } => serde_json::to_value(Begun {
@@ -1640,6 +1641,7 @@ impl Backend for Stub {
                 idle_seconds: 300,
                 via: Via::MacWindow,
                 frame_gap_ms: 150,
+                step_in: false,
             })
             .unwrap(),
             Op::Frame { session_id, .. } if session_id == "outside" => {
@@ -1683,6 +1685,19 @@ impl Backend for Stub {
                 blocked: None,
             })
             .unwrap(),
+            Op::StepIn { .. } => serde_json::to_value(Begun {
+                session_id: "stepin_0123".into(),
+                domain: "okta.com".into(),
+                title: "approve the Okta sign-in".into(),
+                idle_seconds: 300,
+                via: Via::AgentsBrowser,
+                frame_gap_ms: 30,
+                step_in: true,
+            })
+            .unwrap(),
+            Op::Done { session_id, .. } if session_id == "stepin_0123" => {
+                serde_json::json!({ "outcome": Outcome::HandedBack })
+            }
             Op::Done { anyway, .. } => serde_json::json!({
                 "outcome": if anyway { Outcome::SignedIn } else { Outcome::SignedOut }
             }),

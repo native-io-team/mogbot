@@ -1,14 +1,22 @@
 /**
  * "Needs you in its browser" on the phone (desktop `agents/step_in.rs`):
- * Step in happens only at the Mac, so the card offers Not now and says
- * where to go; never an Allow (the Mac refuses one with "Step in on your
- * Mac"). While the user is in the tab at the Mac it offers nothing.
+ * on a Mac that lets the phone into the tab (`stepIn.phone`), Step in opens
+ * the sign-in screen on the agent's own tab; on an older Mac Step in happens
+ * only there, so the card offers Not now and says where to go. Never an
+ * Allow (the Mac refuses one with "Step in on your Mac"). While the user is
+ * in the tab, here or at the Mac, it offers nothing.
  */
 
 import type { AgentMessage, Approval } from '@shipstudio/companion-protocol';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { ARM_MS, ApprovalCard } from '../src/components/ApprovalCard';
-import { STEP_IN_AT_MAC, STEP_IN_ON_YOUR_MAC, cardOutcome } from '../src/lib/agents';
+import {
+  STEP_IN_AT_MAC,
+  STEP_IN_FROM_HERE,
+  STEP_IN_ON_YOUR_MAC,
+  cardOutcome,
+  stepInOnPhone,
+} from '../src/lib/agents';
 import { askAction } from '../src/lib/catchUp';
 import { setApp } from '../src/lib/store';
 import { agent } from './helpers';
@@ -28,7 +36,11 @@ jest.mock('react-native-reanimated', () => {
 });
 jest.mock('expo-haptics', () => ({}));
 // The loops ask whether their screen is showing (lib/moving.ts).
-jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({
+  useIsFocused: () => true,
+  router: { push: (...a: unknown[]) => mockPush(...a) },
+}));
 jest.mock('../src/lib/haptics', () => ({
   haptic: {
     light: jest.fn(),
@@ -70,7 +82,49 @@ const message = (approval: Approval): AgentMessage => ({
 beforeEach(() => {
   jest.useFakeTimers();
   mockAnswer.mockClear();
-  setApp({ link: { kind: 'connected' } as never });
+  mockPush.mockClear();
+  setApp({ link: { kind: 'connected' } as never, welcome: null });
+});
+
+it('on a Mac that lets the phone in, Step in opens the agent’s tab here', async () => {
+  setApp({
+    welcome: { methods: ['agents.stepInBegin'], features: ['stepIn.phone'] } as never,
+  });
+  const a = stepIn();
+  await render(
+    <ApprovalCard
+      message={message(a)}
+      approval={a}
+      agent={agent({ id: 'browse' })}
+      onError={() => {}}
+    />
+  );
+  await act(() => jest.advanceTimersByTime(ARM_MS + 50));
+  expect(screen.getByText(STEP_IN_FROM_HERE)).toBeTruthy();
+  expect(screen.queryByText('Allow')).toBeNull();
+  await fireEvent.press(screen.getByText('Step in'));
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/signin',
+    params: { agentId: 'browse', requestId: 'req_stepin', stepIn: '1' },
+  });
+  // Step in answers nothing by itself: the Mac holds the tab when the screen asks.
+  expect(mockAnswer).not.toHaveBeenCalled();
+});
+
+it('while a phone is in the tab, it names the phone and offers nothing', async () => {
+  const a = stepIn({ inSince: 1, until: 2, onPhone: 'Sam’s iPhone' });
+  await render(
+    <ApprovalCard
+      message={message(a)}
+      approval={a}
+      agent={agent({ id: 'browse' })}
+      onError={() => {}}
+    />
+  );
+  await act(() => jest.advanceTimersByTime(ARM_MS + 50));
+  expect(screen.getByText(stepInOnPhone('Sam’s iPhone'))).toBeTruthy();
+  expect(screen.queryByText('Step in')).toBeNull();
+  expect(screen.queryByText('Not now')).toBeNull();
 });
 
 it('offers Not now and says Step in is on the Mac; never an Allow', async () => {

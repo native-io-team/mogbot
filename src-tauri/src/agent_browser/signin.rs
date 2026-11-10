@@ -71,6 +71,10 @@ pub struct SigninWindow {
     /// The card's request id (what owns the window).
     pub key: String,
     pub agent_id: String,
+    /// The agent's own tab, held for a step-in from the phone
+    /// (`agent_browser::step_in`), not a window of the sign-in's: ending it
+    /// stops the pictures and leaves the tab where it is.
+    borrowed: bool,
     state: Mutex<State>,
 }
 
@@ -138,6 +142,7 @@ impl SigninWindow {
         Ok(Arc::new(SigninWindow {
             key: key.to_string(),
             agent_id: agent_id.to_string(),
+            borrowed: false,
             state: Mutex::new(State::Agents {
                 svc,
                 tab,
@@ -146,6 +151,36 @@ impl SigninWindow {
                 checked: None,
             }),
         }))
+    }
+
+    /// The phone steps into `agent_id`'s own tab `tab`, already held for
+    /// card `key` (`step_in::begin_for_phone`): pictures from its
+    /// screencast, input as CDP events, its window left parked. The agent
+    /// isn't kept out of its other tabs (only the held one is refused).
+    pub fn borrow(
+        key: &str,
+        agent_id: &str,
+        svc: Arc<Service>,
+        tab: Tab,
+    ) -> Result<Arc<SigninWindow>, String> {
+        let slot = svc.watch(&tab)?;
+        Ok(Arc::new(SigninWindow {
+            key: key.to_string(),
+            agent_id: agent_id.to_string(),
+            borrowed: true,
+            state: Mutex::new(State::Agents {
+                svc,
+                tab,
+                slot,
+                last: None,
+                checked: None,
+            }),
+        }))
+    }
+
+    /// The agent's own tab, held for a step-in.
+    pub fn borrowed(&self) -> bool {
+        self.borrowed
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
@@ -330,6 +365,9 @@ impl SigninWindow {
     /// profile opens in an ordinary window. `for_phone`: refused unless the
     /// phone can drive it (both permissions on).
     pub fn go_plain(&self, url: &str, for_phone: bool) -> Result<(), String> {
+        if self.borrowed {
+            return Err("This is the agent's own tab: there's no other way in from here.".into());
+        }
         if for_phone && !super::plain::phone_can_drive() {
             return Err(super::plain::AT_THE_MAC.into());
         }
@@ -358,6 +396,13 @@ impl SigninWindow {
     /// The window closed under it (agents mode).
     pub fn gone(&self) -> bool {
         match &*self.state() {
+            State::Agents { svc, tab, .. } if self.borrowed => {
+                svc.dead()
+                    || !svc
+                        .tabs_of(&Owner::Agent(self.agent_id.clone()))
+                        .iter()
+                        .any(|t| t.target_id == tab.target_id)
+            }
             State::Agents { svc, .. } => {
                 svc.dead() || !svc.has_owner(&Owner::Signin(self.key.clone()))
             }
@@ -371,6 +416,9 @@ impl SigninWindow {
     /// closed first, so its cookies are saved and the agents' Chrome comes
     /// back to read them.
     pub fn check(&self, probe: &str) -> Option<crate::agents::browser::Landed> {
+        if self.borrowed {
+            return self.location();
+        }
         let plain = matches!(&*self.state(), State::Plain { .. });
         if plain {
             let mut st = self.state();
@@ -410,11 +458,15 @@ impl SigninWindow {
         let mut st = self.state();
         if let State::Agents { svc, tab, .. } = &*st {
             svc.unwatch(tab);
-            svc.close_tab(tab);
+            if !self.borrowed {
+                svc.close_tab(tab);
+            }
         }
         *st = State::Closed;
         drop(st);
-        note(&self.key, None);
+        if !self.borrowed {
+            note(&self.key, None);
+        }
     }
 }
 

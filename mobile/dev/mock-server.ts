@@ -1972,7 +1972,15 @@ export function createMockServer(opts: MockOptions = {}) {
   /** Signing in on the Mac's Chrome from the phone: one at a time. Nothing typed is kept. */
   const signins = new Map<
     string,
-    { agentId: string; requestId: string; inputs: number; seq: number; via: string }
+    {
+      agentId: string;
+      requestId: string;
+      inputs: number;
+      seq: number;
+      via: string;
+      /** A step-in card's tab (`agents.stepInBegin`): Done is Hand back. */
+      stepIn?: boolean;
+    }
   >();
   const signinShot = signinPage().toString('base64');
   const loginCardOf = (agentId: string, requestId: string) =>
@@ -2739,6 +2747,42 @@ export function createMockServer(opts: MockOptions = {}) {
         frameGapMs: 250,
       };
     },
+    // As the Mac does (`phone_signin::begin_step_in`): the agent's own tab,
+    // held; the same frames and input; Done hands it back.
+    'agents.stepInBegin': (p) => {
+      const agentId = String(p.agentId);
+      const requestId = String(p.requestId);
+      const card = (messages.get(agentId) ?? []).find(
+        (m) => m.approval?.requestId === requestId && m.approval.stepIn
+      );
+      const s = card?.approval?.stepIn;
+      if (!card?.approval || !s || card.approval.status !== 'pending')
+        return fail({ type: 'Other', message: 'That request no longer exists.' });
+      if (s.inSince)
+        return fail({
+          type: 'Other',
+          message: 'You’re in its browser on your Mac. Hand it back there first.',
+        });
+      signins.clear();
+      const sessionId = `signin_${randomUUID().slice(0, 8)}`;
+      signins.set(sessionId, {
+        agentId,
+        requestId,
+        inputs: 0,
+        seq: 0,
+        via: 'agents_browser',
+        stepIn: true,
+      });
+      return {
+        sessionId,
+        domain: s.site.split('.').slice(-2).join('.'),
+        title: s.reason,
+        idleSeconds: 300,
+        via: 'agents_browser',
+        frameGapMs: 250,
+        stepIn: true,
+      };
+    },
     'agents.signinFrame': (p) => {
       const s = signins.get(String(p.sessionId));
       if (!s) return fail({ type: 'Other', message: 'That sign-in has ended.' });
@@ -2778,6 +2822,14 @@ export function createMockServer(opts: MockOptions = {}) {
     'agents.signinDone': (p) => {
       const s = signins.get(String(p.sessionId));
       if (!s) return fail({ type: 'Other', message: 'That sign-in has ended.' });
+      if (s.stepIn) {
+        signins.delete(String(p.sessionId));
+        const card = (messages.get(s.agentId) ?? []).find(
+          (m) => m.approval?.requestId === s.requestId
+        );
+        if (card?.approval) card.approval.status = 'allowed';
+        return { outcome: 'handed_back' };
+      }
       if (!s.inputs && !p.anyway) return { outcome: 'signed_out' };
       signins.delete(String(p.sessionId));
       const option = loginCardOf(s.agentId, s.requestId)?.approval?.login?.options.find(

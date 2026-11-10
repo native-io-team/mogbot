@@ -703,6 +703,8 @@ export interface StepInCard {
   inSince?: number;
   /** When it is handed back by itself (ms). */
   until?: number;
+  /** The user is in it from a phone (its name), not at the Mac. Laid over, never stored. */
+  onPhone?: string;
 }
 
 export interface Approval {
@@ -879,6 +881,8 @@ export interface SigninBegun {
   via?: SigninVia;
   /** How long to wait between pictures. */
   frameGapMs?: number;
+  /** `agents.stepInBegin`: the agent's own tab; Done is Hand back. */
+  stepIn?: boolean;
 }
 
 /**
@@ -936,7 +940,7 @@ export type SigninInput =
   | { kind: 'reload' };
 
 /** `agents.signinDone`: signed in (the card answered itself), not yet, or can't tell. */
-export type SigninOutcome = 'signed_in' | 'signed_out' | 'unknown';
+export type SigninOutcome = 'signed_in' | 'signed_out' | 'unknown' | 'handed_back';
 
 /** `agents.loginPhoneBegin`: what the phone opens. No secret: the PKCE verifier stays on the Mac. */
 export interface LoginPhoneBegin {

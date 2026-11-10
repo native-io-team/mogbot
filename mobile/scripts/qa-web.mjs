@@ -897,7 +897,7 @@ const PROBE = [
     route: '/chat/browse',
     ready: 'needs you in its browser',
     check:
-      'The step-in card as the desk draws it: a globe, the title with the reason, the site · page title under it, “Step in on your Mac: its tab opens there.”, and only Not now (no Allow, no Step in)',
+      'The step-in card as the desk draws it: a globe, the title with the reason, the site · page title under it, “Its tab shows here and you do it by touch…”, Not now (outlined) and Step in (neutral answer, never the accent); no Allow',
   },
   {
     name: 'probe-stale-card',

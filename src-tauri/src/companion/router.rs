@@ -63,6 +63,7 @@ pub const METHODS: &[&str] = &[
     "agents.signinDone",
     "agents.signinStop",
     "agents.signinFallback",
+    "agents.stepInBegin",
     "agents.focus",
     "agents.markUnread",
     "agents.startFresh",
@@ -180,6 +181,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
 /// typed is a password); the session writes its own line, the domain and
 /// how it ended.
 pub const SELF_AUDITED_METHODS: &[&str] = &[
+    "agents.stepInBegin",
     "agents.signinBegin",
     "agents.signinFrame",
     "agents.signinInput",
@@ -1298,6 +1300,13 @@ struct SigninBeginParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct StepInBeginParams {
+    agent_id: String,
+    request_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SigninParams {
     session_id: String,
     #[serde(default)]
@@ -1885,6 +1894,15 @@ fn signin_op(method: &str, params: Value) -> Result<crate::agents::phone_signin:
                 agent_id: p.agent_id,
                 request_id: p.request_id,
                 way: p.way,
+            }
+        }
+        "agents.stepInBegin" => {
+            let p: StepInBeginParams = parse(params)?;
+            id(&p.agent_id)?;
+            id(&p.request_id)?;
+            Op::StepIn {
+                agent_id: p.agent_id,
+                request_id: p.request_id,
             }
         }
         "agents.signinInput" => {
@@ -3321,6 +3339,51 @@ mod tests {
         let record = stub.logins.lock().unwrap().join("\n");
         assert!(record.contains("way: Some(AgentsBrowser)"), "{record}");
         assert!(record.contains("way: None"), "{record}");
+    }
+
+    /// Step in from the phone: the caller's own device begins it, the same
+    /// frames and input drive it, Done is Hand back, and the router audits
+    /// none of it (the session writes its own line).
+    #[tokio::test]
+    async fn a_phone_step_in_begins_for_the_caller_and_hands_back() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let begun = dispatch(
+            &c,
+            &me,
+            "agents.stepInBegin",
+            json!({ "agentId": AGENT, "requestId": "q_step" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(begun["stepIn"], true);
+        let id = begun["sessionId"].as_str().unwrap().to_string();
+        dispatch(&c, &me, "agents.signinFrame", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        let done = dispatch(&c, &me, "agents.signinDone", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        assert_eq!(done["outcome"], "handed_back");
+        // Malformed: refused at the parse.
+        for bad in [
+            json!({ "agentId": "", "requestId": "q_step" }),
+            json!({ "agentId": AGENT }),
+        ] {
+            assert!(dispatch(&c, &me, "agents.stepInBegin", bad).await.is_err());
+        }
+        let record = stub.logins.lock().unwrap().join("\n");
+        assert!(
+            record.contains("StepIn { agent_id: \"") && record.contains("q_step"),
+            "{record}"
+        );
+        assert!(record.lines().all(|l| l.ends_with("by dev_a")), "{record}");
+        assert!(stub
+            .audited()
+            .iter()
+            .all(|(_, m, _, _)| m != "agents.stepInBegin"));
+        assert!(super::super::wire::MAC_FEATURES.contains(&"stepIn.phone"));
     }
 
     /// Signing in on the phone itself: the sheet is begun for the caller's
