@@ -269,8 +269,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* On the selected surface, muted is 3.6:1; secondary is AA. */
-  color: var(--text-secondary);
+  /* On the selected surface muted is 3.6:1 and secondary 4.3:1. */
+  color: var(--text-primary);
   font-size: var(--font-size-12);
 }
 

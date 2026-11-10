@@ -115,12 +115,22 @@ function nameWordless(anchor: Element, text: string, describeGeneric: boolean) {
   const named = anchor.hasAttribute('aria-label') || anchor.hasAttribute('aria-labelledby');
   const wordless =
     anchor.tagName === 'IFRAME' ||
-    (!(anchor.textContent ?? '').trim() && !anchor.querySelector('img[alt]:not([alt=""])'));
+    (!shownText(anchor).trim() && !anchor.querySelector('img[alt]:not([alt=""])'));
   if (!ours && (named || !wordless)) return;
   if (nameable(anchor)) anchor.setAttribute('aria-label', text);
   else if (describeGeneric) anchor.setAttribute('aria-description', text);
   else return;
   anchor.setAttribute('data-tooltip-named', '');
+}
+
+/**
+ * The words a screen reader would find inside: `innerText` skips a label the
+ * stylesheet hides (a toolbar button's words in a narrow window), which
+ * `textContent` counts. jsdom has no `innerText`; there it is the text.
+ */
+function shownText(el: Element): string {
+  const shown = (el as HTMLElement).innerText;
+  return typeof shown === 'string' ? shown : (el.textContent ?? '');
 }
 
 /** Elements that may be named by `aria-label`: anything but the generic role. */

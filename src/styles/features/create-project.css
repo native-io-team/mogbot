@@ -804,3 +804,8 @@
   text-align: center;
   color: var(--text-secondary);
 }
+
+/* On the selected surface secondary is 4.3:1: the description lifts a step. */
+.stack-card-selected .stack-card-desc {
+  color: var(--text-primary);
+}
