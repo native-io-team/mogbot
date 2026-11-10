@@ -2,6 +2,7 @@
 
 import type { Stack } from 'expo-router';
 import { useMemo, type ComponentProps } from 'react';
+import { Platform } from 'react-native';
 import { useColors } from './appearance';
 import { fonts, radius, type Palette } from './theme';
 
@@ -28,7 +29,14 @@ type NativeStackNavigationOptions = Exclude<
  * a large title over a coloured bar isn't drawn at all. So anything on these
  * screens that isn't the scrolling list sits under the bar unless it's padded
  * by `useHeaderHeight` (the iPad split's chat).
+ *
+ * **Android has neither large titles nor adjusted insets**
+ * (`contentInsetAdjustmentBehavior` is iOS-only), so a transparent bar there
+ * drew the list's first card under the title and the status bar (seen on the
+ * API 35 emulator). There the bar is opaque and the screen starts below it;
+ * `HEADER_OVERLAYS` says which, for what pads itself by the header's height.
  */
+export const HEADER_OVERLAYS = Platform.OS !== 'android';
 export const largeTitle = (
   colors: Palette,
   title: string,
@@ -36,8 +44,9 @@ export const largeTitle = (
 ): NativeStackNavigationOptions => ({
   title,
   headerLargeTitle: true,
-  headerTransparent: true,
-  headerStyle: {},
+  headerTransparent: HEADER_OVERLAYS,
+  headerStyle: HEADER_OVERLAYS ? {} : { backgroundColor: colors.surfaceApp },
+  ...(HEADER_OVERLAYS ? {} : { headerShadowVisible: false }),
   headerLargeTitleShadowVisible: false,
   headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textStrong },
   ...extra,

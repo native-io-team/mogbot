@@ -1,0 +1,39 @@
+<!doctype html>
+<!--
+  Google Play feature graphic, 1024 x 500 (docs/play-store.md, "Graphics").
+  Render: Chrome --headless=new --window-size=1024,500 --screenshot=feature-graphic.png
+  The app's own palette (mobile/src/lib/theme.ts dark surfaceApp, the site's
+  chalk and ink) and its icon (mobile/assets/icon.png). No store badges, no
+  device frames, no other companies' names.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: Geist; font-weight: 400; src: url('../../mobile/node_modules/@expo-google-fonts/geist/400Regular/Geist_400Regular.ttf'); }
+  @font-face { font-family: Geist; font-weight: 600; src: url('../../mobile/node_modules/@expo-google-fonts/geist/600SemiBold/Geist_600SemiBold.ttf'); }
+  html, body { margin: 0; width: 1024px; height: 500px; overflow: hidden; }
+  body {
+    font-family: Geist, -apple-system, 'Helvetica Neue', sans-serif;
+    background: radial-gradient(120% 140% at 18% 30%, #2a2826 0%, #1b1a18 45%, #151413 100%);
+    color: #f2eee6;
+    display: flex; align-items: center;
+    /* Play may crop or overlay the edges: everything sits well inside them. */
+    padding: 0 96px; box-sizing: border-box; gap: 64px;
+  }
+  .icon {
+    width: 232px; height: 232px; border-radius: 52px; flex: none;
+    box-shadow: 0 0 0 1px #00000080, 0 30px 60px -20px #000000c0, 0 10px 20px -10px #00000080;
+  }
+  h1 { margin: 0; font-size: 92px; font-weight: 600; letter-spacing: -0.045em; line-height: 1; }
+  p { margin: 22px 0 0; font-size: 30px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.25; color: #bfb9ae; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <img class="icon" src="../../mobile/assets/icon.png" alt="">
+  <div>
+    <h1>Mogbot</h1>
+    <p>Your AI agents, on your phone.<br>Answer what needs you, from anywhere.</p>
+  </div>
+</body>
+</html>

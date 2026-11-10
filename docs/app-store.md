@@ -1,9 +1,16 @@
 # The phone app in the App Store
 
 Everything needed to put the iPhone app (`mobile/`) in the App Store, and
-what has been checked. Nothing here has been uploaded or submitted; every
+what has been checked. Google Play is [play-store.md](play-store.md). Nothing here has been uploaded or submitted; every
 step that reaches Apple is in the **Owner checklist** at the end, because it
 needs the owner's Apple account and is published under their name.
+
+**Publisher**: Galluzzo Conseil Inc. (organization, Canada), Apple
+Developer team **N2VB8A88LB**, Julian Galluzzo as Account Holder. The store
+build signs with that team (`STORE_PUBLISHER` in `mobile/app.config.ts`); the
+older personal team H8NN6DM6G6 is for self-builds only and must not sign a
+store build. Free Apps Agreement active; Paid Apps not signed (not needed for
+a free app with no purchases); EU trader status not yet declared.
 
 The app's name is **Mogbot**, a working name (it lives only in
 `brand.json`). Whatever the final name is, change `brand.json` and run
@@ -23,6 +30,8 @@ each held by `mobile/__tests__/storeBuild.node.test.ts`:
 | `extra.official` | true: the Mac is told `build: official`, Settings offers push | false: "Push needs the app from the App Store" |
 | Push entitlement | `aps-environment` (Xcode's App Store export makes it `production`) | none (a free team can't sign it) |
 | App Transport Security | `NSAllowsArbitraryLoads: false`, no exceptions | Expo's dev default (the mock on `localhost`) |
+| Apple team | `N2VB8A88LB` (`ios.appleTeamId`, unless `APPLE_TEAM_ID` is set) | the user's own (`APPLE_TEAM_ID`) |
+| `NSHumanReadableCopyright` | `© 2026 Galluzzo Conseil Inc.` | none |
 
 Both builds have: version **1.0.0** (`APP_VERSION`), build number from
 `COMPANION_BUILD_NUMBER` (default 1), no Face ID string, the privacy
@@ -38,30 +47,36 @@ cd mobile
 EAS_PROJECT_ID=<id> eas build -p ios --profile production
 ```
 
-**Locally with Xcode** (what was verified here, unsigned):
+**Locally with Xcode**: `mobile/scripts/store-ios.sh` does the whole run
+(prebuild → `pod install` → archive → export → checks) and never uploads.
 
 ```bash
 cd mobile
-COMPANION_STORE_BUILD=1 npx expo prebuild --platform ios --clean
-cd ios && COMPANION_STORE_BUILD=1 pod install
-COMPANION_STORE_BUILD=1 xcodebuild archive \
-  -workspace Mogbot.xcworkspace -scheme Mogbot -configuration Release \
-  -destination 'generic/platform=iOS' -archivePath /tmp/Mogbot.xcarchive \
-  -allowProvisioningUpdates DEVELOPMENT_TEAM=H8NN6DM6G6 CODE_SIGN_STYLE=Automatic \
-  CURRENT_PROJECT_VERSION=<build number>
-xcodebuild -exportArchive -archivePath /tmp/Mogbot.xcarchive \
-  -exportOptionsPlist ExportOptions.plist -exportPath /tmp/export -allowProvisioningUpdates
+scripts/store-ios.sh --build-number 1          # unsigned: proves the store config archives
+scripts/store-ios.sh --sign --build-number 1   # signed with N2VB8A88LB, exported to an .ipa
+# without an Xcode sign-in, with an App Store Connect API key (Users and Access → Integrations):
+scripts/store-ios.sh --sign --build-number 1 \
+  --api-key ~/keys/AuthKey_XXXXXXXXXX.p8 --api-key-id XXXXXXXXXX --api-issuer <issuer uuid>
 ```
 
-`ExportOptions.plist`: `method` `app-store-connect`, `destination` `export`
-(never `upload` until you mean it), `teamID` `H8NN6DM6G6`, `signingStyle`
-`automatic`. Then check the exported app:
+- **Unsigned** (default): `CODE_SIGNING_ALLOWED=NO`, no `-allowProvisioningUpdates`,
+  nothing reaches Apple, no export. Checks the archived app's bundle id,
+  version and build, ATS, no Face ID string, the privacy manifest, and
+  `aps-environment` in the project's entitlements.
+- **`--sign`**: `DEVELOPMENT_TEAM=N2VB8A88LB CODE_SIGN_STYLE=Automatic
+  -allowProvisioningUpdates` (only behind this flag: on the first run it
+  registers the bundle id and creates the distribution certificate and
+  profile in the team), then `xcodebuild -exportArchive` with
+  [`mobile/store/ExportOptions.plist`](../mobile/store/ExportOptions.plist)
+  (`method` `app-store-connect`, `destination` **`export`**, `teamID`
+  `N2VB8A88LB`, `signingStyle` `automatic`; the script refuses to run if
+  `destination` is changed). Then it unzips the `.ipa` and checks
+  `aps-environment = production` and that the team is N2VB8A88LB.
+- Archive, `.ipa` and derived data go in `mobile/store-build/` (ignored);
+  `mobile/ios` is removed afterwards unless `--keep-native`.
 
-```bash
-unzip -q /tmp/export/Mogbot.ipa -d /tmp/ipa
-codesign -d --entitlements :- /tmp/ipa/Payload/Mogbot.app   # aps-environment = production
-xcrun altool --validate-app -f /tmp/export/Mogbot.ipa -t ios --apiKey <key> --apiIssuer <issuer>
-```
+It prints the next step (validate and upload with `altool`, Transporter or
+Xcode's Organizer), which is the owner's.
 
 The build number must go up with every upload of 1.0.0; the marketing
 version changes only for a new release.
@@ -108,6 +123,16 @@ archive -configuration Release` with signing off, on Xcode 27.2 / iOS SDK
   SafariServices, AuthenticationServices, WebKit, …).
 
 The archive and its 3 GB of build products were deleted after checking.
+
+Again on 10 November 2026 with `scripts/store-ios.sh --build-number 1`
+(unsigned, Xcode 27.2): **ARCHIVE SUCCEEDED**, 56 MB app; bundle id
+`io.native.mogbot.companion`, 1.0.0 (1), `NSHumanReadableCopyright` "© 2026
+Galluzzo Conseil Inc.", ATS arbitrary loads false, non-exempt encryption
+false, the privacy manifest present, no Face ID string, and `aps-environment`
+in the project's entitlements (development there; the App Store export makes
+it production). Archive and 3.2 GB of derived data deleted afterwards. Not
+run: `--sign` (no Xcode account or API key on this Mac, and it would reach
+Apple).
 
 ### Permissions (Info.plist)
 
@@ -301,17 +326,20 @@ keep running on your Mac.`
 
 **Price**: Free (owner decides). No in-app purchases.
 
-**Support URL / Marketing URL / Privacy Policy URL**: `brand.json` has no
-`links.website` yet (all links are null), so there is nothing to put here.
-**Owner-required**: the store won't accept a listing without a support URL
-and a privacy policy URL. A privacy policy that matches the app:
+**Support URL / Marketing URL / Privacy Policy URL**: the pages are written
+for the marketing site (`~/ShipStudio/mogbot-site`, `src/pages/support.astro`
+and `src/pages/privacy.astro`, contact juliangalluzzois@gmail.com) but not
+deployed. Once it is live they are `<site>/support` and `<site>/privacy`
+(the site's `astro.config.mjs` says `https://mogbot-site.vercel.app` until a
+domain is picked); put the site in `brand.json` (`links.website`). The
+store won't accept a listing without both. The short version of the policy:
 
 > <Name> for iPhone collects no data. It has no account and no analytics,
 > and sends nothing to us. It connects only to the Mac you pair it with,
 > over your own Tailscale network, and what you see and send goes only
 > between this phone and that Mac. Pairing keys are kept in this phone's
 > keychain. Removing the app, or "Forget this Mac", removes them. Contact:
-> <email>.
+> juliangalluzzois@gmail.com.
 
 **Age rating** (Apple's questionnaire, as of 2026): everything "None" / "No"
 except **Unrestricted Web Access: Yes** (the sign-in screen shows the Mac's
@@ -320,7 +348,8 @@ content**: the agents reply with text a model wrote, unfiltered by us. Expect
 the 18+ rating from those answers; the owner confirms. No user-to-user
 messaging, no gambling, no medical, no ads, no contests.
 
-**Copyright**: `© 2026 <owner's legal name>`.
+**Copyright**: `© 2026 Galluzzo Conseil Inc.` (also the build's
+`NSHumanReadableCopyright`).
 
 ### Screenshots
 
@@ -355,39 +384,49 @@ build.
 
 Only the owner can do these; each reaches Apple or speaks for the business.
 
-1. **Final name.** Confirm "Mogbot" or set the real one in `brand.json`
+1. **Account**: done. Galluzzo Conseil Inc., team N2VB8A88LB, Free Apps
+   Agreement active. Paid Apps Agreement only if the app is ever sold.
+   **EU trader status**: declare it (App Store Connect → Business) before
+   the app can be offered in the EU; as an organization selling nothing, the
+   trader contact details (address, phone, email) are shown on the EU
+   listing. Or leave the EU out of availability until declared.
+2. **Final name.** Confirm "Mogbot" or set the real one in `brand.json`
    (`pnpm check:brand --write`), and check it's available in App Store
    Connect.
-2. **Bundle id.** Register `io.native.mogbot.companion` (or the final
-   `companion.bundleId`) in the Apple Developer account of team H8NN6DM6G6,
-   with the Push Notifications capability. Automatic signing does this on
-   the first `-allowProvisioningUpdates` archive.
-3. **Signing.** An Apple Distribution certificate for the team (none is in
-   this Mac's keychain; only an Apple Development and a Developer ID
-   Application identity are), and Xcode signed in to the team's account
-   (Xcode → Settings → Accounts; the archive here reported "No Accounts").
-   Then run the archive and export above, and check `aps-environment =
-   production` in the exported app.
-4. **App Store Connect record.** New app: platform iOS, the name, primary
+3. **Bundle id.** Register `io.native.mogbot.companion` (or the final
+   `companion.bundleId`) in team N2VB8A88LB, with the Push Notifications
+   capability. Automatic signing does this on the first
+   `scripts/store-ios.sh --sign`.
+4. **Signing.** An Apple Distribution certificate for the team (none is in
+   this Mac's keychain), and either Xcode signed in to an Apple ID in team
+   N2VB8A88LB (Xcode → Settings → Accounts; none is signed in on this Mac),
+   or an App Store Connect API key with the Admin or App Manager role
+   (Users and Access → Integrations → App Store Connect API; download the
+   `.p8` once, keep it out of the repo). Then `scripts/store-ios.sh --sign`
+   (with `--api-key …` for the key), which makes the certificate and
+   profile, exports, and checks `aps-environment = production`.
+5. **App Store Connect record.** New app: platform iOS, the name, primary
    language English (U.S.), the bundle id, an SKU. Fill in `eas.json`'s
    `submit.production.ios` (`ascAppId`, API key id and issuer) if submitting
    with EAS.
-5. **EAS project** (optional, for EAS builds and OTA updates):
+6. **EAS project** (optional, for EAS builds and OTA updates):
    `eas init`, then set `EAS_PROJECT_ID` for production builds. Without it,
    OTA updates stay off and every fix is a new binary.
-6. **Support and privacy policy URLs.** Publish a support page and the
-   privacy policy above, and put the website in `brand.json`
-   (`links.website`).
-7. **The desktop download link** for the review notes and description:
-   reviewers need somewhere real to point at.
-8. **Export compliance.** Confirm the "exempt" answer above.
-9. **App Privacy.** Answer "Data Not Collected" (above).
-10. **Age rating, category, price, availability.** As above, or your call.
-11. **Screenshots and the listing text.** Review the drafts above; upload.
-12. **Upload and submit.** Upload the build (Xcode Organizer, `altool`,
+7. **Support and privacy policy URLs.** Deploy the marketing site with
+   its new `/support` and `/privacy` pages (written, not deployed), and put
+   the website in `brand.json` (`links.website`).
+8. **The desktop download link** for the review notes and description:
+   reviewers need somewhere real to point at. The owner has approved a
+   public GitHub release page for the desktop app; publish it and use its
+   URL for `<download URL>`.
+9. **Export compliance.** Confirm the "exempt" answer above.
+10. **App Privacy.** Answer "Data Not Collected" (above).
+11. **Age rating, category, price, availability.** As above, or your call.
+12. **Screenshots and the listing text.** Review the drafts above; upload.
+13. **Upload and submit.** Upload the build (Xcode Organizer, `altool`,
     Transporter or `eas submit`), attach it to version 1.0.0, add the review
     notes, and submit. TestFlight first is a good idea: a real pairing on a
     real phone has not been done with a store-signed build.
-13. **Push** (later): deploy `services/push-relay` with the team's APNs key
+14. **Push** (later): deploy `services/push-relay` with the team's APNs key
     (docs/push-relay.md), then revisit App Privacy (device ID).
-14. **Icon** (optional): the real mark instead of the placeholder ring.
+15. **Icon** (optional): the real mark instead of the placeholder ring.

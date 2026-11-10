@@ -45,3 +45,10 @@ dev/.certs/
 
 # Web QA captures (pnpm qa:web)
 qa-shots/
+
+# Store signing and service config: never committed (docs/play-store.md, docs/app-store.md)
+*.keystore
+google-services.json
+GoogleService-Info.plist
+credentials/
+store-build/
