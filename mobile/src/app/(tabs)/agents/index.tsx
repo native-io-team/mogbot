@@ -61,6 +61,7 @@ import { largeTitle } from '../../../lib/navigation';
 import {
   keySize,
   chromeScale,
+  depthOf,
   iconSize,
   PRESSED,
   radius,
@@ -284,6 +285,8 @@ export default function Agents() {
 
   // Usage at a glance, as the desk sidebar's row says it.
   const glance = useGlance();
+  // The card draws nothing with no accounts; its room goes with it.
+  const glanceShown = !removed && !!glance && glance.keys.length > 0;
   // Memoised on what the buttons depend on, not rebuilt each render: see `largeTitle`.
   const hasList = !!overview && !removed;
   const screenOptions = useMemo(
@@ -344,7 +347,7 @@ export default function Agents() {
           <ConnectionBar style={styles.connection} />
           <Refused />
           <ImportChoiceCard />
-          {!removed && glance && (
+          {glanceShown && glance && (
             <View style={styles.quota}>
               <GlanceRow glance={glance} onPress={() => router.push('/usage')} />
             </View>
@@ -360,6 +363,7 @@ export default function Agents() {
             title={item.title}
             live={live}
             first={index === 0}
+            underCard={index === 0 && glanceShown}
           />
         ) : item.kind === 'hidden' ? (
           <Pressable
@@ -472,11 +476,14 @@ function SectionHeader({
   title,
   live,
   first,
+  underCard = false,
   action,
 }: {
   title: string;
   live: boolean;
   first: boolean;
+  /** Straight under the usage card, whose room below already holds its shadow. */
+  underCard?: boolean;
   action?: ReactNode;
 }) {
   const colors = useColors();
@@ -487,7 +494,7 @@ function SectionHeader({
   const label = live || !asOf ? title : `${title} · as of ${formatAgo(asOf)}`;
   return (
     // A label belongs to the rows under it: close below, a clear gap above.
-    <View style={[styles.section, !first && styles.sectionNext]}>
+    <View style={[styles.section, !first && styles.sectionNext, underCard && styles.sectionUnderCard]}>
       <T
         variant="caption"
         color={colors.textMuted}
@@ -608,7 +615,16 @@ const useStyles = makeStyles((colors) => ({
   },
   sectionLabel: { flex: 1 },
   sectionNext: { paddingTop: space.xl },
-  quota: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs },
+  sectionUnderCard: { paddingTop: 0 },
+  // The card's shadow reaches well past it. On iOS the list's header ends at
+  // this view and the shadow stopped in a hard line where it did; the room
+  // below is the shadow's own reach, and the label under it gives up its top
+  // padding so the gap stays about what it was.
+  quota: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: depthOf(colors).cardReach,
+  },
   connection: { marginHorizontal: space.lg, marginTop: space.xs, marginBottom: space.sm },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
   hiddenToggle: {

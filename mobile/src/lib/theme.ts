@@ -324,6 +324,10 @@ const depthByAppearance = {
     // top edge and the soft drop under its side (--button-key-lit/-drop).
     capLit: 'rgba(255, 255, 255, 0.22)',
     capDrop: 'rgba(0, 0, 0, 0.5)',
+    // How far `card` reaches past the card (8 + 24 − 12 = 20, rounded up):
+    // what a wrapper that ends at the card, or a clipping parent, must leave
+    // below it, or the shadow stops in a hard line (--shadow-card-reach).
+    cardReach: 24,
   },
   light: {
     card: '0 24px 32px -24px rgba(0, 0, 0, 0.3), 0 6px 12px -8px rgba(0, 0, 0, 0.15)',
@@ -333,6 +337,8 @@ const depthByAppearance = {
     keyFill: '#ffffff',
     capLit: 'rgba(255, 255, 255, 0.15)',
     capDrop: 'rgba(0, 0, 0, 0.12)',
+    // 24 + 32 − 24 = 32.
+    cardReach: 32,
   },
 } as const;
 
