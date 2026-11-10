@@ -749,6 +749,53 @@ const scrollToText = (text) => async (page) => {
   throw new Error(`never found "${text}"`);
 };
 
+/** Long-press the message whose words start with `start`, as a finger held on it. */
+const holdMessage = async (page, start) => {
+  const box = await page.eval(`(() => {
+    const want = ${JSON.stringify(start)};
+    const el = [...document.querySelectorAll('[tabindex="0"]')]
+      .filter((e) => (e.innerText ?? '').trim().startsWith(want) && e.getBoundingClientRect().height > 20)
+      .pop();
+    if (!el) return null;
+    el.scrollIntoView({ block: 'center' });
+    const r = el.getBoundingClientRect();
+    return { x: r.x + Math.min(r.width / 2, 120), y: r.y + Math.min(r.height / 2, 20) };
+  })()`);
+  if (!box) throw new Error(`No message to hold: ${start}`);
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...box });
+  await page.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    ...box,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await sleep(700);
+  await page.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    ...box,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+  await sleep(700);
+};
+
+/** Open one of Acme Site's conversations by its title, from the switcher. */
+const openSiteConversation = (title) => async (page) => {
+  await page.goto(`${WEB}/conversations?id=site`);
+  await page.waitFor(
+    `document.body.innerText.includes(${JSON.stringify(title)})`,
+    20_000,
+    'the list'
+  );
+  await page.clickText(title);
+  await sleep(1800);
+};
+
+const HOURS = 'Update the winter opening hours';
+const HOURS_ASK = 'Update the winter opening hours: closed';
+
 /** Whether Catch up's bottom bar has a button labelled `label`. */
 const CATCHUP_HAS = (label) =>
   `!![...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label') === ${JSON.stringify(label)})`;
@@ -1680,6 +1727,96 @@ const LIVE = [
       );
       await page.clickText('Rebuild the Acme site');
       await sleep(800);
+    },
+  },
+  // Rewind, fork and edit (lib/goBack.ts), on Acme Site's opening-hours conversation.
+  {
+    name: 'goback-sheet',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await openSiteConversation(HOURS)(page);
+      await holdMessage(page, HOURS_ASK);
+    },
+    check:
+      'Long-press on your own message: the sheet with Copy, Quote, Select Text, then Edit and resend, Fork from here, Rewind to here',
+    after: async (page) => {
+      await page.clickText('Cancel').catch(() => {});
+      await sleep(500);
+    },
+  },
+  {
+    name: 'goback-editing',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await holdMessage(page, HOURS_ASK);
+      await page.clickText('Edit and resend');
+      await sleep(1000);
+    },
+    check:
+      'Editing: the message back in the composer, a bar over it saying “Editing your message. Sending goes back to just before it.” with an ✕',
+    after: async (page) => {
+      await page.clickLabel('Don’t edit').catch(() => {});
+      await sleep(600);
+    },
+  },
+  {
+    name: 'goback-fork-confirm',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await holdMessage(page, HOURS_ASK);
+      await page.clickText('Fork from here');
+      await sleep(800);
+    },
+    check:
+      'Fork from here?: a sheet saying a new conversation with Acme Site, everything before the message, this one stays; what isn’t undone; Fork and Cancel',
+  },
+  {
+    name: 'goback-forked',
+    act: async (page) => {
+      await page.clickText('Fork');
+      await sleep(2200);
+    },
+    check:
+      'The fork, opened: its bar says “Fork of Update the winter opening hours”; one line: Forked from “Update the winter opening hours” before …, that one unchanged, what isn’t undone',
+    after: openSiteConversation(HOURS),
+  },
+  {
+    name: 'goback-rewound',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await holdMessage(page, HOURS_ASK);
+      await page.clickText('Rewind to here');
+      await sleep(800);
+      await page.clickText('Rewind');
+      await sleep(1500);
+      // Drawn fresh: on the web build, rows that rise in while the list
+      // reshapes under them keep react-native-reanimated's absolute
+      // position and overlap (a web artifact; a reload draws them right).
+      await page.goto(`${WEB}/chat/site`);
+      await page.waitFor(`document.body.innerText.includes('Rewound')`, 20_000, 'the fold');
+      await sleep(1500);
+    },
+    check:
+      'Rewound: the two opening-hours lines folded into one quiet “Rewound · 2 messages” row with a chevron, then the line “Went back to before …”',
+  },
+  {
+    name: 'goback-rewound-open',
+    act: async (page) => {
+      await page.clickWhere(
+        `() => [...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label').startsWith('Rewound · '))`,
+        'the Rewound row'
+      );
+      await sleep(1000);
+    },
+    check:
+      'The fold open: the row (chevron up) with the opening-hours lines under it (on the second theme, the first theme’s line too)',
+    after: async (page) => {
+      await fetch(`${MOCK}/dev/unrewind`);
+      await openSiteConversation('Rebuild the Acme site')(page);
     },
   },
   {

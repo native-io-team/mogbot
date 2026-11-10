@@ -4425,6 +4425,18 @@ export function createMockServer(opts: MockOptions = {}) {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(out);
       return;
     }
+    // Dev only: rewinds and forks undone, so `qa:web`'s next theme goes back again.
+    if (req.method === 'GET' && req.url?.startsWith('/dev/unrewind')) {
+      for (const [agentId, c] of convs) {
+        c.items = c.items.filter((i) => !i.forkedFrom);
+        for (const i of c.items) delete i.rewinds;
+        if (!c.items.some((i) => i.id === c.current)) c.current = 'first';
+        for (const key of [...inherited.keys()])
+          if (key.startsWith(`${agentId}:`)) inherited.delete(key);
+      }
+      res.writeHead(200, { 'Content-Type': 'text/plain' }).end('unrewound');
+      return;
+    }
     if (req.method === 'GET' && req.url === '/dev/link') {
       res.writeHead(200, { 'Content-Type': 'text/plain' }).end(pairingLink());
       return;
