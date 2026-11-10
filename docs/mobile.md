@@ -210,7 +210,11 @@ connect it sends `hello.resume`:
   event after the cursor in order, then `sync.caughtUp`. Nothing is missed.
 - **Otherwise** (the app restarted, or a day away): `welcome{resume:'snapshot'}`,
   `sync.snapshot` (overview, Mac status, projects, cursor), `sync.caughtUp`;
-  the phone re-reads the chats it has cached.
+  the phone re-reads the chats it has cached. Each part is worked out within
+  6 s (`server::snapshot`, on the blocking pool): one that's slow goes as
+  `null` (overview, projects: the phone keeps what it has) or as the last
+  status sent, and a late status follows as `system.status`, so a busy Mac
+  sends a partial snapshot rather than a silent socket.
 
 Nothing is ever doubled: messages are upserts by id (an answered approval
 replaces its card), and `agents.send` requires a `clientId` that the Mac
