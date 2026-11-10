@@ -1307,7 +1307,12 @@ const ChatHeader = memo(function ChatHeader({
     <IconButton name="bubble.left" label="Conversations" onPress={openConversations} />
   );
   const usageRing = ring && (
-    <UsageRing percent={percent} tone={tone} tint={accent.accent} onPress={openUsage} />
+    <UsageRing
+      percent={percent}
+      tone={tone}
+      tint={NATIVE_HEADER_BUTTONS ? accent.accent : undefined}
+      onPress={openUsage}
+    />
   );
   return (
     <>
