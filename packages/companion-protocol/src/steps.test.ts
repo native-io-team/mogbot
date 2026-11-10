@@ -15,6 +15,15 @@ describe('whenLabel', () => {
       'Every 3 months on the 15th at 09:00 (Jan, Apr, Jul and Oct)'
     );
   });
+
+  it('drops a one-time run’s UTC offset, keeping the months in brackets', () => {
+    expect(whenLabel('once, Thu 5 Nov 2026, 9:00 AM (UTC-05:00)')).toBe(
+      'Once, Thu 5 Nov 2026, 9:00 AM'
+    );
+    expect(whenLabel('once, Thu 5 Nov 2026, 09:00 (UTC+05:30)')).toBe(
+      'Once, Thu 5 Nov 2026, 09:00'
+    );
+  });
 });
 import { describeRun } from './schedule';
 import type { AgentDraft } from './model';
