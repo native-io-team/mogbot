@@ -79,6 +79,7 @@ describe('Settings window', () => {
     expect(screen.queryByText('This dialog couldn’t be shown. Nothing was changed.')).toBeNull();
     fireEvent.click(nav('Advanced'));
     expect(screen.getByText('Usage analytics & error reports')).toBeTruthy();
+    fireEvent.click(nav('Projects'));
     expect(screen.getByText('Keep dev servers running')).toBeTruthy();
   });
 

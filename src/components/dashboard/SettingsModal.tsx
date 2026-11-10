@@ -34,6 +34,8 @@ import {
 import { AccentColorSetting } from './AccentColorSetting';
 import { ThemeSetting } from './ThemeSetting';
 import { Button } from '../primitives/Button';
+import { TextButton } from '../primitives/TextButton';
+import { Group, Row, Toggle } from '../agents/AgentSettingsRows';
 import { AreaBoundary } from '../primitives/AreaBoundary';
 import { getAnalyticsEnabled, setAnalyticsEnabled, trackEvent } from '../../lib/analytics';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -550,8 +552,8 @@ export function SettingsModal({
             <AreaBoundary where={`settings:${page}`}>
               {agentPage}
               {page === 'projects' && (
-                <>
-                  <div className="settings-section">
+                <div className="agents-settings">
+                  <Group id="projects-where" title="Where projects live">
                     <div className="settings-row settings-row--stacked">
                       <div className="settings-row-info">
                         <span className="settings-row-label">
@@ -569,7 +571,7 @@ export function SettingsModal({
                         <span className="settings-row-description">
                           {multipleWorkspaces && activeAccount
                             ? `Where the ${activeAccount.name} workspace lists and creates projects. Each workspace can use its own folder.`
-                            : 'Where your projects are listed and created. Point this at an existing folder to keep everything in one place.'}
+                            : 'Where projects are listed and created. Point it at a folder you already use to keep everything in one place.'}
                         </span>
                         <button
                           type="button"
@@ -586,25 +588,20 @@ export function SettingsModal({
                           <MoveToFolderIcon size={14} />
                         </button>
                         {customRoot && (
-                          <button
-                            type="button"
+                          <TextButton
                             className="settings-folder-reset"
                             onClick={() => void handleResetFolder()}
                             disabled={savingRoot}
                           >
                             Reset to default
-                          </button>
+                          </TextButton>
                         )}
                       </div>
                     </div>
-                    <div className="settings-row">
-                      <div className="settings-row-info">
-                        <span className="settings-row-label">Shared libraries</span>
-                        <span className="settings-row-description">
-                          Folders your agent brings along to every project in this workspace — brand
-                          docs, snippets, your own skills. Works with Claude Code.
-                        </span>
-                      </div>
+                    <Row
+                      label="Shared libraries"
+                      description="Folders an agent brings to every project in this workspace: brand docs, snippets, your own skills. Claude Code only."
+                    >
                       <Button
                         variant="secondary"
                         onClick={() => {
@@ -612,265 +609,160 @@ export function SettingsModal({
                           openModal('attachedLibraries');
                         }}
                       >
-                        Manage
+                        Manage…
                       </Button>
-                    </div>
-                    <div className="settings-row">
-                      <div className="settings-row-info">
-                        <span className="settings-row-label">Project thumbnails</span>
-                        <span className="settings-row-description">
-                          Automatically screenshot the preview to show project thumbnails on the
-                          dashboard. On macOS this may require Screen Recording permission — allow{' '}
-                          {BRAND.name} under System Settings → Privacy &amp; Security → Screen
-                          Recording, then turn this back on.
-                        </span>
-                      </div>
-                      <button
-                        className={`settings-toggle ${thumbnailsOn ? 'on' : 'off'}`}
-                        onClick={handleThumbnailsToggle}
+                    </Row>
+                  </Group>
+                  {/* The one thing in this app that writes words into a shared
+                      repository, so it says exactly what it writes and exactly
+                      who reads it, in the row itself rather than in a doc. The
+                      credit line sits beside it: both are what the app writes
+                      into your history, a decision about your repo rather than
+                      a cosmetic preference. One-shot deep settings stay out of
+                      ⌘K, per the repo's own rule. */}
+                  <Group id="projects-commits" title="Commits">
+                    <Row
+                      label="Let your agent write the commit message"
+                      description="When you push, your agent writes the subject and a short paragraph on why. Never your prompts, your conversation or your terminal. It is permanent: anyone who can read the repository can read it."
+                    >
+                      <Toggle
+                        on={teamSharingEnabled}
+                        label="Let your agent write the commit message"
+                        onChange={handleTeamSharingToggle}
                         disabled={loading}
-                        role="switch"
-                        aria-label="Project thumbnails"
-                        aria-checked={thumbnailsOn}
-                      >
-                        <span className="settings-toggle-track">
-                          <span className="settings-toggle-thumb" />
-                        </span>
-                      </button>
-                    </div>
-                    {/* The one thing in this app that writes words into a shared
-                repository, so it says exactly what it writes and exactly
-                who reads it, in the row itself rather than in a doc. */}
-                    <div className="settings-row">
-                      <div className="settings-row-info">
-                        <span className="settings-row-label">
-                          Let your agent write the commit message
-                        </span>
-                        <span className="settings-row-description">
-                          When you push, your agent writes the subject and a short paragraph on why
-                          you made the change, and that becomes the commit message. Never your
-                          prompts, your conversation or your terminal. It is permanent history —
-                          anyone who can read the repository, now or later, can read it.
-                        </span>
-                      </div>
-                      <button
-                        className={`settings-toggle ${teamSharingEnabled ? 'on' : 'off'}`}
-                        onClick={handleTeamSharingToggle}
+                      />
+                    </Row>
+                    <Row
+                      label="Credit the agent in commits"
+                      description={
+                        <>
+                          A <code>Made-With</code> line at the bottom of an agent&apos;s commits,
+                          naming it. A git trailer, so never in the subject or{' '}
+                          <code>git log --oneline</code>.
+                        </>
+                      }
+                    >
+                      <Toggle
+                        on={commitAttributionEnabled}
+                        label="Credit the agent in commits"
+                        onChange={handleCommitAttributionToggle}
                         disabled={loading}
-                        role="switch"
-                        aria-label="Let your agent write the commit message"
-                        aria-checked={teamSharingEnabled}
-                      >
-                        <span className="settings-toggle-track">
-                          <span className="settings-toggle-thumb" />
-                        </span>
-                      </button>
-                    </div>
-                    {/* What the app writes into your history, next to what it
-                sends off your machine. Both are "what the app does on your
-                behalf", which is a different question from how it looks —
-                this was briefly on the Appearance tab, where it read as a
-                cosmetic preference rather than a decision about your repo.
-
-                A settings row rather than a palette command, per the repo's
-                own rule that one-shot deep settings stay out of Cmd+K. */}
-                    <div className="settings-row">
-                      <div className="settings-row-info">
-                        <span className="settings-row-label">Credit the agent in commits</span>
-                        <span className="settings-row-description">
-                          Add a <code>Made-With</code> line to the bottom of commits an agent writes
-                          here, naming that agent. It is a git trailer, so it never appears in the
-                          subject line or in <code>git log --oneline</code>.
-                        </span>
-                      </div>
-                      <button
-                        className={`settings-toggle ${commitAttributionEnabled ? 'on' : 'off'}`}
-                        onClick={handleCommitAttributionToggle}
+                      />
+                    </Row>
+                  </Group>
+                  <Group id="projects-previews" title="Previews and terminals">
+                    <Row
+                      label="Keep dev servers running"
+                      description="Previews stay ready while you switch views or projects. A server stops when you stop it, close its project or quit."
+                    >
+                      <Toggle
+                        on={keepDevServersRunning}
+                        label="Keep dev servers running"
+                        onChange={handleKeepDevServersRunningToggle}
                         disabled={loading}
-                        role="switch"
-                        aria-label="Credit the agent in commits"
-                        aria-checked={commitAttributionEnabled}
-                      >
-                        <span className="settings-toggle-track">
-                          <span className="settings-toggle-thumb" />
-                        </span>
-                      </button>
-                    </div>
-                    <div className="settings-row">
-                      <div className="settings-row-info">
-                        <span className="settings-row-label">Terminal GPU acceleration</span>
-                        <span className="settings-row-description">
-                          Use GPU rendering for faster, smoother terminals. Turn off if agent output
-                          looks garbled or fragmented (a known issue on some macOS beta builds).
-                          Applies to newly opened terminals.
-                        </span>
-                      </div>
-                      <button
-                        className={`settings-toggle ${terminalGpuEnabled ? 'on' : 'off'}`}
-                        onClick={handleTerminalGpuToggle}
+                      />
+                    </Row>
+                    <Row
+                      label="Project thumbnails"
+                      description={`A screenshot of each preview on the Projects page. macOS may ask for Screen Recording: allow ${BRAND.name} in System Settings → Privacy & Security, then turn this back on.`}
+                    >
+                      <Toggle
+                        on={thumbnailsOn}
+                        label="Project thumbnails"
+                        onChange={handleThumbnailsToggle}
                         disabled={loading}
-                        role="switch"
-                        aria-label="Terminal GPU acceleration"
-                        aria-checked={terminalGpuEnabled}
-                      >
-                        <span className="settings-toggle-track">
-                          <span className="settings-toggle-thumb" />
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                </>
+                      />
+                    </Row>
+                    <Row
+                      label="Terminal GPU acceleration"
+                      description="Faster, smoother terminals. Turn off if output looks garbled (some macOS betas). New terminals only."
+                    >
+                      <Toggle
+                        on={terminalGpuEnabled}
+                        label="Terminal GPU acceleration"
+                        onChange={handleTerminalGpuToggle}
+                        disabled={loading}
+                      />
+                    </Row>
+                  </Group>
+                </div>
               )}
               {page === 'appearance' && (
-                <>
-                  <div className="settings-section">
-                    <div className="settings-group">
-                      <ThemeSetting />
-                      <AccentColorSetting />
-                      {SLACK_INVITE_URL && (
-                        <div className="settings-row">
-                          <div className="settings-row-info">
-                            <span className="settings-row-label">Show community banner</span>
-                            <span className="settings-row-description">
-                              Show the Slack community invite on the dashboard.
-                            </span>
-                          </div>
-                          <button
-                            className={`settings-toggle ${slackCtaVisible ? 'on' : 'off'}`}
-                            onClick={handleSlackCtaToggle}
-                            disabled={loading}
-                            role="switch"
-                            aria-label="Show community banner"
-                            aria-checked={slackCtaVisible}
-                          >
-                            <span className="settings-toggle-track">
-                              <span className="settings-toggle-thumb" />
-                            </span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="settings-row">
-                      <div className="settings-row-info">
-                        <span className="settings-row-label">Compact workspace toolbar</span>
-                        <span className="settings-row-description">
-                          Combine workspace controls into a single top bar and move Home and sidebar
-                          controls there.
-                        </span>
-                      </div>
-                      <button
-                        className={`settings-toggle ${compactWorkspaceToolbarEnabled ? 'on' : 'off'}`}
-                        onClick={handleCompactWorkspaceToolbarToggle}
-                        disabled={loading}
-                        role="switch"
-                        aria-label="Compact workspace toolbar"
-                        aria-checked={compactWorkspaceToolbarEnabled}
+                <div className="agents-settings">
+                  <Group id="appearance-look" title="Look">
+                    <ThemeSetting />
+                    <AccentColorSetting />
+                    {SLACK_INVITE_URL && (
+                      <Row
+                        label="Show community banner"
+                        description="The Slack community invite on the Projects page."
                       >
-                        <span className="settings-toggle-track">
-                          <span className="settings-toggle-thumb" />
-                        </span>
-                      </button>
-                    </div>
-                    <div className="settings-row">
-                      <div className="settings-row-info">
-                        <span className="settings-row-label">Show element breadcrumb</span>
-                        <span className="settings-row-description">
-                          Show the selected element&apos;s DOM path along the bottom of the preview.
-                        </span>
-                      </div>
-                      <button
-                        className={`settings-toggle ${elementBreadcrumbEnabled ? 'on' : 'off'}`}
-                        onClick={handleElementBreadcrumbToggle}
+                        <Toggle
+                          on={slackCtaVisible}
+                          label="Show community banner"
+                          onChange={handleSlackCtaToggle}
+                          disabled={loading}
+                        />
+                      </Row>
+                    )}
+                  </Group>
+                  <Group id="appearance-workspace" title="Project workspace">
+                    <Row
+                      label="Compact toolbar"
+                      description="One top bar for the workspace's controls, with Home and the sidebar in it."
+                    >
+                      <Toggle
+                        on={compactWorkspaceToolbarEnabled}
+                        label="Compact workspace toolbar"
+                        onChange={handleCompactWorkspaceToolbarToggle}
                         disabled={loading}
-                        role="switch"
-                        aria-label="Show element breadcrumb"
-                        aria-checked={elementBreadcrumbEnabled}
-                      >
-                        <span className="settings-toggle-track">
-                          <span className="settings-toggle-thumb" />
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                </>
+                      />
+                    </Row>
+                    <Row
+                      label="Element breadcrumb"
+                      description="The selected element's path along the bottom of the preview."
+                    >
+                      <Toggle
+                        on={elementBreadcrumbEnabled}
+                        label="Show element breadcrumb"
+                        onChange={handleElementBreadcrumbToggle}
+                        disabled={loading}
+                      />
+                    </Row>
+                  </Group>
+                </div>
               )}
               {page === 'advanced' && (
-                <>
-                  <div className="settings-section">
-                    <div className="settings-row">
-                      <div className="settings-row-info">
-                        <span className="settings-row-label">
-                          Usage analytics &amp; error reports
-                        </span>
-                        <span className="settings-row-description">
-                          Anonymous usage and error reports, never your code or files. Off shares
-                          nothing.
-                        </span>
-                      </div>
-                      <button
-                        className={`settings-toggle ${analyticsEnabled ? 'on' : 'off'}`}
-                        onClick={handleToggle}
+                <div className="agents-settings">
+                  <Group id="advanced-reports" title="Reports">
+                    <Row
+                      label="Usage analytics & error reports"
+                      description="Anonymous usage and error reports, never your code or files. Off sends nothing."
+                    >
+                      <Toggle
+                        on={analyticsEnabled}
+                        label="Usage analytics and error reports"
+                        onChange={handleToggle}
                         disabled={loading}
-                        role="switch"
-                        aria-label="Usage analytics and error reports"
-                        aria-checked={analyticsEnabled}
+                      />
+                    </Row>
+                  </Group>
+                  {isMac() && (
+                    <Group id="advanced-extras" title="Extras">
+                      <Row
+                        label="Spotify controls"
+                        description="What's playing in Spotify, in the sidebar, with play, pause and skip. macOS asks once to let the app control Spotify."
                       >
-                        <span className="settings-toggle-track">
-                          <span className="settings-toggle-thumb" />
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="settings-section">
-                    <div className="settings-group">
-                      <div className="settings-row">
-                        <div className="settings-row-info">
-                          <span className="settings-row-label">Keep dev servers running</span>
-                          <span className="settings-row-description">
-                            Keep previews ready while you switch views or projects. Servers stop
-                            when you stop them, close their project window, or quit the app.
-                          </span>
-                        </div>
-                        <button
-                          className={`settings-toggle ${keepDevServersRunning ? 'on' : 'off'}`}
-                          onClick={handleKeepDevServersRunningToggle}
+                        <Toggle
+                          on={spotifyWidgetEnabled}
+                          label="Spotify controls"
+                          onChange={handleSpotifyWidgetToggle}
                           disabled={loading}
-                          role="switch"
-                          aria-label="Keep dev servers running"
-                          aria-checked={keepDevServersRunning}
-                        >
-                          <span className="settings-toggle-track">
-                            <span className="settings-toggle-thumb" />
-                          </span>
-                        </button>
-                      </div>
-                      {isMac() && (
-                        <div className="settings-row">
-                          <div className="settings-row-info">
-                            <span className="settings-row-label">Spotify controls</span>
-                            <span className="settings-row-description">
-                              Show what's playing in Spotify in the sidebar, with play/pause and
-                              skip controls. macOS will ask permission to control Spotify the first
-                              time.
-                            </span>
-                          </div>
-                          <button
-                            className={`settings-toggle ${spotifyWidgetEnabled ? 'on' : 'off'}`}
-                            onClick={handleSpotifyWidgetToggle}
-                            disabled={loading}
-                            role="switch"
-                            aria-label="Spotify controls"
-                            aria-checked={spotifyWidgetEnabled}
-                          >
-                            <span className="settings-toggle-track">
-                              <span className="settings-toggle-thumb" />
-                            </span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
+                        />
+                      </Row>
+                    </Group>
+                  )}
+                </div>
               )}
             </AreaBoundary>
           </div>

@@ -209,23 +209,12 @@
   align-items: stretch;
 }
 
-/* One rule, under the group — the tab's own divider already sits above the
-   first row, so a second line there was two dividers with nothing between
-   them. It runs the full width of the dialog rather than stopping inside the
-   body's padding, which is what makes it read as a section break instead of
-   an underline. */
-.settings-group {
-  display: flex;
-  flex-direction: column;
-  margin: 0 calc(var(--settings-body-inset) * -1);
-  padding: 0 var(--settings-body-inset);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
-}
-
-/* ...but a divider is a separator, and the last group in a panel has nothing
-   to be separated from. There it is just a line above the bottom edge. */
-.settings-section > .settings-group:last-child {
-  border-bottom: none;
+/* Inside a group, rows sit at one rhythm: each row's own padding, no gap on
+   top of it. The section's 16px gap plus 12px of padding each side put 40px
+   between two switches on the agents' pages, while the app's pages (no
+   group) had 16px; the same window read as two apps. */
+.settings-group .settings-section:not(:has(> :not(.settings-row, .settings-row-steps))) {
+  gap: 0;
 }
 
 .settings-group .settings-row {
@@ -251,33 +240,40 @@
   flex-shrink: 0;
 }
 
-/* The path field is itself the click target — a pencil sits on the right. */
+/* The path field is itself the click target, a folder icon on the right. It
+   is a control, so it has a control's height, radius and hover (a stronger
+   edge, never the accent: the accent means "on" and "the recommended
+   action", and a hover is neither). */
 .settings-folder-field {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
   width: 100%;
-  margin-top: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--surface-control);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-card);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-control);
   color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
   transition:
-    border-color var(--transition),
-    background-color var(--transition),
-    color var(--transition);
+    border-color var(--transition-interaction),
+    color var(--transition-interaction);
 }
 
 .settings-folder-field:hover:not(:disabled) {
-  border-color: var(--accent-active);
+  border-color: var(--border-strong);
   color: var(--text-primary);
 }
 
+.settings-folder-field:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--border-width-default);
+}
+
 .settings-folder-field:disabled {
-  opacity: 0.6;
+  opacity: var(--button-disabled-opacity);
   cursor: not-allowed;
 }
 
@@ -296,23 +292,12 @@
 }
 
 .settings-folder-field:hover:not(:disabled) :last-child {
-  color: var(--accent-active);
+  color: var(--text-secondary);
 }
 
 .settings-folder-reset {
   align-self: flex-start;
   margin-top: var(--spacing-sm);
-  padding: 0;
-  background: none;
-  border: none;
-  font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color var(--transition);
-}
-
-.settings-folder-reset:hover:not(:disabled) {
-  color: var(--text-secondary);
 }
 
 /* Move-projects prompt */
@@ -463,11 +448,14 @@
   font-size: var(--font-size-body-sm);
 }
 
-/* Settings → Agents: a few quiet groups, each a small heading over its rows. */
+/* Every Settings page: a few quiet groups, each a heading over its rows, one
+   hairline between groups, inside the page's column. The line used to be
+   each group's own bottom border, pulled 20px past the column on both sides
+   (the old dialog's inset) and drawn under the last group too, so a page
+   could end on a stray rule. */
 .agents-settings {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
 }
 
 .settings-group {
@@ -476,27 +464,33 @@
   gap: var(--spacing-md);
 }
 
+.agents-settings > .settings-group + .settings-group {
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-xl);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+/* Two runs of rows in one group read as one list: the rows' own padding
+   separates them, not the group's gap on top of it. */
+.settings-group
+  > .settings-section:not(:has(> :not(.settings-row)))
+  + .settings-section:not(:has(> :not(.settings-row))) {
+  margin-top: calc(var(--spacing-md) * -1);
+}
+
 .settings-group__title {
   margin: 0;
-  /* A section's name, read as one (the site's names): primary ink, tracked
-     in. A muted 11px label made a long page read as a log. */
-  font-size: var(--font-size-body-lg);
+  /* A section's name, read as one: primary ink, tracked in, a step above
+     the rows' labels. A muted 11px label made a long page read as a log;
+     at the rows' own 13px a heading and its first row read as a pair
+     ("Agents' browser" over "Agents' browser"). */
+  font-size: var(--font-size-subhead);
   font-weight: var(--font-weight-heading);
   letter-spacing: var(--tracking-name);
   color: var(--text-primary);
 }
 
-/* The same air under every group before its divider. A group that ends on
-   rows already has the row's own padding there; one that ends on a control
-   (Usage's field, Accounts' Add button) had none, and sat on the line. */
-.agents-settings > .settings-group {
-  padding-bottom: var(--spacing-lg);
-}
-
-.agents-settings > .settings-group:last-child {
-  padding-bottom: 0;
-}
-
+/* A group ends on its last row: the hairline's margin is the air. */
 .agents-settings > .settings-group > .settings-section:last-child > .settings-row:last-child {
   padding-bottom: 0;
 }
@@ -515,9 +509,9 @@
   margin-top: var(--spacing-lg);
 }
 
-/* Inside a group the group's own gap separates them. */
+/* Inside a group the rows' own padding separates them. */
 .settings-group > .agents-desktop-settings + .settings-section {
-  margin-top: 0;
+  margin-top: calc(var(--spacing-md) * -1);
 }
 
 /* Accent color. Each swatch is its own accent scope (accentScopeProps), so it
