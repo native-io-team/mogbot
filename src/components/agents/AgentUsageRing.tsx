@@ -43,7 +43,8 @@ export function AgentUsageRing({ agent, open, onOpenChange }: AgentUsageRingProp
   const left = ring ? 100 - ring.percent : null;
   const label =
     left !== null ? `Usage: ${left}% of the 5-hour limit left` : 'Usage: no 5-hour reading yet';
-  const anything = ring !== null || contextMeter(agent.context) !== null || (quotas?.length ?? 0) > 0;
+  const anything =
+    ring !== null || contextMeter(agent.context) !== null || (quotas?.length ?? 0) > 0;
   if (!anything && !open) return null;
   return (
     <Dropdown

@@ -96,9 +96,10 @@ describe('a step’s exact command', () => {
       <AgentBubble message={reply({ ...work, steps: [read, work.steps[1]] })} agent={agent} />
     );
     fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
-    expect(
-      screen.getAllByRole('button', { name: /, Show / }).map((b) => b.textContent)
-    ).toEqual(['Read Hero.tsx, Show details', 'Ran npm test, Show exact command']);
+    expect(screen.getAllByRole('button', { name: /, Show / }).map((b) => b.textContent)).toEqual([
+      'Read Hero.tsx, Show details',
+      'Ran npm test, Show exact command',
+    ]);
   });
 
   it('says so when it is no longer kept', async () => {

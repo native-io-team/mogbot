@@ -163,7 +163,7 @@ export const agentsDeskScenarios: Scenario[] = [
     id: 'agents-desk-routines',
     title: 'Agents — every routine in one list, with Pause all asking first',
     looksRightWhen:
-      'The main pane is “Routines”. A muted count (“… on · 1 paused, across … agents”), then the confirm panel: “Pause all … running routines? Nothing runs until you resume them.” with Cancel and a neutral (not accent) Pause all at the card’s trailing edge, 8px apart. Below, one row per routine on hairlines: the agent’s small key, its name as a link and the routine’s note cut to one line, then a muted line in words (“Every weekday at 9:00 AM · next tomorrow at 9:00 AM”, “Every 4 hours · paused · last: didn’t run after 2 tries”: lower case after the first word) and an on/off switch on the right; the paused one is off and quieter. The sidebar’s Routines row wears the selected fill.',
+      'The main pane is “Routines”. A muted count (“… on · 1 paused, across … agents”), then the confirm panel: “Pause all … running routines? Nothing runs until you resume them.” with Cancel and a neutral (not accent) Pause all at the card’s trailing edge, 8px apart. Below, one row per routine on hairlines: the agent’s small key, its name as a link and the routine’s note cut to one line, then a muted line in words (“Every weekday at 9:00 AM · next tomorrow at 9:00 AM”, “Every 4 hours · paused · last: didn’t run after 2 tries”: lower case after the first word) and an on/off switch on the right; the paused one is off and quieter. The sidebar’s Routines row, in the footer beside Usage (pages together; New agent and New room pinned under the list), wears the selected fill.',
     requires: '.agents-routines__confirm',
     openSelector: AGENTS_TAB,
     steps: [
@@ -186,7 +186,7 @@ export const agentsDeskScenarios: Scenario[] = [
     id: 'agents-desk-groups',
     title: 'Agents — the agent list grouped by project',
     looksRightWhen:
-      'The sidebar: the Chief of Staff first and ungrouped, then folding group headers in the Hidden toggle’s quiet style, each with a chevron turned down and a count on the right: “acme-marketing 1” over Acme Site, “northwind-crm 1” over Lead Gen, then “Not in a project” over the rest. Rows look exactly as they do ungrouped.',
+      'The sidebar: New agent and New room are pinned under the list, never under the Usage footer, and Routines sits in the footer with Usage. The list: the Chief of Staff first and ungrouped, then folding group headers in the Hidden toggle’s quiet style, each with a chevron turned down and a count on the right: “acme-marketing 1” over Acme Site, “northwind-crm 1” over Lead Gen, then “Not in a project” over the rest. Rows look exactly as they do ungrouped.',
     requires: '.agents-list__group-toggle',
     openSelector: AGENTS_TAB,
     storage: {

@@ -122,8 +122,7 @@ export const AgentComposer = memo(function AgentComposer({
   const setDraft = useMemo(() => (text: string) => setComposerDraft(agentId, text), [agentId]);
   const dictating = dictation.phase !== 'idle';
   const blank = isUnfilled(draft, unfilled);
-  const canSend =
-    !blank && (draft.trim().length > 0 || staged.length > 0 || quotes.length > 0);
+  const canSend = !blank && (draft.trim().length > 0 || staged.length > 0 || quotes.length > 0);
 
   // In sidebar order as it is now: computed again as you type, so the picker
   // opening on "@" lists them the way the sidebar does at that moment.

@@ -658,8 +658,7 @@ function keyOf(
       state === 'out'
         ? ([...general]
             .filter((l) => l.left === 0 && l.resetsAtMs !== undefined)
-            .sort((a, b) => (a.resetsAtMs as number) - (b.resetsAtMs as number))[0] ??
-          shareLimit)
+            .sort((a, b) => (a.resetsAtMs as number) - (b.resetsAtMs as number))[0] ?? shareLimit)
         : shareLimit,
     changes: changeLines(row.engine, line?.changes, now),
     fix,
@@ -704,7 +703,7 @@ export function totalOf(
   const real = keys.filter((k) => k.signedIn && k.state !== 'same');
   const read = real.filter((k) => k.share !== null);
   const unread = real.filter((k) => k.share === null);
-  const segment =(k: StackKey): TotalSegment => {
+  const segment = (k: StackKey): TotalSegment => {
     const l = k.refillLimit;
     const refill = l?.countdown ?? null;
     const room = k.share === null ? 'shows after its first reply' : `${k.share}% left`;
@@ -746,8 +745,7 @@ export function totalOf(
     .sort((a, b) => resetAt(a.l, now) - resetAt(b.l, now))[0];
   return {
     left,
-    figure:
-      left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not read yet',
+    figure: left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not read yet',
     across: left === null ? '' : across,
     unread:
       unread.length > 0 && read.length > 0

@@ -462,9 +462,7 @@ export function AccountDetail({
             )}
             <StatusPill tone={PILL[k.state]}>{k.stateLabel}</StatusPill>
           </div>
-          <span className="usage-account__detail">
-            {k.detail.join(' · ')}
-          </span>
+          <span className="usage-account__detail">{k.detail.join(' · ')}</span>
         </div>
         <div className="usage-account__actions">
           {k.canUse && (
@@ -633,8 +631,8 @@ export function AccountDetail({
             ))}
           </ol>
           <p className="usage-section__muted">
-            Each task shows the tokens its engine reported; a rise isn’t divided between tasks.
-            Use of the same plan outside these agents counts too.
+            Each task shows the tokens its engine reported; a rise isn’t divided between tasks. Use
+            of the same plan outside these agents counts too.
           </p>
         </Section>
       )}
