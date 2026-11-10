@@ -1,8 +1,8 @@
 /**
  * Usage, from the ring in a chat's header or the Agents list's usage line:
  * this agent's context, then the accounts as the desk's Usage view shows
- * them: the total across every account first (the roomiest account first in
- * its bar), then one row per account that opens its own screen
+ * them: the total across every account first (its bar in the work order),
+ * then one row per account that opens its own screen
  * (app/usage-account.tsx; components/usageStack.tsx). From an older Mac, the
  * account the turns run on and every other account with its own limits. Each reading shows once: the top
  * account is never listed again under it (lib/usageSheet.ts `usageSheet`). Only what the Mac serves
@@ -13,7 +13,6 @@
 
 import {
   ADD_ACCOUNT_WHY,
-  usageGlance,
   type AccountBlock,
   type UsageInventory,
 } from '@shipstudio/companion-protocol';
@@ -27,6 +26,7 @@ import { ComputeAccount, ComputeQuiet, ComputeSummary, MeterRow } from '../compo
 import { AccountRows as StackRows, TotalCard } from '../components/usageStack';
 import { servesUsageChanges, UsagePlanControls } from '../components/usagePlanControls';
 import { useAccounts } from '../lib/accounts';
+import { glanceFor } from '../lib/glance';
 import { IconButton, Section, SectionTitle, SheetPage, T } from '../components/ui';
 import { engineName } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -95,9 +95,11 @@ export default function Usage() {
   // The stack of accounts, as the desk's Usage view says it: from a Mac
   // that serves its accounts and their readings.
   const { accounts } = useAccounts({ room: false });
+  const agents = useApp((s) => s.overview?.agents);
+  // The same glance as the Agents list's card and the desk: the same accounts, the same pins.
   const glance = useMemo(
-    () => (accounts && inventory ? usageGlance(accounts, inventory, { now }) : null),
-    [accounts, inventory, now]
+    () => (accounts && inventory ? glanceFor(accounts, inventory, agents, now) : null),
+    [accounts, inventory, agents, now]
   );
   const stacked = glance !== null && glance.keys.length > 0;
   const openAccount = (engine: string, account: string) =>
@@ -142,7 +144,10 @@ export default function Usage() {
         {stacked && glance && (
           // The total first; each account a row that opens its own screen.
           <View style={styles.accounts}>
-            <TotalCard glance={glance} onOpen={openAccount} />
+            <TotalCard
+              glance={glance}
+              spendHere={servesUsageChanges() && canCall('agents.spare.spendNow')}
+            />
             <View style={styles.rowsHead}>
               <T variant="headline" color={colors.textStrong} accessibilityRole="header">
                 Accounts
@@ -161,11 +166,7 @@ export default function Usage() {
                     {e.label}
                   </T>
                 )}
-                <StackRows
-                  keys={e.keys}
-                  all={glance.keys}
-                  onOpen={(k) => openAccount(k.engine, k.id)}
-                />
+                <StackRows keys={e.keys} all={e.keys} onOpen={(k) => openAccount(k.engine, k.id)} />
               </View>
             ))}
           </View>

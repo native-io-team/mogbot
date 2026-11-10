@@ -581,12 +581,16 @@ request, the diff and the photo viewer push over them. At
   `components/usageStack.tsx`), as the desk's Usage view says it
   (`usageGlance`, the same words and figures): the Agents list's glance (one
   compact card: the total and how many accounts it is of, a refill chip, the
-  total bar fullest first) and the ring left of ⓘ in a chat's header open it.
+  total bar in the work order) and the ring left of ⓘ in a chat's header open
+  it; on a Mac that serves Usage, Settings shows that same card (Accounts &
+  usage) instead of an account list of its own. Every one of them builds the
+  glance with `lib/glance.ts` `glanceFor`, the desk's engines and pins, so they
+  count the same accounts.
   Under a putty gauge key: this agent's context when its engine reported it,
   then the total first ("72% left across 2 Max accounts", "Next refill in …",
-  the bar with each account named under it), then **Accounts**, one list per
-  engine in the order turns try them (keycap, name, plan, room, pill, refill
-  chip). An account opens its own screen, the desk's account page: its place
+  the bar; `totalWords`, as the desk's hero), then **Accounts**, one list per
+  engine in the order turns try them (keycap numbered within its engine, the
+  heading names it; name, plan, room, pill, refill chip). An account opens its own screen, the desk's account page: its place
   and state, **Use this one now** and the ↑/↓ for its place (where the Mac
   takes `agents.accounts.use|reorder`), then **Limits | Tokens**: each limit a
   card (countdown chip, big "% left", the pace-marked bar, the Mac's run-out

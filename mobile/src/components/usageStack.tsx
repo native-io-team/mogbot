@@ -2,7 +2,7 @@
  * Usage on the phone, as the desk's sidebar row and Usage view say it
  * (`companion-protocol/usageGlance`): the total first, the room across every
  * account ("72% left across 2 accounts"), one bar made of a segment per
- * account with the roomiest first, then each account as a row that opens
+ * account in the work order, then each account as a row that opens
  * its own screen (`KeyCard`): its limits, who used it this week and "Where
  * did my usage go". `GlanceRow` is the Agents list's line, the desk
  * sidebar's row on the phone.
@@ -13,7 +13,7 @@
  * Only what the Mac served: an account with no reading is an empty, outlined
  * segment, never a full one, and never counted as room; a second sign-in of
  * the same account adds nothing and says why. Reordering and "Use this one
- * now" stay in Settings → Accounts; adding and signing in happen on the Mac.
+ * now" are on an account's page; adding and signing in happen on the Mac.
  */
 
 import { useState } from 'react';
@@ -26,19 +26,16 @@ import {
   placeLabel,
   SIGN_IN_DIFFERENT,
   USE_THIS_ONE_NOW,
-  type AgentEngine,
   type KeyLimit,
   type StackKey,
   type UsageGlance,
   type UsageTotal,
+  totalWords,
 } from '@shipstudio/companion-protocol';
 import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import { depthOf, iconSize, keySize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { AgentKey } from './AgentKey';
 import { Button, Icon, IconButton, Segmented, StatusPill, T } from './ui';
-
-/** The least a row can be tall and still take a thumb (Apple's 44pt). */
-const TAP = 44;
 
 const fillOf = (colors: Palette, tone: StackKey['tone']) =>
   tone === 'warning' ? colors.accentWarning : colors.textPrimary;
@@ -141,8 +138,8 @@ const CHIP_SCALE = 1.6;
  * The Agents list's usage glance, as the desk sidebar's row says it, as one
  * compact card: "Usage", the total across every account ("72% left · 2
  * accounts", `usageGlance.total`, never the account in use), the next refill
- * as a chip, and the total bar under it, a segment per account, fullest
- * first. Amber only when the user must act. Opens Usage.
+ * as a chip, and the total bar under it, a segment per account in the work
+ * order. Amber only when the user must act. Opens Usage.
  */
 export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: () => void }) {
   const colors = useColors();
@@ -191,106 +188,66 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
 
 /**
  * The total first: what is left across every account, of what, and when it
- * next refills; the bar, in the work order, with each account named under its
- * segment (a tap opens it); then what needs saying.
+ * next refills (`totalWords`, as the desk's hero and the chat's popover say
+ * it); the bar, in the work order; then what needs saying. The accounts'
+ * names and room are the rows right under this card, so it doesn't list them.
  */
 export function TotalCard({
   glance,
-  onOpen,
+  spendHere = false,
 }: {
   glance: UsageGlance;
-  onOpen?: (engine: AgentEngine, id: string) => void;
+  /** "Give agents something to do" is on this screen (a Mac that takes it from the phone). */
+  spendHere?: boolean;
 }) {
   const colors = useColors();
   const styles = useStyles();
+  // At accessibility sizes: "across 2 Max accounts" its own line (nested, it took
+  // the display figure's line height).
+  const large = useLargeText();
   if (glance.keys.length === 0) return null;
   const { total } = glance;
-  const out = glance.tone === 'limited';
-  const known = total.left !== null && !out;
-  // At accessibility sizes: "across 2 Max accounts" its own line (nested, it took
-  // the display figure's line height), and each account's name its own line.
-  const large = useLargeText();
-  const figure = known ? total.figure : glance.unread ? glance.headline : glance.row.figure;
-  // As the desk's hero words it, with when as well as how long.
-  const refill = out
-    ? glance.row.refill
-    : total.refill
-      ? `Next refill in ${total.refill.in}${total.counted > 1 ? ` · ${total.refill.account}` : ''}, ${total.refill.at}`
-      : null;
+  const words = totalWords(glance);
   return (
     <View style={[styles.card, styles.hero]}>
       <View style={styles.answer}>
         <T variant="caption" color={colors.textMuted}>
-          {total.counted > 1 ? 'All accounts' : 'Usage'}
+          {words.eyebrow ?? 'Usage'}
         </T>
         {/* "72% left across 2 Max accounts": the figure, and of what, as one headline. */}
         <T
-          variant={known ? 'display' : 'title'}
+          variant={words.known ? 'display' : 'title'}
           accessibilityRole="header"
           color={
             glance.tone === 'warning'
               ? colors.accentWarning
-              : known
+              : words.known
                 ? colors.textStrong
                 : colors.textSecondary
           }
         >
-          {figure}
-          {known && !!total.across && !large && (
+          {words.figure}
+          {words.across && !large && (
             <>
               {' '}
               <T variant="subhead" color={colors.textSecondary}>
-                {total.across}
+                {words.across}
               </T>
             </>
           )}
         </T>
-        {known && !!total.across && large && (
+        {words.across && large && (
           <T variant="subhead" color={colors.textSecondary}>
-            {total.across}
+            {words.across}
           </T>
         )}
-        {refill && (
+        {words.refill && (
           <T variant="small" color={colors.textSecondary}>
-            {refill}
+            {words.refill}
           </T>
         )}
       </View>
       <TotalBar total={total} tall />
-      {/* Under the bar, in the same order, one account a line: a tap opens it. */}
-      <View>
-        {total.segments.map((s, i) => (
-          <Pressable
-            key={s.key}
-            accessibilityRole={onOpen ? 'button' : undefined}
-            accessibilityLabel={s.words}
-            disabled={!onOpen}
-            onPress={() => onOpen?.(s.engine, s.id)}
-            style={({ pressed }) => [
-              styles.legendRow,
-              large && styles.wrapRow,
-              i > 0 && styles.divided,
-              pressed && PRESSED,
-            ]}
-          >
-            <T
-              variant="small"
-              color={colors.textPrimary}
-              style={large ? styles.wholeLine : styles.grow}
-              numberOfLines={large ? undefined : 1}
-            >
-              {s.name}
-            </T>
-            <T variant="small" color={colors.textSecondary} style={styles.figure}>
-              {s.left === null ? 'Not read yet' : `${s.left}% left`}
-            </T>
-            {s.refill && <RefillChip text={s.refill} />}
-            {onOpen && (
-              <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
-            )}
-          </Pressable>
-        ))}
-      </View>
       {(glance.estimate || total.unread || glance.sameNotes.length > 0) && (
         <View style={styles.notes}>
           {glance.estimate && (
@@ -336,7 +293,9 @@ export function TotalCard({
           ))}
           {!glance.nudge.empty && (
             <T variant="caption" color={colors.textMuted}>
-              Ask your Chief of Staff to start it, or press Give agents something to do on your Mac.
+              {spendHere
+                ? 'Ask your Chief of Staff to start it, or press Give agents something to do below.'
+                : 'Ask your Chief of Staff to start it, or press Give agents something to do on your Mac.'}
             </T>
           )}
         </View>
@@ -809,13 +768,6 @@ const useStyles = makeStyles((colors) => ({
   },
   glanceHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   answer: { gap: space.xs },
-  legendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    minHeight: TAP,
-    paddingVertical: space.xs,
-  },
   hero: { gap: space.lg, padding: space.xl },
   figure: { fontVariant: ['tabular-nums'] },
   wrapRow: { flexWrap: 'wrap', rowGap: space['2xs'] },
