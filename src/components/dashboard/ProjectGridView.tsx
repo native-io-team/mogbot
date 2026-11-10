@@ -98,16 +98,19 @@ export function ProjectGridView({
     return (
       <div className="project-list-empty">
         {searchQuery ? (
-          <EmptyState title="No items found" description="Try a different search term" />
+          <EmptyState
+            title={`Nothing matches “${searchQuery}”`}
+            description="Try another word, or clear the search."
+          />
         ) : currentFolderId ? (
           <EmptyState
-            title="This folder is empty"
-            description="Move projects here or create a new project"
+            title="Nothing in this folder yet"
+            description="Move a project here, or start a new one."
           />
         ) : (
           <EmptyState
             title="No projects yet"
-            description="You don't need a repo or any code to start — pick a template and your AI agent builds it."
+            description="When work becomes a site or an app, it lives here. No repo or code needed: start from a template and an agent builds it."
             action={
               onCreateProject ? (
                 <Button
