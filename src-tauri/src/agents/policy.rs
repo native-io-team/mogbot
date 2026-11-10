@@ -42,6 +42,7 @@
 //!
 //! Full design: docs/agents.md, "What each agent can do".
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -577,7 +578,8 @@ fn load_locked() -> Saved {
             Ok(mut saved) => {
                 if migrate_exact_text(&mut saved) {
                     if let Ok(json) = serde_json::to_vec_pretty(&saved) {
-                        let _ = store::write_atomic(&p, &json);
+                        store::write_atomic(&p, &json)
+                            .or_log("access.json after updating its exact-text rules");
                     }
                 }
                 saved
@@ -596,7 +598,7 @@ fn write_fresh(p: &Path) -> Saved {
     let agents = store::list().unwrap_or_default();
     let saved = migrate(&agents);
     if let Ok(json) = serde_json::to_vec_pretty(&saved) {
-        let _ = store::write_atomic(p, &json);
+        store::write_atomic(p, &json).or_log("a fresh access.json");
     }
     saved
 }
@@ -701,10 +703,11 @@ pub fn sync() {
         let direct = eff.projects.how != How::Copy;
         let off = !eff.browser;
         if agent.work_directly != direct || agent.reach.browser_off != off {
-            let _ = store::update(&agent.id, |a| {
+            store::update(&agent.id, |a| {
                 a.work_directly = direct;
                 a.reach.browser_off = off;
-            });
+            })
+            .or_log("an agent's work-directly and browser switches from its policy");
         }
     }
 }
@@ -800,7 +803,7 @@ pub fn forget(agent_id: &str) {
     if saved.agents.remove(agent_id).is_some() {
         saved.version += 1;
         if let Ok(json) = serde_json::to_vec_pretty(&saved) {
-            let _ = store::write_atomic(&p, &json);
+            store::write_atomic(&p, &json).or_log("access.json without a deleted agent's policy");
         }
     }
 }

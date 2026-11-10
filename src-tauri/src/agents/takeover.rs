@@ -33,6 +33,7 @@
 //! CLI's pid and session): the next launch stops that CLI if it outlived the
 //! app ([`recover_after_restart`]) and says so in the chat.
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -336,9 +337,10 @@ pub async fn begin(
     // The conversation on screen is the one driven: its session is loaded
     // while the claim keeps every turn out (`conversations::swap`).
     if let Some(c) = conversation.filter(|c| super::conversations::exists(agent_id, c)) {
-        let _ = store::update(agent_id, |a| {
+        store::update(agent_id, |a| {
             super::conversations::swap(a, c);
-        });
+        })
+        .or_log("the conversation a take-over hands back");
     }
     // Read under the claim: an engine or project change is refused from
     // here on (`runner::update_settings`), so this is what it stays.
@@ -654,7 +656,13 @@ pub async fn delete_agent(app: &AppHandle, agent_id: &str) -> Result<store::Agen
     // What its dying turn records lands before its folder goes (and a line
     // recorded after that is refused: `store::append_message`).
     runner::wait_until_idle(agent_id, Duration::from_secs(3)).await;
-    let removed = match store::delete(agent_id) {
+    // The registry, the Keychain and its folder: off the async workers.
+    let id = agent_id.to_string();
+    let deleted = tokio::task::spawn_blocking(move || store::delete(&id))
+        .await
+        .map_err(super::err_other)
+        .and_then(|r| r);
+    let removed = match deleted {
         Ok(removed) => removed,
         Err(e) => {
             runner::undelete(agent_id);

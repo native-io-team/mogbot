@@ -27,6 +27,7 @@
 //!
 //! Full design: docs/agents.md, "Setting up your team".
 
+use crate::agents::store::OrLog;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 
@@ -748,7 +749,8 @@ pub fn fold_cards() -> Result<usize, CommandError> {
         }
     })?;
     for (agent_id, request_id, _) in &moved {
-        let _ = store::expire_with_note(agent_id, request_id, FOLDED_LINE);
+        store::expire_with_note(agent_id, request_id, FOLDED_LINE)
+            .or_log("a folded team-setup card as expired");
         store::refresh_pending(agent_id);
     }
     Ok(moved.len())

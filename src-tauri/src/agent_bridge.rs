@@ -75,6 +75,15 @@ struct GlobalBridge {
 
 static GLOBAL_BRIDGE: LazyLock<Mutex<Option<GlobalBridge>>> = LazyLock::new(|| Mutex::new(None));
 
+/// The bridge's loopback port, while it runs (the watchdog asks it, so
+/// never waits: a held lock answers `None` this time).
+pub fn running_port() -> Option<u16> {
+    GLOBAL_BRIDGE
+        .try_lock()
+        .ok()
+        .and_then(|g| g.as_ref().map(|b| b.port))
+}
+
 /// In-flight tool calls awaiting a frontend answer, keyed by request id.
 static PENDING_REQUESTS: LazyLock<Mutex<HashMap<u64, oneshot::Sender<Value>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));

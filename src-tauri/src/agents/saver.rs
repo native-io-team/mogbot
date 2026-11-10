@@ -24,6 +24,7 @@
 //! Only readings decide: an account with no reading has room as far as this
 //! knows (never held), and a limit with no known reset isn't waited for.
 
+use crate::agents::store::OrLog;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
@@ -455,7 +456,7 @@ pub fn say_held(
     }
     let tz = chrono::Local;
     let detail = held_detail(h, &tz, now);
-    let _ = store::update(&agent.id, |a| {
+    store::update(&agent.id, |a| {
         if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == check_in.id) {
             super::runs::record(
                 &mut c.runs,
@@ -471,7 +472,8 @@ pub fn say_held(
                 },
             );
         }
-    });
+    })
+    .or_log("a routine run's record");
     let mut line = super::runner::new_message(
         &agent.id,
         MessageKind::Note,

@@ -31,6 +31,7 @@
 //! - Its state survives a restart: the open card is in the chat log and
 //!   `waiting` on the routine, so Go ahead after a relaunch still works.
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
@@ -371,7 +372,7 @@ pub fn after_step(
                 return None;
             }
             let now = store::now_ms();
-            let _ = store::update(agent_id, |a| {
+            store::update(agent_id, |a| {
                 if let Some(x) = a.check_ins.iter_mut().find(|x| x.id == c.id) {
                     x.waiting = Some(Waiting {
                         run_at,
@@ -380,7 +381,8 @@ pub fn after_step(
                         asked_at: now,
                     });
                 }
-            });
+            })
+            .or_log("a routine step waiting on the user's OK");
             store::refresh_pending(agent_id);
             super::notify::refresh_badge(app);
             Some(runs::Outcome::Waiting)

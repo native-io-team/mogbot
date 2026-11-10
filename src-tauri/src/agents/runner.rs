@@ -12,6 +12,7 @@
 //! a chat message under the same id when it completes; tool calls only ever
 //! update the "working" line under the agent's name.
 
+use crate::agents::store::OrLog;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
@@ -440,7 +441,8 @@ fn nothing_new(app: &AppHandle, agent_id: &str) {
     notify::replace_held(agent_id, None);
     // Off screen, the firing line counted as unread (`announce`).
     if !notify::on_screen(app, agent_id) {
-        let _ = store::update(agent_id, |a| a.unread = a.unread.saturating_sub(1));
+        store::update(agent_id, |a| a.unread = a.unread.saturating_sub(1))
+            .or_log("an agent's unread count");
     }
     let _ = record_in_turn(
         app,
@@ -1410,11 +1412,12 @@ fn plan_recovery_for(
     if let (Pickup::Resume, Some(sid)) = (&pickup, session) {
         // Claude Code's first turn may have gone before it said its session.
         let sid = sid.to_string();
-        let _ = store::update(agent_id, |a| {
+        store::update(agent_id, |a| {
             if super::crossover::session_on(a, engine).is_none() {
                 super::crossover::save_session(a, engine, sid);
             }
-        });
+        })
+        .or_log("an agent's engine session");
         let resume = next_pickup(mark.resumes).unwrap_or(MAX_RESUMES);
         requeue_first(
             agent_id,
@@ -2464,7 +2467,8 @@ fn conversation_for(agent_id: &str, inbound: &Inbound) -> String {
 /// waits there (`interrupted_in` is per place).
 fn load_conversation(app: &AppHandle, agent_id: &str, to: &str) {
     let mut swapped = false;
-    let _ = store::update(agent_id, |a| swapped = super::conversations::swap(a, to));
+    store::update(agent_id, |a| swapped = super::conversations::swap(a, to))
+        .or_log("the conversation an agent's turn runs in");
     if swapped {
         tracing::info!(agent = %agent_id, conversation = %to, "[Agents] loaded a conversation for its turn");
         let _ = app.emit(EVENT_REGISTRY, ());
@@ -4168,7 +4172,7 @@ async fn tidy(app: &AppHandle, agent_id: &str, agent: &store::Agent) {
         return;
     }
     // The reading was the conversation before it was summarised.
-    let _ = store::update(agent_id, |a| a.context = None);
+    store::update(agent_id, |a| a.context = None).or_log("an agent's cleared context reading");
     let _ = app.emit(EVENT_REGISTRY, ());
     let _ = record(
         app,
@@ -5170,7 +5174,7 @@ fn go_back(app: &AppHandle, agent_id: &str, prompt: &str) -> String {
     let Some(away) = agent.away.clone() else {
         return prompt.to_string();
     };
-    let _ = store::update(agent_id, |a| a.away = None);
+    store::update(agent_id, |a| a.away = None).or_log("an agent's return from away");
     if let Ok(home_dir) = store::agent_home(agent_id) {
         crossover::sync_instructions(&home_dir);
     }
@@ -5724,7 +5728,7 @@ async fn run_turn(
         .await
     {
         agent.capabilities = Some(caps.clone());
-        let _ = store::update(agent_id, |a| a.capabilities = Some(caps));
+        store::update(agent_id, |a| a.capabilities = Some(caps)).or_log("an agent's capabilities");
     }
     // This agent's secrets, as variables of this process only (see `secrets`).
     let secret_env = super::secrets::env_for(&agent);
@@ -6221,7 +6225,7 @@ async fn run_turn(
                         Step::Session(_) => {}
                         Step::Capabilities(caps) => {
                             compare_after_switch(app, agent_id, &caps);
-                            let _ = store::update(agent_id, |a| a.capabilities = Some(caps));
+                            store::update(agent_id, |a| a.capabilities = Some(caps)).or_log("an agent's capabilities");
                         }
                         Step::Reply(text) => {
                             // Recorded under the draft's id, so it takes the draft's place.
@@ -6342,9 +6346,9 @@ async fn run_turn(
                             let turn_model = model.map(str::to_string);
                             let kept = tokio::task::spawn_blocking(move || {
                                 let mut kept = false;
-                                let _ = store::update(&id, |a| {
+                                store::update(&id, |a| {
                                     kept = keep_reading(a, on.as_deref(), turn_model.as_deref(), fill);
-                                });
+                                }).or_log("an agent's context reading");
                                 kept
                             })
                             .await
@@ -6591,7 +6595,8 @@ async fn run_turn(
         tracing::warn!("[Agents] Session {session_id} for {agent_id} is gone; starting a new one");
         // The reading was the lost session's; the retry takes its own.
         reading.armed = false;
-        let _ = store::update(agent_id, |a| super::crossover::drop_session(a, engine));
+        store::update(agent_id, |a| super::crossover::drop_session(a, engine))
+            .or_log("an agent's dropped engine session");
         // The new session starts blank. Hand it the conversation the user
         // can see, so the agent doesn't greet them like a stranger, and say so.
         let _ = record_in_turn(
@@ -6673,7 +6678,8 @@ impl Drop for ReadingWatch {
     fn drop(&mut self) {
         if self.armed && !self.read {
             let mut had = false;
-            let _ = store::update(&self.agent_id, |a| had = a.context.take().is_some());
+            store::update(&self.agent_id, |a| had = a.context.take().is_some())
+                .or_log("an agent's cleared context reading");
             if had {
                 let _ = self.app.emit(EVENT_REGISTRY, ());
             }

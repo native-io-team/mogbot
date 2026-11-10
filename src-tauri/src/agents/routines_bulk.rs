@@ -7,6 +7,7 @@
 //! user's review (the bug `admin::pause` had, S4 in the developer review).
 //! Changing a routine by hand clears the mark (`schedule::set_paused`).
 
+use crate::agents::store::OrLog;
 use serde_json::Value;
 
 use super::schedule::{self, CheckIn};
@@ -45,11 +46,12 @@ fn switch_all(on: bool) -> usize {
         }
         total += switched.len();
         if on {
-            let _ = store::update(&agent.id, |a| {
+            store::update(&agent.id, |a| {
                 for c in a.check_ins.iter_mut().filter(|c| switched.contains(&c.id)) {
                     c.extra.insert(PAUSED_BY_BULK.into(), Value::Bool(true));
                 }
-            });
+            })
+            .or_log("which routines Pause all paused");
         }
     }
     total

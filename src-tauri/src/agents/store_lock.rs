@@ -73,6 +73,15 @@ impl Drop for Held {
     }
 }
 
+/// Where the registry lock is held from and for how long, if it is: what
+/// the watchdog's report says first.
+pub fn holder() -> Option<(String, Duration)> {
+    HOLDER
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .map(|(at, since)| (at.to_string(), since.elapsed()))
+}
+
 /// Whether this thread holds the registry lock now.
 pub fn held_here() -> bool {
     HELD_AT.with(|h| h.get().is_some())

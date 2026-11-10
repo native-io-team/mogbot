@@ -92,9 +92,30 @@ cut, best done after the store-lock fix lands to avoid conflicts.
 ### 7. Error paths
 
 `let _ = store::update(..)` is common in loops (schedule, watch). Each is a
-deliberate best-effort write, but a failed one leaves no trace. A
-`store::update_or_log` would make them visible without changing behaviour.
-Not done tonight.
+deliberate best-effort write, but a failed one leaves no trace.
+
+**Fixed (follow-up):** every `let _ =` on a store or policy write (48 of
+them) is `.or_log("what it was for")` (`store::OrLog`): a warning naming the
+write and its call site, never its content. Two now tell the user: an
+imported routine that couldn't be paused is taken off again and listed as
+not set (it would have run unreviewed), and an agent left on a removed
+account gets an error line instead of "runs on any account".
+
+### 8. Follow-up the same night
+
+- The phone's connect-time snapshot is bounded like requests
+  (`companion::server::snapshot`): each part within 6 s, a slow one sent as
+  `null` or the last status, a late status published when it arrives.
+- `store::create`, `soft_delete` and `restore` do their folder I/O outside
+  the registry lock (`store_lock_tests`: each is "busy" in bounded time under
+  a wedged lock, folders untouched).
+- More of `commands/agents.rs` on `blocking(..)`: create, the open-file
+  commands, Stop, "When…" create/edit, the import prompt and Stop, the team
+  setup hello; `store::delete` and the admin delete off the async workers.
+- `watchdog.rs`: a plain thread asks the phone server and the bridge for a
+  404 every 10 s; silent for 20 s, the log gets one error with the registry
+  lock's holder and a `sample` of every thread (`hang-*.txt` in the logs
+  folder). Not shown on the desk yet.
 
 ## What changed
 

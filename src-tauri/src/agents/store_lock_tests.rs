@@ -168,3 +168,156 @@ fn a_delete_and_a_policy_change_never_wait_on_each_other() {
     assert!(list().unwrap().is_empty());
     set_root_for_tests(None);
 }
+
+/// Hold the registry lock on another thread until the returned sender
+/// fires (or 10 s pass), with writers giving up after 200 ms.
+fn wedge(id: &str) -> (std::thread::JoinHandle<()>, mpsc::Sender<()>) {
+    lock::set_wait_for_tests(Some(Duration::from_millis(200)));
+    let (inside_tx, inside_rx) = mpsc::channel::<()>();
+    let (release_tx, release_rx) = mpsc::channel::<()>();
+    let id = id.to_string();
+    let held = std::thread::spawn(move || {
+        let _ = update(&id, |_| {
+            let _ = inside_tx.send(());
+            let _ = release_rx.recv_timeout(Duration::from_secs(10));
+        });
+    });
+    inside_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    (held, release_tx)
+}
+
+/// Run `f` on a thread and wait at most 3 s for it.
+fn within<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    rx.recv_timeout(Duration::from_secs(3))
+        .expect("waited on a wedged registry lock for ever")
+}
+
+/// Deleting moved the agent's folder to the trash while holding the
+/// registry lock. The move happens outside it now; one that can't get the
+/// lock is told "busy" in bounded time and leaves the folder where it was.
+#[test]
+fn a_delete_that_cant_get_the_lock_leaves_the_folder_in_place() {
+    let _serial = tests_lock();
+    let (dir, agent) = scratch();
+    let home = dir.path().join(&agent.id);
+    assert!(home.join("CLAUDE.md").exists());
+    let (held, release) = wedge(&agent.id);
+    let id = agent.id.clone();
+    let err = within(move || soft_delete(&id, None)).unwrap_err();
+    let _ = release.send(());
+    held.join().unwrap();
+    lock::set_wait_for_tests(None);
+    assert_eq!(err.to_string(), lock::BUSY);
+    assert!(
+        home.join("CLAUDE.md").exists(),
+        "the folder went to the trash"
+    );
+    assert!(!dir.path().join(TRASH_DIR).join(&agent.id).exists());
+    assert!(trashed().is_empty());
+    assert_eq!(get(&agent.id).unwrap().id, agent.id);
+    // Released, the delete and the restore go through, folder and all.
+    soft_delete(&agent.id, None).unwrap();
+    assert!(!home.exists());
+    assert!(dir
+        .path()
+        .join(TRASH_DIR)
+        .join(&agent.id)
+        .join("CLAUDE.md")
+        .exists());
+    assert_eq!(trashed().len(), 1);
+    restore(&agent.id).unwrap();
+    assert!(home.join("CLAUDE.md").exists());
+    assert!(trashed().is_empty());
+    set_root_for_tests(None);
+}
+
+/// The same for a restore: busy, and the folder stays in the trash.
+#[test]
+fn a_restore_that_cant_get_the_lock_leaves_the_folder_in_the_trash() {
+    let _serial = tests_lock();
+    let (dir, agent) = scratch();
+    let other = create(NewAgent {
+        name: "Holder".into(),
+        role: String::new(),
+        instructions: String::new(),
+        shape: None,
+        color: None,
+        is_main: false,
+    })
+    .unwrap();
+    soft_delete(&agent.id, None).unwrap();
+    let kept = dir.path().join(TRASH_DIR).join(&agent.id);
+    assert!(kept.exists());
+    let (held, release) = wedge(&other.id);
+    let id = agent.id.clone();
+    let err = within(move || restore(&id)).unwrap_err();
+    let _ = release.send(());
+    held.join().unwrap();
+    lock::set_wait_for_tests(None);
+    assert_eq!(err.to_string(), lock::BUSY);
+    assert!(kept.join("CLAUDE.md").exists(), "the folder left the trash");
+    assert!(!dir.path().join(&agent.id).exists());
+    assert_eq!(trashed().len(), 1);
+    set_root_for_tests(None);
+}
+
+/// Creating made the folder and wrote CLAUDE.md under the lock. Both happen
+/// before it now; a create that can't get the lock is busy in bounded time
+/// and leaves no folder behind.
+#[test]
+fn a_create_that_cant_get_the_lock_leaves_no_folder() {
+    let _serial = tests_lock();
+    let (dir, agent) = scratch();
+    let late = || NewAgent {
+        name: "Late".into(),
+        role: "Arrives late".into(),
+        instructions: "Hi.".into(),
+        shape: None,
+        color: None,
+        is_main: false,
+    };
+    let (held, release) = wedge(&agent.id);
+    let err = within(move || create(late())).unwrap_err();
+    let _ = release.send(());
+    held.join().unwrap();
+    lock::set_wait_for_tests(None);
+    assert_eq!(err.to_string(), lock::BUSY);
+    let folders: Vec<String> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(folders, vec![agent.id.clone()], "a stray folder was left");
+    // Released, it goes through with its CLAUDE.md written.
+    let made = create(late()).unwrap();
+    let md = std::fs::read_to_string(dir.path().join(&made.id).join("CLAUDE.md")).unwrap();
+    assert!(
+        md.starts_with("# Late\n\nArrives late\n\n## Instructions\n\nHi."),
+        "{md}"
+    );
+    set_root_for_tests(None);
+}
+
+/// A trash entry for an agent that's on the team (a restore whose list
+/// update failed) is dropped by the sweep, never purged: purging would
+/// forget a live agent's secrets.
+#[test]
+fn the_trash_sweep_never_purges_an_agent_on_the_team() {
+    let _serial = tests_lock();
+    let (_dir, agent) = scratch();
+    write_trash(&[Deleted {
+        agent: serde_json::to_value(&agent).unwrap(),
+        deleted_at: 0,
+        deleted_by: None,
+    }])
+    .unwrap();
+    assert!(take_expired(now_ms()).is_empty(), "a live agent was purged");
+    assert!(trashed().is_empty());
+    assert!(get(&agent.id).is_ok());
+    set_root_for_tests(None);
+}

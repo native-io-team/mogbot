@@ -7,7 +7,7 @@
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use super::router::{
@@ -611,9 +611,20 @@ pub struct Stub {
     pub hosts: Mutex<Vec<String>>,
     /// "Setting up your team" calls, as the router handed them over.
     pub team_setup: Mutex<Vec<super::router::TeamSetupAction>>,
+    /// Milliseconds `overview`, `projects` and `mac_status` block their
+    /// thread for before answering, as a held store lock or a hung probe does.
+    pub stall_ms: AtomicU64,
 }
 
 impl Stub {
+    /// Block this thread for `stall_ms`, as a std lock wait does.
+    fn stall(&self) {
+        let ms = self.stall_ms.load(Ordering::SeqCst);
+        if ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+    }
+
     /// The stub's conversations, as the desk's `agents_conversations` serializes them.
     fn conversation_list(&self) -> Value {
         use crate::agents::conversations::{ConversationView, Conversations};
@@ -701,6 +712,7 @@ impl Stub {
             slow_done: AtomicUsize::new(0),
             hosts: Mutex::new(vec![HOST.into()]),
             team_setup: Mutex::new(Vec::new()),
+            stall_ms: AtomicU64::new(0),
         });
         let c = Arc::new(Companion::with_epoch(registry, stub.clone(), epoch.into()));
         let _ = stub.companion.set(Arc::downgrade(&c));
@@ -897,6 +909,7 @@ impl Backend for Stub {
     }
 
     async fn overview(&self) -> Result<Value, CommandError> {
+        self.stall();
         Ok(overview())
     }
 
@@ -2343,6 +2356,7 @@ impl Backend for Stub {
     }
 
     async fn projects(&self) -> Result<Value, CommandError> {
+        self.stall();
         Ok(serde_json::to_value(projects()).unwrap())
     }
 
@@ -2436,6 +2450,7 @@ impl Backend for Stub {
     }
 
     async fn mac_status(&self) -> MacStatus {
+        self.stall();
         mac_status()
     }
 

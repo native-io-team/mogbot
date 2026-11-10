@@ -616,6 +616,114 @@ where
     }
 }
 
+/// The longest each part of a connect-time snapshot (overview, Mac status,
+/// projects) is waited on. The parts run side by side, so the snapshot is
+/// sent within this; the phone answers no ping meanwhile, and a socket that
+/// says nothing past its probe is taken as gone.
+pub(crate) const SNAPSHOT_DEADLINE: Duration = Duration::from_secs(6);
+
+/// The state a phone that can't replay starts from, each part within
+/// `deadline`. A part that's slow (the agents list busy, a probe that hangs)
+/// degrades the snapshot rather than silencing the socket: the overview and
+/// projects go as `null`, which the phone reads as "keep what you have", and
+/// the status as the last one this Mac sent, else one that says only what
+/// is known without asking. A status worked out late is still published as
+/// `system.status`, so the phone is told when it's ready.
+pub(crate) async fn snapshot(
+    c: &Arc<Companion>,
+    cursor: wire::Cursor,
+    deadline: Duration,
+) -> Event {
+    let overview = {
+        let c = c.clone();
+        bounded("sync.snapshot overview", deadline, async move {
+            c.backend.overview().await.map_err(WireError::Command)
+        })
+    };
+    let projects = {
+        let c = c.clone();
+        bounded("sync.snapshot projects", deadline, async move {
+            c.backend.projects().await.map_err(WireError::Command)
+        })
+    };
+    let status = snapshot_status(c, deadline);
+    let (overview, status, projects) = tokio::join!(overview, status, projects);
+    let overview = overview.unwrap_or_else(|e| {
+        tracing::warn!(
+            "[Companion] snapshot sent without the overview: {}",
+            e.summary()
+        );
+        Value::Null
+    });
+    let projects = match projects {
+        Ok(list @ Value::Array(_)) => list,
+        Ok(_) => Value::Null,
+        Err(e) => {
+            tracing::warn!(
+                "[Companion] snapshot sent without projects: {}",
+                e.summary()
+            );
+            Value::Null
+        }
+    };
+    Event::Snapshot {
+        cursor,
+        overview,
+        status,
+        projects,
+    }
+}
+
+/// The Mac status for a snapshot within `deadline`. Past it the work goes
+/// on, and when it ends it is remembered and published like any change.
+async fn snapshot_status(c: &Arc<Companion>, deadline: Duration) -> wire::MacStatus {
+    let (tx, rx) = oneshot::channel::<wire::MacStatus>();
+    let worker = c.clone();
+    let handle = tokio::runtime::Handle::current();
+    // On the blocking pool, as requests are: a probe that blocks its thread
+    // holds one of its own, never an async worker.
+    tokio::task::spawn_blocking(move || {
+        handle.block_on(async move {
+            let status = worker.backend.mac_status().await;
+            if let Err(status) = tx.send(status) {
+                // The snapshot went without it: tell the phones now.
+                tracing::info!("[Companion] the late Mac status arrived; publishing it");
+                if worker.remember_status(&status) {
+                    worker.hub.publish(Event::System { status });
+                }
+            }
+        })
+    });
+    match tokio::time::timeout(deadline, rx).await {
+        Ok(Ok(status)) => {
+            c.remember_status(&status);
+            status
+        }
+        _ => {
+            tracing::warn!(
+                "[Companion] the Mac status took longer than {:?}; the snapshot carries the last one known",
+                deadline
+            );
+            c.last_status().unwrap_or_else(|| wire::MacStatus {
+                name: c.backend.server_name(),
+                app_version: c.backend.app_version(),
+                power: wire::PowerInfo {
+                    keep_awake: false,
+                    lid_closed_mode: wire::Known::Unknown,
+                    on_battery: wire::Known::Unknown,
+                    battery_percent: None,
+                },
+                claude: wire::ClaudeInfo {
+                    installed: false,
+                    signed_in: wire::Known::Unknown,
+                    version: None,
+                },
+                routes: Vec::new(),
+            })
+        }
+    }
+}
+
 /// A request's answer, or an error answer if working it out panicked.
 pub(crate) async fn caught(
     method: &str,
@@ -946,19 +1054,7 @@ where
             cursor
         }
         Resume::Snapshot { cursor } => {
-            let overview = c.backend.overview().await.unwrap_or(Value::Null);
-            let status = c.backend.mac_status().await;
-            c.remember_status(&status);
-            let projects = match c.backend.projects().await {
-                Ok(Value::Array(list)) => list,
-                _ => Vec::new(),
-            };
-            let snapshot = Event::Snapshot {
-                cursor: cursor.clone(),
-                overview,
-                status,
-                projects,
-            };
+            let snapshot = snapshot(c, cursor.clone(), SNAPSHOT_DEADLINE).await;
             if !send(
                 ws,
                 &ServerFrame::Evt {

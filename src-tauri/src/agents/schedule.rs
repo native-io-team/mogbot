@@ -26,6 +26,7 @@
 //! would make every check-in queued behind it arrive "late" for a reason that
 //! has nothing to do with the user.
 
+use crate::agents::store::OrLog;
 use chrono::{
     DateTime, Datelike, Duration as Span, LocalResult, NaiveDate, NaiveDateTime, NaiveTime,
     TimeZone,
@@ -1846,9 +1847,10 @@ pub fn spawn(app: AppHandle) {
                     .iter()
                     .any(|c| !c.runs.is_empty() || c.retry.is_some())
                 {
-                    let _ = store::update(&agent.id, |a| {
+                    store::update(&agent.id, |a| {
                         runs::after_restart(&mut a.check_ins, now);
-                    });
+                    })
+                    .or_log("routine runs settled after a restart");
                 }
             }
         })

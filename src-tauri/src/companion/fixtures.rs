@@ -242,10 +242,12 @@ fn frames() -> Vec<ServerFrame> {
                 cursor: cursor(5),
                 overview: testkit::overview(),
                 status: testkit::mac_status(),
-                projects: testkit::projects()
-                    .iter()
-                    .map(|p| serde_json::to_value(p).unwrap())
-                    .collect(),
+                projects: serde_json::Value::Array(
+                    testkit::projects()
+                        .iter()
+                        .map(|p| serde_json::to_value(p).unwrap())
+                        .collect(),
+                ),
             },
         ),
         (None, Event::CaughtUp { cursor: cursor(5) }),
