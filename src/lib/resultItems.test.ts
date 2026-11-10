@@ -6,6 +6,8 @@ describe('repeatsName', () => {
     expect(repeatsName('www.linkedin.com', 'www.linkedin.com/company/acme')).toBe(true);
     expect(repeatsName('www.linkedin.com', 'https://www.linkedin.com/company/acme')).toBe(true);
     expect(repeatsName('example.com', 'example.com')).toBe(true);
+    // The row shows the host without www.; the title may still have it.
+    expect(repeatsName('linkedin.com', 'www.linkedin.com/company/acme')).toBe(true);
   });
 
   it('keeps a subtitle that adds something', () => {

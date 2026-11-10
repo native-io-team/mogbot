@@ -12,7 +12,11 @@
  */
 export function repeatsName(meta: string, name: string): boolean {
   if (meta === name) return true;
-  const bare = name.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').toLowerCase();
-  const host = meta.toLowerCase();
+  // "www." is left off a row's host (`linkHost`), so it is left off here too.
+  const bare = name
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .replace(/^www\./i, '')
+    .toLowerCase();
+  const host = meta.replace(/^www\./i, '').toLowerCase();
   return bare === host || bare.startsWith(`${host}/`);
 }
