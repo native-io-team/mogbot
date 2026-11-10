@@ -75,6 +75,9 @@ describe('AgentEditorModal: what a new agent runs on', () => {
     const { created } = open([{ ...CLAUDE, installed: false, signedIn: false }, CODEX]);
     // One engine installed: nothing to choose, and nothing greyed out.
     expect(screen.queryByRole('group', { name: 'Runs on' })).not.toBeInTheDocument();
+    // What the engine holds to is under Advanced, not on the review.
+    expect(screen.queryByTestId('agent-engine-protections')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
     expect(screen.getByTestId('agent-engine-protections')).toHaveTextContent(
       /can't reach the internet/
     );

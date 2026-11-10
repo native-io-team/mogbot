@@ -36,7 +36,7 @@ import {
 import { AgentReach } from './AgentReach';
 import { AgentPolicy } from './AgentPolicy';
 import { AgentLevelPicker } from './AgentLevelPicker';
-import { AgentEngineField, AgentEngineMore } from './AgentEngine';
+import { AgentEngineField, AgentEngineMore, AgentEngineProtections } from './AgentEngine';
 import { useQuotaLines } from './AgentsQuota';
 import { ChevronRightIcon } from '@/components/icons';
 import {
@@ -741,6 +741,8 @@ export function AgentEditorModal({
                 </div>
               </div>
             )}
+
+            <AgentEngineProtections engines={engines} value={engine} />
           </div>
         )}
       </div>
@@ -757,7 +759,7 @@ export function AgentEditorModal({
           <AgentSkills agent={agent} focus={initialFocus === 'skills'} />
         </div>
       )}
-      {/* With one engine there's no "Runs on": what protects it, and the way to add another, live down here. */}
+      {/* With one engine there's no "Runs on": the way to add another lives down here. */}
       <AgentEngineMore engines={engines} value={engine} onSetUp={onSetUpEngine} />
 
       {error && (

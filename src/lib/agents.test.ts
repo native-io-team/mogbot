@@ -432,21 +432,22 @@ describe('formatUsage', () => {
     expect(engineUnavailable({ ...codex, installed: true, signedIn: true })).toBeNull();
     // What the engine enforces, under the level: never a second answer to
     // "what does it do on its own" (the independence slider's).
-    expect(engineProtections('claude')).toMatch(/^Claude Code enforces:/);
-    expect(engineProtections('claude')).toMatch(/decided by its independence/);
+    expect(engineProtections('claude')).toBe(
+      'It changes files in its project and its own folder without asking. For anything else, its Independence setting decides whether it asks you first.'
+    );
     const app = engineProtections('codex', { ...codex, installed: true, asks: true });
     expect(app).toMatch(/can't reach the internet/);
-    expect(app).toMatch(/decided by its independence/);
-    expect(app).toMatch(/connected to Codex aren't limited/);
+    expect(app).toMatch(/Independence setting decides/);
+    expect(app).toMatch(/connected to Codex aren't covered/);
     // An old Codex can't ask: the line must not say it does, and says so plainly.
     const old = engineProtections('codex', { ...codex, installed: true, asks: false });
     expect(old).toMatch(/can't stop to ask you/);
-    expect(old).not.toMatch(/decided by its independence/);
+    expect(old).not.toMatch(/Independence setting decides/);
     // No jargon: these are read by people who don't run terminals.
-    for (const line of [engineProtections('claude'), app, old]) {
-      expect(line).not.toMatch(/sandbox|app-server|exec\b|MCP/i);
-      // No "on its own" / "asks you first" claim to contradict the level.
-      expect(line).not.toMatch(/on its own|asks you first/);
+    for (const line of [engineProtections('claude'), engineProtections('opencode'), app, old]) {
+      expect(line).not.toMatch(/sandbox|app-server|exec\b|MCP|enforces/i);
+      // No flat "on its own" / "asks you first" claim to contradict the level.
+      expect(line).not.toMatch(/on its own|(?<!whether it )asks you first/);
     }
   });
 

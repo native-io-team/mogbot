@@ -3002,11 +3002,15 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-engine-one',
     title: 'Agents — a new agent with only Claude Code installed',
     looksRightWhen:
-      'The New agent dialog has no “Runs on” control at all: name, colour, Model, then “Add a role and instructions”. At the foot, one muted line on what protects a Claude Code agent, and a quiet “Also use Codex” text button. No greyed-out Codex, no jargon.',
+      'The New agent dialog has no “Runs on” control at all: name, colour, then “Add a role and instructions”, and Advanced, opened: Model, project, apps, then one muted line in plain words, “It changes files in its project and its own folder without asking. For anything else, its Independence setting decides whether it asks you first.” (no “enforces”, no engine name in it). At the foot a quiet “Also use Codex” text button. No greyed-out Codex, no jargon.',
     openSelector: AGENTS_TAB,
     requires: '.agent-editor [data-testid="agent-engine-protections"]',
     clipSelector: '.agent-editor',
-    steps: [{ click: '.workspace-sidebar-add-project' }, { click: '.agent-editor__fill-in' }],
+    steps: [
+      { click: '.workspace-sidebar-add-project' },
+      { click: '.agent-editor__fill-in' },
+      { click: '.agent-editor__advanced > .agent-editor__more' },
+    ],
     commands: {
       agents_overview: {
         ...overview(),

@@ -1417,10 +1417,12 @@ down") are gone from the desk, and what agents can *reach* (projects, apps,
 the browser) is a list of settings, not a scale (see "What each agent may
 do"). Menus and titles say "Independence…", "<Agent>'s independence" and
 "Each agent's independence". The engine's own limits are worded as what the
-engine enforces *under* the level ("Claude Code enforces: file edits go ahead
-in its project and its own folder; everything else is decided by its
-independence", `engineProtections`), low in Edit agent, never beside the
-level as a second answer.
+engine holds to *under* the level, in plain words ("It changes files in its
+project and its own folder without asking. For anything else, its
+Independence setting decides whether it asks you first.",
+`engineProtections`), under Advanced in Edit agent (it's for people who chose
+an engine on purpose, and nobody can act on it while reviewing a new agent),
+never beside the level as a second answer.
 
 One choice for the whole team (`agents/independence.rs`), drawn on desk and
 phone as one four-stop slider titled "Independence", "Asks a lot" at the
