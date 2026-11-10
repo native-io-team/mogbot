@@ -1442,6 +1442,12 @@ pub fn own_page_key(agent_id: &str, tool: &str) -> Option<String> {
     }
 }
 
+/// The page an own-browser call acts on, when its page memory knows it.
+pub fn own_url_of(agent_id: &str, tool: &str, input: &Value) -> Option<String> {
+    let (page, _, i) = own_call(agent_id, tool, input)?;
+    url_for(&page, &i)
+}
+
 /// An own-browser call as the Claude in Chrome call it amounts to, with
 /// the page memory it is judged on.
 fn own_call(agent_id: &str, tool: &str, input: &Value) -> Option<(Page, String, Value)> {
