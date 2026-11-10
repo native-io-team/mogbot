@@ -58,6 +58,8 @@ pub enum Format {
     OpenBotTransfer,
     OpenClaw,
     Hermes,
+    /// An agent shared as a recipe (`recipe`).
+    Recipe,
 }
 
 impl Format {
@@ -69,6 +71,7 @@ impl Format {
             Format::OpenBotTransfer => "OpenBot transfer",
             Format::OpenClaw => "OpenClaw workspace",
             Format::Hermes => "Hermes profile",
+            Format::Recipe => "Agent recipe",
         }
     }
 
@@ -80,6 +83,7 @@ impl Format {
             Format::OpenBotImport | Format::OpenBotTransfer => "OpenBot",
             Format::OpenClaw => "OpenClaw",
             Format::Hermes => "Hermes",
+            Format::Recipe => "a recipe",
         }
     }
 
@@ -405,6 +409,19 @@ pub fn read_files(files: &Files, out: &mut Export) {
             }
         }
     }
+    // Recipes: an agent someone shared, one file each.
+    let mut recipes = false;
+    for (path, text) in &files.list {
+        for value in json_values(text) {
+            if super::recipe::is_recipe(&value) {
+                super::recipe::read_value(&value, path, out);
+                recipes = true;
+            }
+        }
+    }
+    if recipes {
+        return;
+    }
     // Grok Bot exports, possibly several (one per bot), possibly as a reply.
     let mut grok = Vec::new();
     for (path, text) in &files.list {
@@ -607,7 +624,7 @@ fn strings(v: Option<&Value>) -> Vec<String> {
 
 /// An agent as a file format gives it: every field counts as sent (there's
 /// no one to ask for more).
-fn agent(name: &str) -> Agent {
+pub(crate) fn agent(name: &str) -> Agent {
     let mut a = Agent {
         name: name.trim().to_string(),
         ..Agent::default()

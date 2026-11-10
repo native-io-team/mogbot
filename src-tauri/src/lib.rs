@@ -895,6 +895,8 @@ pub fn run() {
             commands::agents::agents_import_text_review,
             commands::agents::agents_import_file_preview,
             commands::agents::agents_import_file_review,
+            commands::agents::agents_recipe_preview,
+            commands::agents::agents_recipe_save,
             commands::agents::agents_other_app_preview,
             commands::agents::agents_other_app_import,
             commands::agents::agents_other_app_exists,
