@@ -426,6 +426,10 @@ export function ChatView({
   // A phone in landscape: the notch or the Dynamic Island is at a side.
   const side = embedded ? { left: 0, right: 0 } : { left: insets.left, right: insets.right };
   const newest = newestSignature(items[0]);
+  // The page is read again when the turn's state or its newest recorded line
+  // moves on: never per streamed word or working label, each of which would
+  // be a request to the Mac.
+  const pageTurn = `${agent?.status?.state ?? ''}:${messages[messages.length - 1]?.id ?? ''}`;
   // Read by the scroll handler, which outlives a render.
   const newestRef = useRef(newest);
   useLayoutEffect(() => {
@@ -744,7 +748,7 @@ export function ChatView({
       <ConversationPage
         agentId={agent.id}
         conversation={offered ? (viewing ?? conversations?.current) : FIRST_CONVERSATION}
-        turn={`${agent.status?.state ?? ''}:${newest}`}
+        turn={pageTurn}
         side={side}
         onError={showError}
       />

@@ -196,4 +196,10 @@ describe('ConversationPage', () => {
     expect(screen.queryByRole('region')).toBeNull();
     expect(command('agents.pagePin')?.when?.()).toBe(false);
   });
+
+  it('reads the page once when the band and the header ask at once', async () => {
+    both();
+    await screen.findByRole('region', { name: 'Page: Job search' });
+    expect(invoke.mock.calls.filter(([cmd]) => cmd === 'agents_page')).toHaveLength(1);
+  });
 });

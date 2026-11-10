@@ -105,19 +105,38 @@ pub fn note_turn(agent_id: &str, messages: &[String], before: Branch) {
     };
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let path = home.join(POINTS);
-    let mut lines: Vec<String> = std::fs::read_to_string(&path)
-        .unwrap_or_default()
-        .lines()
-        .map(str::to_string)
-        .collect();
-    lines.push(line);
-    if lines.len() > MAX_POINTS + MAX_POINTS / 2 {
-        lines.drain(..lines.len() - MAX_POINTS);
-    }
-    let body = lines.join("\n") + "\n";
-    if let Err(e) = store::write_private(&path, body.as_bytes()) {
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    let count = raw.lines().count();
+    // One line a turn: appended, and the file rewritten only to trim it.
+    let written = if count < MAX_POINTS + MAX_POINTS / 2 && (raw.is_empty() || raw.ends_with('\n'))
+    {
+        append_private(&path, format!("{line}\n").as_bytes())
+    } else {
+        let mut lines: Vec<&str> = raw.lines().collect();
+        lines.push(&line);
+        if lines.len() > MAX_POINTS + MAX_POINTS / 2 {
+            lines.drain(..lines.len() - MAX_POINTS);
+        }
+        let body = lines.join("\n") + "\n";
+        store::write_private(&path, body.as_bytes())
+    };
+    if let Err(e) = written {
         tracing::warn!("[Agents] couldn't note where a turn started: {e}");
     }
+}
+
+/// Add `bytes` to the end of an owner-only file, creating it 0600.
+fn append_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.append(true).create(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(bytes)?;
+    store::restrict_file(path)
 }
 
 fn points(agent_id: &str) -> Vec<Point> {

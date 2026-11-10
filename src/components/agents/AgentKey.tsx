@@ -46,16 +46,27 @@ const BIG: ReadonlySet<AgentKeySize> = new Set(['xl']);
  */
 const teamKeys = () => {
   const s = getAgentsSnapshot();
-  return (
+  // Every key on screen asks on every store change (a streamed word is one):
+  // worked out again only when the agents or the team's level changed.
+  if (s.agents === teamCache.agents && s.independence === teamCache.independence) {
+    return teamCache.keys;
+  }
+  const keys =
     `${s.independence ?? ''}\n` +
     s.agents
       .map((a) => {
         const k = keyLookFor(a);
         return `${a.id}\t${k.colorway}\t${k.icon}\t${k.boundKey ?? ''}\t${a.independence ?? ''}`;
       })
-      .join('\n')
-  );
+      .join('\n');
+  teamCache = { agents: s.agents, independence: s.independence, keys };
+  return keys;
 };
+let teamCache: {
+  agents: unknown;
+  independence: unknown;
+  keys: string;
+} = { agents: null, independence: undefined, keys: '' };
 
 function keyFromTeam(
   team: string,
