@@ -64,7 +64,7 @@ import {
 import { flushCache, forgetCache, saveOutbox, loadCache, watchCache } from './cache';
 import { forgetRemembered } from './remembered';
 import { flushDrafts, forgetDrafts, loadDrafts, refusedToDraft, setComposer } from './drafts';
-import { outboxPlan, sendInOrder, unreached } from './outbox';
+import { outboxPlan, retryWaitMs, sendInOrder, unreached } from './outbox';
 import { loadPrefs } from './prefs';
 import { getApp, setApp, update, useApp } from './store';
 import {
@@ -233,6 +233,8 @@ function connect(c: Credentials) {
     });
     // Focus is per connection: the Mac forgot it when the last one dropped.
     focusHeld = null;
+    // A new link: what waits goes on caught-up, and any retry starts quick.
+    waitingTries = 0;
     syncFocus(0);
     // An older Mac (or one without rooms) shows none: forget any kept from before.
     if (!roomsOffered(welcome)) setApp({ rooms: null });
@@ -613,9 +615,10 @@ export async function send(
     update((s) =>
       setPendingFailed(s, agentId, id, !retry, retry, retry ? undefined : describeError(error))
     );
-    if (retry) return;
+    if (retry) return retryWaitingSoon();
     throw error;
   }
+  waitingTries = 0;
   update((s) => confirmSend(s, id, message));
   if (now) await call('agents.interrupt', { agentId });
 }
@@ -679,9 +682,10 @@ export async function sendToRoom(
     update((s) =>
       setPendingFailed(s, key, id, !retry, retry, retry ? undefined : describeError(error))
     );
-    if (retry) return;
+    if (retry) return retryWaitingSoon();
     throw error;
   }
+  waitingTries = 0;
   update((s) => confirmSend(s, id, sent.message));
 }
 
@@ -692,6 +696,26 @@ export const resend = (p: PendingSend) =>
     : send(p.agentId, p.text, false, p.clientId, p.attachments, p.mentions, p.revises);
 
 let flushing = false;
+let waitingTimer: ReturnType<typeof setTimeout> | null = null;
+/** Tries in a row the Mac didn't answer while the link stayed up. */
+let waitingTries = 0;
+
+/**
+ * A send that didn't reach the Mac, or that it didn't answer, with the link
+ * still up: try what's waiting again in a few seconds (by its `clientId`,
+ * so one that did land isn't doubled), backing off while it stays busy. A
+ * dropped link needs none of this: the reconnect flushes the outbox.
+ */
+function retryWaitingSoon() {
+  if (waitingTimer) return;
+  waitingTimer = setTimeout(() => {
+    waitingTimer = null;
+    if (getApp().link.kind !== 'connected') return;
+    // A flush still going would drop this one: look again after it.
+    if (flushing) return retryWaitingSoon();
+    void flushOutbox();
+  }, retryWaitMs(waitingTries++));
+}
 
 /** Send what waited for the Mac, oldest first; give up on what waited too long. */
 async function flushOutbox() {

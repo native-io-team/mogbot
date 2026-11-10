@@ -55,14 +55,37 @@ export async function sendInOrder(
 }
 
 /**
- * The send may not have reached the Mac (no link, or no answer in time):
- * worth sending again with the same `clientId`. A refusal is final.
+ * The Mac's own words when it couldn't finish answering in time, or its
+ * worker fell over (`server.rs`: `BUSY`, and the two lines beside it). The
+ * work carries on past its deadline there, so the send may well have
+ * landed: it's no refusal, and "Not sent" would be wrong, and an edited
+ * resend (a new `clientId`) a duplicate.
+ */
+const MAC_DIDNT_FINISH = /^(Your Mac is busy|This Mac stopped answering|This Mac hit a fault)/;
+
+/**
+ * The send may not have reached the Mac (no link, no answer in time, the
+ * Mac too busy to finish answering, or rate-limited before it looked):
+ * worth sending again with the same `clientId`, which the Mac answers with
+ * the original if it did land. A refusal is final.
  */
 export function unreached(error: unknown): boolean {
   if (!(error instanceof WireFailure)) return false;
   const e = error.error;
-  return e.type === 'Timeout' || (e.type === 'Protocol' && e.code === 'not_connected');
+  if (e.type === 'Timeout') return true;
+  if (e.type === 'Protocol') return e.code === 'not_connected' || e.code === 'rate_limited';
+  return e.type === 'Other' && MAC_DIDNT_FINISH.test(e.message);
 }
+
+/**
+ * Waits before a send the Mac didn't answer is tried again while the link
+ * stays up (a reconnect sends it at once instead). Before these, a send that
+ * timed out on a live link waited for the next reconnect, which on a good
+ * link might be hours.
+ */
+export const RETRY_WAITING_MS = [3000, 8000, 20_000, 30_000];
+export const retryWaitMs = (tries: number) =>
+  RETRY_WAITING_MS[Math.min(tries, RETRY_WAITING_MS.length - 1)];
 
 /**
  * Pending sends restored from disk after a restart. One that was in flight

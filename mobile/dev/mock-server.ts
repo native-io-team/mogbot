@@ -22,6 +22,7 @@ import {
   pairProofMessage,
   negotiate,
   CLOSE_MAC_CLOSING,
+  FEATURES,
   HEARTBEAT_MS,
   HTTP,
   MAX_ATTACHMENTS,
@@ -106,19 +107,24 @@ import * as real from '../../packages/companion-protocol/src/fixtures.gen';
 /** A skill an agent saved (`agents/skills_learn.rs`), for the chat's card and its sheet. */
 const SKILL_STEPS =
   '1. Export last month’s payouts from Stripe (Balance → Payouts → Export, CSV).\n2. Paste them into the ledger’s “Payouts” tab.\n3. Match each to its bank line by amount and date (±2 days).\n4. Share anything unmatched as a table.';
-const skillsByAgent: Record<string, { slug: string; name: string; when: string; steps: string }[]> = {
-  fin: [
-    {
-      slug: 'export-invoices',
-      name: 'Export invoices from Xero',
-      when: 'When the user asks for last month’s invoices',
-      steps: '1. Open Reports → Invoices.\n2. Filter to last month.\n3. Export as CSV and share it.',
-    },
-  ],
-};
+const skillsByAgent: Record<string, { slug: string; name: string; when: string; steps: string }[]> =
+  {
+    fin: [
+      {
+        slug: 'export-invoices',
+        name: 'Export invoices from Xero',
+        when: 'When the user asks for last month’s invoices',
+        steps:
+          '1. Open Reports → Invoices.\n2. Filter to last month.\n3. Export as CSV and share it.',
+      },
+    ],
+  };
 const skillsOf = (agentId: string) => (skillsByAgent[agentId] ??= []);
 
 const realWelcome = real.frames.find((f) => f.t === 'welcome')!;
+/** `server.rs` BUSY: what the real Mac answers past its request deadline. */
+export const MAC_BUSY = "Your Mac is busy and couldn't answer that in time. Try again in a moment.";
+
 const realRefusal = (reason: string) =>
   real.frames.find((f) => f.t === 'refused' && f.reason === reason)?.message ?? reason;
 
@@ -4289,6 +4295,11 @@ export function createMockServer(opts: MockOptions = {}) {
 
   // ---- The socket ------------------------------------------------------------------------
 
+  /** Tailscale on the phone is signed in as someone else (`switchTailnetAccount`). */
+  let otherAccount = false;
+  /** This many next `agents.send`s are done, then answered as the real Mac's deadline does. */
+  let busySends = 0;
+
   function onConnection(ws: WebSocket) {
     // Stuck: the connection is taken, and then nothing.
     if (opts.hung) return;
@@ -4305,7 +4316,7 @@ export function createMockServer(opts: MockOptions = {}) {
       }
       if (!conn) {
         const refuse = (
-          reason: 'unauthorized' | 'revoked' | 'update_app' | 'update_mac',
+          reason: 'unauthorized' | 'revoked' | 'update_app' | 'update_mac' | 'other_account',
           message: string
         ) => {
           ws.send(JSON.stringify({ t: 'refused', reason, message } satisfies ServerFrame));
@@ -4334,6 +4345,12 @@ export function createMockServer(opts: MockOptions = {}) {
         const entry = [...devices.values()].find((d) => d.token === frame.token);
         if (!entry) return refuse('unauthorized', realRefusal('unauthorized'));
         if (entry.revoked || probeRevoked) return refuse('revoked', realRefusal('revoked'));
+        // As `server.rs` answers a token from another tailnet user.
+        if (otherAccount) {
+          return (frame.features ?? []).includes(FEATURES.otherAccount)
+            ? refuse('other_account', realRefusal('other_account'))
+            : refuse('unauthorized', realRefusal('unauthorized'));
+        }
         const n = { version: proven };
         conn = {
           ws,
@@ -4405,6 +4422,11 @@ export function createMockServer(opts: MockOptions = {}) {
             message: `${frame.method} isn’t available yet`,
           });
         const result = handler!(frame.params as Record<string, unknown>, c);
+        if (frame.method === 'agents.send' && busySends > 0) {
+          // Done, but answered past the deadline as busy (`server.rs` BUSY).
+          busySends--;
+          fail({ type: 'Other', message: MAC_BUSY, expected: true });
+        }
         send(c, { t: 'res', id: frame.id, ok: true, result } as ServerFrame);
       } catch (error) {
         const e: WireError =
@@ -4721,6 +4743,15 @@ export function createMockServer(opts: MockOptions = {}) {
     dropAll: () => conns.forEach((c) => c.ws.terminate()),
     /** The app quitting (or restarting for an update): every socket hears "going away". */
     sayGoodbye: () => conns.forEach((c) => c.ws.close(CLOSE_MAC_CLOSING, 'app closing')),
+    /** Tailscale on the phone signs in as another account (true), or back (false). */
+    switchTailnetAccount(other: boolean) {
+      otherAccount = other;
+      if (other) conns.forEach((c) => c.ws.terminate());
+    },
+    /** The next `n` sends land, but are answered as busy, as past the real Mac's deadline. */
+    answerSendsBusy(n: number) {
+      busySends = n;
+    },
     /** The app restarted: a new epoch, so phones get a snapshot. */
     restartJournal() {
       epoch = randomUUID();
@@ -5369,7 +5400,11 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
         login: loginCard(a.name, 'gmail', { askedAs: 'gmail work' }),
       },
     });
-    add({ ts: now - 31 * 60_000, kind: 'user', text: 'Reconcile October’s payouts against the ledger.' });
+    add({
+      ts: now - 31 * 60_000,
+      kind: 'user',
+      text: 'Reconcile October’s payouts against the ledger.',
+    });
     add({
       ts: now - 30 * 60_000,
       kind: 'approval',
@@ -5378,7 +5413,8 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
         requestId: 'req_skill',
         title: 'Save “Reconcile Stripe payouts” as a skill?',
         detail: SKILL_STEPS,
-        summary: 'When to use it: When the user asks to reconcile last month’s payouts against the ledger',
+        summary:
+          'When to use it: When the user asks to reconcile last month’s payouts against the ledger',
         status: 'pending',
         risk: 'low',
         skill: {

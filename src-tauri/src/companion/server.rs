@@ -869,6 +869,17 @@ where
     c.backend.changed();
 }
 
+/// Whether a token refused for its tailnet user is told so
+/// ([`RefusedReason::OtherAccount`]) rather than `Unauthorized`: the app
+/// knows the word, and the request named a person at all.
+fn other_account_refusal(hello: &wire::HelloFrame, login: Option<&str>) -> bool {
+    login.is_some_and(|l| !l.trim().is_empty())
+        && hello
+            .features
+            .iter()
+            .any(|f| f == wire::FEATURE_OTHER_ACCOUNT)
+}
+
 /// The next text frame as a client frame, or `None` if none came in time
 /// (or it wasn't one).
 async fn read_frame<S>(ws: &mut S) -> Option<ClientFrame>
@@ -977,12 +988,25 @@ where
                     d.name
                 ),
             );
-            refuse(
-                ws,
-                RefusedReason::Unauthorized,
-                "This phone isn't paired with this Mac.",
-            )
-            .await;
+            // Still a refusal. Said as what it is only to a phone that
+            // came as some other person on the tailnet (Tailscale on it
+            // switched accounts), and knows the word: a request naming
+            // nobody (a tagged node, a local process) learns nothing more.
+            if other_account_refusal(&hello, peer.login.as_deref()) {
+                refuse(
+                    ws,
+                    RefusedReason::OtherAccount,
+                    "Tailscale on this phone is signed in to another account than the one it was paired on.",
+                )
+                .await;
+            } else {
+                refuse(
+                    ws,
+                    RefusedReason::Unauthorized,
+                    "This phone isn't paired with this Mac.",
+                )
+                .await;
+            }
             return None;
         }
         Auth::Revoked => {
