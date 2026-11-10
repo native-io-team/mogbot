@@ -47,7 +47,15 @@ import {
   NewGroupField,
   startAgentDrag,
 } from './AgentGroupParts';
-import { sectionAgents, useAgentGroups, type AgentGroup } from '../../lib/agentGroups';
+import {
+  sectionAgents,
+  toggleCollapsed,
+  useAgentGroups,
+  type AgentGroup,
+} from '../../lib/agentGroups';
+
+/** The Rooms section's fold, kept with the groups' folds. */
+const ROOMS_KEY = 'rooms';
 import { Button } from '../primitives/Button';
 import { FooterRowIcon } from '../workspace/FooterRowIcon';
 import { IconButton } from '../primitives/IconButton';
@@ -331,8 +339,26 @@ export function AgentsSidebar({
     agents.length > 0
   );
 
-  // The one row in the Tab order: the open one, else the first.
-  const tabStop = shown.some((a) => a.id === selectedId) ? selectedId : shown[0]?.id;
+  // The one row in the Tab order: the open one (an agent or a room), else the first.
+  const openRoom = rooms.some((r) => `room:${r.room.id}` === selectedId);
+  const tabStop = openRoom || shown.some((a) => a.id === selectedId) ? selectedId : shown[0]?.id;
+
+  // Rooms fold as a group does (the fold is kept with the groups'). Folded,
+  // the open room and any that is waiting on you or unread still show, so
+  // folding never hides something new.
+  const roomsFolded = grouping.collapsed.includes(ROOMS_KEY);
+  const roomRows = sortRooms(rooms.map((r) => r.room))
+    .map((room) => ({
+      room,
+      members: rooms.find((r) => r.room.id === room.id)?.members ?? [],
+    }))
+    .filter(
+      ({ room, members }) =>
+        !roomsFolded ||
+        selectedId === `room:${room.id}` ||
+        room.unread > 0 ||
+        members.some((m) => needsYou(m) && m.status.room === room.id)
+    );
 
   const custom = grouping.mode === 'custom';
   const row = (agent: Agent) => (
@@ -394,14 +420,27 @@ export function AgentsSidebar({
           {/* Rooms right after the agents, before the hidden ones (as on the
               phone), so they're seen without scrolling past the hidden list. */}
           {rooms.length > 0 && (
-            <div className="agents-list__section" role="group" aria-label="Rooms">
-              <div className="agents-list__section-title">Rooms</div>
-              {sortRooms(rooms.map((r) => r.room)).map((room) => (
+            <div className="agents-list__group" role="group" aria-label="Rooms">
+              {/* The groups' own header: a chevron, the name on the names'
+                  column, how many on the right. */}
+              <button
+                type="button"
+                tabIndex={0}
+                className="agents-list__group-toggle"
+                aria-expanded={!roomsFolded}
+                onClick={() => toggleCollapsed(ROOMS_KEY)}
+              >
+                <ChevronRightIcon size={10} className="agents-list__hidden-chevron" />
+                <span className="agents-list__group-title">Rooms</span>
+                <span className="agents-list__group-count">{rooms.length}</span>
+              </button>
+              {roomRows.map(({ room, members }) => (
                 <RoomRow
                   key={room.id}
                   room={room}
-                  members={rooms.find((r) => r.room.id === room.id)?.members ?? []}
+                  members={members}
                   current={selectedId === `room:${room.id}`}
+                  tabStop={selectedId === `room:${room.id}`}
                   onSelect={onSelect}
                   actions={roomActions}
                 />

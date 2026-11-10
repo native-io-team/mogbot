@@ -440,12 +440,13 @@
   box-shadow: inset 0 0 0 var(--border-width-emphasis) var(--accent-focus);
 }
 
-/* The chevron sits in a badge-wide box, so the label starts on the names'
-   column instead of hanging left of it. */
+/* The chevron sits in a key-wide box, so the label starts on the names'
+   column instead of hanging left of it (the rows' keys are the md key, not
+   the projects' 24px badge). */
 .agents-list__hidden-chevron {
   box-sizing: content-box;
   flex: 0 0 auto;
-  padding-inline: calc((var(--size-sidebar-project-shortcut) - var(--size-icon-xs)) / 2);
+  padding-inline: calc((var(--agent-key-size-md) - var(--size-icon-xs)) / 2);
   transition: transform var(--transition-interaction-fast);
 }
 
@@ -620,8 +621,9 @@
 
 .agents-list__group-empty {
   margin: 0;
+  /* On the names' column: the row's inset, the key, the gap. */
   padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs)
-    calc(var(--size-sidebar-project-shortcut) + var(--spacing-md));
+    calc(var(--spacing-sm) * 2 + var(--agent-key-size-md));
   font-size: var(--font-size-caption);
   color: var(--text-muted);
   border-bottom: var(--border-width-default) solid var(--border-subtle);
