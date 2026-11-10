@@ -6298,10 +6298,26 @@ cards.
   1.8s per step, "Thinking" only after 2.5s) and its time sits in a fixed
   column of tabular figures. Other lists
   (switcher, Quick Entry) still use `sortAgents` (pinned, then recency).
-- **Sections** (user-made groups in the list) are not built: they need a
-  persisted field, a naming flow, collapse state, and a story for how they
-  sit with the recency sort. Worth doing as its own slice once the list is
-  long enough to want them.
+- **Groups** (`lib/agentGroups.ts`, `AgentGroupParts.tsx`), off by default:
+  ⌘K → Group agents by project, Group agents into your own groups, New
+  agent group…, Stop grouping agents. The Chief stays first, outside any;
+  each group is a folding header (chevron, name, count) with its rows in the
+  attention order above. Your own groups take a dragged row (or the row's
+  menu: Move to …, Remove from group); an empty one says "Drag agents here";
+  right-click its header to remove it (its agents go back to Ungrouped). A
+  per-window convenience in localStorage (`shipstudio.agents.groups`), never
+  the registry or the phone. The **Rooms** section uses the same header and
+  folds the same way (its fold is kept with the groups'); folded, the open
+  room and any that is unread or waiting on you still show.
+- **One column.** Every label in the list (names, the Hidden and group
+  headers, an empty group's line, a room's name) starts on the names'
+  column: the row's inset, the md key (`--agent-key-size-md`), the gap. Room
+  badges are the key's size. The New agent / New room actions under the list
+  share the footer rows' column instead, since they sit with Routines and
+  Usage.
+- **Keyboard.** The list is one Tab stop: the open agent or room, else the
+  first agent. ↑ ↓ Home End move through agents and rooms alike; Shift+F10
+  or the context-menu key opens a row's menu.
 ## Rooms (`src-tauri/src/agents/rooms.rs`)
 
 A room is one visible thread shared by you and two to six agents. It is a
@@ -6419,12 +6435,15 @@ of their own is open.
 - **Managing.** "New room" at the foot of the agent list (once there are two
   agents), ⌘K → New room…, Open <room>, <room>: members and name…,
   Mute/Unmute, Delete…. Rooms sit in a "Rooms" section right after the
-  agents (above Hidden, as on the phone). A room's badge is its own: its
+  agents (above Hidden, as on the phone), under a folding header with their
+  count, like a group's. A room's badge is its own: its
   initials on an outlined neutral tile, so rooms with the same members still
   look different and none passes for an agent; member faces (three, then
   "+N") are in the room's header and empty state. A quiet room's row is one
   line; its newest words show (one line) while unread or while someone is
-  replying or waiting on you there. An unnamed room of four or more is
+  replying or waiting on you there. Waiting reads as an agent row does, the
+  pill then who ("Needs your OK  Acme Site"), desk and phone; unread takes
+  the rows' unread ink. An unnamed room of four or more is
   "Chief of Staff & 3 others" (`rooms::room_name`). Mute stops the unread count. Deleting a room removes its
   thread and never an agent; deleting an agent takes it out of its rooms
   (and as lead); a room left with fewer than two says so above the composer

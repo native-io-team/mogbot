@@ -20,7 +20,13 @@ import {
 } from '../../../packages/companion-protocol/src/agentKeys';
 import { previewText } from '../../../packages/companion-protocol/src/preview';
 import { workingRowLine } from '../../../packages/companion-protocol/src/work';
-import { agentKeyState, plainActivity, type Agent } from '../../lib/agents';
+import {
+  agentKeyState,
+  failedTurn,
+  failurePill,
+  plainActivity,
+  type Agent,
+} from '../../lib/agents';
 import { AgentKey } from './AgentKey';
 
 interface AgentsBoardProps {
@@ -44,6 +50,13 @@ export function boardDetail(agent: Agent, state: KeyState): string | null {
       return 'You’re driving it';
     case 'idle':
       return previewText(agent.preview);
+    case 'paused': {
+      // When it's back, as its sidebar row says it ("until 3:42 AM"): a
+      // paused key with no time left you guessing whether to wait.
+      const failure = failedTurn(agent);
+      const rest = failure?.kind === 'usage_limit' ? failurePill(failure, null).rest : '';
+      return rest || null;
+    }
     default:
       return null;
   }
@@ -84,8 +97,12 @@ export function AgentsBoard({ agents, onOpenAgent, onNewAgent }: AgentsBoardProp
           let detail = boardDetail(agent, state);
           // "Working · Working on the pricing" says it twice: the word leads
           // the line instead ("Working on the pricing").
-          const runOn = Boolean(word && detail?.startsWith(`${word} `));
-          if (runOn && detail) detail = detail.slice(word!.length);
+          // "Paused until 3:42 AM" runs on too: the time finishes the word.
+          const runOn = Boolean(
+            word && (detail?.startsWith(`${word} `) || detail?.startsWith('until '))
+          );
+          if (runOn && detail?.startsWith(`${word} `)) detail = detail.slice(word!.length);
+          else if (runOn && detail) detail = ` ${detail}`;
           return (
             <button
               key={agent.id}

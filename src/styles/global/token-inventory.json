@@ -507,7 +507,7 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "consumerCount": 13
+      "consumerCount": 9
     },
     {
       "name": "--size-sidebar-project",
@@ -1891,7 +1891,7 @@
       "layer": "components",
       "owner": "Control",
       "status": "canonical",
-      "consumerCount": 100
+      "consumerCount": 99
     },
     {
       "name": "--control-height-large",
@@ -1995,7 +1995,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 2
+      "consumerCount": 3
     },
     {
       "name": "--value-field-variable-menu-max-height",
@@ -5115,7 +5115,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 68
+      "consumerCount": 67
     },
     {
       "name": "--tracking-micro",
@@ -5243,7 +5243,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 925
+      "consumerCount": 924
     },
     {
       "name": "--text-faint",
@@ -5331,7 +5331,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 194
+      "consumerCount": 193
     },
     {
       "name": "--border-strong",
@@ -5363,7 +5363,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 312
+      "consumerCount": 311
     },
     {
       "name": "--border-width-emphasis",
@@ -5835,7 +5835,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 146
+      "consumerCount": 145
     },
     {
       "name": "--font-weight-heading",
@@ -6059,7 +6059,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 908
+      "consumerCount": 907
     },
     {
       "name": "--spacing-md",
@@ -6067,7 +6067,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 592
+      "consumerCount": 590
     },
     {
       "name": "--spacing-lg",
@@ -6659,7 +6659,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 925
+      "consumerCount": 924
     },
     {
       "name": "--text-faint",
@@ -6739,7 +6739,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 194
+      "consumerCount": 193
     },
     {
       "name": "--border-strong",

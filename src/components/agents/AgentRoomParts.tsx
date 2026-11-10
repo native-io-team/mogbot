@@ -16,6 +16,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '../primitives/ContextMenu';
+import { StatusPill } from '../primitives/StatusPill';
 import { TextButton } from '../primitives/TextButton';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { agentInitials } from '../../lib/agentInitials';
@@ -64,10 +65,22 @@ export interface RoomActions {
   onDeleteRoom: (room: Room) => void;
 }
 
-/** What the row's second line says: who needs you, who's answering, or the newest line. */
-function roomSubtitle(room: Room, members: Agent[]): { text: string; state?: string } {
-  const asking = members.find((m) => needsYou(m) && m.status.room === room.id);
-  if (asking) return { text: `${asking.name} needs your OK`, state: 'waiting' };
+/**
+ * What the row's second line says: who needs you, who's answering, or the
+ * newest line. Waiting reads as an agent row does, the state in a pill and
+ * who's asking in ordinary ink (`asking`), never a whole amber line.
+ */
+export function roomSubtitle(
+  room: Room,
+  members: Agent[]
+): { text: string; state?: string; asking?: string } {
+  const asking = members.filter((m) => needsYou(m) && m.status.room === room.id);
+  if (asking.length > 0)
+    return {
+      text: 'Needs your OK',
+      state: 'waiting',
+      asking: listNames(asking.map((m) => m.name)),
+    };
   const { working, waiting } = roomActivity(room, members);
   if (working.length === 1) return { text: `${working[0].name} is replying…`, state: 'working' };
   if (working.length > 1) return { text: `${working.length} are replying…`, state: 'working' };
@@ -79,29 +92,35 @@ export const RoomRow = memo(function RoomRow({
   room,
   members,
   current,
+  tabStop = false,
   onSelect,
   actions,
 }: {
   room: Room;
   members: Agent[];
   current: boolean;
+  /** The list's one Tab stop: the open room. */
+  tabStop?: boolean;
   onSelect: (key: string) => void;
   actions: RoomActions;
 }) {
   const line = roomSubtitle(room, members);
   const { working } = roomActivity(room, members);
-  const asking = members.some((m) => needsYou(m) && m.status.room === room.id);
+  const asking = line.asking !== undefined;
+  // Read already when it's the one open (a muted room's count stays 0).
+  const unread = room.unread > 0 && !current;
   // A quiet room is one line, as a channel is: its newest words only while
   // they're unread, or while something is happening there.
-  const showLine = Boolean(line.state) || (room.unread > 0 && !current);
+  const showLine = Boolean(line.state) || unread;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <button
           type="button"
-          tabIndex={-1}
+          tabIndex={tabStop ? 0 : -1}
           className={`agents-list__row agents-list__row--room${current ? ' is-current' : ''}`}
           data-quiet={showLine ? undefined : true}
+          data-unread={unread || undefined}
           data-agent-id={roomKey(room.id)}
           aria-current={current ? 'true' : undefined}
           onClick={() => onSelect(roomKey(room.id))}
@@ -114,18 +133,24 @@ export const RoomRow = memo(function RoomRow({
                 <BellOffIcon size={10} className="agents-list__pin" aria-label="Muted" />
               )}
             </span>
-            {showLine && (
-              <span className="agents-list__preview" data-state={line.state}>
-                {line.text}
-              </span>
-            )}
+            {showLine &&
+              (asking ? (
+                <span className="agents-list__preview agents-list__preview--pill">
+                  <StatusPill tone="waiting">{line.text}</StatusPill>
+                  <span className="agents-list__rest">{line.asking}</span>
+                </span>
+              ) : (
+                <span className="agents-list__preview" data-state={line.state}>
+                  {line.text}
+                </span>
+              ))}
           </span>
           <span className="agents-list__status">
             {asking ? (
               <span className="sidebar-row-dot dot-attention" aria-label="Needs your OK" />
             ) : working.length > 0 ? (
               <PixelLoaderRings size="sm" label={`Replying in ${room.name}`} />
-            ) : room.unread > 0 && !current ? (
+            ) : unread ? (
               <span className="sidebar-row-dot dot-unread" aria-label="Unread" />
             ) : null}
           </span>
@@ -163,10 +188,6 @@ export function RoomActionItems({
 }
 
 /**
- * In an agent's own chat, what it said in a room is one quiet line that
- * opens the room: the room's thread is where it reads in full.
- */
-/**
  * Where a turn answers when it is in a room: on the working line of the
  * agent's own chat, so its reply there isn't taken for one to you.
  */
@@ -193,6 +214,10 @@ export function RoomWorkingPlace({
   );
 }
 
+/**
+ * In an agent's own chat, what it said in a room is one quiet line that
+ * opens the room: the room's thread is where it reads in full.
+ */
 export const RoomFoldLine = memo(function RoomFoldLine({
   roomId,
   messages,

@@ -10,7 +10,15 @@ import { useRouter } from 'expo-router';
 import { memo, useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import { formatAgo } from '../lib/agents';
-import { foldLine, membersOf, roomKey, roomLine, workingHere, type RoomFold } from '../lib/rooms';
+import {
+  askingNames,
+  foldLine,
+  membersOf,
+  roomKey,
+  roomLine,
+  workingHere,
+  type RoomFold,
+} from '../lib/rooms';
 import { useApp } from '../lib/store';
 import { keySize, chromeScale, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -116,8 +124,11 @@ export const RoomRow = memo(function RoomRow({
   const router = useRouter();
   const agents = useApp((s) => s.overview?.agents ?? NONE);
   const members = useMemo(() => membersOf(room, agents), [room, agents]);
-  const line = useApp((s) => roomLine(room, members, s.chats[roomKey(room.id)]?.messages));
+  const thread = useApp((s) => s.chats[roomKey(room.id)]?.messages);
+  const line = roomLine(room, members, thread);
   const asking = line === 'Needs your OK';
+  // Who is asking, beside the pill, as an agent row says what it's asking.
+  const who = asking ? askingNames(room, members, thread) : '';
   const working = workingHere(members, room.id).length > 0;
   return (
     <Pressable
@@ -126,8 +137,8 @@ export const RoomRow = memo(function RoomRow({
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
       accessibilityLabel={`Room ${room.name}, ${members.length} agents. ${line}${
-        room.unread ? '. Unread' : ''
-      }${live ? '' : '. Last known'}`}
+        who ? `: ${who}` : ''
+      }${room.unread ? '. Unread' : ''}${live ? '' : '. Last known'}`}
       style={({ pressed }) => [
         styles.row,
         selected && styles.selected,
@@ -155,16 +166,26 @@ export const RoomRow = memo(function RoomRow({
         </View>
         <View style={styles.line}>
           {asking && live ? (
-            // Waiting on you, as the agent rows say it: a pill, not an amber line.
-            <View style={{ flex: 1 }}>
+            // Waiting on you, as the agent rows say it: a pill, not an amber
+            // line, then who is asking in ordinary ink.
+            <>
               <StatusPill tone="waiting" label={line} />
-            </View>
+              <T
+                variant="small"
+                numberOfLines={1}
+                maxFontSizeMultiplier={2}
+                color={room.unread ? colors.textStrong : colors.textSecondary}
+                style={{ flex: 1 }}
+              >
+                {who}
+              </T>
+            </>
           ) : (
             <T
               variant="small"
               numberOfLines={1}
               maxFontSizeMultiplier={2}
-              color={colors.textSecondary}
+              color={room.unread ? colors.textStrong : colors.textSecondary}
               style={{ flex: 1 }}
             >
               {line}
