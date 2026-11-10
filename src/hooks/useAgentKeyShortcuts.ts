@@ -11,6 +11,7 @@
 import { useEffect, useRef } from 'react';
 import { keyLookFor, normalizeBoundKey } from '../../packages/companion-protocol/src/agentKeys';
 import type { Agent } from '../lib/agents';
+import { pressAgentKeys } from '../lib/agentKeyPress';
 
 /** Somewhere typing goes: a field, an editable, a terminal. */
 function takesTyping(target: EventTarget | null): boolean {
@@ -60,6 +61,8 @@ export function useAgentKeyShortcuts(agents: Agent[], openAgent: (id: string) =>
       const id = agentForKeyEvent(event, agents);
       if (!id) return;
       event.preventDefault();
+      // The key on screen goes down as you press it, then its chat opens.
+      pressAgentKeys(id);
       openAgent(id);
     };
     window.addEventListener('keydown', onKeyDown);

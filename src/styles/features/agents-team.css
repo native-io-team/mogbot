@@ -3,12 +3,13 @@
 /* ---------------------------------------------------------------- team */
 
 /* The board (AgentsBoard.tsx): every agent as a full-size key on a plate,
-   its name and state under it. */
+   its name and a state line under it (the site's board: the state's word in
+   its colour, then what it's on, cut short). */
 .agents-board__plate {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-lg);
-  padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--agent-key-size-xl) * 1.45), 1fr));
+  gap: var(--spacing-2xl) var(--spacing-sm);
+  padding: var(--spacing-2xl) var(--spacing-lg) var(--spacing-xl);
   background: linear-gradient(var(--agent-key-plate-top), var(--agent-key-plate-bottom));
   border-radius: var(--radius-lg);
   box-shadow: inset 0 2px 6px var(--agent-key-plate-shade);
@@ -18,10 +19,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-2xs);
-  width: var(--agent-key-size-xl);
-  padding: var(--spacing-xs) 0 0;
+  min-width: 0;
+  padding: var(--spacing-xs) var(--spacing-2xs) 0;
   color: var(--text-primary);
+  text-align: center;
   background: none;
   border: none;
   border-radius: var(--radius-control);
@@ -34,24 +35,44 @@
 }
 
 .agents-board__key .agent-key {
-  margin-bottom: calc(var(--spacing-xs) + var(--agent-key-rest-depth));
+  margin-bottom: calc(var(--spacing-md) + var(--agent-key-rest-depth));
 }
 
 .agents-board__name {
   max-width: 100%;
   overflow: hidden;
   font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-label);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-compact);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .agents-board__state {
-  color: var(--text-secondary);
+  max-width: 100%;
+  margin-top: var(--spacing-3xs);
+  overflow: hidden;
+  color: var(--text-muted);
   font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.agents-board__state[data-state='needsOk'] {
+.agents-board__word {
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agents-board__state[data-state='working'] .agents-board__word {
+  color: var(--text-primary);
+}
+
+.agents-board__state[data-state='live'] .agents-board__word {
+  color: var(--accent-success);
+}
+
+.agents-board__state[data-state='needsOk'] .agents-board__word {
   color: var(--accent-warning);
 }
 

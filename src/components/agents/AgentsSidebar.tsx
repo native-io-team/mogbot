@@ -99,7 +99,16 @@ function subtitle(agent: Agent): ReactNode {
     const n = agent.pendingApprovals ?? 0;
     return n > 1 ? `Needs your OK · ${n}` : 'Needs your OK';
   }
-  if (agent.takeover) return `You’re driving ${agent.name}`;
+  // Live, in its colour, as the site's board says it; the key above is lit.
+  if (agent.takeover)
+    return (
+      <>
+        <span className="agents-list__state-word" data-state="live">
+          Live
+        </span>
+        {' · You’re driving it'}
+      </>
+    );
   // The step it's on and how long it's been at it, not "Working…".
   if (agent.status.state === 'working') return <AgentWorkingLine agent={agent} />;
   const failure = failedTurn(agent);
@@ -151,7 +160,7 @@ function rowPill(
 /** The row's second line takes the colour of its state. */
 function lineState(agent: Agent): string | undefined {
   if (needsYou(agent)) return 'waiting';
-  if (agent.takeover) return 'working';
+  if (agent.takeover) return 'live';
   if (agent.status.state === 'working') return 'working';
   const failure = failedTurn(agent);
   if (failure) return failure.kind === 'usage_limit' ? 'limited' : 'failed';

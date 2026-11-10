@@ -47,10 +47,10 @@ const BOARD: [string, string, string][] = [
 
 const DETAIL: Record<string, string> = {
   idle: 'at rest',
-  working: 'pressed',
-  live: 'legend lit',
+  working: 'pressed, lit, breathing',
+  live: 'lit, glow spills',
   needsOk: 'lit, pulsing, proud',
-  paused: 'cap off',
+  paused: 'drained, sunk',
   new: 'empty socket',
 };
 

@@ -7,9 +7,12 @@
  * (`data-dynamic-svg="agent-key"`), drawn from the icon registry shared with
  * the phone (`packages/companion-protocol/src/agentKeyIcons.ts`).
  *
- * Cheap by design: no timers and no per-key JS. A state is a data attribute;
- * the only animation is the slow pulse of "Needs your OK", in CSS, off with
- * Reduce Motion.
+ * Cheap by design: no timers and no per-key JS. A state is a data attribute
+ * and the motion is CSS (the site's keys): a working key breathes, a key that
+ * needs your OK pulses, a new socket fades in, a key just seated drops in
+ * (`seat`); all still with Reduce Motion or in a hidden window. A key inside
+ * something clickable lifts on hover and goes down on press; `data-hit` (set
+ * by the bound-key shortcut, `pressAgentKeys`) presses it for a beat.
  *
  * @module components/agents/AgentKey
  */
@@ -85,6 +88,8 @@ export interface AgentKeyProps {
   state?: KeyState;
   /** Its independence, for the pips (big keys only); defaults to the registry's. */
   level?: AgentIndependence | null;
+  /** Just seated (a new agent on the board): the cap drops into its socket once. */
+  seat?: boolean;
   className?: string;
 }
 
@@ -99,6 +104,7 @@ export function AgentKey({
   size = 'md',
   state = 'idle',
   level,
+  seat,
   className,
 }: AgentKeyProps) {
   const team = useSyncExternalStore(subscribeAgents, teamKeys);
@@ -114,7 +120,7 @@ export function AgentKey({
   }, [team, id, name, role, color, colorway, icon, boundKey, level]);
   const way = colorwayOf(look.colorway);
   const big = BIG.has(size);
-  const socket = state === 'paused' || state === 'new';
+  const socket = state === 'new';
   const pips = pipsFor(look.level);
   const drawing = iconDrawing(look.icon);
   return (
@@ -124,14 +130,16 @@ export function AgentKey({
       data-icon={look.icon}
       data-light={way.light || undefined}
       data-state={state}
+      data-agent-id={id}
+      data-seat={seat || undefined}
       aria-hidden
     >
       {socket ? (
-        <span className="agent-key__housing">
+        <span className="agent-key__socket">
           <span className="agent-key__stem" />
         </span>
       ) : (
-        <>
+        <span className="agent-key__cap">
           <span className="agent-key__face">
             <svg
               data-dynamic-svg="agent-key"
@@ -155,7 +163,7 @@ export function AgentKey({
               ))}
             </span>
           )}
-        </>
+        </span>
       )}
     </span>
   );

@@ -308,6 +308,14 @@
   color: var(--accent-warning);
 }
 
+/* Live (you're driving it): the word in green, as on the board. */
+.agents-list__state-word {
+  font-weight: var(--font-weight-label);
+}
+.agents-list__state-word[data-state='live'] {
+  color: var(--accent-success);
+}
+
 /* A state in a pill, then its words: one line, the words cut first. The pill
    sits in the line's own height (no vertical padding here), so a row that
    turns amber or red never grows. */
