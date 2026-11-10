@@ -12,11 +12,18 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { clockFormat } from '../../../../packages/companion-protocol/src/clock';
 import { Button } from '../../primitives/Button';
 import { Spinner } from '../../primitives/Spinner';
-import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon, WarningIcon } from '@/components/icons';
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  ExternalLinkIcon,
+  PendingCircleIcon,
+  WarningIcon,
+} from '@/components/icons';
 import {
   DONE,
   FLOW_SECTIONS,
   NOT_DONE,
+  WAITING,
   progressOf,
   SECTION_LABEL,
   type CheckResult,
@@ -36,6 +43,7 @@ export const ADVANCE_MS = 1200;
 export const FLOW_FOCUS_TARGET = [
   '.flow-actions [data-flow-primary]:not(:disabled)',
   '.flow-content .agent-pick-card:not(:disabled)',
+  '.flow-content [data-flow-choice]:not(:disabled)',
   '.flow-content [data-flow-fix]:not(:disabled)',
   '.flow-actions button:not(:disabled):not([data-flow-skip])',
 ] as const;
@@ -159,13 +167,25 @@ interface CheckLineProps {
   onCheckAgain?: () => void;
   checking?: boolean;
   checkedAt?: number | null;
+  /** What Check again says when it does something more (Try again, Ask Tailscale again). */
+  againLabel?: string;
 }
 
 const timeOf = (ms: number) =>
   clockFormat({ hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(ms);
 
-/** "Done ✓", "Checking…", or "Not done yet" with the one fix and Check again. */
-export function CheckLine({ result, onCheckAgain, checking = false, checkedAt }: CheckLineProps) {
+/**
+ * "Done ✓", "Checking…", "Waiting for you" (the user's move: neutral, a
+ * hollow mark, never amber), or "Not done yet" with the one fix and Check
+ * again.
+ */
+export function CheckLine({
+  result,
+  onCheckAgain,
+  checking = false,
+  checkedAt,
+  againLabel = 'Check again',
+}: CheckLineProps) {
   if (checking || result.state === 'checking') {
     return (
       <div className="flow-check" data-state="checking" role="status">
@@ -186,14 +206,19 @@ export function CheckLine({ result, onCheckAgain, checking = false, checkedAt }:
       </div>
     );
   }
+  const waiting = result.state === 'waiting';
   return (
-    <div className="flow-check" data-state="fail" role="alert">
+    <div
+      className="flow-check"
+      data-state={waiting ? 'waiting' : 'fail'}
+      role={waiting ? 'status' : 'alert'}
+    >
       <span className="flow-check__mark" aria-hidden>
-        <WarningIcon size={14} />
+        {waiting ? <PendingCircleIcon size={14} /> : <WarningIcon size={14} />}
       </span>
       <div className="flow-check__body">
         <span className="flow-check__line">
-          <strong>{NOT_DONE}.</strong> {result.line}
+          <strong>{waiting ? WAITING : NOT_DONE}.</strong> {result.line}
         </span>
         {result.fix && <span className="flow-check__fix">{result.fix}</span>}
         {(result.action || onCheckAgain) && (
@@ -210,7 +235,7 @@ export function CheckLine({ result, onCheckAgain, checking = false, checkedAt }:
             )}
             {onCheckAgain && (
               <Button variant="secondary" onClick={onCheckAgain} data-flow-check-again>
-                Check again
+                {againLabel}
               </Button>
             )}
           </div>

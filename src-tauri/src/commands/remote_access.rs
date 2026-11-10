@@ -10,12 +10,6 @@
 use crate::errors::CommandError;
 use crate::remote_access::{self, power, tailscale};
 use serde::Serialize;
-use std::sync::{LazyLock, Mutex};
-
-/// The last Funnel attempt's result, so a "needs approval" link survives the
-/// modal re-polling. Cleared whenever the Funnel is confirmed on.
-static LAST_FUNNEL: LazyLock<Mutex<Option<tailscale::FunnelOutcome>>> =
-    LazyLock::new(|| Mutex::new(None));
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -111,11 +105,11 @@ async fn build_status() -> RemoteAccessStatus {
         ),
         _ => (None, None),
     };
-    let last = LAST_FUNNEL.lock().ok().and_then(|l| l.clone());
+    // The last attempt (`remote_access::last_funnel`, kept current by the
+    // approval watch too), cleared once Tailscale confirms the Funnel.
+    let last = remote_access::last_funnel();
     if funnel_on {
-        if let Ok(mut l) = LAST_FUNNEL.lock() {
-            *l = None;
-        }
+        remote_access::set_last_funnel(None);
     }
     let (funnel_approval_url, funnel_error) = funnel_report(funnel_on, config.enabled, last);
     let funnel_problem = funnel_error
@@ -291,15 +285,11 @@ pub async fn set_remote_access_enabled(
     remote_access::update_config(|c| c.enabled = enabled)?;
     if enabled {
         tailscale::forget_reachability();
-        let outcome = remote_access::bring_up(app).await?;
-        if let Ok(mut l) = LAST_FUNNEL.lock() {
-            *l = Some(outcome);
-        }
+        // Records its outcome itself (`set_last_funnel`), before any
+        // approval watch can finish and record a newer one.
+        remote_access::bring_up(app).await?;
     } else {
         remote_access::tear_down().await;
-        if let Ok(mut l) = LAST_FUNNEL.lock() {
-            *l = None;
-        }
         // Put the lid setting back if remote access is what changed it. This
         // shows the macOS password prompt; if the user cancels, it stays on
         // and the checklist keeps saying so.
@@ -341,10 +331,7 @@ pub async fn set_remote_project(
 #[tauri::command]
 #[tracing::instrument]
 pub async fn republish_remote_link() -> Result<RemoteAccessStatus, CommandError> {
-    let outcome = remote_access::republish().await?;
-    if let Ok(mut l) = LAST_FUNNEL.lock() {
-        *l = Some(outcome);
-    }
+    remote_access::republish().await?;
     Ok(build_status().await)
 }
 

@@ -29,7 +29,7 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { BRAND } from '../../lib/brand';
 import { TAILSCALE_DOWNLOAD_URL } from '../../lib/remoteAccess';
-import { PHONE_APP_STORE_URL } from '../../lib/phoneApp';
+import { PHONE_APP_ON_ANDROID, PHONE_APP_STORE_URL } from '../../lib/phoneApp';
 import { TESTFLIGHT_URL } from '../../lib/companionInstall';
 import { formatClock } from '../../../packages/companion-protocol/src/clock';
 import {
@@ -167,15 +167,17 @@ export function tailscaleMacCheck(t: TailscaleState | undefined): CheckResult {
         state: 'pass',
         line: t.login ? `Tailscale is on, signed in as ${t.login}.` : 'Tailscale is on.',
       };
+    // Not installed or not signed in yet is the user's move, not a failure:
+    // "Waiting for you", neutral, never an amber "Not done yet" on arrival.
     case 'needsLogin':
       return {
-        state: 'fail',
+        state: 'waiting',
         line: 'Tailscale is installed but not signed in.',
         fix: 'Click the Tailscale icon in the menu bar and sign in.',
       };
     case 'notInstalled':
       return {
-        state: 'fail',
+        state: 'waiting',
         line: 'Tailscale isn’t on this Mac yet.',
         fix: 'Install it and sign in. It asks to add a VPN configuration: click Allow.',
       };
@@ -207,7 +209,7 @@ export function tailscaleMacView({
       <CheckLine
         result={check}
         checking={checking}
-        onCheckAgain={check.state === 'fail' ? onCheck : undefined}
+        onCheckAgain={check.state === 'fail' || check.state === 'waiting' ? onCheck : undefined}
       />
     ),
     primary:
@@ -509,13 +511,15 @@ function useStepView(p: {
               >
                 App Store
               </Button>
-              <Button
-                variant="ghost"
-                rightIcon={<ExternalLinkIcon size={12} />}
-                onClick={() => void openUrl(TAILSCALE_ANDROID_URL)}
-              >
-                Google Play
-              </Button>
+              {PHONE_APP_ON_ANDROID && (
+                <Button
+                  variant="ghost"
+                  rightIcon={<ExternalLinkIcon size={12} />}
+                  onClick={() => void openUrl(TAILSCALE_ANDROID_URL)}
+                >
+                  Google Play
+                </Button>
+              )}
             </div>
           </>
         ),
@@ -534,10 +538,10 @@ function useStepView(p: {
             ? { state: 'checking', line: 'Starting…' }
             : access.kind === 'approveHttps'
               ? {
-                  state: 'fail',
-                  line: 'One switch in Tailscale is off: HTTPS certificates.',
-                  fix: 'It lets your phone trust this Mac. Turn it on, then come back.',
-                  action: { label: 'Open Tailscale', url: access.url },
+                  state: 'waiting',
+                  line: 'Tailscale asks you to approve HTTPS certificates once, on its own page.',
+                  fix: 'It lets your phone trust this Mac. Approve it there, then come back.',
+                  action: { label: 'Open the Tailscale page', url: access.url },
                 }
               : access.kind === 'failed'
                 ? {
@@ -559,7 +563,11 @@ function useStepView(p: {
           <CheckLine
             result={check}
             checking={p.checking}
-            onCheckAgain={check.state === 'fail' ? () => void p.recheck() : undefined}
+            onCheckAgain={
+              check.state === 'fail' || check.state === 'waiting'
+                ? () => void p.recheck()
+                : undefined
+            }
           />
         ),
         primary:

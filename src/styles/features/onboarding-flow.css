@@ -202,6 +202,93 @@
   color: var(--accent-warning);
 }
 
+/* The user's move, before anything has gone wrong: neutral, a hollow
+   mark, never amber (a screen never opens on "Not done yet"). */
+.flow-check[data-state='waiting'] .flow-check__mark {
+  color: var(--text-secondary);
+}
+
+/* "Bring your agents from another assistant?": one answer per row, the
+   way out ("I'm starting fresh") as plain to see as the rest. */
+.flow-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  width: 100%;
+}
+
+.flow-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background var(--transition-interaction),
+    border-color var(--transition-interaction);
+}
+
+.flow-choice:hover {
+  background: var(--surface-control);
+  border-color: var(--border-strong);
+}
+
+.flow-choice:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.flow-choice__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.flow-choice__name {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+}
+
+.flow-choice__hint {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.flow-choice__go {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.flow-choice--fresh {
+  margin-top: var(--spacing-sm);
+}
+
+/* The exact clicks inside the assistant, numbered. */
+.flow-steps {
+  margin: 0;
+  padding-inline-start: var(--spacing-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-body-md);
+  line-height: 1.5;
+  color: var(--text-primary);
+  text-align: start;
+}
+
+.flow-steps li::marker {
+  color: var(--text-muted);
+}
+
 .flow-check__mark {
   display: inline-flex;
   padding-top: var(--spacing-3xs);
