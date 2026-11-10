@@ -381,7 +381,7 @@ button.dashboard-card-row {
 
 .connect-modal-muted {
   color: var(--text-secondary);
-  font-weight: 400;
+  font-weight: var(--font-weight-body);
 }
 
 .connect-modal-actions {

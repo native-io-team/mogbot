@@ -168,7 +168,7 @@
 
 .settings-row-label {
   font-size: var(--font-size-body-lg);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
   color: var(--text-primary);
 }
 
@@ -230,7 +230,7 @@
   gap: var(--spacing-xs);
   margin-left: var(--spacing-sm);
   font-size: var(--font-size-badge);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
   color: var(--text-muted);
   vertical-align: middle;
 }

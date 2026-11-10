@@ -74,7 +74,7 @@
 .tabs__list--appearance-underline .tabs__tab.button {
   padding-inline: var(--tabs-underline-inset);
   border-radius: var(--radius-sm);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
   color: var(--text-muted);
   transition: color var(--transition-interaction);
 }

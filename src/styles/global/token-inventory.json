@@ -5931,7 +5931,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 36
+      "consumerCount": 37
     },
     {
       "name": "--font-weight-label",
@@ -5939,7 +5939,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 147
+      "consumerCount": 154
     },
     {
       "name": "--font-weight-heading",
@@ -5947,7 +5947,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 51
+      "consumerCount": 54
     },
     {
       "name": "--font-weight-title",
