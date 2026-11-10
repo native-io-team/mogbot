@@ -344,6 +344,7 @@ async function capture({
   identity,
   label,
   requires,
+  sameColumn,
   viewport,
 }) {
   const { page, targetId } = await newPage(url, viewport);
@@ -419,6 +420,11 @@ async function capture({
 
     const clipped = JSON.parse(await page.eval(CLIPPED_TEXT_PROBE).catch(() => '[]'));
 
+    const column = sameColumn?.length
+      ? JSON.parse(await page.eval(columnProbe(sameColumn)).catch(() => '[]'))
+      : undefined;
+    const misaligned = column ? columnMisaligned(column) : false;
+
     // The scenario's subject must actually be on screen. Without this a
     // scenario whose surface has vanished still yields a clean screenshot of
     // whatever else was rendered, under this scenario's name.
@@ -472,6 +478,7 @@ async function capture({
       imageHash: hash(buf),
       clipped,
       ...(requires ? { requires, missingRequired } : {}),
+      ...(column ? { column, misaligned } : {}),
       console: page.console.slice(0, 8),
     };
   } finally {
@@ -480,8 +487,36 @@ async function capture({
   }
 }
 
-const mark = (r) =>
-  r.crashed || !r.ready || r.missingRequired || r.stepMissed ? '✗' : r.unmocked.length ? '!' : '✓';
+/**
+ * Where each `sameColumn` element's left and right edges fall, in CSS px.
+ * `sel@content` is measured inside its padding and border.
+ */
+const columnProbe = (entries) => `(() => {
+  const drawn = (e) => e.getClientRects().length > 0;
+  return JSON.stringify(${JSON.stringify(entries)}.map((entry) => {
+    const content = entry.endsWith('@content');
+    const selector = content ? entry.slice(0, -'@content'.length) : entry;
+    const el = [...document.querySelectorAll(selector)].find(drawn);
+    if (!el) return { entry, missing: true };
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const inL = content ? parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) : 0;
+    const inR = content ? parseFloat(cs.borderRightWidth) + parseFloat(cs.paddingRight) : 0;
+    const round = (n) => Math.round(n * 100) / 100;
+    return { entry, left: round(r.left + inL), right: round(r.right - inR) };
+  }));
+})()`;
+
+/** Any edge more than 1px from its fellows, or an element not drawn at all. */
+const columnMisaligned = (column) => {
+  if (!column.length || column.some((c) => c.missing)) return true;
+  const spread = (k) => Math.max(...column.map((c) => c[k])) - Math.min(...column.map((c) => c[k]));
+  return spread('left') > 1 || spread('right') > 1;
+};
+
+const failed = (r) => r.crashed || !r.ready || r.missingRequired || r.stepMissed || r.misaligned;
+
+const mark = (r) => (failed(r) ? '✗' : r.unmocked.length ? '!' : '✓');
 
 function renderReport({ scenarios, commands, skipped, meta }) {
   const lines = [
@@ -575,9 +610,29 @@ function renderReport({ scenarios, commands, skipped, meta }) {
     );
   }
 
-  const bad = [...scenarios, ...commands].filter(
-    (r) => r.crashed || !r.ready || r.missingRequired || r.stepMissed
-  );
+  const measured = scenarios.filter((r) => r.column);
+  if (measured.length) {
+    lines.push(
+      '## One column',
+      '',
+      'Edges of the elements each scenario says share one column (`sameColumn`),',
+      'in CSS px. More than 1px apart fails the capture.',
+      ''
+    );
+    for (const r of measured) {
+      lines.push(`**\`${r.id}\`** ${r.misaligned ? '✗' : '✓'}`, '');
+      for (const c of r.column) {
+        lines.push(
+          c.missing
+            ? `- \`${c.entry}\` not drawn`
+            : `- \`${c.entry}\` left ${c.left}, right ${c.right}`
+        );
+      }
+      lines.push('');
+    }
+  }
+
+  const bad = [...scenarios, ...commands].filter(failed);
   if (bad.length) {
     lines.push('## Failures', '');
     for (const r of bad) {
@@ -587,7 +642,9 @@ function renderReport({ scenarios, commands, skipped, meta }) {
           ? 'never settled'
           : r.missingRequired
             ? `subject missing — nothing matched \`${r.requires}\`, so this capture is not of what the scenario claims`
-            : `a scripted step never found its control (${r.steps.filter((s) => s.startsWith('never appeared')).join('; ')}), so this capture is one screen short of the state it is named after`;
+            : r.misaligned
+              ? 'out of column — see "One column" above'
+              : `a scripted step never found its control (${r.steps.filter((s) => s.startsWith('never appeared')).join('; ')}), so this capture is one screen short of the state it is named after`;
       lines.push(`### \`${r.id}\` — ${why}`, '');
       for (const c of r.console) lines.push(`- **${c.level}**: ${c.text.split('\n')[0]}`);
       lines.push('');
@@ -651,7 +708,7 @@ async function main() {
   await waitFor(probe.page, 'window.__harness', 20_000, 'the harness module to load');
   const allScenarios = JSON.parse(
     await probe.page.eval(
-      'JSON.stringify(window.__harness.scenarios.map(s=>({id:s.id,title:s.title,looksRightWhen:s.looksRightWhen,clipSelector:s.clipSelector,openSelector:s.openSelector,requires:s.requires,command:s.command,viewport:s.viewport})))'
+      'JSON.stringify(window.__harness.scenarios.map(s=>({id:s.id,title:s.title,looksRightWhen:s.looksRightWhen,clipSelector:s.clipSelector,openSelector:s.openSelector,requires:s.requires,sameColumn:s.sameColumn,command:s.command,viewport:s.viewport})))'
     )
   );
   probe.page.close();
@@ -668,6 +725,7 @@ async function main() {
         clipSelector: s.clipSelector,
         openSelector: s.openSelector,
         requires: s.requires,
+        sameColumn: s.sameColumn,
         viewport: s.viewport,
         identity,
         label: s.id,
@@ -759,7 +817,7 @@ async function main() {
   );
 
   const all = [...scenarioResults, ...commandResults];
-  const broken = all.filter((r) => r.crashed || !r.ready || r.missingRequired || r.stepMissed);
+  const broken = all.filter(failed);
   const incomplete = all.filter((r) => !r.crashed && r.unmocked.length);
   const missing = commandResults.filter((r) => r.commandMissing);
 
@@ -784,9 +842,15 @@ async function main() {
               ? 'never became ready'
               : r.missingRequired
                 ? `subject missing (${r.requires})`
-                : `step never found its control (${r.steps
-                    .filter((s) => s.startsWith('never appeared'))
-                    .join('; ')})`
+                : r.misaligned
+                  ? `out of column (${r.column
+                      .map((c) =>
+                        c.missing ? `${c.entry} not drawn` : `${c.entry} ${c.left}–${c.right}`
+                      )
+                      .join('; ')})`
+                  : `step never found its control (${r.steps
+                      .filter((s) => s.startsWith('never appeared'))
+                      .join('; ')})`
         }`
       );
       for (const c of r.console) console.log(`      ${c.level}: ${c.text.split('\n')[0]}`);

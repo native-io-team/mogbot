@@ -32,6 +32,8 @@
     (var(--control-height-standard) * 4) + (var(--button-gap) * 3) + (var(--spacing-sm) * 2)
   );
   --agents-chat-width: 720px;
+  /* The least space either side of the column. */
+  --agents-chat-gutter: var(--spacing-xl);
   --agents-bubble-max: 80%;
   /* Agent prose sits on the canvas, not in a bubble, across the same column
      as the composer under it: one edge on both sides at every window size.

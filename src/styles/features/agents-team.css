@@ -82,9 +82,7 @@
   flex-direction: column;
   gap: var(--spacing-2xl);
   width: 100%;
-  max-width: calc(var(--agents-chat-width) + (var(--spacing-xl) * 2));
-  margin: 0 auto;
-  padding: var(--spacing-xl);
+  padding: var(--spacing-xl) var(--agents-column-inset);
 }
 
 .agents-team__section {
