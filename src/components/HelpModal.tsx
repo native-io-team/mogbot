@@ -385,7 +385,7 @@ export function HelpModal({ projectPath }: HelpModalProps) {
   ];
 
   return (
-    <ModalFrame isOpen={isOpen} onClose={onClose} title="Help & Commands" className="help-modal">
+    <ModalFrame isOpen={isOpen} onClose={onClose} title="Help and commands" className="help-modal">
       <>
         <Tabs defaultValue="shortcuts">
           <TabsList
@@ -436,7 +436,7 @@ export function HelpModal({ projectPath }: HelpModalProps) {
             {skills.length > 0 && (
               <>
                 <div className="help-section">
-                  <div className="help-section-title">Your Skills</div>
+                  <div className="help-section-title">Your skills</div>
                   <div className="help-command-list">
                     {userSkills.map((skill) => {
                       const skillKey = `${skill.plugin}-${skill.name}`;
@@ -484,7 +484,7 @@ export function HelpModal({ projectPath }: HelpModalProps) {
             {isLoadingSkills && skills.length === 0 && (
               <>
                 <div className="help-section">
-                  <div className="help-section-title">Your Skills</div>
+                  <div className="help-section-title">Your skills</div>
                   <div className="help-loading">Loading skills…</div>
                 </div>
                 <div className="help-divider" />

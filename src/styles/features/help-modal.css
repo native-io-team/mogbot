@@ -49,13 +49,11 @@
 }
 
 .help-section-title {
-  font-size: var(--font-size-body-sm);
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-  padding: 0 4px;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+  padding: 0 var(--spacing-xs);
 }
 
 .help-command-list {
