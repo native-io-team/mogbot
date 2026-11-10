@@ -465,6 +465,14 @@
   border-radius: 0;
 }
 
+/* A reply takes the whole measure, not the width of its longest line: a code
+   panel, a table's frame and a rule then share one right edge in every reply,
+   and a code block being written doesn't widen as each line arrives. Prose
+   has no fill, so a short reply looks the same either way. */
+.agent-chat__row--agent > .agent-bubble--agent {
+  width: 100%;
+}
+
 /* Yours is one neutral colour for every agent: identity lives in the badge,
    and a tinted bubble borrowed the meaning of the app's status colours. */
 .agent-bubble--user {
@@ -613,7 +621,21 @@
 }
 
 .agent-markdown li + li {
-  margin-top: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+/* A list item is a line of the list, not a paragraph: the item's own
+   paragraphs (a "loose" list) sit as tight as its lines do. */
+.agent-markdown li > p {
+  margin: 0;
+}
+
+.agent-markdown li > p + p {
+  margin-top: var(--spacing-xs);
+}
+
+.agent-markdown li::marker {
+  color: var(--text-muted);
 }
 
 .agent-markdown li > ul,
@@ -648,9 +670,13 @@
   line-height: var(--line-height-compact);
 }
 
-/* A heading opens a section: the top levels step up a size, and every level
+/* A heading opens a section: each top level steps up a size (a reply's "#"
+   and "##" both read as 16px before, a pixel off the prose), and every level
    takes more room above than a paragraph does. */
-.agent-markdown h1,
+.agent-markdown h1 {
+  font-size: var(--font-size-h3);
+}
+
 .agent-markdown h2 {
   font-size: var(--font-size-h4);
 }
@@ -660,10 +686,12 @@
   margin-top: var(--spacing-xl);
 }
 
+/* Code runs a step under the prose (13 in 15), as a monospace face reads
+   larger than its size; at 12 an inline path looked like a footnote. */
 .agent-markdown code {
   padding: 0 var(--spacing-xs);
   font-family: var(--font-code);
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-body-lg);
   /* A tint, not a surface: --surface-control is one step off the light
      theme's app background, so the chip vanished and read as stray spaces. */
   background: var(--tint-strong);
@@ -751,10 +779,10 @@
 
 .agent-code pre {
   margin: 0;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
   overflow-x: auto;
   font-family: var(--font-code);
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-body-lg);
   line-height: var(--line-height-help);
   scrollbar-width: thin;
 }
