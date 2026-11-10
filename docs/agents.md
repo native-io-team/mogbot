@@ -80,7 +80,9 @@ a team" went for the same reason ("I'm not launching anything").
   your team…"), grouped On a schedule / When something happens / Agents
   together / For builders, everyday jobs first: chase unpaid invoices, draft
   the week's social posts, apply for jobs (a scout and a cover-letter
-  writer), find a place to live, watch competitors, sort the inbox and draft
+  writer, and a page of every application and where it stands), track
+  something (a page kept current, checked every evening), find a place to
+  live, watch competitors, sort the inbox and draft
   replies, tidy up meeting notes when they land in a folder (`new_file`),
   research, plan a trip (prices checked again every few days), a big project
   as a team, and two agents arguing it out. Anything that reaches other
@@ -6885,6 +6887,13 @@ pinned above its chat on desk and phone, that the agent and the routines
 running in that conversation keep current, instead of a trail of
 point-in-time messages and result cards.
 
+- **Asked for where tracking is the job.** Whether an agent pins one isn't
+  left to the model alone: the "Help me apply for jobs" starter asks for a
+  page of every application and where it stands, "Track something for me"
+  is a page from the first line, the Chief is told to have the agent keep a
+  page for work that changes over time (`CHIEF_INSTRUCTIONS`), and a
+  drafted agent's briefing says to keep one for that kind of work
+  (`draft::prompt`).
 - **Blocks, nothing new to draw.** The `page` tool takes blocks exactly as
   `show` does, each through `blocks::parse` (so the same limits, no HTML,
   http(s) links with no credentials), plus an `id` the agent picks
