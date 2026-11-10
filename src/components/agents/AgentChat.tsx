@@ -77,6 +77,7 @@ import {
 } from './useComposerAttachments';
 import { AgentSwitcher } from './AgentSwitcher';
 import { ConversationSwitcher } from './ConversationSwitcher';
+import { ConversationPage, ConversationPagePin } from './ConversationPage';
 import { conversationKey, loadedConversation } from '../../lib/agentConversations';
 import { useQuoteSelection } from './useQuoteSelection';
 import { useCommands } from '../../commands/useCommands';
@@ -1784,6 +1785,7 @@ export const AgentChat = memo(function AgentChat({
                 <div className="agent-chat__actions">
                   {/* Compact: the title is the agent menu, so it sits with the actions. */}
                   {compact && conversationSwitcher}
+                  <ConversationPagePin agent={agent} conversation={viewing} />
                   {/* Nothing to schedule or pick a model for until Claude Code is here. */}
                   {engineReady && (
                     <>
@@ -1835,6 +1837,9 @@ export const AgentChat = memo(function AgentChat({
                   />
                 </div>
               </header>
+
+              {/* This conversation's living page, kept current by the agent. */}
+              <ConversationPage agent={agent} conversation={viewing} />
 
               {/* Unmounted while the chat shows (a hidden xterm would fit itself to
             nothing); showing it again replays the session's scrollback. */}

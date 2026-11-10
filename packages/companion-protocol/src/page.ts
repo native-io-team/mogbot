@@ -92,11 +92,7 @@ function nameOf(id: string, blocks: unknown): string {
  * Titles come from the version the block is on (the removed ones from the
  * version before, when given).
  */
-export function pageChangeLine(
-  changes: PageChanges,
-  blocks: unknown,
-  before?: unknown
-): string {
+export function pageChangeLine(changes: PageChanges, blocks: unknown, before?: unknown): string {
   const parts: string[] = [];
   const names = (ids: string[], on: unknown) => ids.map((id) => nameOf(id, on)).join(', ');
   if (changes.added.length) parts.push(`Added ${names(changes.added, blocks)}`);
