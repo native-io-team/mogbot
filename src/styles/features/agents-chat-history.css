@@ -21,40 +21,72 @@
 }
 
 /* That skipping turns on paint containment, which clips every line to its own
-   box, always, on screen or not: a card's shadow (approval, result, error)
-   stopped in a hard line at the row's edge, its hairline ring lost at the
-   sides, and the band left under it read as a grey strip behind the line
-   that follows. A card's line reaches out by the shadow's reach (padding)
-   and gives the room straight back (negative margin), so the rhythm and the
-   card's width are unchanged and the shadow is drawn whole. Above, the card
-   needs only its ring and the dark theme's short lift; that room comes back
-   off the line before it, since a line's own top margin is the rhythm's. */
+   box, always, on screen or not: a card's shadow (approval, result, error, a
+   reply's page, chart or metric) stopped in a hard line at the row's edge,
+   its hairline ring lost at the sides, and the band left under it read as a
+   grey strip behind the line that follows. A line holding something with a
+   shadow reaches out by the shadow's reach (padding) and gives the room
+   straight back (negative margin), so the rhythm and every width are
+   unchanged and the shadow is drawn whole. A card that opens its line also
+   needs its ring and the dark theme's short lift above it; that room comes
+   back off the line before, since a line's own top margin is the rhythm's. */
 :root {
   --agents-chat-card-room-top: var(--space-04);
 }
 
-.agent-chat__messages > .agent-chat__row--card {
-  padding: var(--agents-chat-card-room-top) var(--shadow-card-reach) var(--shadow-card-reach);
+.agent-chat__messages
+  > :is(
+    .agent-chat__row--card,
+    .agent-chat__row--agent:has(
+      .agent-card,
+      .agent-block-metric,
+      .agent-block-compare__option,
+      .agent-block-link
+    )
+  ) {
+  --agents-chat-row-room-end: var(--shadow-card-reach);
+
+  padding-inline: var(--shadow-card-reach);
+  padding-bottom: var(--agents-chat-row-room-end);
   margin-inline: calc(var(--shadow-card-reach) * -1);
-  margin-bottom: calc(var(--shadow-card-reach) * -1);
+  margin-bottom: calc(var(--agents-chat-row-room-end) * -1);
 }
 
 /* The last line's room can't reach past the column's own end padding, or the
    scroll range would grow by the difference and lift the chat off the
    composer; the shadow's tail past that is invisible anyway. */
-.agent-chat__messages > .agent-chat__row--card:last-child {
-  --agents-chat-card-room-end: min(var(--shadow-card-reach), var(--spacing-xl));
+.agent-chat__messages
+  > :is(
+    .agent-chat__row--card,
+    .agent-chat__row--agent:has(
+      .agent-card,
+      .agent-block-metric,
+      .agent-block-compare__option,
+      .agent-block-link
+    )
+  ):last-child {
+  --agents-chat-row-room-end: min(var(--shadow-card-reach), var(--spacing-xl));
+}
 
-  padding-bottom: var(--agents-chat-card-room-end);
-  margin-bottom: calc(var(--agents-chat-card-room-end) * -1);
+.agent-chat__messages > .agent-chat__row--card {
+  padding-top: var(--agents-chat-card-room-top);
 }
 
 .agent-chat__messages > :has(+ .agent-chat__row--card) {
   margin-bottom: calc(var(--agents-chat-card-room-top) * -1);
 }
 
-.agent-chat__messages > .agent-chat__row--card:has(+ .agent-chat__row--card) {
-  margin-bottom: calc((var(--shadow-card-reach) + var(--agents-chat-card-room-top)) * -1);
+.agent-chat__messages
+  > :is(
+    .agent-chat__row--card,
+    .agent-chat__row--agent:has(
+      .agent-card,
+      .agent-block-metric,
+      .agent-block-compare__option,
+      .agent-block-link
+    )
+  ):has(+ .agent-chat__row--card) {
+  margin-bottom: calc((var(--agents-chat-row-room-end) + var(--agents-chat-card-room-top)) * -1);
 }
 
 /* A reply whose box already reaches down over its actions
