@@ -1488,7 +1488,8 @@ const searchAcme = (args: Record<string, unknown>) =>
           messageId: GUTTERS.id,
           ts: GUTTERS.ts,
           kind: GUTTERS.kind,
-          snippet: 'Read both. The guidelines want 24px gutters on mobile, so the stacked cards use that.',
+          snippet:
+            'Read both. The guidelines want 24px gutters on mobile, so the stacked cards use that.',
           conversation: 'first',
         },
       ]
@@ -2121,7 +2122,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team-failures',
     title: 'Agents — What’s in flight lists turns that didn’t finish',
     looksRightWhen:
-      'Opened from ⌘K. Needs your OK lists Lead Gen (“Didn’t finish: …”, red dot) with its error and Retry, and Finance (“Out of usage until <time>”, amber dot) with the quiet notice, “Retry at <time>” and “Retry now”. Each card spans from the name to the meta edge.',
+      'Opened from ⌘K. Needs you lists Lead Gen (a red “Didn’t finish” pill, then its reason) with its error and Retry. Finance is under Paused, not Needs you (a usage limit resets by itself): “Out of usage” as a neutral pill, “until <time>”, the quiet notice with “Retry at <time>” and “Try anyway”. Each card spans from the name to the meta edge.',
     command: 'agents.team',
     requires: '.agents-team .agent-bubble--error',
     commands: {
