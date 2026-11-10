@@ -2020,7 +2020,13 @@ pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {
-            super::survive::tick("watch", tick(&app)).await;
+            // The registry's reads and writes on a blocking thread, never an
+            // async worker the bridge, the phone and every command share.
+            let a = app.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                super::survive::tick_blocking("watch", || tick(&a))
+            })
+            .await;
             // On the minute, with the other minute loops (one wake-up).
             crate::power::sleep_aligned(TICK).await;
         }
@@ -2035,7 +2041,7 @@ static SLOTS: LazyLock<tokio::sync::Semaphore> =
 /// its own task, at most [`CONCURRENT_CHECKS`] at once, holding its
 /// routine's `Checking` guard from here on so the next tick can't start it
 /// twice. One that hangs (a folder on a dead mount) holds only its own slot.
-async fn tick(app: &AppHandle) {
+fn tick(app: &AppHandle) {
     let Ok(agents) = store::list() else { return };
     let mut model_checks = 0;
     for agent in agents {
