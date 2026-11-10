@@ -3704,8 +3704,16 @@ the full threat model in docs/remote-access.md):
    plan is with the user the other assistant is told `STATUS: with_user`.
    The playback card expires on a restart (the interview is in memory).
 7. `finish` (once the user says that's everything) posts the review card: each agent ticked, with its role and the
-   first lines of its instructions in view (**Show all** for the rest), its
-   memory, routines (paused) and the logins it asks for a click away; a
+   first lines of its instructions in view (**Show all** for the rest; six
+   lines, three on a card bringing more than five agents, and a briefing
+   written as one long paragraph cut at a word after about 480 characters),
+   its memory, routines (paused) and the logins it asks for a click away.
+   Past five agents a muted tally over the rows says "All 12 ticked" / "9 of
+   12 ticked" with one **Untick all** / **Tick all** (`agents-import-review-many`). Once
+   imported, each name in the card's "Imported …" line that is an agent here
+   opens its chat, as the pills on the import's done screen do and the
+   phone's Import screen's **Say hi to <name>** buttons: an import ends with
+   the user talking to the agents. A
    name already taken (or a lookalike of one) comes in as "<Name> (from
    Grok)" unless the user picks **Replace**, which lists what it does to
    that agent: new instructions (the diff), a fresh conversation (memory
