@@ -325,6 +325,20 @@ export function withoutName(line: string, name: string): string {
   return rest.charAt(0).toUpperCase() + rest.slice(1);
 }
 
+/**
+ * A row with no action of its own still keeps the action column's width
+ * (`agents-team__slot`), so its time lines up with Needs you's and Working
+ * now's, which carry Open chat and Stop there.
+ */
+function ActionColumn({ children }: { children: ReactNode }) {
+  return (
+    <div className="agents-team__head">
+      {children}
+      <span className="agents-team__slot" aria-hidden />
+    </div>
+  );
+}
+
 /** Opens and closes its height with the chat's motion (see useHeightReveal). */
 function Fold({ open, children }: { open: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -853,6 +867,7 @@ export function AgentsTeamView({
                     Stop
                   </TextButton>
                 )}
+                {!onStop && <span className="agents-team__slot" aria-hidden />}
               </div>
             ))}
           </Section>
@@ -863,23 +878,24 @@ export function AgentsTeamView({
             empty="Nothing new since you last looked"
           >
             {finished.map(({ agent, reply }) => (
-              <Row
-                key={agent.id}
-                agent={agent}
-                place={roomName(reply?.room)}
-                line={
-                  reply?.result?.title ??
-                  (reply ? replyPreview(reply.text) : (previewText(agent.preview) ?? ''))
-                }
-                unread
-                meta={reply ? formatAgo(reply.ts) : undefined}
-                arrived={reply ? isNewReply(reply.id) : false}
-                onOpen={() =>
-                  reply
-                    ? openWhere(agent, reply.room, reply.id, reply.conversation)
-                    : onOpenAgent(agent.id)
-                }
-              />
+              <ActionColumn key={agent.id}>
+                <Row
+                  agent={agent}
+                  place={roomName(reply?.room)}
+                  line={
+                    reply?.result?.title ??
+                    (reply ? replyPreview(reply.text) : (previewText(agent.preview) ?? ''))
+                  }
+                  unread
+                  meta={reply ? formatAgo(reply.ts) : undefined}
+                  arrived={reply ? isNewReply(reply.id) : false}
+                  onOpen={() =>
+                    reply
+                      ? openWhere(agent, reply.room, reply.id, reply.conversation)
+                      : onOpenAgent(agent.id)
+                  }
+                />
+              </ActionColumn>
             ))}
           </Section>
 
@@ -937,13 +953,14 @@ export function AgentsTeamView({
           {team.scheduled.length > 0 && (
             <Section title="Coming up" empty="" quiet>
               {team.scheduled.slice(0, COMING_UP_MAX).map(({ agent, checkIn }) => (
-                <Row
-                  key={`${agent.id}-${checkIn.id}`}
-                  agent={agent}
-                  line={checkIn.note}
-                  meta={formatWhen(checkIn.nextAt)}
-                  onOpen={() => onOpenAgent(agent.id)}
-                />
+                <ActionColumn key={`${agent.id}-${checkIn.id}`}>
+                  <Row
+                    agent={agent}
+                    line={checkIn.note}
+                    meta={formatWhen(checkIn.nextAt)}
+                    onOpen={() => onOpenAgent(agent.id)}
+                  />
+                </ActionColumn>
               ))}
             </Section>
           )}

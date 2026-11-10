@@ -148,18 +148,21 @@ export function AgentsBoard({
                       name={agent.name}
                       color={agent.color}
                       state={state}
-                      size="lg"
+                      size="md"
                       seat={seated.has(agent.id)}
                     />
-                    {/* Its bound key, beside the cap: the small key's face has no room for it. */}
-                    {bound && (
-                      <kbd className="agents-board__bound" aria-hidden="true">
-                        {bound}
-                      </kbd>
-                    )}
                   </span>
-                  <span className="agents-board__name">{agent.name}</span>
-                  {news && <span className="agents-board__news">{news}</span>}
+                  {/* A row's anatomy: the key, then its name with what's news under it. */}
+                  <span className="agents-board__label">
+                    <span className="agents-board__name">{agent.name}</span>
+                    {news && <span className="agents-board__news">{news}</span>}
+                  </span>
+                  {/* Its bound key, at the row's end: the small key's face has no room for it. */}
+                  {bound && (
+                    <kbd className="agents-board__bound" aria-hidden="true">
+                      {bound}
+                    </kbd>
+                  )}
                 </button>
               </Tooltip>
             );
@@ -173,8 +176,10 @@ export function AgentsBoard({
               onClick={() => onNewAgent()}
               aria-label="New agent"
             >
-              <AgentKey name="New agent" state="new" size="lg" />
-              <span className="agents-board__name">New agent</span>
+              <AgentKey name="New agent" state="new" size="md" />
+              <span className="agents-board__label">
+                <span className="agents-board__name">New agent</span>
+              </span>
             </button>
           )}
         </div>

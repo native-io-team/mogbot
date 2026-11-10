@@ -433,9 +433,18 @@
   text-align: start;
 }
 
-/* What keeps them going, at the foot of What's in flight. */
+/* What keeps them going, at the foot of What's in flight: on the column's
+   left edge with everything above it, not a centred island. */
 .agents-team__column > .agents-stay-on {
+  align-items: flex-start;
+  max-width: none;
   margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agents-team__column > .agents-stay-on .agents-stay-on__actions {
+  justify-content: flex-start;
 }
 
 /* Where agents run: a quiet note set apart under the starters. */

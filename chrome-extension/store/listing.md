@@ -4,9 +4,11 @@ Package: `pnpm package:extension` → `chrome-extension/dist/<slug>-chrome-<vers
 (the manifest's dev `key` is removed; the store assigns the listing's own id,
 which then goes into `brand.json` as `chromeExtension.webStoreId`).
 
-Icon: `icons/icon-128.png` (from `store/icon.svg`). Still needed before
-submitting: at least one 1280×800 screenshot (the popup over a page with an
-agent's tab group), and a small promo tile 440×280.
+Icon: `icons/icon-128.png` (from `store/icon.svg`). Screenshot
+`store/assets/screenshot-1280x800.png` and small promo tile
+`store/assets/promo-440x280.png`, rendered from the `.html` beside them with
+headless Chrome (`--window-size` to the image's size). Still needed: the
+hosted privacy policy URL (`privacy.md`'s answers, on the site).
 
 ## Name
 

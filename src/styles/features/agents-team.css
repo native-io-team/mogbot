@@ -1,5 +1,12 @@
 /* Agents mode: the team view. */
 
+:root {
+  /* The width of "Open chat" at body-sm: the page's action column. */
+  --agents-team-action-width: 4.75rem;
+  /* Everyone else's columns: a name and its key, cut short past this. */
+  --agents-team-rest-column: 13rem;
+}
+
 /* ---------------------------------------------------------------- team */
 
 /* The board (AgentsBoard.tsx): every agent as a full-size key on a plate,
@@ -224,8 +231,13 @@
   min-width: 0;
 }
 
-.text-button.button.agents-team__open {
+.text-button.button.agents-team__open,
+.agents-team__slot {
   flex: none;
+  /* One action column for every section: Open chat, Stop and nothing all
+     take the same width, so every row's time lines up down the page. */
+  min-width: var(--agents-team-action-width);
+  justify-content: flex-end;
   margin-right: var(--spacing-sm);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
@@ -343,32 +355,51 @@
   color: var(--text-primary);
 }
 
-/* Everyone else: quieter, below the line of things happening. */
-.agents-team__section--quiet .agents-team__heading {
-  color: var(--text-faint);
-}
+/* Every heading but Needs you's is one style: a fainter one for the
+   quieter sections read as disabled, and the page as two different lists. */
 
 .agents-board--quiet .agents-board__plate {
-  grid-template-columns: repeat(auto-fill, minmax(calc(var(--agent-key-size-lg) * 2.4), 1fr));
-  gap: var(--spacing-md) var(--spacing-2xs);
-  padding: var(--spacing-lg) var(--spacing-sm);
-  /* The quietest section shouldn't carry the page's heaviest fill: the warm
-     plate (in light, a beige slab) read louder than Needs you. A recessed
-     well keeps the keys seated without shouting. */
-  background: var(--surface-recessed);
+  /* The rest of the team as compact rows (key, name), in columns on the
+     same left edge as every row above: big keycaps in a centred grid were
+     the page's heaviest block and pulled it off balance. */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--agents-team-rest-column), 1fr));
+  gap: var(--spacing-2xs) var(--spacing-sm);
+  width: calc(100% + var(--spacing-sm));
+  margin-inline-start: calc(var(--spacing-sm) * -1);
+  padding: 0;
+  background: none;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .agents-board--quiet .agents-board__key {
   position: relative;
-  padding: var(--spacing-xs) var(--spacing-2xs);
+  flex-direction: row;
+  gap: var(--spacing-sm);
+  align-items: center;
+  min-height: var(--size-sidebar-project-row);
+  padding: var(--spacing-sm);
+  text-align: left;
+}
+
+.agents-board--quiet .agents-board__key:hover {
+  background: var(--tint-subtle);
 }
 
 .agents-board--quiet .agents-board__key .agent-key {
-  margin-bottom: calc(var(--spacing-sm) + var(--agent-key-rest-depth));
+  margin-bottom: 0;
+}
+
+.agents-board__label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .agents-board--quiet .agents-board__name {
+  font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-label);
   color: var(--text-secondary);
 }
@@ -396,11 +427,9 @@
   display: inline-flex;
 }
 
-/* Just off the cap's top-right corner, as a keyboard prints a second legend. */
+/* At the row's end, as a menu prints a shortcut. */
 .agents-board__bound {
-  position: absolute;
-  top: 0;
-  left: calc(100% + var(--spacing-2xs));
+  flex: none;
   font-family: inherit;
   font-size: var(--font-size-caption);
   line-height: var(--line-height-compact);
