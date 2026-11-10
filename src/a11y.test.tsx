@@ -19,9 +19,9 @@ import { Spinner } from './components/primitives/Spinner';
 import { Tooltip, TooltipProvider } from './components/primitives/Tooltip';
 import { Dropdown, DropdownItem } from './components/primitives/Dropdown';
 import { AgentsBoard } from './components/agents/AgentsBoard';
-import { StackMeter, UsageKey } from './components/agents/UsageStack';
+import { AccountDetail, AccountRow, TotalBar } from './components/agents/UsageStack';
+import { usageGlance } from './lib/agentsUsage';
 import type { Agent } from './lib/agents';
-import type { StackKey } from '../packages/companion-protocol/src/usageGlance';
 import { CloseIcon, MoreHorizontalIcon } from './components/icons';
 
 afterEach(cleanup);
@@ -117,35 +117,63 @@ describe('axe: no WCAG A/AA violations', () => {
     );
   });
 
-  it('the usage meter and an account key', async () => {
-    const key: StackKey = {
-      key: 'claude:a1',
-      id: 'a1',
-      engine: 'claude',
-      name: 'Work',
-      sameAs: null,
-      tight: null,
-      position: 1,
-      detail: ['Max plan'],
-      state: 'in_use',
-      stateLabel: 'In use',
-      tone: 'calm',
-      left: 40,
-      limits: [{ key: 'five_hour', label: '5-hour', left: 40, tone: 'calm', resetsIn: 'in 2 h' }],
-      spent: ['Riley · 3 turns'],
-      changes: [],
-      fix: null,
-      canUse: false,
-      signedIn: true,
-      thisMac: false,
-      pinnedBy: [],
-    } as StackKey;
+  it('the total bar, an account row and an account’s page', async () => {
+    const now = Date.now();
+    const glance = usageGlance(
+      [
+        {
+          id: 'a1',
+          engine: 'claude',
+          name: 'Work',
+          plan: 'max',
+          thisMac: false,
+          signedIn: true,
+          out: false,
+        },
+        { id: 'a2', engine: 'claude', name: 'Side', thisMac: false, signedIn: true, out: false },
+      ],
+      {
+        mode: 'normal',
+        engines: [],
+        accounts: ['a1', 'a2'].map((id, i) => ({
+          engine: 'claude' as const,
+          id,
+          name: id,
+          thisMac: false,
+          signedIn: true,
+          out: false,
+          next: i === 0,
+          windows: [
+            {
+              kind: 'seven_day',
+              usedPercent: 20 + 40 * i,
+              resetsAt: now + 50 * 3_600_000,
+              limited: false,
+              observedAt: now,
+            },
+          ],
+          learned: [],
+          spent: [{ agentId: 'r', name: 'Riley', turns: 3, tokens: 9000 }],
+        })),
+        local: [],
+        spare: [],
+        backlog: [],
+        agents: [],
+        routines: [],
+        now,
+      },
+      { now }
+    );
+    const key = glance.keys[0];
     await check(
       <div>
-        <StackMeter keys={[key]} />
-        <UsageKey
+        <TotalBar total={glance.total} />
+        <TotalBar total={glance.total} size="large" onOpen={() => {}} />
+        <ul>
+          <AccountRow k={key} onOpen={() => {}} />
+        </ul>
+        <AccountDetail
           k={key}
-          draggable={false}
           actions={{
             onUse: () => {},
             onSignIn: () => {},

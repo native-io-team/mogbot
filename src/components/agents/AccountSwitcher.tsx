@@ -1,9 +1,9 @@
 /**
  * Usage at a glance, always in sight: the row at the foot of the Agents
  * sidebar, answering "how much can my agents still do, and when does it
- * refill" in words anyone reads: "Usage 57% left this week", a meter with
- * one segment per real account (a second sign-in of one never draws one),
- * and "Refills Sat 10:00 AM", with "2 accounts" only when there are. A
+ * refill" in words anyone reads: the total across every account ("72% left
+ * · 2 accounts"), the total bar (a segment per real account, most room
+ * first; a second sign-in of one never draws one), and "Refills in 2d 4h". A
  * status dot only when the user must act, or agents are out. It opens the
  * Usage view (`AgentsUsageView`), where every account is a key in order.
  *
@@ -25,12 +25,12 @@ import { Tooltip } from '../primitives/Tooltip';
 import { FooterRowIcon, type FooterRowStatus } from '../workspace/FooterRowIcon';
 import { useUsageAccounts } from './useUsageAccounts';
 import { useUsageInventory } from './AgentsUsage';
-import { StackMeter } from './UsageStack';
+import { TotalBar } from './UsageStack';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { Agent, AgentEngine, EngineInfo } from '../../lib/agents';
 import {
   onSwitcherRequest,
-  requestSwitcher,
+  requestUsageAccount,
   requestUsageAdd,
   type UsageAccount,
 } from '../../lib/agentAccounts';
@@ -168,12 +168,12 @@ export function AccountSwitcher({
     >
       {!collapsed && (
         <span className="usage-glance__body">
-          <span className="usage-glance__top">
-            <span className="usage-glance__label">Usage</span>
-            {words.count && <span className="usage-glance__refill">{words.count}</span>}
+          <span className="usage-glance__label">Usage</span>
+          <span className="usage-glance__headline">
+            {words.figure}
+            {words.count && <span className="usage-glance__count"> · {words.count}</span>}
           </span>
-          <span className="usage-glance__headline">{words.figure}</span>
-          {glance.meterKeys.length > 0 && <StackMeter keys={glance.meterKeys} size="small" paced />}
+          <TotalBar total={glance.total} size="small" />
           {words.refill && <span className="usage-glance__summary">{words.refill}</span>}
         </span>
       )}
@@ -204,7 +204,9 @@ export function AgentAccountChip({ agent }: { agent: Agent }) {
         size="compact"
         className="agent-chat__project agent-chat__account"
         leftIcon={<Icon size={12} />}
-        onClick={() => requestSwitcher('open')}
+        onClick={() => {
+          if (agent.ranOn) requestUsageAccount(agent.engine, agent.ranOn.id);
+        }}
         aria-label={tip}
         data-testid="agent-account-chip"
       >

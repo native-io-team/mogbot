@@ -94,6 +94,9 @@ export {
   type UsageGlance,
   type GlanceRowWords,
   type SignInChangedNotice,
+  type UsageTotal,
+  type TotalSegment,
+  type AgentSpend,
 } from '../../packages/companion-protocol/src/usageGlance';
 export {
   ADD_IT,

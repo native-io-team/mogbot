@@ -70,6 +70,8 @@ export interface KeyLimit {
   model?: boolean;
   /** "3d 12h" until it refills. */
   countdown?: string;
+  /** When it refills, as the engine reported it (ms). */
+  resetsAtMs?: number;
   /** What would be left now had it been spent evenly through the window (the pace marker), 0–100. */
   evenLeft?: number;
   paceState?: 'ahead' | 'on' | 'under';
@@ -115,6 +117,18 @@ export interface StackKey {
   limits: KeyLimit[];
   /** "Riley · 1.2M tokens · 14 turns", this week, most first. */
   spent: string[];
+  /** The same, one row each for a table: who used this account this week, most first. */
+  agents: AgentSpend[];
+  /**
+   * What this account adds to the total: its weekly limit's left (else its
+   * tighter limit's, when the engine reported no week), 0–100. Null with no
+   * reading, signed out, or a second sign-in of an account already counted.
+   */
+  share: number | null;
+  /** Which limit `share` is: the week, or (no weekly reading) the tighter one. */
+  shareOf: 'week' | 'tight' | null;
+  /** The limit `share` is, for its refill countdown. */
+  shareLimit: KeyLimit | null;
   changes: ChangeLine[];
   /**
    * The one fix for a sign-in problem. A duplicate's (`sign_in_other`) can
@@ -125,6 +139,65 @@ export interface StackKey {
   signedIn: boolean;
   thisMac: boolean;
   pinnedBy: string[];
+}
+
+/** One agent (or one of its routines) and what it used of one account this week. */
+export interface AgentSpend {
+  key: string;
+  agentId: string;
+  /** "Finance", "Finance: Monday numbers". */
+  name: string;
+  tokens: number;
+  turns: number;
+  /** "1.2M". */
+  tokensText: string;
+  /** "14 turns". */
+  turnsText: string;
+  /** Of this account's tokens this week, 0–100. */
+  share: number;
+}
+
+/** One account as a segment of the total: filled to what it adds. */
+export interface TotalSegment {
+  key: string;
+  engine: AgentEngine;
+  id: string;
+  name: string;
+  position: number;
+  /** Its `share`; null when it has no reading (an empty, dashed segment, never room). */
+  left: number | null;
+  state: AccountKeyState;
+  stateLabel: string;
+  tone: KeyTone;
+  /** "3d 12h" until that limit refills; absent when no reset was reported. */
+  refill: string | null;
+  /** "Sat 10:00 AM". */
+  refillAt: string | null;
+  /** "sam@example.com: 100% left, refills in 3d 12h". */
+  words: string;
+}
+
+/**
+ * Everything at once: the room across every real account, so two accounts
+ * at 100% and 44% read as "72% left", not as the one in use. Each account
+ * counts equally (plans' sizes aren't reported, so none is guessed); a
+ * second sign-in of an account and an account with no reading add nothing.
+ */
+export interface UsageTotal {
+  /** 0–100, the mean of each read account's share; null when none is read. */
+  left: number | null;
+  /** "72% left", "Not checked yet". */
+  figure: string;
+  /** "across 2 accounts", "across 2 Max accounts", "this week", "for now". */
+  across: string;
+  /** "1 account not read yet, not counted": only when there is one. */
+  unread: string | null;
+  /** The accounts counted (read). */
+  counted: number;
+  /** The soonest refill of the limits counted. */
+  refill: { in: string; at: string; account: string } | null;
+  /** Most room first, left to right; accounts with no reading last. */
+  segments: TotalSegment[];
 }
 
 export interface StackEngine {
@@ -178,7 +251,7 @@ export interface GlanceRowWords {
   needsYou: boolean;
 }
 
-/** The figure that matters: the tighter limit of the account in use (else the roomiest), and its refill. */
+/** The figure that matters: the total across every account (`totalOf`), and its next refill. */
 function rowWords(
   keys: StackKey[],
   counted: StackKey[],
@@ -187,7 +260,8 @@ function rowWords(
   tone: 'calm' | 'warning' | 'limited',
   back: number | null,
   soonest: { resetsAt: string } | null,
-  now: number
+  now: number,
+  total: UsageTotal
 ): GlanceRowWords {
   const count = counted.length > 1 ? plural(counted.length, 'account') : null;
   const needsYou = tone === 'warning';
@@ -204,14 +278,10 @@ function rowWords(
     const at = back ? resetPhrase(back, now) : (soonest?.resetsAt ?? null);
     return { figure: OUT_OF_USAGE, refill: at ? `Refills ${at}` : null, count, needsYou };
   }
-  const using =
-    roomy.find((k) => k.state === 'in_use') ??
-    roomy.reduce((a, b) => ((b.left ?? 0) > (a.left ?? 0) ? b : a));
-  const tight = using.tight;
-  const left = tight?.left ?? using.left ?? 0;
+  // The total across every account, as the Usage view's hero says it.
   return {
-    figure: `${left}% left ${tight?.label === 'Weekly' ? 'this week' : 'for now'}`,
-    refill: tight?.countdown ? `Refills in ${tight.countdown}` : null,
+    figure: total.counted > 1 ? total.figure : `${total.figure} ${total.across}`,
+    refill: total.refill ? `Refills in ${total.refill.in}` : null,
     count,
     needsYou,
   };
@@ -219,6 +289,8 @@ function rowWords(
 
 export interface UsageGlance {
   engines: StackEngine[];
+  /** The room across every account, first: the Usage view's hero and the sidebar row. */
+  total: UsageTotal;
   /** The row's plain words: what's left, when it refills. */
   row: GlanceRowWords;
   /** Every key, engine by engine, in order. */
@@ -412,6 +484,7 @@ function limitsOf(line: UsageAccountLine | undefined, now: number): KeyLimit[] {
             resetsIn: relativeIn(pick.resetsAt, now),
             resetsAt: resetPhrase(pick.resetsAt, now),
             countdown: countdown(pick.resetsAt, now),
+            resetsAtMs: pick.resetsAt,
           }
         : {}),
       ...(pace ? { pace } : {}),
@@ -533,6 +606,8 @@ function keyOf(
         : left <= LOW_LEFT || limits.some((l) => l.tone === 'warning')
           ? 'warning'
           : 'calm';
+  const week = general.find((l) => l.label === 'Weekly');
+  const shareLimit = left === null ? null : (week ?? tightest);
   const fix: StackKey['fix'] = !row.signedIn
     ? { action: 'sign_in', text: 'Sign in to use it.' }
     : same
@@ -555,6 +630,10 @@ function keyOf(
     spent: (line?.spent ?? [])
       .slice(0, 5)
       .map((r) => `${r.name} · ${tokensShortly(r.tokens)} tokens · ${plural(r.turns, 'turn')}`),
+    agents: agentsOf(line),
+    share: shareLimit ? shareLimit.left : left,
+    shareOf: shareLimit ? (week ? 'week' : 'tight') : null,
+    shareLimit,
     changes: changeLines(row.engine, line?.changes, now),
     fix,
     canUse: row.canUse && !same,
@@ -562,6 +641,108 @@ function keyOf(
     thisMac: row.thisMac,
     pinnedBy: row.pinnedBy,
   };
+}
+
+function agentsOf(line: UsageAccountLine | undefined): AgentSpend[] {
+  const spent = [...(line?.spent ?? [])].sort((a, b) => b.tokens - a.tokens);
+  const all = spent.reduce((n, r) => n + r.tokens, 0);
+  return spent.map((r) => ({
+    key: r.routine ? `${r.agentId}:${r.routine}` : r.agentId,
+    agentId: r.agentId,
+    name: r.routine ? `${r.name}: ${r.routine}` : r.name,
+    tokens: r.tokens,
+    turns: r.turns,
+    tokensText: tokensShortly(r.tokens),
+    turnsText: plural(r.turns, 'turn'),
+    share: all > 0 ? Math.round((r.tokens / all) * 100) : 0,
+  }));
+}
+
+/** "Max", "Pro": a plan as one word, for "across 2 Max accounts". */
+function planWord(plan: string | undefined): string | null {
+  const p = plan?.trim();
+  return p ? `${p.charAt(0).toUpperCase()}${p.slice(1)}` : null;
+}
+
+/**
+ * The total across every real account: each read account's share, counted
+ * equally, most room first; an account with no reading shown but never
+ * counted as room.
+ */
+export function totalOf(
+  keys: StackKey[],
+  plans: (k: StackKey) => string | undefined,
+  now: number
+): UsageTotal {
+  const real = keys.filter((k) => k.signedIn && k.state !== 'same');
+  const read = real.filter((k) => k.share !== null);
+  const unread = real.filter((k) => k.share === null);
+  const segment = (k: StackKey): TotalSegment => {
+    const l = k.shareLimit;
+    const refill = l?.countdown ?? null;
+    const room = k.share === null ? 'no reading yet' : `${k.share}% left`;
+    return {
+      key: k.key,
+      engine: k.engine,
+      id: k.id,
+      name: k.name,
+      position: k.position,
+      left: k.share,
+      state: k.state,
+      stateLabel: k.stateLabel,
+      tone: k.tone,
+      refill,
+      refillAt: l?.resetsAt ?? null,
+      words: `${k.name}: ${room}${refill ? `, refills in ${refill}` : ''}`,
+    };
+  };
+  const segments = [
+    ...[...read].sort(
+      (a, b) =>
+        (b.share as number) - (a.share as number) ||
+        a.engine.localeCompare(b.engine) ||
+        a.position - b.position
+    ),
+    ...unread,
+  ].map(segment);
+  const left =
+    read.length > 0
+      ? Math.round(read.reduce((n, k) => n + (k.share as number), 0) / read.length)
+      : null;
+  let across: string;
+  if (read.length <= 1) {
+    across = read[0]?.shareOf === 'tight' ? 'for now' : 'this week';
+  } else {
+    const words = read.map((k) => planWord(plans(k)));
+    const same = words.every((w) => w !== null && w === words[0]);
+    across = same
+      ? `across ${read.length} ${words[0]} accounts`
+      : `across ${plural(read.length, 'account')}`;
+  }
+  const soon = read
+    .filter((k) => k.shareLimit?.resetsAt && k.shareLimit.countdown)
+    .map((k) => ({ k, l: k.shareLimit as KeyLimit }))
+    .sort((a, b) => resetAt(a.l, now) - resetAt(b.l, now))[0];
+  return {
+    left,
+    figure:
+      left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not checked yet',
+    across: left === null ? '' : across,
+    unread:
+      unread.length > 0 && read.length > 0
+        ? `${plural(unread.length, 'account')} not read yet, not counted`
+        : null,
+    counted: read.length,
+    refill: soon
+      ? { in: soon.l.countdown as string, at: soon.l.resetsAt as string, account: soon.k.name }
+      : null,
+    segments,
+  };
+}
+
+/** A limit's reset, from its countdown's source: kept on the key as `resetsAtMs`. */
+function resetAt(l: KeyLimit, now: number): number {
+  return l.resetsAtMs ?? now;
 }
 
 /** Two keys never read the same: a repeated name says its place too. */
@@ -797,7 +978,14 @@ export function usageGlance(
     };
   }
 
-  const row = rowWords(keys, counted, read, roomy, tone, back?.at ?? null, soonest, now);
+  const total = totalOf(
+    keys,
+    (k) =>
+      accounts.find((a) => a.engine === k.engine && a.id === k.id)?.plan ??
+      inventory?.accounts.find((l) => l.engine === k.engine && l.id === k.id)?.plan,
+    now
+  );
+  const row = rowWords(keys, counted, read, roomy, tone, back?.at ?? null, soonest, now, total);
 
   // This Mac's sign-in became another account: the first engine's, said once.
   const change = (inventory?.signInChanges ?? []).find((c) =>
@@ -809,6 +997,7 @@ export function usageGlance(
 
   return {
     engines,
+    total,
     keys,
     row,
     meterKeys: keys.filter((k) => k.state !== 'same'),

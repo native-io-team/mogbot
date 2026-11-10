@@ -532,3 +532,139 @@ describe('this Mac signed in as another account', () => {
     expect(g.signInChanged).toBeNull();
   });
 });
+
+describe('the total, across every account', () => {
+  it('averages each account’s week, most room first: 100% and 44% read as 72%', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'sam@example.com' }), acct('work', { name: 'Work' })],
+      inv([
+        line('default', { windows: [week(56, 2 * 24 * H)] }),
+        line('work', { windows: [week(0, 5 * 24 * H)] }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.total.left).toBe(72);
+    expect(g.total.figure).toBe('72% left');
+    expect(g.total.across).toBe('across 2 accounts');
+    // The account in use (44%) is first in the order, but the roomier one leads the bar.
+    expect(g.keys.map((k) => k.name)).toEqual(['sam@example.com', 'Work']);
+    expect(g.total.segments.map((s) => [s.name, s.left])).toEqual([
+      ['Work', 100],
+      ['sam@example.com', 44],
+    ]);
+    // The next refill is the soonest of the weeks counted.
+    expect(g.total.refill).toMatchObject({ in: '2d 0h', account: 'sam@example.com' });
+    expect(g.row.figure).toBe('72% left');
+    expect(g.row.count).toBe('2 accounts');
+    expect(g.row.refill).toBe('Refills in 2d 0h');
+  });
+
+  it('names the plan when every account counted is on the same one', () => {
+    const g = usageGlance(
+      [acct('default', { plan: 'max' }), acct('work', { plan: 'max' })],
+      inv([line('default', { windows: [week(20)] }), line('work', { windows: [week(40)] })]),
+      { now: NOW }
+    );
+    expect(g.total.across).toBe('across 2 Max accounts');
+    const mixed = usageGlance(
+      [acct('default', { plan: 'max' }), acct('work', { plan: 'pro' })],
+      inv([line('default', { windows: [week(20)] }), line('work', { windows: [week(40)] })]),
+      { now: NOW }
+    );
+    expect(mixed.total.across).toBe('across 2 accounts');
+  });
+
+  it('leaves out a second sign-in of the same account', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'sam@example.com' }), acct('p', { name: 'Personal' })],
+      inv([
+        line('default', { windows: [week(50)] }),
+        line('p', { windows: [week(50)], sameAs: 'sam@example.com' }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.total.counted).toBe(1);
+    expect(g.total.left).toBe(50);
+    expect(g.total.segments.map((s) => s.name)).toEqual(['sam@example.com']);
+    expect(g.total.across).toBe('this week');
+    expect(g.row.figure).toBe('50% left this week');
+    expect(g.row.count).toBeNull();
+  });
+
+  it('shows an account with no reading as unknown, never as room, and doesn’t count it', () => {
+    const g = usageGlance(
+      [acct('default'), acct('work', { name: 'Work' }), acct('new', { name: 'New' })],
+      inv([line('default', { windows: [week(70)] }), line('work'), line('new')]),
+      { now: NOW }
+    );
+    expect(g.total.left).toBe(30);
+    expect(g.total.counted).toBe(1);
+    expect(g.total.unread).toBe('2 accounts not read yet, not counted');
+    // Last, and empty.
+    expect(g.total.segments.map((s) => [s.name, s.left])).toEqual([
+      ['default', 30],
+      ['Work', null],
+      ['New', null],
+    ]);
+    expect(g.total.segments[1].words).toBe('Work: no reading yet');
+
+    const none = usageGlance([acct('default')], inv([line('default')]), { now: NOW });
+    expect(none.total.left).toBeNull();
+    expect(none.total.figure).toBe('Not checked yet');
+    expect(none.total.across).toBe('');
+  });
+
+  it('an account out of usage counts as nothing left, and sits last of the read ones', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'A' }), acct('b', { name: 'B' }), acct('c', { name: 'C' })],
+      inv([
+        line('default', { windows: [week(40)], out: true, outUntil: NOW + 3 * H }),
+        line('b', { windows: [week(10)] }),
+        line('c', { windows: [week(60)] }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.total.segments.map((s) => [s.name, s.left])).toEqual([
+      ['B', 90],
+      ['C', 40],
+      ['A', 0],
+    ]);
+    expect(g.total.left).toBe(43);
+  });
+
+  it('uses the tighter limit only when an engine reported no week', () => {
+    const fiveHour = {
+      kind: 'five_hour',
+      usedPercent: 38,
+      resetsAt: NOW + 2 * H,
+      limited: false,
+      observedAt: NOW,
+    };
+    const g = usageGlance([acct('default')], inv([line('default', { windows: [fiveHour] })]), {
+      now: NOW,
+    });
+    expect(g.total.left).toBe(62);
+    expect(g.total.across).toBe('for now');
+    expect(g.row.figure).toBe('62% left for now');
+  });
+
+  it('lists who used an account as rows, most first, with each one’s share', () => {
+    const g = usageGlance(
+      [acct('default')],
+      inv([
+        line('default', {
+          windows: [week(20)],
+          spent: [
+            { agentId: 'f', name: 'Finance', turns: 2, tokens: 250_000 },
+            { agentId: 'c', name: 'Chief', turns: 9, tokens: 750_000 },
+          ],
+        }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.keys[0].agents.map((a) => [a.name, a.tokensText, a.turnsText, a.share])).toEqual([
+      ['Chief', '750k', '9 turns', 75],
+      ['Finance', '250k', '2 turns', 25],
+    ]);
+  });
+});
