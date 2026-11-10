@@ -16,7 +16,6 @@ export interface WorkspaceModalHostProps {
   currentProjectPath: string | undefined;
   backups: ModalGroup<'onBackupRestore' | 'onBackupCreatePR'>;
   education: ModalGroup<'isEducationMode' | 'onCloseEducation'>;
-  toasts: ModalGroup<'toasts' | 'dismissToast'>;
   screenshots: ModalGroup<
     | 'screenshotPreviewPath'
     | 'showScreenshotModal'
@@ -68,7 +67,6 @@ export function WorkspaceModalHost({
   currentProjectPath,
   backups,
   education,
-  toasts,
   screenshots,
   notification,
   extensions,
@@ -89,7 +87,6 @@ export function WorkspaceModalHost({
       currentProjectPath={currentProjectPath}
       {...backups}
       {...education}
-      {...toasts}
       {...screenshots}
       {...notification}
       {...extensions}

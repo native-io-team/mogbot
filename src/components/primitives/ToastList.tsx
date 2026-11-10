@@ -1,15 +1,17 @@
 /**
- * Shared toast list — the single rendering of the app's toast notifications.
+ * Shared toast list — the single rendering of the app's toast notifications,
+ * drawn once per window (`AppGlobalModals`).
  *
- * Previously duplicated inline in App.tsx (twice) and WorkspaceModals.tsx.
- * Error toasts persist until dismissed (see useToasts) and carry a Copy
- * button so the full error text can be pasted into Slack/a bug report
- * instead of screenshotted.
+ * A toast is a Bar: one line saying what happened, its icon telling success,
+ * information and failure apart without relying on hue, and at most one
+ * action. Error toasts persist until dismissed (see useToasts) and carry a
+ * Copy button so the full error text can be pasted into Slack or a bug
+ * report instead of screenshotted. Pointing at a toast holds it.
  */
 
 import { createPortal } from 'react-dom';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
-import { SuccessIcon, InfoIcon, CloseIcon, CopyIcon } from '@/components/icons';
+import { SuccessIcon, InfoIcon, ErrorIcon, CloseIcon, CopyIcon } from '@/components/icons';
 import type { Toast } from '../../hooks/useToasts';
 import { Button } from './Button';
 import { IconButton } from './IconButton';
@@ -18,18 +20,45 @@ import { MODAL_INERT_EXEMPT_ATTR } from './ModalFrame';
 interface ToastListProps {
   toasts: Toast[];
   onDismiss: (id: number) => void;
+  /** Hold a toast's clock while the pointer is on it (`useToasts().holdToast`). */
+  onHold?: (id: number, held: boolean) => void;
 }
 
-function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => void }) {
+const ICON = { success: SuccessIcon, info: InfoIcon, error: ErrorIcon } as const;
+
+function ToastItem({
+  toast,
+  onDismiss,
+  onHold,
+}: {
+  toast: Toast;
+  onDismiss: (id: number) => void;
+  onHold?: (id: number, held: boolean) => void;
+}) {
   // Per-toast hook so each error toast gets its own "Copied" flag.
   const { copy, isCopied } = useCopyToClipboard();
+  const Icon = ICON[toast.type];
+  const count = toast.count ?? 1;
 
   return (
-    <div className={`toast toast-${toast.type}`}>
-      <span className="toast-icon">
-        {toast.type === 'success' ? <SuccessIcon size={16} /> : <InfoIcon size={16} />}
+    <div
+      className={`toast toast-${toast.type}`}
+      // A failure interrupts; anything else waits its turn.
+      role={toast.type === 'error' ? 'alert' : 'status'}
+      onPointerEnter={() => onHold?.(toast.id, true)}
+      onPointerLeave={() => onHold?.(toast.id, false)}
+    >
+      <span className="toast-icon" aria-hidden="true">
+        <Icon size={16} />
       </span>
-      <span className="toast-message">{toast.message}</span>
+      <span className="toast-message">
+        {toast.message}
+        {count > 1 && (
+          <span className="toast-count" aria-label={`, ${count} times`}>
+            ×{count}
+          </span>
+        )}
+      </span>
       {toast.action && (
         <Button
           variant="ghost"
@@ -84,17 +113,17 @@ function ensureToastRoot(): HTMLElement | null {
   return host;
 }
 
-export function ToastList({ toasts, onDismiss }: ToastListProps) {
+export function ToastList({ toasts, onDismiss, onHold }: ToastListProps) {
   if (toasts.length === 0) return null;
   const host = ensureToastRoot();
   if (!host) return null;
 
   return createPortal(
-    <div className="toast-container">
+    <section className="toast-container" aria-label="Notifications">
       {toasts.map((t) => (
-        <ToastItem key={t.id} toast={t} onDismiss={onDismiss} />
+        <ToastItem key={t.id} toast={t} onDismiss={onDismiss} onHold={onHold} />
       ))}
-    </div>,
+    </section>,
     host
   );
 }

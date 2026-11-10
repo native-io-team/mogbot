@@ -366,7 +366,7 @@ function AppContents({ initialProjectPath }: AppProps) {
   // `toastsProps` is the memoized context value, still prop-drilled into
   // WorkspaceView during the transition off `onToast` prop chains.
   const toastsProps = useToast();
-  const { toasts, showToast, dismissToast } = toastsProps;
+  const { showToast } = toastsProps;
 
   // Branch management (state, polling, conflict handlers)
   const {
@@ -1172,8 +1172,6 @@ function AppContents({ initialProjectPath }: AppProps) {
         onConfirmMonorepoPick={() => void handleConfirmMonorepoPick()}
         onCancelMonorepoPick={() => void handleCancelMonorepoPick()}
         thumbnailConsentProps={thumbnailConsentProps}
-        toasts={toasts}
-        onDismissToast={dismissToast}
         quitConfirmModal={quitConfirmModal}
         agentPreviewServer={agentPreviewServer}
       />

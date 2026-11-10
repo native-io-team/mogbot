@@ -32,6 +32,10 @@ import { SHARE_RECIPE_EVENT } from '../lib/agentRecipe';
 import { openLogs } from '../lib/agentDesk';
 import { composerDraft, setComposerDraft } from '../lib/composerDraft';
 import { setGroupMode, startNamingGroup, useAgentGroups, type GroupMode } from '../lib/agentGroups';
+import { asCommandError, formatCommandError } from '../lib/errors';
+
+/** What went wrong, in words: never `String(e)`'s "Error: …" or "[object Object]". */
+const errorText = (e: unknown) => formatCommandError(asCommandError(e));
 
 /** ⌘K switches for the agent list's optional groups. */
 const GROUP_COMMANDS: { mode: GroupMode; title: string; keywords: string[] }[] = [
@@ -326,7 +330,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
                     requestAgentsIntent({ kind: 'open', agentId: chiefId });
                     setView('agents');
                   })
-                  .catch((e: unknown) => showToast(String(e), 'error'));
+                  .catch((e: unknown) => showToast(errorText(e), 'error'));
               },
             },
           ]
@@ -444,7 +448,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         when: () => !!setup,
         keywords: ['agents', 'import', 'logins', 'reach', 'access', 'connected', 'check'],
         run: () => {
-          checkTeamReach().catch((e: unknown) => showToast(String(e), 'error'));
+          checkTeamReach().catch((e: unknown) => showToast(errorText(e), 'error'));
           if (chiefId) requestAgentsIntent({ kind: 'open', agentId: chiefId });
           setView('agents');
         },
@@ -536,7 +540,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
           // Finder opens outside the app: a quiet line says it happened.
           openLogs().then(
             () => showToast('Opened the logs folder in Finder', 'success'),
-            (e: unknown) => showToast(`Couldn't open the logs: ${String(e)}`, 'error')
+            (e: unknown) => showToast(`Couldn’t open the logs: ${errorText(e)}`, 'error')
           );
         },
       },
@@ -579,7 +583,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
               result.supported ? 'success' : 'info'
             );
           } catch (err) {
-            showToast(`Couldn't change that setting: ${String(err)}`, 'error');
+            showToast(`Couldn’t change that setting: ${errorText(err)}`, 'error');
           }
         },
       })),

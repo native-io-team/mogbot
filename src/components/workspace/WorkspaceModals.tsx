@@ -29,8 +29,6 @@ import { WorktreeCreateModal } from '../branches/WorktreeCreateModal';
 import { ConflictResolutionModal } from '../branches/ConflictResolutionModal';
 import { OnboardingTerminal } from '../terminal/lazyTerminals';
 import { ZapIcon } from '@/components/icons';
-import { ToastList } from '../primitives/ToastList';
-import type { Toast } from '../../hooks/useToasts';
 import type { NotificationSettings } from '../../lib/sounds';
 import type { AgentConfig } from '../../lib/agent';
 import type { BranchInfo } from '../../lib/branches';
@@ -52,10 +50,6 @@ export interface WorkspaceModalsProps {
   // EducationOverlay
   isEducationMode: boolean;
   onCloseEducation: () => void;
-
-  // Toasts
-  toasts: Toast[];
-  dismissToast: (id: number) => void;
 
   // Screenshot
   screenshotPreviewPath: string | null;
@@ -153,8 +147,6 @@ export function WorkspaceModals({
   onBackupCreatePR,
   isEducationMode,
   onCloseEducation,
-  toasts,
-  dismissToast,
   screenshotPreviewPath,
   showScreenshotModal,
   onDismissScreenshotPreview,
@@ -236,9 +228,6 @@ export function WorkspaceModals({
 
       {/* Education Mode Overlay */}
       {isEducationMode && <EducationOverlay onClose={onCloseEducation} />}
-
-      {/* Toast notifications */}
-      <ToastList toasts={toasts} onDismiss={dismissToast} />
 
       {/* Screenshot Preview Toast */}
       {screenshotPreviewPath && !showScreenshotModal && (

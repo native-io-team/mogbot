@@ -9,7 +9,6 @@ import { AccountSelectScreen } from './accounts/AccountSelectScreen';
 import type { ProjectsView } from './dashboard/ProjectsView';
 import { BootLoadingScreen } from './BootLoadingScreen';
 import { ThumbnailConsentModal } from './preview/ThumbnailConsentModal';
-import { ToastList } from './primitives/ToastList';
 import { HomeSidebar } from './workspace/HomeSidebar';
 import { CompactModeToggle } from './workspace/ModeToggle';
 import { AgentsView } from './agents/AgentsView';
@@ -65,7 +64,6 @@ type HomeSidebarProps = Omit<ComponentProps<typeof HomeSidebar>, 'activeNav'>;
 type ProjectsViewProps = ComponentProps<typeof ProjectsView>;
 type WorkspaceViewProps = ComponentProps<typeof WorkspaceView>;
 type ThumbnailConsentProps = ComponentProps<typeof ThumbnailConsentModal>;
-type ToastListProps = ComponentProps<typeof ToastList>;
 
 interface PendingMonorepoPick {
   project: Project;
@@ -91,8 +89,6 @@ export interface AppViewRouterProps {
   onConfirmMonorepoPick: () => void;
   onCancelMonorepoPick: () => void;
   thumbnailConsentProps: ThumbnailConsentProps;
-  toasts: ToastListProps['toasts'];
-  onDismissToast: ToastListProps['onDismiss'];
   quitConfirmModal: ReactNode;
   /** The window's dev servers, for the Agents preview pane. */
   agentPreviewServer?: AgentPreviewServer;
@@ -118,8 +114,6 @@ export function AppViewRouter({
   onConfirmMonorepoPick,
   onCancelMonorepoPick,
   thumbnailConsentProps,
-  toasts,
-  onDismissToast,
   quitConfirmModal,
   agentPreviewServer,
 }: AppViewRouterProps) {
@@ -152,7 +146,6 @@ export function AppViewRouter({
         <div className="app">
           <AccountSelectScreen {...accountSelectProps} />
         </div>
-        <ToastList toasts={toasts} onDismiss={onDismissToast} />
         {quitConfirmModal}
       </>
     );
@@ -194,7 +187,6 @@ export function AppViewRouter({
             />
           </Suspense>
         )}
-        <ToastList toasts={toasts} onDismiss={onDismissToast} />
         {quitConfirmModal}
       </>
     );
@@ -209,7 +201,6 @@ export function AppViewRouter({
           sidebarProps={homeSidebarProps}
           previewServer={agentPreviewServer}
         />
-        <ToastList toasts={toasts} onDismiss={onDismissToast} />
         {quitConfirmModal}
       </>
     );

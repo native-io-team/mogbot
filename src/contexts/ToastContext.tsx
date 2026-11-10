@@ -14,14 +14,14 @@ interface ProviderProps {
 }
 
 export function ToastProvider({ children }: ProviderProps) {
-  const { toasts, showToast, dismissToast } = useToasts();
+  const { toasts, showToast, dismissToast, holdToast } = useToasts();
   // Memoize the context value so consumers only re-render when toast state
   // actually changes (not when an ancestor re-renders the provider). The
   // `showToast` / `dismissToast` functions are useCallback-stable inside
   // `useToasts`, so effects and callbacks may safely list them as deps.
   const value = useMemo(
-    () => ({ toasts, showToast, dismissToast }),
-    [toasts, showToast, dismissToast]
+    () => ({ toasts, showToast, dismissToast, holdToast }),
+    [toasts, showToast, dismissToast, holdToast]
   );
   return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;
 }

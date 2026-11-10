@@ -7,6 +7,7 @@
 import type { Scenario } from '../types';
 import { AGENTS_TAB, overview } from './agents';
 import { WORKSPACE_PROJECT, workspaceCommands } from './workspace';
+import { rejectsWith } from '../reject';
 
 const commands = { agents_overview: overview() };
 
@@ -55,9 +56,26 @@ export const connectiveScenarios: Scenario[] = [
     id: 'toast-success',
     title: 'Toast — Open logs says where it opened',
     looksRightWhen:
-      'One toast, top right, under the window’s edge: a tick, one sentence, a close button. Exactly one toast is drawn, not two stacked on each other.',
+      'One toast, top right, under the chat header (Schedule, Model and ⋯ uncovered): a tick, one sentence, a close button. Exactly one toast is drawn, not two stacked on each other.',
     requires: '.toast',
     command: 'agents.openLogs',
     commands: { ...commands, agents_open_logs: '/Users/sam/Library/Logs/Mogbot' },
+  },
+  {
+    id: 'toast-error-repeated',
+    title: 'Toast — the same failure twice',
+    looksRightWhen:
+      'One toast under the chat header: the failure with a red error mark (not the info “i”), “×2” after its sentence, then Copy and close. No second copy of it stacked underneath.',
+    requires: '.toast-error .toast-count',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { key: 'mod+k' },
+      { fill: '.command-palette-input', value: 'Open logs' },
+      { click: '.command-palette [role="option"]', text: 'Open logs' },
+      { key: 'mod+k' },
+      { fill: '.command-palette-input', value: 'Open logs' },
+      { click: '.command-palette [role="option"]', text: 'Open logs' },
+    ],
+    commands: { ...commands, agents_open_logs: rejectsWith('Finder is not responding.') },
   },
 ];
