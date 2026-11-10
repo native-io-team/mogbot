@@ -9,6 +9,10 @@
   --flow-mat-dot: rgba(214, 210, 202, 0.07);
   --flow-mat-lamp: rgba(244, 242, 238, 0.045);
   --flow-mat-pitch: 24px;
+  /* An install's steps and its folded output (InstallProgress). */
+  --install-mark-size: 16px;
+  --install-dot-size: 6px;
+  --install-details-height: 240px;
 }
 
 :root[data-theme='light'] {
@@ -242,4 +246,170 @@
 
 .flow-error .flow-check {
   box-shadow: var(--shadow-md);
+}
+
+/* An install or a sign-in, as a native installer shows it
+   (src/components/setup/flow/InstallProgress.tsx): the steps, what it's
+   waiting on, and the real output folded under "Show details". */
+.install-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.install-steps {
+  list-style: none;
+  margin: 0;
+  padding: var(--spacing-md) var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  border-radius: var(--radius-card);
+  border: var(--border-width-default) solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.install-step {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-md);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.install-step[data-state='current'] {
+  color: var(--text-primary);
+}
+
+.install-step[data-state='done'] {
+  color: var(--text-secondary);
+}
+
+.install-step__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--install-mark-size);
+  height: var(--install-mark-size);
+}
+
+.install-step[data-state='done'] .install-step__mark {
+  color: var(--accent-success);
+}
+
+.install-step__dot {
+  width: var(--install-dot-size);
+  height: var(--install-dot-size);
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+}
+
+/* What the run is waiting on: the Mac password, Return, a code. */
+.install-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-card);
+  border: var(--border-width-default) solid var(--border-strong);
+  background: var(--surface-panel);
+}
+
+.install-ask__label {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-primary);
+}
+
+.install-ask__hint {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.install-ask__row {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.install-ask__row > .ss-text-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.install-signin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.install-progress__foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.install-progress__foot > .install-details {
+  flex: 1;
+  min-width: 0;
+}
+
+/* "Show details": the real output, for whoever wants it. */
+.install-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+}
+
+.install-details__chevron {
+  transition: transform var(--transition-interaction);
+}
+
+.install-details [aria-expanded='true'] .install-details__chevron {
+  transform: rotate(180deg);
+}
+
+.install-details__panel {
+  align-self: stretch;
+  border-radius: var(--radius-card);
+  border: var(--border-width-default) solid var(--border-subtle);
+  background: var(--surface-recessed);
+  overflow: hidden;
+}
+
+/* Folded, the live terminal stays laid out at full size (it owns the
+   process, and only measures and starts in a box with a size): the panel
+   clips it to nothing rather than unmounting or display: none. */
+.install-details__panel[data-open='false'] {
+  height: 0;
+  border-color: transparent;
+  visibility: hidden;
+}
+
+.install-details__terminal .onboarding-terminal-container {
+  height: var(--install-details-height);
+  background: var(--surface-recessed);
+}
+
+.install-details__log {
+  margin: 0;
+  max-height: var(--install-details-height);
+  overflow: auto;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-family: var(--font-code);
+  font-size: var(--font-size-body-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

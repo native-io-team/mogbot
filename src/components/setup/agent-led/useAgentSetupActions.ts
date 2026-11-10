@@ -1,18 +1,28 @@
 /**
- * Item actions for Phase 0 of the agent-led onboarding (getting one agent
- * installed + signed in). Mirrors the classic wizard's terminal-exit
- * verification semantics — a clean exit is a claim, not proof — but only for
- * agent items, which are all terminal-based. Under mock mode
- * (SHIPSTUDIO_FORCE_SETUP) actions resolve deterministically via the backend
- * mock state instead of spawning real processes, so contributors can click
- * through the whole flow on any machine.
+ * Runs onboarding's installs and sign-ins (getting one engine installed and
+ * signed in) and keeps what the screen needs to show them as a native
+ * installer would: the run's real output, the step it has reached
+ * (`lib/installProgress`), what it's waiting on, and, when it fails, what
+ * went wrong with the one fix.
+ *
+ * A clean exit is a claim, not proof: "Checking it works" is the app's own
+ * status check, and only that marks an item done.
+ *
+ * Three ways a run happens:
+ * - `pty`: the real command in a terminal (`OnboardingTerminal`), which the
+ *   screen keeps folded under "Show details"
+ * - `quiet`: Node.js through Homebrew in the background (`install_brew_packages`),
+ *   which prints nothing until it's done
+ * - `mock`: under `SHIPSTUDIO_FORCE_SETUP`, a scripted run (`mockScript`)
+ *   through the same parsing, then the backend's mock state; nothing touches
+ *   the Mac. `SHIPSTUDIO_FORCE_INSTALL_FAILURE` makes the first run of each
+ *   item that can fail that way fail once.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import {
   SetupItem,
   FullSetupStatus,
-  TerminalCommand,
   TERMINAL_COMMANDS,
   USES_TERMINAL,
   checkClaudeAuthStatus,
@@ -25,27 +35,49 @@ import {
 import { mockMarkSetupItemReady } from '../../../lib/agentOnboarding';
 import { trackEvent } from '../../../lib/analytics';
 import { withTimeout } from '../../../lib/withTimeout';
+import { extractTerminalError } from '../../../lib/terminalDiagnostics';
+import { asCommandError, formatCommandError } from '../../../lib/errors';
 import {
-  detectAlreadyLoggedIn,
-  extractTerminalError,
-  isNetworkError,
-  isNodeMissingError,
-} from '../../../lib/terminalDiagnostics';
-import {
-  alreadySignedInMessage,
-  authFailureMessage,
-  notDetectedMessage,
-  NETWORK_FAILURE_MESSAGE,
-} from '../setupFailureMessages';
+  describeFailure,
+  isAuthItem,
+  laterPhase,
+  mockScript,
+  phaseFromOutput,
+  type InstallFailure,
+  type InstallPhase,
+  type MockFailure,
+} from '../../../lib/installProgress';
+import { usePolling } from '../../../hooks/usePolling';
 import { logger } from '../../../lib/logger';
 
 const SETUP_STATUS_TIMEOUT_MS = 15_000;
-/** Simulated duration of a mock install/connect, long enough to see the spinner. */
-const MOCK_ACTION_MS = 1200;
+/** How much of a run's output is kept: enough for an installer's failure. */
+const OUTPUT_MAX_CHARS = 16_384;
+/** How often a sign-in asks the app's own check whether it's done. */
+const SIGN_IN_POLL_MS = 3000;
 
-/** Configuration for the active terminal command */
-export interface TerminalConfig extends TerminalCommand {
+export interface InstallRun {
   itemId: string;
+  source: 'pty' | 'mock' | 'quiet';
+  /** Everything it has printed (bounded), raw. */
+  output: string;
+  /** The furthest step it has reached; never goes back. */
+  phase: InstallPhase;
+  /** When it last printed, so a quiet prompt can be told from a busy one. */
+  lastOutputAt: number;
+  /** What the app knew about the item before this run, restored on Cancel. */
+  before: SetupItem['status'];
+}
+
+/** The real command a `pty` run is running. */
+export interface InstallTerminal {
+  /** A new key per run, so Try again is a fresh process. */
+  key: number;
+  command: string;
+  args: string[];
+  onExit: (exitCode: number | null, outputTail: string) => void;
+  onOutput: (text: string) => void;
+  inputRef: MutableRefObject<((data: string) => void) | null>;
 }
 
 interface Params {
@@ -53,14 +85,49 @@ interface Params {
   fetchStatus: () => Promise<FullSetupStatus | null>;
   /** Patch a single item's status in the owner's `items` state. */
   updateItemStatus: (itemId: string, updates: Partial<SetupItem>) => void;
-  /** Mock mode: resolve actions via backend mock state, no real processes. */
+  /** Mock mode: scripted runs and the backend's mock state, no real processes. */
   mock: boolean;
+  /** Mock mode: fail the first run of each item that can fail this way. */
+  mockFailure?: MockFailure | null;
 }
 
-export function useAgentSetupActions({ fetchStatus, updateItemStatus, mock }: Params) {
-  const [activeItemId, setActiveItemId] = useState<string | null>(null);
-  const [terminalConfig, setTerminalConfig] = useState<TerminalConfig | null>(null);
-  const [terminalExitCode, setTerminalExitCode] = useState<number | null>(null);
+const bound = (s: string) => (s.length > OUTPUT_MAX_CHARS ? s.slice(-OUTPUT_MAX_CHARS) : s);
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export function useAgentSetupActions({
+  fetchStatus,
+  updateItemStatus,
+  mock,
+  mockFailure = null,
+}: Params) {
+  const [run, setRun] = useState<InstallRun | null>(null);
+  const [terminal, setTerminal] = useState<{
+    key: number;
+    itemId: string;
+    command: string;
+    args: string[];
+  } | null>(null);
+  /** The last run's output per item, for "Show details" after it ends. */
+  const [outputs, setOutputs] = useState<Record<string, string>>({});
+  /** What went wrong, per item, from everything the run printed. */
+  const [failures, setFailures] = useState<Record<string, InstallFailure>>({});
+
+  // Every run gets a token; anything arriving for an older one (a killed
+  // PTY's exit, a mock line after Cancel) is ignored.
+  const token = useRef(0);
+  // The run as handlers see it: set at once when one starts or ends, and
+  // kept in step with each output after render.
+  const runRef = useRef<InstallRun | null>(null);
+  useEffect(() => {
+    runRef.current = run;
+  }, [run]);
+  const endRun = useCallback(() => {
+    runRef.current = null;
+    setRun(null);
+  }, []);
+  const ptyInput = useRef<((data: string) => void) | null>(null);
+  const mockAnswer = useRef<(() => void) | null>(null);
+  const mockFailedOnce = useRef(new Set<string>());
 
   // Staggered re-checks (600/1500/3000ms) outlive fast unmounts — their
   // continuations must not dispatch state into an unmounted tree.
@@ -69,102 +136,45 @@ export function useAgentSetupActions({ fetchStatus, updateItemStatus, mock }: Pa
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      token.current += 1;
     };
   }, []);
+  const live = (t: number) => mountedRef.current && t === token.current;
 
-  const handleItemAction = useCallback(
-    async (itemId: string) => {
-      if (activeItemId || terminalConfig) return;
-      const isAuth = itemId.endsWith('_auth');
-      void trackEvent('setup_action_clicked', {
-        item_id: itemId,
-        action: isAuth ? 'connect' : 'install',
-        step_id: 'agent_led_pick',
-      });
+  const append = useCallback((text: string) => {
+    if (!text) return;
+    setRun((prev) => {
+      if (!prev) return prev;
+      const output = bound(prev.output + text);
+      return {
+        ...prev,
+        output,
+        phase: laterPhase(prev.phase, phaseFromOutput(prev.itemId, output)),
+        lastOutputAt: Date.now(),
+      };
+    });
+  }, []);
 
-      setActiveItemId(itemId);
-      updateItemStatus(itemId, { status: 'in_progress', errorMessage: undefined });
-
-      if (mock) {
-        // Deterministic path for contributors: flip the backend mock state
-        // after a visible beat. No real terminals, no host-machine changes.
-        await new Promise((resolve) => setTimeout(resolve, MOCK_ACTION_MS));
-        try {
-          await mockMarkSetupItemReady(itemId);
-        } catch (err) {
-          logger.warn('Mock setup action failed', { itemId, error: String(err) });
-        }
-        if (!mountedRef.current) return;
-        await fetchStatus();
-        if (mountedRef.current) setActiveItemId(null);
-        return;
-      }
-
-      // Auth items: re-check first — the user may have completed auth in a
-      // previously cancelled terminal without the checklist updating. Only
-      // skip the terminal when the CHECKLIST source agrees the item is ready;
-      // if the quick probe and the checklist disagree, fall through and open
-      // the login terminal anyway — the CLI's own flow is the tiebreaker the
-      // user can actually see. (A probe-only early return here deadlocks the
-      // button: it "loads" and nothing ever happens — the #159 failure shape.)
-      if (itemId === 'claude_auth') {
-        const isAuthed = await checkClaudeAuthStatus();
-        if (!mountedRef.current) return;
-        if (isAuthed) {
-          const status = await fetchStatus();
-          if (!mountedRef.current) return;
-          if (status && isSetupItemReady(status.items, itemId)) {
-            setActiveItemId(null);
-            return;
-          }
-        }
-      }
-
-      // Node.js (Codex's prerequisite) installs through the package manager
-      // with no terminal; the app's own check decides whether it landed.
-      if (PKG_MGR_PACKAGES.has(itemId)) {
-        try {
-          await installPackages([itemId]);
-        } catch (err) {
-          logger.warn('Package install failed', { itemId, error: String(err) });
-        }
-        if (!mountedRef.current) return;
-        const status = await fetchStatus();
-        if (!mountedRef.current) return;
-        if (!status || !isSetupItemReady(status.items, itemId)) {
-          updateItemStatus(itemId, { status: 'error', errorMessage: notDetectedMessage(itemId) });
-        }
-        setActiveItemId(null);
-        return;
-      }
-
-      // Every agent item (binary installs and auth flows) runs in a terminal.
-      if (USES_TERMINAL.has(itemId)) {
-        const cmd = TERMINAL_COMMANDS[itemId];
-        if (cmd) {
-          setTerminalConfig({ itemId, command: cmd.command, args: cmd.args });
-          return;
-        }
-      }
-      logger.warn('Agent-led pick phase asked to run a non-terminal item', { itemId });
-      setActiveItemId(null);
-    },
-    [activeItemId, terminalConfig, mock, fetchStatus, updateItemStatus]
-  );
-
-  const handleTerminalExit = useCallback(
-    async (exitCode: number | null, outputTail = '') => {
-      const itemId = terminalConfig?.itemId;
-      if (!itemId) return;
+  /** The run ended: the app checks for itself, or says what went wrong. */
+  const finish = useCallback(
+    async (itemId: string, t: number, exitCode: number | null, tail: string) => {
+      if (!live(t)) return;
+      setTerminal(null);
+      setOutputs((prev) => ({ ...prev, [itemId]: tail }));
 
       if (exitCode === 0 || exitCode === null) {
-        setTerminalConfig(null);
-        setTerminalExitCode(null);
-
-        // Verify the outcome actually landed — auth/token files and freshly
-        // installed binaries can appear a beat after the process exits.
+        setRun((prev) => (prev ? { ...prev, phase: 'check' } : prev));
         let verified: boolean;
-        if (itemId === 'claude_auth') {
+        if (mock) {
+          try {
+            await mockMarkSetupItemReady(itemId);
+          } catch (err) {
+            logger.warn('Mock setup action failed', { itemId, error: String(err) });
+          }
+          if (!live(t)) return;
+          const status = await fetchStatus();
+          verified = !!status && isSetupItemReady(status.items, itemId);
+        } else if (itemId === 'claude_auth') {
           verified = await recheckWithDelays(() => checkClaudeAuthStatus());
         } else {
           verified = await recheckWithDelays(async () => {
@@ -180,77 +190,241 @@ export function useAgentSetupActions({ fetchStatus, updateItemStatus, mock }: Pa
             }
           });
         }
-        if (!mountedRef.current) return;
-
-        await fetchStatus();
-        if (!mountedRef.current) return;
-
+        if (!live(t)) return;
+        if (!mock) await fetchStatus();
+        if (!live(t)) return;
         if (!verified) {
+          const failure = describeFailure(itemId, tail, { exitedClean: true });
           void trackEvent('setup_action_failed', {
             item_id: itemId,
             exit_code: exitCode,
             error_excerpt: 'clean_exit_but_not_detected',
           });
-          updateItemStatus(itemId, {
-            status: 'error',
-            errorMessage: itemId.endsWith('_auth')
-              ? authFailureMessage(itemId, outputTail)
-              : notDetectedMessage(itemId),
-          });
+          setFailures((prev) => ({ ...prev, [itemId]: failure }));
+          updateItemStatus(itemId, { status: 'error', errorMessage: failure.line });
         }
       } else {
-        setTerminalExitCode(exitCode);
-
-        // Surface the actual failure from the terminal output instead of a
-        // generic message. Append guidance to the raw error, never replace it.
-        const extractedError = extractTerminalError(outputTail);
-        const alreadySignedIn = itemId.endsWith('_auth') ? detectAlreadyLoggedIn(outputTail) : null;
-        const networkMessage = isNetworkError(outputTail) ? NETWORK_FAILURE_MESSAGE : null;
-        let errorMessage =
-          networkMessage && extractedError
-            ? `${extractedError} — ${NETWORK_FAILURE_MESSAGE}`
-            : (networkMessage ?? extractedError ?? 'Command failed. Click to try again.');
-        if (isNodeMissingError(outputTail)) {
-          errorMessage =
-            "Node.js wasn't found, and this needs it. Choose Claude Code, which installs on its own, or install Node.js first.";
-        } else if (alreadySignedIn) {
-          errorMessage = alreadySignedInMessage(itemId, alreadySignedIn.identity);
-        }
+        const failure = describeFailure(itemId, tail);
         void trackEvent('setup_action_failed', {
           item_id: itemId,
           exit_code: exitCode,
-          error_excerpt: extractedError ?? undefined,
+          error_excerpt: extractTerminalError(tail) ?? undefined,
+          failure_kind: failure.kind,
         });
-        updateItemStatus(itemId, { status: 'error', errorMessage });
+        setFailures((prev) => ({ ...prev, [itemId]: failure }));
+        updateItemStatus(itemId, { status: 'error', errorMessage: failure.line });
       }
-
-      setActiveItemId(null);
+      endRun();
     },
-    [terminalConfig, fetchStatus, updateItemStatus]
+    [mock, fetchStatus, updateItemStatus, endRun]
   );
 
-  const handleTerminalCancel = useCallback(() => {
-    const itemId = terminalConfig?.itemId;
-    setTerminalConfig(null);
-    setTerminalExitCode(null);
-    setActiveItemId(null);
-
-    if (itemId && !terminalExitCode) {
-      void fetchStatus();
-      // Auth flows may still be writing the token when the user cancels
-      // (e.g. after the OAuth browser callback) — re-check once more.
-      if (itemId.endsWith('_auth')) {
-        setTimeout(() => void fetchStatus(), 2000);
+  const playMock = useCallback(
+    async (itemId: string, t: number) => {
+      const failing =
+        mockFailure &&
+        !mockFailedOnce.current.has(itemId) &&
+        mockScript(itemId, mockFailure).exitCode !== 0;
+      if (failing) mockFailedOnce.current.add(itemId);
+      const script = mockScript(itemId, failing ? mockFailure : null);
+      let tail = '';
+      for (const line of script.lines) {
+        await wait(line.after);
+        if (!live(t)) return;
+        if (!line.text) continue;
+        const text = line.waitsForInput ? line.text : `${line.text}\r\n`;
+        tail += text;
+        append(text);
+        if (line.waitsForInput) {
+          await new Promise<void>((resolve) => {
+            mockAnswer.current = resolve;
+          });
+          mockAnswer.current = null;
+          if (!live(t)) return;
+          tail += '\r\n';
+          append('\r\n');
+        }
       }
+      await finish(itemId, t, script.exitCode, tail);
+    },
+    [mockFailure, append, finish]
+  );
+
+  const handleItemAction = useCallback(
+    async (itemId: string, before: SetupItem['status'] = 'not_installed') => {
+      if (runRef.current) return;
+      const t = ++token.current;
+      void trackEvent('setup_action_clicked', {
+        item_id: itemId,
+        action: isAuthItem(itemId) ? 'connect' : 'install',
+        step_id: 'agent_led_pick',
+      });
+
+      const source: InstallRun['source'] = mock
+        ? 'mock'
+        : PKG_MGR_PACKAGES.has(itemId)
+          ? 'quiet'
+          : 'pty';
+      const started: InstallRun = {
+        itemId,
+        source,
+        output: '',
+        phase: phaseFromOutput(itemId, ''),
+        lastOutputAt: Date.now(),
+        // An error was the last run's, not what's on the Mac.
+        before: before === 'error' || before === 'in_progress' ? 'not_installed' : before,
+      };
+      runRef.current = started;
+      setRun(started);
+      setFailures((prev) => {
+        if (!(itemId in prev)) return prev;
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+      updateItemStatus(itemId, { status: 'in_progress', errorMessage: undefined });
+
+      if (mock) {
+        await playMock(itemId, t);
+        return;
+      }
+
+      // Auth items: re-check first — the user may have completed auth in a
+      // previously cancelled run without the screen updating. Only skip the
+      // sign-in when the CHECKLIST source agrees the item is ready; if the
+      // quick probe and the checklist disagree, run the CLI's own flow, the
+      // tiebreaker the user can actually see. (A probe-only early return
+      // here deadlocks the button — the #159 failure shape.)
+      if (itemId === 'claude_auth' && (await checkClaudeAuthStatus())) {
+        if (!live(t)) return;
+        const status = await fetchStatus();
+        if (!live(t)) return;
+        if (status && isSetupItemReady(status.items, itemId)) {
+          endRun();
+          return;
+        }
+      }
+
+      // Node.js (Codex's prerequisite) installs through the package manager
+      // with no terminal; its answer, if it fails, is the whole output.
+      if (source === 'quiet') {
+        let error = '';
+        try {
+          await installPackages([itemId]);
+        } catch (err) {
+          error = formatCommandError(asCommandError(err));
+          logger.warn('Package install failed', { itemId, error });
+        }
+        if (!live(t)) return;
+        append(error);
+        await finish(itemId, t, error ? 1 : 0, error);
+        return;
+      }
+
+      const cmd = USES_TERMINAL.has(itemId) ? TERMINAL_COMMANDS[itemId] : undefined;
+      if (cmd) {
+        setTerminal({ key: t, itemId, command: cmd.command, args: cmd.args });
+        return;
+      }
+      logger.warn('Onboarding asked to run an item it has no command for', { itemId });
+      endRun();
+    },
+    [mock, playMock, append, finish, fetchStatus, updateItemStatus, endRun]
+  );
+
+  /** Stop the run: the process is killed, and the screen says it was closed. */
+  const cancel = useCallback(() => {
+    const current = runRef.current;
+    token.current += 1;
+    mockAnswer.current?.();
+    setTerminal(null);
+    endRun();
+    if (!current) return;
+    const { itemId } = current;
+    setOutputs((prev) => ({ ...prev, [itemId]: current.output }));
+    // Back to what the app knew before the run, until the check below says otherwise.
+    updateItemStatus(itemId, { status: current.before });
+    void fetchStatus();
+    // Auth flows may still be writing the token when the user cancels
+    // (e.g. after the OAuth browser callback) — re-check once more.
+    if (isAuthItem(itemId)) {
+      setTimeout(() => {
+        if (mountedRef.current) void fetchStatus();
+      }, 2000);
     }
-  }, [terminalConfig, terminalExitCode, fetchStatus]);
+  }, [fetchStatus, updateItemStatus, endRun]);
+
+  /** Answer what the run is waiting on (a password, Return, a code). */
+  const answer = useCallback((data: string) => {
+    if (runRef.current?.source === 'pty') {
+      ptyInput.current?.(data);
+    } else if (runRef.current?.source === 'mock') {
+      mockAnswer.current?.();
+    }
+  }, []);
+
+  /** Forget a failure (Try again by way of a prerequisite). */
+  const clearFailure = useCallback((itemId: string) => {
+    setFailures((prev) => {
+      if (!(itemId in prev)) return prev;
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+  }, []);
+
+  // A sign-in finishes in the browser. The command usually exits then, but
+  // the app's own check decides: once it says signed in, the run is done.
+  const signingIn = run?.source === 'pty' && isAuthItem(run.itemId) && run.phase !== 'check';
+  usePolling(
+    async () => {
+      const current = runRef.current;
+      if (!current || !isAuthItem(current.itemId)) return;
+      const t = token.current;
+      const status = await withTimeout(
+        getFullSetupStatus(),
+        SETUP_STATUS_TIMEOUT_MS,
+        'Setup status check'
+      );
+      if (!live(t) || !isSetupItemReady(status.items, current.itemId)) return;
+      token.current += 1;
+      setTerminal(null);
+      setRun((prev) => (prev ? { ...prev, phase: 'check' } : prev));
+      await fetchStatus();
+      if (mountedRef.current) endRun();
+    },
+    {
+      intervalMs: SIGN_IN_POLL_MS,
+      enabled: signingIn,
+      whileHidden: true,
+      name: 'onboarding-sign-in',
+    }
+  );
+
+  const t = terminal?.key ?? 0;
+  const itemId = terminal?.itemId ?? '';
+  const onExit = useCallback(
+    (exitCode: number | null, tail: string) => void finish(itemId, t, exitCode, tail),
+    [finish, itemId, t]
+  );
+  const ptyTerminal: InstallTerminal | null = terminal && {
+    key: terminal.key,
+    command: terminal.command,
+    args: terminal.args,
+    onExit,
+    onOutput: append,
+    inputRef: ptyInput,
+  };
 
   return {
-    activeItemId,
-    terminalConfig,
-    terminalExitCode,
+    run,
+    busy: run !== null,
+    terminal: ptyTerminal,
+    outputs,
+    failures,
     handleItemAction,
-    handleTerminalExit,
-    handleTerminalCancel,
+    cancel,
+    answer,
+    clearFailure,
   };
 }
