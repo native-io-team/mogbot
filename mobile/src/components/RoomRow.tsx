@@ -21,7 +21,7 @@ import {
 } from '../lib/rooms';
 import { useApp } from '../lib/store';
 import { keySize, chromeScale, iconSize, radius, space } from '../lib/theme';
-import { makeStyles, useColors } from '../lib/appearance';
+import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import { Spinner } from './agent';
 import { AgentKey } from './AgentKey';
 import { keyGeometry } from '../lib/agentKey';
@@ -130,6 +130,8 @@ export const RoomRow = memo(function RoomRow({
   // Who is asking, beside the pill, as an agent row says what it's asking.
   const who = asking ? askingNames(room, members, thread) : '';
   const working = workingHere(members, room.id).length > 0;
+  // At accessibility sizes who is asking goes under the pill, not squeezed beside it.
+  const large = useLargeText();
   return (
     <Pressable
       onPress={onPress ?? (() => router.push({ pathname: '/room/[id]', params: { id: room.id } }))}
@@ -164,7 +166,7 @@ export const RoomRow = memo(function RoomRow({
             {formatAgo(room.lastActivityAt)}
           </T>
         </View>
-        <View style={styles.line}>
+        <View style={[styles.line, large && asking && live && styles.wrapLine]}>
           {asking && live ? (
             // Waiting on you, as the agent rows say it: a pill, not an amber
             // line, then who is asking in ordinary ink.
@@ -172,10 +174,10 @@ export const RoomRow = memo(function RoomRow({
               <StatusPill tone="waiting" label={line} />
               <T
                 variant="small"
-                numberOfLines={1}
+                numberOfLines={large ? 3 : 1}
                 maxFontSizeMultiplier={2}
                 color={room.unread ? colors.textStrong : colors.textSecondary}
-                style={{ flex: 1 }}
+                style={large ? styles.underPill : { flex: 1 }}
               >
                 {who}
               </T>
@@ -248,6 +250,8 @@ const useStyles = makeStyles((colors) => ({
   selected: { backgroundColor: colors.surfaceControl },
   text: { flex: 1, gap: space['2xs'] },
   line: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
+  wrapLine: { flexWrap: 'wrap', rowGap: space['2xs'] },
+  underPill: { flexBasis: '100%' },
   name: { flexShrink: 1, flexGrow: 1 },
   mark: { width: 14, alignItems: 'flex-end' },
   fold: {

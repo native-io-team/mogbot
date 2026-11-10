@@ -48,7 +48,17 @@ import {
 } from '../lib/rooms';
 import { describeError, loadLatest, loadOlder, sendToRoom, setOpenChat } from '../lib/session';
 import { getApp, useApp } from '../lib/store';
-import { keySize, chromeScale, fonts, iconSize, radius, space, speakerInk } from '../lib/theme';
+import {
+  CHIP_H,
+  keySize,
+  chromeScale,
+  fonts,
+  iconSize,
+  radius,
+  space,
+  speakerInk,
+  tapSlop,
+} from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { AgentKey } from './AgentKey';
@@ -638,6 +648,7 @@ function Chip({ agent, label, onPress }: { agent?: Agent; label?: string; onPres
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={agent ? `Mention ${name}` : name}
+      hitSlop={tapSlop(CHIP_H)}
       android_ripple={ripple}
       onPress={onPress}
       style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
@@ -724,7 +735,7 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    minHeight: 36,
+    minHeight: CHIP_H,
     paddingHorizontal: space.md,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceControl,

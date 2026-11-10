@@ -23,6 +23,7 @@
  *   pnpm qa:web --phases reconnecting    # the Mac going away under an open app (not in the default run)
  *   pnpm qa:web --phases link-down       # the connection bar: away, back, the Mac's app stuck or closing (not in the default run)
  *   pnpm qa:web --out /tmp/shots
+ *   pnpm qa:web --font-scale 3.1         # Dynamic Type stand-in (AX5 ≈ 3.1): every T at min(scale, its clamp)
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
  *   QA_WEB_PORT=… QA_MOCK_PORT=… QA_CDP_PORT=… pnpm qa:web
  *
@@ -52,6 +53,8 @@ const OUT = path.resolve(opt('--out', 'QA_OUT', path.join(ROOT, 'qa-shots')));
 const ONLY = opt('--only', 'QA_ONLY', '');
 const THEMES = opt('--themes', 'QA_THEMES', 'light,dark').split(',').filter(Boolean);
 const VERBOSE = args.includes('--verbose');
+// The web has no Dynamic Type: the app reads this as its font scale (`lib/qaFontScale`).
+const FONT_SCALE = Number(opt('--font-scale', 'QA_FONT_SCALE', 0)) || 0;
 // A run that outlives this is hung: everything it started is killed and it fails.
 const MAX_MS = Number(opt('--max-ms', 'QA_MAX_MS', 75 * 60 * 1000));
 const PHASES = opt(
@@ -407,6 +410,11 @@ async function openTab() {
   const target = await res.json();
   const page = await Page.attach(target.webSocketDebuggerUrl);
   await page.send('Emulation.setDeviceMetricsOverride', VIEWPORT);
+  if (FONT_SCALE) {
+    await page.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `window.__QA_FONT_SCALE = ${FONT_SCALE};`,
+    });
+  }
   return page;
 }
 

@@ -32,7 +32,7 @@ import {
   type UsageGlance,
   type UsageTotal,
 } from '@shipstudio/companion-protocol';
-import { makeStyles, useColors } from '../lib/appearance';
+import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import { depthOf, iconSize, keySize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { AgentKey } from './AgentKey';
 import { Button, Icon, IconButton, Segmented, StatusPill, T } from './ui';
@@ -207,6 +207,9 @@ export function TotalCard({
   const { total } = glance;
   const out = glance.tone === 'limited';
   const known = total.left !== null && !out;
+  // At accessibility sizes: "across 2 Max accounts" its own line (nested, it took
+  // the display figure's line height), and each account's name its own line.
+  const large = useLargeText();
   const figure = known ? total.figure : glance.unread ? glance.headline : glance.row.figure;
   // As the desk's hero words it, with when as well as how long.
   const refill = out
@@ -233,7 +236,7 @@ export function TotalCard({
           }
         >
           {figure}
-          {known && !!total.across && (
+          {known && !!total.across && !large && (
             <>
               {' '}
               <T variant="subhead" color={colors.textSecondary}>
@@ -242,6 +245,11 @@ export function TotalCard({
             </>
           )}
         </T>
+        {known && !!total.across && large && (
+          <T variant="subhead" color={colors.textSecondary}>
+            {total.across}
+          </T>
+        )}
         {refill && (
           <T variant="small" color={colors.textSecondary}>
             {refill}
@@ -258,9 +266,19 @@ export function TotalCard({
             accessibilityLabel={s.words}
             disabled={!onOpen}
             onPress={() => onOpen?.(s.engine, s.id)}
-            style={({ pressed }) => [styles.legendRow, i > 0 && styles.divided, pressed && PRESSED]}
+            style={({ pressed }) => [
+              styles.legendRow,
+              large && styles.wrapRow,
+              i > 0 && styles.divided,
+              pressed && PRESSED,
+            ]}
           >
-            <T variant="small" color={colors.textPrimary} style={styles.grow} numberOfLines={1}>
+            <T
+              variant="small"
+              color={colors.textPrimary}
+              style={large ? styles.wholeLine : styles.grow}
+              numberOfLines={large ? undefined : 1}
+            >
               {s.name}
             </T>
             <T variant="small" color={colors.textSecondary} style={styles.figure}>
@@ -340,6 +358,7 @@ export function AccountRows({
 }) {
   const colors = useColors();
   const styles = useStyles();
+  const large = useLargeText();
   return (
     <View style={styles.rows}>
       {keys.map((k, i) => {
@@ -368,12 +387,12 @@ export function AccountRows({
               </T>
             </View>
             <View style={styles.rowBody}>
-              <View style={styles.rowLine}>
+              <View style={[styles.rowLine, large && styles.wrapRow]}>
                 <T
                   variant="headline"
                   color={colors.textStrong}
-                  style={styles.grow}
-                  numberOfLines={1}
+                  style={large ? styles.wholeLine : styles.grow}
+                  numberOfLines={large ? undefined : 1}
                 >
                   {k.name}
                 </T>
@@ -799,6 +818,8 @@ const useStyles = makeStyles((colors) => ({
   },
   hero: { gap: space.lg, padding: space.xl },
   figure: { fontVariant: ['tabular-nums'] },
+  wrapRow: { flexWrap: 'wrap', rowGap: space['2xs'] },
+  wholeLine: { flexBasis: '100%' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -177,6 +177,18 @@ describe('every kind', () => {
     expect(screen.getByTestId('callout-warning')).toBeTruthy();
   });
 
+  it('tells VoiceOver what a chart shows, not only its title', async () => {
+    await draw(message(ALL.slice(0, 2)), null);
+    expect(
+      screen.getByRole('image', {
+        name: 'Signups (line chart, Mon to Wed). Signups: Mon 1, Tue 2, Wed 3. Trials: Mon 2, Wed 1.',
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('image', { name: /Ads 3, 30%; Search 7, 70%\. Total 10\./ })
+    ).toBeTruthy();
+  });
+
   it('says a chart with nothing in it has nothing to chart', async () => {
     await draw(
       message([
@@ -269,6 +281,17 @@ describe('fitting a table to the phone', () => {
       rows: [['Acme Site', 1, 0, 6]],
     };
     expect(fitColumns(counts, 300).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(300);
+  });
+
+  it('measures at Dynamic Type: at AX sizes words stay whole and the table scrolls', () => {
+    const counts = {
+      columns: [{ label: 'Agent' }, { label: 'Results', numeric: true }],
+      rows: [['Research', 1]],
+    };
+    const big = fitColumns(counts, 300, 3.1);
+    // "Research" and "Results" at the reading clamp (×2), not at ×1.
+    expect(big[0]).toBeGreaterThanOrEqual(8 * 14 * 0.57 * 2);
+    expect(big[1]).toBeGreaterThanOrEqual(7 * 12 * 0.57 * 2);
   });
 
   it('scrolls only when even wrapped it cannot fit', () => {

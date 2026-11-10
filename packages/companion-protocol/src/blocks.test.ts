@@ -5,6 +5,7 @@ import {
   badNumbers,
   blockRuns,
   chartModel,
+  chartSummary,
   domainOf,
   formReply,
   formatNumber,
@@ -157,6 +158,36 @@ describe('charts', () => {
     );
     if (m.type !== 'cartesian') throw new Error('cartesian');
     expect(m.ticks.map((t) => t.label)).toEqual(['0', '5K', '10K', '15K', '20K']);
+  });
+
+  it('says a chart in words: each point of a short series, the shape of a long one', () => {
+    const short: ChartBlock = {
+      kind: 'chart',
+      summary: 's',
+      chart: 'bar',
+      labels: ['Mon', 'Tue', 'Wed'],
+      series: [{ name: 'Orders', values: [3, null, 5] }],
+    };
+    expect(chartSummary(short)).toBe('Orders: Mon 3, Wed 5.');
+    const long: ChartBlock = {
+      kind: 'chart',
+      summary: 's',
+      chart: 'line',
+      prefix: '$',
+      labels: Array.from({ length: 12 }, (_, i) => `M${i + 1}`),
+      series: [{ name: 'Revenue', values: [5, 9, 2, 4, 4, 4, 4, 4, 4, 4, 20, 7] }],
+    };
+    expect(chartSummary(long)).toBe(
+      'Revenue: from $5 (M1) to $7 (M12), low $2 (M3), high $20 (M11).'
+    );
+    const pie: ChartBlock = {
+      kind: 'chart',
+      summary: 's',
+      chart: 'donut',
+      labels: ['Ads', 'Search', 'Mail'],
+      series: [{ name: 'Visits', values: [30, 70, 0] }],
+    };
+    expect(chartSummary(pie)).toBe('Ads 30, 30%; Search 70, 70%. Total 100.');
   });
 
   it('a legend only for two or more series', () => {

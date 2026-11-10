@@ -1392,11 +1392,24 @@ Contrast brightens each grey a step. Every Text scales with Dynamic Type:
 chrome clamped at 1.3×, card titles at 1.5×, words at 2× (`READ_MAX_SCALE`,
 so a reply still sets a sentence a line at AX3), and at accessibility sizes
 the approval card folds its explanation so the answers stay on screen.
+From ×1.6 (`LARGE_TEXT`, `useLargeText`: Dynamic Type times Text size) rows
+stack rather than truncate: Catch up's action goes under its words, a name
+gets its own whole line in usage, and words go under a row's pill; tables
+measure their columns at the size the words are set, so a header never
+breaks mid-word (the table scrolls). Chips drawn 36 tall carry
+`tapSlop(CHIP_H)` to reach 44.
 **Settings → Text size** (Smaller 0.88×, Default, Larger 1.12×, Largest
 1.25×) multiplies the whole type scale on top of Dynamic Type, saved in
 `prefs.json`: `type` reads the size in force and `makeStyles` rebuilds each
 sheet per appearance and size, so anything sized from `type` follows it. VoiceOver and TalkBack hear
-replies, approvals, failures and toasts (`lib/a11y.ts`, not during replay).
+replies, approvals, failures and toasts (`lib/a11y.ts`, not during replay):
+a reply that lands in the chat that's open is read (as said aloud, cut at a
+sentence near 280 characters, `replyAnnouncement`), anywhere else "X replied";
+the connection bar's verdict is said once across tabs when it appears or
+changes (live regions are Android's only). A chart's accessible name says
+its values (`chartSummary`: each slice and share, a short series point by
+point, a long one by start, end, low and high), and every chart series is 3:1
+on app, panel and control in both themes.
 A command, code block, table or diff that runs past the edge scrolls sideways
 and says so: its far edge fades into the well while there's more, and the
 indicator flashes once (`SideScroll`), so a cut-off command never reads as the
@@ -1680,7 +1693,15 @@ cd mobile && pnpm qa:web
 pnpm qa:web --only chat-fixtures --themes dark --out /tmp/shots
 pnpm qa:web --phases heavy          # demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture
 pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681   # the defaults
+pnpm qa:web --font-scale 3.1 --themes light   # large text (AX5)
 ```
+
+`--font-scale N` stands in for Dynamic Type, which the web doesn't have
+(react-native-web reports 1 and ignores `maxFontSizeMultiplier`): the app
+reports N as its font scale, so layouts that stack at accessibility sizes
+stack, and every `T` is set at N or its own clamp, whichever is less
+(`lib/qaFontScale.ts`). Plain `Text` and inputs aren't scaled, so it's a close
+stand-in for the device, not the device.
 
 `--phases perf` (not in the default run) times the torture mock's "Long Rich"
 chat, 5,000 lines of every kind (markdown, code, timelines, result and

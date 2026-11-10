@@ -28,7 +28,8 @@ import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import * as Updates from 'expo-updates';
 import { FIRST_CONVERSATION } from '@shipstudio/companion-protocol';
-import { announce } from './a11y';
+import { announce, replyAnnouncement } from './a11y';
+import { speakable } from './readAloud';
 import { conversationOfKey } from './conversations';
 import { needsYou } from './agents';
 import {
@@ -1341,7 +1342,9 @@ function noticeMessage(m: AgentMessage) {
   if (m.kind === 'approval' && m.approval?.status === 'pending') {
     announce(`${name} needs your OK: ${m.approval.title}`, true);
   } else if (m.kind === 'agent') {
-    announce(`${name} replied`);
+    // In its open chat the reply is read; a streamed one was a moving target until now.
+    const here = getApp().openChat === m.agentId && AppState.currentState === 'active';
+    announce(replyAnnouncement(name, here ? speakable(m.text ?? '') : '', here), here);
   } else if (m.kind === 'error') {
     announce(`${name} didn’t finish`);
   }

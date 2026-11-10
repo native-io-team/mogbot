@@ -142,6 +142,30 @@ describe('palettes', () => {
     }
   );
 
+  it.each(APPEARANCES)(
+    'draw every chart series at 3:1 on what a chart sits on (%s)',
+    (appearance) => {
+      // A line or a bar is a graphic the reader needs (WCAG 1.4.11): light's
+      // orange, teal, mustard and pink were 1.9 to 2.9 on a panel.
+      const c = palettes[appearance];
+      const series = [
+        c.chart1,
+        c.chart2,
+        c.chart3,
+        c.chart4,
+        c.chart5,
+        c.chart6,
+        c.chart7,
+        c.chart8,
+      ];
+      for (const [i, hex] of series.entries()) {
+        for (const bg of ['surfaceApp', 'surfacePanel', 'surfaceControl'] as const) {
+          expect([i + 1, bg, contrast(hex, c[bg]) >= 3]).toEqual([i + 1, bg, true]);
+        }
+      }
+    }
+  );
+
   it('keep words on media white, over a dark scrim, in both appearances', () => {
     for (const appearance of APPEARANCES) {
       const c = palettes[appearance];

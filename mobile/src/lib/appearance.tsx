@@ -14,7 +14,12 @@
 
 import * as SystemUI from 'expo-system-ui';
 import { createContext, useContext, useEffect, useLayoutEffect, type ReactNode } from 'react';
-import { Appearance as RNAppearance, StyleSheet, useColorScheme } from 'react-native';
+import {
+  Appearance as RNAppearance,
+  StyleSheet,
+  useColorScheme,
+  useWindowDimensions,
+} from 'react-native';
 import { useApp, type AppearancePref } from './store';
 import {
   atTextScale,
@@ -24,6 +29,7 @@ import {
   TEXT_SIZES,
   type Appearance,
   type Palette,
+  LARGE_TEXT,
 } from './theme';
 
 export interface Theme {
@@ -76,6 +82,15 @@ export const useColors = () => useContext(ThemeContext).colors;
 export const useAppearance = () => useContext(ThemeContext).appearance;
 /** The phone's text size in force (Settings → Text size), as a multiplier. */
 export const useTextScale = () => useContext(ThemeContext).textScale;
+
+/**
+ * At accessibility text sizes (`LARGE_TEXT`, Dynamic Type times Settings →
+ * Text size): rows stack instead of truncating.
+ */
+export function useLargeText(): boolean {
+  const { fontScale } = useWindowDimensions();
+  return (fontScale || 1) * useTextScale() >= LARGE_TEXT;
+}
 
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const pref = useApp((s) => s.prefs.appearance);
