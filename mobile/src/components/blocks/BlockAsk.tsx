@@ -23,7 +23,7 @@ import DateTimePicker, {
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { makeStyles, useAppearance, useColors } from '../../lib/appearance';
-import { fonts, iconSize, PRESSED, radius, space, type } from '../../lib/theme';
+import { fonts, iconSize, lineHeight, PRESSED, radius, space, type } from '../../lib/theme';
 import { Button, Icon, T } from '../ui';
 
 /** Whether and how this block may answer. */
@@ -136,7 +136,9 @@ export function BlockComparison({
             )}
             {o.pros.map((p, k) => (
               <View key={`p${k}`} style={styles.point} accessible accessibilityLabel={`Pro: ${p}`}>
-                <Icon name="checkmark" size={iconSize.inline} color={colors.accentSuccess} />
+                <View style={styles.pointIcon}>
+                  <Icon name="checkmark" size={iconSize.inline} color={colors.accentSuccess} />
+                </View>
                 <T variant="small" color={colors.textPrimary} style={styles.flex}>
                   {p}
                 </T>
@@ -144,24 +146,31 @@ export function BlockComparison({
             ))}
             {o.cons.map((c, k) => (
               <View key={`c${k}`} style={styles.point} accessible accessibilityLabel={`Con: ${c}`}>
-                <Icon name="minus.circle" size={iconSize.inline} color={colors.textMuted} />
+                <View style={styles.pointIcon}>
+                  <Icon name="minus.circle" size={iconSize.inline} color={colors.textMuted} />
+                </View>
                 <T variant="small" color={colors.textSecondary} style={styles.flex}>
                   {c}
                 </T>
               </View>
             ))}
-            {(answering.live || on) && (
+            {on ? (
+              <View style={styles.picked} testID="comparison-picked">
+                <Icon name="checkmark" size={iconSize.inline} color={colors.textStrong} />
+                <T variant="subhead" color={colors.textStrong}>
+                  Picked
+                </T>
+              </View>
+            ) : answering.live ? (
               <Button
-                title={on ? 'Picked' : 'Pick this'}
-                variant={on || o.recommended ? 'answer' : 'outline'}
-                icon={on ? 'checkmark' : undefined}
-                disabled={!answering.live}
-                accessibilityLabel={on ? `Picked ${o.name}` : `Pick ${o.name}`}
-                onPress={answering.live ? () => answering.reply(o.reply) : undefined}
+                title="Pick this"
+                variant={o.recommended ? 'answer' : 'outline'}
+                accessibilityLabel={`Pick ${o.name}`}
+                onPress={() => answering.reply(o.reply)}
                 style={styles.pick}
                 testID="comparison-pick"
               />
-            )}
+            ) : null}
           </View>
         );
       })}
@@ -422,11 +431,15 @@ const useStyles = makeStyles((colors) => ({
   },
   optionFacts: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
   optionFact: { gap: space['2xs'] },
-  point: {
+  point: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  pointIcon: { height: lineHeight(type.small), justifyContent: 'center' },
+  picked: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: space.sm,
-    paddingTop: space['2xs'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+    minHeight: 44,
+    marginTop: space.xs,
   },
   pick: { marginTop: space.xs },
   form: { gap: space.md },

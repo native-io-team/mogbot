@@ -140,14 +140,14 @@ function BlockView({
       return <BlockCallout block={block} />;
     case 'code':
       return (
-        <View style={styles.bare}>
-          {!!title && (
-            <T variant="caption" color={colors.textMuted}>
-              {title}
-            </T>
-          )}
+        <Card
+          icon="doc.text"
+          title={title ?? block.language ?? 'Code'}
+          meta={title && block.language ? block.language : undefined}
+          testID="block-card"
+        >
           <BlockCode block={block} />
-        </View>
+        </Card>
       );
     case 'image':
       return <BlockImage block={block} agentId={agentId} />;

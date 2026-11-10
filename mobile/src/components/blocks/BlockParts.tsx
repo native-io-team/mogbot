@@ -71,11 +71,7 @@ function MetricTile({ metric, half }: { metric: Metric; half: boolean }) {
         ? colors.accentErrorLight
         : colors.textMuted;
   const arrow: SFName | null =
-    delta?.direction === 'up'
-      ? 'arrow.up.right'
-      : delta?.direction === 'down'
-        ? 'arrow.down.right'
-        : null;
+    delta?.direction === 'up' ? 'arrow.up' : delta?.direction === 'down' ? 'arrow.down' : null;
   const spark = useMemo(() => {
     if (!metric.trend || metric.trend.length < 2) return null;
     const block: ChartBlock = {
@@ -371,11 +367,6 @@ export function BlockCode({ block }: { block: CodeBlock }) {
   const shown = long && !open ? lines.slice(0, CODE_LINES) : lines;
   return (
     <View style={styles.code}>
-      {!!block.language && (
-        <T variant="caption" color={colors.textMuted} style={styles.codeLang}>
-          {block.language}
-        </T>
-      )}
       <SideScroll fade={colors.surfaceApp} contentContainerStyle={{ flexGrow: 1 }}>
         <T variant="mono" color={colors.textPrimary} selectable style={styles.codeText}>
           {shown.join('\n')}
@@ -477,7 +468,6 @@ const useStyles = makeStyles((colors) => ({
   },
   calloutHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   code: { backgroundColor: colors.surfaceApp, borderRadius: radius.inner, overflow: 'hidden' },
-  codeLang: { paddingHorizontal: space.md, paddingTop: space.sm },
   codeText: { paddingHorizontal: space.md, paddingVertical: space.sm },
   image: { gap: space.xs },
 }));
