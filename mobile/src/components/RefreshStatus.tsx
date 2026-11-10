@@ -54,7 +54,13 @@ export function RefreshStatus({
 
   const line =
     said === 'done' ? (
-      <Line icon="checkmark" tone="success" lead="Up to date" text="just now" testID="refresh-done" />
+      <Line
+        icon="checkmark"
+        tone="success"
+        lead="Up to date"
+        text="just now"
+        testID="refresh-done"
+      />
     ) : (
       <Line
         icon="exclamationmark.circle"
