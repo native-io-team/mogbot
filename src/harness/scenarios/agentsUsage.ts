@@ -578,7 +578,7 @@ export const agentsUsageScenarios: Scenario[] = [
     looksRightWhen:
       'Finance’s chat. In the header, left of the clock, a small ring about two-thirds filled (62% of the 5-hour window left), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% used with a bar and “128.4K of 200K tokens”; Your accounts — the stack’s one line in ink, the segmented meter with each account named under its segment and what it has left (“62% left”, “No reading”, never a used figure, never “This Mac” as a name), the next reset, and a full-width “Usage and accounts” button. Readable in both themes.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-usage .usage-stack__labels',
+    requires: '.agent-usage .usage-total',
     clipSelector: '.agent-usage',
     steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-usage-ring' }],
     commands: {
@@ -672,7 +672,7 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'settings-agents-usage-empty',
     title: 'Settings — Agents → Usage with no reading and no history',
     looksRightWhen:
-      'The same panel with nothing read: “No usage reading yet”, an empty dashed segment, a key saying it has no reading yet; no bars, no estimate lines, never a made-up figure. The spare-capacity list shows only its sentence and the field.',
+      'The same panel with nothing read: “Your usage shows here after an agent’s first reply.”, an empty dashed segment, a key saying it has no reading yet; no bars, no estimate lines, never a made-up figure. The spare-capacity list shows only its sentence and the field.',
     // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
     requires: '.usage-panel [data-testid="usage-hero"]',

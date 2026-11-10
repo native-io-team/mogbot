@@ -244,7 +244,7 @@ export function useAppSetup({
   // Once per page load, on the first view: a reload is the only thing it
   // recovers from. It used to re-run on every view change, and the sentinel
   // and the port reservation both outlive any visit to a project, so the first
-  // switch from a project to Agents (or Workflows, the Inbox, the dashboard)
+  // switch from a project to Agents (or the dashboard)
   // in a window put the workspace straight back.
   useEffect(() => {
     if (hmrRecoveryCheckedRef.current) return;

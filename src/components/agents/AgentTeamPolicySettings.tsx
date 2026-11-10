@@ -142,7 +142,7 @@ export function AgentTeamPolicySettings() {
               stays as it is.
             </p>
           }
-          hint="It applies from each agent’s next turn."
+          hint="It applies from each agent’s next message."
           loading={busy}
           confirmLabel="Reset everyone"
           loadingLabel="Resetting…"

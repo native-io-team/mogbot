@@ -234,9 +234,10 @@
   flex: 1;
 }
 
+/* On the items' text edge (12px in), not 4px left of it. */
 .agent-model-menu .agent-model-menu__heading {
   margin: 0;
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }

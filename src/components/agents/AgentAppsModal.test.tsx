@@ -66,8 +66,8 @@ describe('AgentAppsModal', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Connect Vercel' }));
     const row = document.querySelector('[data-service="vercel"]') as HTMLElement;
     expect(within(row).getByText('Which agents can use it?')).toBeTruthy();
-    expect((within(row).getByLabelText('Ops') as HTMLInputElement).checked).toBe(true);
-    expect((within(row).getByLabelText('Chief') as HTMLInputElement).checked).toBe(false);
+    expect(within(row).getByLabelText('Ops')).toBeChecked();
+    expect(within(row).getByLabelText('Chief')).not.toBeChecked();
     fireEvent.click(within(row).getByRole('button', { name: 'Sign in to Vercel' }));
     await screen.findByRole('button', { name: 'Connect Vercel' });
     const connect = calls.find((c) => c.cmd === 'agents_app_connect');
@@ -82,8 +82,8 @@ describe('AgentAppsModal', () => {
     backend({});
     render(<AgentAppsModal isOpen onClose={() => undefined} agents={AGENTS} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Connect Linear' }));
-    expect((screen.getByLabelText('Chief') as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText('Ops') as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByLabelText('Chief')).toBeChecked();
+    expect(screen.getByLabelText('Ops')).not.toBeChecked();
   });
 
   it('while it signs in, says so like a login card, with Open again, Copy link and Stop', async () => {
@@ -124,7 +124,9 @@ describe('AgentAppsModal', () => {
           grants: [{ agentId: 'chief', access: 'read', grantedAt: 0 }],
         },
       ],
-      flows: [{ service: 'vercel', connected: { connectionId: 'c1', line: 'Connected as sam@acme.com' } }],
+      flows: [
+        { service: 'vercel', connected: { connectionId: 'c1', line: 'Connected as sam@acme.com' } },
+      ],
     });
     render(<AgentAppsModal isOpen onClose={() => undefined} agents={AGENTS} />);
     expect(await screen.findByText('Connected as sam@acme.com')).toBeTruthy();
@@ -136,10 +138,17 @@ describe('AgentAppsModal', () => {
   it('a Claude Code server we connect ourselves is never signed in through /mcp', async () => {
     backend({}, [
       { name: 'vercel', target: 'https://mcp.vercel.com', status: 'needs_auth', source: 'user' },
-      { name: 'webflow', target: 'https://mcp.webflow.com/mcp', status: 'needs_auth', source: 'user' },
+      {
+        name: 'webflow',
+        target: 'https://mcp.webflow.com/mcp',
+        status: 'needs_auth',
+        source: 'user',
+      },
     ]);
     render(<AgentAppsModal isOpen onClose={() => undefined} agents={AGENTS} />);
-    expect(await screen.findByText('Connect it above to use it on every engine')).toBeTruthy();
+    expect(
+      await screen.findByText('Connect it above to use it on Claude Code and Codex alike')
+    ).toBeTruthy();
     // Only the one we can't connect ourselves keeps Claude Code's own sign-in.
     expect(screen.getAllByRole('button', { name: 'Sign in…' })).toHaveLength(1);
     expect(screen.getByText(/Only agents on Claude Code use these/)).toBeTruthy();

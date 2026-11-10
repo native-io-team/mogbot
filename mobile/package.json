@@ -102,7 +102,10 @@
         ],
         "transformIgnorePatterns": [
           "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|marked|@noble/.*))"
-        ]
+        ],
+        "moduleNameMapper": {
+          "^\\./agentKeyPackShards$": "<rootDir>/../packages/companion-protocol/src/agentKeyPackShards.require.ts"
+        }
       },
       {
         "displayName": "node",
@@ -112,7 +115,10 @@
         ],
         "transformIgnorePatterns": [
           "node_modules/(?!(@noble/.*))"
-        ]
+        ],
+        "moduleNameMapper": {
+          "^\\./agentKeyPackShards$": "<rootDir>/../packages/companion-protocol/src/agentKeyPackShards.require.ts"
+        }
       }
     ]
   }

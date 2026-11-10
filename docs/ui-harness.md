@@ -167,6 +167,14 @@ and `prs-open` carried populated fixtures but never navigated to the surface
 they describe, so both were photographing the Preview tab. Both now reach their
 subject and assert it.
 
+### Edges that must line up
+
+`sameColumn: ['<selector>', '<selector>@content', …]` measures each element's
+left and right edges (`@content`: inside its padding and border) and fails the
+capture if any two differ by more than 1px. The report's "One column" section
+lists the numbers. The `agents-column-*` scenarios use it to hold the chat
+header's content, the messages, the bars and the composer to one column.
+
 ## Fixtures that fail
 
 A scenario's `commands` may hold a function, and a function that throws rejects
@@ -237,6 +245,30 @@ turns "look carefully" into something the runner can point at.
 
 Check what got cut, not just that something did.
 
+## Accessibility
+
+`pnpm check:a11y` (`scripts/harness-a11y.mjs`) runs axe-core over every
+scenario, in light and dark, with Reduce Motion emulated, and writes
+`harness/a11y/report.md` (rules by count) and `report.json` (every node).
+Same harness, its own Chrome; give it its own port and `TMPDIR` as above.
+
+- **Fails** on a WCAG 2.1 A/AA violation, or a loop still running under
+  Reduce Motion (`motion-reduced`, ours: base.css's floor stops every loop but
+  a spinner and `data-motion="essential"`), beyond `scripts/a11y-baseline.json`.
+  The baseline is per scenario, theme and rule, so a new violation anywhere
+  fails while the known ones are worked down. `--update-baseline` after a fix
+  shrinks it; it never grows unless that flag is passed on purpose.
+- **Reported only:** best-practice rules (one `h1`, one `main`, heading order).
+- `node scripts/harness-a11y.mjs agents-` scans one prefix; `--theme dark` one theme.
+- A page that doesn't settle with several tabs open (a busy machine) is read
+  again alone; one that never settles fails the run, since it wasn't read.
+  `HARNESS_A11Y_TABS` sets the tabs (default 4).
+- CI runs it as its own job and keeps the report as an artifact.
+
+The fast half is `src/a11y.test.tsx`: axe in jsdom over the primitives and the
+surfaces built from them (names, roles, states), with every `pnpm test:run`.
+jsdom has no layout, so contrast is the harness scan's alone.
+
 ## The one rule that makes it trustworthy
 
 **A command with no fixture is never given a plausible default.**
@@ -283,7 +315,7 @@ Fixture layering:
 | `base.ts` | A healthy, fully set-up machine; everything reachable from anywhere |
 | `workspace.ts` | What opening a project asks for |
 | `app.ts` | Dashboard and onboarding scenarios |
-| `features.ts` | Populated branches, PRs, conflicts, workflows, inbox |
+| `features.ts` | Populated branches, PRs, conflicts |
 | `hosting.ts` | The ten push-popover deployment states |
 | `hostingConnect.ts` | The connect flow: the token modal and the link picker |
 

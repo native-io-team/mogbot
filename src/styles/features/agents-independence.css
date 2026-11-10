@@ -13,9 +13,12 @@
   color: var(--text-primary);
 }
 
+/* On the track's ends, as the stop names under it are, not half a thumb
+   outside them. */
 .independence-slider__ends {
   display: flex;
   justify-content: space-between;
+  margin: 0 calc(var(--independence-slider-thumb) / 2);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }

@@ -79,7 +79,7 @@ export function quitPrompt(
   const lines: string[] = [];
   if (working > 0) {
     lines.push(
-      `Quitting stops ${nameList(check.working)} mid-turn; what ${plural(working, 'it has', 'they have')} done so far stays.`
+      `Quitting stops ${nameList(check.working)} mid-task; what ${plural(working, 'it has', 'they have')} done so far stays.`
     );
   }
   if (scheduled.length > 0) {

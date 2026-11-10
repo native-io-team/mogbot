@@ -8,8 +8,8 @@
 //! left itself, and a quiet "Scheduled check-in" line goes in the chat above
 //! the reply.
 //!
-//! The rules are the workflow scheduler's (`crate::workflow_scheduler`), and
-//! the UI and the tool both say them out loud:
+//! The rules (inherited from Ship Studio's workflow scheduler), which the UI
+//! and the tool both say out loud:
 //!
 //! - **Nothing fires while Ship Studio is closed.** There is no server.
 //! - **A missed one-time check-in fires once, late, when the app reopens**,
@@ -22,9 +22,9 @@
 //! - **At most one check-in fires per tick**, most overdue first, so a
 //!   backlog at launch can't start every agent at once.
 //!
-//! Its own loop, not a line in the workflow tick: that tick awaits a whole
-//! workflow run, which can take minutes, and every check-in queued behind it
-//! would arrive "late" for a reason that has nothing to do with the user.
+//! Its own loop, not a line in another tick: a tick that awaited a long run
+//! would make every check-in queued behind it arrive "late" for a reason that
+//! has nothing to do with the user.
 
 use chrono::{
     DateTime, Datelike, Duration as Span, LocalResult, NaiveDate, NaiveDateTime, NaiveTime,
@@ -1818,6 +1818,9 @@ pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandE
             }
             c.paused = paused;
             c.paused_on_import = false;
+            // Switched by hand (or by the bulk switch itself, which marks
+            // it again after): a later "Resume all" isn't its to undo.
+            c.extra.remove(super::routines_bulk::PAUSED_BY_BULK);
         }
     })?;
     if found {

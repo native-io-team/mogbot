@@ -10,7 +10,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import type { AppView } from '../lib/types';
 
 /** Screens the switcher can return to; anything else falls back to Home. */
-const RETURNABLE: ReadonlySet<AppView> = new Set<AppView>(['workspace', 'workflows', 'inbox']);
+const RETURNABLE: ReadonlySet<AppView> = new Set<AppView>(['workspace']);
 
 interface AccountSelectNavigation {
   /** Show the switcher, remembering `view` as the place to come back to. */

@@ -630,6 +630,7 @@ export function SettingsModal({
                         onClick={handleThumbnailsToggle}
                         disabled={loading}
                         role="switch"
+                        aria-label="Project thumbnails"
                         aria-checked={thumbnailsOn}
                       >
                         <span className="settings-toggle-track">
@@ -709,6 +710,7 @@ export function SettingsModal({
                         onClick={handleTerminalGpuToggle}
                         disabled={loading}
                         role="switch"
+                        aria-label="Terminal GPU acceleration"
                         aria-checked={terminalGpuEnabled}
                       >
                         <span className="settings-toggle-track">
@@ -810,6 +812,7 @@ export function SettingsModal({
                         onClick={handleToggle}
                         disabled={loading}
                         role="switch"
+                        aria-label="Usage analytics and error reports"
                         aria-checked={analyticsEnabled}
                       >
                         <span className="settings-toggle-track">

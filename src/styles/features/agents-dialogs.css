@@ -383,10 +383,11 @@ p.agent-schedule__place {
   color: var(--text-muted);
 }
 
+/* Bordered chips a step apart, rows too: at 4px they read as one strip. */
 .agent-schedule__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 .agent-schedule__time {
@@ -710,7 +711,7 @@ p.agent-schedule__place {
   color: var(--text-primary);
   text-decoration: underline;
   text-decoration-color: var(--border-strong);
-  text-underline-offset: 0.2em;
+  text-underline-offset: var(--text-underline-offset);
 }
 
 .agent-editor__other-ways .text-button.button:hover:not(:disabled),

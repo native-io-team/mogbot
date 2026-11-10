@@ -374,7 +374,7 @@ export function useAppCommands({
       },
       {
         id: 'agents.userChrome',
-        title: 'Let agents use your Chrome (any engine)…',
+        title: 'Let agents use your Chrome (Claude Code or Codex)…',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: [
@@ -558,7 +558,7 @@ export function useAppCommands({
       },
       {
         id: 'agents.newAgentDefaults',
-        title: 'Engine and model for new agents…',
+        title: 'What new agents run on, and their model…',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: [

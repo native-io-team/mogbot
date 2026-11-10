@@ -353,3 +353,41 @@
   align-items: center;
   flex-shrink: 0;
 }
+
+/* A row's own action: a real button stretched under the row's controls,
+   so the row is not a role="button" holding other buttons. The controls sit
+   above it; everything else (name, dot, meta) clicks through to it. */
+.sidebar-row,
+.sidebar-project-row {
+  position: relative;
+}
+
+.sidebar-row-hit {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: inherit;
+  color: inherit;
+  cursor: inherit;
+}
+
+.sidebar-row-hit:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
+.sidebar-row:has(> .sidebar-row-hit:focus-visible),
+.sidebar-project-row:has(> .sidebar-row-hit:focus-visible) {
+  background: var(--surface-control);
+}
+
+.sidebar-row > .sidebar-row-control-slot,
+.sidebar-row > .sidebar-row-rename,
+.sidebar-project-row > .sidebar-project-control,
+.sidebar-project-row > .drag-sort__handle {
+  position: relative;
+  z-index: 1;
+}

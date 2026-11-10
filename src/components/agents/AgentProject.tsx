@@ -226,6 +226,18 @@ function LineCounts({ added = 0, removed = 0 }: { added?: number; removed?: numb
   );
 }
 
+/** "3 files, +40 −12": line counts only when every file is listed with them. */
+export function copyStat(count: string, files: ChangedFile[], fileCount: number): string {
+  const counted =
+    files.length > 0 &&
+    files.length === fileCount &&
+    files.every((f) => f.added != null && f.removed != null);
+  if (!counted) return count;
+  const added = files.reduce((n, f) => n + (f.added ?? 0), 0);
+  const removed = files.reduce((n, f) => n + (f.removed ?? 0), 0);
+  return `${count}, +${added} −${removed}`;
+}
+
 /**
  * What a bound agent's turn changed in its project, from git. A turn in a
  * copy of the project lists everything in the copy; the newest such card of
@@ -383,6 +395,7 @@ export const ChangeCard = memo(function ChangeCard({
           agent={agent}
           copy={copy}
           project={project}
+          stat={copyStat(count, changes.files, changes.fileCount)}
           onReview={changes.files.length > 0 ? () => setViewing(changes.files[0]) : undefined}
           onPreview={preview ? () => preview.open(message.agentId, message.id) : ctx?.openProject}
           onAskForChanges={

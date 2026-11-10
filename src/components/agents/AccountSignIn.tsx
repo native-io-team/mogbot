@@ -90,8 +90,8 @@ export function AccountSignIn({
     return (
       <ModalFrame isOpen onClose={onDone} title={`Sign in to ${label}`}>
         <p className="connect-modal-instructions">
-          This is {label}’s own sign-in on this Mac. Sign in from the engine’s row in Agents, or add
-          another account here.
+          This is {label}’s own sign-in on this Mac. Sign in from its row in Agents, or add another
+          account here.
         </p>
         <div className="connect-modal-actions">
           <Button variant="secondary" onClick={onDone}>

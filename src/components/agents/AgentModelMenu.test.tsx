@@ -61,9 +61,9 @@ describe('AgentModelItems effort', () => {
     render(<AgentModelItems agent={{ ...finance, effort: 'high' }} />);
     fireEvent.click(screen.getByRole('menuitem', { name: 'High' }));
     expect(updateAgent).not.toHaveBeenCalled();
-    const defaults = screen.getAllByRole('menuitem', { name: 'Engine’s default' });
+    const defaults = screen.getAllByRole('menuitem', { name: 'Default' });
     await act(async () => {
-      // The second "Engine's default" is the effort's (the first, the model's).
+      // The second "Default" is the effort's (the first, the model's).
       fireEvent.click(defaults[defaults.length - 1]);
       await Promise.resolve();
     });
@@ -80,7 +80,7 @@ describe('AgentModelItems routines', () => {
       />
     );
     // Never "Routines run on Fastest" above a ticked "Automatic".
-    expect(screen.getByText('Routines · the model they wake on')).toBeInTheDocument();
+    expect(screen.getByText('Routines · the model for its scheduled work')).toBeInTheDocument();
     expect(screen.queryByText(/^Routines run on/)).toBeNull();
     expect(screen.getByRole('menuitem', { name: /^Automatic/ })).toHaveTextContent('Fastest');
   });

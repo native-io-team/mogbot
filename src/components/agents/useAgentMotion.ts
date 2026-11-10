@@ -11,13 +11,9 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
-export function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
+import { prefersReducedMotion } from '../../lib/motion';
+
+export { prefersReducedMotion };
 
 /**
  * Which items arrived while this chat was open. The ids present when the

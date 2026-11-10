@@ -45,6 +45,8 @@ import { StepOutput } from './AgentLiveStep';
 import { BrowserStill } from './AgentBrowserLive';
 import { stepLine } from '../../../packages/companion-protocol/src/work';
 import { useTurnSteps } from '../../lib/turnSteps';
+import { stepIndex } from '../../lib/agentDesk';
+import { BriefingLink, ExactCommand, RanOn, type ExactRef } from './AgentWorkDetail';
 
 type IconComponent = ComponentType<{ size?: number }>;
 
@@ -74,7 +76,18 @@ export function StepIcon({ kind }: { kind: string }) {
   );
 }
 
-function StepRow({ step, startedAt, agent }: { step: WorkStep; startedAt: number; agent: Agent }) {
+function StepRow({
+  step,
+  startedAt,
+  agent,
+  exact,
+}: {
+  step: WorkStep;
+  startedAt: number;
+  agent: Agent;
+  /** A finished turn's step whose exact command is kept: where to read it. */
+  exact?: ExactRef;
+}) {
   // "Ran the Cypress tests · 6m 12s · 42 passed, 3 failed": its time and
   // counts only where the Mac recorded them.
   const line = stepLine(step);
@@ -102,6 +115,7 @@ function StepRow({ step, startedAt, agent }: { step: WorkStep; startedAt: number
           <StepOutput step={step} />
         </div>
       )}
+      {step.hasExact && exact && <ExactCommand at={exact} />}
     </li>
   );
 }
@@ -140,10 +154,12 @@ interface StepListProps {
   agent: Agent;
   /** While it works: what the working line says (`liveSteps`), and the step it's on. */
   live?: { activity: string | null | undefined; current?: CurrentStep | null };
+  /** A finished turn: the line it's kept under, for each step's exact command. */
+  kept?: { agentId: string; messageId: string };
 }
 
 /** The steps, oldest first, and the files the turn edited. */
-function StepList({ work, agent, live }: StepListProps) {
+function StepList({ work, agent, live, kept }: StepListProps) {
   const steps = live
     ? live.current
       ? withoutCall(work.steps, live.current.call)
@@ -161,7 +177,13 @@ function StepList({ work, agent, live }: StepListProps) {
           </li>
         )}
         {steps.map((step, i) => (
-          <StepRow key={`${step.at}-${i}`} step={step} startedAt={work.startedAt} agent={agent} />
+          <StepRow
+            key={`${step.at}-${i}`}
+            step={step}
+            startedAt={work.startedAt}
+            agent={agent}
+            exact={kept && !live ? { ...kept, index: stepIndex(work, i) } : undefined}
+          />
         ))}
         {live?.current && <CurrentRow current={live.current} />}
       </ol>
@@ -218,7 +240,8 @@ function FinishedSteps({ work, agent, messageId, ownerId }: WorkTimelineProps) {
       return (
         <>
           <BrowserStill agent={agent} work={steps.work} />
-          <StepList work={steps.work} agent={agent} />
+          <StepList work={steps.work} agent={agent} kept={{ agentId: ownerId, messageId }} />
+          <BriefingLink agentId={ownerId} messageId={messageId} />
         </>
       );
     case 'reading':
@@ -268,6 +291,7 @@ export const WorkTimeline = memo(function WorkTimeline({
             setOpen((o) => !o);
           }}
         />
+        <RanOn work={work} />
       </div>
       <div className="agent-work__body" id={id} aria-hidden={!open}>
         <div className="agent-work__inner">

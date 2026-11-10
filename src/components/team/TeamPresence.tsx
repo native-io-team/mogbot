@@ -23,7 +23,7 @@
 import { CollaboratorsIcon } from '@/components/icons';
 import { ToggleButton } from '../primitives/ToggleButton';
 import { TeamAvatar } from './TeamAvatar';
-import { formatAgo } from '../../lib/workflows';
+import { formatAgo } from '../../lib/formatAgo';
 import { activeTeammates, actorKey, type TeamMember } from '../../lib/team';
 
 /** Beyond this the rest collapse into a "+N". Four is what the header fits. */

@@ -5,7 +5,7 @@
  * - idle: the mic and **Send** (dimmed until there's something to send);
  * - working: the mic, **Stop** and **Send**. The mic stays, so you can talk
  *   while it works: what you say queues, as what you type does. With words,
- *   Send queues (the line over the field says it reads it when this turn
+ *   Send queues (the line over the field says it reads it when it’s done with this one
  *   ends) and **Send now** (interrupt, then send) sits at that line's right;
  * - waiting on your OK: Send queues, and no Stop: the card above is the control;
  * - offline: **Send** waits for the Mac (outbox.ts), and says so;
@@ -505,7 +505,7 @@ export function Composer({
     mode === 'queue' && !driven
       ? waitingOnYou
         ? `${agent.name} reads it after you answer above`
-        : `${agent.name} reads it when this turn ends`
+        : `${agent.name} reads it when it’s done with this one`
       : null;
   // Listening while it works, the queued line stays, so Send now has its sentence.
   const hint = held
@@ -826,7 +826,7 @@ export function Composer({
                 driven
                   ? `Queue · ${drivenWait(agent.name)}`
                   : mode === 'queue'
-                    ? `Queue: ${agent.name} reads it when this turn ends`
+                    ? `Queue: ${agent.name} reads it when it’s done with this one`
                     : connected
                       ? 'Send'
                       : `Send when ${macName} answers`
@@ -882,7 +882,7 @@ function EngineChip({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={says}
-      accessibilityHint="Opens Agent controls: model, effort and independence"
+      accessibilityHint="Opens Agent controls: model, effort and how much it does on its own"
       onPress={() => {
         haptic.light();
         onPress();

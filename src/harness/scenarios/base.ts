@@ -196,10 +196,6 @@ export const baseCommands: CommandMap = {
   check_github_cli_status: { installed: true, authenticated: true },
   check_claude_cli_status: { installed: true, version: '2.1.0' },
 
-  // ---- workflows & inbox --------------------------------------------------
-  list_all_workflows: [],
-  list_inbox_items: [],
-
   // ---- agents -------------------------------------------------------------
   // Base layer: the nav badge subscribes to the agents store on every screen.
   agents_busy: 0,
@@ -683,7 +679,6 @@ export const baseCommands: CommandMap = {
   clear_project_cache: null,
   unregister_external_pty: null,
   pty_session_detach: null,
-  mark_all_inbox_read: null,
   register_external_project: null,
   set_compact_workspace_toolbar_enabled: null,
   fetch_community_templates: '[]',

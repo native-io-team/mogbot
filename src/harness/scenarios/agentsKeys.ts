@@ -121,16 +121,16 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-sidebar',
     title: 'Agents — small keys in the sidebar, the Chief’s chat open',
     looksRightWhen:
-      'Twelve sidebar rows, each led by a 30px key in its colourway with one legend: a star for the Chief, money for Finance, people for Hiring, megaphone for Social Posts, shield for Security & DevOps, an inbox for Inbox. Working rows are pressed and warm-lit; Lead Gen’s key sits proud with an amber legend and spill (the loudest); Native App’s key is drained grey and sunk; Hiring’s row says “Live” in green. Every key still reads as a key at this size. The chat header shows the Chief’s 44px key.',
+      'Twelve sidebar rows, each led by a 30px key in its colourway with one legend: the app’s mark (the filled “M”) on Graphite for the Chief, money for Finance, people for Hiring, megaphone for Social Posts, shield for Security & DevOps, an inbox for Inbox. Working rows are pressed and warm-lit; Lead Gen’s key sits proud with an amber legend and spill (the loudest); Native App’s key is drained grey and sunk; Hiring’s row says “Live” in green. Every key still reads as a key at this size. The chat header shows the Chief’s 44px key.',
     openSelector: AGENTS_TAB,
-    requires: '.agents-list__row .agent-key[data-icon="star"]',
+    requires: '.agents-list__row .agent-key[data-icon="mogbot"]',
     commands,
   },
   {
     id: 'agents-keys-picker',
     title: 'Agents — a new agent’s key: colourway, legend and shortcut key',
     looksRightWhen:
-      'New agent. Under the name, the key at 112px on a quiet band (its legend read from the name as you type, the first free letter as its sublegend), then Colour (eight small keys), Icon (every legend as a small key in the chosen colourway), and Shortcut key: a field showing the letter, with the line “Press <letter> anywhere outside a text box to open this agent.” The pick is a neutral ring, never the accent.',
+      'New agent. Under the name, the key at 112px on a quiet band (its legend read from the name as you type, the first free letter as its sublegend), then Colour (fourteen small keys), Icon (a search box, the category filters, “2,052 icons” and the grid: the featured legends first as small keys in the chosen colourway, the app’s filled mark leading, then the pack), and Shortcut key: a field showing the letter, with the line “Press <letter> anywhere outside a text box to open this agent.” The pick is a neutral ring, never the accent.',
     requires: '.agent-look__preview .agent-key--xl',
     steps: [
       { click: '.agents-list__new' },
@@ -139,6 +139,35 @@ export const agentsKeysScenarios: Scenario[] = [
       // still "find" its control.
       { click: '.agent-editor__fill-in' },
       { fill: '.agent-editor__identity input', value: 'Bookings' },
+    ],
+    commands,
+  },
+  {
+    id: 'agents-keys-icon-search',
+    title: 'Agents — searching every icon for “money”',
+    looksRightWhen:
+      'New agent, the key picker open, “money” typed into the icon search. Under it the categories as a strip of quick filters (All, Featured, Accessibility, …), the line “N for “money””, then the matches as small keys in the chosen colourway: our Money legend first, then Lucide’s banknote, coins, currency, wallet, dollar sign… drawn in the same uniform stroke as the featured legends, round-capped. The key at 112px above wears whatever is picked. Readable in both themes.',
+    requires: '.agent-icons .agent-look__choice[data-value="lucide:banknote"]',
+    steps: [
+      { click: '.agents-list__new' },
+      { click: '.agent-editor__fill-in' },
+      { fill: '.agent-editor__identity input', value: 'Bookkeeper' },
+      { fill: '.agent-icons input', value: 'money' },
+      { click: '.agent-icons .agent-look__choice[data-value="lucide:wallet"]' },
+    ],
+    commands,
+  },
+  {
+    id: 'agents-keys-colourways',
+    title: 'Agents — the fourteen colourways on a new agent',
+    looksRightWhen:
+      'New agent, the key picker open: Colour shows fourteen small keys: the eight from before, then Brick, Plum, Navy, Forest, Sky and Lilac, which differ in lightness as well as hue (Navy and Forest deep, Sky and Lilac pale). Each legend reads on its face. Navy is picked: the 112px key is navy with a warm off-white legend.',
+    requires: '.agent-look__preview .agent-key[data-colorway="navy"]',
+    steps: [
+      { click: '.agents-list__new' },
+      { click: '.agent-editor__fill-in' },
+      { fill: '.agent-editor__identity input', value: 'Ledger' },
+      { click: '.agent-look__choice[data-value="navy"]' },
     ],
     commands,
   },

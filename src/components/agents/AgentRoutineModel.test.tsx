@@ -29,8 +29,8 @@ describe('AgentRoutineModel', () => {
     const options = routineOwnChoices(agent, AGENT_MODELS);
     expect(options.map((o) => o.value)).toEqual(['', 'same', 'opus', 'sonnet', 'haiku']);
     // An agent on Opus runs its routines on Opus unless told otherwise.
-    expect(options[0].detail).toBe('Most capable');
-    expect(options[1].detail).toBe('Most capable');
+    expect(options[0].detail).toBe(AGENT_MODELS[1].label);
+    expect(options[1].detail).toBe(AGENT_MODELS[1].label);
   });
 
   it('picks a lighter model for one routine, at once', async () => {
@@ -42,9 +42,10 @@ describe('AgentRoutineModel', () => {
     const agent = { id: 'a1', name: 'Inbox', engine: 'claude', checkIns: [routine] } as Agent;
     render(<AgentRoutineModel agent={agent} routine={routine} />);
     const trigger = screen.getByRole('button', { name: /Model for this routine/ });
-    expect(trigger).toHaveTextContent('Like its other routines (Fastest)');
+    // Haiku, by the label the menu gives it.
+    expect(trigger).toHaveTextContent(`Like its other routines (${AGENT_MODELS[3].label})`);
     fireEvent.click(trigger);
-    fireEvent.click(await screen.findByText('Balanced'));
+    fireEvent.click(await screen.findByText(AGENT_MODELS[2].label));
     await waitFor(() =>
       expect(calls).toEqual([expect.objectContaining({ agentId: 'a1', id: 'r1', model: 'sonnet' })])
     );

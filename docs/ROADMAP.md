@@ -63,7 +63,7 @@ reply to a single message.
   models each engine lists; the New agent dialog, the Chief's
   `create_agent` and the phone's New agent start there, existing agents
   don't change; the phone reads and sets it (`agents.setDefaults`, audited);
-  ⌘K "Engine and model for new agents…" ([agents.md](agents.md), "Defaults
+  ⌘K "What new agents run on, and their model…" ([agents.md](agents.md), "Defaults
   for new agents"). Not yet tried on a live Codex account's model list.
 - **Rooms** — group conversations with 2–6 agents: @one, @everyone, or the
   room's lead; agents bring each other in with @Name, at most 8 agent turns

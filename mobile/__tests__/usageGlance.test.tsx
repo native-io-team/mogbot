@@ -13,7 +13,7 @@ import {
   type UsageAccountLine,
   type UsageInventory,
 } from '@shipstudio/companion-protocol';
-import { GlanceCard, GlanceRow, KeyCard } from '../src/components/usageStack';
+import { AccountRows, GlanceRow, KeyCard, TotalCard } from '../src/components/usageStack';
 import { palettes } from '../src/lib/theme';
 
 const NOW = new Date(2026, 10, 9, 12, 0).getTime();
@@ -91,7 +91,11 @@ const inventory = (lines: UsageAccountLine[], runOut = false): UsageInventory =>
 });
 
 const colorOf = (text: string | RegExp) =>
-  (StyleSheet.flatten((screen.getByText(text).props as { style?: object }).style) as { color?: string } | undefined)?.color;
+  (
+    StyleSheet.flatten((screen.getByText(text).props as { style?: object }).style) as
+      | { color?: string }
+      | undefined
+  )?.color;
 
 describe('usage at a glance, on the phone', () => {
   it('the Agents list line answers as the desk sidebar does, and opens Usage', async () => {
@@ -100,9 +104,9 @@ describe('usage at a glance, on the phone', () => {
     });
     const onPress = jest.fn();
     await render(<GlanceRow glance={glance} onPress={onPress} />);
-    // What's left and of what, then when it refills: words anyone reads.
-    expect(screen.getByText(/70% left this week/)).toBeTruthy();
-    expect(screen.getByText(/^Refills .* · 2 accounts$/)).toBeTruthy();
+    // The total across both accounts, then when it next refills.
+    expect(screen.getByText(/60% left · 2 accounts/)).toBeTruthy();
+    expect(screen.getByText(/^Refills in /)).toBeTruthy();
     expect(screen.queryByText('Plenty of room')).toBeNull();
     await fireEvent.press(screen.getByRole('button'));
     expect(onPress).toHaveBeenCalled();
@@ -118,7 +122,7 @@ describe('usage at a glance, on the phone', () => {
     await render(<GlanceRow glance={glance} onPress={() => {}} />);
     // One real account: no "1 account" beside a meter that shows two.
     expect(screen.queryByText(/accounts?$/)).toBeNull();
-    await render(<GlanceCard glance={glance} />);
+    await render(<TotalCard glance={glance} />);
     expect(
       screen.getByText(
         'Work is the same Claude account as Claude Code account — adds no extra room'
@@ -126,11 +130,20 @@ describe('usage at a glance, on the phone', () => {
     ).toBeTruthy();
   });
 
-  it('names every account in full, never "This Mac", each with what it has left', async () => {
+  it('leads with the total, roomiest account first, each named in full, never "This Mac"', async () => {
     const glance = usageGlance([mac, work], inventory([line('default', 30), line('w', 50)]), {
       now: NOW,
     });
-    await render(<GlanceCard glance={glance} />);
+    const onOpen = jest.fn();
+    await render(<TotalCard glance={glance} onOpen={onOpen} />);
+    expect(screen.getByText('60% left')).toBeTruthy();
+    expect(screen.getByText('across 2 accounts')).toBeTruthy();
+    // Most room first: the account in use (70%) before Work (50%).
+    const names = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel);
+    expect(names[0]).toMatch(/^Claude Code account: 70% left/);
+    expect(names[1]).toMatch(/^Work: 50% left/);
+    await fireEvent.press(screen.getAllByRole('button')[1]);
+    expect(onOpen).toHaveBeenCalledWith('claude', 'w');
     expect(screen.queryByText(/This Mac|Signed in on t/)).toBeNull();
     expect(screen.getByText('Claude Code account')).toBeTruthy();
     expect(screen.getByText('Work')).toBeTruthy();
@@ -143,7 +156,7 @@ describe('usage at a glance, on the phone', () => {
       now: NOW,
     });
     expect(glance.estimate).not.toBeNull();
-    await render(<GlanceCard glance={glance} />);
+    await render(<TotalCard glance={glance} />);
     const amber = [palettes.light.accentWarning, palettes.dark.accentWarning];
     expect(amber).not.toContain(colorOf(/^Runs out /));
 
@@ -168,5 +181,23 @@ describe('usage at a glance, on the phone', () => {
     await render(<KeyCard k={paced.keys[0]} />);
     expect(amber).not.toContain(colorOf(/^Ahead of pace — at this rate it runs out /));
     expect(amber).not.toContain(colorOf(/^Estimate from /));
+  });
+
+  it('lists each account as a row in order that opens it, and its agents as a table', async () => {
+    const spent = [{ agentId: 'c', name: 'Chief', turns: 9, tokens: 750_000 }];
+    const glance = usageGlance(
+      [mac, work],
+      inventory([line('default', 30, { spent }), line('w', 50)]),
+      { now: NOW }
+    );
+    const onOpen = jest.fn();
+    await render(<AccountRows keys={glance.keys} onOpen={onOpen} />);
+    const rows = screen.getAllByRole('button');
+    expect(rows[0].props.accessibilityLabel).toMatch(/^1\. Claude Code account, 70% left, In use/);
+    await fireEvent.press(rows[1]);
+    expect(onOpen.mock.calls[0][0].id).toBe('w');
+    await render(<KeyCard k={glance.keys[0]} />);
+    expect(screen.getByText('Messages')).toBeTruthy();
+    expect(screen.getByText('750k')).toBeTruthy();
   });
 });

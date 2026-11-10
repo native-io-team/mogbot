@@ -174,6 +174,7 @@ import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 import { guardRow, useGuardedRows } from './AgentsErrorBoundary';
 import { AreaBoundary } from '../primitives/AreaBoundary';
 import { isRecipeFile, looksLikeRecipe } from '../../lib/agentRecipe';
+import { scrollMotion } from '../../lib/motion';
 
 /**
  * The Chief's first open: three workflows that run without the user
@@ -446,9 +447,6 @@ export const AgentChat = memo(function AgentChat({
   // under its own key. Unknown for a moment on first open, while the Mac
   // says which one the user was last in.
   const viewing = useAgentsSelector((s) => s.viewing[agent.id]);
-  const severalConversations = useAgentsSelector(
-    (s) => (s.conversations[agent.id]?.items.length ?? 0) > 1
-  );
   useEffect(() => {
     void ensureViewing(agent.id);
   }, [agent.id]);
@@ -1125,7 +1123,7 @@ export const AgentChat = memo(function AgentChat({
     }
     // The scroll handler settles `atBottom`; until then, don't follow new lines.
     atBottomRef.current = false;
-    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.scrollIntoView({ block: 'center', behavior: scrollMotion() });
     // Restart the flash if it's already running (the same hit, clicked twice).
     target.removeAttribute('data-flash');
     void target.offsetWidth;
@@ -1168,7 +1166,7 @@ export const AgentChat = memo(function AgentChat({
     setupRevealed.current = ask;
     setupReveal.done();
     atBottomRef.current = false;
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.scrollIntoView({ block: 'center', behavior: scrollMotion() });
     row.removeAttribute('data-flash');
     void row.offsetWidth;
     row.setAttribute('data-flash', '');
@@ -1182,7 +1180,7 @@ export const AgentChat = memo(function AgentChat({
 
   const scrollToBottom = () => {
     const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: scrollMotion() });
   };
 
   const staged = attachments.items;
@@ -1375,12 +1373,11 @@ export const AgentChat = memo(function AgentChat({
   const stopNow = useStableEvent(() => void onStop());
   const clearRevising = useCallback(() => setRevising(null), []);
 
-  // Identity only: who this is and what it's for. What it's doing is said
-  // once in the sidebar row and once in the conversation (a bar, the working
-  // line), never a third time up here.
-  // With several conversations the title of the one on screen wins the room:
-  // the role is in the sidebar row already, and cut there it said nothing.
-  const role = agent.role && !severalConversations ? roleWithoutPath(agent.role) : '';
+  // Identity only: who this is. What it's doing is said once in the sidebar
+  // row and once in the conversation (a bar, the working line), never a third
+  // time up here. Its role sentence crowded the band and was cut at every
+  // width; it is the name's tooltip, and in the agent's sheet.
+  const role = agent.role ? roleWithoutPath(agent.role) : '';
   const title = (
     <>
       <AgentKey
@@ -1390,12 +1387,9 @@ export const AgentChat = memo(function AgentChat({
         state={agentKeyState(agent)}
         size="md"
       />
-      <h2 className="agent-chat__name">{agent.name}</h2>
-      {role && (
-        <span className="agent-chat__status" title={role}>
-          {role}
-        </span>
-      )}
+      <h2 className="agent-chat__name" title={role || undefined}>
+        {agent.name}
+      </h2>
     </>
   );
 

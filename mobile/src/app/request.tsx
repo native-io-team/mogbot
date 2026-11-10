@@ -10,7 +10,12 @@
  * chat. Answered elsewhere while you read: it says so, and the answers go.
  */
 
-import type { Agent, AgentMessage, Approval } from '@shipstudio/companion-protocol';
+import {
+  keyAccessibleName,
+  type Agent,
+  type AgentMessage,
+  type Approval,
+} from '@shipstudio/companion-protocol';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -25,6 +30,7 @@ import { AgentAccent } from '../lib/accent';
 import { agentKeyState, askingLine, formatAgo } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
 import { askAction, askState, type CatchItem } from '../lib/catchUp';
+import { announce } from '../lib/a11y';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { answerApproval, describeError, loadLatest, setOpenChat } from '../lib/session';
@@ -148,7 +154,10 @@ function Shown({
         onClose();
       } catch (e) {
         haptic.error();
-        setError(describeError(e));
+        const said = describeError(e);
+        setError(said);
+        // iOS has no live regions: say the failure, or it lands in silence.
+        announce(said);
       } finally {
         setBusy(null);
       }
@@ -172,7 +181,17 @@ function Shown({
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {agent && (
-          <View style={styles.who}>
+          <View
+            style={styles.who}
+            // One stop for VoiceOver: who is asking, its key's state, and when.
+            accessible
+            accessibilityLabel={[
+              keyAccessibleName(agent.name, agentKeyState(agent)),
+              card ? formatAgo(card.ts) : '',
+            ]
+              .filter(Boolean)
+              .join(', ')}
+          >
             <AgentKey
               id={agent.id}
               name={agent.name}

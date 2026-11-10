@@ -460,7 +460,9 @@ export function Dropdown({
       data-accent-scope={portal ? accentScope['data-accent-scope'] : undefined}
       {...(portal ? { [PORTAL_OWNER_ATTR]: portalId } : {})}
       style={portal ? accentScope.style : undefined}
-      role={presentation === 'menu' ? 'menu' : 'dialog'}
+      // A menu may hold only items, groups and separators: with a search field
+      // the menu role moves to the list under it (ss-dropdown__items).
+      role={presentation === 'menu' ? (search ? undefined : 'menu') : 'dialog'}
       aria-label={presentation === 'popover' ? ariaLabel : undefined}
       tabIndex={-1}
       onKeyDown={presentation === 'menu' ? handleMenuKeyDown : undefined}
@@ -494,7 +496,15 @@ export function Dropdown({
           />
         </div>
       )}
-      <DropdownContext.Provider value={{ close }}>{children}</DropdownContext.Provider>
+      <DropdownContext.Provider value={{ close }}>
+        {search && presentation === 'menu' ? (
+          <div className="ss-dropdown__items" role="menu" aria-label={search.placeholder}>
+            {children}
+          </div>
+        ) : (
+          children
+        )}
+      </DropdownContext.Provider>
     </div>
   ) : null;
 

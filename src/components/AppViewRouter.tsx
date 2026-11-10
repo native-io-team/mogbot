@@ -24,13 +24,12 @@ import type { AgentPreviewServer } from '../lib/agentPreview';
 import type { WorkspacePick } from './dashboard/MonorepoPickerModal';
 
 // Agents is where the app opens, so what it doesn't need to paint (the
-// workspace with its terminals and editor, the projects dashboard, onboarding,
-// Workflows/Inbox) is its own chunk, fetched when a view first asks for it and
+// workspace with its terminals and editor, the projects dashboard, onboarding)
+// is its own chunk, fetched when a view first asks for it and
 // warmed shortly after launch so the first switch doesn't wait.
 const loadProjectsView = () => import('./dashboard/ProjectsView');
 const loadMonorepoPicker = () => import('./dashboard/MonorepoPickerModal');
 const loadOnboarding = () => import('./setup');
-const loadStandingWork = () => import('./workspace/StandingWorkView');
 const loadWorkspaceView = () => import('./workspace/WorkspaceView');
 const LazyProjectsView = lazy(() => loadProjectsView().then((m) => ({ default: m.ProjectsView })));
 const LazyMonorepoPicker = lazy(() =>
@@ -38,9 +37,6 @@ const LazyMonorepoPicker = lazy(() =>
 );
 const LazyOnboardingRouter = lazy(() =>
   loadOnboarding().then((m) => ({ default: m.OnboardingRouter }))
-);
-const LazyStandingWorkView = lazy(() =>
-  loadStandingWork().then((m) => ({ default: m.StandingWorkView }))
 );
 const LazyWorkspaceView = lazy(() =>
   loadWorkspaceView().then((m) => ({ default: m.WorkspaceView }))
@@ -53,7 +49,6 @@ function useWarmViewChunks(view: AppView) {
     const id = window.setTimeout(() => {
       void loadProjectsView();
       void loadWorkspaceView();
-      void loadStandingWork();
     }, WARM_AFTER_MS);
     return () => window.clearTimeout(id);
   }, [view]);
@@ -214,25 +209,6 @@ export function AppViewRouter({
           sidebarProps={homeSidebarProps}
           previewServer={agentPreviewServer}
         />
-        <ToastList toasts={toasts} onDismiss={onDismissToast} />
-        {quitConfirmModal}
-      </>
-    );
-  }
-
-  // Workflows, Inbox and Team: home-level screens sharing the home sidebar.
-  if (view === 'workflows' || view === 'inbox') {
-    return (
-      <>
-        <Suspense fallback={viewFallback}>
-          <LazyStandingWorkView
-            view={view}
-            isCompact={isCompact}
-            sidebarProps={homeSidebarProps}
-            currentProjectPath={currentProject?.path ?? null}
-            onOpenProject={projectsViewProps.onSelectProject}
-          />
-        </Suspense>
         <ToastList toasts={toasts} onDismiss={onDismissToast} />
         {quitConfirmModal}
       </>

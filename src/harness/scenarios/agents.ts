@@ -266,7 +266,10 @@ export const TEAM = [
     // Created pinned: the one agent you're told to talk to doesn't move.
     pinned: true,
     shape: 5,
+    // The app's accent; its key is the app's mark on Graphite (`keys::fill`).
     color: 'white',
+    colorway: 'graphite',
+    icon: 'mogbot',
     minutesAgo: 3,
     role: 'Runs the other agents and keeps track of what’s in flight.',
     preview: 'Acme’s staging deploy is green. Want me to have Acme Site open the PR?',
@@ -1870,6 +1873,72 @@ const WEEKLY_LIMIT_CHAT = [
   }),
 ];
 
+/** The header at its fullest: a project, a long role, the account its last
+ * turn ran on (an email), several conversations and routines. */
+const CROWDED_HEADER = {
+  ...CONVERSATIONS,
+  agents_overview: acmeWith({
+    role: 'Designs and builds the marketing site for Acme (former landing pages, the pricing table and the launch blog)',
+    ranOn: { id: 'default', name: 'sam.rivera.design@example.com' },
+    checkIns: [
+      {
+        id: 'crowd1',
+        note: 'Check the staging deploy every morning.',
+        repeat: { kind: 'days', days: [1, 2, 3, 4, 5], hour: 9, minute: 0 },
+        nextAt: now + 12 * 60 * MIN,
+        createdAt: now - 7 * 24 * 60 * MIN,
+        paused: false,
+      },
+    ],
+    conversations: { loaded: 'c-launch' },
+  }),
+};
+
+const crowdedHeader = (id: string, width?: number): Scenario => ({
+  id,
+  title: `Agents — the chat header at its fullest${width ? `, ${width}px` : ''}`,
+  looksRightWhen:
+    'Acme Site’s header: at the leading edge its key and name, then quiet chips: the folder “acme-marketing” and the conversation “Plan the November launch email” (the account chip doesn’t fit the conversation’s column; Usage says it). No role sentence (it is the name’s tooltip). At the trailing edge one family of ghost buttons, 4px apart, the same height: the usage gauge “Usage”, the clock “1 scheduled”, the sliders “Model”, then …. The key starts over the messages’ left edge and … ends over the composer’s right edge. Narrow, the words go (icons stay), then the project chip. Nothing truncates at 1280px.',
+  ...(width ? { viewport: { width, height: 800 } } : {}),
+  openSelector: AGENTS_TAB,
+  requires: '.agent-conversations__title',
+  steps: [{ click: '[data-agent-id="acme"]' }],
+  clipSelector: '.agent-chat__header',
+  commands: CROWDED_HEADER,
+});
+
+/** The header's content, the messages and the composer: one column, one pair of edges. */
+export const CHAT_COLUMN = [
+  '.agent-chat__header@content',
+  '.agent-chat__messages@content',
+  '.agent-composer',
+];
+
+/**
+ * The fullest header at one window size, measured: its content must start
+ * and end where the messages and the composer do (`sameColumn`).
+ */
+const chatColumn = (
+  id: string,
+  width: number,
+  opts: { collapsed?: boolean; bars?: boolean } = {}
+): Scenario => ({
+  id,
+  title: `Agents — header, messages and composer in one column, ${width}px${opts.collapsed ? ', sidebar collapsed' : ''}${opts.bars ? ', a bar above the composer' : ''}`,
+  looksRightWhen: `The header’s key and name start exactly above the messages’ left edge and the composer’s; its last control (…) ends exactly above the composer’s right edge. The band’s hairline still runs the whole width.${opts.collapsed ? ' The collapsed nav row floats clear of the name.' : ''}${opts.bars ? ' The bar above the composer has the same two edges.' : ''}`,
+  viewport: { width, height: 800 },
+  openSelector: AGENTS_TAB,
+  requires: opts.bars ? '.agent-bars:not([data-empty])' : '.agent-conversations__title',
+  steps: [
+    ...(opts.collapsed ? [{ click: '.workspace-sidebar-toggle' }] : []),
+    { click: opts.bars ? '[data-agent-id="chief"]' : '[data-agent-id="acme"]' },
+  ],
+  sameColumn: opts.bars ? [...CHAT_COLUMN, '.agent-bars'] : CHAT_COLUMN,
+  commands: opts.bars
+    ? { agents_overview: liveOverview, agents_messages: messagesFor, agents_send: sendMessage }
+    : CROWDED_HEADER,
+});
+
 export const agentsScenarios: Scenario[] = [
   composerScenario(1),
   composerScenario(3),
@@ -2275,7 +2344,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-model-menu',
     title: 'Agents — model menu, with what routines run on',
     looksRightWhen:
-      'Finance’s header has a quiet “Model ⌄” button left of the … menu. Open, it starts with a quiet “Model · runs on Claude Code” line, then Default (checked), Most capable (Opus), Balanced (Sonnet), Fastest (Haiku) with the engine’s names small; Finance has a routine, so a divider, “Routines · the model they wake on”, then Automatic (checked) with “Fastest” small beside it, Same as its chats with what its chats run on, and the three models. The menu never runs past the window: it stops above the bottom edge and scrolls inside.',
+      'Finance’s header has a quiet “Model ⌄” button left of the … menu. Open, it starts with a quiet “Model · the AI it thinks with, on Claude Code” line, then Default (checked), Smartest (Opus), Balanced (Sonnet), Fastest (Haiku) with the engine’s names small; Finance has a routine, so a divider, “Routines · the model for its scheduled work”, then Automatic (checked) with “Fastest” small beside it, Same as its chats with what its chats run on, and the three models. The menu never runs past the window: it stops above the bottom edge and scrolls inside.',
     requires: '.agent-model-menu__heading',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-chat__model button' }],
@@ -2677,7 +2746,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-model-menu',
     title: 'Agents — the model menu in the chat header',
     looksRightWhen:
-      'The header has a quiet “Model ⌄” button left of the … menu, which holds actions only. Open, the menu starts with “Model · runs on Claude Code” and Default (checked), Most capable, Balanced, Fastest, each with the engine’s own name small beside it; no item ringed or highlighted.',
+      'The header has a quiet “Model ⌄” button left of the … menu, which holds actions only. Open, the menu starts with “Model · the AI it thinks with, on Claude Code” and Default (checked), Smartest, Balanced, Fastest, each with the engine’s own name small beside it; no item ringed or highlighted.',
     openSelector: AGENTS_TAB,
     requires: '.agent-model-menu__heading',
     steps: [{ click: '.agent-chat__model button' }],
@@ -2776,7 +2845,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-first-run',
     title: 'Agents — first open: the Chief of Staff says hello',
     looksRightWhen:
-      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Sort my inbox, draft replies, Run my launch as a team), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
+      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Sort my inbox, draft replies, Research it and write it up), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
     command: 'agents.open',
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
@@ -3488,6 +3557,40 @@ export const agentsScenarios: Scenario[] = [
     requires: '.agent-conversations__title',
     steps: [{ click: '[data-agent-id="acme"]' }],
     commands: CONVERSATIONS,
+  },
+  crowdedHeader('agents-header-crowded'),
+  crowdedHeader('agents-header-crowded-900', 900),
+  crowdedHeader('agents-header-crowded-700', 700),
+  chatColumn('agents-column-1280', 1280),
+  chatColumn('agents-column-1600', 1600),
+  chatColumn('agents-column-900', 900),
+  chatColumn('agents-column-collapsed', 1280, { collapsed: true }),
+  chatColumn('agents-column-collapsed-900', 900, { collapsed: true }),
+  chatColumn('agents-column-bars', 1280, { bars: true }),
+  {
+    id: 'agents-column-usage',
+    title: 'Agents — the Usage view: its header title over its column',
+    looksRightWhen:
+      'The “Usage” title starts exactly above the panel’s left edge; the panel keeps the conversation’s width.',
+    viewport: { width: 1280, height: 800 },
+    command: 'agents.usage',
+    requires: '.agents-usage-view .usage-panel',
+    sameColumn: [
+      '.agents-usage-view .agent-chat__header@content',
+      '.agents-usage-view__column@content',
+    ],
+    commands: { agents_overview: overview(), agents_messages: messagesFor },
+  },
+  {
+    id: 'agents-column-team',
+    title: 'Agents — What’s in flight: its header title over its column',
+    looksRightWhen:
+      'The key and “What’s in flight” start exactly above the board’s left edge; the column keeps the conversation’s width.',
+    viewport: { width: 1280, height: 800 },
+    command: 'agents.team',
+    requires: '.agents-team__column',
+    sameColumn: ['.agents-team .agent-chat__header@content', '.agents-team__column@content'],
+    commands: { agents_overview: overview(), agents_messages: messagesFor },
   },
   {
     id: 'agents-conversations-search',

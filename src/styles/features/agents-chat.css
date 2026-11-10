@@ -5,6 +5,13 @@
 /* ---------------------------------------------------------------- chat */
 
 .agent-chat {
+  /* The conversation's one column: the header's content, the messages, the
+     bars and the composer all sit inside it, so their edges can't drift.
+     Used as an inline padding or margin on a full-width box, where 100% is
+     the pane's width: the column is the chat width, centred, or the pane
+     less a gutter each side when the pane is narrower. Declared here, not on
+     :root, so a gutter changed on this element (the collapsed rail) reaches it. */
+  --agents-column-inset: max(var(--agents-chat-gutter), (100% - var(--agents-chat-width)) / 2);
   position: relative;
   display: flex;
   flex: 1;
@@ -12,13 +19,20 @@
   min-height: 0;
 }
 
+/* Collapsed, the rail's nav row floats over the header's leading edge; the
+   column keeps clear of it on both sides, so it stays centred. */
+.workspace-sidebar.is-hidden ~ .agents-main .agent-chat {
+  --agents-chat-gutter: max(var(--spacing-xl), var(--agents-rail-nav-width));
+}
+
 /* Same height and hairline as the sidebar's nav row, so the two read as one
-   band across the window. Three columns: the leading edge (the compact mode
-   toggle, or nothing), the title, the actions. The outer two are never
-   narrower than what they hold and split what's left evenly, so the title is
-   centred, as the workspace centres its title, while there's room, and slides
-   over when there isn't. The title's column can shrink to nothing, so it
-   truncates instead of running under the actions. */
+   band across the window. The band is full width; what's in it keeps to the
+   conversation's column (its padding is the column's inset), so the name
+   starts over the messages' edge and the last action ends over the
+   composer's. Being the container, its collapse below follows the column,
+   not the window. Three grid columns: the leading edge (the compact mode
+   toggle, or nothing), the title, the actions. The title's column can shrink
+   to nothing, so it truncates instead of running under the actions. */
 .agent-chat__header {
   position: relative;
   container: agent-chat-header / inline-size;
@@ -31,7 +45,7 @@
   align-items: center;
   column-gap: var(--spacing-sm);
   height: var(--agents-header-height);
-  padding: 0 var(--spacing-sm);
+  padding: 0 var(--agents-column-inset);
   border-bottom: var(--border-width-default) solid var(--border-subtle);
 }
 
@@ -41,20 +55,16 @@
   min-width: 0;
 }
 
-.workspace-sidebar.is-hidden ~ .agents-main .agent-chat__header {
-  padding-inline: var(--agents-rail-nav-width);
+/* Compact: no column to keep to. The mode toggle has to clear the traffic
+   lights from the window's edge, and the switcher is centred on the window. */
+.agent-chat__header:has(> .agent-chat__mode) {
+  padding-inline: var(--spacing-sm);
 }
 
 /* Collapsed, the nav row floats over the header band; it carries the band's
    hairline so the line runs unbroken across the window. */
 .agents-mode .workspace-sidebar.is-hidden .workspace-sidebar-top-row {
   box-shadow: inset 0 calc(var(--border-width-default) * -1) 0 var(--border-subtle);
-}
-
-.agent-chat__scheduled {
-  font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
-  white-space: nowrap;
 }
 
 .agent-chat__title {
@@ -65,6 +75,33 @@
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
+}
+
+/* Who this is, at the leading edge: the key and the name, then quiet chips
+   (its project, the account it ran on, the conversation). A step more room
+   after the name than inside the key-and-name pair, so the name leads.
+   Compact keeps its centred switcher. */
+.agent-chat__header > .agent-chat__title {
+  grid-column: 1 / 3;
+  justify-self: start;
+  gap: var(--spacing-md);
+}
+
+.agent-chat__header > .agent-chat__title > .agent-key {
+  margin-inline-end: calc(var(--spacing-xs) * -1);
+}
+
+/* The header's actions are one family: a ghost button each, one height, an
+   icon and a word, the same size and colour, 4px apart. */
+.agent-chat__actions .agent-chat__action {
+  gap: var(--spacing-tight);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.agent-chat__actions .agent-chat__action .button__icon {
+  color: var(--text-muted);
 }
 
 /* Compact: the switcher's wrapper is the grid item, its button the title. */
@@ -92,24 +129,6 @@
   text-overflow: ellipsis;
 }
 
-.agent-chat__status {
-  /* Gives way long before the name does. */
-  flex: 0 1000 auto;
-  min-width: 0;
-  /* What it's doing, or idle what it's for: cut, never wrapped. */
-  max-width: 40ch;
-  overflow: hidden;
-  font-size: var(--font-size-body-md);
-  line-height: var(--line-height-compact);
-  color: var(--text-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.agent-chat__status[data-state='waiting'] {
-  color: var(--accent-warning);
-}
-
 /* [N scheduled] […] at the trailing edge, never squeezed. */
 .agent-chat__actions {
   display: flex;
@@ -117,13 +136,15 @@
   grid-column: 3;
   align-items: center;
   justify-self: end;
-  gap: var(--spacing-2xs);
+  gap: var(--spacing-xs);
 }
 
-/* Collapsed, the padding clears the floating nav row; the actions still keep
-   to the window's edge, as the title stays centred on the window. */
-.workspace-sidebar.is-hidden ~ .agents-main .agent-chat__actions {
-  margin-inline-end: calc(var(--spacing-sm) - var(--agents-rail-nav-width));
+/* One height across the header's controls (Model and the conversation
+   switcher were compact: 20px targets beside 30px ones). Ghost buttons, so
+   only the hover fill grows. */
+.agent-chat__header :is(.agent-chat__actions, .agent-chat__title) .button--size-compact {
+  height: var(--control-height-standard);
+  min-height: var(--control-height-standard);
 }
 
 /* Compact: the mode toggle at the header's leading edge, clear of the traffic lights. */
@@ -148,16 +169,26 @@
   );
 }
 
-/* Narrow: the description goes first, then "N scheduled" keeps only its
-   clock and count. The tooltips still say it all. */
-@container agent-chat-header (max-width: 560px) {
-  .agent-chat__status {
+/* Narrow: the account chip goes first (Usage says it), then the actions
+   keep only their icons ("N scheduled" its count), then the project chip.
+   The container is the column, so these follow its width: at its widest
+   (--agents-chat-width) the account chip already has no room, and shows
+   only where the header isn't held to the column (compact).
+   The tooltips and labels still say it all; the … menu has the rest. */
+@container agent-chat-header (max-width: 720px) {
+  .agent-chat__account {
+    display: none;
+  }
+}
+
+@container agent-chat-header (max-width: 600px) {
+  .agent-chat__action-word {
     display: none;
   }
 }
 
 @container agent-chat-header (max-width: 440px) {
-  .agent-chat__scheduled-word {
+  .agent-chat__title > .agent-chat__project {
     display: none;
   }
 }
@@ -229,10 +260,8 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: calc(var(--agents-chat-width) + (var(--spacing-xl) * 2));
   min-height: 100%;
-  margin: 0 auto;
-  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-xl);
+  padding: var(--spacing-xl) var(--agents-column-inset);
 }
 
 .agent-chat__messages > :first-child {
@@ -299,7 +328,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
   max-width: 480px;
   margin-top: var(--spacing-md);
 }
@@ -596,7 +625,7 @@
   color: inherit;
   text-decoration: underline;
   text-decoration-color: var(--text-faint);
-  text-underline-offset: 2px;
+  text-underline-offset: var(--text-underline-offset);
 }
 
 .agent-markdown a:hover {

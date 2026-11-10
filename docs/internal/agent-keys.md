@@ -21,13 +21,39 @@ Avatars exist for wayfinding: colour plus icon tells you which agent you're in w
 - Mustard  #E8B93F / #C99A26 / #8E6B12 / #2A1E05
 - Pink     #EFA9A2 / #D48A83 / #9C5C56 / #2B0E0C
 - Sage     #A9BA78 / #8C9D5C / #5F6E38 / #1A2108
+- Brick    #B5452C / #963722 / #632314 / #FFF1E8
+- Plum     #7A3E6E / #62305A / #3F1C3A / #FBEAF5
+- Navy     #27395E / #1D2C4A / #0E172C / #EEE7D8
+- Forest   #2F6148 / #244D39 / #123021 / #EAF2E2
+- Sky      #9DC8EA / #7EABD0 / #4C7BA3 / #0E2538
+- Lilac    #C3B4E2 / #A696C8 / #6C5D95 / #1F1734
+
+The last six were added so a big team doesn't repeat colours, and they differ in lightness as well as hue: Navy, Forest and Plum are deep, Brick mid, Sky and Lilac pale (marked `light`, so a lit legend gets the deeper wash). Every legend clears 4.5:1 on its face (agentKeys.test.ts and the phone's theme test check). A new agent gets the colourway fewest wear, in palette order, so the original eight still come first; the old avatar colours red and purple now map to Brick and Plum.
+
 Keys sit best on a light warm neutral (~#E9E3D6). Dark theme: keys keep their colours; plate/socket neutrals get dark equivalents.
 
 ## Icons
 Keyboard legends, not app icons: single uniform stroke, no fills, square caps, miter joins, only horizontal/vertical/45-degree lines plus plain circles, 24px grid. Symbols over pictures (inbox = down-arrow into a tray). Final icons come from a designer: placeholders follow these rules and live in one registry so they're easy to swap.
 
+These 23 are the **featured** legends: drawn by us, first in the picker, the defaults, and the only ones a new agent is given from its name or role (`iconRules`).
+
+**The app's mark** (`mogbot`, named "Logo" so no copy carries the product name) is first in the featured row on desk and phone, and any agent can wear it. Search finds it by "mogbot", "logo", "mark" or "brand" (its `aka` in `agent-keys.json`: extra name words, not name rules, so an agent called "Brand" isn't given it). It is the **one exception to the legend rules**: the "M" (a dome with two slot eyes, `scripts/build-icons.mjs`) only reads as a solid shape, so it is drawn **filled** in the legend's colour (even-odd, the eyes cut out), with no stroke, and keeps its curves (`KeyIconDrawing.fill`; the desk's `.agent-key__legend[data-fill]`, the phone's `Legend`, where lit glow rings outline it). agentKeys.test.ts holds it to the only filled legend.
+
+**The Chief's key** is the mark on **Graphite** (the app icon's colourway): `chiefIcon` / `chiefColorway` in `agent-keys.json`, used by `ensure_main` and the onboarding and pairing screens. A Chief made earlier wore the star on Putty; `keys::fill` moves it once (marked `chiefKeyDefault` in the Chief's entry): the legend only if it's still the star, the colourway only if it's still Putty. Nothing records whether the user chose those, so a value that differs is theirs and is kept, and after the move a star picked again stays. The Chief's old `color` stays "white" either way: it is the app's accent (`src/lib/accent.ts`), and a new default key is not a new accent.
+
+## The icon pack
+Beyond the featured legends, a key can wear any of **Lucide**'s 2,029 icons (version in `agent-keys.json` → `pack`). Chosen over Tabler (MIT, ~5,000) and Phosphor (MIT): Lucide is drawn on the same 24 grid with one 2px stroke and no fills, its geometry is more even than Tabler's (which matters at 15px on a small key), and every icon carries tags and categories for search. Licence: ISC (permissive and MIT-compatible); the notice, with Feather's MIT notice for the icons derived from it, ships beside the data in `agent-key-pack/LICENSE`.
+
+- **Ids:** `lucide:` + the icon's name (`lucide:wallet`). The Mac accepts exactly the ids in the pack's index; the clients draw any id of that shape and fall back to the default legend for one they can't find.
+- **Drawn as legends:** the same uniform stroke, legend colour and per-size stroke width as ours, no fills (the generator turns rects, ellipses and lines into paths and drops the few filled dots' fill). The one difference: pack icons keep the **round caps and joins** Lucide drew them with (`KeyIconDrawing.round`); squared off, their curves and short ticks break up.
+- **Vendored as data, not a UI package:** `scripts/agent-key-pack.mjs <lucide repo> <lucide-static>` writes `packages/companion-protocol/src/agent-key-pack/` (`index.json`: names, tags, categories; `drawings-<letter>.json`: the drawings by first letter; `LICENSE`) and `agentKeyPackShards.ts` (one `import()` per file). Run it by hand to move to a newer Lucide, update `pack` in agent-keys.json, commit.
+- **Loaded lazily:** nothing at startup. A key wearing a pack icon loads the one drawings file its icon is in (`agentKeyPack.ts`, `legendDrawing`), blank for that moment; the picker loads the index and every drawing when it opens. Desk: Vite code-splits each file. Phone: Metro doesn't split `import()`, so `mobile/metro.config.js` resolves the loaders to `agentKeyPackShards.require.ts` (also generated): each file a bundled module, evaluated on first use. About 535 KB raw (143 KB gzipped) for the whole pack, of which a key needs one file (0.1 to 55 KB).
+- **Search** (`agentKeySearch.ts`, mirrored by `keys::find_icon`): every word must match a name word, a tag or a synonym (`iconSynonyms`), with prefixes and one typo allowed; featured legends and simpler names first. "money", "invoice", "mail", "car", "house", "code" and "calendar" all lead with a good key; `find` in `agent-key-cases.json` holds the desk, phone and Mac to the same best match.
+- **The picker:** desk (`AgentKeyIconPicker.tsx`): the search (focused when the look is opened by hand), the categories as quick filters, Recently used (this Mac's browser storage), the grid of keys drawn as they would look, rendered a page at a time; arrows move the pick with the 112px key, ↓ from the search enters the grid, Enter takes the first match. Phone (`KeyIconSheet.tsx`): the featured row, then "Search 2,029 more icons" opens a sheet with the 112px key, the search (focused), category chips, Recently used (for the session) and a virtualised grid.
+- **From chat:** `create_agent` / `update_agent` take `icon` as a featured id, a `lucide:` id, a pack icon's bare name, or a word for what it's for ("invoice"), resolved to the best match and named in the line ("with the Receipt legend").
+
 ## States (physical, always paired with a text label where space allows)
-The look and motion follow the marketing site's keys (`mogbot-site` `src/styles/agent-key.css`, `src/scripts/motion.ts`), value for value where they can be. "Lit" means a backlit shine-through cap: the face deepens in its own hue (a per-colourway mix toward its depth: Blue 42%, Orange 30%, Putty 62%, Teal 48%, Graphite 30%, Mustard 48%, Pink 58%, Sage 48%), the legend shines warm with a tight glow on the icon only.
+The look and motion follow the marketing site's keys (`mogbot-site` `src/styles/agent-key.css`, `src/scripts/motion.ts`), value for value where they can be. "Lit" means a backlit shine-through cap: the face deepens in its own hue (a per-colourway mix toward its depth: Blue 42%, Orange 30%, Putty 62%, Teal 48%, Graphite 30%, Mustard 48%, Pink 58%, Sage 48%, Brick, Plum, Navy and Forest 30%, Sky 55%, Lilac 58%), the legend shines warm with a tight glow on the icon only.
 - Idle (free): cap at rest, legend unlit. Calm.
 - Working: pressed (down to a 1.5-unit depth), lit warm white (#FFE9B4), breathing slowly (2.4s: the legend's glow and a soft light in the face), and its light spills onto the surface under the key in the key's own colour. This is also the typing/working indicator.
 - Live (you drive its session): lit with the spill, still.
@@ -49,8 +75,8 @@ Four pips on the front edge (the skirt band under the face), filled from the lef
 Each agent is bound to a real keyboard key, shown as the sublegend. Pressing it (when no text field is focused) jumps to that agent. Rebindable per agent; the sublegend updates. Unique per team.
 
 ## Where it lives
-- **Data (both clients and the Mac):** `packages/companion-protocol/src/agent-keys.json` (colourways, icon ids, old colour → colourway, the name/role heuristics, the key alphabet, pips), read by `agentKeys.ts` and `src-tauri/src/agents/keys.rs`; `agent-key-cases.json` holds both to the same answers.
-- **Legends:** `packages/companion-protocol/src/agentKeyIcons.ts`, the one registry to swap for the designer's set.
+- **Data (both clients and the Mac):** `packages/companion-protocol/src/agent-keys.json` (colourways, featured icon ids, the pack and its synonyms, old colour → colourway, the name/role heuristics, the key alphabet, pips), read by `agentKeys.ts` and `src-tauri/src/agents/keys.rs`; `agent-key-cases.json` holds both to the same answers.
+- **Legends:** `packages/companion-protocol/src/agentKeyIcons.ts`, the featured ones, the one registry to swap for the designer's set; the pack is `agentKeyPack.ts` + `agent-key-pack/` ("The icon pack").
 - **Registry:** each agent stores `colorway`, `icon`, `boundKey`. An agent saved before keys gets them on read (`keys::fill`: its colour's nearest colourway, an icon from its name then role, the first free letter of its name, the Chief first); a duplicate key gets a free one. A key given automatically (on read, or a new agent with no colour asked for) never repeats another agent's colourway with the same icon (`keys::distinct_colorway`, `distinctColorway` in TS); a key someone chose is never changed. The old `color` follows the colourway for clients that only read colours.
 - **Changing it:** the editor (colour, icon, press-to-bind), the Chief's `update_agent` / `create_agent` (`colorway`, `icon`, `key`; a key someone has is refused naming whose), the phone over `agents.create|update` on a Mac listing `agents.keys`.
 - **Phone:** `mobile/src/components/AgentKey.tsx` (Views and react-native-svg; geometry `mobile/src/lib/agentKey.ts`, colours `keyColorways` / `keyNeutrals` in `mobile/src/lib/theme.ts`), everywhere an avatar was; colour, icon and a free key from the agent sheet and New agent (docs/mobile.md, "Agent keys").

@@ -1,5 +1,5 @@
 /**
- * Settings → Agents → Engines and models: what a new agent starts on when
+ * Settings → Agents → What agents run on: what a new agent starts on when
  * nobody picked, a real setting (`agents_set_defaults`, saved in the app's
  * settings; `agents::defaults`).
  *
@@ -153,7 +153,7 @@ export function AgentDefaultsSettings() {
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const ready = engines.length > 0 && defaults !== null;
-  // ⌘K "Engine and model for new agents…": shown, not left below the fold.
+  // ⌘K "What new agents run on, and their model…": shown, not left below the fold.
   useEffect(() => {
     if (ready && takeSettingsSectionRequest('agent-defaults')) {
       ref.current?.scrollIntoView({ block: 'center' });

@@ -82,6 +82,14 @@ p.sub{color:var(--ink-3);font-size:14px;margin-top:6px}
 .mustard{--face:#E8B93F;--skirt:#C99A26;--depth:#8E6B12;--legend:#2A1E05}
 .pink{--face:#EFA9A2;--skirt:#D48A83;--depth:#9C5C56;--legend:#2B0E0C}
 .sage{--face:#A9BA78;--skirt:#8C9D5C;--depth:#5F6E38;--legend:#1A2108}
+.brick{--face:#B5452C;--skirt:#963722;--depth:#632314;--legend:#FFF1E8}
+.plum{--face:#7A3E6E;--skirt:#62305A;--depth:#3F1C3A;--legend:#FBEAF5}
+.navy{--face:#27395E;--skirt:#1D2C4A;--depth:#0E172C;--legend:#EEE7D8}
+.forest{--face:#2F6148;--skirt:#244D39;--depth:#123021;--legend:#EAF2E2}
+.sky{--face:#9DC8EA;--skirt:#7EABD0;--depth:#4C7BA3;--legend:#0E2538}
+.lilac{--face:#C3B4E2;--skirt:#A696C8;--depth:#6C5D95;--legend:#1F1734}
+/* a pack legend (Lucide) keeps its round caps and joins */
+.k svg.round{stroke-linecap:round;stroke-linejoin:round}
 .sock.blue{--stem:#3F6FD8;--depth:#223F85}
 .board{display:inline-flex;gap:18px;flex-wrap:wrap;padding:22px 24px 26px;border-radius:22px;background:linear-gradient(#E2DBCB,#DDD5C4);box-shadow:inset 0 2px 6px rgba(70,55,30,.18)}
 </style></head><body>
@@ -95,6 +103,13 @@ p.sub{color:var(--ink-3);font-size:14px;margin-top:6px}
     <symbol id="send" viewBox="0 0 24 24"><path d="M3 12H17M12 7L17 12L12 17M21 5V19"/></symbol>
     <symbol id="chat" viewBox="0 0 24 24"><path d="M4 5H20V16H11L7 20V16H4Z"/></symbol>
     <symbol id="grid" viewBox="0 0 24 24"><path d="M4 4H10V10H4ZM14 4H20V10H14ZM4 14H10V20H4ZM14 14H20V20H14Z"/></symbol>
+    <!-- From the icon pack: Lucide (ISC), packages/companion-protocol/src/agent-key-pack -->
+    <symbol id="l-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+    <symbol id="l-house" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="l-receipt" viewBox="0 0 24 24"><path d="M12 17V7"/><path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"/><path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="l-dog" viewBox="0 0 24 24"><path d="M11.25 16.25h1.5L12 17z"/><path d="M16 14v.5"/><path d="M4.42 11.247A13.152 13.152 0 0 0 4 14.556C4 18.728 7.582 21 12 21s8-2.272 8-6.444a11.702 11.702 0 0 0-.493-3.309"/><path d="M8 14v.5"/><path d="M8.5 8.5c-.384 1.05-1.083 2.028-2.344 2.5-1.931.722-3.576-.297-3.656-1-.113-.994 1.177-6.53 4-7 1.923-.321 3.651.845 3.651 2.235A7.497 7.497 0 0 1 14 5.277c0-1.39 1.844-2.598 3.767-2.277 2.823.47 4.113 6.006 4 7-.08.703-1.725 1.722-3.656 1-1.261-.472-1.855-1.45-2.239-2.5"/></symbol>
+    <symbol id="l-plane" viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
+    <symbol id="l-banknote" viewBox="0 0 24 24"><path d="M4 6H20A2 2 0 0 1 22 8V16A2 2 0 0 1 20 18H4A2 2 0 0 1 2 16V8A2 2 0 0 1 4 6Z"/><path d="M6 12h.01M18 12h.01"/><circle cx="12" cy="12" r="2"/></symbol>
   </defs>
 </svg>
 
@@ -113,7 +128,7 @@ p.sub{color:var(--ink-3);font-size:14px;margin-top:6px}
 <h2>Independence pips (front edge, filled from the left)</h2>
 <div class="row" id="pipsrow"></div>
 
-<h2>Colourways</h2>
+<h2>Colourways (the eight, then Brick, Plum, Navy, Forest, Sky, Lilac; the last six wear icons from the pack)</h2>
 <div class="board" id="board"></div>
 <div class="row" id="boardsm" style="margin-top:22px"></div>
 
@@ -123,13 +138,13 @@ const pips=n=>`<span class="pips">${[0,1,2,3].map(i=>`<i class="${i<n?'on':''}">
 const key=(c,icon,state,small,sub='I',n=2)=>{
   if(state==='paused')return `<div class="sock ${c} ${small?'small':''}"><div class="housing"><div class="stem"></div></div></div>`;
   if(state==='new')return `<div class="sock ${small?'small':''}"><div class="housing"><div class="stem"></div></div></div>`;
-  return `<div class="k ${c} ${state} ${small?'small':''}"><div class="face"><svg><use href="#${icon}"/></svg><span class="sub">${sub}</span></div>${pips(n)}</div>`};
+  return `<div class="k ${c} ${state} ${small?'small':''}"><div class="face"><svg class="${icon.startsWith('l-')?'round':''}"><use href="#${icon}"/></svg><span class="sub">${sub}</span></div>${pips(n)}</div>`};
 const lab=(t,s)=>`<div class="lab">${t}${s?`<small>${s}</small>`:''}</div>`;
 big.innerHTML=S.map(([s,t,d])=>`<div class="cell">${key('blue','inbox',s,false)}${lab(t,d)}</div>`).join('');
 small.innerHTML=S.map(([s,t])=>`<div class="cell sm">${key('blue','inbox',s,true)}${lab(t)}</div>`).join('');
 rows.innerHTML=[['idle','Inbox','Idle'],['working','Inbox','Working…'],['ok','Inbox','Needs your OK'],['paused','Inbox','Paused']].map(([s,n,l])=>`<div class="listrow">${key('blue','inbox',s,true)}<div><div class="n">${n}</div><div class="s">${l}</div></div></div>`).join('');
 pipsrow.innerHTML=[[1,'Careful'],[2,'Steady'],[3,'Bold'],[4,'Unleashed']].map(([n,t])=>`<div class="cell">${key('blue','inbox','idle',false,'I',n)}${lab(t)}</div>`).join('');
-const C=[['blue','inbox','I'],['orange','code','C'],['putty','search','S'],['teal','clock','R'],['graphite','pen','W'],['mustard','send','P'],['pink','chat','M'],['sage','grid','D']];
+const C=[['blue','inbox','I'],['orange','code','C'],['putty','search','S'],['teal','clock','R'],['graphite','pen','W'],['mustard','send','P'],['pink','chat','M'],['sage','grid','D'],['brick','l-receipt','B'],['plum','l-dog','G'],['navy','l-wallet','N'],['forest','l-house','H'],['sky','l-plane','T'],['lilac','l-banknote','L']];
 board.innerHTML=C.map(([c,i,k])=>key(c,i,'idle',false,k,2)).join('')+key('','','new',false);
 boardsm.innerHTML=C.map(([c,i,k])=>key(c,i,'idle',true,k)).join('')+key('','','new',true);
 </script>

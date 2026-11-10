@@ -4,7 +4,7 @@
  * it draws, and reads its colours from the palette in force.
  */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { agentTint } from '../lib/accent';
@@ -19,9 +19,16 @@ import {
   radius,
   space,
 } from '../lib/theme';
-import { Icon, T, tap, useRipple } from './ui';
+import { Button, Icon, T, tap, useRipple } from './ui';
 import { AgentKey } from './AgentKey';
-import { COLORWAYS, KEY_CHARS, KEY_ICONS } from '@shipstudio/companion-protocol';
+import {
+  COLORWAYS,
+  KEY_CHARS,
+  KEY_ICONS,
+  PACK_INFO,
+  iconName,
+} from '@shipstudio/companion-protocol';
+import { KeyIconSheet } from './KeyIconSheet';
 
 /** Chips fit 36pt; their slop makes the target 44. */
 const CHIP = 36;
@@ -181,6 +188,8 @@ export function KeyChoices({
   const colors = useColors();
   const styles = useStyles();
   const free = [...KEY_CHARS].filter((k) => k === boundKey || !taken.includes(k));
+  const [searching, setSearching] = useState(false);
+  const featured = KEY_ICONS.some((i) => i.id === icon);
   return (
     <View style={styles.look}>
       <T variant="caption" color={colors.textSecondary}>
@@ -202,12 +211,35 @@ export function KeyChoices({
         Icon
       </T>
       <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Icon">
+        {/* One from the pack leads the row, so the pick is always in sight. */}
+        {!featured && (
+          <LookChoice label={iconName(icon)} on onPress={() => setSearching(true)}>
+            <AgentKey name={name} colorway={colorway} icon={icon} size={keySize.md} />
+          </LookChoice>
+        )}
         {KEY_ICONS.map((i) => (
           <LookChoice key={i.id} label={i.name} on={i.id === icon} onPress={() => onIcon(i.id)}>
             <AgentKey name={name} colorway={colorway} icon={i.id} size={keySize.md} />
           </LookChoice>
         ))}
       </View>
+      <Button
+        title={`Search ${PACK_INFO.count.toLocaleString('en')} more icons`}
+        icon="magnifyingglass"
+        variant="secondary"
+        size="compact"
+        onPress={() => setSearching(true)}
+        style={styles.more}
+      />
+      <KeyIconSheet
+        visible={searching}
+        name={name}
+        colorway={colorway}
+        icon={icon}
+        boundKey={boundKey}
+        onPick={onIcon}
+        onClose={() => setSearching(false)}
+      />
       <T variant="caption" color={colors.textSecondary}>
         Key
       </T>
@@ -285,6 +317,7 @@ const useStyles = makeStyles((colors) => ({
   swatches: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -space['2xs'] },
   swatchTarget: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   look: { gap: space.xs },
+  more: { alignSelf: 'flex-start' },
   lookRing: {
     width: KEY_RING,
     height: KEY_RING,

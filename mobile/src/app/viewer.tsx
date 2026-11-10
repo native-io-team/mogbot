@@ -181,6 +181,8 @@ export default function Viewer() {
       {error && (
         <Pressable
           onPress={() => setError(null)}
+          accessibilityRole="alert"
+          accessibilityHint="Hides this"
           style={[styles.error, { bottom: insets.bottom + space.lg }]}
         >
           <T variant="small" color={colors.onMedia}>

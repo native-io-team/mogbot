@@ -100,6 +100,19 @@ link…** rotates it, the old link dies instantly, and setup starts over. If
 your phone is lost, removing the Mac in Tailscale's admin console cuts it off
 from any device. The config and audit files are written `0600`.
 
+**The token lives in the login Keychain** (`remote_access::token_store`, one
+generic-password item under the app's own `<slug>-remote-access-` prefix),
+not in `remote_access.json`, and is held in memory after the first read since
+every request checks it. An older settings file's copy is moved on first
+read: written to the Keychain, read back, and only when it reads back the
+same is the file rewritten without it. If the Keychain refuses (locked,
+denied), the file's copy keeps working and the move is tried again on the
+next read; a new link the Keychain refuses is kept in the file the same way,
+and a file token that differs from the Keychain's is the newer link and moves
+over it. "The Keychain didn't answer" is never taken for "no token", which
+would mint a new one and break the assistant's link. Unverified: the move on
+a real Keychain (the tests use an in-memory store).
+
 **Prompt injection.** This is the realistic attack. The assistant reads
 terminal output, which can contain text from strangers (web pages,
 dependencies, issues). Defences:
@@ -128,7 +141,7 @@ dependencies, issues). Defences:
 - **No flag injection.** An opening prompt that starts with `-` would have been
   parsed by the agent CLI as a flag (`--dangerously-skip-permissions`). It now
   gets a leading space, both in Rust and in `agentPromptArgs`. That fix also
-  closes the same hole in Inbox handoffs, which existed before this feature.
+  closes the same hole in queued-prompt handoffs (`lib/promptHandoff.ts`).
 - The agent's own permission system still applies on top of all this. Remote
   access types into the agent; it doesn't widen what the agent may do. If you
   started the agent with permission prompts skipped, a remote message gets that
@@ -223,7 +236,7 @@ Grok Bot ──HTTPS──▶ Tailscale ──▶ tailscaled Funnel (/<slug>, TL
   window (or main). `useRemoteAgentControl` spawns the tab's PTY in the
   background (`lib/backgroundSessions.ts`, with the same command builder as a
   mounted tab, `lib/agentSpawn.ts`) whose CLI *starts with* the prompt — the
-  Inbox's spawn-not-paste rule — and the project's tab list adopts it without
+  same spawn-not-paste rule as `hooks/usePromptHandoff` — and the project's tab list adopts it without
   the window changing. Rust reports success only once a new agent PTY
   actually exists.
 - **Tailscale.** Mounted at `/<slug>` (`brand::FUNNEL_MOUNT_PATH`; Ship Studio

@@ -69,8 +69,8 @@ describe('the engine chip', () => {
   it('lists the models of its engine with the current one marked', () => {
     const rows = currentModels(agent(), ENGINES);
     expect(rows.map((r) => [r.label, r.current])).toEqual([
-      ['Engine’s default', false],
-      ['Most capable', true],
+      ['Default', false],
+      ['Smartest', true],
       ['Balanced', false],
     ]);
   });

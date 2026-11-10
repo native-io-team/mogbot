@@ -80,6 +80,8 @@ export type WorkStepKind =
 
 /** One thing a turn did, in plain words ("Read Hero.tsx", "Ran npm test"). */
 export interface WorkStep {
+  /** Its exact command is kept on the Mac (desk only); the text never rides here. */
+  hasExact?: boolean;
   /** When it was seen, ms since the epoch. */
   at: number;
   kind: WorkStepKind;
@@ -133,6 +135,12 @@ export type WorkStepOutcome = 'declined' | 'failed';
  * engine's output said it did; a turn with no steps has none.
  */
 export interface TurnWork {
+  /** The engine it ran on, as the Mac started it. Older Macs omit it. */
+  engine?: string;
+  /** The account it ran on, by the name it is shown by. */
+  account?: string;
+  /** The model, only as the engine reported it. */
+  model?: string;
   startedAt: number;
   /** Absent while the turn is still running. */
   endedAt?: number;

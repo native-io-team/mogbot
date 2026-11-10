@@ -82,9 +82,7 @@
   flex-direction: column;
   gap: var(--spacing-2xl);
   width: 100%;
-  max-width: calc(var(--agents-chat-width) + (var(--spacing-xl) * 2));
-  margin: 0 auto;
-  padding: var(--spacing-xl);
+  padding: var(--spacing-xl) var(--agents-column-inset);
 }
 
 .agents-team__section {
@@ -112,8 +110,12 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  width: 100%;
+  /* The hover fill bleeds left of the column so the key sits on the
+     heading's left edge, as "Nothing is waiting on you" does; the right
+     edge (the meta, Open chat) stays where it was. */
+  width: calc(100% + var(--spacing-sm));
   min-height: var(--size-sidebar-project-row);
+  margin-inline-start: calc(var(--spacing-sm) * -1);
   padding: var(--spacing-sm);
   font: inherit;
   color: var(--text-primary);
@@ -239,7 +241,8 @@
    from the name to the meta edge, so Allow lines up with every row's meta. */
 .agents-team__group .agent-chat__row {
   margin: var(--spacing-2xs) 0 var(--spacing-sm);
-  padding: 0 var(--spacing-sm) 0 calc(var(--size-sidebar-project-shortcut) + var(--spacing-sm) * 2);
+  /* The row bleeds one step left, so its name starts one step sooner. */
+  padding: 0 var(--spacing-sm) 0 calc(var(--size-sidebar-project-shortcut) + var(--spacing-sm));
 }
 
 .agents-team__group .agent-approval,

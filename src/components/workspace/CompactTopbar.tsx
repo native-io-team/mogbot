@@ -70,7 +70,7 @@ export function CompactTopbar({
       <div className="compact-topbar__spacer" aria-hidden="true" />
       <div className="compact-topbar__actions">
         {hasDevServer && (
-          <span className="compact-topbar__dev-server" aria-label="Dev server running">
+          <span className="compact-topbar__dev-server" role="img" aria-label="Dev server running">
             <span className="compact-topbar__dev-server-dot" />
           </span>
         )}

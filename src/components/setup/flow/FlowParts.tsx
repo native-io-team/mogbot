@@ -103,6 +103,7 @@ export function FlowShell({
           // its label under the last segment, when the line got shorter.
           style={{ '--flow-progress-sections': sections } as CSSProperties}
           role="progressbar"
+          aria-label="Setup progress"
           aria-valuemin={1}
           aria-valuemax={sections}
           aria-valuenow={section}

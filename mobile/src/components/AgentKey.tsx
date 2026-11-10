@@ -23,13 +23,15 @@ import {
   KEY_PIP_COUNT,
   KEY_GEOMETRY,
   colorwayOf,
-  iconDrawing,
   keyLookFor,
+  legendDrawing,
+  packDrawingsVersion,
   pipsFor,
+  subscribePackDrawings,
   type AgentIndependence,
   type KeyState,
 } from '@shipstudio/companion-protocol';
-import { useEffect, useId, useMemo, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -380,24 +382,46 @@ function Legend({
   light: KeyLight;
   dim: boolean;
 }) {
-  const drawing = iconDrawing(icon);
-  const strokes = (stroke: string, width: number, opacity = 1) => (
+  // A pack icon's drawing arrives with its file (agentKeyPack.ts): until
+  // then the face is blank, and the version bump re-draws it.
+  useSyncExternalStore(subscribePackDrawings, packDrawingsVersion);
+  const drawing = legendDrawing(icon);
+  // Ours are square-capped and mitred; a pack icon keeps its round caps.
+  const cap = drawing?.round ? 'round' : 'square';
+  const join = drawing?.round ? 'round' : 'miter';
+  // `glowPass`: a ring of glow drawn under the legend, not the legend itself.
+  const strokes = (stroke: string, width: number, opacity = 1, glowPass = false) => (
     <>
-      {drawing.paths.map((d) => (
-        <Path
-          key={d}
-          d={d}
-          fill="none"
-          stroke={stroke}
-          strokeWidth={width}
-          strokeOpacity={opacity}
-          strokeLinecap="square"
-          strokeLinejoin="miter"
-        />
-      ))}
-      {drawing.circles?.map(([cx, cy, r]) => (
+      {drawing?.paths.map((d, i) =>
+        drawing.fill ? (
+          // The app's mark, the one filled legend (agentKeyIcons.ts): the
+          // ink as a fill; a glow pass outlines the shape under it.
+          <Path
+            key={`${i}:${d}`}
+            d={d}
+            fill={glowPass ? 'none' : stroke}
+            fillRule="evenodd"
+            stroke={glowPass ? stroke : 'none'}
+            strokeWidth={width}
+            strokeOpacity={opacity}
+            strokeLinejoin="round"
+          />
+        ) : (
+          <Path
+            key={`${i}:${d}`}
+            d={d}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={width}
+            strokeOpacity={opacity}
+            strokeLinecap={cap}
+            strokeLinejoin={join}
+          />
+        )
+      )}
+      {drawing?.circles?.map(([cx, cy, r], i) => (
         <Circle
-          key={`${cx},${cy}`}
+          key={`${i}:${cx},${cy}`}
           cx={cx}
           cy={cy}
           r={r}
@@ -427,8 +451,8 @@ function Legend({
       }
       style={[styles.legend, dim && { opacity: KEY_GEOMETRY.paused.legendOpacity }]}
     >
-      {lit && strokes(glow, g.stroke * wide, light === 'ask' ? 0.2 : 0.16)}
-      {lit && strokes(glow, g.stroke * 1.7, light === 'ask' ? 0.45 : 0.35)}
+      {lit && strokes(glow, g.stroke * wide, light === 'ask' ? 0.2 : 0.16, true)}
+      {lit && strokes(glow, g.stroke * 1.7, light === 'ask' ? 0.45 : 0.35, true)}
       {strokes(ink, g.stroke)}
     </Svg>
   );

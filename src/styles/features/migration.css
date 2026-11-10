@@ -607,7 +607,9 @@
 }
 
 .mig-rail__item--not-started {
-  opacity: 0.55;
+  /* Not begun reads quieter through its border and marker, never by fading
+     its words: at 55% opacity they were 2.5:1. */
+  border-style: dashed;
 }
 
 .mig-rail__item--blocked {

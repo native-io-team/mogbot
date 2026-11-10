@@ -17,9 +17,20 @@
 
 import data from './agent-keys.json';
 import { KEY_ICON_DRAWINGS, type KeyIconDrawing } from './agentKeyIcons';
+import { isPackIconId, packDrawing, packIconName } from './agentKeyPack';
 import type { AgentIndependence } from './model';
 
 export { KEY_ICON_DRAWINGS, KEY_ICON_GRID, type KeyIconDrawing } from './agentKeyIcons';
+export {
+  PACK_INFO,
+  PACK_PREFIX,
+  isPackIconId,
+  loadAllPackDrawings,
+  loadPackIndex,
+  packDrawingsVersion,
+  packIconName,
+  subscribePackDrawings,
+} from './agentKeyPack';
 
 export interface Colorway {
   id: string;
@@ -41,11 +52,16 @@ export const COLORWAYS: readonly Colorway[] = data.colorways;
 export const COLORWAY_IDS: readonly string[] = COLORWAYS.map((c) => c.id);
 export type ColorwayId = string;
 
-export const KEY_ICONS: readonly { id: string; name: string }[] = data.icons;
+/** The featured legends, in picker order; `aka` are other names a search finds one by. */
+export const KEY_ICONS: readonly { id: string; name: string; aka?: string[] }[] = data.icons;
 export const KEY_ICON_IDS: readonly string[] = KEY_ICONS.map((i) => i.id);
 
-/** The Chief's legend, and the one an agent gets when nothing in its name says otherwise. */
+/**
+ * The Chief's legend (the app's mark) and colourway (Graphite, the app
+ * icon's), and the legend an agent gets when nothing in its name says otherwise.
+ */
 export const CHIEF_ICON: string = data.chiefIcon;
+export const CHIEF_COLORWAY: string = data.chiefColorway;
 export const DEFAULT_ICON: string = data.defaultIcon;
 
 /** Every key an agent can be bound to: letters, then digits. No modifiers. */
@@ -71,6 +87,19 @@ export const KEY_STATE_LABEL: Record<KeyState, string> = {
   new: 'New agent',
 };
 
+/**
+ * What a screen reader calls a key: its agent's name, then its state when the
+ * state is news ("Finance, needs your OK"). Idle says nothing more; a key with
+ * no agent yet is "New agent". Desk and phone both, so the two never disagree.
+ */
+export function keyAccessibleName(name: string | null | undefined, state?: KeyState | null): string {
+  const who = name?.trim();
+  if (!who) return KEY_STATE_LABEL.new;
+  if (!state || state === 'idle') return who;
+  const said = KEY_STATE_LABEL[state];
+  return `${who}, ${said.charAt(0).toLowerCase()}${said.slice(1)}`;
+}
+
 /** Pips lit on the front edge for each independence level: Careful 1 … Unleashed 4. */
 export const KEY_PIPS: Record<AgentIndependence, number> = data.pips as Record<
   AgentIndependence,
@@ -80,18 +109,36 @@ export const KEY_PIP_COUNT = 4;
 
 export const isColorway = (v: unknown): v is string =>
   typeof v === 'string' && COLORWAY_IDS.includes(v);
+/** A featured legend, or a pack id (`lucide:wallet`; which exist is the Mac's to say). */
 export const isKeyIcon = (v: unknown): v is string =>
-  typeof v === 'string' && KEY_ICON_IDS.includes(v);
+  (typeof v === 'string' && KEY_ICON_IDS.includes(v)) || isPackIconId(v);
 
 export function colorwayOf(id: string | null | undefined): Colorway {
   return COLORWAYS.find((c) => c.id === id) ?? COLORWAYS[0];
 }
 
 export function iconDrawing(id: string | null | undefined): KeyIconDrawing {
-  return KEY_ICON_DRAWINGS[id ?? ''] ?? KEY_ICON_DRAWINGS[DEFAULT_ICON];
+  return legendDrawing(id) ?? KEY_ICON_DRAWINGS[DEFAULT_ICON];
 }
 
-export const iconName = (id: string) => KEY_ICONS.find((i) => i.id === id)?.name ?? id;
+/**
+ * What a key prints: a featured legend, a pack icon once its drawings file
+ * has arrived (`null` until then, which starts loading it; a client re-draws
+ * on `subscribePackDrawings`), else the default legend.
+ */
+export function legendDrawing(id: string | null | undefined): KeyIconDrawing | null {
+  const own = KEY_ICON_DRAWINGS[id ?? ''];
+  if (own) return own;
+  if (isPackIconId(id)) {
+    const d = packDrawing(id);
+    if (d === undefined) return null;
+    if (d) return d;
+  }
+  return KEY_ICON_DRAWINGS[DEFAULT_ICON];
+}
+
+export const iconName = (id: string) =>
+  KEY_ICONS.find((i) => i.id === id)?.name ?? (isPackIconId(id) ? packIconName(id) : id);
 export const colorwayName = (id: string) => COLORWAYS.find((c) => c.id === id)?.name ?? id;
 
 /** The nearest colourway to an old avatar colour key (blue for one it doesn't know). */
@@ -117,7 +164,7 @@ function words(text: string): string[] {
 /**
  * An icon read from what the agent is called and what it's for: the name
  * first, then the role, each against the rules in order. The Chief's is the
- * star. Matches `agents::keys::icon_for` exactly (agentKeys.test.ts and
+ * app's mark. Matches `agents::keys::icon_for` exactly (agentKeys.test.ts and
  * keys_tests.rs hold the same table).
  */
 export function iconFor(name: string, role = '', isMain = false): string {
@@ -264,6 +311,12 @@ export const KEY_LIT_MIX: Readonly<Record<string, number>> = {
   mustard: 0.48,
   pink: 0.58,
   sage: 0.48,
+  brick: 0.3,
+  plum: 0.3,
+  navy: 0.3,
+  forest: 0.3,
+  sky: 0.55,
+  lilac: 0.58,
 };
 
 /** At or below this size a key drops its sublegend and pips and thickens its legend. */

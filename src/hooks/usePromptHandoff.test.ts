@@ -1,0 +1,135 @@
+import { renderHook } from '@testing-library/react';
+import { act } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { usePromptHandoff } from './usePromptHandoff';
+import { clearHandoff, queueHandoff, peekHandoff } from '../lib/promptHandoff';
+
+describe('usePromptHandoff', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    clearHandoff();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const setup = (overrides: { tabCount?: number; maxTabs?: number; path?: string } = {}) => {
+    const addTerminalTab = vi.fn();
+    const showToast = vi.fn();
+    const props = {
+      path: overrides.path ?? '/p/demo',
+      terminals: {
+        terminalTabs: new Array<unknown>(overrides.tabCount ?? 1).fill(null),
+        maxTerminalTabs: overrides.maxTabs ?? 6,
+        addTerminalTab,
+      },
+    };
+    const view = renderHook((p: typeof props) => usePromptHandoff(p.path, p.terminals, showToast), {
+      initialProps: props,
+    });
+    return { addTerminalTab, showToast, view, props };
+  };
+
+  it('starts a new agent with the prompt in its argv', () => {
+    // The delivery is a spawn, not a paste: the prompt reaches the CLI as an
+    // argument, so there is no window where the terminal exists but the agent
+    // is not yet listening, and nothing has to press Return.
+    queueHandoff('/p/demo', 'Fix the checkout route');
+    const { addTerminalTab, showToast } = setup();
+
+    act(() => void vi.advanceTimersByTime(500));
+
+    expect(addTerminalTab).toHaveBeenCalledWith(undefined, {
+      initialPrompt: 'Fix the checkout route',
+      projectPath: '/p/demo',
+    });
+    expect(peekHandoff('/p/demo')).toBeNull();
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('on it'), 'success');
+  });
+
+  it('waits for the project to finish opening rather than dropping the prompt', () => {
+    queueHandoff('/p/demo', 'Fix it');
+    // No tabs yet — the workspace is still mounting.
+    const { addTerminalTab, view, props } = setup({ tabCount: 0 });
+
+    act(() => void vi.advanceTimersByTime(2000));
+    expect(addTerminalTab).not.toHaveBeenCalled();
+    expect(peekHandoff('/p/demo')).toBe('Fix it');
+
+    view.rerender({ ...props, terminals: { ...props.terminals, terminalTabs: [null] } });
+    act(() => void vi.advanceTimersByTime(500));
+    expect(addTerminalTab).toHaveBeenCalled();
+  });
+
+  it('delivers a second prompt for the project that is already hot', () => {
+    // Queue → workspace → away (via the sidebar, which keeps the hot
+    // project current) → queue again. Nothing about the terminals changes, so
+    // the caller signals the round trip by passing null while off-workspace.
+    queueHandoff('/p/demo', 'First prompt');
+    const { addTerminalTab, view, props } = setup();
+    act(() => void vi.advanceTimersByTime(500));
+    expect(addTerminalTab).toHaveBeenCalledTimes(1);
+
+    view.rerender({ ...props, path: null as unknown as string });
+    queueHandoff('/p/demo', 'Second prompt');
+    view.rerender(props);
+    act(() => void vi.advanceTimersByTime(500));
+
+    expect(addTerminalTab).toHaveBeenCalledTimes(2);
+    expect(addTerminalTab).toHaveBeenLastCalledWith(undefined, {
+      initialPrompt: 'Second prompt',
+      projectPath: '/p/demo',
+    });
+    expect(peekHandoff('/p/demo')).toBeNull();
+  });
+
+  it('never delivers a prompt into a different project', () => {
+    queueHandoff('/p/other', 'Not for this one');
+    const { addTerminalTab } = setup();
+    act(() => void vi.advanceTimersByTime(2000));
+    expect(addTerminalTab).not.toHaveBeenCalled();
+  });
+
+  it('gives up out loud rather than leaving the prompt queued', () => {
+    // A prompt left in the queue would ambush whatever terminal appeared next.
+    queueHandoff('/p/demo', 'Fix it');
+    const { addTerminalTab, showToast } = setup({ tabCount: 0 });
+
+    act(() => void vi.advanceTimersByTime(61_000));
+
+    expect(addTerminalTab).not.toHaveBeenCalled();
+    expect(peekHandoff('/p/demo')).toBeNull();
+    // A handoff that genuinely failed is still reported as a fault.
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining('Could not start'),
+      'error',
+      undefined,
+      { expected: false }
+    );
+  });
+
+  it('delivers once, not once per retry', () => {
+    queueHandoff('/p/demo', 'Fix it');
+    const { addTerminalTab } = setup();
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(addTerminalTab).toHaveBeenCalledTimes(1);
+  });
+
+  it('says there is no room rather than retrying a blocker that cannot clear', () => {
+    // At the cap `addTerminalTab` no-ops; consuming the prompt on a call that
+    // did nothing is how a prompt silently disappears.
+    queueHandoff('/p/demo', 'Fix it');
+    const { addTerminalTab, showToast } = setup({ tabCount: 6, maxTabs: 6 });
+
+    act(() => void vi.advanceTimersByTime(1000));
+
+    expect(addTerminalTab).not.toHaveBeenCalled();
+    expect(peekHandoff('/p/demo')).toBeNull();
+    // Shown like an error — it stays until read — but marked expected, so the
+    // app's own cap isn't filed as a malfunction (issue #920).
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining('maximum number'),
+      'error',
+      undefined,
+      { expected: true }
+    );
+  });
+});

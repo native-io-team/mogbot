@@ -1,6 +1,6 @@
 /**
  * The workspace sidebar as it appears on the home-level screens (Projects,
- * Workflows, Inbox), where there is no active project and no terminal tabs.
+ * Agents), where there is no active project and no terminal tabs.
  *
  * Extracted so the home screens share one configuration of `WorkspaceSidebar`
  * instead of each repeating its twenty inert props.
@@ -18,19 +18,16 @@ const noop = () => {};
 
 interface HomeSidebarProps {
   /** Which home destination is showing, so the nav row can mark it current. */
-  activeNav: 'home' | 'workflows' | 'inbox' | 'agents';
+  activeNav: 'home' | 'agents';
   /** Agents mode shows its agent list in place of the projects. */
   listContent?: ReactNode;
   /** Agents mode's line at the sidebar's foot. */
   footerContent?: ReactNode;
   onGoHome: () => void;
-  onGoWorkflows: () => void;
-  onGoInbox: () => void;
-  inboxUnreadCount: number;
   /** The Projects | Agents toggle: back to wherever you were on each side. */
   onGoProjects: () => void;
   onGoAgents: () => void;
-  /** Agents mode's own nav (What's in flight) in place of Home / Workflows / Inbox. */
+  /** Agents mode's own nav (What's in flight) in place of Home. */
   navContent?: ReactNode;
   /** Agents mode's conversation search, in the palette trigger's place. */
   searchContent?: ReactNode;
@@ -53,9 +50,6 @@ interface HomeSidebarProps {
 export function HomeSidebar({
   activeNav,
   onGoHome,
-  onGoWorkflows,
-  onGoInbox,
-  inboxUnreadCount,
   onGoProjects,
   onGoAgents,
   searchContent,
@@ -83,9 +77,6 @@ export function HomeSidebar({
       isHomeActive={activeNav === 'home'}
       activeNav={activeNav}
       onGoHome={onGoHome}
-      onGoWorkflows={onGoWorkflows}
-      onGoInbox={onGoInbox}
-      inboxUnreadCount={inboxUnreadCount}
       onGoProjects={onGoProjects}
       onGoAgents={onGoAgents}
       searchContent={searchContent}

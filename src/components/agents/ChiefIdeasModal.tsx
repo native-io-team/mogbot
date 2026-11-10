@@ -42,8 +42,8 @@ export function ChiefIdeasModal({
       <div className="agents-ideas__body" ref={bodyRef} tabIndex={-1}>
         <p className="agents-ideas__lede">
           Each keeps running once it’s set up. Pick one and its brief is typed out for your Chief of
-          Staff to finish; nothing is sent until you press Send. Anything it needs, like GitHub or a
-          folder, your Chief sets up with you first.
+          Staff to finish; nothing is sent until you press Send. Anything it needs, like your email
+          or a folder, your Chief sets up with you first.
         </p>
         {ideaGroups().map(({ group, label, ideas }) => (
           <section key={group} className="agents-ideas__group" aria-label={label}>

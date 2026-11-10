@@ -1255,9 +1255,9 @@ describe('the spatial implementation switch', () => {
     localStorage.removeItem(WORKSPACE_LAYOUT_MENU_IMPLEMENTATION_KEY);
     const user = await openMenu(stacked());
 
-    await user.click(screen.getByRole('menuitem', { name: 'Float Agent' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Float Agent', checked: true }));
     expect(readProjectLayout(PROJECT).floating).toContain('agent');
-    await user.click(screen.getByRole('menuitem', { name: 'Dock Agent' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Dock Agent', checked: false }));
     expect(readProjectLayout(PROJECT).floating).not.toContain('agent');
   });
 });

@@ -929,6 +929,10 @@ fn adopt(mut agent: Agent, keep_rules: bool) -> Agent {
     agent.failure = None;
     agent.capabilities = None;
     agent.secrets = Vec::new();
+    // Admin is a role the user gives here, to an agent they know here: an
+    // import never brings it (the other app's Chief, or one it made an admin,
+    // would otherwise answer this team's cards).
+    agent.extra.remove(super::admin::ADMIN_KEY);
     if !keep_rules {
         agent.permissions = Vec::new();
     }
@@ -1606,6 +1610,35 @@ mod tests {
     }
 
     const FINANCE: &str = "f1a4ce00000000000000000000000002";
+
+    /// An admin in the other app arrives as an ordinary agent here.
+    #[test]
+    fn an_imported_admin_arrives_without_the_role() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let mut theirs = store::create(store::NewAgent {
+            name: "Ops".into(),
+            role: String::new(),
+            instructions: String::new(),
+            shape: None,
+            color: None,
+            is_main: false,
+        })
+        .unwrap();
+        theirs.extra.insert(
+            super::super::admin::ADMIN_KEY.into(),
+            serde_json::Value::Bool(true),
+        );
+        assert!(super::super::admin::is_admin(&theirs));
+        let ours = adopt(theirs.clone(), true);
+        assert!(!super::super::admin::is_admin(&ours));
+        // Their Chief is an admin by default; here it is an ordinary agent.
+        theirs.extra.remove(super::super::admin::ADMIN_KEY);
+        theirs.is_main = true;
+        assert!(!super::super::admin::is_admin(&adopt(theirs, true)));
+        store::set_root_for_tests(None);
+    }
 
     /// Imported instructions said "via the shipstudio-local MCP": the other
     /// app's tools, which don't exist here. They're written in ours.

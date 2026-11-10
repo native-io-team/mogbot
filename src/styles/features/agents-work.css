@@ -221,16 +221,26 @@
   white-space: nowrap;
 }
 
-/* The whole line opens the steps; it reads as text, never as a link. */
+/* The whole line opens the steps; it reads as text, never as a link, so it
+   carries no underline (an underline 2px under 11px words looked cramped,
+   and the words' own clip cut it in half). Hover and keyboard focus give it
+   a ghost button's fill, bled 4px round the words with a box-shadow so
+   nothing moves, and brighten the words: the affordance. */
 .text-button.button.agent-working__toggle {
   flex: 0 1 auto;
   justify-content: flex-start;
   min-width: 0;
   color: inherit;
+  text-decoration-line: none;
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--transition-interaction),
+    box-shadow var(--transition-interaction);
 }
 
-.text-button.button.agent-working__toggle:hover:not(:disabled) {
-  text-decoration: none;
+.text-button.button.agent-working__toggle:is(:hover:not(:disabled), :focus-visible) {
+  background: var(--button-surface-hover);
+  box-shadow: 0 0 0 var(--spacing-xs) var(--button-surface-hover);
 }
 
 .agent-working__toggle:hover .agent-working__meta,
@@ -469,4 +479,103 @@
 /* A step with its time and counts wraps rather than cutting "3 failed" off. */
 .agent-work__step[data-detail] .agent-work__label {
   white-space: normal;
+}
+
+/* ------------------------------------------- under the hood (desk only) */
+
+/* components/agents/AgentWorkDetail.tsx. "Claude Code · work@acme.com ·
+   claude-opus-4-6" beside the folded line: quieter than the line itself. */
+.agent-work__ran-on {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* "Show exact command" under a step, on its label's edge. */
+.agent-work__exact {
+  display: flex;
+  flex-direction: column;
+  grid-column: 2 / -1;
+  align-items: flex-start;
+  gap: var(--spacing-2xs);
+  margin-top: var(--spacing-2xs);
+  min-width: 0;
+}
+
+.agent-work__exact > .text-button.button {
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+.agent-work__exact > .text-button.button:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.agent-work__exact-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-muted);
+}
+
+.agent-work__exact-text,
+.agent-briefing__text {
+  margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: var(--spacing-sm);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font-family: var(--font-code);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.agent-work__exact-text {
+  align-self: stretch;
+  max-height: 240px; /* css-ok: a long command scrolls inside its box */
+  overflow-y: auto;
+}
+
+/* "What it was told": the briefing, section by section. */
+.agent-briefing {
+  width: min(720px, calc(100vw - var(--spacing-2xl))); /* css-ok: a reading-width dialog */
+}
+
+.agent-briefing__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.agent-briefing__note {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-briefing__section > summary {
+  cursor: pointer;
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agent-briefing__section[open] > summary {
+  color: var(--text-primary);
 }

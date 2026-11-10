@@ -96,6 +96,20 @@ const BANNED: [RegExp, string][] = [
   ],
   [/Being driven on your Mac/, '"You’re driving <name> on your Mac"'],
   [/Keep into /, '"Keep there too": no version names'],
+  // The beginners' glossary (docs/internal/persona-beginners-2026-11-09.md):
+  // words that mean nothing to someone who has never run an agent.
+  [/\bworktrees?\b/i, '"a copy" of the project'],
+  [/\bMCP\b/, '"a connector" (an app it can use)'],
+  [/\bturn ends\b|\bmid-turn\b|\bnext turn\b|\bthis turn\b/i, '"its next message", "mid-task"'],
+  [
+    /\bengines?\b/i,
+    '"Claude Code or Codex", "AI app", "what agents run on"; never "engine" (Usage’s one line is its owner’s to reword)',
+  ],
+];
+
+/** Lines another change owns and will reword; each is still listed so it can't spread. */
+const NOT_YET: readonly string[] = [
+  'Nothing reported yet. Figures appear once an engine reports them after a turn.',
 ];
 
 describe('the words a person reads', () => {
@@ -109,7 +123,9 @@ describe('the words a person reads', () => {
   });
 
   it.each(BANNED)('never say %s', (pattern, instead) => {
-    const hits = strings.filter((s) => pattern.test(s.text)).map((s) => `${s.at}: ${s.text}`);
+    const hits = strings
+      .filter((s) => pattern.test(s.text) && !NOT_YET.includes(s.text))
+      .map((s) => `${s.at}: ${s.text}`);
     expect({ instead, hits }).toEqual({ instead, hits: [] });
   });
 

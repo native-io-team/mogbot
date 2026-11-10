@@ -1,9 +1,11 @@
 /**
  * The model an agent runs on, in the conversation header's own Model menu
- * (settings, kept out of the … menu, which holds actions only). Each choice is said by what it's for — "Most capable",
- * "Balanced", "Fastest" — with the engine's own name for it in small text;
- * the change applies from its next turn. The engine is named once, in the
- * heading. Below, when the agent has a routine, what its routines run on: on
+ * (settings, kept out of the … menu, which holds actions only). "Model"
+ * means little to someone new, so the heading says it plainly ("the AI it
+ * thinks with") and each choice is said by what it's for — "Smartest",
+ * "Balanced", "Fastest" — with the model's own name in small text; the
+ * change applies from its next message. Claude Code or Codex is named once,
+ * in the heading. Below, when the agent has a routine, what its routines run on: on
  * Claude Code, automatically the fastest while the agent is on the default
  * model, since a routine mostly checks and fires again and again; on Codex,
  * its own model unless the user picks another of Codex's. Between them, how
@@ -12,7 +14,7 @@
  * @module components/agents/AgentModelMenu
  */
 
-import { CheckIcon, ChevronIcon } from '@/components/icons';
+import { CheckIcon, SettingsSlidersIcon } from '@/components/icons';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import {
@@ -33,6 +35,7 @@ import { accountsOf } from '../../lib/agentAccounts';
 import { useUsageAccounts } from './useUsageAccounts';
 import { accountLabel } from '../../../packages/companion-protocol/src/accountSwitcher';
 import {
+  MODEL_MEANS,
   RUNS_ON_ANY,
   RUNS_ON_ANY_DETAIL,
   runsOnDetail,
@@ -106,7 +109,9 @@ export function AgentModelItems({ agent }: { agent: Agent }) {
   };
   return (
     <>
-      <p className="agent-model-menu__heading">Model · runs on {engineName}</p>
+      <p className="agent-model-menu__heading">
+        Model · {MODEL_MEANS}, on {engineName}
+      </p>
       {choices.map((m) => (
         <DropdownItem
           key={m.value}
@@ -142,7 +147,7 @@ export function AgentModelItems({ agent }: { agent: Agent }) {
               Automatic or Same comes to sits beside it, as the engine's
               names sit beside the models ("Automatic  Fastest"), so the
               heading never names one choice while another is ticked. */}
-          <p className="agent-model-menu__heading">Routines · the model they wake on</p>
+          <p className="agent-model-menu__heading">Routines · the model for its scheduled work</p>
           {routineModelChoices(agent.engine, choices).map((m) => {
             const resolved =
               m.value === '' || m.value === 'same'
@@ -192,12 +197,12 @@ export function AgentModelMenu({ agent }: { agent: Agent }) {
           tabIndex={0}
           expanded={p['aria-expanded']}
           variant="ghost"
-          size="compact"
-          title={`Model: ${current}`}
-          aria-label={`Model for ${agent.name}: ${current}`}
+          className="agent-chat__action"
+          leftIcon={<SettingsSlidersIcon size={14} />}
+          title={`Model, ${MODEL_MEANS}: ${current}`}
+          aria-label={`Model for ${agent.name}, ${MODEL_MEANS}: ${current}`}
         >
-          Model
-          <ChevronIcon size={10} className={p['aria-expanded'] ? 'chevron-flipped' : undefined} />
+          <span className="agent-chat__action-word">Model</span>
         </MenuButton>
       )}
     >

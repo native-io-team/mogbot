@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import cases from './agent-key-cases.json';
 import {
+  CHIEF_COLORWAY,
+  CHIEF_ICON,
   COLORWAYS,
   KEY_ICON_DRAWINGS,
   KEY_ICON_IDS,
@@ -9,6 +11,7 @@ import {
   colorwayForColor,
   freshColorway,
   iconFor,
+  keyAccessibleName,
   keyLookFor,
   keyStateOf,
   normalizeBoundKey,
@@ -29,7 +32,7 @@ const contrast = (a: string, b: string) => {
 };
 
 describe('colourways', () => {
-  it('are the eight of the spec, each a legend that reads on its face', () => {
+  it('are the fourteen of the spec, each a legend that reads on its face', () => {
     expect(COLORWAYS.map((c) => c.id)).toEqual([
       'blue',
       'orange',
@@ -39,6 +42,21 @@ describe('colourways', () => {
       'mustard',
       'pink',
       'sage',
+      'brick',
+      'plum',
+      'navy',
+      'forest',
+      'sky',
+      'lilac',
+    ]);
+    // The pale faces are marked light (a lit legend needs the deeper wash).
+    expect(COLORWAYS.filter((c) => c.light).map((c) => c.id)).toEqual([
+      'putty',
+      'mustard',
+      'pink',
+      'sage',
+      'sky',
+      'lilac',
     ]);
     for (const c of COLORWAYS) {
       expect(contrast(c.legend, c.face), c.id).toBeGreaterThanOrEqual(4.5);
@@ -69,6 +87,8 @@ describe('icons', () => {
 
   it('are legends: straight lines only horizontal, vertical or 45°, on the 24 grid', () => {
     for (const [id, drawing] of Object.entries(KEY_ICON_DRAWINGS)) {
+      // The app's mark is the one filled legend, and keeps its curves (below).
+      if (drawing.fill) continue;
       for (const d of drawing.paths) {
         expect(d, id).toMatch(/^[MHVLZ0-9. ]+$/);
         // Walk the path and check each segment's angle.
@@ -119,6 +139,24 @@ describe('icons', () => {
     }
   });
 
+  it("only the app's mark is filled: first in the row, on the grid, the Chief's", () => {
+    const filled = Object.entries(KEY_ICON_DRAWINGS).filter(([, d]) => d.fill);
+    expect(filled.map(([id]) => id)).toEqual(['mogbot']);
+    expect(KEY_ICON_IDS[0]).toBe('mogbot');
+    expect(CHIEF_ICON).toBe('mogbot');
+    expect(CHIEF_COLORWAY).toBe('graphite');
+    const mark = KEY_ICON_DRAWINGS.mogbot;
+    expect(mark.circles).toBeUndefined();
+    for (const d of mark.paths) {
+      for (const n of d.match(/-?[\d.]+/g) ?? []) {
+        expect(Number(n)).toBeGreaterThanOrEqual(0);
+        expect(Number(n)).toBeLessThanOrEqual(24);
+      }
+      // The dome and its two eyes: three closed shapes.
+      expect(d.match(/Z/g)).toHaveLength(3);
+    }
+  });
+
   it('read from a name or role, as the Mac does', () => {
     for (const c of cases.icons) {
       expect(iconFor(c.name, c.role, c.isMain), c.name).toBe(c.icon);
@@ -154,6 +192,9 @@ describe('an agent from an older Mac', () => {
       keyLookFor({ name: 'Finance', color: 'amber', colorway: 'teal', icon: 'chat', boundKey: 'q' })
     ).toEqual({ colorway: 'teal', icon: 'chat', boundKey: 'Q' });
     expect(keyLookFor({ name: 'X', colorway: 'chrome', icon: 'unicorn' }).icon).toBe('grid');
+    // A pack icon is kept as chosen (which exist is the Mac's to say).
+    expect(keyLookFor({ name: 'X', icon: 'lucide:wallet' }).icon).toBe('lucide:wallet');
+    expect(keyLookFor({ name: 'X', icon: 'lucide:Wallet!' }).icon).toBe('grid');
   });
 });
 
@@ -170,5 +211,19 @@ describe('states and pips', () => {
     expect(KEY_PIPS).toEqual({ often: 1, judgement: 2, go_hard: 3, full_send: 4 });
     expect(pipsFor('go_hard')).toBe(3);
     expect(pipsFor(undefined)).toBe(0);
+  });
+});
+
+describe('keyAccessibleName', () => {
+  it('names the agent, then the state when it is news', () => {
+    expect(keyAccessibleName('Finance', 'needsOk')).toBe('Finance, needs your OK');
+    expect(keyAccessibleName('Finance', 'working')).toBe('Finance, working');
+    expect(keyAccessibleName('Finance', 'paused')).toBe('Finance, paused');
+    expect(keyAccessibleName('Finance', 'idle')).toBe('Finance');
+    expect(keyAccessibleName('Finance')).toBe('Finance');
+  });
+  it('a key with no agent yet is a new agent', () => {
+    expect(keyAccessibleName('', 'new')).toBe('New agent');
+    expect(keyAccessibleName(undefined)).toBe('New agent');
   });
 });

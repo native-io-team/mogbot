@@ -1,21 +1,27 @@
-/* Usage: the sidebar's one-glance row (AccountSwitcher), the stack meter
-   (UsageStack) and the full Usage view (AgentsUsageView).
+/* Usage: the sidebar's one-glance row (AccountSwitcher), the total bar,
+   the account rows and an account's page (UsageStack), and the view
+   (AgentsUsageView).
 
-   The stack is drawn in ink, not hue: the account in use in full ink, the
-   rest quieter. A status hue only for an account that is low (amber) or a
-   limit used up (red on its own bar); out of usage as a whole is neutral,
-   since it resets by itself. Never the accent. The position keycap is the
-   site's key (the segmented tabs' key), the cards are sheets. */
+   The total is drawn in ink, not hue: one segment per account, most room
+   first, each filled to what it adds. A status hue only for an account that
+   is low (amber); out of usage is neutral, since it resets by itself. Never
+   the accent. The position keycap is the site's key (the segmented tabs'
+   key); the hero and the account's page are sheets. */
 
 :root {
-  --usage-stack-gap: var(--border-width-emphasis);
-  --usage-stack-height-small: var(--spacing-xs);
-  --usage-stack-height-large: var(--spacing-md);
   --usage-stack-track: var(--surface-recessed);
   --usage-stack-ink: var(--text-primary);
   --usage-stack-ink-quiet: var(--text-muted);
-  --usage-key-cap-size: var(--spacing-xl);
-  --usage-hero-headline: var(--font-size-24);
+  --usage-total-gap: var(--spacing-2xs);
+  --usage-total-height-small: var(--spacing-xs);
+  --usage-total-height-large: var(--spacing-lg);
+  --usage-cap-size: var(--spacing-xl);
+  --usage-cap-size-large: var(--spacing-2xl);
+  --usage-row-bar-width: 6em;
+  --usage-row-left-width: 7.5em;
+  --usage-row-state-width: 8.5em;
+  --usage-row-refill-width: 5.5em;
+  --usage-hero-headline: var(--font-size-display);
 }
 
 /* ------------------------------------------------------- the sidebar row */
@@ -34,17 +40,8 @@
   gap: var(--spacing-xs);
   min-width: 0;
   flex: 1;
-  text-align: left;
-}
-
-.usage-glance__top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-  min-width: 0;
-  font-size: var(--font-size-caption);
   line-height: var(--line-height-compact);
+  text-align: left;
 }
 
 .usage-glance__headline {
@@ -67,75 +64,8 @@
   white-space: nowrap;
 }
 
-.usage-glance__refill {
-  flex: none;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* The pace marker on a meter segment. */
-.usage-stack__even {
-  position: absolute;
-  inset-block: 0;
-  left: var(--usage-stack-even);
-  width: var(--border-width-emphasis);
-  background: var(--text-secondary);
-  box-shadow: 0 0 0 var(--border-width-default) var(--surface-panel);
-  transform: translateX(-50%);
-}
-
 .usage-glance[data-needs-you] .usage-glance__headline {
   color: var(--accent-warning);
-}
-
-/* ------------------------------------------------------ the Tokens view */
-
-.usage-burn {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.usage-burn__row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--spacing-2xs) var(--spacing-md);
-  font-size: var(--font-size-body-sm);
-}
-
-.usage-burn__name {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-primary);
-  font-weight: var(--font-weight-label);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-burn__detail {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.usage-burn__bar {
-  position: relative;
-  grid-column: 1 / -1;
-  height: var(--spacing-2xs);
-  overflow: hidden;
-  background: var(--usage-stack-track);
-  border-radius: var(--radius-pill);
-}
-
-.usage-burn__bar::after {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--usage-burn-share);
-  background: var(--usage-stack-ink-quiet);
-  border-radius: inherit;
-  content: '';
 }
 
 /* One line under a meter: an account signed in twice, which draws no segment. */
@@ -145,7 +75,6 @@
   font-size: var(--font-size-body-sm);
 }
 
-.usage-glance__est,
 .usage-glance__summary {
   color: var(--text-muted);
   font-weight: var(--font-weight-body);
@@ -164,123 +93,27 @@
   background: var(--surface-selected);
 }
 
-/* ---------------------------------------------------------- the meter */
-
-.usage-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-  width: 100%;
-  min-width: 0;
-}
-
-.usage-stack__track {
-  display: flex;
-  gap: var(--usage-stack-gap);
-  width: 100%;
-}
-
-.usage-stack__seg {
-  position: relative;
-  flex: 1 1 0;
-  height: var(--usage-stack-height-small);
-  overflow: hidden;
-  background: var(--usage-stack-track);
-  border-radius: var(--radius-pill);
-}
-
-.usage-stack[data-size='large'] .usage-stack__seg {
-  height: var(--usage-stack-height-large);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-input-inset);
-}
-
-.usage-stack__fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--usage-stack-fill);
-  background: var(--usage-stack-ink-quiet);
-  border-radius: inherit;
-  transition: width var(--transition-arrive);
-}
-
-.usage-stack__seg[data-state='in_use'] .usage-stack__fill {
-  background: var(--usage-stack-ink);
-}
-
-.usage-stack__seg[data-tone='warning'] .usage-stack__fill {
-  background: var(--accent-warning);
-}
-
-/* No reading: an empty slot with a dashed edge, never a full bar. */
-.usage-stack__seg[data-unread] {
-  background: transparent;
-  box-shadow: none;
-  outline: var(--border-width-default) dashed var(--border-strong);
-  outline-offset: calc(var(--border-width-default) * -1);
-}
-
-/* A second sign-in of an account already here: hatched, holding nothing. */
-.usage-stack__seg[data-state='same'] {
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--usage-stack-track) 0 var(--border-width-emphasis),
-    transparent var(--border-width-emphasis) var(--spacing-2xs)
-  );
-  outline: var(--border-width-default) solid var(--border-subtle);
-  outline-offset: calc(var(--border-width-default) * -1);
-}
-
-.usage-stack__labels {
-  display: flex;
-  gap: var(--usage-stack-gap);
-}
-
-.usage-stack__label {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  min-width: 0;
-  font-size: var(--font-size-body-sm);
-}
-
-.usage-stack__label-name {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-weight: var(--font-weight-label);
-  letter-spacing: var(--tracking-name);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-stack__label-room {
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.usage-stack__label[data-state='same'] .usage-stack__label-room,
-.usage-stack__label[data-state='off'] .usage-stack__label-room {
-  color: var(--text-muted);
-}
-
 /* ------------------------------------------------------------- the view */
 
 /* The one rendering of usage and accounts: the view's body and Settings →
    Accounts & usage alike. */
 .usage-panel {
+  container: usage-panel / inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xl);
   min-width: 0;
+  /* Every line here has its own leading. Inherited, it was the app's 1:
+     two-line pairs (an account and what's left) and the hero's three lines
+     touched. */
+  line-height: var(--line-height-compact);
 }
 
 .agents-usage-view__column {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: calc(var(--agents-chat-width) + (var(--spacing-xl) * 2));
-  margin: 0 auto;
-  padding: var(--spacing-xl);
+  padding: var(--spacing-xl) var(--agents-column-inset);
 }
 
 .usage-hero {
@@ -296,25 +129,7 @@
 .usage-hero__answer {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.usage-hero__stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.usage-hero .usage-stack {
-  gap: var(--spacing-md);
-}
-
-.usage-hero .usage-stack__labels {
-  gap: var(--spacing-lg);
-}
-
-.usage-hero .usage-stack__label {
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-sm);
 }
 
 .usage-hero__refill {
@@ -337,15 +152,7 @@
   font-size: var(--usage-hero-headline);
   font-weight: var(--font-weight-title);
   letter-spacing: var(--tracking-title);
-  line-height: var(--line-height-heading);
-}
-
-.usage-hero__name {
-  margin: 0 0 var(--spacing-xs);
-  color: var(--text-primary);
-  font-size: var(--font-size-subhead-lg);
-  font-weight: var(--font-weight-title);
-  letter-spacing: var(--tracking-name);
+  line-height: var(--line-height-compact);
 }
 
 .usage-hero[data-tone='warning'] .usage-hero__headline {
@@ -369,24 +176,26 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--spacing-sm) var(--spacing-md);
+  gap: var(--spacing-md) var(--spacing-xl);
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--surface-warning);
   border-radius: var(--radius-card);
 }
 
 .usage-bar__text {
-  flex: 1 1 auto;
+  flex: 1 1 20em;
   margin: 0;
   color: var(--text-primary);
   font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
 }
 
+/* Full-height answers, a step apart. */
 .usage-bar__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 .usage-bar__wait {
@@ -398,6 +207,22 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
+}
+
+/* A section's heading and, at its right, a control that belongs to it
+   (Limits | Tokens). */
+.usage-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  min-height: var(--control-height-standard);
+}
+
+/* A segmented control hugs its options; stretched, three options bunched at
+   the left of an empty tray. */
+.usage-section > .segmented-control {
+  align-self: flex-start;
 }
 
 .usage-section__title {
@@ -479,107 +304,6 @@
   margin-top: var(--spacing-xs);
 }
 
-/* ------------------------------------------------------------ the keys */
-
-.usage-engine__keys {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.usage-key {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
-  background: var(--surface-panel);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-}
-
-.usage-key[data-state='same'],
-.usage-key[data-state='off'] {
-  background: var(--surface-app);
-  box-shadow: none;
-  outline: var(--border-width-default) dashed var(--border-default);
-  outline-offset: calc(var(--border-width-default) * -1);
-}
-
-.usage-key__head {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-}
-
-.usage-key__grip {
-  flex: none;
-  margin-top: var(--spacing-3xs);
-  color: var(--text-muted);
-  cursor: grab;
-}
-
-/* Its place in the order, as a keycap. */
-.usage-key__cap {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: var(--usage-key-cap-size);
-  height: var(--usage-key-cap-size);
-  color: var(--text-primary);
-  font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-title);
-  font-variant-numeric: tabular-nums;
-  background: var(--tabs-key-surface);
-  border-radius: var(--radius-control);
-  box-shadow: var(--tabs-key-shadow);
-}
-
-.usage-key[data-state='in_use'] .usage-key__cap {
-  color: var(--text-on-inverse);
-  background: var(--surface-inverse);
-}
-
-.usage-key__title {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--spacing-3xs);
-  min-width: 0;
-}
-
-.usage-key__name-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-xs);
-  min-width: 0;
-  color: var(--text-secondary);
-}
-
-.usage-key__name {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: var(--font-size-body-lg);
-  font-weight: var(--font-weight-title);
-  letter-spacing: var(--tracking-title);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-key__name-field {
-  flex: 1;
-  min-width: 0;
-}
-
-.usage-key__detail,
-.usage-key__muted {
-  color: var(--text-muted);
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-help);
-}
-
 .usage-key__limits {
   display: grid;
   grid-template-columns: repeat(
@@ -592,7 +316,7 @@
 .usage-key__limit {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xs);
+  gap: var(--spacing-xs);
   min-width: 0;
 }
 
@@ -608,34 +332,16 @@
   color: var(--text-secondary);
 }
 
-.usage-key__limit-left {
-  color: var(--text-primary);
-  font-weight: var(--font-weight-label);
-  font-variant-numeric: tabular-nums;
-}
-
 /* A limit as a card: its own sheet inside the key. */
 .usage-key__limit {
-  padding: var(--spacing-md);
-  background: var(--surface-recessed);
-  border-radius: var(--radius-control);
-}
-
-.usage-key__chip {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: var(--spacing-3xs);
-  padding: 0 var(--spacing-xs);
-  color: var(--text-secondary);
-  font-size: var(--font-size-caption);
-  font-variant-numeric: tabular-nums;
+  padding: var(--spacing-lg);
   background: var(--surface-panel);
-  border: var(--border-width-default) solid var(--border-subtle);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 
 .usage-key__figure {
+  margin-bottom: var(--spacing-2xs);
   color: var(--text-primary);
   font-size: var(--font-size-24);
   font-weight: var(--font-weight-label);
@@ -735,9 +441,10 @@
 }
 
 .usage-key__timeline-ends {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--spacing-xs);
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: var(--spacing-sm);
+  text-align: center;
   color: var(--text-muted);
   font-size: var(--font-size-caption);
 }
@@ -783,29 +490,6 @@
   color: var(--text-muted);
 }
 
-.usage-key__fix {
-  margin: 0;
-  padding: var(--spacing-sm) var(--spacing-md);
-  color: var(--text-primary);
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-help);
-  background: var(--surface-warning);
-  border-radius: var(--radius-control);
-}
-
-.usage-key__label {
-  color: var(--text-muted);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-label);
-}
-
-.usage-key__spent {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3xs);
-}
-
-.usage-key__spent-list,
 .usage-key__change-runs {
   margin: 0;
   padding: 0;
@@ -817,40 +501,30 @@
   list-style: none;
 }
 
-.usage-key__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-xs);
-}
-
-.usage-key__spacer {
-  flex: 1;
-}
-
-.usage-key__chevron {
-  transition: transform var(--transition-interaction);
-}
-
-.usage-key__chevron[data-open] {
-  transform: rotate(90deg);
-}
-
 /* Where did my usage go. */
 .usage-key__story {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
   margin: 0;
-  padding: var(--spacing-md) 0 0;
-  border-top: var(--border-width-default) solid var(--border-subtle);
+  padding: var(--spacing-2xs) var(--spacing-lg);
   list-style: none;
+  background: var(--surface-panel);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.usage-key__story > .usage-key__change {
+  padding-block: var(--spacing-md);
+}
+
+.usage-key__story > .usage-key__change + .usage-key__change {
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .usage-key__change {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-2xs);
 }
 
 .usage-key__change-head {
@@ -888,18 +562,535 @@
 .usage-add {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-md);
 }
 
 .usage-add__buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .usage-stack__fill,
-  .usage-key__chevron {
+  .usage-total__fill,
+  .usage-row__fill,
+  .usage-row {
     transition: none;
   }
+}
+
+/* ----------------------------------------------------------- the total */
+
+.usage-total {
+  display: flex;
+  gap: var(--usage-total-gap);
+  width: 100%;
+  min-width: 0;
+}
+
+.usage-total[data-size='small'] {
+  gap: var(--border-width-emphasis);
+}
+
+.usage-total__track {
+  display: flex;
+  flex: 1;
+  gap: inherit;
+  min-width: 0;
+}
+
+.usage-total__item {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* A segment and its label, one target: opens that account. */
+.usage-total__part {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  margin: calc(var(--spacing-xs) * -1);
+  padding: var(--spacing-xs);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: background var(--transition-interaction);
+}
+
+.usage-total__part:hover {
+  background: var(--tint-subtle);
+}
+
+.usage-total__part:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 0;
+}
+
+.usage-total__seg {
+  position: relative;
+  display: block;
+  flex: 1 1 0;
+  height: var(--usage-total-height-small);
+  overflow: hidden;
+  background: var(--usage-stack-track);
+  border-radius: var(--radius-pill);
+}
+
+.usage-total__part .usage-total__seg {
+  flex: none;
+  height: var(--usage-total-height-large);
+  margin-bottom: var(--spacing-2xs);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-input-inset);
+}
+
+.usage-total__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--usage-total-fill);
+  background: var(--usage-stack-ink);
+  border-radius: inherit;
+  transition: width var(--transition-arrive);
+}
+
+.usage-total__seg[data-tone='warning'] .usage-total__fill {
+  background: var(--accent-warning);
+}
+
+/* No reading: an empty slot with a dashed edge, never a full bar. */
+.usage-total__seg[data-unread] {
+  background: transparent;
+  box-shadow: none;
+  outline: var(--border-width-default) dashed var(--border-strong);
+  outline-offset: calc(var(--border-width-default) * -1);
+}
+
+.usage-total__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-label);
+  letter-spacing: var(--tracking-name);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-total__room {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs) var(--spacing-sm);
+}
+
+.usage-total__left {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-md);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A countdown to a refill: one chip, everywhere. */
+.usage-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--spacing-3xs);
+  padding: 0 var(--spacing-xs);
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-height-control);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+}
+
+.usage-hero__across {
+  color: var(--text-secondary);
+  font-size: var(--font-size-h4);
+  font-weight: var(--font-weight-body);
+  letter-spacing: normal;
+}
+
+.usage-hero[data-unread] .usage-hero__headline {
+  color: var(--text-secondary);
+  font-size: var(--font-size-h3);
+}
+
+.usage-hero__notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.usage-glance__count {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-body);
+}
+
+/* ------------------------------------------------------ the account rows */
+
+.usage-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.usage-rows + .usage-rows {
+  margin-top: var(--spacing-md);
+}
+
+.usage-rows__engine {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+}
+
+.usage-rows__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  background: var(--surface-panel);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.usage-row__item + .usage-row__item {
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+/* One line, in fixed columns so the figures line up from row to row. */
+.usage-row {
+  display: grid;
+  grid-template-columns:
+    var(--usage-cap-size) minmax(0, 1fr) var(--usage-row-bar-width)
+    var(--usage-row-left-width) var(--usage-row-state-width) var(--usage-row-refill-width)
+    max-content;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition-interaction);
+}
+
+.usage-row:hover {
+  background: var(--tint-subtle);
+}
+
+.usage-row:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--border-width-emphasis) * -1);
+}
+
+/* Its place in the order, as a keycap. */
+.usage-cap {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--usage-cap-size);
+  height: var(--usage-cap-size);
+  color: var(--text-primary);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-title);
+  font-variant-numeric: tabular-nums;
+  background: var(--tabs-key-surface);
+  border-radius: var(--radius-control);
+  box-shadow: var(--tabs-key-shadow);
+}
+
+.usage-cap[data-size='large'] {
+  width: var(--usage-cap-size-large);
+  height: var(--usage-cap-size-large);
+  font-size: var(--font-size-body-lg);
+}
+
+.usage-row[data-state='in_use'] .usage-cap,
+.usage-cap[data-state='in_use'] {
+  color: var(--text-on-inverse);
+  background: var(--surface-inverse);
+}
+
+.usage-row__who {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  min-width: 0;
+}
+
+.usage-row__name {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  color: var(--text-secondary);
+}
+
+.usage-row__name-text {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-label);
+  letter-spacing: var(--tracking-name);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-row__detail {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-row__bar {
+  position: relative;
+  display: block;
+  height: var(--spacing-xs);
+  overflow: hidden;
+  background: var(--usage-stack-track);
+  border-radius: var(--radius-pill);
+}
+
+.usage-row[data-unread] .usage-row__bar {
+  background: transparent;
+  outline: var(--border-width-default) dashed var(--border-strong);
+  outline-offset: calc(var(--border-width-default) * -1);
+}
+
+.usage-row__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--usage-row-fill);
+  background: var(--usage-stack-ink);
+  border-radius: inherit;
+  transition: width var(--transition-arrive);
+}
+
+.usage-row[data-tone='warning'] .usage-row__fill {
+  background: var(--accent-warning);
+}
+
+.usage-row__left {
+  color: var(--text-primary);
+  font-size: var(--font-size-body-md);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.usage-row[data-tone='quiet'] .usage-row__left {
+  color: var(--text-muted);
+}
+
+.usage-row__state {
+  display: flex;
+  min-width: 0;
+}
+
+.usage-row__refill {
+  display: flex;
+}
+
+.usage-row__chevron {
+  color: var(--text-muted);
+}
+
+/* Narrow: the bar and refill give way; name, room and state stay. */
+@container usage-panel (max-width: 34rem) {
+  .usage-row {
+    grid-template-columns: var(--usage-cap-size) minmax(0, 1fr) max-content max-content;
+  }
+
+  .usage-row__bar,
+  .usage-row__refill,
+  .usage-row__chevron {
+    display: none;
+  }
+}
+
+/* -------------------------------------------------- an account's page */
+
+.usage-crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: calc(var(--spacing-md) - var(--spacing-xl));
+  margin-left: calc(var(--spacing-xs) * -1);
+}
+
+.usage-account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xl);
+  min-width: 0;
+}
+
+.usage-account__head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl) var(--spacing-2xl);
+  background: var(--surface-panel);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.usage-account__title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.usage-account__name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  color: var(--text-secondary);
+}
+
+.usage-account__name {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-title);
+  letter-spacing: var(--tracking-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-account__name:focus {
+  outline: none;
+}
+
+.usage-account__name:focus-visible {
+  outline: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.usage-account__name-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.usage-account__detail {
+  color: var(--text-muted);
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+}
+
+.usage-account__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+/* Who used it: agent, tokens, turns in aligned columns, a hairline between rows. */
+.usage-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  padding: var(--spacing-xs) var(--spacing-lg) var(--spacing-md);
+  background: var(--surface-panel);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.usage-table__row {
+  display: contents;
+}
+
+.usage-table__row > * {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height-standard);
+  padding-block: var(--spacing-sm);
+  font-size: var(--font-size-body-md);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.usage-table__row--head > * {
+  min-height: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  border-top: none;
+}
+
+.usage-table__agent {
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.usage-table__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-weight: var(--font-weight-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Its share of the account's tokens: a thin bar after the name. */
+.usage-table__share {
+  position: relative;
+  flex: 0 1 var(--usage-row-bar-width);
+  height: var(--spacing-2xs);
+  margin-left: auto;
+  overflow: hidden;
+  background: var(--usage-stack-track);
+  border-radius: var(--radius-pill);
+}
+
+.usage-table__share::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--usage-table-share);
+  background: var(--usage-stack-ink-quiet);
+  border-radius: inherit;
+  content: '';
+}
+
+/* The column gap is padding, so each row's hairline runs unbroken. */
+.usage-table__num {
+  justify-content: flex-end;
+  padding-left: var(--spacing-2xl);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-table__note {
+  grid-column: 1 / -1;
+  padding-top: var(--spacing-sm);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+/* The trail reads as words, not code: the app's face, a step larger. */
+.usage-crumbs .breadcrumb__link.button,
+.usage-crumbs .breadcrumb__page {
+  max-width: none;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-body-md);
 }

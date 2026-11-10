@@ -181,7 +181,12 @@ export default function Settings() {
         </Section>
       )}
 
-      <AccountsSections state={accounts} />
+      <AccountsSections
+        state={accounts}
+        onOpenAccount={(engine, account) =>
+          router.push({ pathname: '/usage-account', params: { engine, account } })
+        }
+      />
 
       {usage.length > 0 && (
         <Section title="Usage" footer={USAGE_FOOTER}>

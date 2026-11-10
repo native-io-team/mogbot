@@ -8,6 +8,7 @@
 
 import {
   draftAppsLine,
+  ROUTINES_MEANS,
   whenLabel,
   routineSteps,
   type AgentDraft,
@@ -59,6 +60,9 @@ export function DraftReview({
         <View style={styles.field}>
           <T variant="subhead" color={colors.textPrimary}>
             Routines
+          </T>
+          <T variant="small" color={colors.textMuted}>
+            {ROUTINES_MEANS}
           </T>
           <View style={styles.group}>
             {draft.routines.map((r, i) => (

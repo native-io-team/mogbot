@@ -1,19 +1,19 @@
 /**
- * Usage at a glance on the phone, as the desk's sidebar row and Usage view
- * say it (`companion-protocol/usageGlance`): one line, the stack of accounts
- * as one segmented meter (each account a segment, in order, filled to what
- * its tighter limit has left), the soonest reset, and each account as a
- * card with its limits, who used it this week and "Where did my usage go".
- * `GlanceRow` is the Agents list's line, the desk sidebar's row on the phone.
+ * Usage on the phone, as the desk's sidebar row and Usage view say it
+ * (`companion-protocol/usageGlance`): the total first, the room across every
+ * account ("72% left across 2 accounts"), one bar made of a segment per
+ * account with the roomiest first, then each account as a row that opens
+ * its own screen (`KeyCard`): its limits, who used it this week and "Where
+ * did my usage go". `GlanceRow` is the Agents list's line, the desk
+ * sidebar's row on the phone.
  *
- * Each account is named in full under the meter, one line each, never cut
- * to a stub. An estimate (a pace line, "Runs out ~Thu") is secondary ink:
- * amber means "needs you", and only nearly out is that.
+ * An estimate (a pace line, "Runs out ~Thu") is secondary ink: amber means
+ * "needs you", and only nearly out is that.
  *
  * Only what the Mac served: an account with no reading is an empty, outlined
- * segment, never a full one; a second sign-in of the same account holds
- * nothing and says why. Reordering and "Use this one now" stay in Settings →
- * Accounts; adding and signing in happen on the Mac.
+ * segment, never a full one, and never counted as room; a second sign-in of
+ * the same account adds nothing and says why. Reordering and "Use this one
+ * now" stay in Settings → Accounts; adding and signing in happen on the Mac.
  */
 
 import { useState } from 'react';
@@ -21,23 +21,22 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import {
   ADD_ON_MAC,
   LOW_LEFT,
+  OUT_OF_USAGE,
   placeLabel,
   SIGN_IN_DIFFERENT,
+  type AgentEngine,
   type StackKey,
   type UsageGlance,
+  type UsageTotal,
 } from '@shipstudio/companion-protocol';
 import { makeStyles, useColors } from '../lib/appearance';
 import { depthOf, iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { Icon, StatusPill, T } from './ui';
 
-const fillOf = (colors: Palette, k: StackKey) =>
-  k.tone === 'warning'
-    ? colors.accentWarning
-    : k.state === 'in_use'
-      ? colors.textPrimary
-      : colors.textMuted;
+const fillOf = (colors: Palette, tone: StackKey['tone']) =>
+  tone === 'warning' ? colors.accentWarning : colors.textPrimary;
 
-const pillOf = (k: StackKey) =>
+const pillOf = (k: Pick<StackKey, 'state'>) =>
   k.state === 'in_use'
     ? 'done'
     : k.state === 'out'
@@ -46,25 +45,32 @@ const pillOf = (k: StackKey) =>
         ? 'waiting'
         : 'idle';
 
-/** The stack as one meter: a segment per real account (a second sign-in of one draws none). */
-export function StackMeter({ glance, tall = false }: { glance: UsageGlance; tall?: boolean }) {
+/** What an account adds, in a row's words. */
+function roomWords(k: StackKey): string {
+  if (k.state === 'same') return 'Adds no room';
+  if (k.state === 'off') return '';
+  if (k.share === null) return 'Not read yet';
+  return `${k.share}% left`;
+}
+
+/** The total as one bar: a segment per account, most room first. */
+export function TotalBar({ total, tall = false }: { total: UsageTotal; tall?: boolean }) {
   const colors = useColors();
   const styles = useStyles();
-  const words = glance.meterKeys
-    .map((k) =>
-      k.left === null ? `${k.name}: ${k.stateLabel.toLowerCase()}` : `${k.name}: ${k.left}% left`
-    )
-    .join('; ');
+  const words = total.segments.map((s) => s.words).join('; ');
   return (
     <View style={styles.track} accessible accessibilityLabel={`Room left. ${words}`}>
-      {glance.meterKeys.map((k) => (
+      {total.segments.map((s) => (
         <View
-          key={k.key}
-          style={[styles.seg, tall && styles.segTall, k.left === null && styles.segEmpty]}
+          key={s.key}
+          style={[styles.seg, tall && styles.segTall, s.left === null && styles.segEmpty]}
         >
-          {k.left !== null && (
+          {s.left !== null && (
             <View
-              style={[styles.fill, { width: `${k.left}%`, backgroundColor: fillOf(colors, k) }]}
+              style={[
+                styles.fill,
+                { width: `${s.left}%`, backgroundColor: fillOf(colors, s.tone) },
+              ]}
             />
           )}
         </View>
@@ -73,13 +79,7 @@ export function StackMeter({ glance, tall = false }: { glance: UsageGlance; tall
   );
 }
 
-/** What a key has left, in the legend's words. */
-function roomWord(k: StackKey): string {
-  if (k.left === null) return k.signedIn ? 'No reading' : 'Not signed in';
-  return `${k.left}% left`;
-}
-
-/** Each account signed in twice, one line each, under the meter. */
+/** Each account signed in twice, one line each, under the bar. */
 function SameNotes({ glance }: { glance: UsageGlance }) {
   const colors = useColors();
   return (
@@ -94,18 +94,17 @@ function SameNotes({ glance }: { glance: UsageGlance }) {
 }
 
 /**
- * The Agents list's usage line, as the desk sidebar's row says it, in
- * words anyone reads: "Usage 57% left this week", the stack as a thin
- * meter, and "Refills Sat 10:00 AM" (with "2 accounts" only when there
- * are). Amber only when the user must act. Opens Usage.
+ * The Agents list's usage line, as the desk sidebar's row says it: the total
+ * ("72% left · 2 accounts"), the total bar and "Refills in 2d 4h". Amber
+ * only when the user must act. Opens Usage.
  */
 export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   if (glance.keys.length === 0) return null;
   const { row } = glance;
-  const foot = [row.refill, row.count].filter(Boolean).join(' · ');
-  const label = `Usage: ${[row.figure, row.refill, row.count].filter(Boolean).join('. ')}`;
+  const count = glance.total.left !== null ? row.count : null;
+  const label = `Usage: ${[row.figure, count, row.refill].filter(Boolean).join('. ')}`;
   return (
     <Pressable
       accessibilityRole="button"
@@ -123,51 +122,119 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
           Usage{' '}
         </T>
         {row.figure}
+        {count && (
+          <T variant="small" color={colors.textMuted}>
+            {' '}
+            · {count}
+          </T>
+        )}
       </T>
-      {glance.meterKeys.length > 0 && <StackMeter glance={glance} />}
-      {!!foot && (
+      {glance.total.segments.length > 0 && <TotalBar total={glance.total} />}
+      {!!row.refill && (
         <T variant="caption" color={colors.textMuted} numberOfLines={1}>
-          {foot}
+          {row.refill}
         </T>
       )}
     </Pressable>
   );
 }
 
-/** The answer: one line, the meter with each account named, and the next reset. */
-export function GlanceCard({ glance }: { glance: UsageGlance }) {
+/**
+ * The total first: what is left across every account, of what, and when it
+ * next refills; the bar, most room first, with each account named under its
+ * segment (a tap opens it); then what needs saying.
+ */
+export function TotalCard({
+  glance,
+  onOpen,
+}: {
+  glance: UsageGlance;
+  onOpen?: (engine: AgentEngine, id: string) => void;
+}) {
   const colors = useColors();
   const styles = useStyles();
   if (glance.keys.length === 0) return null;
+  const { total } = glance;
+  const out = glance.tone === 'limited';
+  const known = total.left !== null && !out;
+  const figure = known ? total.figure : glance.unread ? glance.headline : glance.row.figure;
+  const refill = out
+    ? glance.row.refill
+    : total.refill
+      ? `Next refill in ${total.refill.in}${total.counted > 1 ? ` · ${total.refill.account}` : ''}`
+      : null;
   return (
     <View style={styles.card}>
-      <T variant="title" color={glance.tone === 'calm' ? colors.textStrong : colors.accentWarning}>
-        {glance.headline}
-      </T>
-      {glance.estimate && (
+      <View style={styles.answer}>
         <T variant="caption" color={colors.textMuted}>
-          {glance.estimate}. An estimate, not a reading.
+          {total.counted > 1 ? 'All accounts' : 'Usage'}
         </T>
-      )}
-      <StackMeter glance={glance} tall />
-      {/* A legend, one account a line: the full width for its name, so an
-          email reads whole rather than as "Signed in on t…". */}
+        <T
+          variant={known ? 'display' : 'title'}
+          color={
+            glance.tone === 'warning'
+              ? colors.accentWarning
+              : known
+                ? colors.textStrong
+                : colors.textSecondary
+          }
+        >
+          {figure}
+        </T>
+        {known && !!total.across && (
+          <T variant="small" color={colors.textSecondary}>
+            {total.across}
+          </T>
+        )}
+        {refill && (
+          <T variant="small" color={colors.textSecondary}>
+            {refill}
+          </T>
+        )}
+      </View>
+      <TotalBar total={total} tall />
+      {/* Under the bar, in the same order, one account a line: a tap opens it. */}
       <View style={styles.legend}>
-        {glance.meterKeys.map((k) => (
-          <View key={k.key} style={styles.legendRow}>
-            <T variant="caption" color={colors.textMuted} style={styles.legendPlace}>
-              {placeLabel(k, glance.meterKeys)}
-            </T>
+        {total.segments.map((s) => (
+          <Pressable
+            key={s.key}
+            accessibilityRole={onOpen ? 'button' : undefined}
+            accessibilityLabel={s.words}
+            disabled={!onOpen}
+            onPress={() => onOpen?.(s.engine, s.id)}
+            style={({ pressed }) => [styles.legendRow, pressed && PRESSED]}
+          >
             <T variant="small" color={colors.textPrimary} style={styles.grow} numberOfLines={1}>
-              {k.name}
+              {s.name}
             </T>
-            <T variant="small" color={colors.textMuted}>
-              {roomWord(k)}
+            <T variant="small" color={colors.textSecondary} style={styles.figure}>
+              {s.left === null ? 'Not read yet' : `${s.left}% left`}
             </T>
-          </View>
+            {s.refill && (
+              <View style={styles.chip}>
+                <T variant="caption" color={colors.textSecondary}>
+                  ⟳ {s.refill}
+                </T>
+              </View>
+            )}
+          </Pressable>
         ))}
       </View>
-      <SameNotes glance={glance} />
+      {(glance.estimate || total.unread || glance.sameNotes.length > 0) && (
+        <View style={styles.notes}>
+          {glance.estimate && (
+            <T variant="caption" color={colors.textMuted}>
+              {glance.headline}. {glance.estimate}: an estimate, not a reading.
+            </T>
+          )}
+          {total.unread && (
+            <T variant="caption" color={colors.textMuted}>
+              {total.unread}.
+            </T>
+          )}
+          <SameNotes glance={glance} />
+        </View>
+      )}
       {glance.signInChanged && (
         <View style={styles.low}>
           <T variant="small" color={colors.textPrimary}>
@@ -177,12 +244,6 @@ export function GlanceCard({ glance }: { glance: UsageGlance }) {
             {ADD_ON_MAC}
           </T>
         </View>
-      )}
-      {glance.soonest && (
-        <T variant="small" color={colors.textSecondary}>
-          Next reset: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
-          {glance.soonest.resetsIn} ({glance.soonest.resetsAt})
-        </T>
       )}
       {glance.low && (
         <View style={styles.low}>
@@ -213,8 +274,96 @@ export function GlanceCard({ glance }: { glance: UsageGlance }) {
   );
 }
 
+/** Every account as one row in turn order, in one grouped card; a tap opens its screen. */
+export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: StackKey) => void }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={styles.rows}>
+      {keys.map((k, i) => {
+        const refill = k.refillLimit?.countdown;
+        const room = roomWords(k);
+        return (
+          <Pressable
+            key={k.key}
+            accessibilityRole="button"
+            accessibilityLabel={`${placeLabel(k, keys)}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
+              refill ? `, refills in ${refill}` : ''
+            }`}
+            onPress={() => onOpen(k)}
+            style={({ pressed }) => [
+              styles.accountRow,
+              i > 0 && styles.divided,
+              pressed && PRESSED,
+            ]}
+          >
+            <View style={[styles.cap, k.state === 'in_use' && styles.capOn]}>
+              <T
+                variant="caption"
+                color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
+              >
+                {placeLabel(k, keys)}
+              </T>
+            </View>
+            <View style={styles.rowBody}>
+              <View style={styles.rowLine}>
+                <T
+                  variant="headline"
+                  color={colors.textStrong}
+                  style={styles.grow}
+                  numberOfLines={1}
+                >
+                  {k.name}
+                </T>
+                {!!room && (
+                  <T variant="small" color={colors.textPrimary} style={styles.figure}>
+                    {room}
+                  </T>
+                )}
+              </View>
+              <View style={[styles.miniBar, k.share === null && styles.segEmpty]}>
+                {k.share !== null && (
+                  <View
+                    style={[
+                      styles.fill,
+                      { width: `${k.share}%`, backgroundColor: fillOf(colors, k.tone) },
+                    ]}
+                  />
+                )}
+              </View>
+              <View style={styles.rowLine}>
+                <StatusPill
+                  tone={pillOf(k)}
+                  label={k.state === 'out' ? OUT_OF_USAGE : k.stateLabel}
+                />
+                <View style={styles.grow} />
+                {refill && (
+                  <T variant="caption" color={colors.textSecondary}>
+                    ⟳ {refill}
+                  </T>
+                )}
+              </View>
+            </View>
+            <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 /** One account: its place, name, state, limits, who used it, and where its usage went. */
-export function KeyCard({ k, all = [] }: { k: StackKey; all?: readonly StackKey[] }) {
+export function KeyCard({
+  k,
+  titled = true,
+  all = [],
+}: {
+  k: StackKey;
+  /** Its name is the screen's title already: the card leads with its place and state. */
+  titled?: boolean;
+  /** Every account listed, so a place names its engine when both are there. */
+  all?: readonly StackKey[];
+}) {
   const colors = useColors();
   const styles = useStyles();
   const [story, setStory] = useState(false);
@@ -230,19 +379,22 @@ export function KeyCard({ k, all = [] }: { k: StackKey; all?: readonly StackKey[
           </T>
         </View>
         <View style={styles.title}>
-          <T variant="headline" color={colors.textStrong} numberOfLines={1}>
-            {k.name}
-          </T>
+          {titled && (
+            <T variant="headline" color={colors.textStrong} numberOfLines={1}>
+              {k.name}
+            </T>
+          )}
           {k.detail.length > 0 && (
             <T variant="caption" color={colors.textMuted} numberOfLines={2}>
               {k.detail.join(' · ')}
             </T>
           )}
         </View>
+        {!titled && <StatusPill tone={pillOf(k)} label={k.stateLabel} />}
       </View>
-      <StatusPill tone={pillOf(k)} label={k.stateLabel} style={styles.pill} />
-      {k.limits.map((l) => (
-        <View key={l.key} style={styles.limit}>
+      {titled && <StatusPill tone={pillOf(k)} label={k.stateLabel} style={styles.pill} />}
+      {k.limits.map((l, i) => (
+        <View key={l.key} style={[styles.limit, i > 0 && styles.limitNext]}>
           <View style={styles.limitHead}>
             <T variant="small" color={colors.textSecondary}>
               {l.label}
@@ -324,15 +476,32 @@ export function KeyCard({ k, all = [] }: { k: StackKey; all?: readonly StackKey[
           </T>
         </View>
       )}
-      {k.spent.length > 0 && (
-        <View style={styles.spent}>
-          <T variant="caption" color={colors.textMuted}>
-            Used by these agents this week
-          </T>
-          {k.spent.map((s) => (
-            <T key={s} variant="small" color={colors.textSecondary}>
-              {s}
+      {k.agents.length > 0 && (
+        // Who used it: agent, tokens, turns, in aligned columns.
+        <View style={styles.table} accessibilityLabel={`Who used ${k.name} this week`}>
+          <View style={styles.tableRow}>
+            <T variant="caption" color={colors.textMuted} style={styles.grow}>
+              Used by these agents this week
             </T>
+            <T variant="caption" color={colors.textMuted} style={styles.num}>
+              Tokens
+            </T>
+            <T variant="caption" color={colors.textMuted} style={styles.numNarrow}>
+              Messages
+            </T>
+          </View>
+          {k.agents.map((a) => (
+            <View key={a.key} style={[styles.tableRow, styles.tableLine]}>
+              <T variant="small" color={colors.textPrimary} style={styles.grow} numberOfLines={1}>
+                {a.name}
+              </T>
+              <T variant="small" color={colors.textSecondary} style={styles.num}>
+                {a.tokensText}
+              </T>
+              <T variant="small" color={colors.textSecondary} style={styles.numNarrow}>
+                {String(a.turns)}
+              </T>
+            </View>
           ))}
         </View>
       )}
@@ -374,7 +543,55 @@ export function KeyCard({ k, all = [] }: { k: StackKey; all?: readonly StackKey[
 }
 
 const useStyles = makeStyles((colors) => ({
-  track: { flexDirection: 'row', gap: space['3xs'] },
+  track: { flexDirection: 'row', gap: space['2xs'] },
+  answer: { gap: space.xs },
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    minHeight: space['2xl'],
+  },
+  figure: { fontVariant: ['tabular-nums'] },
+  chip: {
+    paddingHorizontal: space.xs,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderDefault,
+  },
+  notes: { gap: space.xs },
+  rows: {
+    backgroundColor: colors.surfacePanel,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.cardBorder,
+    boxShadow: depthOf(colors).card,
+    overflow: 'hidden',
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+  },
+  divided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
+  rowBody: { flex: 1, minWidth: 0, gap: space.sm },
+  rowLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  miniBar: {
+    height: space.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceControl,
+    overflow: 'hidden',
+  },
+  table: { gap: space['2xs'] },
+  tableRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  tableLine: {
+    paddingVertical: space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
+  num: { width: space['2xl'] * 1.5, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  numNarrow: { width: space['2xl'] * 2, textAlign: 'right', fontVariant: ['tabular-nums'] },
   seg: {
     flex: 1,
     height: space.xs,
@@ -390,9 +607,7 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.borderStrong,
   },
   fill: { height: '100%', borderRadius: radius.pill },
-  legend: { gap: space['2xs'] },
-  legendRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
-  legendPlace: { minWidth: space.md },
+  legend: { gap: space['3xs'] },
   grow: { flex: 1, minWidth: 0 },
   pace: { flexDirection: 'row', alignItems: 'center', gap: space['2xs'] },
   row: { gap: space['2xs'] },
@@ -422,6 +637,11 @@ const useStyles = makeStyles((colors) => ({
   title: { flex: 1, minWidth: 0 },
   pill: { alignSelf: 'flex-start' },
   limit: { gap: space['2xs'] },
+  limitNext: {
+    paddingTop: space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
   limitHead: { flexDirection: 'row', justifyContent: 'space-between' },
   bar: {
     height: space.xs,
@@ -436,7 +656,6 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.inner,
     backgroundColor: colors.surfaceControl,
   },
-  spent: { gap: space['3xs'] },
   change: {
     gap: space['3xs'],
     paddingTop: space.sm,

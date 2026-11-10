@@ -6,6 +6,7 @@ pub mod accounts;
 pub mod agent_bridge;
 pub mod agent_rooms;
 pub mod agents;
+pub mod agents_desk;
 pub mod agents_preview;
 pub mod agents_slack;
 pub mod agents_usage;
@@ -57,7 +58,6 @@ pub mod static_server;
 pub mod team;
 pub mod templates;
 pub mod window;
-pub mod workflows;
 
 // Re-export all commands for easy access in lib.rs
 pub use accounts::*;
@@ -98,7 +98,6 @@ pub use spotify::*;
 pub use static_server::*;
 pub use templates::*;
 pub use window::*;
-pub use workflows::*;
 
 #[cfg(test)]
 mod log_hygiene_tests {

@@ -148,10 +148,12 @@
   gap: var(--spacing-xs);
 }
 
+/* The label sits 4px over its field; Draft it is the next group, 8px under. */
 .agent-describe__actions {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
 }
 
 .agent-describe__hint {

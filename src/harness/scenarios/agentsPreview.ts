@@ -11,7 +11,17 @@ import type { Scenario } from '../types';
 import { rejectsWith } from '../reject';
 import { HARNESS_ROOT } from './base';
 import { workspaceCommands } from './workspace';
-import { AGENTS_TAB, MIN, TEAM, messagesFor, msg, now, overview, status } from './agents';
+import {
+  AGENTS_TAB,
+  CHAT_COLUMN,
+  MIN,
+  TEAM,
+  messagesFor,
+  msg,
+  now,
+  overview,
+  status,
+} from './agents';
 
 const ACME_PATH = `${HARNESS_ROOT}/acme-marketing`;
 const COPY = {
@@ -242,6 +252,18 @@ export const agentsPreviewScenarios: Scenario[] = [
     looksRightWhen:
       'The chat stays on the left (narrower), and a pane fills the right: a header with a globe, “Pricing cards on mobile” over a muted “A copy of acme-marketing”, then a neutral “Test it” button (play icon, not the agent’s colour), a ghost “Open in workspace” and an ×. Under it a toolbar: a Back arrow (disabled), the address “/” in a mono field, Reload, and a four-way width control (full / laptop / tablet / phone). The frame shows the fictional Acme Marketing home page (“Campaigns that ship on Monday…”). No steps column yet. The chat’s card is unchanged.',
     requires: '.agent-preview__iframe[data-loaded]',
+    openSelector: AGENTS_TAB,
+    steps: [OPEN_ACME, PRESS_PREVIEW, SITE_LOADED],
+    commands: pane(BASE_CHAT),
+  },
+  {
+    id: 'agents-column-preview',
+    title: 'Agents — preview open: the narrower chat keeps one column',
+    looksRightWhen:
+      'With the site open beside it, the chat’s header content, its messages and its composer still share one left edge and one right edge; the header’s controls fold to icons for the narrower column rather than crowd it.',
+    viewport: { width: 1280, height: 800 },
+    requires: '.agent-preview__iframe[data-loaded]',
+    sameColumn: CHAT_COLUMN,
     openSelector: AGENTS_TAB,
     steps: [OPEN_ACME, PRESS_PREVIEW, SITE_LOADED],
     commands: pane(BASE_CHAT),

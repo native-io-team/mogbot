@@ -12,7 +12,7 @@
  *   closed in the background (lib/backgroundSessions) and the project's tab
  *   list adopts or drops it, whichever project is showing. The user sees the
  *   new tab when they next open the project, conversation and all. Start is
- *   spawn-not-paste, as for the Inbox (see useWorkflowHandoff).
+ *   spawn-not-paste, as for queued prompts (see usePromptHandoff).
  * - **Show** opens the project, for remote access's screenshot when no dev
  *   server is running (`remote-show-project`). Ship Studio's own agents never
  *   send it.

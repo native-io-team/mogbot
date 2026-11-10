@@ -429,6 +429,21 @@ fn model_and_effort_come_in_the_users_words_and_go_back_to_default() {
     );
     assert_eq!(chat_model(Engine::Claude, "default").unwrap(), None);
     assert!(chat_model(Engine::Claude, "gpt-9").is_err());
+    // The app's own words for them (the menu's "Smartest · Opus").
+    assert_eq!(
+        chat_model(Engine::Claude, "Smartest").unwrap(),
+        Some("opus".into())
+    );
+    assert_eq!(
+        chat_model(Engine::Claude, " balanced ").unwrap(),
+        Some("sonnet".into())
+    );
+    assert_eq!(
+        chat_model(Engine::Claude, "Fastest").unwrap(),
+        Some("haiku".into())
+    );
+    // Codex's models have no such families: the word isn't guessed at.
+    assert!(chat_model(Engine::Codex, "Smartest").is_err());
     let r = run_settings(
         Engine::Claude,
         &json!({ "model": "Sonnet", "effort": "High" }),

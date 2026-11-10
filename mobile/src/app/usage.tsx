@@ -1,8 +1,9 @@
 /**
- * Usage, from the ring in a chat's header: this agent's context, then the
- * whole stack of accounts as the desk's Usage view shows it (one line, a
- * segmented meter, each account as a card with its limits, who used it and
- * where its usage went; components/usageStack.tsx). From an older Mac, the
+ * Usage, from the ring in a chat's header or the Agents list's usage line:
+ * this agent's context, then the accounts as the desk's Usage view shows
+ * them: the total across every account first (the roomiest account first in
+ * its bar), then one row per account that opens its own screen
+ * (app/usage-account.tsx; components/usageStack.tsx). From an older Mac, the
  * account the turns run on and every other account with its own limits. Each reading shows once: the top
  * account is never listed again under it (lib/usageSheet.ts `usageSheet`). Only what the Mac serves
  * (lib/usageSheet.ts): a section with no reading isn't drawn. The one
@@ -15,13 +16,13 @@ import {
   type AccountBlock,
   type UsageInventory,
 } from '@shipstudio/companion-protocol';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Spinner } from '../components/agent';
 import { SheetTitle } from '../components/SheetTitle';
 import { ComputeAccount, ComputeQuiet, ComputeSummary, MeterRow } from '../components/usage';
-import { GlanceCard, KeyCard } from '../components/usageStack';
+import { AccountRows as StackRows, TotalCard } from '../components/usageStack';
 import { servesUsageChanges, UsagePlanControls } from '../components/usagePlanControls';
 import { useAccounts } from '../lib/accounts';
 import { IconButton, Section, SectionTitle, SheetPage, T } from '../components/ui';
@@ -97,6 +98,8 @@ export default function Usage() {
     [accounts, inventory, now]
   );
   const stacked = glance !== null && glance.keys.length > 0;
+  const openAccount = (engine: string, account: string) =>
+    router.push({ pathname: '/usage-account', params: { engine, account } });
   const nothing = !context && !total && !stacked && !active && others.length === 0;
 
   return (
@@ -133,12 +136,11 @@ export default function Usage() {
         )}
 
         {stacked && glance && (
+          // The total first; each account a row that opens its own screen.
           <View style={styles.accounts}>
-            <SectionTitle title="Your accounts" />
-            <GlanceCard glance={glance} />
-            {glance.keys.map((k) => (
-              <KeyCard key={k.key} k={k} all={glance.keys} />
-            ))}
+            <TotalCard glance={glance} onOpen={openAccount} />
+            <SectionTitle title="Accounts" />
+            <StackRows keys={glance.keys} onOpen={(k) => openAccount(k.engine, k.id)} />
           </View>
         )}
 
@@ -193,7 +195,7 @@ export default function Usage() {
         {nothing && (
           <T color={colors.textSecondary}>
             {connected
-              ? 'Nothing reported yet. Figures appear once an engine reports them after a turn.'
+              ? 'Nothing yet. It shows after an agent’s first reply.'
               : 'Your Mac is away. Usage shows once it’s back.'}
           </T>
         )}

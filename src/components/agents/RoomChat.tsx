@@ -107,6 +107,7 @@ import { blockedCopy, dictationVocabulary, openPrivacySettings } from '../../lib
 import { listProjects } from '../../lib/project';
 import { useResolvedTheme } from '../../lib/theme';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
+import { scrollMotion } from '../../lib/motion';
 
 const STICK_THRESHOLD = 80;
 
@@ -610,7 +611,7 @@ export function RoomChat({
               onClick={() =>
                 scrollRef.current?.scrollTo({
                   top: scrollRef.current.scrollHeight,
-                  behavior: 'smooth',
+                  behavior: scrollMotion(),
                 })
               }
               aria-label="Jump to latest"

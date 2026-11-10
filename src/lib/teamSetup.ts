@@ -15,6 +15,7 @@ import { listen } from '@tauri-apps/api/event';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { humanise } from '../../packages/companion-protocol/src/loginNames';
 import { AGENT_EVENTS, failedTurn, type Agent, type AgentMessage, type ChatItem } from './agents';
+import { scrollMotion } from './motion';
 
 export type SetupStepId = 'logins' | 'routines' | 'missing' | 'hello';
 export type SetupStepState = 'open' | 'done' | 'skipped';
@@ -292,7 +293,7 @@ export function showTeamSetup() {
   else
     document
       .querySelector('[data-testid="team-setup"]')
-      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      ?.scrollIntoView({ block: 'center', behavior: scrollMotion() });
 }
 
 function subscribeReveal(f: () => void) {

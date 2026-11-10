@@ -32,6 +32,7 @@ import {
 } from '../../lib/agents';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
+import { ROUTINES_MEANS } from '../../../packages/companion-protocol/src/cardWords';
 
 /** The one prompt, and Draft it. */
 export function AgentDescribe({
@@ -134,6 +135,7 @@ export function AgentDraftRoutines({
       {draft.routines.length > 0 && (
         <>
           Routines
+          <p className="agent-editor__hint">{ROUTINES_MEANS}</p>
           <ul className="agent-draft__routines">
             {draft.routines.map((r, i) => (
               <DraftRoutineRow

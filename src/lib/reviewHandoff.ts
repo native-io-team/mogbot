@@ -7,7 +7,7 @@
  * of the project as a workspace and leaves the request here, and the
  * workspace opens the modal once it is showing that copy on that branch.
  *
- * A one-slot queue, like `workflowHandoff`, because the two ends are far
+ * A one-slot queue, like `promptHandoff`, because the two ends are far
  * apart and the trip (mounting a workspace, reading its branch) is async.
  *
  * @module lib/reviewHandoff

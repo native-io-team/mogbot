@@ -71,6 +71,7 @@ pub mod arrival;
 pub mod attachments;
 pub mod autoallow;
 pub mod brief;
+pub mod briefing;
 pub mod broker;
 pub mod browser;
 pub mod browser_gate;
@@ -159,6 +160,7 @@ pub mod review;
 pub mod room_tools;
 pub mod rooms;
 pub mod routine_steps;
+pub mod routines_bulk;
 pub mod runner;
 pub mod runs;
 pub mod saver;
@@ -298,6 +300,8 @@ pub fn ensure_main() -> Result<store::Agent, CommandError> {
         role: prompts::CHIEF_ROLE.to_string(),
         instructions: prompts::CHIEF_INSTRUCTIONS.to_string(),
         shape: Some(5),
+        // The app's accent (`src/lib/accent.ts`). Its key is the app's mark on
+        // Graphite all the same (`keys::fill`).
         color: Some("white".to_string()),
         is_main: true,
     });

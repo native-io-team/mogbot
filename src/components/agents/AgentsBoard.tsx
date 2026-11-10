@@ -11,7 +11,11 @@
  */
 
 import { useState } from 'react';
-import { KEY_STATE_LABEL, type KeyState } from '../../../packages/companion-protocol/src/agentKeys';
+import {
+  KEY_STATE_LABEL,
+  keyAccessibleName,
+  type KeyState,
+} from '../../../packages/companion-protocol/src/agentKeys';
 import { previewText } from '../../../packages/companion-protocol/src/preview';
 import { workingRowLine } from '../../../packages/companion-protocol/src/work';
 import { agentKeyState, plainActivity, type Agent } from '../../lib/agents';
@@ -86,7 +90,7 @@ export function AgentsBoard({ agents, onOpenAgent, onNewAgent }: AgentsBoardProp
               type="button"
               className="agents-board__key"
               onClick={() => onOpenAgent(agent.id)}
-              aria-label={`${agent.name}, ${KEY_STATE_LABEL[state]}`}
+              aria-label={keyAccessibleName(agent.name, state)}
               data-agent-id={agent.id}
             >
               <AgentKey

@@ -8,6 +8,7 @@ import {
   CloseIcon,
 } from '@/components/icons';
 import TemplatePlaceholderGraphic from '@/assets/graphics/template-placeholder.svg?react';
+import { scrollMotion } from '../../lib/motion';
 
 /** Shape of a community template from the API */
 export interface CommunityTemplate {
@@ -122,7 +123,7 @@ export function TemplateGallery({
     // 3 cards fill clientWidth (with 2 inner gaps of 10px).
     // The next set of 3 starts at clientWidth + 10px (the gap after card 3).
     const amount = el.clientWidth + 10;
-    el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
+    el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: scrollMotion() });
   };
 
   // Update scroll buttons when templates load

@@ -193,7 +193,7 @@ const TOOLS: &[Tool] = &[
                 "role": { "type": "string", "description": "One line: what this agent is responsible for. Required unless you use a template." },
                 "instructions": { "type": "string", "description": "A briefing, as if for a new hire: context, standing rules, who's who, where things live. Required unless you use a template; with one, what you know about the user, added to its briefing." },
                 "colorway": { "type": "string", "enum": super::keys::colorways(), "description": "Optional: its key's colour. Left out, the one fewest on the team wear." },
-                "icon": { "type": "string", "enum": super::keys::icons(), "description": "Optional: the legend on its key. Left out, one read from its name and role." },
+                "icon": { "type": "string", "description": format!("Optional: the legend on its key. Left out, one read from its name and role. {}", super::keys::icon_hint()) },
                 "key": { "type": "string", "description": "Optional: the keyboard key (one letter or digit) that jumps to it. Left out, the first free letter of its name." },
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
                 "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
@@ -224,7 +224,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku; Codex: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on Opus\", \"have Finance think harder\". `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `account` is its Runs on: one of its engine's accounts by the name usage_overview lists (\"run Finance only on Work\"), or \"any\" to run on whichever has room; no card. Its key: `colorway`, `icon` (the legend) and `key` (the keyboard key, one letter or digit, that jumps to it; unique on the team) change how it looks (\"make Hiring teal with the people icon\", \"put Finance on F\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
+        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku, which the app calls Smartest, Balanced and Fastest and which you may pass by those words; Codex: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on the smartest model\", \"have Finance think harder\". Tell the user in the app's words, the model's name second: \"Research now uses Smartest (Opus)\", never just \"opus\"; \"model\" alone means little to most people, so say \"the AI it thinks with\" when they seem unsure. `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `account` is its Runs on: one of its engine's accounts by the name usage_overview lists (\"run Finance only on Work\"), or \"any\" to run on whichever has room; no card. Its key: `colorway`, `icon` (the legend) and `key` (the keyboard key, one letter or digit, that jumps to it; unique on the team) change how it looks (\"make Hiring teal with the people icon\", \"put Finance on F\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -241,7 +241,7 @@ const TOOLS: &[Tool] = &[
                 "muted": { "type": "boolean" },
                 "account": { "type": "string", "description": "Runs on: an account's name or id, or \"any\"." },
                 "colorway": { "type": "string", "enum": super::keys::colorways() },
-                "icon": { "type": "string", "enum": super::keys::icons() },
+                "icon": { "type": "string", "description": super::keys::icon_hint() },
                 "key": { "type": "string", "description": "One letter or digit." }
             },
             "required": ["agent"]
@@ -2176,12 +2176,27 @@ fn is_default_word(raw: &str) -> bool {
     )
 }
 
-/// A model in the user's words, for `engine`: its id or its label.
+/// What the app calls Claude Code's models (`MODEL_PURPOSE` in the
+/// companion protocol's `cardWords.ts`): the words a person picks by.
+const CLAUDE_PURPOSE: [(&str, &str); 4] = [
+    ("smartest", "opus"),
+    ("most capable", "opus"),
+    ("balanced", "sonnet"),
+    ("fastest", "haiku"),
+];
+
+/// A model in the user's words, for `engine`: its id, its label, or (on
+/// Claude Code) what the app calls it ("Smartest" is `opus`).
 pub(super) fn chat_model(engine: Engine, raw: &str) -> Result<Option<String>, String> {
     if is_default_word(raw) {
         return Ok(None);
     }
-    let want = raw.trim();
+    let lower = raw.trim().to_ascii_lowercase();
+    let purpose = CLAUDE_PURPOSE
+        .iter()
+        .find(|(word, _)| engine == Engine::Claude && *word == lower)
+        .map(|(_, id)| *id);
+    let want = purpose.unwrap_or_else(|| raw.trim());
     let found = super::engine::models(engine)
         .into_iter()
         .find(|m| m.value.eq_ignore_ascii_case(want) || m.label.eq_ignore_ascii_case(want));

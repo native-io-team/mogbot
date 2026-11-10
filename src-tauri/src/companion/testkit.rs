@@ -377,6 +377,7 @@ pub fn live_work() -> crate::agents::work::TurnWork {
                 ended_at: Some(1_762_290_402_000),
                 summary: Some("42 passed, 3 failed".into()),
                 output: vec!["Tests: 3 failed, 42 passed, 45 total".into()],
+                has_exact: false,
             },
         ],
         files: Vec::new(),
@@ -397,6 +398,9 @@ pub fn live_work() -> crate::agents::work::TurnWork {
         project: None,
         own_browser: false,
         steps_omitted: false,
+        engine: None,
+        account: None,
+        model: None,
     }
 }
 

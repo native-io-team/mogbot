@@ -48,6 +48,9 @@ pub enum Step {
     Context(super::context::ContextFill),
     /// The engine compacted the conversation (`super::tidy`).
     Compacted,
+    /// The model the turn runs on, as the engine itself said (Claude Code's
+    /// `init` event, Codex's `thread/start`), for "What it did".
+    Model(String),
     /// The turn ended in an error, in the engine's words.
     Failed(String),
     /// The turn's result is in.
@@ -70,6 +73,11 @@ pub fn claude_steps(value: &Value, now: i64) -> Vec<Step> {
             }
             if let Some(sid) = value.get("session_id").and_then(Value::as_str) {
                 out.push(Step::Session(sid.to_string()));
+            }
+            if value.get("subtype").and_then(Value::as_str) == Some("init") {
+                if let Some(model) = value.get("model").and_then(Value::as_str) {
+                    out.push(Step::Model(model.to_string()));
+                }
             }
         }
         Some("assistant") => {

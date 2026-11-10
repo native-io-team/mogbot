@@ -117,9 +117,9 @@ pub fn set_low_power(on: bool) -> Result<(), crate::errors::CommandError> {
 
 /// How long until the next whole multiple of `period` on the wall clock.
 ///
-/// The minute loops (routines, "When…" checks, workflows, card expiry) each
-/// slept a flat 60 s from whenever they started, so the app woke four times
-/// a minute at four unrelated moments. Sleeping to the minute boundary wakes
+/// The minute loops (routines, "When…" checks, card expiry) each slept a flat
+/// 60 s from whenever they started, so the app woke several times a minute at
+/// unrelated moments. Sleeping to the minute boundary wakes
 /// them together: one wake-up a minute, each loop still ticking once a minute.
 pub fn until_aligned(period: Duration, now_since_epoch: Duration) -> Duration {
     let p = period.as_millis().max(1);

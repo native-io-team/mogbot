@@ -101,7 +101,7 @@ function UsageLines({ usage, agent }: { usage: UsageSummary | null; agent: Agent
       {allTime && (
         <>
           <dt>This week</dt>
-          <dd title={priced(usage?.week)}>{week ?? 'No turns'}</dd>
+          <dd title={priced(usage?.week)}>{week ?? 'Nothing run yet'}</dd>
           {routines && (
             <>
               <dt>Its routines</dt>
@@ -133,7 +133,7 @@ function CanDo({ agent }: { agent: Agent }) {
       What {agent.name} can do
       {lines.length === 0 ? (
         <p className="agent-editor__hint">
-          Shown after its first turn, from what {ENGINE_LABEL[agent.engine]} says it can use.
+          Shown after its first reply, from what {ENGINE_LABEL[agent.engine]} says it can use.
         </p>
       ) : (
         <dl className="agent-editor__usage agent-editor__can-do">
@@ -278,6 +278,8 @@ export function AgentEditorModal({
   const [pickedIcon, setIcon] = useState<string | null>(saved?.icon ?? null);
   const [pickedKey, setBoundKey] = useState<string | null>(saved?.boundKey ?? null);
   const [showLook, setShowLook] = useState(!agent);
+  // Opened by hand (not a new agent's, open from the start): its icon search takes focus.
+  const [lookByHand, setLookByHand] = useState(false);
   const [role, setRole] = useState(agent?.role ?? first?.role ?? '');
   const icon = pickedIcon ?? iconFor(name, role);
   const taken = useMemo(
@@ -573,7 +575,10 @@ export function AgentEditorModal({
           title={showLook ? 'Done changing how it looks' : 'Change how it looks'}
           aria-expanded={showLook}
           data-open={showLook || undefined}
-          onClick={() => setShowLook((open) => !open)}
+          onClick={() => {
+            setLookByHand(true);
+            setShowLook((open) => !open);
+          }}
         >
           {/* Open, the picker's big key is the key: this one would be it twice, 40px apart. */}
           {showLook ? (
@@ -602,6 +607,7 @@ export function AgentEditorModal({
           onColorwayChange={setColorway}
           onIconChange={setIcon}
           onBoundKeyChange={setBoundKey}
+          autoFocusSearch={lookByHand}
         />
       )}
 

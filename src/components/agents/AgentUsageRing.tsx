@@ -19,13 +19,13 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Dropdown } from '../primitives/Dropdown';
 import { Button } from '../primitives/Button';
-import { IconButton } from '../primitives/IconButton';
+import { ActivityIcon } from '@/components/icons';
 import type { Agent } from '../../lib/agents';
 import { contextMeter, ringPercent, type UsageMeter } from '../../lib/agentsUsage';
 import { requestSwitcher } from '../../lib/agentAccounts';
 import { useQuotas } from './AgentsQuota';
 import { useUsageGlance } from './AccountSwitcher';
-import { SameNotes, StackMeter } from './UsageStack';
+import { SameNotes, TotalBar } from './UsageStack';
 
 interface AgentUsageRingProps {
   agent: Agent;
@@ -49,39 +49,33 @@ export function AgentUsageRing({ agent, open, onOpenChange }: AgentUsageRingProp
       open={open}
       onOpenChange={onOpenChange}
       menuClassName="agent-usage"
-      trigger={(p) =>
-        // No 5-hour reading yet: the word, not an empty dashed ring (it read
-        // as a spinner). The ring comes back with the first reading.
-        !ring ? (
-          <Button
-            {...p}
-            tabIndex={0}
-            variant="ghost"
-            className="agent-usage-ring agent-usage-ring--word"
-            title={label}
-            aria-label={label}
-          >
-            Usage
-          </Button>
-        ) : (
-          <IconButton
-            {...p}
-            tabIndex={0}
-            variant="ghost"
-            className="agent-usage-ring"
-            title={label}
-            aria-label={label}
-            icon={
+      trigger={(p) => (
+        // One header action like the others: an icon and the word. With no
+        // 5-hour reading the icon is a plain gauge, never an empty dashed ring
+        // (it read as a spinner); the dial comes with the first reading.
+        <Button
+          {...p}
+          tabIndex={0}
+          variant="ghost"
+          className="agent-chat__action agent-usage-ring"
+          title={label}
+          aria-label={label}
+          leftIcon={
+            ring ? (
               <span
                 className="agent-usage-ring__dial"
                 data-tone={ring.tone}
                 style={{ '--agent-usage-ring-percent': left ?? 0 } as CSSProperties}
                 aria-hidden
               />
-            }
-          />
-        )
-      }
+            ) : (
+              <ActivityIcon size={14} />
+            )
+          }
+        >
+          <span className="agent-chat__action-word">Usage</span>
+        </Button>
+      )}
     >
       {open && <UsageBody agent={agent} onClose={() => onOpenChange(false)} />}
     </Dropdown>
@@ -110,7 +104,12 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
           {glance.estimate && (
             <span className="agent-usage__muted">{glance.estimate}. An estimate.</span>
           )}
-          <StackMeter keys={glance.meterKeys} labelled />
+          {glance.total.left !== null && (
+            <span className="agent-usage__muted">
+              {glance.total.figure} {glance.total.across}
+            </span>
+          )}
+          <TotalBar total={glance.total} />
           <SameNotes notes={glance.sameNotes} />
           {glance.soonest && (
             <span className="agent-usage__muted">

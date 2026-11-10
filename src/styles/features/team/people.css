@@ -34,7 +34,7 @@
   margin-top: var(--spacing-sm);
   padding-top: var(--spacing-md);
   border-top: var(--border-width-default) solid var(--border-subtle);
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: var(--font-size-body-sm);
 }
 
@@ -103,7 +103,7 @@
 
 .team-person-when {
   flex: none;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: var(--font-size-body-md);
   line-height: var(--line-height-compact);
   white-space: nowrap;
@@ -111,7 +111,7 @@
 
 .team-person-role {
   margin-left: auto;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: var(--font-size-body-sm);
   white-space: nowrap;
 }
@@ -156,7 +156,7 @@
 }
 
 .team-person-idle {
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: var(--font-size-body-sm);
   font-style: italic;
 }

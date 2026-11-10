@@ -9,7 +9,7 @@
  * web page or message can open one.
  */
 
-import { CHIEF_ICON, COLORWAYS, type PairingLink } from '@shipstudio/companion-protocol';
+import { CHIEF_COLORWAY, CHIEF_ICON, type PairingLink } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -34,6 +34,8 @@ import {
   type PairFailure,
   type PairPlan,
 } from '../lib/pairing';
+import { reachChecklist, reachDetail } from '../lib/reachChecklist';
+import { ReachChecklist, useTailscaleInstalled } from '../components/ReachChecklist';
 import { adopt, enableAlerts } from '../lib/session';
 import { isDemo } from '../lib/demo';
 import { PAIRING_LOST } from '../lib/identity';
@@ -157,11 +159,11 @@ export default function Pair() {
       bounces={false}
     >
       <View style={styles.hero}>
-        {/* The site's mark: the Chief's key, as the desk's onboarding shows it. */}
+        {/* The app's mark: the Chief's key, as the desk's onboarding shows it. */}
         <View style={styles.logo}>
           <AgentKey
             name="Chief of Staff"
-            colorway={COLORWAYS[0].id}
+            colorway={CHIEF_COLORWAY}
             icon={CHIEF_ICON}
             boundKey="C"
             size={keySize.xl}
@@ -295,13 +297,13 @@ export default function Pair() {
 
       {phase.kind === 'failed' && (
         <Animated.View entering={FadeInDown.duration(250)} style={[styles.card, styles.block]}>
-          <FailureCopy
-            failure={phase.failure}
-            mac={cleanName(phase.link.name)}
-            host={linkHost(phase.link)}
-          />
+          <FailureCopy failure={phase.failure} mac={cleanName(phase.link.name)} />
           {(phase.failure.kind === 'tailscale_off' || phase.failure.kind === 'mac_unreachable') && (
-            <Button title="Open Tailscale" icon="network" onPress={() => void openTailscale()} />
+            <Unreachable
+              mac={cleanName(phase.link.name)}
+              host={linkHost(phase.link)}
+              diagnosis={phase.failure.kind}
+            />
           )}
           {phase.failure.kind === 'expired' ||
           phase.failure.kind === 'refused' ||
@@ -503,20 +505,43 @@ function TryDemo() {
   );
 }
 
-function FailureCopy({ failure, mac, host }: { failure: PairFailure; mac: string; host: string }) {
+/**
+ * Nothing answered: the three things that have to be true, each with what
+ * this phone can see of it and its fix. The address is folded away.
+ */
+function Unreachable({
+  mac,
+  host,
+  diagnosis,
+}: {
+  mac: string;
+  host: string;
+  diagnosis: 'tailscale_off' | 'mac_unreachable';
+}) {
+  const phoneOnline = useApp((s) => s.phoneOnline);
+  const installed = useTailscaleInstalled();
+  return (
+    <ReachChecklist
+      checks={reachChecklist({
+        mac,
+        phoneOnline,
+        tailscaleInstalled: installed,
+        diagnosis,
+        paired: { kind: 'not_yet' },
+      })}
+      detail={reachDetail(host)}
+    />
+  );
+}
+
+function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
   const colors = useColors();
   const [title, body] = ((): [string, string] => {
     switch (failure.kind) {
+      // A checklist follows (`Unreachable`): no address in the first line.
       case 'tailscale_off':
-        return [
-          'This phone isn’t on your Mac’s tailnet',
-          `It couldn’t find ${host}, which only resolves through Tailscale. On this phone, open Tailscale: make sure it’s connected and signed in to the same account as ${mac}. Then try again.`,
-        ];
       case 'mac_unreachable':
-        return [
-          `Can’t reach ${mac}`,
-          `Nothing answered at ${host}. Check that Tailscale is connected on this phone and signed in to the same account as ${mac}, that the Mac is awake with Tailscale on, and that the app is open on it. Then try again.`,
-        ];
+        return [`Can’t reach ${mac}`, 'Check these, then try again.'];
       case 'no_answer':
         return [
           `No answer from ${mac}`,

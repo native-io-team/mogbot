@@ -2976,12 +2976,183 @@ pub const ALWAYS_ASK: &[&str] = &[
 // ============================================================================
 
 /// Whether a command line reads text from outside this Mac: a web page or
-/// API answer (`curl` / `wget` to anything but this Mac), issue or pull
-/// request comments (`gh issue view`, `gh pr view --comments`, `gh api …
-/// /comments`), or a cloned repository. Plain `gh pr view`, `gh pr checks`,
-/// `gh run view` and `git fetch` don't count. `exposure` marks the turn.
+/// API answer (`curl` / `wget` to anything but this Mac, or a script that
+/// fetches one), issue or pull request comments (`gh issue view --comments`,
+/// `gh pr view --comments`, `gh api …/comments`), a repository's files, a
+/// cloned repository, or Mail and Messages on this Mac. `exposure` marks the
+/// turn. A pull request's or issue's own text, its diff and a run's log
+/// ([`reads_by_author`]) are decided by who wrote them, once the output is
+/// seen; `gh pr checks`, plain `gh run view` and `git fetch` don't count.
 pub fn command_reads_outside(command: &str) -> bool {
     outside_line(command, 0)
+}
+
+/// A `gh` read whose text is outside content unless the signed-in user
+/// wrote it (`exposure` decides from the output, failing safe).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ByAuthor {
+    /// Its output names its author: `gh pr view`, `gh issue view`, `gh api
+    /// …/pulls/N` or `…/issues/N`. `pr`: the pull request it shows, when
+    /// named (`<repo>#<number>`), so a later diff of it is known.
+    Shown { pr: Option<String> },
+    /// `gh pr diff`: the diff names no author; only an earlier view of the
+    /// same pull request (`pr`) says whose it is.
+    Diff { pr: Option<String> },
+    /// No author can be read from it (`gh run view --log`, a line too
+    /// complex to follow): outside.
+    Unknown,
+}
+
+/// Every [`ByAuthor`] read on a command line.
+pub fn reads_by_author(command: &str) -> Vec<ByAuthor> {
+    let mut out = Vec::new();
+    by_author_line(command, 0, &mut out);
+    out
+}
+
+fn by_author_line(command: &str, depth: u8, out: &mut Vec<ByAuthor>) {
+    if depth > MAX_DEPTH {
+        out.push(ByAuthor::Unknown);
+        return;
+    }
+    let Some(lexed) = lex(command, "") else {
+        let lower = command.to_ascii_lowercase();
+        if ["gh pr ", "gh issue ", "gh run ", "gh api "]
+            .iter()
+            .any(|m| lower.contains(m))
+        {
+            out.push(ByAuthor::Unknown);
+        }
+        return;
+    };
+    for s in &lexed.subs {
+        by_author_line(s, depth + 1, out);
+    }
+    let mut words: Vec<Word> = Vec::new();
+    let mut toks = lexed.toks.into_iter();
+    loop {
+        let tok = toks.next();
+        let end = tok.is_none();
+        match tok {
+            Some(Tok::Word(w)) => {
+                words.push(w);
+                continue;
+            }
+            Some(Tok::Out | Tok::In | Tok::Text) => {
+                toks.next();
+                continue;
+            }
+            Some(Tok::Sep) | None => {}
+        }
+        let simple = strip_wrappers(std::mem::take(&mut words));
+        let texts: Vec<&str> = simple.iter().map(|w| w.text.as_str()).collect();
+        match texts.first().and_then(|p| program_name(p)) {
+            Some("gh") => out.extend(gh_by_author(&texts[1..])),
+            Some("sh" | "bash" | "zsh" | "dash") => {
+                if let Some(code) = texts
+                    .iter()
+                    .position(|t| t.starts_with('-') && t.ends_with('c'))
+                    .and_then(|i| texts.get(i + 1))
+                {
+                    by_author_line(code, depth + 1, out);
+                }
+            }
+            Some("eval") => by_author_line(&texts[1..].join(" "), depth + 1, out),
+            _ => {}
+        }
+        if end {
+            return;
+        }
+    }
+}
+
+/// The [`ByAuthor`] read one `gh` invocation makes, if any.
+fn gh_by_author(args: &[&str]) -> Option<ByAuthor> {
+    let comments = |rest: &[&str]| rest.iter().any(|a| matches!(*a, "--comments" | "-c"));
+    // `--json state,statusCheckRollup`: no one's words, only status.
+    let only_status = |rest: &[&str]| {
+        const TEXT: &[&str] = &[
+            "title",
+            "body",
+            "comments",
+            "reviews",
+            "latestReviews",
+            "commits",
+            "files",
+            "headRefName",
+        ];
+        let fields = rest
+            .iter()
+            .position(|a| *a == "--json")
+            .and_then(|i| rest.get(i + 1).copied())
+            .or_else(|| rest.iter().find_map(|a| a.strip_prefix("--json=")));
+        fields.is_some_and(|f| !f.split(',').any(|f| TEXT.contains(&f.trim())))
+    };
+    match args {
+        ["pr", "view", rest @ ..] if !comments(rest) && !only_status(rest) => {
+            Some(ByAuthor::Shown { pr: pr_key(rest) })
+        }
+        ["pr", "diff", rest @ ..] => Some(ByAuthor::Diff { pr: pr_key(rest) }),
+        ["issue", "view", rest @ ..] if !comments(rest) && !only_status(rest) => {
+            Some(ByAuthor::Shown { pr: None })
+        }
+        ["run", "view", rest @ ..] if rest.iter().any(|a| a.starts_with("--log")) => {
+            Some(ByAuthor::Unknown)
+        }
+        ["api", rest @ ..]
+            if rest
+                .iter()
+                .any(|a| !a.starts_with('-') && api_single_item(a)) =>
+        {
+            Some(ByAuthor::Shown { pr: None })
+        }
+        _ => None,
+    }
+}
+
+/// `<repo>#<number>` for a `gh pr view|diff` naming one (a number or a pull
+/// request's address); `None` for the current branch's, which can change.
+fn pr_key(rest: &[&str]) -> Option<String> {
+    let mut repo = "";
+    let mut number = None;
+    let mut it = rest.iter();
+    while let Some(a) = it.next() {
+        match *a {
+            "-R" | "--repo" => repo = it.next().copied().unwrap_or(""),
+            // Flags that take a value: skip it.
+            "-q" | "--jq" | "-t" | "--template" | "--json" | "--color" | "-B" => {
+                it.next();
+            }
+            a if a.starts_with("--repo=") => repo = &a["--repo=".len()..],
+            a if a.starts_with('-') => {}
+            a if number.is_none()
+                && !a.is_empty()
+                && (a.chars().all(|c| c.is_ascii_digit()) || a.contains("/pull/")) =>
+            {
+                number = Some(a)
+            }
+            _ => {}
+        }
+    }
+    number.map(|n| format!("{}#{n}", repo.to_ascii_lowercase()))
+}
+
+/// `gh api` path naming one pull request or issue (`repos/o/r/pulls/12`):
+/// its JSON's `user` is the author. Anything under it (`/comments`,
+/// `/files`) isn't one.
+fn api_single_item(path: &str) -> bool {
+    let path = path
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .trim_end_matches('/');
+    let mut segs = path.rsplit('/');
+    let (Some(number), Some(kind)) = (segs.next(), segs.next()) else {
+        return false;
+    };
+    matches!(kind, "pulls" | "issues")
+        && !number.is_empty()
+        && number.chars().all(|c| c.is_ascii_digit())
 }
 
 fn outside_line(command: &str, depth: u8) -> bool {
@@ -3000,42 +3171,64 @@ fn outside_line(command: &str, depth: u8) -> bool {
             "git clone",
         ]
         .iter()
-        .any(|m| lower.contains(m));
+        .any(|m| lower.contains(m))
+            || script_text_reads_outside(&lower);
     };
     if lexed.subs.iter().any(|s| outside_line(s, depth + 1)) {
         return true;
     }
     let mut words: Vec<Word> = Vec::new();
+    // `<<<` text: what an interpreter reads as its program.
+    let mut here: Vec<String> = Vec::new();
     let mut toks = lexed.toks.into_iter();
     while let Some(tok) = toks.next() {
         match tok {
             Tok::Word(w) => words.push(w),
             Tok::Sep => {
-                if outside_simple(std::mem::take(&mut words), depth) {
+                if outside_simple(
+                    std::mem::take(&mut words),
+                    &std::mem::take(&mut here),
+                    depth,
+                ) {
                     return true;
                 }
             }
+            Tok::Text => {
+                if let Some(Tok::Word(w)) = toks.next() {
+                    here.push(w.text);
+                }
+            }
             // A redirect's target isn't an argument.
-            Tok::Out | Tok::In | Tok::Text => {
+            Tok::Out | Tok::In => {
                 toks.next();
             }
         }
     }
-    outside_simple(words, depth)
+    outside_simple(words, &here, depth)
 }
 
-fn outside_simple(words: Vec<Word>, depth: u8) -> bool {
+fn outside_simple(words: Vec<Word>, here: &[String], depth: u8) -> bool {
     let words = strip_wrappers(words);
     let texts: Vec<&str> = words.iter().map(|w| w.text.as_str()).collect();
     let Some(name) = texts.first().and_then(|p| program_name(p)) else {
         return false;
     };
+    // Mail and Messages on this Mac are other people's words, whatever
+    // reads them (`sqlite3 …/chat.db`, `cat …/Mail/…/*.emlx`, `grep -r`).
+    if texts[1..].iter().any(|a| message_store(a)) {
+        return true;
+    }
+    if let Some(reads) = interpreter_reads_outside(name, &texts[1..], here) {
+        return reads;
+    }
     let args = &texts[1..];
     match name {
         "curl" | "wget" => curl_reads_outside(args),
         "git" => args.contains(&"clone") && args.iter().any(|a| remote_url(a) || a.contains('@')),
         "gh" => match args {
-            ["issue", "view", ..] => true,
+            // Without comments, an issue's or a pull request's text is the
+            // author's: [`reads_by_author`] decides once its output is seen.
+            ["issue", "view", rest @ ..] => rest.iter().any(|a| matches!(*a, "--comments" | "-c")),
             ["pr", "view", rest @ ..] => rest.iter().any(|a| {
                 matches!(*a, "--comments" | "-c")
                     || ((a.contains("comments") || a.contains("reviews") || a.contains("Reviews"))
@@ -3043,6 +3236,7 @@ fn outside_simple(words: Vec<Word>, depth: u8) -> bool {
             }),
             ["api", rest @ ..] => rest.iter().any(|a| {
                 !a.starts_with('-')
+                    && !api_single_item(a)
                     && [
                         "comments",
                         "reviews",
@@ -3052,6 +3246,9 @@ fn outside_simple(words: Vec<Word>, depth: u8) -> bool {
                         "timeline",
                         "events",
                         "graphql",
+                        "contents",
+                        "files",
+                        "logs",
                     ]
                     .iter()
                     .any(|m| a.contains(m))
@@ -3102,6 +3299,160 @@ fn curl_reads_outside(args: &[&str]) -> bool {
         let h = host_of(a);
         !h.is_empty() && local_host(&h)
     })
+}
+
+/// What a script names when it reaches the network, by language. A
+/// denylist: a program that does it some other way (a script file, a
+/// library not listed, a binary) isn't seen. See docs/agents.md, "Other
+/// programs that fetch".
+const NET_PY: &[&str] = &[
+    "urllib",
+    "requests",
+    "http.client",
+    "httpx",
+    "aiohttp",
+    "urlopen",
+    "socket",
+    "pycurl",
+    "ftplib",
+    "imaplib",
+    "poplib",
+];
+const NET_JS: &[&str] = &[
+    "fetch(",
+    "require('http",
+    "require(\"http",
+    "from 'http",
+    "from \"http",
+    "node:http",
+    "http.get",
+    "https.get",
+    "http.request",
+    "https.request",
+    "axios",
+    "undici",
+    "net.connect",
+    "xmlhttprequest",
+    "websocket",
+];
+const NET_RB: &[&str] = &[
+    "net/http",
+    "net::http",
+    "open-uri",
+    "uri.open",
+    "httparty",
+    "faraday",
+    "socket",
+    "net/imap",
+    "net::imap",
+];
+const NET_PL: &[&str] = &[
+    "lwp",
+    "http::tiny",
+    "io::socket",
+    "net::http",
+    "net::imap",
+    "mojo::useragent",
+];
+
+/// Mail and Messages on this Mac: other people's words, in the user's
+/// own stores (`~/Library/Messages/chat.db`, `~/Library/Mail/…`).
+fn message_store(arg: &str) -> bool {
+    let a = arg.to_ascii_lowercase();
+    ["library/messages", "library/mail", "com.apple.mail"]
+        .iter()
+        .any(|m| {
+            a.match_indices(m).any(|(i, _)| {
+                let after = a[i + m.len()..].chars().next();
+                after.is_none_or(|c| c == '/' || c == '"' || c == '\'')
+            })
+        })
+        || a.ends_with("/chat.db")
+        || a == "chat.db"
+}
+
+/// An AppleScript or JXA program that talks to Mail or Messages.
+fn osascript_reads_mail(code: &str) -> bool {
+    let c = code.to_ascii_lowercase();
+    ["mail", "messages", "microsoft outlook"].iter().any(|app| {
+        [
+            format!("application \"{app}\""),
+            format!("app \"{app}\""),
+            format!("application(\"{app}\")"),
+            format!("application('{app}')"),
+            format!("application id \"com.apple.{app}\""),
+        ]
+        .iter()
+        .any(|p| c.contains(p.as_str()))
+    })
+}
+
+/// Whether script code that reaches the network (`markers`) reads from
+/// somewhere other than this Mac. Every address it writes out decides; with
+/// none (a variable, an argument), only one naming this Mac is local.
+fn script_reads_network(code: &str, markers: &[&str]) -> bool {
+    let lower = code.to_ascii_lowercase();
+    if !markers.iter().any(|m| lower.contains(m)) {
+        return false;
+    }
+    let urls: Vec<&str> = ["http://", "https://", "ws://", "wss://", "ftp://"]
+        .iter()
+        .flat_map(|scheme| lower.match_indices(scheme).map(|(i, _)| i))
+        .map(|i| {
+            let rest = &lower[i..];
+            let end = rest
+                .find(|c: char| c.is_whitespace() || "'\"`)(;,<>".contains(c))
+                .unwrap_or(rest.len());
+            &rest[..end]
+        })
+        .collect();
+    if !urls.is_empty() {
+        return urls.iter().any(|u| remote_url(u));
+    }
+    !["localhost", "127.0.0.1", "[::1]"]
+        .iter()
+        .any(|h| lower.contains(h))
+}
+
+/// `Some(reads)` when `name` is a script interpreter (or `sqlite3`,
+/// `osascript`) this knows; `None` for any other program. `here`: `<<<`
+/// text handed to it.
+fn interpreter_reads_outside(name: &str, args: &[&str], here: &[String]) -> Option<bool> {
+    // The program as written on the line: inline code (`-c`, `-e`,
+    // `--eval=`), modules it loads (`-M`, `-r`, `-m`) and `<<<` text. A
+    // script file's contents aren't seen.
+    let code = args
+        .iter()
+        .copied()
+        .chain(here.iter().map(String::as_str))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let reads = match name {
+        n if n == "python" || n.starts_with("python2") || n.starts_with("python3") => {
+            script_reads_network(&code, NET_PY)
+        }
+        "node" | "bun" | "deno" => script_reads_network(&code, NET_JS),
+        "ruby" => script_reads_network(&code, NET_RB),
+        "perl" => script_reads_network(&code, NET_PL),
+        "osascript" => osascript_reads_mail(&code) || script_reads_network(&code, NET_JS),
+        // A database file: Messages' and Mail's are caught above.
+        "sqlite3" => false,
+        _ => return None,
+    };
+    Some(reads)
+}
+
+/// A command line too complex to follow (a here-document): whether its text
+/// runs an interpreter on code that reaches the network or reads Mail or
+/// Messages.
+fn script_text_reads_outside(lower: &str) -> bool {
+    let runs = |names: &[&str]| names.iter().any(|n| lower.contains(n));
+    (runs(&["python"]) && script_reads_network(lower, NET_PY))
+        || (runs(&["node", "bun ", "deno "]) && script_reads_network(lower, NET_JS))
+        || (runs(&["ruby"]) && script_reads_network(lower, NET_RB))
+        || (runs(&["perl"]) && script_reads_network(lower, NET_PL))
+        || (runs(&["osascript"]) && osascript_reads_mail(lower))
+        || lower.split_whitespace().any(message_store)
 }
 
 /// Loop words, assignments and wrappers in front of the program.

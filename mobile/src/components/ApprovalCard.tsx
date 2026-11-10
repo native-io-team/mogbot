@@ -383,7 +383,7 @@ export function ApprovalCard({
             disabled={off}
             focusable={armed}
             onPress={() => void answer(true, true)}
-            accessibilityHint="Carry on with the other engine whenever this happens. Change it on your Mac in Settings → Agents → Usage."
+            accessibilityHint="Carry on with the other AI app (Claude Code or Codex) whenever this happens. Change it on your Mac in Settings → Agents → Usage."
             style={share}
           />
         </>

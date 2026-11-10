@@ -173,13 +173,29 @@ impl Overrides {
     }
 
     /// These settings with every grant wider than the team's taken back:
-    /// a level above `team_level`, the browser switched on, exact-text off.
-    /// Stricter choices stay. What Replace keeps when new instructions
-    /// arrive from outside (`review::replace_in_place`): they were given to
-    /// the old instructions, and a newly imported agent starts at the
-    /// team's. Pure.
-    pub fn without_widening(&self, team_level: Level) -> Overrides {
+    /// a level above `team_level`, the browser switched on, exact-text off,
+    /// and projects, folders and apps narrowed to what the team has
+    /// ([`narrow_projects`], [`narrow_folders`], [`narrow_apps`]). Stricter
+    /// choices stay. What Replace keeps when new instructions arrive from
+    /// outside (`review::replace_in_place`): they were given to the old
+    /// instructions, and a newly imported agent starts at the team's. Pure.
+    pub fn without_widening(&self, team: &Team, team_level: Level) -> Overrides {
         let mut o = self.clone();
+        o.projects = o
+            .projects
+            .as_ref()
+            .map(|own| narrow_projects(own, &team.projects))
+            .filter(|p| *p != team.projects);
+        o.folders = o
+            .folders
+            .as_ref()
+            .map(|own| narrow_folders(own, &team.folders))
+            .filter(|f| *f != team.folders);
+        o.apps = o
+            .apps
+            .as_ref()
+            .map(|own| narrow_apps(own, &team.apps))
+            .filter(|a| *a != team.apps);
         if o.independence.is_some_and(|l| l.rank() > team_level.rank()) {
             o.independence = None;
         }
@@ -194,14 +210,102 @@ impl Overrides {
     }
 }
 
+/// Projects an agent keeps through Replace: the narrower of its own and the
+/// team's on every axis (which projects, how it works in its own, what it
+/// may do in others). Two lists keep only the projects on both. Pure.
+pub fn narrow_projects(own: &Projects, team: &Projects) -> Projects {
+    let how_rank = |h: How| match h {
+        How::ReadOnly => 0,
+        How::Copy => 1,
+        How::Direct => 2,
+    };
+    let (scope, listed) = match (own.scope, team.scope) {
+        (Scope::None, _) | (_, Scope::None) => (Scope::None, Vec::new()),
+        (Scope::Listed, Scope::Listed) => (
+            Scope::Listed,
+            own.listed
+                .iter()
+                .filter(|p| team.listed.contains(p))
+                .cloned()
+                .collect(),
+        ),
+        (Scope::Listed, Scope::All) => (Scope::Listed, own.listed.clone()),
+        (Scope::All, Scope::Listed) => (Scope::Listed, team.listed.clone()),
+        (Scope::All, Scope::All) => (Scope::All, Vec::new()),
+    };
+    let how = if how_rank(own.how) <= how_rank(team.how) {
+        own.how
+    } else {
+        team.how
+    };
+    let elsewhere = match (own.elsewhere, team.elsewhere) {
+        (Elsewhere::Change, Elsewhere::Change) => Elsewhere::Change,
+        _ => Elsewhere::Read,
+    };
+    Projects {
+        scope,
+        listed,
+        how,
+        elsewhere,
+    }
+}
+
+/// Folders an agent keeps through Replace: its own that the team's cover
+/// (the same folder or one inside a team folder), and change only where both
+/// allow it. A folder only it had is dropped. Pure.
+pub fn narrow_folders(own: &[Folder], team: &[Folder]) -> Vec<Folder> {
+    let inside = |p: &str, root: &str| {
+        let (p, root) = (p.trim_end_matches('/'), root.trim_end_matches('/'));
+        p == root
+            || p.strip_prefix(root)
+                .is_some_and(|rest| rest.starts_with('/'))
+    };
+    own.iter()
+        .filter_map(|f| {
+            let covering: Vec<&Folder> = team.iter().filter(|t| inside(&f.path, &t.path)).collect();
+            (!covering.is_empty()).then(|| Folder {
+                path: f.path.clone(),
+                write: f.write && covering.iter().any(|t| t.write),
+            })
+        })
+        .collect()
+}
+
+/// Apps an agent keeps through Replace: none beats only beats every app, and
+/// two "only" lists keep the apps on both. Pure.
+pub fn narrow_apps(own: &Apps, team: &Apps) -> Apps {
+    match (own.mode, team.mode) {
+        (AppsMode::None, _) | (_, AppsMode::None) => Apps {
+            mode: AppsMode::None,
+            only: Vec::new(),
+        },
+        (AppsMode::Only, AppsMode::Only) => Apps {
+            mode: AppsMode::Only,
+            only: own
+                .only
+                .iter()
+                .filter(|a| team.only.iter().any(|t| t.eq_ignore_ascii_case(a)))
+                .cloned()
+                .collect(),
+        },
+        (AppsMode::Only, AppsMode::All) => own.clone(),
+        (AppsMode::All, AppsMode::Only) => team.clone(),
+        (AppsMode::All, AppsMode::All) => Apps {
+            mode: AppsMode::All,
+            only: Vec::new(),
+        },
+    }
+}
+
 /// New instructions from outside replaced this agent's (`review`): take
 /// back its own grants wider than the team's ([`Overrides::without_widening`])
 /// and its admin role.
 pub fn narrow_for_replace(agent_id: &str) -> Result<(), CommandError> {
     let team_level = super::independence::level();
     modify(|saved| {
+        let team = saved.team.clone();
         if let Some(o) = saved.agents.get_mut(agent_id) {
-            *o = o.without_widening(team_level);
+            *o = o.without_widening(&team, team_level);
         }
         Ok(())
     })?;

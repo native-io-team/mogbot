@@ -315,14 +315,8 @@
   background: var(--tint-strong);
 }
 
-.agents-list__preview,
-.agent-chat__status {
+.agents-list__preview {
   transition: color var(--transition-interaction);
-}
-
-/* "Working" / "Needs your OK" in the header eases in when it appears. */
-.agent-chat__status {
-  animation: agents-motion-swap-in var(--agents-motion-enter) backwards;
 }
 
 /* An agent made while the list is up rises into its place once (useNewKeys);
@@ -406,7 +400,6 @@
   .agent-chat__messages,
   .agent-chat__messages > [data-arrived],
   .agent-chat__footer .agent-chat__jump,
-  .agent-chat__status,
   .agents-list > *,
   .ss-dropdown__menu:is(.agent-model-menu, .agent-schedule),
   .modal-frame-overlay:has(> .modal-frame-content:is(.agent-editor, .agents-import)),

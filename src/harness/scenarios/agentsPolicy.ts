@@ -260,7 +260,7 @@ export const agentsPolicyScenarios: Scenario[] = [
     id: 'agents-settings-card-allowed',
     title: 'Agents — a settings card once allowed',
     looksRightWhen:
-      'The same card resolved: folded to one quiet line, “Change Hiring’s settings? · Changed · from each agent’s next turn” with “Show request”, as every answered card folds. No buttons.',
+      'The same card resolved: folded to one quiet line, “Change Hiring’s settings? · Changed · from each agent’s next message” with “Show request”, as every answered card folds. No buttons.',
     openSelector: AGENTS_TAB,
     requires: '.agent-chat__row--agent',
     commands: {

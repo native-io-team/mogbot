@@ -457,14 +457,54 @@ const PACE = {
   ]),
 };
 
+/** The owner's case: the account in use has 44% of its week left, the other all of it. */
+const TWO = {
+  accounts: [
+    account('default', 'sam@example.com', { email: 'sam@example.com', plan: 'Max' }),
+    account('a1work', 'Work', { email: 'sam@northwind.example', plan: 'Max' }),
+    codexMac,
+  ],
+  inv: inventory([
+    line(
+      'default',
+      'sam@example.com',
+      [
+        win('five_hour', 31, 3 * H + 10 * M),
+        win('seven_day', 56, 2 * 24 * H + 4 * H),
+        win('seven_day_opus', 40, 2 * 24 * H + 4 * H),
+      ],
+      {
+        plan: 'max',
+        spent,
+        changes,
+        pace: [
+          {
+            estimate: true,
+            kind: 'seven_day',
+            resetsAt: now + 2 * 24 * H + 4 * H,
+            reachesAt: now + 40 * H,
+            readings: 14,
+            spanMinutes: 3 * 24 * 60,
+          },
+        ],
+      }
+    ),
+    line('a1work', 'Work', [win('five_hour', 0, 5 * H), win('seven_day', 0, 6 * 24 * H + 2 * H)], {
+      orgName: 'Northwind',
+      next: false,
+    }),
+  ]),
+};
+
 const OPEN = [{ click: '[data-testid="account-switcher"]' }];
 
-function pair(
+/** The overview, an account's page, and the sidebar row, for one state. */
+function trio(
   id: string,
   title: string,
   looksRightWhen: string,
   state: { accounts: Acc[]; inv: Acc },
-  extra: Partial<Scenario> = {}
+  detail: { account: string; looksRightWhen: string } | null
 ): Scenario[] {
   const cmds = commands(state.accounts, state.inv);
   return [
@@ -475,15 +515,26 @@ function pair(
       openSelector: AGENTS_TAB,
       steps: OPEN,
       requires: '[data-testid="usage-hero"]',
-      viewport: { width: 1280, height: 1000 },
       commands: cmds,
-      ...extra,
     },
+    ...(detail
+      ? [
+          {
+            id: `usage-${id}-account`,
+            title: `Usage — ${title} (an account’s page)`,
+            looksRightWhen: detail.looksRightWhen,
+            openSelector: AGENTS_TAB,
+            steps: [...OPEN, { click: `.usage-row[data-account="${detail.account}"]` }],
+            requires: '.usage-account',
+            commands: cmds,
+          },
+        ]
+      : []),
     {
       id: `usage-${id}-row`,
       title: `Usage — ${title} (the sidebar row)`,
       looksRightWhen:
-        'At the foot of the Agents sidebar: the engine icon with its status dot, one plain line, the stack as a thin segmented meter (one segment per account, in order) and, muted, the count and soonest reset. Nothing accent-coloured; nothing wraps.',
+        'At the foot of the Agents sidebar: “Usage”, then the total (“72% left · 2 accounts”), the total bar (a segment per account, most room first) and “Refills in …”. Nothing accent-coloured; nothing wraps.',
       openSelector: AGENTS_TAB,
       requires: '[data-testid="account-switcher"]',
       clipSelector: '.workspace-sidebar-footer',
@@ -492,71 +543,103 @@ function pair(
   ];
 }
 
+const PAGE =
+  'A breadcrumb with a back arrow, “Usage › <name>”. A sheet with a large keycap, the name, a status pill and “1st in the order · Max plan · …”, with “Use this one now” (when it isn’t in use) and ⋯ at the right. Then “Limits” with Limits | Tokens at its right, the limit cards (5-hour, Weekly, per-model) with countdown chips, a big “% left”, the pace-marked bar and the pace sentence, then “Where did my usage go” when there is something to say.';
+
 export const agentsUsageViewScenarios: Scenario[] = [
-  ...pair(
+  ...trio(
+    'two',
+    'two accounts, 100% and 44%',
+    'The hero leads with the total: “All accounts”, a large “72% left across 2 Max accounts”, “Next refill in 2d 4h · sam@example.com, …”. One bar of two segments, Work (full) on the left, sam@example.com (44%) on the right, each with its name, “% left” and a refill chip under it. Then “Accounts” with “Add …” at the right, two rows in order (1 sam@example.com In use, 2 Work), figures aligned. Then “How agents use your limits”, a hugging three-option control and its one line.',
+    TWO,
+    { account: 'default', looksRightWhen: PAGE }
+  ),
+  ...trio(
     'one',
     'one account',
-    'A hero sheet: “Your account”, “Plenty of room”, one full-width segment filled to 53% in ink, “sam@example.com · 53% left” under it, and the next reset. Below: the mode control, then one key card with a raised “1” keycap, “sam@example.com”, an “In use” pill, “Max plan · this Mac’s own sign-in”, 5-hour and Weekly bars with “Resets in …”, “Used by these agents this week” and a quiet “Where did my usage go”. No drag handle with one account.',
-    ONE
+    'The hero: “Usage”, “53% left this week”, “Next refill in …”, one full-width segment. One row. No “All accounts”.',
+    ONE,
+    { account: 'default', looksRightWhen: PAGE }
   ),
-  ...pair(
+  ...trio(
     'three',
     'three accounts',
-    'Three segments in order, the first (in use) in full ink, the others quieter; under them each name and its room. Three key cards with grips and 1, 2, 3 keycaps: In use, Next, Ready. The first has a pace line in secondary ink, never amber (an estimate, with what it rests on). Work shows “Northwind”. Each card that isn’t in use has “Use this one now”.',
-    THREE
+    'Three segments, most room first (Side project 95%, Work 78%, sam@example.com 39%); the total is their mean. Three rows in order 1, 2, 3: In use, Next, Ready.',
+    THREE,
+    { account: 'a1work', looksRightWhen: PAGE }
   ),
-  ...pair(
+  ...trio(
     'one-out',
     'one account out',
-    'The first key reads “Out of usage until …” (a neutral pill, never amber) with an empty first segment; Work is “In use”; the headline still says there is room.',
-    ONE_OUT
+    'sam@example.com sits last in the bar (empty, 0% left) and its row says “Out of usage until …” in a neutral pill; the total counts it as nothing left.',
+    ONE_OUT,
+    {
+      account: 'default',
+      looksRightWhen:
+        'The out account’s page: its pill reads “Out of usage until …”; its limit cards say 0% left.',
+    }
   ),
-  ...pair(
+  ...trio(
     'near-empty',
     'every account nearly empty',
-    'Headline “Nearly out on every account” in amber; under the hero one calm warning-washed bar: “Every account is nearly out of usage.” with “Add an account” and “Wait until …”. Segments are thin amber slivers.',
-    NEAR_EMPTY
+    'A small total in amber slivers; under the hero one calm warning-washed bar: “Every account is nearly out of usage.” with “Add an account” and “Wait until …”.',
+    NEAR_EMPTY,
+    null
   ),
-  ...pair(
+  ...trio(
     'reset-soon',
     'a reset soon with lots left',
-    '“Get the most from your limits” leads with a sheet: “62% of sam@example.com’s week resets in 9 h”, “Give agents something to do before it goes?”, the first three waiting items and “and 1 more”, and a neutral “Give agents something to do” key. The mode control shows “Use it all before reset”.',
-    RESET_SOON
+    'Under “How agents use your limits” (on “Use it all before reset”) a sheet: “62% of sam@example.com’s week resets in 9 h”, the first three waiting items and “and 1 more”, and a neutral “Give agents something to do”.',
+    RESET_SOON,
+    null
   ),
-  ...pair(
+  ...trio(
     'unknown',
     'no readings yet',
-    'Headline “No usage reading yet”. Every segment is an empty dashed slot, never full. Keys say “No reading yet” / “Not signed in”; the unsigned one has the fix line and a “Sign in” button.',
-    UNKNOWN
+    'The hero says “Your usage shows here after an agent’s first reply.” in secondary ink (no big figure). Every segment is an empty dashed slot, never full. Rows say “Not read yet”; the signed-out one only its “Not signed in” pill.',
+    UNKNOWN,
+    {
+      account: 'a3new',
+      looksRightWhen:
+        'The unsigned account’s page: a warning-washed bar “Sign in to use it.” with “Sign in”; no limits section.',
+    }
   ),
-  ...pair(
+  ...trio(
     'same-account',
     'the same account signed in twice',
-    'The meter has ONE segment (the duplicate draws none), with one muted line under it: “Personal Account is the same Claude account as sam@example.com — adds no extra room”. “Personal Account” sits on a dashed sheet with a “Same account” pill, the plain line “Same Claude account as sam@example.com — adds no extra room.”, and two buttons: “Sign in with a different account” and “Remove”; no “Use this one now”. The sidebar row says “Usage 78% left this week” and “Refills …”, with no account count.',
-    SAME
+    'The bar has ONE segment (the duplicate draws none), with one muted line under it: “Personal Account is the same Claude account as sam@example.com — adds no extra room”. The rows list both; Personal Account’s says “Adds no room” with a “Same account” pill and a dashed bar.',
+    SAME,
+    {
+      account: 'a4dup',
+      looksRightWhen:
+        'The duplicate’s page: “Same account” pill, a bar “Same Claude account as sam@example.com — adds no extra room.” with “Sign in with a different account” and “Remove”; no limits.',
+    }
   ),
-  ...pair(
+  ...trio(
     'signin-changed',
     'this Mac’s sign-in became another account',
-    'First thing in the view, a calm bar: “This Mac’s Claude Code is now signed in as me@example.com, whose week resets Saturdays 10 AM. It used to reset Mondays 4 PM, so that was another Claude account, and it isn’t connected anymore — add it to keep stacking.” with “Add it” and “Not now”. Below, one segment and the duplicate line for “Personal Account”.',
-    SIGNIN_CHANGED
+    'First thing in the view, a calm bar about this Mac’s sign-in, with “Add it” and “Not now”. Below, the total of one segment and the duplicate line.',
+    SIGNIN_CHANGED,
+    null
   ),
-  ...pair(
-    'pace',
-    'every limit, against pace',
-    'Each limit is its own small card: name and a countdown chip (“⟳ 3d 12h”), a big “36% left”, a bar with what is left solid and what is used hatched, and a thin pace tick where it would stand at an even pace. The weekly card of sam@example.com is ahead of pace: a now → refills line with a dashed marker “Runs out ~tomorrow · estimate” and the words “Ahead of pace — runs out ~…, 2 days early”. “Weekly · Opus” is its own card. Work’s cards say “Under pace — room to spare before it refills”. The sidebar row has a pace tick on each segment.',
-    PACE
-  ),
+  ...trio('pace', 'every limit, against pace', 'Two segments, Work (88%) first.', PACE, {
+    account: 'default',
+    looksRightWhen:
+      'sam@example.com’s page: 5-hour, Weekly and “Weekly · Opus” cards. The weekly one is ahead of pace: a now → refills line with a dashed marker “Runs out ~tomorrow · estimate” and “Ahead of pace — …”.',
+  }),
   {
     id: 'usage-tokens',
-    title: 'Usage — who used it this week (Tokens)',
+    title: 'Usage — who used an account this week (Tokens)',
     looksRightWhen:
-      'After “Tokens” in the Limits / Tokens switch: “Who used it this week”, a line saying these are tokens the engines reported and not a cost, and one row per agent, most first (Chief of Staff 4.8M, Lead Gen 2.5M …) with a thin share bar each.',
+      'On sam@example.com’s page after “Tokens”: “Used by these agents this week”, a table with Agent / Tokens / Turns headings, one row per agent with its key, name, a thin share bar, and right-aligned figures (Chief of Staff 4.8M 23 …), then a line saying these are tokens, not a cost.',
     openSelector: AGENTS_TAB,
-    steps: [...OPEN, { click: '[data-testid="usage-view-switch"] button:last-child' }],
-    requires: '[data-testid="usage-tokens"]',
-    viewport: { width: 1280, height: 1000 },
-    commands: commands(PACE.accounts, PACE.inv),
+    steps: [
+      ...OPEN,
+      { click: '.usage-row[data-account="default"]' },
+      { click: '[data-testid="usage-view-switch"] button:last-child' },
+    ],
+    requires: '.usage-table',
+    commands: commands(TWO.accounts, TWO.inv),
   },
   {
     id: 'usage-add-account-warning',
@@ -576,16 +659,5 @@ export const agentsUsageViewScenarios: Scenario[] = [
         named: true,
       },
     },
-  },
-  {
-    id: 'usage-where-did-it-go',
-    title: 'Usage — where did my usage go',
-    looksRightWhen:
-      'Under the in-use key, “Where did my usage go” is open: “Weekly 32% → 47% used” with when, and plainly “Nothing these agents ran explains this. It was used somewhere else: …”; then “Weekly 21% → 32% used” listing “Finance: Monday numbers · 3 turns · 900k tokens” and “Chief of Staff · 6 turns · 640k tokens”, and a quiet note that points aren’t split between runs.',
-    openSelector: AGENTS_TAB,
-    steps: [...OPEN, { click: '.usage-key[data-state="in_use"] [data-usage-story]' }],
-    requires: '.usage-key__story',
-    viewport: { width: 1280, height: 1100 },
-    commands: commands(ONE.accounts, ONE.inv),
   },
 ];

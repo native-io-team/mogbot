@@ -182,7 +182,7 @@ export function EngineStep({
       <FlowShell
         step="engine"
         title="Which AI should your agents run on?"
-        lede="Pick the one you pay for. You can add the other later."
+        lede="You don’t need to know how to code. Pick the one whose plan you pay for; you can add the other later."
         onBack={onBack}
         wide
       >

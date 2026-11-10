@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type KeyboardEvent,
   type MouseEvent,
   type CSSProperties,
   type ReactNode,
@@ -17,7 +16,6 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ActivityIcon,
   AddIcon,
-  BellIcon,
   ChevronIcon,
   CloseIcon,
   EditFieldIcon,
@@ -172,7 +170,7 @@ interface Props {
    * Which top-level destination is showing, so the
    * nav row can mark it current. Defaults to Home when omitted.
    */
-  activeNav?: 'home' | 'workflows' | 'inbox' | 'agents';
+  activeNav?: 'home' | 'agents';
   /**
    * Replaces the project list. Agents mode keeps this whole sidebar (nav,
    * search, footer) and shows its agent list here, so it reads as the same app.
@@ -180,13 +178,6 @@ interface Props {
   listContent?: ReactNode;
   /** Agents mode's quiet line at the foot (the plan's usage), above the phone row. */
   footerContent?: ReactNode;
-  /** Open the Workflows page. Hides the nav button when omitted. */
-  onGoWorkflows?: () => void;
-  /** Open the Inbox. Hides the nav button when omitted. */
-  onGoInbox?: () => void;
-  /** Home-level Team screen. Absent where there is no nav row. */
-  /** Unread findings, rendered as a badge on the Inbox button. */
-  inboxUnreadCount?: number;
   /**
    * Switch to Agents mode. Shows the Projects | Agents toggle above Search;
    * without it there is no toggle.
@@ -195,9 +186,8 @@ interface Props {
   /** Switch back to Projects from Agents mode. Falls back to `onGoHome`. */
   onGoProjects?: () => void;
   /**
-   * Replaces the Home / Workflows / Inbox buttons beside the sidebar toggle.
-   * Agents mode shows its own (What's in flight) there: those three belong to
-   * the Projects side.
+   * Replaces the Home button beside the sidebar toggle. Agents mode shows its
+   * own (What's in flight) there: Home belongs to the Projects side.
    */
   navContent?: ReactNode;
   /** Replaces the palette trigger at the top (Agents mode searches conversations there). */
@@ -431,9 +421,6 @@ function serverStatusDot(
 export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   isHomeActive,
   activeNav,
-  onGoWorkflows,
-  onGoInbox,
-  inboxUnreadCount = 0,
   onGoAgents,
   onGoProjects,
   searchContent,
@@ -483,8 +470,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   const bugReportModal = useModal('bugReport');
   const featureRequestModal = useModal('featureRequest');
   const changelogModal = useModal('changelog');
-  // 219, not 214: the top row gained Workflows and Inbox beside Home, and at the
-  // old default the last one sat hard against the resize edge.
+  // 219, not 214: kept from when the top row carried more buttons, so a saved
+  // width and the default still match.
   const [sidebarWidth, setSidebarWidth] = useState(219);
   const sidebarProjectSettingsModal = useModal('sidebarProjectSettings');
   const sidebarProjectRenameModal = useModal('sidebarProjectRename');
@@ -1804,39 +1791,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                   title="Home"
                   aria-label="Home"
                 />
-                {onGoWorkflows && (
-                  <IconButton
-                    variant="ghost"
-                    className={`workspace-sidebar-home ${activeNav === 'workflows' ? 'is-active' : ''}`}
-                    icon={<ActivityIcon size={12} />}
-                    onClick={onGoWorkflows}
-                    disabled={activeNav === 'workflows'}
-                    aria-current={activeNav === 'workflows' ? 'page' : undefined}
-                    title="Workflows"
-                    aria-label="Workflows"
-                  />
-                )}
-                {onGoInbox && (
-                  <span className="workspace-sidebar-inbox">
-                    <IconButton
-                      variant="ghost"
-                      className={`workspace-sidebar-home ${activeNav === 'inbox' ? 'is-active' : ''}`}
-                      icon={<BellIcon size={12} />}
-                      onClick={onGoInbox}
-                      disabled={activeNav === 'inbox'}
-                      aria-current={activeNav === 'inbox' ? 'page' : undefined}
-                      title="Inbox"
-                      aria-label={
-                        inboxUnreadCount > 0 ? `Inbox — ${inboxUnreadCount} unread` : 'Inbox'
-                      }
-                    />
-                    {inboxUnreadCount > 0 && (
-                      <span className="workspace-sidebar-inbox-badge" aria-hidden>
-                        {inboxUnreadCount > 9 ? '9+' : inboxUnreadCount}
-                      </span>
-                    )}
-                  </span>
-                )}
               </>
             )}
           </div>
@@ -2401,23 +2355,19 @@ function ProjectGroup({
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div
-            className="sidebar-project-row"
-            data-parked={isParked || undefined}
-            role="button"
-            tabIndex={0}
-            aria-current={isCurrent ? 'true' : undefined}
-            aria-label={`${row.fallbackName}; ${accessibleStatus}${isCurrent ? '; current project' : ''}`}
-            onClick={() => {
-              if (!isCurrent) onSelectProject(row.projectPath);
-            }}
-            onKeyDown={(e) => {
-              if ((e.key === 'Enter' || e.key === ' ') && !isCurrent) {
-                e.preventDefault();
-                onSelectProject(row.projectPath);
-              }
-            }}
-          >
+          <div className="sidebar-project-row" data-parked={isParked || undefined}>
+            {/* The row's own action is a real button stretched under its
+                controls: a role="button" row holding buttons hid them from
+                screen readers (nested-interactive). */}
+            <button
+              type="button"
+              className="sidebar-row-hit"
+              aria-current={isCurrent ? 'true' : undefined}
+              aria-label={`${row.fallbackName}; ${accessibleStatus}${isCurrent ? '; current project' : ''}`}
+              onClick={() => {
+                if (!isCurrent) onSelectProject(row.projectPath);
+              }}
+            />
             {sortable && (
               <DragSortHandle
                 className="sidebar-project-drag-handle"
@@ -2851,14 +2801,6 @@ function SidebarRow({ item }: { item: SidebarItem }) {
     inputRef.current.select();
   }, [isEditing]);
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
-    if (isEditing) return;
-    if ((e.key === 'Enter' || e.key === ' ') && item.onSelect) {
-      e.preventDefault();
-      item.onSelect();
-    }
-  };
-
   const handleClose = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     item.onClose?.();
@@ -2902,12 +2844,19 @@ function SidebarRow({ item }: { item: SidebarItem }) {
       ]
         .filter(Boolean)
         .join(' ')}
-      role={item.onSelect && !isEditing ? 'button' : undefined}
-      tabIndex={item.onSelect && !isEditing ? 0 : -1}
-      onClick={isEditing ? undefined : item.onSelect}
       onDoubleClick={item.onRename ? enterEditMode : undefined}
-      onKeyDown={handleKeyDown}
     >
+      {item.onSelect && !isEditing && (
+        // The row's action as a real button under its controls (see the
+        // project row): the list stays a list of items, each control reachable.
+        <button
+          type="button"
+          className="sidebar-row-hit"
+          aria-current={item.isActive ? 'true' : undefined}
+          aria-label={item.label}
+          onClick={item.onSelect}
+        />
+      )}
       <span className="sidebar-row-status">
         {item.leading ? (
           item.leading

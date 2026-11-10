@@ -8,7 +8,7 @@ import { BRAND } from '../../lib/brand';
 
 describe('the Chief’s ideas: the catalogue', () => {
   it('puts three things that run without you on the chips', () => {
-    expect(CHIEF_CHIPS.map((i) => i.id)).toEqual(['morning-brief', 'inbox', 'launch']);
+    expect(CHIEF_CHIPS.map((i) => i.id)).toEqual(['morning-brief', 'inbox', 'research']);
     // Every morning, on a trigger, a team: one from each group.
     expect(new Set(CHIEF_CHIPS.map((i) => i.group))).toEqual(
       new Set(['schedule', 'together', 'trigger'])
@@ -37,7 +37,17 @@ describe('the Chief’s ideas: the catalogue', () => {
   });
 
   it('what reaches others or the repo waits for the user', () => {
-    for (const id of ['ship-fixes', 'client-brief', 'inbox', 'invoices']) {
+    for (const id of [
+      'ship-fixes',
+      'client-brief',
+      'inbox',
+      'invoices',
+      'social-posts',
+      'job-search',
+      'house-hunt',
+      'meeting-notes',
+      'travel',
+    ]) {
       expect(findIdea(id)?.text).toMatch(/without (me|my Allow)/);
     }
   });
@@ -62,6 +72,40 @@ describe('the Chief’s ideas: the catalogue', () => {
     // A small business and a student each find their first job in the gallery.
     expect(findIdea('invoices')?.label).toMatch(/invoices/i);
     expect(findIdea('research')?.label).toMatch(/research/i);
+  });
+
+  it('puts everyday jobs first and anything about code under For builders, last', () => {
+    const groups = ideaGroups();
+    expect(groups.map((g) => g.label)).toEqual([
+      'On a schedule',
+      'When something happens',
+      'Agents together',
+      'For builders',
+    ]);
+    const everyday = groups.slice(0, -1).flatMap((g) => g.ideas);
+    for (const idea of everyday) {
+      expect(`${idea.label} ${idea.what}`).not.toMatch(
+        /GitHub|\brepo\b|deploy|\berrors?\b|dev server|\bcode\b/i
+      );
+    }
+    expect(groups[groups.length - 1].ideas.map((i) => i.id)).toEqual([
+      'ship-fixes',
+      'errors',
+      'client-brief',
+    ]);
+    // The jobs a beginner walk-through asked for, each findable by its title.
+    for (const job of [
+      /inbox/i,
+      /invoices/i,
+      /research/i,
+      /trip/i,
+      /social/i,
+      /meeting/i,
+      /jobs/i,
+      /place to live/i,
+    ]) {
+      expect(everyday.some((i) => job.test(i.label))).toBe(true);
+    }
   });
 
   it('is name-free', () => {

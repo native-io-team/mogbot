@@ -29,6 +29,7 @@ import type {
   RoutineWaiting,
 } from '../../packages/companion-protocol/src/model';
 import { keyStateOf, type KeyState } from '../../packages/companion-protocol/src/agentKeys';
+import { MODEL_DEFAULT, MODEL_PURPOSE } from '../../packages/companion-protocol/src/cardWords';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
@@ -98,6 +99,11 @@ export interface WorkStep {
   summary?: string;
   /** The last lines a long or failed command printed (finished timelines only). */
   output?: string[];
+  /**
+   * Its exact command or tool input is kept on this Mac, for the desk's
+   * "Show exact command" (`agents_step_exact`). The text never rides here.
+   */
+  hasExact?: boolean;
 }
 
 /** A tool known to take a while (`agents::describe::Slow`); a newer Mac may send another. */
@@ -170,6 +176,12 @@ export interface TurnWork {
    * from a Mac that never leaves them out, and from pages that didn't ask.
    */
   stepsOmitted?: boolean;
+  /** The engine it ran on ("Claude Code"), as the Mac started it. Older Macs omit it. */
+  engine?: string;
+  /** The account it ran on, by the name it is shown by. */
+  account?: string;
+  /** The model, only as the engine reported it; absent when it didn't say. */
+  model?: string;
 }
 
 export interface Agent {
@@ -412,7 +424,7 @@ export type AgentEffort = 'low' | 'medium' | 'high';
  * conversation, not its routines. Must match `EFFORTS` in store.rs.
  */
 export const EFFORT_CHOICES: readonly { value: AgentEffort | ''; label: string }[] = [
-  { value: '', label: 'Engine’s default' },
+  { value: '', label: MODEL_DEFAULT },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -426,7 +438,7 @@ export interface EngineModel {
 
 /** A model as the UI offers it. */
 export interface ModelChoice extends EngineModel {
-  /** What a person picks by: "Most capable", "Balanced", "Fastest". */
+  /** What a person picks by: "Smartest", "Balanced", "Fastest". */
   label: string;
   /** The engine's own name for it, said small beside the label: "Opus". */
   detail?: string;
@@ -999,17 +1011,18 @@ export interface UpdateAgentInput {
 }
 
 /** The model choice that passes no model: whatever the engine itself defaults to. */
-export const ENGINE_DEFAULT_LABEL = 'Engine’s default';
+export const ENGINE_DEFAULT_LABEL = MODEL_DEFAULT;
 
 /**
  * The models an agent can run on: Claude Code's own `--model` aliases, which
  * always mean the current model of that family. Must match `MODELS` in store.rs.
+ * Said by what they're for, worded once with the phone (`cardWords`).
  */
 export const AGENT_MODELS: readonly ModelChoice[] = [
   { value: '', label: ENGINE_DEFAULT_LABEL },
-  { value: 'opus', label: 'Most capable', detail: 'Opus' },
-  { value: 'sonnet', label: 'Balanced', detail: 'Sonnet' },
-  { value: 'haiku', label: 'Fastest', detail: 'Haiku' },
+  { value: 'opus', label: MODEL_PURPOSE.opus, detail: 'Opus' },
+  { value: 'sonnet', label: MODEL_PURPOSE.sonnet, detail: 'Sonnet' },
+  { value: 'haiku', label: MODEL_PURPOSE.haiku, detail: 'Haiku' },
 ];
 
 export const ENGINE_LABEL: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };

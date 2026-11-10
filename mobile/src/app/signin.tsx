@@ -289,7 +289,13 @@ export default function SignInFromPhone() {
             bouncesZoom
             contentContainerStyle={{ minHeight: shownHeight(width, frame) }}
           >
-            <Pressable onPress={onTap} disabled={!live} accessibilityLabel="The page on your Mac">
+            <Pressable
+              onPress={onTap}
+              disabled={!live}
+              accessibilityRole="imagebutton"
+              accessibilityLabel="The page on your Mac"
+              accessibilityState={{ disabled: !live }}
+            >
               <Image
                 source={{ uri: `data:image/jpeg;base64,${frame.image}` }}
                 style={{ width, height: shownHeight(width, frame) }}

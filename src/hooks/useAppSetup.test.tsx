@@ -97,7 +97,7 @@ describe('useAppSetup HMR recovery vs. closing a project', () => {
 
     // The sentinel and the reservation are both still there, as they are
     // after opening any project in this window.
-    for (const view of ['agents', 'workflows', 'agents', 'inbox', 'agents'] as AppView[]) {
+    for (const view of ['agents', 'projects', 'agents', 'projects', 'agents'] as AppView[]) {
       rerender({ view });
     }
 

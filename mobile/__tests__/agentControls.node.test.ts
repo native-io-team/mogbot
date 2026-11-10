@@ -102,7 +102,7 @@ describe('Agent controls', () => {
   it('locks the model and effort while a turn runs or it’s driven', () => {
     expect(controlsLocked(agent())).toBeNull();
     expect(controlsLocked(agent({ status: { state: 'working' } as Agent['status'] }))).toMatch(
-      /turn ends/
+      /once it’s done with this/
     );
     expect(controlsLocked(agent({ takeover: {} as Agent['takeover'] }))).toMatch(/hand it back/);
   });

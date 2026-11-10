@@ -97,6 +97,50 @@ jobs:
         # thresholds as more tests land (see Block 14 follow-ups).
         run: pnpm test:coverage --coverage.thresholds.lines=4 --coverage.thresholds.functions=4 --coverage.thresholds.branches=15 --coverage.thresholds.statements=4
 
+  # axe-core over every harness scenario, light and dark, with Reduce Motion
+  # on. Fails on any WCAG A/AA violation (or a loop still running) beyond
+  # scripts/a11y-baseline.json, so the known ones are worked down and no new
+  # one lands. See docs/ui-harness.md, "Accessibility".
+  a11y:
+    name: Accessibility (axe over the harness)
+    runs-on: ubuntu-latest
+    needs: [config-integrity]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.9
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Start the harness
+        run: |
+          pnpm harness > /tmp/harness.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:1425/harness.html > /dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/harness.log
+          exit 1
+
+      - name: axe over every scenario
+        run: pnpm check:a11y
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-report
+          path: harness/a11y/
+
   # Backend checks
   backend:
     name: Backend Checks

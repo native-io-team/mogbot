@@ -286,12 +286,12 @@ export function engineLayers(
 
 function engineLayersLive(s: Pick<Inputs, 'mac' | 'overview'>): Layer[] {
   const engines = engineHealth(s);
-  if (!engines.length) return [{ title: 'Agent engines', tone: 'unknown', detail: 'Unknown' }];
+  if (!engines.length) return [{ title: 'What agents run on', tone: 'unknown', detail: 'Unknown' }];
   const shown = engines.filter((e) => e.installed || e.used > 0);
   if (!shown.length) {
     return [
       {
-        title: 'Agent engines',
+        title: 'What agents run on',
         tone: 'problem',
         detail: `None installed on the Mac. Install ${engines.map((e) => e.label).join(' or ')} there`,
       },

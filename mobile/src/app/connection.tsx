@@ -12,7 +12,10 @@ import { Button, Dot, Section, T, useToneColor, SheetPage, InsetDivider } from '
 import { SheetTitle } from '../components/SheetTitle';
 import { engineName, failureLine, formatAgo, formatDate } from '../lib/agents';
 import { layers, needsPairing, pill, problemBody } from '../lib/connection';
-import { appInfo, openTailscale } from '../lib/pairing';
+import { appInfo } from '../lib/pairing';
+import { reachChecklist } from '../lib/reachChecklist';
+import { ReachChecklist, useTailscaleInstalled } from '../components/ReachChecklist';
+import { ShowAll } from '../components/ShowAll';
 import { currentTransport, deviceSelf, unpair } from '../lib/session';
 import { useRouter } from 'expo-router';
 import { space } from '../lib/theme';
@@ -41,6 +44,23 @@ export default function Connection() {
   const router = useRouter();
   const macName = state.credentials?.name ?? 'your Mac';
   const pairAgain = needsPairing(state.link);
+  // The Mac is quiet (not a refusal): the checklist first, the layers folded.
+  const unreachable = !connected && state.link.kind !== 'refused';
+  const [details, setDetails] = useState(false);
+  const installed = useTailscaleInstalled();
+  const lastSeenAt = t?.lastSeenAt || state.syncedAt || 0;
+  const power = state.mac?.power;
+  const checks = unreachable
+    ? reachChecklist({
+        mac: macName,
+        phoneOnline: state.phoneOnline,
+        tailscaleInstalled: installed,
+        paired: { kind: 'yes', since: state.credentials?.pairedAt ?? 0 },
+        lastSeenAt,
+        likelyAsleep: !!power && !power.keepAwake && power.onBattery === 'yes',
+        now,
+      })
+    : null;
 
   return (
     <SheetPage>
@@ -62,22 +82,35 @@ export default function Connection() {
           )}
         </View>
 
-        <Section>
-          {rows.map((layer, i) => (
-            <View key={layer.title} style={styles.layer}>
-              <View style={styles.dot}>
-                <Dot color={toneColor[layer.tone]} />
-              </View>
-              <View style={{ flex: 1, gap: space['2xs'] }}>
-                <T color={colors.textBody}>{layer.title}</T>
-                <T variant="small" color={colors.textMuted}>
-                  {layer.detail}
-                </T>
-              </View>
-              {i < rows.length - 1 && <InsetDivider />}
+        {checks && (
+          <Section title="Check these">
+            <View style={styles.checklist}>
+              <ReachChecklist checks={checks} />
             </View>
-          ))}
-        </Section>
+          </Section>
+        )}
+
+        {unreachable && (
+          <ShowAll open={details} onPress={() => setDetails((d) => !d)} label="Details" />
+        )}
+        {(!unreachable || details) && (
+          <Section>
+            {rows.map((layer, i) => (
+              <View key={layer.title} style={styles.layer}>
+                <View style={styles.dot}>
+                  <Dot color={toneColor[layer.tone]} />
+                </View>
+                <View style={{ flex: 1, gap: space['2xs'] }}>
+                  <T color={colors.textBody}>{layer.title}</T>
+                  <T variant="small" color={colors.textMuted}>
+                    {layer.detail}
+                  </T>
+                </View>
+                {i < rows.length - 1 && <InsetDivider />}
+              </View>
+            ))}
+          </Section>
+        )}
 
         {failures.length > 0 && (
           <Section title="Agents">
@@ -112,9 +145,9 @@ export default function Connection() {
           <Info label="App" value={`${appInfo().version} (${appInfo().build})`} last />
         </Section>
 
-        {/* The one fix: pairing again when the Mac let this phone go
-            (Tailscale wouldn't help); Tailscale when the Mac can't be reached. */}
-        {pairAgain ? (
+        {/* The one fix when the Mac let this phone go: pairing again
+            (Tailscale wouldn't help). A quiet Mac's fixes are in the checklist. */}
+        {pairAgain && (
           <Button
             title="Pair again"
             icon="qrcode.viewfinder"
@@ -125,11 +158,6 @@ export default function Connection() {
             }}
             testID="connection-pair-again"
           />
-        ) : (
-          !connected &&
-          state.link.kind !== 'refused' && (
-            <Button title="Open Tailscale" icon="network" onPress={() => void openTailscale()} />
-          )
         )}
       </ScrollView>
     </SheetPage>
@@ -158,6 +186,7 @@ const useStyles = makeStyles(() => ({
   // Centred on the title's first line: (24 line − 8 dot) / 2.
   dot: { paddingTop: space.sm },
   info: { flexDirection: 'row', justifyContent: 'space-between', gap: space.md, padding: space.lg },
+  checklist: { paddingHorizontal: space.lg, paddingVertical: space.xs },
 }));
 
 /** A throw while drawing stays on this screen, with the way back. */

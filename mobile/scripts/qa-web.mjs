@@ -524,7 +524,7 @@ async function prePairShots(page, d) {
       await capture(page, `pair-unreachable-${theme}`, {
         route: '/pair?d=… (Mac never answers)',
         check:
-          '“Can’t reach <Mac>”, the host, what to check (Tailscale on, same account), Open Tailscale and Try again',
+          '“Can’t reach <Mac>”, “Check these, then try again.”, then three rows with a dot each: the Mac awake with the app open (can’t tell), Tailscale on with the same account (Open Tailscale), this phone paired (not yet); no host or port anywhere until Details is opened; Try again and Back',
         theme,
       });
     }
@@ -825,6 +825,49 @@ const PROBE = [
     check:
       'Request in full: every one of the 19 lines (no “Show all”), Deny · Allow pinned at the bottom',
   },
+  // The two screens a request is answered on, at the largest text size: the
+  // words wrap rather than clip, and Deny · Allow stay whole and reachable.
+  ...[
+    {
+      name: 'probe-needs-you-largest',
+      to: '/needs',
+      ready: 'Needs you',
+      pages: 2,
+      check:
+        'Needs you at Largest: names, titles and lines wrap with nothing cut through; Deny · Allow and Review whole, never squeezed into one line',
+    },
+    {
+      name: 'probe-request-risky-largest',
+      to: '/request?agent=doomed&id=doomed_001',
+      ready: 'Request',
+      pages: 2,
+      check:
+        'The risky request at Largest: the command wraps, the warning icon beside the title, Deny and Allow side by side or stacked, each label whole',
+    },
+  ].map(({ to, ready, ...shot }) => ({
+    ...shot,
+    route: '/settings',
+    ready: 'Largest',
+    act: async (page) => {
+      await scrollToText('Largest')(page);
+      await page.clickText('Largest');
+      await sleep(400);
+      await page.goto(`${WEB}${to}`);
+      await page.waitFor(
+        `document.body.innerText.includes(${JSON.stringify(ready)})`,
+        20_000,
+        ready
+      );
+      await sleep(1500);
+    },
+    after: async (page) => {
+      await page.goto(`${WEB}/settings`);
+      await page.waitFor(`document.body.innerText.includes('Largest')`, 20_000, 'Largest');
+      await scrollToText('Largest')(page);
+      await page.clickText('Default');
+      await sleep(400);
+    },
+  })),
   {
     name: 'probe-fifty',
     route: '/agents',
@@ -1496,7 +1539,7 @@ const LIVE = [
       await sleep(500);
     },
     check:
-      'Working, with words: “Ops reads it when this turn ends” full width over the field from its left edge, Send now at its right; in the field the mic, Stop and Send',
+      'Working, with words: “Ops reads it when it’s done with this one” full width over the field from its left edge, Send now at its right; in the field the mic, Stop and Send',
     after: clearField,
   },
   {
@@ -1646,6 +1689,25 @@ const LIVE = [
     },
     check:
       'The key tapped: a row of eight small keys, one per colourway, a row of the icons on keys in its colourway, and a row of free keyboard keys (its own ringed); the current choice in each ringed in a neutral grey. The big key at the top shows its sublegend and pips',
+  },
+  {
+    name: 'agent-sheet-icons',
+    route: '/agent/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await page.clickLabel('Change how it looks');
+      await sleep(500);
+      await page.clickLabel('Search 2,029 more icons');
+      await page.waitFor(
+        `document.body.innerText.includes('2,052 icons')`,
+        20_000,
+        'the icon pack'
+      );
+      await page.type('money', 'input[aria-label="Search icons"]');
+      await sleep(800);
+    },
+    check:
+      'The icon sheet over the agent: Icon and Done, the agent’s key at 112pt, the search reading “money”, category chips (All, Featured, Accessibility…), “N for “money””, then a grid of small keys in the agent’s colourway: the Money legend first, then Lucide’s banknote, coins, currency, wallet, dollar sign…',
   },
   {
     name: 'agent-sheet-level',
@@ -2115,7 +2177,7 @@ const OFFLINE_CACHED = [
     name: 'offline-connection',
     route: '/connection',
     settle: 3000,
-    check: 'What is wrong, layer by layer',
+    check: 'Check these first: three rows (Mac awake and app open, Tailscale on, paired: Yes), each with its fix; Details folded; no host in the first lines',
   },
 ];
 
@@ -2553,7 +2615,7 @@ const ENGINE = [
     ready: 'Designer',
     act: openControls,
     check:
-      'Agent controls: “Designer · Opus 5.5 · High”, then Model (Engine’s default ticked, saying it is Opus 5.5 now; “Switch to Codex…” under it), Effort (High ticked), how much it does on its own, Usage, More about Designer',
+      'Agent controls: “Designer · Opus 5.5 · High”, then Model (Default ticked, saying it is Opus 5.5 now; “Switch to Codex…” under it), Effort (High ticked), how much it does on its own, Usage, More about Designer',
     pages: 3,
     after: closeAndClear,
   },
@@ -2578,7 +2640,7 @@ const ENGINE = [
     ready: 'Ops',
     act: openControls,
     check:
-      'Ops is mid-turn: the sheet says to change the model and effort when this turn ends, their rows dimmed; the level stays open',
+      'Ops is working: the sheet says to change the model and effort once it’s done with this, their rows dimmed; the level stays open',
     pages: 2,
     after: closeAndClear,
   },
@@ -3143,6 +3205,25 @@ async function main() {
   }
 
   if (phase('usage-accounts')) {
+    await startMock('--usage', 'room');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await each([
+      {
+        name: 'usage-total',
+        route: '/usage',
+        ready: 'Usage',
+        check:
+          'The total first: "All accounts", a large "72% left", "across 2 accounts", "Next refill in …". One bar of two segments, Personal (full) on the left, then the account in use (44%); under it each account named with its % left and a ⟳ chip. Then "ACCOUNTS": one grouped card with a row each (keycap 1 filled for the one in use, name, % left, a thin bar, the pill and ⟳ countdown, a chevron).',
+      },
+      {
+        name: 'usage-account',
+        route: '/usage-account?engine=claude&account=default',
+        ready: 'Usage',
+        check:
+          '"‹ Usage" above the account’s name as the title; one card: keycap, name, plan, "In use", the 5-hour and Weekly limits with big "% left", the pace-marked bar and the pace sentence; then "Used by these agents this week" as a table (name, tokens, messages) with right-aligned figures.',
+      },
+    ]);
     for (const variant of ['two-claude', 'one-read']) {
       await startMock('--usage', variant);
       await page.goto(`${WEB}/agents`);
@@ -3152,7 +3233,7 @@ async function main() {
           name: `usage-accounts-${variant}`,
           route: '/usage?id=site',
           ready: 'Usage',
-          act: scrollToText('YOUR ACCOUNTS'),
+          act: scrollToText('Accounts'),
           check:
             'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) with each account named and its room under it, and the next reset; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
         },
