@@ -409,16 +409,13 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
    * Open an agent's chat on one line. A line said in another of its
    * conversations opens that conversation first, then scrolls to it.
    */
-  const openMessage = useCallback(
-    (agentId: string, messageId: string, conversation?: string) => {
-      if (conversation && getAgentsSnapshot().viewing[agentId] !== conversation) {
-        void openConversation(agentId, conversation);
-      }
-      setSelectedId(agentId);
-      setJump({ agentId, messageId });
-    },
-    []
-  );
+  const openMessage = useCallback((agentId: string, messageId: string, conversation?: string) => {
+    if (conversation && getAgentsSnapshot().viewing[agentId] !== conversation) {
+      void openConversation(agentId, conversation);
+    }
+    setSelectedId(agentId);
+    setJump({ agentId, messageId });
+  }, []);
   const openHit = useCallback(
     (hit: SearchHit) => {
       setCurrentHit(hit.messageId);
@@ -889,6 +886,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     []
   );
 
+  const installEngine = useCallback(
+    (engine: AgentEngine) => setEngineSetup({ engine, step: 'install' }),
+    []
+  );
+
   // Stable, so the memoised chat re-renders only for its own agent.
   const shownEngine = shown?.engine;
   const setUpShownEngine = useCallback(() => {
@@ -899,6 +901,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
       step: engines.find((e) => e.id === shownEngine)?.installed ? 'sign-in' : 'install',
     });
   }, [shownEngine, engines]);
+  // An error line said its engine isn't on this Mac: install, whatever the
+  // last check said (it may predate the engine going).
+  const installShown = useCallback(() => {
+    if (shownEngine) setEngineSetup({ engine: shownEngine, step: 'install' });
+  }, [shownEngine]);
   const signInShown = useCallback(() => {
     if (shownEngine) signIn(shownEngine);
   }, [shownEngine, signIn]);
@@ -1043,6 +1050,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onNewAgent={openNew}
                 onOpenMessage={openMessage}
                 onSignIn={signIn}
+                onInstallEngine={installEngine}
                 compact={
                   isCompact
                     ? {
@@ -1064,6 +1072,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onOpenAgent={setSelectedId}
                 onSetUpEngine={setUpShownEngine}
                 onSignIn={signInShown}
+                onInstallEngine={installShown}
                 onImport={openImport}
                 onSetUpPhone={shown.isMain ? openPhone : undefined}
                 onOpenApps={openShownApps}

@@ -302,8 +302,12 @@ export interface ContextFill {
 }
 
 export interface Failure {
-  /** `interrupted`: cut off part-way and not picked up by itself; Continue carries on. */
-  kind: 'usage_limit' | 'signed_out' | 'interrupted' | 'other';
+  /**
+   * `interrupted`: cut off part-way and not picked up by itself; Continue
+   * carries on. `engine_missing`: its engine isn't on the Mac any more
+   * (older Macs never send it).
+   */
+  kind: 'usage_limit' | 'signed_out' | 'interrupted' | 'engine_missing' | 'other';
   resetsAt?: number;
 }
 
@@ -1456,7 +1460,7 @@ export interface AgentMessage {
    * `user_chrome` is Settings → Agents → Your Chrome on the Mac. The phone
    * shows the note's text, which names where. Older Macs never send it.
    */
-  fix?: 'user_chrome';
+  fix?: 'user_chrome' | 'user_chrome_check' | 'disk';
   /**
    * Which of the agent's conversations it was said in (`conversationOf`).
    * Absent on lines from before there were several: the first one's.

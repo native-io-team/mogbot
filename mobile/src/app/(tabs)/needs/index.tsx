@@ -49,7 +49,7 @@ import { answerApproval, canCall, describeError, loadLatest } from '../../../lib
 import { useApp } from '../../../lib/store';
 import { progress as setupProgress } from '../../../lib/teamSetup';
 import { heroMark, keySize, iconSize, PRESSED, radius, space } from '../../../lib/theme';
-import { previewText } from '@shipstudio/companion-protocol';
+import { failurePill, previewText } from '@shipstudio/companion-protocol';
 
 /** Agents whose chat the feed needs and this phone hasn't loaded. */
 function toLoad(agents: Agent[], chats: Record<string, { loaded?: boolean } | undefined>) {
@@ -215,9 +215,14 @@ function rowWords(
       return [SETUP_TITLE, setupLine ?? `In ${agent.name}’s chat`];
     case 'stuck': {
       const failure = failedTurn(agent);
-      return failure
-        ? ['Didn’t finish', failureLine(failure, previewText(agent.preview), engineName(agent))]
-        : ['Needs your OK', 'Open its chat to see what it’s asking'];
+      if (!failure) return ['Needs your OK', 'Open its chat to see what it’s asking'];
+      // The state as the title ("Signed out", "Didn't finish"), the reason
+      // under it: said once, as the desk's pill says it.
+      const pill = failurePill(failure, previewText(agent.preview), engineName(agent));
+      return [
+        pill.label,
+        pill.rest || failureLine(failure, previewText(agent.preview), engineName(agent)),
+      ];
     }
   }
 }

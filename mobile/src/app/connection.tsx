@@ -3,17 +3,18 @@
  * phone can't observe is said to be unknown, never guessed.
  */
 
-import type { Device } from '@shipstudio/companion-protocol';
+import { previewText, type Device } from '@shipstudio/companion-protocol';
 
 import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useLinkState, useNow } from '../components/ConnectionPill';
 import { Button, Dot, Section, T, useToneColor, SheetPage, InsetDivider } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
-import { engineName, formatAgo, formatDate } from '../lib/agents';
-import { layers, pill } from '../lib/connection';
+import { engineName, failureLine, formatAgo, formatDate } from '../lib/agents';
+import { layers, needsPairing, pill, problemBody } from '../lib/connection';
 import { appInfo, openTailscale } from '../lib/pairing';
-import { currentTransport, deviceSelf } from '../lib/session';
+import { currentTransport, deviceSelf, unpair } from '../lib/session';
+import { useRouter } from 'expo-router';
 import { space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 
@@ -37,6 +38,9 @@ export default function Connection() {
     now
   );
   const failures = (state.overview?.agents ?? []).filter((a) => a.failure);
+  const router = useRouter();
+  const macName = state.credentials?.name ?? 'your Mac';
+  const pairAgain = needsPairing(state.link);
 
   return (
     <SheetPage>
@@ -50,8 +54,10 @@ export default function Connection() {
             </T>
           </View>
           {state.refusal && (
+            // Removed or asked to pair again: what's true and the fix, in
+            // the app's words (the Agents tab's), never the Mac's raw refusal.
             <T variant="small" color={colors.accentErrorLight}>
-              {state.refusal.message}
+              {pairAgain ? problemBody(state.link, macName, 'Your agents') : state.refusal.message}
             </T>
           )}
         </View>
@@ -87,11 +93,7 @@ export default function Connection() {
                 <View style={{ flex: 1, gap: space['2xs'] }}>
                   <T color={colors.textBody}>{a.name}</T>
                   <T variant="small" color={colors.textMuted}>
-                    {a.failure?.kind === 'signed_out'
-                      ? `Last turn failed: ${engineName(a)} is signed out`
-                      : a.failure?.kind === 'usage_limit'
-                        ? 'At its usage limit'
-                        : 'Last turn didn’t finish'}
+                    {a.failure ? failureLine(a.failure, previewText(a.preview), engineName(a)) : ''}
                     {a.capabilities ? ` · as of ${formatAgo(a.capabilities.seenAt, now)}` : ''}
                   </T>
                 </View>
@@ -110,8 +112,24 @@ export default function Connection() {
           <Info label="App" value={`${appInfo().version} (${appInfo().build})`} last />
         </Section>
 
-        {!connected && (
-          <Button title="Open Tailscale" icon="network" onPress={() => void openTailscale()} />
+        {/* The one fix: pairing again when the Mac let this phone go
+            (Tailscale wouldn't help); Tailscale when the Mac can't be reached. */}
+        {pairAgain ? (
+          <Button
+            title="Pair again"
+            icon="qrcode.viewfinder"
+            onPress={async () => {
+              await unpair();
+              router.replace('/pair');
+              router.push('/scan');
+            }}
+            testID="connection-pair-again"
+          />
+        ) : (
+          !connected &&
+          state.link.kind !== 'refused' && (
+            <Button title="Open Tailscale" icon="network" onPress={() => void openTailscale()} />
+          )
         )}
       </ScrollView>
     </SheetPage>

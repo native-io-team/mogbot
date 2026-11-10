@@ -277,7 +277,10 @@ describe('errors in the chat', () => {
     } as AgentMessage;
     await render(<MessageRow message={m} agent={agent()} queued={false} onError={() => {}} />);
     expect(screen.getByTestId('card-head')).toBeTruthy();
-    expect(screen.getByText('Didn’t finish: The tool crashed')).toBeTruthy();
+    // The state as the heading, the Mac's sentence once under it.
+    expect(screen.getByText('Didn’t finish')).toBeTruthy();
+    expect(screen.getByText('The tool crashed.')).toBeTruthy();
+    expect(screen.queryByText('The tool crashed · didn’t finish')).toBeNull();
   });
 
   it('a real failure says where it ran and, if it ended the last turn, what to do', async () => {

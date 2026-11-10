@@ -154,7 +154,6 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "Shows a one-time code to type at github.com/login/device, here or anywhere. GitHub’s sign-in stays on your Mac.",
   "Shows the task’s own screen, as your Mac has it",
   "Sign in to … here. The token stays on your Mac.",
-  "Sign in to … on your Mac, then send it again.",
   "Signed in to the same account as your Mac",
   "Signed out. Sign in on your Mac to keep your agents working",
   "Signing in from here only works over Tailscale, which encrypts it all the way to your Mac.",
