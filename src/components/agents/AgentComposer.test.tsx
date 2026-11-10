@@ -17,11 +17,13 @@ function Chat({
   onSend,
   renders,
   unfilled,
+  lastSent,
 }: {
   id: string;
   onSend: () => void;
   renders: () => void;
   unfilled?: string;
+  lastSent?: () => string | null;
 }) {
   renders();
   return (
@@ -47,6 +49,7 @@ function Chat({
         onSend={onSend}
         onPickFiles={() => {}}
         unfilled={unfilled}
+        lastSent={lastSent}
       />
     </>
   );
@@ -56,6 +59,34 @@ afterEach(() => {
   setComposerDraft('a1', '');
   setComposerDraft('a2', '');
   resetChatRestoreForTests();
+});
+
+describe('↑ brings back what you last sent', () => {
+  it('fills an empty field with it, and leaves ↑ alone once anything is typed', () => {
+    render(
+      <Chat id="a1" onSend={() => {}} renders={() => {}} lastSent={() => 'Run the tests again'} />
+    );
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    fireEvent.keyDown(box, { key: 'ArrowUp' });
+    expect(box).toHaveValue('Run the tests again');
+    fireEvent.change(box, { target: { value: 'Something else' } });
+    fireEvent.keyDown(box, { key: 'ArrowUp' });
+    expect(box).toHaveValue('Something else');
+  });
+
+  it('does nothing with nothing sent yet, or with a modifier held', () => {
+    const { unmount } = render(
+      <Chat id="a1" onSend={() => {}} renders={() => {}} lastSent={() => null} />
+    );
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    fireEvent.keyDown(box, { key: 'ArrowUp' });
+    expect(box).toHaveValue('');
+    unmount();
+    render(<Chat id="a1" onSend={() => {}} renders={() => {}} lastSent={() => 'Hi'} />);
+    const again = screen.getByRole('textbox', { name: 'Message Ops' });
+    fireEvent.keyDown(again, { key: 'ArrowUp', metaKey: true });
+    expect(again).toHaveValue('');
+  });
 });
 
 describe('the composer owns what is typed', () => {

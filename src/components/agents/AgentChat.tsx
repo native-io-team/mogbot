@@ -499,6 +499,16 @@ export const AgentChat = memo(function AgentChat({
   const getDraft = useCallback(() => composerDraft(agent.id), [agent.id]);
   const setDraft = useCallback((text: string) => setComposerDraft(agent.id, text), [agent.id]);
   const [pending, setPending] = useState<Pending[]>([]);
+  // ↑ in an empty composer: the last thing you said here, back in the field
+  // to change and send again (it goes as a new message; the old one stays).
+  const lastSent = useStableEvent((): string | null => {
+    for (let i = pending.length - 1; i >= 0; i--) if (pending[i].text.trim()) return pending[i].text;
+    const said = messages ?? [];
+    for (let i = said.length - 1; i >= 0; i--) {
+      if (said[i].kind === 'user' && said[i].text.trim()) return said[i].text;
+    }
+    return null;
+  });
   const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
@@ -2025,6 +2035,7 @@ export const AgentChat = memo(function AgentChat({
                     onSend={send}
                     onPickFiles={pickFiles}
                     unfilled={unfilled}
+                    lastSent={lastSent}
                   />
                 ) : (
                   <div className="agent-composer agent-composer--blocked" role="status">

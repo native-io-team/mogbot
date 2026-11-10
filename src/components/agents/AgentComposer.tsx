@@ -76,6 +76,8 @@ interface AgentComposerProps {
    * nothing) and the hint says to finish it.
    */
   unfilled?: string | null;
+  /** The last message you sent in this chat, for ↑ in an empty composer. */
+  lastSent?: () => string | null;
 }
 
 /** True while the draft is the starter's brief with its blank still empty. */
@@ -117,6 +119,7 @@ export const AgentComposer = memo(function AgentComposer({
   onSend,
   onPickFiles,
   unfilled,
+  lastSent,
 }: AgentComposerProps) {
   const draft = useComposerDraft(agentId);
   const setDraft = useMemo(() => (text: string) => setComposerDraft(agentId, text), [agentId]);
@@ -200,7 +203,28 @@ export const AgentComposer = memo(function AgentComposer({
         onKeyDown={(e) => {
           if (dictation.onComposerKeyDown(e)) return;
           if (mentionPicker.onKeyDown(e)) return;
-          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+          if (
+            e.key === 'ArrowUp' &&
+            !e.shiftKey &&
+            !e.altKey &&
+            !e.metaKey &&
+            !e.ctrlKey &&
+            !e.nativeEvent.isComposing &&
+            draft === '' &&
+            staged.length === 0 &&
+            quotes.length === 0 &&
+            revising === null
+          ) {
+            // ↑ in an empty field brings back what you last sent, caret at
+            // its end, as a terminal or Slack does. A field with anything in
+            // it keeps ↑ for moving the caret.
+            const last = lastSent?.();
+            if (!last) return;
+            e.preventDefault();
+            setDraft(last);
+            const el = e.currentTarget;
+            requestAnimationFrame(() => el.setSelectionRange(last.length, last.length));
+          } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             if (!blank) onSend(e.metaKey);
           } else if (e.key === 'Escape' && onEscape?.()) {
