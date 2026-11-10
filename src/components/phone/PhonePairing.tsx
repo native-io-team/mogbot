@@ -24,26 +24,40 @@ import { PhoneQr } from './PhoneQr';
 import { TailscaleStoreLinks } from './PhoneTailscale';
 import { BRAND } from '../../lib/brand';
 import { formatClock } from '../../../packages/companion-protocol/src/clock';
+import {
+  PAIR_BUTTON,
+  PAIR_YOUR_PHONE,
+  SCAN_THE_CODE,
+} from '../../../packages/companion-protocol/src/pairWords';
 
 interface OfferProps {
   busy: boolean;
+  /** No phone paired yet (the code was cancelled or ran out). */
+  first?: boolean;
   onPair: () => void;
 }
 
-export function PairOffer({ busy, onPair }: OfferProps) {
+/**
+ * The way to a code once setup is done. Its button is the phone app's own
+ * instruction, "Pair your phone", so whichever way the panel was opened the
+ * words on the phone match a button here.
+ */
+export function PairOffer({ busy, first = false, onPair }: OfferProps) {
   return (
     <div className="phone-offer">
       <span className="phone-offer__icon" aria-hidden>
         <MobileIcon size={18} />
       </span>
       <div className="phone-offer__body">
-        <span className="phone-offer__title">Pair a phone</span>
+        <span className="phone-offer__title">
+          {first ? 'Ready to pair' : 'Another phone, or this one again'}
+        </span>
         <span className="phone-offer__detail">
-          Scan a one-time code with the {BRAND.name} app, then allow the phone here.
+          Shows a one-time code to scan with the {BRAND.name} app.
         </span>
       </div>
       <Button variant="primary" disabled={busy} onClick={onPair}>
-        Show code
+        {PAIR_YOUR_PHONE}
       </Button>
     </div>
   );
@@ -71,17 +85,26 @@ export function PairCode({ code, now, busy, tailscale, reachedAt, onCopy, onCanc
         label={`Pairing code for the ${BRAND.name} phone app`}
       />
       <div className="phone-code__side">
-        <span className="phone-code__title">Scan with the {BRAND.name} app</span>
+        <span className="phone-code__title">Scan this with your phone</span>
         <ol className="phone-code__steps">
+          <li>
+            <span className="phone-code__step-strong">Get the {BRAND.name} app</span> on your phone,
+            from your TestFlight invite.
+          </li>
           <li data-tailscale>
-            <span className="phone-code__step-strong">{phoneTailscaleText(tailscale)}</span> It’s
-            how the phone reaches this Mac; turn it on before you scan.
+            <span className="phone-code__step-strong">{phoneTailscaleText(tailscale)}</span> Switch
+            it on: it’s how the phone reaches this Mac.
             <TailscaleStoreLinks />
           </li>
-          <li>Open {BRAND.name} on your phone.</li>
-          {/* The phone's own words: its button is "Scan the code", then "Pair". */}
-          <li>Tap Scan the code, then point the camera at this code.</li>
-          <li>Tap Pair, then allow the phone here when it asks.</li>
+          {/* The phone's own words: its buttons are "Scan the code", then "Pair". */}
+          <li>
+            Open {BRAND.name}, tap <span className="phone-code__step-strong">{SCAN_THE_CODE}</span>{' '}
+            and point the camera at this code.
+          </li>
+          <li>
+            Tap <span className="phone-code__step-strong">{PAIR_BUTTON}</span>, then click Allow
+            here when it asks.
+          </li>
         </ol>
         {reachedAt !== undefined && (
           <span className="phone-code__reached" role="status" data-testid="phone-code-reached">

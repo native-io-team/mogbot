@@ -48,72 +48,91 @@
   margin-top: var(--spacing-sm);
 }
 
-/* First visit: get the app, Tailscale once, pair. Numbered by the list. */
-.phone-steps {
+/* The first phone: each step numbered, its one button, Done when it is. */
+.phone-setup__list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
-  margin: var(--spacing-md) 0 0;
-  padding-left: var(--spacing-lg);
-  font-size: var(--font-size-body-md);
-  font-weight: var(--font-weight-heading);
-  color: var(--text-primary);
-}
-
-.phone-step {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--spacing-xs);
-}
-
-.phone-steps > .phone-step {
-  display: list-item;
-}
-
-.phone-steps > .phone-step > * + * {
-  margin-top: var(--spacing-xs);
-}
-
-.phone-step__title {
+  gap: var(--spacing-sm);
   margin: 0;
-  font-size: var(--font-size-body-md);
-  font-weight: var(--font-weight-heading);
-  color: var(--text-primary);
+  padding: 0;
+  list-style: none;
 }
 
-.phone-step__done {
-  margin-right: var(--spacing-xs);
-  vertical-align: -1px;
+.phone-setup__step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-default);
+  background: var(--surface-panel);
+}
+
+.phone-setup__num {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-xl);
+  height: var(--spacing-xl);
+  border-radius: var(--radius-pill);
+  background: var(--surface-control);
+  color: var(--text-primary);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.phone-setup__step[data-done] .phone-setup__num {
   color: var(--accent-success);
 }
 
-.phone-step__actions {
+.phone-setup__body {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.phone-setup__title {
+  display: flex;
+  align-items: baseline;
   gap: var(--spacing-sm);
-}
-
-.phone-steps .text-button.button {
-  font-weight: var(--font-weight-body);
-}
-
-.phone-step__text {
   margin: 0;
   font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-primary);
+}
+
+.phone-setup__step[data-done] .phone-setup__title {
+  color: var(--text-secondary);
+}
+
+.phone-setup__done {
+  font-size: var(--font-size-body-sm);
   font-weight: var(--font-weight-body);
+  color: var(--accent-success);
+}
+
+.phone-setup__text {
+  margin: 0;
+  font-size: var(--font-size-body-md);
   line-height: var(--line-height-help);
   color: var(--text-secondary);
 }
 
-.phone-step__action {
-  margin-top: var(--spacing-xs);
+.phone-setup__wait {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
-/* The second step reads as next, not now. */
-.phone-step[data-later] .phone-step__title,
-.phone-step[data-later] .phone-step__text {
-  color: var(--text-muted);
+.phone-setup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
 }
 
 .phone-section {

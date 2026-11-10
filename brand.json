@@ -28,7 +28,8 @@
     "templateApi": null,
     "starterRepoBase": "https://github.com/ship-studio",
     "companionSource": null,
-    "pushRelay": null
+    "pushRelay": null,
+    "macDownload": "https://github.com/native-io-team/mogbot-releases"
   },
   "chromeExtension": {
     "webStoreId": null

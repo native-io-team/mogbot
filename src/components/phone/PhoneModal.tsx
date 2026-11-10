@@ -10,7 +10,7 @@
  * @module components/phone/PhoneModal
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { ModalFrame } from '../primitives/ModalFrame';
@@ -26,7 +26,6 @@ import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { TAILSCALE_DOWNLOAD_URL } from '../../lib/remoteAccess';
-import { BRAND } from '../../lib/brand';
 import {
   cancelPairing,
   COMPANION_CHANGED_EVENT,
@@ -34,7 +33,6 @@ import {
   getPhoneStatus,
   phoneCapabilities,
   phoneStep,
-  phoneTailscaleText,
   PUSH_COPY,
   removePhone,
   retryPhoneTailscale,
@@ -50,9 +48,9 @@ import {
 } from '../../lib/companion';
 import { PairCode, PairConfirm, PairOffer } from './PhonePairing';
 import { PhoneDevices } from './PhoneDevices';
-import { TailscaleStoreLinks } from './PhoneTailscale';
 import { PhoneInstall } from './PhoneInstall';
 import { PhoneInstallEntry } from './PhoneInstallEntry';
+import { PhoneSetupSteps } from './PhoneSetupSteps';
 import {
   COMPANION_INSTALL_ENABLED,
   readInstallRecord,
@@ -156,10 +154,16 @@ function PhonePanel({
     [run]
   );
 
+  // The first phone: the panel opens straight on its code once it can be
+  // shown (from the sidebar, ⌘K, Settings or the Chief's card alike), once
+  // per opening, so Cancel stays cancelled.
+  const autoIssued = useRef(false);
+
   useEffect(() => {
     if (!isOpen) {
       setCode(null);
       setInstall(null);
+      autoIssued.current = false;
       return;
     }
     if (takeInstallOnOpen() && COMPANION_INSTALL_ENABLED) setInstall({});
@@ -170,8 +174,11 @@ function PhonePanel({
       else unlisten = fn;
     });
     void load().then((s) => {
-      // Cmd+K "Pair a phone": straight to the code when it can be shown.
-      if (takePairOnOpen() && s && phoneStep(s).kind === 'ready') void pair();
+      // "Pair your phone" (sidebar, ⌘K): straight to the code when it can be shown.
+      if (takePairOnOpen() && s && phoneStep(s).kind === 'ready' && !autoIssued.current) {
+        autoIssued.current = true;
+        void pair();
+      }
     });
     return () => {
       closed = true;
@@ -198,6 +205,16 @@ function PhonePanel({
     enabled: showingCode,
     name: 'phone-code-clock',
   });
+
+  // No phone paired yet and the last setup step just went green: the code,
+  // without another click.
+  const firstReady = !!s && s.devices.length === 0 && phoneStep(s).kind === 'ready';
+  useEffect(() => {
+    if (!isOpen || !firstReady || code || pairing?.request || busy !== null) return;
+    if (autoIssued.current) return;
+    autoIssued.current = true;
+    void pair();
+  }, [isOpen, firstReady, code, pairing?.request, busy, pair]);
 
   // The code was used, cancelled or ran out: let it go.
   useEffect(() => {
@@ -237,14 +254,9 @@ function PhonePanel({
     );
   }
 
-  // Nothing to connect yet: off, no phone paired, no build from this Mac,
-  // and not told they already have the app. The panel is the way to get it.
-  const getAppFirst =
-    !!s &&
-    phoneStep(s).kind === 'off' &&
-    s.devices.length === 0 &&
-    !readInstallRecord() &&
-    !haveApp;
+  // The first phone, until a code can be shown: every step in order with
+  // its Done tick. Once it's ready, the code itself takes the panel.
+  const firstSetup = !!s && s.devices.length === 0 && phoneStep(s).kind !== 'ready';
 
   // "Phone", the Settings section's name, wherever it opens: the phone app
   // sends people to Settings → Phone, so the sidebar's window says the same.
@@ -265,11 +277,16 @@ function PhonePanel({
           {/* The app comes first: there's nothing to connect until it's on a
                 phone. Off, with no phone paired and no build from this Mac, the
                 panel is the way to get it; turning access on comes after. */}
-          {getAppFirst ? (
-            <PhoneGetApp
-              tailscale={s.tailscale}
-              onInstall={COMPANION_INSTALL_ENABLED ? () => setInstall({}) : undefined}
+          {firstSetup ? (
+            <PhoneSetupSteps
+              status={s}
+              step={phoneStep(s)}
+              busy={busy}
+              haveApp={haveApp || !!readInstallRecord()}
               onHaveApp={() => setHaveApp(true)}
+              onInstall={COMPANION_INSTALL_ENABLED ? () => setInstall({}) : undefined}
+              onEnable={() => void run('enable', () => setPhoneAccess(true))}
+              onRetry={() => void run('retry', retryPhoneTailscale)}
             />
           ) : (
             <AccessHeader
@@ -295,12 +312,16 @@ function PhonePanel({
                   onCancel={() => void run('cancel', cancelPairing)}
                 />
               ) : (
-                <PairOffer busy={busy !== null} onPair={() => void pair()} />
+                <PairOffer
+                  busy={busy !== null}
+                  first={s.devices.length === 0}
+                  onPair={() => void pair()}
+                />
               )}
             </section>
           )}
 
-          {COMPANION_INSTALL_ENABLED && !getAppFirst && (
+          {COMPANION_INSTALL_ENABLED && (!firstSetup || !!readInstallRecord()) && (
             <PhoneInstallEntry
               now={now}
               onInstall={() => setInstall({})}
@@ -356,79 +377,6 @@ function PhonePanel({
           )}
         </>
       )}
-    </div>
-  );
-}
-
-/**
- * First visit, nothing installed: the plain story. Get the app, then pair.
- * One prerequisite sits between them, said once with its link: Tailscale,
- * which is how the phone reaches this Mac. How the app gets built (Xcode,
- * a cable, USB debugging) is the install screen's business, behind
- * "Install it yourself (advanced)", never a paragraph here.
- */
-function PhoneGetApp({
-  tailscale,
-  onInstall,
-  onHaveApp,
-}: {
-  tailscale: PhoneStatus['tailscale'];
-  onInstall?: () => void;
-  onHaveApp: () => void;
-}) {
-  const tailscaleReady = tailscale.state === 'connected';
-  return (
-    <div className="phone-intro phone-get-app">
-      <p className="phone-lede">
-        Talk to your agents from your phone, answer their questions and approve what they ask for.
-      </p>
-      <ol className="phone-steps">
-        <li className="phone-step">
-          <h3 className="phone-step__title">Get the app</h3>
-          <p className="phone-step__text">Put the {BRAND.name} app on your phone.</p>
-          <div className="phone-step__actions">
-            {onInstall ? (
-              <Button variant="primary" onClick={onInstall} data-install-open>
-                Get the app…
-              </Button>
-            ) : (
-              <p className="phone-step__text">Installing isn’t available in this version yet.</p>
-            )}
-            <Button variant="secondary" onClick={onHaveApp} data-have-app>
-              I already have it
-            </Button>
-          </div>
-        </li>
-        <li className="phone-step">
-          <h3 className="phone-step__title">Tailscale, on this Mac and your phone</h3>
-          <p className="phone-step__text">
-            How your phone reaches this Mac, privately. Without it on the phone, a scan never gets
-            here.
-          </p>
-          <p className="phone-step__text" data-done={tailscaleReady || undefined}>
-            {tailscaleReady && <CheckIcon size={12} className="phone-step__done" />}
-            {tailscaleReady
-              ? 'This Mac: set up.'
-              : 'This Mac: install it and sign in, then turn on phone access here.'}
-          </p>
-          {!tailscaleReady && (
-            <TextButton
-              rightIcon={<ExternalLinkIcon size={12} />}
-              onClick={() => void openUrl(TAILSCALE_DOWNLOAD_URL)}
-            >
-              Get Tailscale for Mac
-            </TextButton>
-          )}
-          <p className="phone-step__text" data-tailscale-phone>
-            Your phone: {phoneTailscaleText(tailscale)}
-          </p>
-          <TailscaleStoreLinks />
-        </li>
-        <li className="phone-step" data-later>
-          <h3 className="phone-step__title">Pair</h3>
-          <p className="phone-step__text">Scan a code from this Mac with the app, then allow it.</p>
-        </li>
-      </ol>
     </div>
   );
 }

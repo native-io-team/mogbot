@@ -33,6 +33,8 @@ export interface BrandLinks {
   /** Git repo the phone app is built from on the user's Mac. */
   companionSource: string | null;
   pushRelay: string | null;
+  /** Where the Mac app is downloaded from (the phone's pairing screen links it). */
+  macDownload: string | null;
 }
 
 export interface Brand {

@@ -5,14 +5,14 @@
  * onboarding) was ten minutes of Tailscale between someone and their first
  * result.
  *
- * Shown once per Mac's chat until it's answered: Set up my phone opens the
+ * Shown once per Mac's chat until it's answered: "Pair your phone" opens the
  * Phone panel (the same pairing the onboarding screens did), Not now puts it
  * away. Never while a phone is already paired, while the import question is
  * still open (one question at a time), or while a turn is running.
  *
  * The answer is kept in this window's storage: losing it costs one more
- * offer, never a wrong state, and "Get the phone app" at the sidebar's foot
- * and ⌘K "Pair a phone" are there either way.
+ * offer, never a wrong state, and "Pair your phone" at the sidebar's foot
+ * and in ⌘K are there either way.
  *
  * @module components/agents/ChiefPhoneOffer
  */
@@ -22,17 +22,18 @@ import { MobileIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { AgentCard } from './AgentCard';
 import { getPhoneStatus } from '../../lib/companion';
+import { PAIR_YOUR_PHONE } from '../../../packages/companion-protocol/src/pairWords';
 import type { AgentMessage } from '../../lib/agents';
 
 export const PHONE_OFFER_KEY = 'shipstudio.chief.phoneOffer';
 
 /**
- * Honest about the time: "about ten minutes" held only when the phone app
- * was already on the phone. With no App Store build yet, a first-timer's
- * phone app is built on this Mac (Expo Go in minutes, Xcode up to an hour).
+ * What it is and the one thing to know before starting: the phone reaches
+ * this Mac only through Tailscale, on both. Said here, not as a surprise
+ * after a scan that never arrives.
  */
 export const PHONE_OFFER_NOTE =
-  'Chat, answer and approve from anywhere. Your phone talks only to this Mac. There’s no App Store app yet, so setting it up takes ten minutes to an hour.';
+  'Chat, answer and approve from anywhere. Your phone talks only to this Mac, through Tailscale on both.';
 
 /**
  * Whether the conversation has reached its first result: the user has said
@@ -112,7 +113,7 @@ export function ChiefPhoneOffer({ onSetUp }: { onSetUp: () => void }) {
             onClick={() => answer('setup')}
             data-phone-offer-setup
           >
-            Set up my phone
+            {PAIR_YOUR_PHONE}
           </Button>
         </>
       }

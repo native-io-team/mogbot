@@ -26,6 +26,7 @@ export const ALL_LINKS: BrandModule.BrandLinks = {
   starterRepoBase: 'https://github.com/ship-studio',
   companionSource: 'https://github.com/ship-studio/ship-studio.git',
   pushRelay: null,
+  macDownload: null,
 };
 
 export function withAllLinks(original: typeof BrandModule): typeof BrandModule {

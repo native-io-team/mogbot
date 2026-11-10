@@ -27,6 +27,7 @@ import {
   requestPairOnOpen,
   type PhoneStatus,
 } from '../../lib/companion';
+import { PAIR_YOUR_PHONE } from '../../../packages/companion-protocol/src/pairWords';
 
 type Tone = 'off' | 'ok';
 
@@ -38,8 +39,9 @@ export function phoneIndicatorState(
   if (devices.length === 0) {
     return {
       tone: 'off',
-      line: 'Get the phone app',
-      detail: 'Pair the companion app to talk to your agents from your phone.',
+      // The phone app's first screen says to click exactly this.
+      line: PAIR_YOUR_PHONE,
+      detail: 'Shows a code to scan with the phone app, to talk to your agents from your phone.',
       pair: true,
     };
   }

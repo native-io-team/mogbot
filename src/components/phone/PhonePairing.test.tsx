@@ -83,9 +83,10 @@ describe('PairCode', () => {
       />
     );
 
-  it('puts Tailscale on the phone first, with the Mac’s account and the store links', () => {
+  it('says the app, then Tailscale on the phone with the Mac’s account and the store links', () => {
     show();
-    const first = screen.getAllByRole('listitem')[0];
+    const [app, first] = screen.getAllByRole('listitem');
+    expect(app.textContent).toMatch(/^Get the .+ app on your phone/);
     expect(first.textContent).toMatch(
       /^Install Tailscale on your phone and sign in as julian@example\.com\./
     );
