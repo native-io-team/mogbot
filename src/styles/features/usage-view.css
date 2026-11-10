@@ -2,8 +2,8 @@
    the account rows and an account's page (UsageStack), and the view
    (AgentsUsageView).
 
-   The total is drawn in ink, not hue: one segment per account, in the work
-   order, each filled to what it adds. A status hue only for an account that
+   The total is drawn in ink, not hue: one ordinary bar filled to what is
+   left across every account; each account's own bar is its row. A status hue only for an account that
    is low (amber); out of usage is neutral, since it resets by itself. Never
    the accent. The position keycap is the site's key (the segmented tabs'
    key); the hero and the account's page are sheets. */
@@ -12,7 +12,6 @@
   --usage-stack-track: var(--surface-recessed);
   --usage-stack-ink: var(--text-primary);
   --usage-stack-ink-quiet: var(--text-muted);
-  --usage-total-gap: var(--spacing-2xs);
   --usage-total-height-small: var(--spacing-xs);
   --usage-total-height-large: var(--spacing-lg);
   --usage-cap-size: var(--spacing-xl);
@@ -581,69 +580,20 @@
 
 /* ----------------------------------------------------------- the total */
 
+/* One ordinary bar: the track, filled to what is left across every account.
+   Never a segment per account (two at 50% read as two quarter-bars). */
 .usage-total {
-  display: flex;
-  gap: var(--usage-total-gap);
-  width: 100%;
-  min-width: 0;
-}
-
-.usage-total[data-size='small'] {
-  gap: var(--border-width-emphasis);
-}
-
-.usage-total__track {
-  display: flex;
-  flex: 1;
-  gap: inherit;
-  min-width: 0;
-}
-
-.usage-total__item {
-  display: flex;
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-/* A segment, one target: opens that account. */
-.usage-total__part {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  margin: calc(var(--spacing-xs) * -1);
-  padding: var(--spacing-xs);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-  transition: background var(--transition-interaction);
-}
-
-.usage-total__part:hover {
-  background: var(--tint-subtle);
-}
-
-.usage-total__part:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 0;
-}
-
-.usage-total__seg {
   position: relative;
   display: block;
-  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
   height: var(--usage-total-height-small);
   overflow: hidden;
   background: var(--usage-stack-track);
   border-radius: var(--radius-pill);
 }
 
-.usage-total__part .usage-total__seg {
-  flex: none;
+.usage-total[data-size='large'] {
   height: var(--usage-total-height-large);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-input-inset);
@@ -658,12 +608,12 @@
   transition: width var(--transition-arrive);
 }
 
-.usage-total__seg[data-tone='warning'] .usage-total__fill {
+.usage-total[data-tone='warning'] .usage-total__fill {
   background: var(--accent-warning);
 }
 
-/* No reading: an empty slot with a dashed edge, never a full bar. */
-.usage-total__seg[data-unread] {
+/* No reading: an empty track with a dashed edge, never a full bar. */
+.usage-total[data-unread] {
   background: transparent;
   box-shadow: none;
   outline: var(--border-width-default) dashed var(--border-strong);
@@ -901,6 +851,73 @@
   transform: translateY(-50%);
 }
 
+/* Under a row: who uses it, and switching new work to it. The one new work
+   starts on says so in strong ink with a tick: unmistakable, never accent. */
+.usage-row__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  min-height: var(--spacing-xl);
+  padding: 0 var(--spacing-lg) var(--spacing-md)
+    calc(var(--spacing-lg) + var(--usage-cap-size) + var(--spacing-md));
+  margin-top: calc(var(--spacing-xs) * -1);
+}
+
+.usage-row__users {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-row__current {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--spacing-3xs);
+  color: var(--text-primary);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+}
+
+/* Runs on: each agent and the account it runs on, changed in place. */
+.usage-runs-on {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  background: var(--surface-panel);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.usage-runs-on__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-lg);
+}
+
+.usage-runs-on__row + .usage-runs-on__row {
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.usage-runs-on__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Narrow: the bar and refill give way; name, room and state stay. */
 @container usage-panel (max-width: 34rem) {
   .usage-row {
@@ -1123,9 +1140,9 @@
 }
 
 /* Read at 0%: nothing left, so no solid track (in dark the track is a dark
-   slab that read as full beside the dashed unread ones); an empty slot with
-   a solid hairline, told apart from "not read" by the dash. */
-.usage-total__seg[data-empty] {
+   slab that read as full); an empty track with a solid hairline, told apart
+   from "not read" by the dash. */
+.usage-total[data-empty] {
   background: transparent;
   box-shadow: none;
   outline: var(--border-width-default) solid var(--border-strong);

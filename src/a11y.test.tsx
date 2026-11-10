@@ -168,9 +168,9 @@ describe('axe: no WCAG A/AA violations', () => {
     await check(
       <div>
         <TotalBar total={glance.total} />
-        <TotalBar total={glance.total} size="large" onOpen={() => {}} />
+        <TotalBar total={glance.total} size="large" />
         <ul>
-          <AccountRow k={key} onOpen={() => {}} />
+          <AccountRow k={key} onOpen={() => {}} onUse={() => {}} />
         </ul>
         <AccountDetail
           k={key}

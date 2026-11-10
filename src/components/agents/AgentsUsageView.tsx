@@ -5,12 +5,16 @@
  *
  * **The overview**, read top-down:
  * 1. **The total**: the room across every real account as one figure ("72%
- *    left across 2 accounts", each account counted equally), when the next
- *    refill is, and one bar made of a segment per account, in the work order,
- *    each opening that account (the rows under it name them).
+ *    left across 2 accounts", each account counted equally, said how), when
+ *    the next refill is, and ONE ordinary bar filled to that figure (never a
+ *    segment per account: two at 50% are one bar half full).
  * 2. **Nearly out everywhere**: one calm bar with the options.
  * 3. **Accounts**: one row each, in the order turns try them (its place,
- *    name, a small bar, what it adds, In use / Next, refill), opening its page.
+ *    name, a small bar, what it adds, In use / Next, refill), opening its
+ *    page; under it who uses it and "Use for new work", or "New work starts
+ *    here" on the one in use.
+ * 3b. **Runs on**: each agent with the account it runs on (any, in order, or
+ *    one only), changed in place (`agents_update` with `account`).
  * 4. **How agents use your limits**: Normal / Save my limits / Use it all
  *    before reset, its one line, and the spare-capacity nudge.
  * 5. Add an account, the crossover choice, the list of ideas for leftover usage and other
@@ -28,7 +32,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AddIcon, ArrowLeftIcon, ZapIcon } from '@/components/icons';
+import { AddIcon, ArrowLeftIcon, CheckIcon, ZapIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
@@ -42,7 +46,7 @@ import {
 } from '../primitives/Breadcrumb';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { ENGINE_LABEL, type AgentEngine } from '../../lib/agents';
+import { ENGINE_LABEL, updateAgent, type AgentEngine } from '../../lib/agents';
 import {
   addUsageAccount,
   onUsageAccountRequest,
@@ -84,6 +88,11 @@ import { AgentsCrossover } from './AgentsCrossover';
 import { SpareList } from './AgentsUsage';
 import { useUsageGlance } from './AccountSwitcher';
 import { AccountDetail, AccountRow, SameNotes, TotalBar } from './UsageStack';
+import { AgentKey } from './AgentKey';
+import { Dropdown, DropdownItem } from '../primitives/Dropdown';
+import { MenuButton } from '../primitives/MenuButton';
+import { refreshAgents } from '../../lib/agentsStore';
+import { runsOnRows } from '../../../packages/companion-protocol/src/usageGlance';
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
 
@@ -144,7 +153,7 @@ export function UsagePanel({
   onCrumb?: (crumb: UsageCrumb | null) => void;
 }) {
   const { showToast } = useOptionalToast();
-  const { accounts, all, glance, inventory, now, engines, attempt, remove, reload } =
+  const { accounts, all, glance, inventory, now, engines, agents, attempt, remove, reload } =
     useUsageGlance({ look: true });
   const [signingIn, setSigningIn] = useState<UsageAccount | null>(null);
   const [macSignIn, setMacSignIn] = useState<AgentEngine | null>(null);
@@ -377,7 +386,7 @@ export function UsagePanel({
       ) : (
         <>
           {signInChanged}
-          <TotalHero glance={glance} onOpen={(engine, id) => show({ engine, id })} />
+          <TotalHero glance={glance} />
 
           {glance.low && (
             <div className="usage-bar" role="status" data-testid="usage-low">
@@ -451,6 +460,11 @@ export function UsagePanel({
                         k={k}
                         onOpen={() => show({ engine: k.engine, id: k.id })}
                         onSignIn={() => signIn(k.engine, k.id)}
+                        onUse={
+                          e.keys.length > 1
+                            ? () => void attempt(() => putAccountFirst(k.engine, k.id))
+                            : undefined
+                        }
                       />
                     ))}
                   </ul>
@@ -458,6 +472,8 @@ export function UsagePanel({
               ))}
             </section>
           )}
+
+          <RunsOnList glance={glance} agents={agents} />
 
           {glance.keys.length === 0 && installed.length > 0 && (
             <div className="usage-add">
@@ -589,18 +605,11 @@ export function UsagePanel({
 /**
  * The total first: what is left across every account, of what, and when it
  * next refills (`totalWords`, as the phone and the chat's popover say it);
- * then the bar, in the work order. Each segment opens its account; the
- * accounts' names and room are the rows right under it, so the bar doesn't
- * say them a second time. Out everywhere, or nothing read, it says that
- * instead of a figure.
+ * then ONE bar filled to that figure, and how it is weighted. The accounts'
+ * names, bars and room are the rows right under it, so the hero doesn't say
+ * them. Out everywhere, or nothing read, it says that instead of a figure.
  */
-function TotalHero({
-  glance,
-  onOpen,
-}: {
-  glance: UsageGlance;
-  onOpen: (engine: AgentEngine, id: string) => void;
-}) {
+function TotalHero({ glance }: { glance: UsageGlance }) {
   const { total } = glance;
   const words = totalWords(glance);
   return (
@@ -618,9 +627,14 @@ function TotalHero({
         </h2>
         {words.refill && <p className="usage-hero__refill">{words.refill}</p>}
       </div>
-      <TotalBar total={total} size="large" onOpen={onOpen} />
-      {(glance.estimate || total.unread || glance.sameNotes.length > 0) && (
+      <TotalBar total={total} size="large" />
+      {(glance.estimate || total.unread || total.weighting || glance.sameNotes.length > 0) && (
         <div className="usage-hero__notes">
+          {total.weighting && (
+            <p className="usage-hero__estimate" data-testid="usage-weighting">
+              {total.weighting}
+            </p>
+          )}
           {glance.estimate && (
             <p className="usage-hero__estimate">
               {glance.headline}. {glance.estimate}: an estimate, not a reading.
@@ -631,5 +645,82 @@ function TotalHero({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * "Runs on", for every agent whose engine has two or more accounts: any
+ * account (the order above, carrying on when one runs out) or one only.
+ * The same choice as an agent's Model menu (`AgentAccountItems`), all in
+ * one place, so moving work from one plan to another is here.
+ */
+function RunsOnList({
+  glance,
+  agents,
+}: {
+  glance: UsageGlance;
+  agents: readonly { id: string; name: string; engine: AgentEngine; account?: string }[];
+}) {
+  const { showToast } = useOptionalToast();
+  const rows = runsOnRows(glance, agents);
+  if (rows.length === 0) return null;
+  const pick = async (agentId: string, account: string) => {
+    try {
+      await updateAgent(agentId, { account });
+      await refreshAgents();
+    } catch (e) {
+      showToast(say(e), 'error');
+    }
+  };
+  return (
+    <section className="usage-section" aria-labelledby="usage-runs-on">
+      <h3 className="usage-section__title" id="usage-runs-on">
+        Runs on
+      </h3>
+      <p className="usage-section__muted">
+        Any account follows the order above. Pick one to keep an agent on it, never another.
+      </p>
+      <ul className="usage-runs-on" aria-label="Which account each agent runs on">
+        {rows.map((r) => (
+          <li key={r.agentId} className="usage-runs-on__row" data-agent={r.agentId}>
+            <AgentKey id={r.agentId} name={r.name} size="sm" />
+            <span className="usage-runs-on__name">{r.name}</span>
+            <Dropdown
+              align="right"
+              portal
+              quietOpen
+              menuClassName="agent-model-menu"
+              trigger={(p) => (
+                <MenuButton
+                  {...p}
+                  tabIndex={0}
+                  expanded={p['aria-expanded']}
+                  variant="secondary"
+                  size="compact"
+                  aria-label={`${r.name} runs on: ${r.currentLabel}`}
+                >
+                  {r.currentLabel}
+                </MenuButton>
+              )}
+            >
+              {r.choices.map((c) => (
+                <DropdownItem
+                  key={c.id || 'any'}
+                  onSelect={() => c.id !== r.current && void pick(r.agentId, c.id)}
+                >
+                  <span className="agent-model-menu__label">
+                    {c.label}
+                    <span className="agent-model-menu__detail">{c.detail}</span>
+                  </span>
+                  <span className="agent-model-menu__check" aria-hidden="true">
+                    {c.id === r.current && <CheckIcon size={12} />}
+                  </span>
+                </DropdownItem>
+              ))}
+            </Dropdown>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
