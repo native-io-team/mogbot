@@ -1534,10 +1534,13 @@ pub fn set_status(app: &AppHandle, agent_id: &str, mut status: Status) {
         *activity = super::secrets::redact(activity).into_owned();
     }
     status.work = None;
-    {
+    let moved = {
         let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
-        runtimes.entry(agent_id.to_string()).or_default().status = Some(status.clone());
-    }
+        let runtime = runtimes.entry(agent_id.to_string()).or_default();
+        let before = runtime.status.as_ref().map_or("idle", |s| s.state);
+        runtime.status = Some(status.clone());
+        before != status.state
+    };
     with_work(agent_id, &mut status);
     #[derive(Serialize, Clone)]
     #[serde(rename_all = "camelCase")]
@@ -1553,6 +1556,11 @@ pub fn set_status(app: &AppHandle, agent_id: &str, mut status: Status) {
             status: &status,
         },
     );
+    // The Dock badge reads the state too: a failed turn needs you only once
+    // it's idle, which is after its error line was recorded.
+    if moved {
+        notify::refresh_badge(app);
+    }
 }
 
 /// Which room a line recorded without one belongs to.
