@@ -22,6 +22,8 @@ import {
   ZapIcon,
 } from '@/components/icons';
 import { useCommands } from './useCommands';
+import { kbd } from '../lib/shortcuts';
+import { onMenuAction } from '../lib/nativeMenu';
 import { useOptionalToast } from '../contexts/ToastContext';
 import { setStayOn, type StayOnChange } from '../lib/remoteAccess';
 import { useAgentsSelector, type AgentsState } from '../lib/agentsStore';
@@ -211,6 +213,17 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
     });
     return () => void unlisten.then((off) => off());
   }, [setView]);
+  // File → New Agent… (⌘N on macOS; Agents' own key handler elsewhere).
+  useEffect(
+    () =>
+      onMenuAction((action) => {
+        if (action !== 'new_agent') return;
+        if (document.querySelector('[aria-modal="true"]')) return;
+        requestAgentsIntent({ kind: 'new' });
+        setView('agents');
+      }),
+    [setView]
+  );
   // The Chief's `share_recipe`: that agent's recipe, on the desk.
   useEffect(() => {
     const unlisten = listen<string>(SHARE_RECIPE_EVENT, (e) => {
@@ -265,6 +278,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         title: 'New agent…',
         icon: <PlusIcon size={14} />,
         category: 'navigation',
+        shortcut: kbd('mod', 'N'),
         keywords: ['agents', 'create', 'bot'],
         run: () => {
           requestAgentsIntent({ kind: 'new' });
@@ -360,6 +374,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         title: 'Search agent conversations',
         icon: <SearchIcon size={14} />,
         category: 'navigation',
+        shortcut: kbd('mod', 'F'),
         keywords: ['agents', 'find', 'messages', 'chat', 'history'],
         run: () => {
           requestAgentsIntent({ kind: 'search' });

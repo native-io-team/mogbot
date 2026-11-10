@@ -87,7 +87,7 @@ const MAX_ERROR_LENGTH = 200;
  * the same line — only the last non-empty segment survives), and drops blank
  * lines.
  */
-function toVisibleLines(tail: string): string[] {
+export function toVisibleLines(tail: string): string[] {
   return stripAnsi(tail)
     .split('\n')
     .map((line) => {

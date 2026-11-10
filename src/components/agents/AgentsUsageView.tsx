@@ -7,7 +7,7 @@
  * 1. **The total**: the room across every real account as one figure ("72%
  *    left across 2 accounts", each account counted equally), when the next
  *    refill is, and one bar made of a segment per account, in the work order,
- *    each labelled under it and opening that account.
+ *    each opening that account (the rows under it name them).
  * 2. **Nearly out everywhere**: one calm bar with the options.
  * 3. **Accounts**: one row each, in the order turns try them (its place,
  *    name, a small bar, what it adds, In use / Next, refill), opening its page.
@@ -69,6 +69,7 @@ import {
   setUsageMode,
   setCrossover,
   spendSpareNow,
+  totalWords,
   type StackKey,
   type UsageGlance,
   type UsageMode,
@@ -587,8 +588,11 @@ export function UsagePanel({
 
 /**
  * The total first: what is left across every account, of what, and when it
- * next refills; then the bar, in the work order, each account under its
- * segment. Out everywhere, or nothing read, it says that instead of a figure.
+ * next refills (`totalWords`, as the phone and the chat's popover say it);
+ * then the bar, in the work order. Each segment opens its account; the
+ * accounts' names and room are the rows right under it, so the bar doesn't
+ * say them a second time. Out everywhere, or nothing read, it says that
+ * instead of a figure.
  */
 function TotalHero({
   glance,
@@ -598,19 +602,7 @@ function TotalHero({
   onOpen: (engine: AgentEngine, id: string) => void;
 }) {
   const { total } = glance;
-  const out = glance.tone === 'limited';
-  const figure = glance.unread
-    ? glance.headline
-    : out || total.left === null
-      ? glance.row.figure
-      : total.figure;
-  const refill = out
-    ? glance.row.refill
-    : total.refill
-      ? `Next refill in ${total.refill.in}${
-          total.counted > 1 ? ` · ${total.refill.account}` : ''
-        }, ${total.refill.at}`
-      : null;
+  const words = totalWords(glance);
   return (
     <div
       className="usage-hero"
@@ -619,18 +611,14 @@ function TotalHero({
       data-testid="usage-hero"
     >
       <div className="usage-hero__answer">
-        {/* With one account the page's title already says Usage. */}
-        {total.segments.length > 1 && <p className="usage-hero__eyebrow">All accounts</p>}
+        {words.eyebrow && <p className="usage-hero__eyebrow">{words.eyebrow}</p>}
         <h2 className="usage-hero__headline">
-          {figure}
-          {!out && total.left !== null && total.across && (
-            <span className="usage-hero__across"> {total.across}</span>
-          )}
+          {words.figure}
+          {words.across && <span className="usage-hero__across"> {words.across}</span>}
         </h2>
-        {refill && <p className="usage-hero__refill">{refill}</p>}
+        {words.refill && <p className="usage-hero__refill">{words.refill}</p>}
       </div>
-      {/* One account: the bar alone; its name and room are the row below. */}
-      <TotalBar total={total} size="large" onOpen={onOpen} labelled={total.segments.length > 1} />
+      <TotalBar total={total} size="large" onOpen={onOpen} />
       {(glance.estimate || total.unread || glance.sameNotes.length > 0) && (
         <div className="usage-hero__notes">
           {glance.estimate && (

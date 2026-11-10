@@ -760,7 +760,7 @@ where
             }
             if let Some(r) = &u.soonest_reset {
                 lines.push(format!(
-                    "- Soonest reset: {} ({}), {} limit, {}.",
+                    "- Soonest refill: {} ({}), {} limit, {}.",
                     r.account,
                     r.engine,
                     r.window,
@@ -906,7 +906,7 @@ where
             }
         }
         if let Some(r) = &u.soonest_reset {
-            rows.push(json!({"label": "Soonest reset", "value": format!(
+            rows.push(json!({"label": "Soonest refill", "value": format!(
                 "{} ({}), {} limit, {}", r.account, r.engine, r.window,
                 super::failure::clock_phrase(tz, r.at, now)
             )}));

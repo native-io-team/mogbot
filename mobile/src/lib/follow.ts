@@ -106,15 +106,32 @@ export const holdFor = (state: Follow) => (state.pinned ? undefined : HOLD);
  * A new card that asks (an approval, a question) landed: whether to bring
  * its answers into view. Only when you're at or near the newest line (within
  * `FAR`), so a card never yanks you away from something you scrolled back to
- * read; and only for a card that wasn't there before, so it happens once.
- * `before` is undefined until the chat has loaded: a card already waiting
+ * read; and only for a card this chat hasn't shown before, so it happens
+ * once. `seen` is every card that was waiting while the chat was open
+ * (`seeCards`), undefined until the chat has loaded: a card already waiting
  * when you open the chat isn't "new" (opening lands on the newest anyway).
+ *
+ * Every card, not only the newest: with two waiting, answering the newer on
+ * the Mac makes the older one the newest waiting card, and comparing with
+ * the last newest alone took that for an arrival and scrolled the chat back
+ * up to it, past everything said since, with no "New" pill (the scroll
+ * isn't yours, so it never let go). Seen in the iOS Simulator with the
+ * torture mock's two cards.
  */
 export function revealsCard(
-  before: string | null | undefined,
+  seen: ReadonlySet<string> | undefined,
   now: string | null,
   distance: number
 ): boolean {
-  if (!now || before === undefined || now === before) return false;
+  if (!now || seen === undefined || seen.has(now)) return false;
   return distance <= FAR;
+}
+
+/** `seen` with the cards waiting now added (the same set when nothing is new). */
+export function seeCards(
+  seen: ReadonlySet<string> | undefined,
+  waiting: readonly string[]
+): ReadonlySet<string> {
+  if (seen && waiting.every((id) => seen.has(id))) return seen;
+  return new Set([...(seen ?? []), ...waiting]);
 }

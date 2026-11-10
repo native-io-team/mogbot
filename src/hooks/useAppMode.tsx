@@ -24,6 +24,7 @@
  * @module hooks/useAppMode
  */
 
+import { menuOwnsShortcuts, onMenuAction } from '../lib/nativeMenu';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { AgentsIcon, FolderOpenIcon } from '@/components/icons';
 import { useCommands } from '../commands/useCommands';
@@ -124,6 +125,8 @@ export function useAppMode({
   });
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // The macOS menu bar owns this key (Go → Switch to …).
+      if (menuOwnsShortcuts()) return;
       if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey) return;
       if (event.code !== 'KeyA' || event.repeat) return;
       if (!latest.current.inMode) return;
@@ -133,7 +136,15 @@ export function useAppMode({
       latest.current.toggle();
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+    const offMenu = onMenuAction((action) => {
+      if (action !== 'toggle_mode' || !latest.current.inMode) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      latest.current.toggle();
+    });
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, { capture: true });
+      offMenu();
+    };
   }, []);
 
   useCommands(

@@ -365,7 +365,7 @@ button.dashboard-card-row {
   color: var(--text-primary);
 }
 
-.connect-modal-field input {
+.connect-modal-field input:not(.ss-text-field) {
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--surface-app);
   border: 1px solid var(--border-default);
@@ -374,7 +374,7 @@ button.dashboard-card-row {
   font-size: var(--font-size-body-lg);
 }
 
-.connect-modal-field input:focus {
+.connect-modal-field input:not(.ss-text-field):focus {
   outline: none;
   border-color: var(--focus-ring);
 }
@@ -399,6 +399,12 @@ button.dashboard-card-row {
   padding: var(--spacing-md) 0;
   color: var(--text-secondary);
   font-size: var(--font-size-body-md);
+}
+
+/* The hosting link picker's failed fetch; Try again sits with Back. */
+.connect-modal-body .connect-modal-failure {
+  color: var(--accent-error);
+  overflow-wrap: anywhere;
 }
 
 /* Capped so an account with many projects scrolls the list rather than

@@ -5,7 +5,13 @@
  */
 
 import type { ImportTalk, PhoneImportStatus } from '@shipstudio/companion-protocol';
-import { asksImportChoice, phoneImportStep } from '../src/lib/importChoice';
+import {
+  asksImportChoice,
+  importedHere,
+  phoneImportStep,
+  pasteProblemLine,
+  phoneTalkHeading,
+} from '../src/lib/importChoice';
 
 const SERVES = { methods: ['agents.import.status', 'agents.setImportChoice'] };
 
@@ -54,5 +60,51 @@ describe('phoneImportStep', () => {
       imported: [],
     } as unknown as ImportTalk;
     expect(phoneImportStep(status({ talk }))).toMatchObject({ id: 'follow', index: 3 });
+  });
+});
+
+describe('phoneTalkHeading', () => {
+  const talk = (state: ImportTalk['state'], imported: string[] = []): ImportTalk => ({
+    id: 't',
+    source: 'Grok',
+    chiefId: 'chief',
+    state,
+    startedAt: 0,
+    lastAt: 0,
+    exchanges: 0,
+    staged: [],
+    imported,
+    busy: false,
+  });
+
+  it('never asks the user to answer while the other assistant is sending', () => {
+    expect(phoneTalkHeading(talk('interviewing'), 'Ada')).toBe('Grok is sending everything');
+    expect(phoneTalkHeading(talk('awaiting_consent'), 'Ada')).toBe('Allow Grok in Ada’s chat');
+    expect(phoneTalkHeading(talk('playback'), 'Ada')).toBe('Check the plan in Ada’s chat');
+    expect(phoneTalkHeading(talk('review'), 'Ada')).toBe('Review them in Ada’s chat');
+    expect(phoneTalkHeading(talk('imported', ['Travel']), 'Ada')).toBe('Your team is here');
+    expect(phoneTalkHeading(talk('stopped'), 'Ada')).toBe('Nothing was imported');
+  });
+
+  it('ends on the imported agents that are here, to open', () => {
+    const agents = [
+      { id: 'a1', name: 'Travel' },
+      { id: 'a2', name: 'Finance' },
+    ];
+    expect(importedHere(talk('imported', ['Finance (from Grok)', 'Travel']), agents)).toEqual([
+      { id: 'a1', name: 'Travel' },
+    ]);
+    expect(importedHere(talk('review', ['Travel']), agents)).toEqual([]);
+  });
+});
+
+describe('pasteProblemLine', () => {
+  it('says a cut-off reply’s own fix, not "copy the message again" as well', () => {
+    const cut =
+      'The JSON stops before it’s complete, so it was probably cut off. Ask the assistant to send that part again.';
+    expect(pasteProblemLine([cut])).toBe(cut);
+    expect(pasteProblemLine(['Block 2 has a trailing comma at line 14.'])).toMatch(
+      /^That reply isn’t in the format we asked for\. .* line 14\.$/
+    );
   });
 });

@@ -21,7 +21,7 @@ pub struct Def {
 pub const TOOLS: &[Def] = &[
     Def {
         name: "usage_overview",
-        description: "What the user has to run agents on and what is left of it (their total compute): a TOTAL line across every account (how many have room now, per 5-hour and weekly limit, the soonest reset, and, as an ESTIMATE, when an engine runs out on every account at the recent pace), the usage mode they chose, every engine and account (Claude Code, Codex) with each account's last REPORTED limit windows and reset times (each account is read every 10 minutes without a turn where it can be) (only what the engines said, with when; \"No reading\" when there's none), which account the next turn runs on, other compute installed on this Mac (Opencode, Ollama, LM Studio), windows near a reset with capacity left, ESTIMATES of what a turn or routine uses from this user's past runs, and the list of ideas for leftover usage. Read-only. Use it before planning anything big, and whenever the user asks about usage or limits. Answering them, `show` the numbers rather than listing them: each account's used share of its limits as metrics (suffix \"%\", good \"down\", reset time in `vs`), a bar chart to compare accounts, an estimate labelled as one.",
+        description: "What the user has to run agents on and what is left of it (their total compute): a TOTAL line across every account (how many have room now, per 5-hour and weekly limit, the soonest reset, and, as an ESTIMATE, when an engine runs out on every account at the recent pace), the usage mode they chose, every engine and account (Claude Code, Codex) with each account's last REPORTED limit windows and reset times (each account is read every 10 minutes without a turn where it can be) (only what the engines said, with when; \"No reading\" when there's none), which account the next turn runs on, other compute installed on this Mac (Opencode, Ollama, LM Studio), windows near a reset with capacity left, ESTIMATES of what a turn or routine uses from this user's past runs, and the list of ideas for leftover usage. Read-only. Use it before planning anything big, and whenever the user asks about usage or limits. Answering them, `show` the numbers rather than listing them: each account's used share of its limits as metrics (suffix \"%\", good \"down\", when it refills in `vs`), a bar chart to compare accounts, an estimate labelled as one. To the user a limit \"refills\", never \"resets\".",
         main_only: false,
         schema: || json!({ "type": "object", "properties": {} }),
     },
@@ -514,7 +514,7 @@ async fn named_account(args: &Value) -> Result<super::wallet::Account, String> {
     let account = pick_account(&shown, named, engine)?;
     if !super::wallet::signed_in(&account).await {
         return Err(format!(
-            "“{}” isn't signed in on this Mac. Ask the user to sign it in under Settings → Agents → Usage; nothing changed.",
+            "“{}” isn't signed in on this Mac. Ask the user to sign it in under Settings → Accounts & usage; nothing changed.",
             account.name
         ));
     }

@@ -35,6 +35,7 @@
  */
 
 import { SETUP_DEPENDENCIES, type SetupItem } from './setup';
+import { describeFailure, type InstallFailure } from './installProgress';
 
 // ============ Steps ============
 
@@ -205,21 +206,21 @@ export function engineItemCopy(
   if (itemId === engine.binaryId) {
     return {
       title: `Install ${engine.name}`,
-      lede: 'A window opens here and installs it. If it asks for your Mac password, type it and press Enter: nothing shows as you type.',
+      lede: 'It downloads and installs on this Mac, usually in a minute or two.',
       action: `Install ${engine.name}`,
     };
   }
   if (itemId === 'opencode_auth') {
     return {
       title: 'Connect OpenCode to a provider',
-      lede: 'Pick a provider in the window and sign in to it, then come back here.',
+      lede: 'Pick a provider and sign in to it. This screen notices when you’re done.',
       action: 'Connect',
     };
   }
   if (itemId === `${engine.binaryId}_auth`) {
     return {
       title: `Sign in to ${engine.name}`,
-      lede: `Your browser opens. Sign in with your ${engine.account} account, then come back here.`,
+      lede: `Sign-in opens in your browser. Use your ${engine.account} account; this screen notices when you’re done.`,
       action: 'Sign in',
     };
   }
@@ -239,7 +240,12 @@ export function engineItemCheck(
    * sign-in abandoned). Without this the screen fell silent: the same
    * button and no word on what happened.
    */
-  stopped = false
+  stopped = false,
+  /**
+   * What the app made of the run that failed, from everything it printed.
+   * Without it (a status that came back failed), the error is read alone.
+   */
+  failure?: InstallFailure
 ): CheckResult | null {
   if (!item) return { state: 'checking', line: 'Checking this Mac…' };
   switch (item.status) {
@@ -253,16 +259,14 @@ export function engineItemCheck(
         state: 'checking',
         line: isAuth ? 'Waiting for you to finish signing in…' : 'Installing…',
       };
-    case 'error':
-      return {
-        state: 'fail',
-        line: item.errorMessage ?? 'It didn’t finish.',
-        // A network failure has a fix the person can do themselves; "quit
-        // and reopen" doesn't help when the Wi-Fi is down.
-        fix: /network|timed? ?out|reach|offline|connection/i.test(item.errorMessage ?? '')
-          ? 'Check this Mac is online (open any website), then press Try again.'
-          : 'Press Try again. If it fails twice, quit and reopen the app, then try once more.',
-      };
+    case 'error': {
+      // The one cause and the one fix: offline says check the Mac is
+      // online, a full disk says free some space; "quit and reopen" only
+      // when nothing more specific is known.
+      const { line, fix } =
+        failure ?? describeFailure(item.id, item.errorMessage ?? 'It didn’t finish.');
+      return { state: 'fail', line, fix };
+    }
     default:
       return stopped
         ? {

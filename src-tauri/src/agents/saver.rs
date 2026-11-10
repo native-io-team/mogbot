@@ -193,7 +193,7 @@ where
             window_minutes,
             used,
         } => format!(
-            "Holding “{}” until {}, when {account}’s {} limit resets: it has {} left, and Save my limits keeps routines for after the reset. Run now still runs it.",
+            "Holding “{}” until {}, when {account}’s {} limit refills: it has {} left, and Save my limits keeps routines for after the refill. Run now still runs it.",
             what(note),
             until_phrase(&when),
             window_name(kind, *window_minutes),
@@ -215,7 +215,7 @@ where
             window_minutes,
             used,
         } => format!(
-            "Waiting for the {} limit to reset {when}: {} left, Save my limits.",
+            "Waiting for the {} limit to refill {when}: {} left, Save my limits.",
             window_name(kind, *window_minutes),
             left(*used)
         ),
@@ -312,14 +312,14 @@ where
     let who = format!("{} “{}”", engine.label(), wallet::line_name(account));
     let said = match &w.warn {
         Warn::Near { used } => format!(
-            "{who} has {} of its {limit} limit left; it resets {reset}.",
+            "{who} has {} of its {limit} limit left; it refills {reset}.",
             left(*used)
         ),
         Warn::Pace {
             reaches_at,
             readings,
         } => format!(
-            "At the recent pace, {who} runs out of its {limit} limit {}, before it resets {reset} (an estimate from {readings} readings).",
+            "At the recent pace, {who} runs out of its {limit} limit {}, before it refills {reset} (an estimate from {readings} readings).",
             super::failure::clock_phrase(tz, *reaches_at, now)
                 .replacen("at ", "around ", 1)
         ),

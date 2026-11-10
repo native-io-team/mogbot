@@ -1,0 +1,10 @@
+%% `claude auth login` when it can't listen for the browser's callback: it says
+%% so, prints "Sign in at:", and waits on "Paste code here > ". A pasted code
+%% without its "#state" half is refused (on stderr, with no new prompt) and it
+%% waits for another line. The terminal echoes what was typed.
+The browser can't return the sign-in to Claude Code automatically. After you sign in, paste the code shown.
+Sign in at: https://claude.com/cai/oauth/authorize?code=true&client_id=demo&state=demo
+Paste code here > ⏸abc123
+Invalid code. Please make sure the full code was copied.
+⏸abc123#demo
+Login successful.

@@ -1981,3 +1981,54 @@ async fn a_quick_snapshot_is_whole() {
     assert!(v["projects"].is_array(), "{v}");
     assert_eq!(c.last_status().unwrap().name, v["status"]["name"]);
 }
+
+/// Security review 2026-11-10: each request holds a thread of the blocking
+/// pool the whole app shares, and keeps it past its deadline. A device
+/// sending request after request that sticks used to take as many threads
+/// as it sent; past the cap the rest are answered as busy at once, and a
+/// slot comes back only when its work really ends.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn requests_past_the_cap_are_busy_at_once_and_slots_come_back_when_work_ends() {
+    let slots = Arc::new(tokio::sync::Semaphore::new(2));
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let release_rx = Arc::new(std::sync::Mutex::new(release_rx));
+    for _ in 0..2 {
+        let rx = release_rx.clone();
+        let err = super::bounded_in(
+            &slots,
+            "agents.overview",
+            Duration::from_millis(100),
+            async move {
+                // Blocks its thread until released, as a lock wait does.
+                let _ = rx.lock().unwrap().recv();
+                Ok(json!(null))
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.summary(), super::BUSY);
+    }
+    // Both past their deadline and still running: the third is refused
+    // without waiting.
+    let started = std::time::Instant::now();
+    let err = super::bounded_in(&slots, "agents.overview", Duration::from_secs(5), async {
+        Ok(json!({"ok": true}))
+    })
+    .await
+    .unwrap_err();
+    assert_eq!(err.summary(), super::BUSY);
+    assert!(started.elapsed() < Duration::from_secs(1));
+    // Their work ends: the slots come back.
+    release_tx.send(()).unwrap();
+    release_tx.send(()).unwrap();
+    let until = std::time::Instant::now() + Duration::from_secs(5);
+    while slots.available_permits() < 2 && std::time::Instant::now() < until {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let ok = super::bounded_in(&slots, "agents.overview", Duration::from_secs(5), async {
+        Ok(json!({"ok": true}))
+    })
+    .await
+    .unwrap();
+    assert_eq!(ok, json!({"ok": true}));
+}

@@ -3,7 +3,7 @@
 //! Funnel gives this Mac a stable public HTTPS address on the user's *own*
 //! tailnet (`https://<machine>.<tailnet>.ts.net`). Traffic goes from the
 //! chat service straight to Tailscale's edge and on to this machine; it never
-//! passes through anything Ship Studio runs, and the address belongs to the
+//! passes through anything this app runs, and the address belongs to the
 //! user's Tailscale account, not to us.
 //!
 //! The server is mounted at [`MOUNT_PATH`] rather than the root, so turning
@@ -67,7 +67,7 @@ pub enum TailscaleState {
 
 /// A command for the CLI at `bin`. The standalone Tailscale.app binary is
 /// both the GUI and the CLI, and decides which from the environment: from a
-/// terminal it's the CLI, but spawned by a GUI app (Ship Studio installed, not
+/// terminal it's the CLI, but spawned by a GUI app (the installed app, not
 /// `tauri dev`) it tries to start a second GUI, prints "The Tailscale GUI
 /// failed to start" and exits zero. `TAILSCALE_BE_CLI` forces the CLI.
 fn cli_command(bin: std::path::PathBuf) -> tokio::process::Command {

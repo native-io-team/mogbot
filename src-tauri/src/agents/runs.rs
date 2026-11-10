@@ -368,6 +368,22 @@ pub fn routine_model(agent_id: &str, ids: &[String]) -> Option<String> {
         .then_some(first)
 }
 
+/// The name of the routine the tickets `ids` fire ("Weekly report", from its
+/// note), when they are all the one routine. None: several, or none known.
+pub fn routine_named(agent_id: &str, ids: &[String]) -> Option<String> {
+    let tickets = TICKETS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut fired = tickets
+        .iter()
+        .filter(|t| t.agent_id == agent_id && ids.contains(&t.id))
+        .flat_map(|t| t.check_ins.iter());
+    let first = fired.next()?;
+    if !fired.all(|c| c.id == first.id) {
+        return None;
+    }
+    let name = super::routine_steps::routine_name(&first.note);
+    (!name.is_empty()).then_some(name)
+}
+
 fn take(agent_id: &str, ids: &[String]) -> Vec<Ticket> {
     let mut tickets = TICKETS.lock().unwrap_or_else(|e| e.into_inner());
     let (mine, rest): (Vec<Ticket>, Vec<Ticket>) = tickets

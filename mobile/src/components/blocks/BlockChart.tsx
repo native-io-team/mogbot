@@ -9,6 +9,7 @@
 import {
   chartHasData,
   chartLabel,
+  chartSummary,
   chartModel,
   formatValue,
   indexAt,
@@ -56,7 +57,7 @@ export function BlockChart({ block }: { block: ChartBlock }) {
       style={styles.wrap}
       accessible
       accessibilityRole="image"
-      accessibilityLabel={chartLabel(block)}
+      accessibilityLabel={`${chartLabel(block)}. ${chartSummary(block)}`}
     >
       {legend.length > 0 && (
         <View style={styles.legend} testID="chart-legend">
@@ -341,7 +342,12 @@ function Sparkline({ block }: { block: ChartBlock }) {
   const last = values[values.length - 1];
   const units = { prefix: block.prefix, suffix: block.suffix };
   return (
-    <View style={styles.spark} accessible accessibilityLabel={chartLabel(block)}>
+    <View
+      style={styles.spark}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={`${chartLabel(block)}. ${chartSummary(block)}`}
+    >
       <Svg width={chartSize.sparkWidth} height={chartSize.spark}>
         <SparkPath model={model} colors={colors} />
       </Svg>

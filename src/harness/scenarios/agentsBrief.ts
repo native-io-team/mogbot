@@ -30,7 +30,7 @@ export const BRIEF_SAMPLE = [
   '',
   '**Usage**',
   '- Room on 2 of 3 accounts (1 not reported), by their own readings.',
-  '- Soonest reset: Work (Claude Code), 5-hour limit, at 11:20 AM.',
+  '- Soonest refill: Work (Claude Code), 5-hour limit, at 11:20 AM.',
   '',
   '**Your checks**',
   // A check's words are outside text, escaped (`brief::plain`): they read

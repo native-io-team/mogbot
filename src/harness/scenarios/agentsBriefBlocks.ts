@@ -75,7 +75,7 @@ const BRIEF_ITEMS = [
     items: [
       { label: 'Room', value: '2 of 3 accounts (1 not reported), by their own readings' },
       {
-        label: 'Soonest reset',
+        label: 'Soonest refill',
         value: 'sam@acme.com (Claude Code), weekly limit, Thursday at 6:00 PM',
       },
     ],

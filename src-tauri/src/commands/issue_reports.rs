@@ -71,7 +71,7 @@ fn saved_agent_name(agent_id: &str) -> Option<&'static str> {
     match agent_id {
         "claude-code" => Some("Claude Code"),
         "codex" => Some("Codex"),
-        "opencode" => Some("Opencode"),
+        "opencode" => Some("OpenCode"),
         "cursor" => Some("Cursor"),
         _ => None,
     }
@@ -384,7 +384,7 @@ mod tests {
     fn context_only_names_an_explicitly_saved_known_agent() {
         assert_eq!(saved_agent_name("claude-code"), Some("Claude Code"));
         assert_eq!(saved_agent_name("codex"), Some("Codex"));
-        assert_eq!(saved_agent_name("opencode"), Some("Opencode"));
+        assert_eq!(saved_agent_name("opencode"), Some("OpenCode"));
         assert_eq!(saved_agent_name("cursor"), Some("Cursor"));
         assert_eq!(saved_agent_name("unknown"), None);
     }

@@ -2560,6 +2560,7 @@ mod tests {
             away: None,
             context: None,
             routine_model: None,
+            learn_skills: Default::default(),
             account: None,
             template: None,
             reach: Default::default(),

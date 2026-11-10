@@ -417,7 +417,7 @@ fn it_reads_as_one_short_message_led_by_what_needs_you() {
         "**Today**\n- 9:00 AM Finance: Sweep the invoices inbox",
         "**Since yesterday**\n- Research: shared “Papers digest”, ran 1 routine, 2 replies",
         "- Room on 1 of 3 accounts (1 not reported), by their own readings.",
-        "- Soonest reset: Work (Claude Code), 5-hour limit, at 11:20 AM.",
+        "- Soonest refill: Work (Claude Code), 5-hour limit, at 11:20 AM.",
     ] {
         assert!(text.contains(want), "missing {want:?} in\n{text}");
     }

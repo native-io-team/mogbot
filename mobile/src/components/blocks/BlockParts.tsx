@@ -21,7 +21,7 @@ import {
   type StepStatus,
   type StepsBlock,
 } from '@shipstudio/companion-protocol';
-import { useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 import Svg from 'react-native-svg';
 import { makeStyles, useColors } from '../../lib/appearance';
@@ -45,6 +45,13 @@ import { SideScroll } from '../SideScroll';
 import { Icon, T } from '../ui';
 import { SparkPath } from './BlockChart';
 
+/**
+ * Blocks drawn on a conversation's page, not in a reply: tiles lie flat (no
+ * lift, a faint hairline) so a metric on the page never looks like one in a
+ * reply. The desk does the same in agents-page.css.
+ */
+export const FlatBlocks = createContext(false);
+
 /* ---- Metrics ------------------------------------------------------------------- */
 
 export function BlockMetrics({ block }: { block: MetricsBlock }) {
@@ -62,6 +69,7 @@ export function BlockMetrics({ block }: { block: MetricsBlock }) {
 function MetricTile({ metric, half }: { metric: Metric; half: boolean }) {
   const colors = useColors();
   const styles = useStyles();
+  const flat = useContext(FlatBlocks);
   const delta = metricDelta(metric);
   const value = metricValue(metric);
   const tone =
@@ -94,7 +102,7 @@ function MetricTile({ metric, half }: { metric: Metric; half: boolean }) {
     .join(', ');
   return (
     <View
-      style={[styles.tile, half && styles.tileHalf]}
+      style={[styles.tile, flat && styles.tileFlat, half && styles.tileHalf]}
       accessible
       accessibilityLabel={said}
       testID="metric-tile"
@@ -435,6 +443,11 @@ const useStyles = makeStyles((colors) => ({
     borderWidth: 1,
     borderColor: colors.cardBorder,
     boxShadow: depthOf(colors).card,
+  },
+  tileFlat: {
+    backgroundColor: colors.surfaceApp,
+    borderColor: colors.borderSubtle,
+    boxShadow: 'none',
   },
   tileHalf: { flexBasis: '40%' },
   delta: { flexDirection: 'row', alignItems: 'center', gap: space.xs },

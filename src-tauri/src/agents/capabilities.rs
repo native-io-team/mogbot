@@ -113,7 +113,7 @@ pub fn lines(engine: Engine, tools: &[&str], servers: &[Server]) -> Vec<Line> {
         ),
         Some(_) => push(
             "Chrome",
-            "Not connected: the Claude in Chrome extension isn't reachable. The fix is Settings → Agents → Your Chrome.".into(),
+            "Not connected: the Claude in Chrome extension isn't reachable. The fix is Settings → Chrome.".into(),
         ),
         None => {}
     }

@@ -311,7 +311,7 @@ export function workingLine(
       // Short: the row is narrow, and the room says where they went.
       name: `${view.engine === 'claude' ? 'Claude' : 'Codex'} out`,
       // "Claude out · on Codex": what fits the sidebar's row; until when
-      // is in its detail (the tooltip) and in Settings → Agents → Usage.
+      // is in its detail (the tooltip) and in Settings → Accounts & usage.
       room: `on ${ACCOUNT_ENGINE_LABEL[away.on]}`,
       tone: 'warning',
       away: true,

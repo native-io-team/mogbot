@@ -265,7 +265,7 @@ export const hostingConnectScenarios: Scenario[] = [
     id: 'hosting-connect-picker-projects',
     title: "Connect hosting — the account's projects (Cloudflare, two accounts)",
     looksRightWhen:
-      'A pickable list. Note the two rows both called "acme-docs": Cloudflare\'s adapter walks every account the token can see, and the picker prints only the project name — so two accounts owning the same name are indistinguishable here, and picking the wrong one links this repo to another account\'s project.',
+      'A pickable list, each row naming its account: the two "acme-docs" rows read "acme-docs — Acme Inc" and "acme-docs — Acme Labs", because Cloudflare\'s adapter walks every account the token can see and a name alone would let the wrong account\'s project be linked.',
     ...connectFlow,
     steps: [
       { click: ROW_ACTION },
@@ -329,10 +329,9 @@ export const hostingConnectScenarios: Scenario[] = [
     id: 'hosting-connect-picker-error',
     title: 'Connect hosting — the provider call failed',
     looksRightWhen:
-      'The error is reported (as a toast) and the picker falls back to the provider choice rather than showing an empty list, which would read as "you have no projects". Unclipped for the same reason as the failed save: the report renders outside the dialog.',
-    project: WORKSPACE_PROJECT,
-    openSelector: OPEN_POPOVER,
-    requires: '.toast-error',
+      'The reason is said inside the dialog ("Couldn’t load your Vercel projects: …") with Try again and Back, never an empty list, which would read as "you have no projects", and never only a toast that is gone before it is read.',
+    ...connectFlow,
+    requires: '.connect-modal-failure',
     steps: [{ click: ROW_ACTION }, { click: '.connect-modal-body > button:first-of-type' }],
     commands: {
       ...connectCommands,

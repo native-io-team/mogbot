@@ -149,7 +149,9 @@ export default function Agents() {
     }))
   );
   // Rooms only from a Mac that does them (`welcome.features`): an older one shows none.
-  const rooms = useApp((s) => (roomsOffered(s.welcome) ? s.rooms : null));
+  // While it's away, the saved rooms (kept only from a Mac that did them), as the
+  // agents above them are, rather than the list losing its Rooms until it's back.
+  const rooms = useApp((s) => (s.welcome ? (roomsOffered(s.welcome) ? s.rooms : null) : s.rooms));
   // A room's row says "Needs your OK" for a card left waiting after the turn
   // ended, which only its thread shows: as for agents, its newest page is read
   // for any room with a member waiting on you whose saved thread doesn't hold

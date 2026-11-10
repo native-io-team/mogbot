@@ -105,6 +105,18 @@ fn everything_that_acts_asks_and_git_folders_are_denied_in_the_config() {
     let config: Value = serde_json::from_str(&config(None, &[], &[])).unwrap();
     assert_eq!(config["agent"]["build"]["permission"]["bash"], "ask");
     assert_eq!(config["default_agent"], "build");
+    // Security review 2026-11-10, checked against 1.18.29: a user's
+    // `mode.build` is folded into the agent after every config file and
+    // turned `bash: ask` into `allow`; ours is set too, so it can't.
+    assert_eq!(
+        config["mode"]["build"]["permission"],
+        config["agent"]["build"]["permission"]
+    );
+    // No language servers or formatters: both run the project's own code.
+    assert_eq!(config["lsp"], false);
+    assert_eq!(config["formatter"], false);
+    // OPENCODE_PERMISSION is merged over the inline config: never passed on.
+    assert!(ENV_REMOVED.contains(&"OPENCODE_PERMISSION"));
     assert!(env(String::new())
         .iter()
         .any(|(k, v)| *k == "OPENCODE_DISABLE_PROJECT_CONFIG" && v == "1"));
@@ -501,4 +513,54 @@ fn mcp_names_split_on_the_longest_server_it_has() {
         as_claude("bash", &json!({ "command": "ls" }), &[]).1,
         json!({ "command": "ls" })
     );
+}
+
+/// Security review 2026-11-10: a repo's symlink is wherever it points. A
+/// writable folder holding `notes.md -> ~/.zshrc` or `hooks -> .git/hooks`
+/// used to pass as "ours" (written without a card) because only the path as
+/// written was looked at.
+#[test]
+fn a_symlink_in_a_writable_folder_is_judged_by_where_it_points() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let project = root.join("project");
+    let outside = root.join("home");
+    std::fs::create_dir_all(project.join(".git/hooks")).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join(".zshrc"), "").unwrap();
+    std::fs::write(project.join("plain.md"), "").unwrap();
+    std::os::unix::fs::symlink(outside.join(".zshrc"), project.join("notes.md")).unwrap();
+    std::os::unix::fs::symlink(project.join(".git/hooks"), project.join("hooks")).unwrap();
+    std::os::unix::fs::symlink(outside.join("new-profile"), project.join("dangling")).unwrap();
+    std::os::unix::fs::symlink(&outside, project.join("out")).unwrap();
+    let scope = Scope {
+        writable: vec![project.clone()],
+        read_only: vec![],
+    };
+    let at = |p: &std::path::Path| scope.place(&p.to_string_lossy());
+    // Its own files, and new ones, are still its own.
+    assert_eq!(at(&project.join("plain.md")), Place::Ours);
+    assert_eq!(at(&project.join("new/dir/file.md")), Place::Ours);
+    // A link out of the folder asks, as an edit there would.
+    assert_eq!(at(&project.join("notes.md")), Place::Elsewhere);
+    assert_eq!(at(&project.join("out/.zshrc")), Place::Elsewhere);
+    // A link to nowhere: a write would create its target, so it asks.
+    assert_eq!(at(&project.join("dangling")), Place::Elsewhere);
+    // A link into .git is .git.
+    assert!(matches!(
+        at(&project.join("hooks/pre-commit")),
+        Place::Kept(_)
+    ));
+    // And through the conversation, as OpenCode asks.
+    let mut c = started();
+    c.scope = scope.clone();
+    assert!(matches!(
+        ask(
+            &mut c,
+            "x",
+            "edit",
+            json!({ "filepath": project.join("notes.md"), "diff": "" })
+        ),
+        Asked::Decide { .. }
+    ));
 }

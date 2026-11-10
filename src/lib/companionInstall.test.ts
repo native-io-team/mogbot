@@ -6,7 +6,10 @@ import {
   iosBuildCommand,
   iosProjectName,
   iosSteps,
+  installAgent,
+  installPrompt,
   isFreeTeamExpiry,
+  reinstallCommand,
   readInstallRecord,
   reminderDue,
   saveInstallRecord,
@@ -26,6 +29,7 @@ const source = {
   present: false,
   installed: false,
   desktopVersion: '1.7.0',
+  buildLog: '/Users/me/Library/Application Support/Mogbot/companion-build/last-build.log',
 };
 
 /** This Mac, as the real checks read it: Xcode 26.1, no phone. */
@@ -38,7 +42,9 @@ const thisMac: IosInstallStatus = {
   devices: [],
   signing: {
     teamId: 'TEAM000001',
+    teamName: null,
     identity: 'Apple Development: me',
+    free: null,
     bundleId: 'io.native.mogbot.companion.87be70',
   },
   source,
@@ -109,6 +115,83 @@ describe('iosSteps', () => {
   it('a disconnected phone doesn’t count', () => {
     const s = { ...thisMac, devices: [{ ...iphone, connected: false }] };
     expect(state(iosSteps(s, null)).phone).toBe('you');
+  });
+
+  it('no Xcode: the phone and the Apple ID wait for it, rather than asking now', () => {
+    const s = { ...thisMac, xcode: { state: 'missing' as const }, signing: null };
+    const steps = iosSteps(s, null);
+    expect(state(steps)).toMatchObject({ phone: 'waiting', signing: 'waiting' });
+    expect(steps.find((x) => x.id === 'phone')?.detail).toContain('once Xcode is installed');
+  });
+
+  it('signed in to Xcode with no certificate yet still ticks: the first build makes it', () => {
+    const s = {
+      ...thisMac,
+      signing: {
+        teamId: 'TEAM000001',
+        teamName: 'Sam Doe (Personal Team)',
+        identity: null,
+        free: true,
+        bundleId: 'io.native.mogbot.companion.87be70',
+      },
+    };
+    const signing = iosSteps(s, null).find((x) => x.id === 'signing');
+    expect(signing?.state).toBe('done');
+    expect(signing?.detail).toBe(
+      'Sam Doe (Personal Team) · its certificate is made by the first build'
+    );
+  });
+
+  it('not signed in to Xcode: the user’s, with where to click', () => {
+    const ok = { ...thisMac, xcode: { state: 'ok' as const, version: '26.4' }, signing: null };
+    const signing = iosSteps(ok, null).find((x) => x.id === 'signing');
+    expect(signing?.state).toBe('you');
+    expect(signing?.detail).toContain('Xcode → Settings → Accounts');
+  });
+
+  it('a phone that won’t answer with Developer Mode on is a locked phone', () => {
+    const ok = { ...thisMac, xcode: { state: 'ok' as const, version: '26.4' }, devices: [iphone] };
+    const build = iosSteps(ok, { installed: null, version: null, expiresAt: null }).find(
+      (x) => x.id === 'build'
+    );
+    expect(build?.state).toBe('you');
+    expect(build?.detail).toContain('Unlock Sam’s iPhone');
+    // With Developer Mode off that row already says why; the build just waits on the agent.
+    const off = { ...ok, devices: [{ ...iphone, developerMode: 'disabled' }] };
+    expect(state(iosSteps(off, { installed: null, version: null, expiresAt: null })).build).toBe(
+      'agent'
+    );
+  });
+});
+
+describe('the install agent', () => {
+  it('is Codex when that’s the engine chosen, else Claude Code', () => {
+    expect(installAgent('codex')).toEqual({ binary: 'codex', name: 'Codex' });
+    expect(installAgent('claude-code')).toEqual({ binary: 'claude', name: 'Claude Code' });
+    expect(installAgent('opencode').binary).toBe('claude');
+  });
+});
+
+describe('Reinstall’s log', () => {
+  const ok = {
+    ...thisMac,
+    xcode: { state: 'ok' as const, version: '26.4' },
+    devices: [iphone],
+    source: { ...source, present: true, installed: true },
+  };
+  it('writes the build to the log and keeps its exit code through tee', () => {
+    const cmd = reinstallCommand({ platform: 'ios', status: ok, app: null });
+    expect(cmd).toMatch(/^mkdir -p '.*\/companion-build' && set -o pipefail && \{ cd /);
+    expect(cmd).toContain(`| tee '${source.buildLog}'`);
+    expect(cmd).toContain('xcodebuild');
+  });
+  it('a hand-off after a failed build points the agent at that log', () => {
+    const s = { platform: 'ios' as const, status: ok, app: null };
+    expect(installPrompt(s)).not.toContain('last-build.log');
+    expect(installPrompt(s, true)).toContain(
+      `The last build failed. Its full output is in ${source.buildLog}`
+    );
+    expect(installPrompt(s, true)).not.toContain('\n');
   });
 });
 

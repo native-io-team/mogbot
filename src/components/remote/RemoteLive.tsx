@@ -55,9 +55,11 @@ export function RemoteLive({ ctl, projects, onProjectChange, activity }: Props) 
     state === 'live'
       ? (lastRequest ?? 'Waiting for your assistant’s next message')
       : state === 'down'
-        ? status.reachability?.state === 'noPublicDns'
-          ? 'Tailscale is still publishing this Mac’s address.'
-          : 'Remote access is on, but the internet can’t reach this Mac right now.'
+        ? !status.serverRunning
+          ? 'Remote access is on, but nothing on this Mac is answering the link.'
+          : status.reachability?.state === 'noPublicDns'
+            ? 'Tailscale is still publishing this Mac’s address.'
+            : 'Remote access is on, but the internet can’t reach this Mac right now.'
         : 'Your assistant can’t reach this Mac.';
 
   return (
@@ -113,7 +115,7 @@ export function RemoteLive({ ctl, projects, onProjectChange, activity }: Props) 
       </section>
 
       <section className="remote-section">
-        <h3 className="remote-heading">Pushing from your phone</h3>
+        <h3 className="remote-heading">Pushing from your assistant</h3>
         <PushPanel ctl={ctl} />
       </section>
 
@@ -145,7 +147,8 @@ export function RemoteLive({ ctl, projects, onProjectChange, activity }: Props) 
       </section>
 
       <p className="remote-footnote">
-        Lost your phone, or something looks wrong? Turn off here, or remove this Mac in{' '}
+        Lost a device with your assistant on it, or something looks wrong? Turn off here, or remove
+        this Mac in{' '}
         <TextButton onClick={() => void openUrl(TAILSCALE_MACHINES_URL)}>
           Tailscale’s admin console
         </TextButton>{' '}

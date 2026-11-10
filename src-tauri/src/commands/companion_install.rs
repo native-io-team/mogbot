@@ -63,6 +63,9 @@ pub struct SourceCheck {
     pub installed: bool,
     /// The desktop's version: the checkout is made at tag `v<version>`.
     pub desktop_version: String,
+    /// Where Reinstall writes its build's output, for the app (and the agent
+    /// it hands a failure to) to read back.
+    pub build_log: String,
 }
 
 fn check_source() -> SourceCheck {
@@ -72,6 +75,47 @@ fn check_source() -> SourceCheck {
         present: dir.join("package.json").is_file(),
         installed: dir.join("node_modules/expo/package.json").is_file(),
         desktop_version: env!("CARGO_PKG_VERSION").to_string(),
+        build_log: build_log_path().to_string_lossy().into_owned(),
+    }
+}
+
+/// Reinstall's output (`tee`d there by the command the panel runs). A fixed
+/// path under the app's own folder, so reading it back takes no argument.
+fn build_log_path() -> std::path::PathBuf {
+    crate::brand::app_support_dir().join("companion-build/last-build.log")
+}
+
+/// How much of the log's end is read back: xcodebuild puts the error that
+/// matters in its last screen or two.
+const BUILD_LOG_TAIL: usize = 48 * 1024;
+
+/// The last part of a long log, cut at a line start.
+fn log_tail(text: &str, max: usize) -> &str {
+    if text.len() <= max {
+        return text;
+    }
+    let mut start = text.len() - max;
+    while !text.is_char_boundary(start) {
+        start += 1;
+    }
+    let tail = &text[start..];
+    tail.find('\n').map(|i| &tail[i + 1..]).unwrap_or(tail)
+}
+
+/// The end of the last Reinstall's output, or `None` when there isn't one.
+/// Read-only; the panel reads it once a build has failed, to say the fix.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn companion_install_build_log() -> Result<Option<String>, CommandError> {
+    match std::fs::read(build_log_path()) {
+        Ok(bytes) => {
+            let text = String::from_utf8_lossy(&bytes);
+            Ok(Some(log_tail(&text, BUILD_LOG_TAIL).to_string()))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(CommandError::Io {
+            message: e.to_string(),
+        }),
     }
 }
 
@@ -127,10 +171,26 @@ pub struct IosDevice {
 #[serde(rename_all = "camelCase")]
 pub struct Signing {
     pub team_id: String,
+    /// The team's name as Xcode lists it ("Sam Doe (Personal Team)").
+    pub team_name: Option<String>,
     /// The certificate's name, e.g. "Apple Development: me@icloud.com (CERT000001)".
-    pub identity: String,
+    /// `None` when an Apple ID is signed in to Xcode but no certificate has
+    /// been made yet: the first build makes it (`-allowProvisioningUpdates`).
+    pub identity: Option<String>,
+    /// Xcode's own word on whether this is a free Apple ID's personal team,
+    /// whose builds stop opening after 7 days. `None` when Xcode didn't say.
+    pub free: Option<bool>,
     /// The bundle id this team builds as.
     pub bundle_id: String,
+}
+
+/// A team an Apple ID signed in to Xcode can sign with, from Xcode's own
+/// preferences (`IDEProvisioningTeamByIdentifier`).
+#[derive(Debug, PartialEq, Clone)]
+struct XcodeTeam {
+    team_id: String,
+    team_name: Option<String>,
+    free: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -336,7 +396,8 @@ pub fn bundle_id_for_team(team_id: &str) -> String {
     format!("{}.{hex}", crate::brand::COMPANION_BUNDLE_ID)
 }
 
-async fn check_signing() -> Option<Signing> {
+/// The "Apple Development" certificate in the keychain, and its team.
+async fn certificate_team() -> Option<(String, String)> {
     let identity = parse_dev_identity(
         &quick("security", &["find-identity", "-v", "-p", "codesigning"]).await?,
     )?;
@@ -350,11 +411,88 @@ async fn check_signing() -> Option<Signing> {
     .await
     .ok()?;
     let team_id = parse_subject_ou(&String::from_utf8_lossy(&out.stdout))?;
+    Some((identity, team_id))
+}
+
+/// `{"<account uuid>": [{"teamID": …, "teamName": …, "isFreeProvisioningTeam": true}]}`
+/// → each team once.
+fn parse_xcode_teams(json: &serde_json::Value) -> Vec<XcodeTeam> {
+    let mut teams: Vec<XcodeTeam> = Vec::new();
+    let Some(accounts) = json.as_object() else {
+        return teams;
+    };
+    for team in accounts.values().filter_map(|v| v.as_array()).flatten() {
+        let Some(team_id) = str_at(team, &["teamID"]).filter(|t| !t.is_empty()) else {
+            continue;
+        };
+        if teams.iter().any(|t| t.team_id == team_id) {
+            continue;
+        }
+        teams.push(XcodeTeam {
+            team_id: team_id.to_string(),
+            team_name: str_at(team, &["teamName"]).map(str::to_string),
+            free: team.get("isFreeProvisioningTeam").and_then(|f| f.as_bool()),
+        });
+    }
+    teams
+}
+
+/// The teams of the Apple IDs signed in to Xcode → Settings → Accounts. Read
+/// from Xcode's preferences, so it ticks the moment someone signs in, before
+/// any certificate exists (the first build makes that).
+async fn xcode_teams() -> Vec<XcodeTeam> {
+    let Ok(file) = tempfile::NamedTempFile::new() else {
+        return Vec::new();
+    };
+    let path = file.path().to_string_lossy().into_owned();
+    if quick("defaults", &["export", "com.apple.dt.Xcode", &path])
+        .await
+        .is_none()
+    {
+        return Vec::new();
+    }
+    // Xcode 14 and later; older ones kept the same shape under IDEProvisioningTeams.
+    for key in ["IDEProvisioningTeamByIdentifier", "IDEProvisioningTeams"] {
+        if let Some(json) = quick("plutil", &["-extract", key, "json", "-o", "-", &path])
+            .await
+            .and_then(|out| serde_json::from_str::<serde_json::Value>(&out).ok())
+        {
+            let teams = parse_xcode_teams(&json);
+            if !teams.is_empty() {
+                return teams;
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// The certificate's team when there is one; otherwise a team Xcode is signed
+/// in to, the free personal team first (it's always the person's own, while a
+/// company team may not let them make profiles).
+fn choose_signing(cert: Option<(String, String)>, teams: &[XcodeTeam]) -> Option<Signing> {
+    let (identity, team_id) = match cert {
+        Some((identity, team_id)) => (Some(identity), team_id),
+        None => {
+            let team = teams
+                .iter()
+                .find(|t| t.free == Some(true))
+                .or_else(|| teams.first())?;
+            (None, team.team_id.clone())
+        }
+    };
+    let known = teams.iter().find(|t| t.team_id == team_id);
     Some(Signing {
         bundle_id: bundle_id_for_team(&team_id),
+        team_name: known.and_then(|t| t.team_name.clone()),
+        free: known.and_then(|t| t.free),
         team_id,
         identity,
     })
+}
+
+async fn check_signing() -> Option<Signing> {
+    let (cert, teams) = tokio::join!(certificate_team(), xcode_teams());
+    choose_signing(cert, &teams)
 }
 
 #[tauri::command]
@@ -803,6 +941,73 @@ mod tests {
         assert_eq!(parse_subject_ou(subject).as_deref(), Some("TEAM000001"));
         let openssl3 = "subject=UID=Z, CN=Apple Development: me, OU=ABCDE12345, O=Me, C=US";
         assert_eq!(parse_subject_ou(openssl3).as_deref(), Some("ABCDE12345"));
+    }
+
+    #[test]
+    fn xcode_teams_from_its_preferences() {
+        let json = serde_json::json!({
+            "72F053AD-0809-42FA-855D-80DF05D82F26": [
+                { "teamID": "TEAM000001", "teamName": "Sam Doe (Personal Team)", "isFreeProvisioningTeam": true, "teamType": "Personal Team" },
+                { "teamID": "PAID000002", "teamName": "Acme Ltd", "isFreeProvisioningTeam": false, "teamType": "Company/Organization" }
+            ],
+            "B0B": [ { "teamID": "TEAM000001", "teamName": "Sam Doe (Personal Team)" }, { "teamName": "no id" } ]
+        });
+        let teams = parse_xcode_teams(&json);
+        assert_eq!(teams.len(), 2);
+        assert_eq!(teams[0].free, Some(true));
+        assert_eq!(teams[1].team_id, "PAID000002");
+        assert!(parse_xcode_teams(&serde_json::json!({})).is_empty());
+        assert!(parse_xcode_teams(&serde_json::json!([])).is_empty());
+    }
+
+    #[test]
+    fn signing_without_a_certificate_uses_xcodes_team() {
+        let teams = vec![
+            XcodeTeam {
+                team_id: "PAID000002".into(),
+                team_name: Some("Acme Ltd".into()),
+                free: Some(false),
+            },
+            XcodeTeam {
+                team_id: "TEAM000001".into(),
+                team_name: Some("Sam Doe (Personal Team)".into()),
+                free: Some(true),
+            },
+        ];
+        // Signed in, no certificate yet: the personal team, and the build makes the certificate.
+        let s = choose_signing(None, &teams).unwrap();
+        assert_eq!(s.team_id, "TEAM000001");
+        assert_eq!(s.identity, None);
+        assert_eq!(s.free, Some(true));
+        assert_eq!(s.bundle_id, bundle_id_for_team("TEAM000001"));
+        // A certificate decides the team, and Xcode's list names it.
+        let s = choose_signing(
+            Some(("Apple Development: x".into(), "PAID000002".into())),
+            &teams,
+        )
+        .unwrap();
+        assert_eq!(s.team_id, "PAID000002");
+        assert_eq!(s.team_name.as_deref(), Some("Acme Ltd"));
+        assert_eq!(s.free, Some(false));
+        // A certificate from a team Xcode doesn't list: nothing is guessed about it.
+        let s = choose_signing(
+            Some(("Apple Development: y".into(), "OTHER00003".into())),
+            &[],
+        )
+        .unwrap();
+        assert_eq!((s.team_name, s.free), (None, None));
+        // Nothing signed in, no certificate.
+        assert!(choose_signing(None, &[]).is_none());
+    }
+
+    #[test]
+    fn build_log_tail_starts_on_a_line() {
+        assert_eq!(log_tail("short", 100), "short");
+        let long = format!("{}\nerror: the end\n", "x".repeat(200));
+        assert_eq!(log_tail(&long, 20), "error: the end\n");
+        // Never splits a character.
+        let wide = format!("{}\nok\n", "’".repeat(50));
+        assert_eq!(log_tail(&wide, 10), "ok\n");
     }
 
     #[test]

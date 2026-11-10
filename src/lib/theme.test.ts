@@ -278,6 +278,15 @@ describe('contrast (WCAG AA) in both themes', () => {
     }
   });
 
+  it.each(themes)('status words read on a selected row (%s)', (theme) => {
+    // "Live" in the sidebar sits on the selected fill when its agent is open.
+    for (const fg of ['--text-success', '--text-warning', '--text-error', '--text-info']) {
+      for (const bg of ['--surface-panel', '--surface-selected']) {
+        expect(ratio(fg, bg, theme), `${fg} on ${bg}`).toBeGreaterThanOrEqual(AA_TEXT);
+      }
+    }
+  });
+
   it.each(themes)('syntax roles read on the control surface (%s)', (theme) => {
     for (const fg of [
       '--syntax-property',

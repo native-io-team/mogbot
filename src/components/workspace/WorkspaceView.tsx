@@ -22,7 +22,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { onMenuAction, reportMenuContext } from '../../lib/nativeMenu';
 import { logger } from '../../lib/logger';
 import { setTerminalState } from '../../lib/project';
 import type { InspectTab } from '../preview/Preview';
@@ -359,25 +359,23 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
   // with no preview at all.
   const previewVisible = isWebProject && workspaceTab === 'preview' && !isPreviewHidden;
 
-  // Listen for native menu accelerators (Cmd+Shift+S / Cmd+Shift+C).
+  // File → Capture Preview / Crop Preview… (Cmd+Shift+S / Cmd+Shift+C).
   // Native accelerators work even when the cross-origin preview iframe has focus,
-  // unlike window keydown listeners which the iframe swallows.
+  // unlike window keydown listeners which the iframe swallows. The menu greys
+  // them out unless a web preview is showing.
+  useEffect(() => {
+    reportMenuContext({ preview: previewVisible });
+  }, [previewVisible]);
+  useEffect(() => () => reportMenuContext({ preview: false }), []);
   useEffect(() => {
     if (!previewVisible) return;
-    const unlistenScreenshot = listen('capture-screenshot', () => {
-      if (!isCapturing && !isCropMode) {
+    return onMenuAction((action) => {
+      if (action === 'capture_screenshot' && !isCapturing && !isCropMode) {
         void handleCaptureScreenshot();
-      }
-    });
-    const unlistenCrop = listen('toggle-crop', () => {
-      if (!isCapturing && !isCropCapturing) {
+      } else if (action === 'toggle_crop' && !isCapturing && !isCropCapturing) {
         setIsCropMode(!isCropMode);
       }
     });
-    return () => {
-      void unlistenScreenshot.then((f) => f());
-      void unlistenCrop.then((f) => f());
-    };
   }, [
     previewVisible,
     isCapturing,
@@ -651,18 +649,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
     closeTerminalTab,
     showToast,
   });
-
-  // Listen for native menu "Close Tab" (Cmd+W) event from Tauri
-  useEffect(() => {
-    const unlisten = listen('close-tab', () => {
-      if (terminalTabs.length > 1) {
-        closeTerminalTab(activeTerminalTab);
-      }
-    });
-    return () => {
-      void unlisten.then((fn) => fn());
-    };
-  }, [terminalTabs, activeTerminalTab, closeTerminalTab]);
 
   // Focus the active terminal tab when switching between existing tabs.
   // For brand-new tabs, the Terminal component auto-focuses itself after init.

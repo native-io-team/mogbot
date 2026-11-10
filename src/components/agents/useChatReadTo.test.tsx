@@ -142,7 +142,9 @@ describe('useChatReadTo', () => {
     const scroller = screen.getByTestId('scroller');
     scroller.scrollTop = 250;
     fireEvent.scroll(scroller);
-    act(() => vi.advanceTimersByTime(200));
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     expect(readTo('a1')).toEqual({ id: 'm2', offset: -50 });
     unmount();
     relaunch();
@@ -158,7 +160,9 @@ describe('useChatReadTo', () => {
     const scroller = screen.getByTestId('scroller');
     scroller.scrollTop = 10 * LINE - VIEW;
     fireEvent.scroll(scroller);
-    act(() => vi.advanceTimersByTime(200));
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     expect(readTo('a1')).toBeNull();
   });
 

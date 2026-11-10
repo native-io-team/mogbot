@@ -24,6 +24,7 @@ import {
   ShieldCheckIcon,
   TerminalIcon,
   TrashIcon,
+  UndoIcon,
 } from '@/components/icons';
 import { ContextMenuItem, ContextMenuSeparator } from '../primitives/ContextMenu';
 import { DropdownDivider, DropdownItem } from '../primitives/Dropdown';
@@ -52,6 +53,9 @@ export interface AgentActions {
   onWhatItWasTold?: (agent: Agent) => void;
 }
 
+/** The header's way back from a wrong turn: ⌘K's words, so the two are one thing. */
+export const GO_BACK_MENU = 'Go back to an earlier message…';
+
 interface Item {
   label: string;
   icon: ReactNode;
@@ -78,6 +82,7 @@ export function AgentActionItems({
   onWhatItWasTold,
   onSchedule,
   onFiles,
+  onGoBack,
 }: {
   agent: Agent;
   kind: 'context' | 'dropdown';
@@ -85,6 +90,12 @@ export function AgentActionItems({
   onSchedule?: () => void;
   /** Same: only where the Files list can open. */
   onFiles?: () => void;
+  /**
+   * "Go back to an earlier message…" (Edit, Fork, Rewind), only in the
+   * conversation header and only when there is one of yours to go back to:
+   * a wrong turn is looked for here, not on a hover of your own message.
+   */
+  onGoBack?: () => void;
 } & AgentActions) {
   // Actions only, in three short groups, Delete last on its own: what you do
   // with it, where it sits in the list, then the conversation itself. Its
@@ -136,6 +147,7 @@ export function AgentActionItems({
     },
     ...withDivider([
       ...takeoverItems(agent, onTakeOver, onHandBack),
+      ...(onGoBack ? [{ label: GO_BACK_MENU, icon: <UndoIcon size={12} />, run: onGoBack }] : []),
       {
         // How full this one is, only when its engine said. Never waits on a
         // turn: the turn stays in its own conversation.

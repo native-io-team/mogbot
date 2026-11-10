@@ -19,7 +19,7 @@
   --usage-cap-size-large: var(--spacing-2xl);
   --usage-row-bar-width: 6em;
   --usage-row-left-width: 7.5em;
-  --usage-row-state-width: 8.5em;
+  --usage-row-state-width: 9.5em;
   --usage-row-refill-width: 5.5em;
   --usage-hero-headline: var(--font-size-display);
 }
@@ -605,12 +605,11 @@
   min-width: 0;
 }
 
-/* A segment and its label, one target: opens that account. */
+/* A segment, one target: opens that account. */
 .usage-total__part {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--spacing-xs);
   min-width: 0;
   margin: calc(var(--spacing-xs) * -1);
   padding: var(--spacing-xs);
@@ -646,7 +645,6 @@
 .usage-total__part .usage-total__seg {
   flex: none;
   height: var(--usage-total-height-large);
-  margin-bottom: var(--spacing-2xs);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-input-inset);
 }
@@ -670,29 +668,6 @@
   box-shadow: none;
   outline: var(--border-width-default) dashed var(--border-strong);
   outline-offset: calc(var(--border-width-default) * -1);
-}
-
-.usage-total__name {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: var(--font-size-body-lg);
-  font-weight: var(--font-weight-label);
-  letter-spacing: var(--tracking-name);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-total__room {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-xs) var(--spacing-sm);
-}
-
-.usage-total__left {
-  color: var(--text-secondary);
-  font-size: var(--font-size-body-md);
-  font-variant-numeric: tabular-nums;
 }
 
 /* A countdown to a refill: one chip, everywhere. */

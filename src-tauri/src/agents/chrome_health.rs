@@ -190,9 +190,9 @@ pub fn would_use(agent: &Agent, outside: bool) -> bool {
 /// agent has the agents' browser to fall back on. Pure.
 pub fn line(user_chrome_on: bool, agents_browser: bool) -> String {
     let mut s = if user_chrome_on {
-        "Chrome isn't reachable: Claude's extension isn't answering and Your Chrome isn't connected. Open Chrome and Your Chrome reconnects by itself (Settings → Agents → Your Chrome).".to_string()
+        "Chrome isn't reachable: Claude's extension isn't answering and Your Chrome isn't connected. Open Chrome and Your Chrome reconnects by itself (Settings → Chrome).".to_string()
     } else {
-        "Chrome isn't reachable through Claude's extension. Set up Your Chrome once (Settings → Agents → Your Chrome) so this can't happen again.".to_string()
+        "Chrome isn't reachable through Claude's extension. Set up Your Chrome once (Settings → Chrome) so this can't happen again.".to_string()
     };
     if agents_browser {
         s.push_str(" Until then, agents use their own browser for sites signed in there.");
@@ -267,11 +267,11 @@ mod tests {
         // agent's standing rules point at Your Chrome instead.
         let down = super::super::connections::CHROME_DOWN_PROMPT;
         assert!(down.contains("Never tell the user to sign out of or into the Claude extension"));
-        assert!(down.contains("Settings → Agents → Your Chrome"));
+        assert!(down.contains("Settings → Chrome"));
         assert!(down.contains("mcp__browser__*"));
         let rules = super::super::logins::RULES;
         assert!(rules.contains(
-            "Chrome not answering? The fix is Settings → Agents → Your Chrome, never the Claude extension."
+            "Chrome not answering? The fix is Settings → Chrome, never the Claude extension."
         ));
     }
 
@@ -321,11 +321,11 @@ mod tests {
         let off = line(false, true);
         assert_eq!(
             off,
-            "Chrome isn't reachable through Claude's extension. Set up Your Chrome once (Settings → Agents → Your Chrome) so this can't happen again. Until then, agents use their own browser for sites signed in there."
+            "Chrome isn't reachable through Claude's extension. Set up Your Chrome once (Settings → Chrome) so this can't happen again. Until then, agents use their own browser for sites signed in there."
         );
         let on = line(true, false);
         assert!(on.contains("Your Chrome isn't connected"));
-        assert!(on.contains("Settings → Agents → Your Chrome"));
+        assert!(on.contains("Settings → Chrome"));
         assert!(!on.contains("their own browser"));
         for l in [off, on] {
             let lower = l.to_lowercase();

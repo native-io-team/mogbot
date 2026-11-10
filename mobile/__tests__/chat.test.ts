@@ -187,7 +187,7 @@ describe('contextual actions', () => {
     expect(toggleFor('markUnread')).toBeNull();
   });
 
-  it('offers Copy, Quote and Select Text on words, never on cards', () => {
+  it('offers Copy, Quote and Select text on words, never on cards', () => {
     expect(messageActions(msg('m', 1, { text: '**Done.** See `a.ts`' })).map((a) => a.id)).toEqual([
       'copy',
       'copyMarkdown',
@@ -203,7 +203,7 @@ describe('contextual actions', () => {
     expect(messageActions(msg('m', 1, { text: '  ' }))).toEqual([]);
   });
 
-  it('offers Remember This only where the Mac serves memory', () => {
+  it('offers Remember this only where the Mac serves memory', () => {
     const ids = (remember: boolean) =>
       messageActions(msg('m', 1, { kind: 'user', text: 'hi' }), remember).map((a) => a.id);
     expect(ids(true)).toContain('remember');

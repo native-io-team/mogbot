@@ -1051,7 +1051,7 @@ async fn ask_grok(h: &H, v: &mut Verdict, cards: &Arc<Mutex<Vec<String>>>) -> Ch
         let u = c["url"].as_str().unwrap_or("").to_lowercase();
         u.contains("grok.com") || u.contains("x.com/i/grok")
     };
-    let opened = calls.iter().any(|c| on_grok(c));
+    let opened = calls.iter().any(&on_grok);
     let asked = calls.iter().any(|c| {
         on_grok(c)
             && matches!(c["tool"].as_str(), Some("computer" | "form_input"))

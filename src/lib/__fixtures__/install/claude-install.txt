@@ -1,0 +1,29 @@
+%% Claude Code, installed by TERMINAL_COMMANDS.claude (lib/setup.ts):
+%%   echo "Downloading the Claude Code installer…" && curl -fSL --progress-bar https://claude.ai/install.sh | bash
+%% The bar is curl fetching install.sh itself. install.sh then fetches the
+%% binary with `curl -fsSL` (silent), echoes "Setting up Claude Code..." and
+%% runs `<binary> install`, an Ink screen that redraws its one status line
+%% (ESC[2K erase, ESC[1A up, ESC[G column 0), then echoes "✅ Installation complete!".
+%% Sources: https://claude.ai/install.sh; the `install` command in the 2.1.322 binary.
+Downloading the Claude Code installer…
+\r##########                                                                  14.2%\r######################################################################## 100.0%
+Setting up Claude Code...
+\e[?25l
+\e[38;2;215;119;87mChecking installation status...\e[39m
+\e[2K\e[1A\e[2K\e[1A\e[2K\e[G
+\e[38;2;215;119;87mInstalling Claude Code native build 2.1.322...\e[39m
+\e[2K\e[1A\e[2K\e[1A\e[2K\e[G
+\e[38;2;215;119;87mSetting up launcher and shell integration...\e[39m
+\e[2K\e[1A\e[2K\e[1A\e[2K\e[G
+\e[32m✔\e[39m \e[1m\e[32mClaude Code successfully installed!\e[39m\e[22m
+
+  \e[2mVersion: \e[22m\e[38;2;215;119;87m2.1.322\e[39m
+
+  \e[2mLocation: \e[22m~/.local/bin/claude
+
+
+  \e[2mNext: Run \e[22m\e[1m\e[38;2;215;119;87mclaude --help\e[39m\e[22m\e[2m to get started\e[22m
+\e[?25h
+
+✅ Installation complete!
+

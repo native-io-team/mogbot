@@ -74,7 +74,14 @@ export function TeamPeoplePanel({
   const sorted = [...members].sort((a, b) => (b.lastPushedAt ?? -1) - (a.lastPushedAt ?? -1));
 
   return (
-    <div className={`team-people${compact ? ' is-compact' : ''}`}>
+    // It scrolls, and nothing inside it takes focus, so the list itself does:
+    // otherwise a keyboard can't reach the people past the fold.
+    <div
+      className={`team-people${compact ? ' is-compact' : ''}`}
+      role="region"
+      aria-label="People"
+      tabIndex={0}
+    >
       {!compact && (
         <p className="team-people-note">
           Everyone with access to this repository on GitHub. Roles come from GitHub. The app has no

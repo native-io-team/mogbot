@@ -203,7 +203,7 @@ export const SETUP_FRIENDLY_NAMES: Record<string, string> = {
   claude_auth: 'Claude Account',
   codex: 'Codex',
   codex_auth: 'Codex Account',
-  opencode: 'Opencode',
+  opencode: 'OpenCode',
   opencode_auth: 'Opencode Account',
   cursor: 'Cursor',
   cursor_auth: 'Cursor Account',

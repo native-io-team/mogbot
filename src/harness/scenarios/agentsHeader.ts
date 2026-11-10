@@ -95,7 +95,7 @@ export const agentsHeaderScenarios: Scenario[] = [
     id: 'agents-header-narrowest',
     title: 'Agents — chat header, narrowest window',
     looksRightWhen:
-      'The scheduled button keeps only its clock and “2” (hovering says “2 routines”); the switcher’s name truncates before it if it must. Nothing overlaps.',
+      'The scheduled button keeps only its clock and “2” (hovering says “2 routines”); the switcher is the Chief’s key and a whole chevron, no name (there was room for “C…” and a chevron squeezed to a dot). Nothing overlaps.',
     viewport: { width: 400, height: 800 },
     command: 'agents.open',
     requires: '.agent-chat__header .agent-chat__scheduled',

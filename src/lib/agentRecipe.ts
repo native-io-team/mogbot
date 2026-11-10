@@ -30,6 +30,8 @@ export interface Recipe {
   apps: string[];
   look: { colorway?: string; icon?: string; key?: string };
   independence?: AgentIndependence;
+  /** Skills it saved (`skills_learn`), scrubbed; absent when it has none. */
+  skills?: { name: string; when: string; steps: string }[];
 }
 
 export interface RecipeRemoved {

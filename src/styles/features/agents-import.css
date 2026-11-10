@@ -653,6 +653,16 @@
   border-radius: var(--radius-pill);
 }
 
+/* An agent that's here: the pill is a button to its chat. */
+.agents-import-done__team li[data-open] {
+  padding: 0;
+  background: none;
+}
+
+.agents-import-done__team li[data-open] .button {
+  border-radius: var(--radius-pill);
+}
+
 .agents-import-done .agents-import-problems {
   align-self: stretch;
   text-align: left;
@@ -885,6 +895,16 @@
 
 .agent-import-review__summary-text {
   font-style: italic;
+}
+
+/* A card bringing many agents: how many are ticked, and one switch for all. */
+.agent-import-review__tally {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
 }
 
 /* Instructions and notes are prose: read, not copied as code. The diff

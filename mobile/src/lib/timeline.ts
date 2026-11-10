@@ -13,7 +13,7 @@ import { isImportInterview } from './bars';
 import { foldRoomLines, type RoomFold } from './rooms';
 import type { PendingSend } from './sync';
 
-export type Item =
+export type Item = (
   | { kind: 'message'; key: string; message: AgentMessage; grouped: boolean }
   | { kind: 'day'; key: string; label: string }
   | { kind: 'pending'; key: string; pending: PendingSend; grouped: boolean }
@@ -22,7 +22,15 @@ export type Item =
   /** What the agent said in a room, folded into one line that opens the room. */
   | { kind: 'room'; key: string; fold: RoomFold }
   /** "Setting up your team", where it was posted in the Chief's chat. */
-  | { kind: 'setup'; key: typeof SETUP_KEY };
+  | { kind: 'setup'; key: typeof SETUP_KEY }
+  /** What a rewind passed over, as one row that opens to show it (`lib/goBack`). */
+  | { kind: 'rewound'; key: string; rewindId: string; count: number; open: boolean }
+  /** "End of what was rewound": closes an opened fold, on its newest side. */
+  | { kind: 'rewound-end'; key: string; rewindId: string }
+) & {
+  /** Inside an opened "Rewound" fold: drawn muted behind a rule, as past (`lib/goBack`). */
+  past?: boolean;
+};
 
 /**
  * A send's row key, the same while it's on its way and once the Mac has it

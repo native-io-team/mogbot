@@ -3,11 +3,16 @@
 :root {
   --project-table-select-w: var(--spacing-lg);
   --project-table-menu-w: calc(var(--spacing-2xl) + var(--spacing-xs));
+  /* A card narrower than this can't hold a branch name beside its counts. */
+  --project-card-min-w: 220px;
 }
 
+/* As many columns as the panel holds, never a card under its minimum. The
+   panel sits beside the sidebar, so the window's width (the media queries
+   below) said three columns where there was room for two. */
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--project-card-min-w)), 1fr));
   gap: var(--spacing-md);
 }
 
@@ -15,10 +20,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
-}
-
-.project-grid--folder-strip {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .project-table {
@@ -195,10 +196,6 @@
   white-space: nowrap;
 }
 
-.project-table-changes.has-changes {
-  color: var(--accent-warning);
-}
-
 .project-table-muted {
   color: var(--text-muted);
 }
@@ -269,9 +266,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* On the selected surface muted is 3.6:1 and secondary 4.3:1. */
-  color: var(--text-primary);
-  font-size: var(--font-size-12);
+  /* Decorative (aria-hidden; the thumbnail is labelled "Open <name>"), so it
+     can sit back in muted instead of shouting the same words on every card. */
+  color: var(--text-muted);
+}
+
+.project-card-monogram {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .project-card-info {
@@ -281,8 +285,9 @@
   padding: var(--spacing-md);
   gap: 8px;
   overflow: visible;
+  /* Grows for the team line (ProjectTeam) rather than spilling under the card. */
   min-height: 52px;
-  flex: 0 0 52px;
+  flex: 0 0 auto;
   box-sizing: border-box;
   border-radius: 0 0 var(--radius-card) var(--radius-card);
 }
@@ -460,11 +465,6 @@
 
 /* Medium screens - 2 columns */
 @media (max-width: 700px) {
-  .project-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-md);
-  }
-
   .project-card-info {
     padding: var(--spacing-sm);
   }
@@ -494,11 +494,6 @@
 
 /* Narrow screens - single column */
 @media (max-width: 550px) {
-  .project-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
   .project-card-info {
     padding: var(--spacing-sm);
   }

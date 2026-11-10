@@ -4,7 +4,8 @@
 //! A recipe is one JSON object (`format: "agent-recipe"`, `version`; the
 //! schema is in docs/agents.md, "Share an agent as a recipe"): its name,
 //! role, instructions, routines as words, what it watches for, the apps it
-//! needs by name, its key's look and the independence it suggests.
+//! needs by name, its key's look, the independence it suggests and the
+//! skills it saved (`skills_learn`: a name, when to use it, the steps).
 //!
 //! **Never in it:** memory, the conversation, logins, keys or connection
 //! tokens, which accounts it uses, its project, and, in every text that is
@@ -77,6 +78,18 @@ pub struct Recipe {
     /// "often", "judgement", "go_hard" or "full_send": a suggestion.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub independence: Option<Level>,
+    /// Skills (`skills_learn`), scrubbed like the rest.
+    /// Absent when it has none, so a recipe without any reads as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<RecipeSkill>,
+}
+
+/// One saved skill, as a recipe carries it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct RecipeSkill {
+    pub name: String,
+    pub when: String,
+    pub steps: String,
 }
 
 /// What the scrub took out of the recipe's text, by kind.
@@ -158,6 +171,8 @@ pub struct Source<'a> {
     /// The apps it was given, by their names ("Linear"), never the account.
     pub apps: Vec<String>,
     pub independence: Option<Level>,
+    /// Its saved skills (`skills_learn::list`).
+    pub skills: Vec<super::skills_learn::Skill>,
 }
 
 /// A recipe, what was removed from it, and what was left out on purpose.
@@ -226,6 +241,16 @@ pub fn build(src: Source) -> Built {
             key: a.bound_key.clone(),
         },
         independence: src.independence,
+        skills: src
+            .skills
+            .iter()
+            .map(|s| RecipeSkill {
+                name: clean(&s.name),
+                when: clean(&s.when),
+                steps: clean(&s.steps),
+            })
+            .filter(|s| !s.name.is_empty() && !s.steps.is_empty())
+            .collect(),
     };
     let mut left_out = vec![
         "Its memory and everything it knows about you".to_string(),
@@ -312,11 +337,13 @@ pub fn for_agent(id: &str) -> Result<Preview, CommandError> {
         .map(|(c, _)| c.title)
         .collect();
     let independence = Some(super::policy::chosen_level(&agent));
+    let skills = super::skills_learn::list(&store::agent_home(&agent.id)?);
     Ok(preview_of(build(Source {
         agent: &agent,
         instructions: &instructions,
         apps,
         independence,
+        skills,
     })))
 }
 
@@ -431,6 +458,27 @@ pub fn read_value(value: &Value, label: &str, out: &mut Export) {
     };
     let look = obj.get("look");
     let s = |k: &str| look.and_then(|l| l.get(k)).and_then(Value::as_str);
+    a.skills = match obj.get("skills") {
+        Some(Value::Array(list)) => list
+            .iter()
+            .filter_map(|v| {
+                let s = |k: &str| v.get(k).and_then(Value::as_str).map(str::trim);
+                let (name, steps) = (s("name")?, s("steps")?);
+                (!name.is_empty() && !steps.is_empty()).then(|| {
+                    (
+                        name.to_string(),
+                        s("when").unwrap_or("").to_string(),
+                        steps.to_string(),
+                    )
+                })
+            })
+            .collect(),
+        None | Some(Value::Null) => Vec::new(),
+        Some(_) => {
+            problems.push("The recipe's \"skills\" should be a list.".into());
+            Vec::new()
+        }
+    };
     a.look = ProposedLook::read(
         s("colorway"),
         s("icon"),

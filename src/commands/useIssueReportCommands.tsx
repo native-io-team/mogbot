@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { BugReportIcon, PlusIcon } from '@/components/icons';
+import { onMenuAction } from '../lib/nativeMenu';
 import { useOpenModal } from '../contexts/ModalContext';
 import { useCommands } from './useCommands';
 import { ISSUE_REPORTS_ENABLED } from '../lib/issueReports';
@@ -6,6 +8,16 @@ import { ISSUE_REPORTS_ENABLED } from '../lib/issueReports';
 /** Discoverable entry points for the public issue reporting flows. */
 export function useIssueReportCommands() {
   const openModal = useOpenModal();
+  // Help → Report a Bug… / Request a Feature… (shown when brand.json names the repo).
+  useEffect(
+    () =>
+      onMenuAction((action) => {
+        if (!ISSUE_REPORTS_ENABLED) return;
+        if (action === 'report_bug') openModal('bugReport');
+        else if (action === 'request_feature') openModal('featureRequest');
+      }),
+    [openModal]
+  );
 
   useCommands(
     () => [

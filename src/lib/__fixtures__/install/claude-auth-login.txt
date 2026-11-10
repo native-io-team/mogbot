@@ -1,0 +1,7 @@
+%% `claude auth login` (TERMINAL_COMMANDS.claude_auth), as 2.1.322 writes it to
+%% stdout: two lines, then a code prompt left open (no newline) while it waits
+%% for the browser to hand the sign-in back; the link is an OSC 8 hyperlink.
+%% On success it writes "Login successful." straight after the prompt.
+Opening browser to sign in…
+If the browser didn't open, visit: \e]8;;https://claude.com/cai/oauth/authorize?code=true&client_id=demo&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A54545%2Fcallback&state=demo\ahttps://claude.com/cai/oauth/authorize?code=true&client_id=demo&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A54545%2Fcallback&state=demo\e]8;;\a
+Paste code here if prompted > ⏸Login successful.

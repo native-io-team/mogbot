@@ -41,10 +41,6 @@ export interface SearchAndSortProps {
   onNewFolder: () => void;
   onCreateProject: () => void;
   onImportProject?: () => void;
-  /** Whether GitHub is authenticated (import requires GitHub). */
-  isGitHubAuthenticated?: boolean;
-  /** Callback when the user tries to import without GitHub auth. */
-  onGitHubConnectForImport?: () => void;
   /** Optional element rendered just after the title (e.g. a workspace chip). */
   titleAccessory?: React.ReactNode;
 }
@@ -63,8 +59,6 @@ export function SearchAndSort({
   onNewFolder,
   onCreateProject,
   onImportProject,
-  isGitHubAuthenticated = true,
-  onGitHubConnectForImport,
   titleAccessory,
 }: SearchAndSortProps) {
   // A project start checks this Mac's tools first; the button says so.
@@ -106,14 +100,9 @@ export function SearchAndSort({
               leftIcon={checking === 'import' ? <Spinner size="sm" /> : <PullIcon size={14} />}
               aria-busy={checking === 'import' || undefined}
               data-education-id="import-button"
-              onClick={() => {
-                if (isGitHubAuthenticated) {
-                  onImportProject();
-                } else if (onGitHubConnectForImport) {
-                  onGitHubConnectForImport();
-                }
-              }}
-              title={!isGitHubAuthenticated ? 'Connect GitHub to import repositories' : undefined}
+              // Always the two choices: a folder on this Mac needs no GitHub,
+              // and the GitHub one signs in first when it has to.
+              onClick={onImportProject}
             >
               Import
             </Button>

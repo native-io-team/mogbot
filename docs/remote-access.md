@@ -9,8 +9,11 @@ what an agent tab is showing, answers it, starts new agents, screenshots the
 preview, and can push behind a PIN only you know. When you sit back down, the
 conversation is in the same tab you left.
 
-Open it from Cmd+K → **Remote access**, or from the sidebar indicator once
-it's on.
+Open it from Cmd+K → **Remote access**, Settings → Phone (under "Other
+assistants"), or the sidebar indicator once it's on. Its first line, in setup
+and live alike, says what it is and how it differs from the phone app: another
+assistant drives your agents through a private link; on your phone, the phone
+app is simpler.
 
 ## The question it answers
 
@@ -48,13 +51,14 @@ this first, before any setup, and makes it as unlikely as possible.
 **Setup** (`RemoteSetup`) is five steps, all visible from the start. Each is
 done when something is *true*, not when something was clicked:
 
-1. **This computer has to stay on.** The live checklist, with the lid and
+1. **This Mac has to stay on.** The live checklist, with the lid and
    restart fixes inline, then "Got it — set it up".
 2. **A private link.** Install Tailscale → sign in → turn on → approve Funnel
    once. Done when `tailscale funnel status` confirms our mount.
 3. **Projects.** Nothing is reachable until it's ticked.
-4. **Pushing.** Off unless a PIN is set; skipping is a first-class choice.
-5. **Connect Grok Bot.** Copy the link, add it as a custom connector, ask a
+4. **Pushing from your assistant.** Off unless a PIN is set; skipping ("Skip,
+   I'll push from this Mac") is a first-class choice.
+5. **Connect your AI assistant.** Copy the link, add it as a custom connector, ask a
    question. Done when an assistant has actually connected (`ever_connected`,
    persisted). A link nobody has used proves nothing.
 
@@ -62,8 +66,18 @@ Done steps collapse to a summary with **Change**.
 
 **Live** (`RemoteLive`), shown from the first connection onwards:
 
-- A hero (Live / Not reachable / Off) with who last connected and the machine
-  name.
+- A hero (Live / Not reachable / Off) with the assistant last heard from
+  ("Grok, last heard from 2 min ago"; `assistantName` turns the client's
+  `clientInfo.name` into the name people know, and shows anything it doesn't
+  recognise as sent) and the machine name. **Live** needs all three of: the
+  server running, a link Tailscale confirms, and a request from the internet
+  that got through. A reachability reading without a link or a server is
+  stale, never evidence.
+- On but with its server stopped, the hero says so and the connection panel
+  offers **Start it again** (turning it on again starts the server), rather
+  than waiting on Tailscale for a server that isn't there. The sidebar's red
+  "Remote access stopped" sends people here.
+- A status that can't be read says why, with **Try again**.
 - "Before you leave" with a badge.
 - Projects, pushing (on / off / locked), and the masked link with
   **Replace link…**.

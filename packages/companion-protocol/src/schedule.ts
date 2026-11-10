@@ -519,6 +519,16 @@ export function describeWatchSource(source: WatchSource): string {
       return 'a Linear issue is assigned to you';
     case 'new_file':
       return `a new file appears in ${source.folder}`;
+    case 'new_mail': {
+      let s = 'an email arrives in Mail';
+      if (source.from) s += ` from ${source.from}`;
+      if (source.words) s += ` mentioning “${source.words}”`;
+      return s;
+    }
+    case 'new_text':
+      return source.from
+        ? `a text arrives in Messages from ${source.from}`
+        : 'a text arrives in Messages';
     case 'custom':
       return source.check.trim().replace(/\.$/, '');
     default:

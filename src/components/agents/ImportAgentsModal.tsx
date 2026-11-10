@@ -131,7 +131,12 @@ export function ImportAgentsModal({
       {result ? (
         <>
           <div className="agents-import__body" ref={doneRef} tabIndex={-1}>
-            <ImportDone summary={result.summary} agents={result.agents} extra={result.extra} />
+            <ImportDone
+              summary={result.summary}
+              agents={result.agents}
+              extra={result.extra}
+              onOpen={openAgent}
+            />
           </div>
           <footer className="agents-import__footer agents-import__footer--done">
             <Button variant="secondary" onClick={close}>

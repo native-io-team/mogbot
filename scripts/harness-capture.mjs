@@ -47,6 +47,8 @@ const BASE_CDP_PORT = Number(process.env.HARNESS_CDP_PORT ?? 9333);
 let CDP_PORT = BASE_CDP_PORT;
 // A run that outlives this is hung: Chrome is closed and the run fails.
 const MAX_MS = Number(process.env.HARNESS_MAX_MS ?? 45 * 60 * 1000);
+/** The longest one DevTools call may take before its capture is failed. */
+const SEND_TIMEOUT_MS = 60_000;
 // `HARNESS_WIDTH` / `HARNESS_HEIGHT` capture at another window size (e.g. a
 // spacing review at 1280 and 1600).
 const VIEWPORT = {
@@ -232,7 +234,18 @@ class Page {
   send(method, params = {}) {
     const id = ++this.#id;
     return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      // Never wait forever: an evaluate whose page reloaded under it (Vite
+      // reloading after an edit) can go unanswered, and both of a night's
+      // full runs sat on one capture for twenty minutes. A late answer
+      // fails that capture instead of freezing the run.
+      const timer = setTimeout(() => {
+        if (!this.#pending.delete(id)) return;
+        reject(new Error(`${method} got no answer in ${SEND_TIMEOUT_MS / 1000}s`));
+      }, SEND_TIMEOUT_MS);
+      this.#pending.set(id, {
+        resolve: (v) => (clearTimeout(timer), resolve(v)),
+        reject: (e) => (clearTimeout(timer), reject(e)),
+      });
       this.#ws.send(JSON.stringify({ id, method, params }));
     });
   }
@@ -347,7 +360,12 @@ async function capture({
   sameColumn,
   viewport,
 }) {
-  const { page, targetId } = await newPage(url, viewport);
+  // `HARNESS_FORCE_WIDTH` re-captures every scenario at that width (a narrow
+  // pass), keeping a scenario's own height, so a fixed 1280 doesn't win.
+  const forced = process.env.HARNESS_FORCE_WIDTH
+    ? { ...(viewport ?? VIEWPORT), width: Number(process.env.HARNESS_FORCE_WIDTH) }
+    : viewport;
+  const { page, targetId } = await newPage(url, forced);
   try {
     const ready = await waitFor(page, 'window.__harnessReady', 25_000, `${file} to settle`)
       .then(() => true)

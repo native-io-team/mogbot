@@ -455,6 +455,23 @@ pub fn read_files(files: &Files, out: &mut Export) {
         }
     }
     if !any {
+        // A `.json` that doesn't parse is most likely the export itself with
+        // a typo (a bot wrote it): say where, not "doesn't look like an export".
+        let broken: Vec<String> = files
+            .list
+            .iter()
+            .filter(|(path, _)| path.to_ascii_lowercase().ends_with(".json"))
+            .filter_map(|(path, text)| {
+                super::paste::parse_block(text, path)
+                    .err()
+                    .filter(|_| json_values(text).is_empty())
+            })
+            .take(3)
+            .collect();
+        if !broken.is_empty() {
+            out.problems.extend(broken);
+            return;
+        }
         out.problems.push(
             "This doesn't look like an export from Grok Bot, OpenBot, OpenClaw or Hermes. Pick the export itself or the app's folder, or use Paste a reply instead.".into(),
         );
@@ -608,7 +625,21 @@ fn s<'a>(v: &'a Value, key: &str) -> &'a str {
     v.get(key).and_then(Value::as_str).unwrap_or("").trim()
 }
 
+/// A list of strings (or `{text}` objects). A Grok Bot export is written by the
+/// bot itself, so a list sometimes arrives as one string: one item a line.
 fn strings(v: Option<&Value>) -> Vec<String> {
+    if let Some(one) = v.and_then(Value::as_str) {
+        return one
+            .lines()
+            .map(|l| {
+                l.trim()
+                    .trim_start_matches(['-', '•', '*'])
+                    .trim()
+                    .to_string()
+            })
+            .filter(|l| !l.is_empty())
+            .collect();
+    }
     v.and_then(Value::as_array)
         .into_iter()
         .flatten()
@@ -693,12 +724,18 @@ fn grok_bot(values: &[(String, Value)], out: &mut Export) {
             a.role = s(bot, "title").to_string();
             a.instructions = s(bot, "instructions").to_string();
             a.memory = strings(bot.get("memories")).join("\n");
+            let mut named_only = Vec::new();
             for skill in bot
                 .get("skills")
                 .and_then(Value::as_array)
                 .into_iter()
                 .flatten()
             {
+                // Just a name ("skills": ["web-brief"]): there's nothing to run.
+                if let Some(name) = skill.as_str().map(str::trim).filter(|n| !n.is_empty()) {
+                    named_only.push(name.to_string());
+                    continue;
+                }
                 let body = format!(
                     "{}\n\n{}",
                     s(skill, "description"),
@@ -724,11 +761,17 @@ fn grok_bot(values: &[(String, Value)], out: &mut Export) {
                     .join(": ");
                 let trigger = s(r, "trigger");
                 if trigger.is_empty() || trigger == "schedule" {
-                    let when = cron_words(s(r, "schedule_cron"))
+                    // `schedule_cron` as asked; a bot writing its own export
+                    // sometimes says `cron` or `schedule` instead.
+                    let cron = [s(r, "schedule_cron"), s(r, "cron"), s(r, "schedule")]
+                        .into_iter()
+                        .find(|c| !c.is_empty())
+                        .unwrap_or("");
+                    let when = cron_words(cron)
                         .or_else(|| {
                             Some(s(r, "schedule_text").to_string()).filter(|t| !t.is_empty())
                         })
-                        .unwrap_or_else(|| s(r, "schedule_cron").to_string());
+                        .unwrap_or_else(|| cron.to_string());
                     a.routines.push((
                         when,
                         with_zone(&what, r.get("timezone").and_then(Value::as_str)),
@@ -749,11 +792,18 @@ fn grok_bot(values: &[(String, Value)], out: &mut Export) {
                 .into_iter()
                 .flatten()
             {
-                // The MCP address stays behind: it can carry a key.
-                let n = s(app, "name");
+                // The MCP address stays behind: it can carry a key. Just a
+                // name ("apps": ["Linear"]) is the same app.
+                let n = app
+                    .as_str()
+                    .map(str::trim)
+                    .unwrap_or_else(|| s(app, "name"));
                 if !n.is_empty() {
                     a.apps.push((n.to_string(), String::new()));
                 }
+            }
+            if !named_only.is_empty() {
+                a.context = format!("Skills it had there:\n- {}", named_only.join("\n- "));
             }
             about(out, "personal", strings(bot.get("user_facts")));
             out.add_agent(a);
@@ -1127,7 +1177,7 @@ fn openclaw(files: &Files, out: &mut Export) {
         }
     } else {
         out.skipped.push(
-            "OpenClaw's scheduled jobs: it keeps them in a database since 2026.6.1. Ask OpenClaw to list them, then add them here".into(),
+            "OpenClaw’s scheduled jobs. Newer versions keep them in a database this can’t read: ask OpenClaw to list them, then ask each agent here to set up its own.".into(),
         );
     }
 }

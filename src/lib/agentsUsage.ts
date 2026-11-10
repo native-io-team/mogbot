@@ -84,6 +84,8 @@ export {
   elsewhereLine,
   relativeIn,
   usageGlance,
+  totalWords,
+  type TotalWords,
   type ChangeLine,
   type KeyLimit,
   type AccountKeyState,

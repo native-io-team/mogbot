@@ -74,7 +74,8 @@ export function phoneIndicatorState(
 
 export function PhoneIndicator({ isSidebarHidden }: { isSidebarHidden: boolean }) {
   const openModal = useOpenModal();
-  const status = useAsyncState<PhoneStatus>(getPhoneStatus, { immediate: true });
+  // No `immediate`: the poll below reads on mount, and both made it two reads at once.
+  const status = useAsyncState<PhoneStatus>(getPhoneStatus);
   const [now, setNow] = useState(() => Date.now());
   const { execute } = status;
   usePolling(

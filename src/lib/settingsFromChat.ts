@@ -7,8 +7,13 @@
  * - **Morning brief** (`agents::brief`): on or off, its time, quiet days
  *   and the user's checks, worded by the protocol's `brief.ts`. The chat's
  *   `set_morning_brief` emits {@link BRIEF_EVENT}.
- * - **Slow down on battery** (`power.rs`): on by default; the Chief's
- *   `change_app_setting` emits {@link APP_SETTINGS_EVENT}.
+ * - **The app's own switches** (Slow down on battery, `power.rs`; new
+ *   agents' engine and model; the menu bar and quick message; Projects',
+ *   Appearance's and Advanced's switches): the Chief's `change_app_setting`
+ *   writes them with the same commands Settings uses and emits
+ *   {@link APP_SETTINGS_EVENT} with what changed. Settings reads its rows
+ *   again, and {@link followAppSettings} hands each window the event its
+ *   readers already listen for.
  * - **Opening Settings** for what needs the user's own hands on the Mac: a
  *   Slack token pasted into a masked field, an engine account's browser
  *   sign-in. The Chief's `slack_settings connect` and `manage_account add`
@@ -23,6 +28,11 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { QuietWindow } from '../../packages/companion-protocol/src/quiet';
 import type { BriefCheck, MorningBrief } from '../../packages/companion-protocol/src/brief';
 import type { AgentEngine } from './agents';
+import {
+  COMPACT_WORKSPACE_TOOLBAR_CHANGED_EVENT,
+  ELEMENT_BREADCRUMB_ENABLED_CHANGED_EVENT,
+  SPOTIFY_WIDGET_ENABLED_CHANGED_EVENT,
+} from './settings';
 
 export {
   QUIET_DETAIL,
@@ -61,6 +71,38 @@ export const setMorningBrief = (
     always: brief.always,
     checks: checks ?? null,
   });
+
+/**
+ * What `change_app_setting` changed, by its key (`settings_tools::SWITCHES`):
+ * `{ compact_toolbar: true }`. Empty for the theme or battery alone.
+ */
+export type AppSettingsChanged = Record<string, boolean>;
+
+/** The window event each switch's readers already listen for, by key. */
+const FOLLOWED_BY: Record<string, string> = {
+  compact_toolbar: COMPACT_WORKSPACE_TOOLBAR_CHANGED_EVENT,
+  element_breadcrumb: ELEMENT_BREADCRUMB_ENABLED_CHANGED_EVENT,
+  spotify_controls: SPOTIFY_WIDGET_ENABLED_CHANGED_EVENT,
+};
+
+/**
+ * Pass a change made from chat on to this window, as Settings' own switch
+ * would have: the workspace toolbar, the preview's breadcrumb and the
+ * Spotify controls follow at once. Exported for tests.
+ */
+export function followAppSettings(changed: AppSettingsChanged | null | undefined) {
+  for (const [key, on] of Object.entries(changed ?? {})) {
+    const name = FOLLOWED_BY[key];
+    if (name && typeof on === 'boolean') {
+      window.dispatchEvent(new CustomEvent<boolean>(name, { detail: on }));
+    }
+  }
+}
+
+export const onAppSettingsChanged = (
+  fn: (changed: AppSettingsChanged) => void
+): Promise<UnlistenFn> =>
+  listen<AppSettingsChanged | null>(APP_SETTINGS_EVENT, (e) => fn(e.payload ?? {}));
 
 export const getLowPower = () => invoke<boolean>('get_low_power_on_battery');
 export const setLowPower = (enabled: boolean) =>

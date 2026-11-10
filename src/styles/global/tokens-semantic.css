@@ -71,6 +71,13 @@
   --focus-ring-offset: var(--stroke-2);
 
   --accent-success: var(--color-green-600);
+  /* A status word as text on a selected row or a status tint. The accent hue
+     reads on plain surfaces; on light, selected and tinted fills need a deeper
+     shade. Dark keeps the accent. */
+  --text-success: var(--accent-success);
+  --text-warning: var(--accent-warning);
+  --text-error: var(--color-red-300);
+  --text-info: var(--status-info);
   --accent-warning: var(--color-orange-600);
   --accent-error: var(--color-red-error);
   /* AA as text on a dark card (#ef4444 was 3.9:1 on the control surface). */
@@ -329,6 +336,10 @@
   --border-accent: var(--color-ink-500);
 
   --accent-success: var(--color-green-900);
+  --text-success: var(--color-green-950);
+  --text-warning: var(--color-orange-950);
+  --text-error: var(--color-red-800);
+  --text-info: var(--color-blue-900);
   /* orange-800 was 4.1:1 on its own 10% tint (the main-branch banner). */
   --accent-warning: var(--color-orange-900);
   --accent-error: var(--color-red-700);

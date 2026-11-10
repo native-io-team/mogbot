@@ -19,6 +19,9 @@ observed on Claude Code 2.1.318 (`src-tauri/src/agents/testdata/`):
 - Sessions: `--session-id` starts a transcript under
   `$CLAUDE_CONFIG_DIR` (or `~/.claude`)`/projects/<cwd folder>/<id>.jsonl`,
   `--resume` needs one there ("No conversation found with session ID").
+  Every entry has a `uuid`; `--resume <s> --resume-session-at <uuid>
+  --fork-session [--session-id <new>]` starts <new> as <s> up to and
+  including that entry, <s> untouched (as Claude Code 2.1.322 does).
 - Sealed calls (`--output-format text|json`) get a short canned answer.
 
 What a turn does is the script in its prompt: the LAST `#fake ` in it
@@ -53,14 +56,19 @@ With none, it runs `$FAKE_ENGINE_DEFAULT` (the same JSON), else replies
   {"list_tools": true}            log the app server's `tools/list` as this engine
                                   reaches it (`served` in the log).
 
-Run as `codex` (a link named so), it is Codex's `exec` driver instead
-(`codex exec --json`, JSONL out, threads under `$CODEX_HOME/sessions`):
-the same steps, except that commands never ask (exec can't) and
-`usage_limit` applies to Codex only with `"codex": true`. The app runs it on `exec` when
-`SHIPSTUDIO_AGENTS_CODEX_EXEC` is set (debug builds); otherwise it is Codex's
-`app-server` (`AppServer`): replies stream as deltas, a `bash` step asks with
-`item/commandExecution/requestApproval` unless `"ask": false`, and a `write`
-step with `item/fileChange/requestApproval`.
+Run as `codex` (a link named so), it is Codex's `app-server` (JSON-RPC on
+stdin/stdout, as observed on Codex 0.166, `testdata/codex-app-server.jsonl`),
+which the app prefers: `generate-json-schema` lists what the app checks for,
+`thread/start` / `thread/resume` (an unknown thread fails), `turn/start`
+running the same steps, a `bash` step asking with
+`item/commandExecution/requestApproval` (a `write` with
+`item/fileChange/requestApproval`), a decline ending that item `declined`,
+steers logged as `{"steer": ...}`, `turn/interrupt`, `thread/compact/start`.
+With `SHIPSTUDIO_AGENTS_CODEX_EXEC` set (debug builds) the app runs it as
+the `exec` driver instead (`codex exec --json`, JSONL out): the same steps,
+except that commands never ask (exec can't). Threads live under
+`$CODEX_HOME/sessions` for both; `usage_limit` applies to Codex only with
+`"codex": true`.
 
 Run as `opencode`, it is OpenCode's `opencode acp` (the Agent Client
 Protocol on stdin/stdout, as observed on OpenCode 1.18.29,
@@ -424,6 +432,10 @@ def script_of(prompt):
 def stream_turn(args):
     prompt = sys.stdin.read()
     resume = flag(args, "--resume")
+    # As a Claude Code that dropped the hidden flag would: refused before any output.
+    if os.environ.get("FAKE_CLAUDE_NO_RESUME_AT") and "--resume-session-at" in args:
+        sys.stderr.write("error: unknown option '--resume-session-at'\n")
+        sys.exit(1)
     if resume and not find_transcript(resume):
         sys.stderr.write("No conversation found with session ID: %s\n" % resume)
         sys.exit(1)
@@ -432,12 +444,29 @@ def stream_turn(args):
         sys.stderr.write("Error: Session ID %s is already in use.\n" % new)
         sys.exit(1)
     turn = Turn(args, prompt)
+    if resume and "--fork-session" in args:
+        turn.session = new or str(uuid.uuid4())
+        at = flag(args, "--resume-session-at")
+        kept, found = [], at is None
+        with open(find_transcript(resume)) as f:
+            for line in f:
+                kept.append(line)
+                if at is not None and json.loads(line).get("uuid") == at:
+                    found = True
+                    break
+        if not found:
+            sys.stderr.write("No message found with message.uuid of: %s\n" % at)
+            sys.exit(1)
+        os.makedirs(os.path.dirname(transcript_path(turn.session)), exist_ok=True)
+        with open(transcript_path(turn.session), "w") as f:
+            f.writelines(kept)
     path = transcript_path(turn.session)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a") as f:
-        f.write(json.dumps({"type": "user", "sessionId": turn.session,
+        f.write(json.dumps({"type": "user", "sessionId": turn.session, "uuid": str(uuid.uuid4()),
                             "message": {"role": "user", "content": prompt}}) + "\n")
-    log({"turn": turn.session, "resume": bool(resume), "cwd": os.getcwd(),
+    log({"turn": turn.session, "resume": bool(resume), "fork": "--fork-session" in args,
+         "cwd": os.getcwd(),
          "account": os.environ.get("CLAUDE_CONFIG_DIR", "this-mac"), "prompt": prompt})
     tools = ["Bash", "Edit", "Read", "Write"] + ["mcp__app__" + t for t in turn.bridge.tools() if t]
     status = "connected" if turn.bridge.url else "failed"
@@ -450,6 +479,7 @@ def stream_turn(args):
     with open(path, "a") as f:
         for reply in turn.replies:
             f.write(json.dumps({"type": "assistant", "sessionId": turn.session,
+                                "uuid": str(uuid.uuid4()),
                                 "message": {"role": "assistant", "content": reply}}) + "\n")
     turn.result()
 
@@ -597,36 +627,70 @@ def codex_turn(args):
                                              "output_tokens": 20, "reasoning_output_tokens": 0}})
 
 
-APP_SERVER_SCHEMA = {
-    "ClientRequest.json": ["thread/start", "thread/resume", "turn/start", "turn/steer",
-                           "turn/interrupt"],
+def codex_main(args):
+    if args[:1] == ["--version"]:
+        print("codex-cli 0.166.0")
+    elif args[:2] == ["login", "status"]:
+        print("Logged in using ChatGPT")
+    elif args[:2] == ["mcp", "list"]:
+        print("[]")
+    elif args[:1] == ["exec"]:
+        codex_turn(args)
+    elif args[:2] == ["app-server", "generate-json-schema"]:
+        codex_schema(args)
+    elif args[:1] == ["app-server"]:
+        CodexApp(args).serve()
+    else:
+        print("fake codex: nothing to do for %s" % " ".join(args), file=sys.stderr)
+
+
+# ------------------------------------------------------- Codex app-server
+
+# What `codex app-server generate-json-schema` lists, as far as the app
+# checks it (`codex_app::NEEDED`): every method name quoted in its file.
+CODEX_SCHEMA = {
+    "ClientRequest.json": ["initialize", "thread/start", "thread/resume", "turn/start",
+                           "turn/steer", "turn/interrupt", "thread/compact/start",
+                           "account/rateLimits/read"],
     "ServerRequest.json": ["item/commandExecution/requestApproval",
-                           "item/fileChange/requestApproval", "mcpServer/elicitation/request"],
+                           "item/fileChange/requestApproval",
+                           "mcpServer/elicitation/request"],
     "ServerNotification.json": ["item/agentMessage/delta", "item/started", "item/completed",
-                                "turn/completed", "thread/tokenUsage/updated"],
+                                "turn/started", "turn/completed", "thread/started",
+                                "thread/tokenUsage/updated", "account/rateLimits/updated"],
 }
 
 
-class AppServer:
-    """`codex app-server`, as observed on Codex 0.166
-    (`testdata/codex-app-server.jsonl`): JSON-RPC both ways. A `bash` step
-    asks with `item/commandExecution/requestApproval` (a command needing
-    more than the sandbox) unless `"ask": false`; a `write` step asks with
-    `item/fileChange/requestApproval`. A decline ends nothing: the model
-    reads the declined result (and any `turn/steer` the app sent) and the
-    turn carries on. Threads are rollouts under `$CODEX_HOME/sessions`, as
-    `exec`'s are, so either driver resumes the other's."""
+def codex_schema(args):
+    folder = flag(args, "--out")
+    if not folder:
+        sys.stderr.write("error: --out is required\n")
+        sys.exit(2)
+    os.makedirs(folder, exist_ok=True)
+    for name, methods in CODEX_SCHEMA.items():
+        with open(os.path.join(folder, name), "w") as f:
+            json.dump({"oneOf": [{"properties": {"method": {"enum": [m]}}} for m in methods]}, f)
+
+
+class CodexApp:
+    """`codex app-server`: JSON-RPC over stdin/stdout, as observed on Codex
+    0.166 (`testdata/codex-app-server.jsonl`). One thread per process; a
+    `bash` step asks with `item/commandExecution/requestApproval` unless
+    `"ask": false`, a `write` step with `item/fileChange/requestApproval`,
+    and a decline ends that item `declined` and the steps go on, as Codex's
+    model would carry on. Steers are logged and acknowledged; an interrupt
+    ends the turn `interrupted`."""
 
     def __init__(self, args):
         import queue
         import threading
-        self.args = args
         self.inbox = queue.Queue()
-        self.next_id = 100
         self.thread = None
         self.turn = None
         self.n = 0
+        self.next_id = 0
         self.interrupted = False
+        self.failed = None
         url = None
         for i, a in enumerate(args):
             if a == "-c" and i + 1 < len(args) and args[i + 1].startswith("mcp_servers.app="):
@@ -634,8 +698,9 @@ class AppServer:
                 url = m.group(1) if m else None
         self.bridge = Bridge(None)
         self.bridge.url = url
-        self.bridge.headers = {"Authorization": "Bearer " +
-                               os.environ.get("SHIPSTUDIO_AGENTS_BRIDGE_TOKEN", "")}
+        self.bridge.headers = {
+            "Authorization": "Bearer " + os.environ.get("SHIPSTUDIO_AGENTS_BRIDGE_TOKEN", "")}
+        self.argv = args
 
         def reader():
             for line in sys.stdin:
@@ -649,129 +714,184 @@ class AppServer:
 
         threading.Thread(target=reader, daemon=True).start()
 
-    def note(self, method, params):
+    # ------------------------------------------------------------ wire
+
+    def reply(self, rid, result):
+        out({"id": rid, "result": result})
+
+    def notify(self, method, params):
+        if self.thread and "threadId" not in params:
+            params = dict(params, threadId=self.thread)
+        if self.turn and method.startswith("item/") and "turnId" not in params:
+            params = dict(params, turnId=self.turn)
         out({"method": method, "params": params})
 
-    def ours(self, params):
-        return dict(params, threadId=self.thread, turnId=self.turn)
-
-    def take(self, block=True):
-        """The next message from the app; interrupts, steers and the rate
-        limit read are answered on the way."""
+    def take(self, timeout=None):
+        """The next message, handling what can arrive mid-turn (steers,
+        interrupts) on the way. None when nothing came in `timeout`."""
         import queue
-        try:
-            msg = self.inbox.get(timeout=None if block else 0.05)
-        except queue.Empty:
-            return {}
-        if msg is None:
-            sys.exit(0)
-        method, rid = msg.get("method"), msg.get("id")
-        if method == "turn/interrupt":
-            self.interrupted = True
-            out({"id": rid, "result": {}})
-        elif method == "turn/steer":
-            text = "".join(p.get("text", "") for p in (msg.get("params") or {}).get("input") or [])
-            log({"engine": "codex-app", "steer": text})
-            out({"id": rid, "result": {"turnId": self.turn}})
-        elif method == "account/rateLimits/read":
-            out({"id": rid, "result": {"rateLimits": {
-                "limitId": "codex", "primary": {"usedPercent": 12, "windowDurationMins": 300,
-                                                "resetsAt": int(time.time()) + 3600},
-                "secondary": None, "credits": None, "planType": "plus"}}})
-        return msg
+        while True:
+            try:
+                msg = self.inbox.get(timeout=timeout)
+            except queue.Empty:
+                return None
+            if msg is None:
+                sys.exit(0)
+            method, rid, params = msg.get("method"), msg.get("id"), msg.get("params") or {}
+            if method == "turn/steer":
+                text = "".join(i.get("text", "") for i in params.get("input") or [])
+                log({"engine": "codex-app", "steer": text,
+                     "expected": params.get("expectedTurnId") == self.turn})
+                self.record("user_message", text)
+                self.reply(rid, {"turnId": self.turn})
+                continue
+            if method == "turn/interrupt":
+                self.interrupted = True
+                self.reply(rid, {})
+                continue
+            return msg
+
+    # ------------------------------------------------------------ rollout
+
+    def rollout(self):
+        path = rollout_of(self.thread)
+        if path:
+            return path
+        folder = os.path.join(codex_home(), "sessions", time.strftime("%Y/%m/%d"))
+        os.makedirs(folder, exist_ok=True)
+        return os.path.join(folder, "rollout-%s-%s.jsonl" % (
+            time.strftime("%Y-%m-%dT%H-%M-%S"), self.thread))
+
+    def record(self, kind, text):
+        with open(self.rollout(), "a") as f:
+            f.write(json.dumps({"type": "event_msg",
+                                "payload": {"type": kind, "message": text}}) + "\n")
+
+    # ------------------------------------------------------------ items
+
+    def item_id(self, prefix):
+        self.n += 1
+        return "%s_%d_%d" % (prefix, os.getpid(), self.n)
 
     def ask(self, method, params):
+        """A server request; the app's decision ("accept", "decline", …)."""
         rid = self.next_id
         self.next_id += 1
-        out({"id": rid, "method": method, "params": self.ours(params)})
+        out({"method": method, "id": rid,
+             "params": dict(params, threadId=self.thread, turnId=self.turn)})
         while True:
             msg = self.take()
             if msg.get("id") == rid and "method" not in msg:
                 break
-            if self.interrupted:
-                return False
         decision = (msg.get("result") or {}).get("decision")
-        log({"engine": "codex-app", "asked": method, "answer": decision})
-        self.note("serverRequest/resolved", {"threadId": self.thread, "requestId": rid})
-        return decision == "accept"
-
-    def item(self, item):
-        self.n += 1
-        item = dict(item, id="item_%d" % self.n)
-        self.note("item/started", self.ours({"item": dict(item, status="inProgress")}))
-        return item
-
-    def completed(self, item):
-        self.note("item/completed", self.ours({"item": item}))
+        log({"engine": "codex-app", "asked": method, "params": params, "answer": decision})
+        return decision
 
     def say(self, text, every=0.0):
-        text = text.replace("{session}", self.thread).replace(
-            "{account}", os.path.basename(os.environ.get("CODEX_HOME", "")) or "this-mac")
-        text = text.replace("{turn}", str(rollout_turns(self.thread)))
-        item = self.item({"type": "agentMessage", "text": ""})
+        text = (text.replace("{session}", self.thread)
+                .replace("{turn}", str(rollout_turns(self.thread)))
+                .replace("{account}",
+                         os.path.basename(os.environ.get("CODEX_HOME", "")) or "this-mac"))
+        mid = self.item_id("msg")
+        self.notify("item/started", {"item": {"type": "agentMessage", "id": mid, "text": ""}})
         for piece in re.findall(r"\S+\s*", text) or [text]:
-            self.note("item/agentMessage/delta", self.ours({"itemId": item["id"], "delta": piece}))
+            self.notify("item/agentMessage/delta", {"itemId": mid, "delta": piece})
             if every:
                 time.sleep(every)
-        self.completed(dict(item, text=text))
+        self.notify("item/completed", {"item": {"type": "agentMessage", "id": mid, "text": text}})
+        self.record("agent_message", text)
+
+    def mcp(self, tool, args):
+        iid = self.item_id("call")
+        item = {"type": "mcpToolCall", "id": iid, "server": "app", "tool": tool,
+                "arguments": args, "status": "inProgress", "result": None, "error": None}
+        self.notify("item/started", {"item": item})
+        text, is_error = self.bridge.call(tool, args)
+        done = dict(item, status="failed" if is_error else "completed")
+        if is_error:
+            done["error"] = {"message": text}
+        else:
+            done["result"] = {"content": [{"type": "text", "text": text}]}
+        self.notify("item/completed", {"item": done})
+
+    def bash(self, command, ask=True):
+        iid = self.item_id("call")
+        shell = command if "'" in command else "/bin/zsh -lc '%s'" % command
+        item = {"type": "commandExecution", "id": iid, "command": shell,
+                "cwd": os.getcwd(), "status": "inProgress", "aggregatedOutput": None,
+                "exitCode": None}
+        self.notify("item/started", {"item": item})
+        if ask:
+            decision = self.ask("item/commandExecution/requestApproval", {
+                "itemId": iid, "command": shell, "cwd": os.getcwd(),
+                "reason": "Write outside the sandbox?"})
+            if decision != "accept":
+                self.notify("item/completed", {"item": dict(item, status="declined")})
+                return
+        run = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True)
+        if run.stdout + run.stderr:
+            self.notify("item/commandExecution/outputDelta",
+                        {"itemId": iid, "delta": run.stdout + run.stderr})
+        self.notify("item/completed", {"item": dict(
+            item, status="completed" if run.returncode == 0 else "failed",
+            aggregatedOutput=run.stdout + run.stderr, exitCode=run.returncode)})
+
+    def write(self, path, text):
+        iid = self.item_id("call")
+        full = os.path.join(os.getcwd(), path)
+        item = {"type": "fileChange", "id": iid, "status": "inProgress",
+                "changes": [{"path": full, "kind": {"type": "add"}, "diff": text}]}
+        self.notify("item/started", {"item": item})
+        if self.ask("item/fileChange/requestApproval", {"itemId": iid}) != "accept":
+            self.notify("item/completed", {"item": dict(item, status="declined")})
+            return
+        with open(full, "w") as f:
+            f.write(text)
+        self.notify("item/completed", {"item": dict(item, status="completed")})
+
+    def wait(self, seconds):
+        """Silence that an interrupt can end (None: until one). Zero just
+        takes in whatever already arrived."""
+        end = None if seconds is None else time.time() + seconds
+        while not self.interrupted:
+            left = 0.2 if end is None else min(0.2, end - time.time())
+            msg = self.take(timeout=max(left, 0.001))
+            if msg is not None and msg.get("id") is not None and msg.get("method"):
+                out({"id": msg["id"], "error": {"code": -32600, "message": "turn in progress"}})
+            if end is not None and time.time() >= end:
+                return
 
     def run(self, steps):
         for step in steps:
-            self.take(block=False)
-            if self.interrupted:
+            # Anything that came in between steps (an interrupt) first.
+            self.wait(0)
+            if self.interrupted or self.failed:
                 return
             if "say" in step:
                 self.say(step["say"])
             elif "slow" in step:
                 self.say(step["slow"], every=float(step.get("every", 0.2)))
-            elif "tool" in step:
-                tool, args = step["tool"], step.get("args") or {}
-                item = self.item({"type": "mcpToolCall", "server": "app", "tool": tool,
-                                  "arguments": args, "result": None, "error": None})
-                text, is_error = self.bridge.call(tool, args)
-                self.completed(dict(item, status="failed" if is_error else "completed",
-                                    result={"content": [{"type": "text", "text": text}]}))
+            elif "tool" in step or "volley" in step:
+                if "volley" in step:
+                    v = step["volley"]
+                    back = [{"volley": {"to": v["back"], "back": v["to"]}}]
+                    self.mcp("message_agent", {"agent": v["to"],
+                                               "message": "volley #fake " + json.dumps(back)})
+                else:
+                    self.mcp(step["tool"], step.get("args") or {})
             elif "bash" in step:
-                command = step["bash"]
-                shell = "/bin/zsh -lc '%s'" % command.replace("'", "'\\''")
-                item = self.item({"type": "commandExecution", "command": shell,
-                                  "cwd": os.getcwd(), "aggregatedOutput": None,
-                                  "exitCode": None})
-                if step.get("ask", True) and not self.ask(
-                        "item/commandExecution/requestApproval",
-                        {"itemId": item["id"], "reason": "Run outside the sandbox?",
-                         "command": shell, "cwd": os.getcwd()}):
-                    self.completed(dict(item, status="declined"))
-                    continue
-                run = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True)
-                self.completed(dict(item, aggregatedOutput=run.stdout + run.stderr,
-                                    exitCode=run.returncode,
-                                    status="completed" if run.returncode == 0 else "failed"))
+                self.bash(step["bash"], ask=step.get("ask", True))
             elif "write" in step:
-                full = os.path.join(os.getcwd(), step["write"])
-                item = self.item({"type": "fileChange", "changes": [{"path": full,
-                                                                      "kind": "add"}]})
-                if not self.ask("item/fileChange/requestApproval", {"itemId": item["id"]}):
-                    self.completed(dict(item, status="declined"))
-                    continue
-                with open(full, "w") as f:
-                    f.write(step.get("text", ""))
-                self.completed(dict(item, status="completed"))
-            elif "rate_limit" in step:
-                self.note("account/rateLimits/updated", {"rateLimits": {
-                    "limitId": "codex", "primary": None,
-                    "secondary": {"usedPercent": int(float(step["rate_limit"]) * 100),
-                                  "windowDurationMins": 10080,
-                                  "resetsAt": int(time.time()) + 86400},
-                    "credits": None, "planType": "plus"}})
+                self.write(step["write"], step.get("text", ""))
+            elif "usage_limit" in step:
+                if step.get("codex") and not os.environ.get(step.get("unless_env", "\0") or "\0"):
+                    self.failed = "You've hit your usage limit. Try again at 7:18 PM."
             elif "list_tools" in step:
                 log({"served": self.bridge.tools()})
             elif "sleep" in step:
-                time.sleep(float(step["sleep"]))
+                self.wait(float(step["sleep"]))
             elif "hang" in step:
-                while not self.interrupted:
-                    self.take(block=False)
-                return
+                self.wait(None)
             elif "crash" in step:
                 os.kill(os.getpid(), signal.SIGSEGV)
             elif "stderr" in step:
@@ -780,103 +900,84 @@ class AppServer:
             elif "exit" in step:
                 sys.exit(int(step["exit"]))
             elif "error" in step:
-                raise RuntimeError(step["error"])
+                self.failed = step["error"]
+            elif "raw" in step:
+                sys.stdout.write(step["raw"] + "\n")
+                sys.stdout.flush()
+
+    # ------------------------------------------------------------ requests
 
     def open_thread(self, method, rid, params):
-        thread = params.get("threadId")
         if method == "thread/resume":
-            if not thread or not rollout_of(thread):
+            self.thread = params.get("threadId")
+            if not rollout_of(self.thread):
                 out({"id": rid, "error": {"code": -32600,
-                                          "message": "no rollout found for thread id %s" % thread}})
+                                          "message": "no rollout found for thread id %s"
+                                          % self.thread}})
+                self.thread = None
                 return
         else:
-            thread = str(uuid.uuid4())
-        self.thread = thread
-        log({"engine": "codex-app", "method": method, "thread": thread,
-             "approval": params.get("approvalPolicy"), "argv": self.args[1:],
-             "env_has_bearer": bool(os.environ.get("SHIPSTUDIO_AGENTS_BRIDGE_TOKEN"))})
-        out({"id": rid, "result": {"thread": {"id": thread},
-                                   "model": params.get("model") or "gpt-fake",
-                                   "approvalPolicy": params.get("approvalPolicy")}})
+            self.thread = str(uuid.uuid4())
+            open(self.rollout(), "a").close()
+        log({"engine": "codex-app", "method": method, "thread": self.thread,
+             "cwd": os.getcwd(), "argv": self.argv,
+             "env_has_bearer": any("Bearer" in v for v in os.environ.values()),
+             "params": {k: v for k, v in params.items() if k != "developerInstructions"}})
+        thread = {"id": self.thread, "cwd": params.get("cwd") or os.getcwd()}
+        self.reply(rid, {"thread": thread, "model": params.get("model") or "gpt-fake",
+                         "approvalPolicy": params.get("approvalPolicy")})
+        self.notify("thread/started", {"thread": thread})
 
     def start_turn(self, rid, params):
-        prompt = "".join(p.get("text", "") for p in params.get("input") or [])
-        path = rollout_of(self.thread)
-        if not path:
-            day = time.strftime("%Y/%m/%d")
-            stamp = time.strftime("%Y-%m-%dT%H-%M-%S")
-            folder = os.path.join(codex_home(), "sessions", day)
-            os.makedirs(folder, exist_ok=True)
-            path = os.path.join(folder, "rollout-%s-%s.jsonl" % (stamp, self.thread))
-        with open(path, "a") as f:
-            f.write(json.dumps({"type": "event_msg", "payload": {"type": "user_message",
-                                                                 "message": prompt}}) + "\n")
-        self.turn = "turn_%s" % uuid.uuid4().hex[:12]
-        log({"turn": self.thread, "engine": "codex-app", "cwd": os.getcwd(),
-             "account": os.environ.get("CODEX_HOME", "this-mac"), "prompt": prompt,
-             "effort": params.get("effort")})
-        out({"id": rid, "result": {"turn": {"id": self.turn, "status": "inProgress"}}})
-        self.note("turn/started", {"threadId": self.thread, "turn": {"id": self.turn}})
-        error = None
-        try:
-            self.run(script_of(prompt))
-        except RuntimeError as e:
-            error = str(e)
-        last = {"totalTokens": 120, "inputTokens": 150, "cachedInputTokens": 50,
+        if params.get("threadId") != self.thread:
+            out({"id": rid, "error": {"code": -32600, "message": "thread not found"}})
+            return
+        text = "".join(i.get("text", "") for i in params.get("input") or [])
+        self.turn = str(uuid.uuid4())
+        self.interrupted = False
+        self.failed = None
+        self.record("user_message", text)
+        log({"turn": self.thread, "engine": "codex-app", "prompt": text, "cwd": os.getcwd(),
+             "effort": params.get("effort"),
+             "account": os.environ.get("CODEX_HOME", "this-mac")})
+        turn = {"id": self.turn, "items": [], "status": "inProgress", "error": None}
+        self.reply(rid, {"turn": turn})
+        self.notify("turn/started", {"turn": turn})
+        self.run(script_of(text))
+        last = {"totalTokens": 120, "inputTokens": 100, "cachedInputTokens": 50,
                 "cacheWriteInputTokens": 0, "outputTokens": 20, "reasoningOutputTokens": 0}
-        self.note("thread/tokenUsage/updated", self.ours({"tokenUsage": {
-            "total": last, "last": last, "modelContextWindow": 200000}}))
-        status = "interrupted" if self.interrupted else ("failed" if error else "completed")
-        turn = {"id": self.turn, "status": status, "items": []}
-        if error:
-            turn["error"] = {"message": error}
-        self.note("turn/completed", {"threadId": self.thread, "turn": turn})
+        self.notify("thread/tokenUsage/updated", {"turnId": self.turn, "tokenUsage": {
+            "total": last, "last": last, "modelContextWindow": 272000}})
+        if self.interrupted:
+            status, error = "interrupted", None
+        elif self.failed:
+            status, error = "failed", {"message": self.failed}
+        else:
+            status, error = "completed", None
+        self.notify("turn/completed", {"turn": dict(turn, status=status, error=error)})
 
     def serve(self):
         while True:
             msg = self.take()
             method, rid, params = msg.get("method"), msg.get("id"), msg.get("params") or {}
             if method == "initialize":
-                out({"id": rid, "result": {"userAgent": "fake/0.166.0"}})
+                self.reply(rid, {"userAgent": "fake/0.166.0", "codexHome": codex_home(),
+                                 "platformFamily": "unix", "platformOs": "macos"})
+            elif method == "account/rateLimits/read":
+                self.reply(rid, {"rateLimits": {"limitId": "codex", "primary": None,
+                                                "secondary": None, "credits": None,
+                                                "planType": None}})
             elif method in ("thread/start", "thread/resume"):
                 self.open_thread(method, rid, params)
             elif method == "turn/start":
                 self.start_turn(rid, params)
             elif method == "thread/compact/start":
-                out({"id": rid, "result": {}})
-                self.note("item/completed", {"threadId": self.thread, "item": {
-                    "type": "contextCompaction", "id": "compact_1"}})
-            elif method is not None and rid is not None and method not in (
-                    "turn/interrupt", "turn/steer", "account/rateLimits/read"):
+                self.reply(rid, {})
+                iid = self.item_id("compact")
+                self.notify("item/started", {"item": {"type": "contextCompaction", "id": iid}})
+                self.notify("item/completed", {"item": {"type": "contextCompaction", "id": iid}})
+            elif method is not None and rid is not None:
                 out({"id": rid, "error": {"code": -32601, "message": "no " + method}})
-
-
-def codex_main(args):
-    if args[:1] == ["--version"]:
-        print("codex-cli 0.166.0")
-    elif args[:2] == ["login", "status"]:
-        print("Logged in using ChatGPT")
-    elif args[:2] == ["mcp", "list"]:
-        print("[]")
-    elif args[:1] == ["exec"]:
-        codex_turn(args)
-    elif args[:2] == ["app-server", "generate-json-schema"]:
-        # The methods the app checks for; with FAKE_CODEX_NO_APP_SERVER it
-        # has none, and the app falls back to `exec`.
-        folder = flag(args, "--out")
-        if os.environ.get("FAKE_CODEX_NO_APP_SERVER") or not folder:
-            sys.exit(2)
-        os.makedirs(folder, exist_ok=True)
-        for name, methods in APP_SERVER_SCHEMA.items():
-            with open(os.path.join(folder, name), "w") as f:
-                json.dump({"oneOf": [{"properties": {"method": {"enum": [m]}}}
-                                     for m in methods]}, f)
-    elif args[:1] == ["app-server"]:
-        if os.environ.get("FAKE_CODEX_NO_APP_SERVER"):
-            sys.exit(2)
-        AppServer(args).serve()
-    else:
-        print("fake codex: nothing to do for %s" % " ".join(args), file=sys.stderr)
 
 
 # --------------------------------------------------------------- OpenCode

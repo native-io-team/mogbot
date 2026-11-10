@@ -171,6 +171,37 @@ pub async fn set_window_title(window: Window, title: String) -> Result<(), Comma
     Ok(())
 }
 
+/// The red button (or Window → Close Window) on any window but the main
+/// one: that window goes, and the app, its agents and its other windows
+/// carry on. `false` for the main window, whose close is a quit (or a hide,
+/// with "Keep running when closed" on) and stays the frontend's to decide.
+///
+/// The frontend can't `destroy()` a window itself (no ACL grant), which is
+/// why closing a second window used to quit the whole app.
+#[tauri::command]
+#[tracing::instrument(skip(window), fields(label = %window.label()))]
+pub async fn close_secondary_window(window: tauri::WebviewWindow) -> Result<bool, CommandError> {
+    if !is_secondary(window.label()) {
+        return Ok(false);
+    }
+    window
+        .destroy()
+        .map_err(|e| format!("Failed to close window: {e}"))?;
+    Ok(true)
+}
+
+/// File → New Window (⌥⌘N) from the palette: the menu item's own path.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn open_new_window(app: tauri::AppHandle) -> Result<String, CommandError> {
+    Ok(crate::commands::projects::spawn_blank_window(&app)?)
+}
+
+/// A window whose close closes only it: not the main window, not quick entry.
+pub fn is_secondary(label: &str) -> bool {
+    label != "main" && label != crate::agents::quick_entry::LABEL
+}
+
 // ============================================================================
 // Keep running when windows close (opt-in, macOS)
 // ============================================================================

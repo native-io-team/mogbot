@@ -39,6 +39,9 @@ pub const METHODS: &[&str] = &[
     "agents.loginSaveKey",
     "agents.reach",
     "agents.policy",
+    "agents.skills",
+    "agents.skillEdit",
+    "agents.skillRemove",
     "agents.onItsOwn",
     "agents.onItsOwnTeam",
     "agents.onItsOwnNarrow",
@@ -71,7 +74,12 @@ pub const METHODS: &[&str] = &[
     "agents.conversationNew",
     "agents.conversationSelect",
     "agents.conversationRename",
+    "agents.conversationRewind",
+    "agents.conversationFork",
     "agents.conversationRoutine",
+    "agents.page",
+    "agents.pageVersion",
+    "agents.pagePin",
     "agents.create",
     "agents.draft",
     "agents.templates",
@@ -112,6 +120,10 @@ pub const METHODS: &[&str] = &[
     "agents.schedule.pause",
     "agents.schedule.cancel",
     "agents.schedule.runNow",
+    "agents.watch.options",
+    "agents.watch.create",
+    "agents.watch.update",
+    "agents.watch.checkNow",
     "rooms.list",
     "rooms.messages",
     "rooms.send",
@@ -146,11 +158,14 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.overview",
     "agents.messages",
     "agents.conversations",
+    "agents.page",
+    "agents.pageVersion",
     "agents.workSteps",
     "agents.instructions",
     "agents.memory",
     "agents.reach",
     "agents.policy",
+    "agents.skills",
     "agents.onItsOwn",
     "agents.onItsOwnTeam",
     "agents.loginsTeam",
@@ -170,6 +185,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.files",
     "agents.search",
     "agents.schedule.preview",
+    "agents.watch.options",
     "rooms.list",
     "rooms.messages",
     "projects.list",
@@ -261,6 +277,30 @@ pub enum ScheduleOp {
         agent_id: String,
         id: String,
     },
+    /// What the "When…" composer may offer for this agent (`watch_options`).
+    WatchOptions {
+        agent_id: String,
+    },
+    /// Add a "When…" routine (`agents_watch_create`).
+    WatchCreate {
+        agent_id: String,
+        source: crate::agents::watch::Source,
+        every_minutes: u32,
+        note: String,
+    },
+    /// Change one (`agents_watch_update`).
+    WatchUpdate {
+        agent_id: String,
+        id: String,
+        source: crate::agents::watch::Source,
+        every_minutes: u32,
+        note: String,
+    },
+    /// Check one now (`agents_watch_check_now`).
+    WatchCheckNow {
+        agent_id: String,
+        id: String,
+    },
 }
 
 impl ScheduleOp {
@@ -270,8 +310,13 @@ impl ScheduleOp {
             ScheduleOp::Update { agent_id, id, .. }
             | ScheduleOp::Pause { agent_id, id, .. }
             | ScheduleOp::Cancel { agent_id, id }
-            | ScheduleOp::RunNow { agent_id, id } => Some((agent_id, id)),
-            ScheduleOp::Preview { .. } | ScheduleOp::Create { .. } => None,
+            | ScheduleOp::RunNow { agent_id, id }
+            | ScheduleOp::WatchUpdate { agent_id, id, .. }
+            | ScheduleOp::WatchCheckNow { agent_id, id } => Some((agent_id, id)),
+            ScheduleOp::Preview { .. }
+            | ScheduleOp::Create { .. }
+            | ScheduleOp::WatchOptions { .. }
+            | ScheduleOp::WatchCreate { .. } => None,
         }
     }
 }
@@ -319,6 +364,10 @@ pub struct AgentToggles {
     /// From a Mac that serves `agents.accounts.use`.
     #[serde(default)]
     pub account: Option<String>,
+    /// "Save new skills": `auto`, `ask` or `off`. From a Mac that
+    /// serves `agents.skills`.
+    #[serde(default, rename = "learnSkills")]
+    pub learn_skills: Option<crate::agents::skills_learn::Learning>,
 }
 
 /// Instructions are a brief, not a document: the phone's editor stops here.
@@ -604,6 +653,20 @@ pub trait Backend: Send + Sync + 'static {
         id: &str,
         title: String,
     ) -> Result<Value, CommandError>;
+    /// `agents_conversation_rewind` / `_fork`: gone back to just before the
+    /// user's message, in place or as a new conversation; the list after.
+    async fn conversation_rewind(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError>;
+    async fn conversation_fork(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError>;
     /// `agents_conversation_routine`: a routine moved to another
     /// conversation; the list after.
     async fn conversation_routine(
@@ -611,6 +674,24 @@ pub trait Backend: Send + Sync + 'static {
         agent_id: &str,
         routine_id: &str,
         id: &str,
+    ) -> Result<Value, CommandError>;
+    /// `agents_page`: the conversation's living page (`agents/page.rs`),
+    /// or null. `None` is the conversation the user is in.
+    async fn page(&self, agent_id: &str, conversation: Option<&str>)
+        -> Result<Value, CommandError>;
+    /// `agents_page_version`: one kept version, or null.
+    async fn page_version(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        version: u32,
+    ) -> Result<Value, CommandError>;
+    /// `agents_page_pin`: pinned above the chat, or not; the page after.
+    async fn page_pin(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        pinned: bool,
     ) -> Result<Value, CommandError>;
     async fn send(
         &self,
@@ -818,6 +899,12 @@ pub trait Backend: Send + Sync + 'static {
     async fn reach(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_policy`: "What it can do". Read-only on the phone; changed in chat.
     async fn policy(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_skills`: "Skills" and its setting.
+    async fn skills(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_skill_edit`: the user's edit of one skill.
+    async fn skill_edit(&self, agent_id: &str, edit: SkillEdit) -> Result<Value, CommandError>;
+    /// `agents_skill_remove`: one skill removed.
+    async fn skill_remove(&self, agent_id: &str, slug: &str) -> Result<(), CommandError>;
     /// `agents_on_its_own`: what it may do without asking, in plain words.
     async fn on_its_own(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_on_its_own_team`: the same for the team.
@@ -1084,6 +1171,31 @@ struct AgentParam {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SkillParams {
+    agent_id: String,
+    slug: String,
+}
+
+/// One skill as the phone's editor sends it back.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SkillEdit {
+    pub slug: String,
+    pub name: String,
+    pub when: String,
+    pub steps: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillEditParams {
+    agent_id: String,
+    #[serde(flatten)]
+    edit: SkillEdit,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct NarrowParams {
     agent_id: String,
     narrow: Value,
@@ -1170,6 +1282,41 @@ struct ConversationRenameParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct PageParams {
+    agent_id: String,
+    /// Absent: the conversation the user is in.
+    #[serde(default)]
+    conversation_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PageVersionParams {
+    agent_id: String,
+    #[serde(default)]
+    conversation_id: Option<String>,
+    version: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PagePinParams {
+    agent_id: String,
+    #[serde(default)]
+    conversation_id: Option<String>,
+    pinned: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationMessageParams {
+    agent_id: String,
+    conversation_id: String,
+    message_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ConversationRoutineParams {
     agent_id: String,
     routine_id: String,
@@ -1226,6 +1373,18 @@ struct ScheduleParams {
     paused: bool,
     #[serde(default)]
     then: Option<Vec<crate::agents::routine_steps::Step>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WatchRoutineParams {
+    agent_id: String,
+    #[serde(default)]
+    id: String,
+    source: crate::agents::watch::Source,
+    every_minutes: u32,
+    #[serde(default)]
+    note: String,
 }
 
 #[derive(Deserialize)]
@@ -1751,6 +1910,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         },
         "agents.fetchPath" => preview(field("path")),
         "agents.revokePermission" => format!("revoke {} {}", field("ruleId"), field("agentId")),
+        "agents.skillEdit" => format!("edit skill {} of {}", field("slug"), field("agentId")),
+        "agents.skillRemove" => format!("remove skill {} of {}", field("slug"), field("agentId")),
         "agents.onItsOwnNarrow" => format!(
             "take back {} {}",
             params
@@ -1790,8 +1951,28 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             )
         }
         "agents.schedule.cancel" | "agents.schedule.runNow" => field("id").to_string(),
+        "agents.watch.create" | "agents.watch.update" => {
+            let kind = params
+                .get("source")
+                .and_then(|s| s.get("kind"))
+                .and_then(Value::as_str)
+                .unwrap_or("?");
+            preview(&format!("when {kind} — {}", field("note")))
+        }
+        "agents.watch.checkNow" => format!("check now {}", field("id")),
         "agents.conversationRoutine" => {
             format!("move {} to {}", field("routineId"), field("conversationId"))
+        }
+        "agents.pagePin" => {
+            let pinned = params.get("pinned").and_then(Value::as_bool) == Some(true);
+            format!(
+                "{} the page of {}",
+                if pinned { "pinned" } else { "unpinned" },
+                match field("conversationId") {
+                    "" => "the current conversation",
+                    c => c,
+                }
+            )
         }
         "agents.setDefaults" => {
             let said: Vec<String> = [
@@ -2214,6 +2395,38 @@ async fn run(
             }
             Ok(
                 b.conversation_rename(&p.agent_id, &p.conversation_id, p.title)
+                    .await?,
+            )
+        }
+        "agents.page" => {
+            let p: PageParams = parse(params)?;
+            Ok(b.page(&p.agent_id, p.conversation_id.as_deref()).await?)
+        }
+        "agents.pageVersion" => {
+            let p: PageVersionParams = parse(params)?;
+            Ok(
+                b.page_version(&p.agent_id, p.conversation_id.as_deref(), p.version)
+                    .await?,
+            )
+        }
+        "agents.pagePin" => {
+            let p: PagePinParams = parse(params)?;
+            Ok(
+                b.page_pin(&p.agent_id, p.conversation_id.as_deref(), p.pinned)
+                    .await?,
+            )
+        }
+        "agents.conversationRewind" => {
+            let p: ConversationMessageParams = parse(params)?;
+            Ok(
+                b.conversation_rewind(&p.agent_id, &p.conversation_id, &p.message_id)
+                    .await?,
+            )
+        }
+        "agents.conversationFork" => {
+            let p: ConversationMessageParams = parse(params)?;
+            Ok(
+                b.conversation_fork(&p.agent_id, &p.conversation_id, &p.message_id)
                     .await?,
             )
         }
@@ -2673,6 +2886,27 @@ async fn run(
             let p: AgentParam = parse(params)?;
             Ok(b.policy(&p.agent_id).await?)
         }
+        "agents.skills" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.skills(&p.agent_id).await?)
+        }
+        "agents.skillEdit" => {
+            let p: SkillEditParams = parse(params)?;
+            if !crate::agents::skills_learn::valid_slug(&p.edit.slug)
+                || p.edit.steps.chars().count() > crate::agents::skills_learn::STEPS_CHARS * 2
+            {
+                return Err(bad_params("Which skill?"));
+            }
+            Ok(b.skill_edit(&p.agent_id, p.edit).await?)
+        }
+        "agents.skillRemove" => {
+            let p: SkillParams = parse(params)?;
+            if !crate::agents::skills_learn::valid_slug(&p.slug) {
+                return Err(bad_params("Which skill?"));
+            }
+            b.skill_remove(&p.agent_id, &p.slug).await?;
+            Ok(Value::Null)
+        }
         "agents.onItsOwn" => {
             let p: AgentParam = parse(params)?;
             Ok(b.on_its_own(&p.agent_id).await?)
@@ -2842,6 +3076,55 @@ async fn run(
                 },
             };
             Ok(b.schedule(op).await?)
+        }
+        "agents.watch.options" => {
+            let p: ScheduleParams = parse(params)?;
+            Ok(b.schedule(ScheduleOp::WatchOptions {
+                agent_id: p.agent_id,
+            })
+            .await?)
+        }
+        "agents.watch.create" | "agents.watch.update" => {
+            let p: WatchRoutineParams = parse(params)?;
+            let update = method == "agents.watch.update";
+            if update && p.id.trim().is_empty() {
+                return Err(bad_params("id is required."));
+            }
+            // What to do, and a check in the user's own words, are prompts
+            // the routine sends later with nobody watching: the same rules as
+            // a message typed now.
+            refuse_unsafe_text(&p.note, "A routine's note")?;
+            if let crate::agents::watch::Source::Custom { check, .. } = &p.source {
+                refuse_unsafe_text(check.as_str(), "What a routine looks out for")?;
+            }
+            let op = if update {
+                ScheduleOp::WatchUpdate {
+                    agent_id: p.agent_id,
+                    id: p.id,
+                    source: p.source,
+                    every_minutes: p.every_minutes,
+                    note: p.note,
+                }
+            } else {
+                ScheduleOp::WatchCreate {
+                    agent_id: p.agent_id,
+                    source: p.source,
+                    every_minutes: p.every_minutes,
+                    note: p.note,
+                }
+            };
+            Ok(b.schedule(op).await?)
+        }
+        "agents.watch.checkNow" => {
+            let p: ScheduleParams = parse(params)?;
+            if p.id.trim().is_empty() {
+                return Err(bad_params("id is required."));
+            }
+            Ok(b.schedule(ScheduleOp::WatchCheckNow {
+                agent_id: p.agent_id,
+                id: p.id,
+            })
+            .await?)
         }
         "projects.list" => Ok(b.projects().await?),
         "sessions.read" => {

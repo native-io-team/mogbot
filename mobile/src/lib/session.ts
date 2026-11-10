@@ -18,8 +18,9 @@ import type {
   AgentEffort,
   AgentEngine,
   RoutineStep,
+  WatchSource,
 } from '@shipstudio/companion-protocol';
-import { MAC_FEATURES, legacyColorFor, setClockHour24 } from '@shipstudio/companion-protocol';
+import { MAC_FEATURES, legacyColorFor, setClockHour24, type LearnSkills } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -27,7 +28,8 @@ import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import * as Updates from 'expo-updates';
 import { FIRST_CONVERSATION } from '@shipstudio/companion-protocol';
-import { announce } from './a11y';
+import { announce, replyAnnouncement } from './a11y';
+import { speakable } from './readAloud';
 import { conversationOfKey } from './conversations';
 import { needsYou } from './agents';
 import {
@@ -761,6 +763,8 @@ export async function setAgentToggles(
     colorway?: string;
     icon?: string;
     boundKey?: string;
+    /** "Save new skills", from a Mac that serves `agents.skills`. */
+    learnSkills?: LearnSkills;
   }
 ) {
   const before = getApp().overview;
@@ -791,6 +795,7 @@ export async function setAgentToggles(
                       colorway: was.colorway,
                       icon: was.icon,
                       boundKey: was.boundKey,
+                      learnSkills: was.learnSkills,
                     }
                   : a;
               }),
@@ -933,6 +938,52 @@ export async function moveRoutine(agentId: string, routineId: string, conversati
   );
 }
 
+/**
+ * "Rewind to here": the conversation carries on from just before the user's
+ * message; what came after stays in the chat, folded. The chat is read again
+ * so the Mac's line saying so is in it.
+ */
+export async function rewindConversation(
+  agentId: string,
+  conversation: string,
+  messageId: string
+) {
+  setConversations(
+    await call('agents.conversationRewind', { agentId, conversationId: conversation, messageId })
+  );
+}
+
+/** "Fork from here": a new conversation with everything before the message, opened at once. */
+export async function forkConversation(agentId: string, conversation: string, messageId: string) {
+  const list = await call('agents.conversationFork', {
+    agentId,
+    conversationId: conversation,
+    messageId,
+  });
+  setConversations(list);
+  setApp((s) => ({ viewing: { ...s.viewing, [agentId]: list.current } }));
+}
+
+/** Whether this Mac can go back (rewind, fork, edit and resend). */
+export const canGoBack = () =>
+  canCall('agents.conversationRewind') && canCall('agents.conversationFork');
+
+/**
+ * Edit and resend: back to just before `messageId` in `conversation`, then
+ * the new words sent there. A refused rewind sends nothing (it throws).
+ */
+export async function sendEdited(
+  agentId: string,
+  conversation: string,
+  messageId: string,
+  text: string,
+  mentions: string[] = [],
+  attachments: PendingAttachment[] = []
+) {
+  await rewindConversation(agentId, conversation, messageId);
+  await send(agentId, text, false, undefined, attachments, mentions);
+}
+
 /** Name one; empty gives it back to its first message. */
 export async function renameConversation(agentId: string, conversation: string, title: string) {
   setConversations(
@@ -1046,6 +1097,19 @@ export const schedule = {
     call('agents.schedule.pause', { agentId, id, paused }),
   cancel: (agentId: string, id: string) => call('agents.schedule.cancel', { agentId, id }),
   runNow: (agentId: string, id: string) => call('agents.schedule.runNow', { agentId, id }),
+};
+
+/**
+ * "When…" routines, on a Mac that lists these methods (`canCall`). Pause and
+ * Cancel are `schedule.pause|cancel`, shared with timed routines.
+ */
+export const watch = {
+  options: (agentId: string) => call('agents.watch.options', { agentId }),
+  create: (agentId: string, source: WatchSource, everyMinutes: number, note: string) =>
+    call('agents.watch.create', { agentId, source, everyMinutes, note }),
+  update: (agentId: string, id: string, source: WatchSource, everyMinutes: number, note: string) =>
+    call('agents.watch.update', { agentId, id, source, everyMinutes, note }),
+  checkNow: (agentId: string, id: string) => call('agents.watch.checkNow', { agentId, id }),
 };
 
 // ---- Projects and sessions -----------------------------------------------------------
@@ -1327,7 +1391,9 @@ function noticeMessage(m: AgentMessage) {
   if (m.kind === 'approval' && m.approval?.status === 'pending') {
     announce(`${name} needs your OK: ${m.approval.title}`, true);
   } else if (m.kind === 'agent') {
-    announce(`${name} replied`);
+    // In its open chat the reply is read; a streamed one was a moving target until now.
+    const here = getApp().openChat === m.agentId && AppState.currentState === 'active';
+    announce(replyAnnouncement(name, here ? speakable(m.text ?? '') : '', here), here);
   } else if (m.kind === 'error') {
     announce(`${name} didn’t finish`);
   }

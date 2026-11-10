@@ -172,7 +172,7 @@ export const remoteScenarios: Scenario[] = [
     'remote-setup-4-pushing',
     'Remote access setup — step 4, pushing is opt-in with a PIN',
     'Explains that the assistant never sees the PIN, two masked PIN fields, "Allow pushing", and a ' +
-      'clear "Skip — I’ll push from the computer".',
+      'clear "Skip, I’ll push from this Mac".',
     { ...ON, projects: [PROJECTS[0]] },
     choices({ understood: true, projectsConfirmed: true })
   ),
@@ -233,6 +233,8 @@ export const remoteScenarios: Scenario[] = [
     {
       ...ON,
       linkMasked: null,
+      // The backend measures reachability only with a confirmed link.
+      reachability: null,
       funnelOn: false,
       funnelError: 'Tailscale didn’t answer within 20 seconds.',
       projects: [PROJECTS[0]],
@@ -241,6 +243,26 @@ export const remoteScenarios: Scenario[] = [
       lidClosedMode: true,
       openAtLogin: true,
       activity: { lastRequestMs: Date.now() - 40 * MIN, lastClient: 'grok', rejectedRequests: 3 },
+    },
+    {},
+    { get_remote_audit: audit }
+  ),
+  remote(
+    'remote-live-stopped',
+    'Remote access — on, but its server stopped',
+    'Amber "Not reachable" hero saying the server on this Mac isn’t running, and the connection ' +
+      'panel offering "Start it again" — never a spinner waiting on Tailscale for a server that ' +
+      'isn’t there. The sidebar says "Remote access stopped" in this state and sends people here.',
+    {
+      ...ON,
+      serverRunning: false,
+      linkMasked: null,
+      reachability: null,
+      funnelOn: false,
+      projects: [PROJECTS[0]],
+      pushPin: 'set',
+      everConnected: true,
+      openAtLogin: true,
     },
     {},
     { get_remote_audit: audit }

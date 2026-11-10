@@ -105,9 +105,7 @@ export function SignInHelp({ agentId, requestId, reopen, flow }: SignInHelpProps
         onClick={() => {
           setError(null);
           const again = reopen ?? (() => reopenLogin(agentId ?? '', requestId ?? ''));
-          void again().catch((err) =>
-            setError(formatCommandError(asCommandError(err)))
-          );
+          void again().catch((err) => setError(formatCommandError(asCommandError(err))));
         }}
       >
         Open again

@@ -6,6 +6,7 @@
  */
 
 import type { ContextFill } from './model';
+import type { ForkedFrom, Rewind } from './rewind';
 import { conversationAutoTitle } from './conversationTitle';
 
 export { conversationAutoTitle, CONVERSATION_AUTO_TITLE_CHARS } from './conversationTitle';
@@ -33,6 +34,10 @@ export interface ConversationView {
   waiting: number;
   /** How full it is, as its engine last said. */
   context?: ContextFill;
+  /** Where the user went back to: the lines each folded, oldest first. Absent from older Macs. */
+  rewinds?: Rewind[];
+  /** A fork: where it came from. */
+  forkedFrom?: ForkedFrom;
 }
 
 /** `agents_conversations` / `agents.conversations`. */

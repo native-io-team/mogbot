@@ -23,7 +23,17 @@ import DateTimePicker, {
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { makeStyles, useAppearance, useColors } from '../../lib/appearance';
-import { fonts, iconSize, lineHeight, PRESSED, radius, space, type } from '../../lib/theme';
+import {
+  CHIP_H,
+  fonts,
+  iconSize,
+  lineHeight,
+  PRESSED,
+  radius,
+  space,
+  tapSlop,
+  type,
+} from '../../lib/theme';
 import { Button, Icon, T } from '../ui';
 
 /** Whether and how this block may answer. */
@@ -295,6 +305,7 @@ function Field({
                 key={o}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: on, disabled: !editable }}
+                hitSlop={tapSlop(CHIP_H)}
                 disabled={!editable}
                 onPress={() => onChange(on ? '' : o)}
                 style={({ pressed }) => [styles.chip, on && styles.chipOn, pressed && PRESSED]}
@@ -464,7 +475,7 @@ const useStyles = makeStyles((colors) => ({
   datePicker: { alignSelf: 'flex-start' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   chip: {
-    minHeight: 36,
+    minHeight: CHIP_H,
     justifyContent: 'center',
     paddingHorizontal: space.md,
     borderRadius: radius.pill,

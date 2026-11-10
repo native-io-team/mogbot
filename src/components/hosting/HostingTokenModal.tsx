@@ -7,8 +7,8 @@
  * into the webview.
  *
  * Why a token rather than the CLI's own login: the Vercel CLI's credential is a
- * short-lived OAuth access token (about seven hours on a real machine). Ship
- * Studio will happily borrow it when it's there — that's what makes hosting
+ * short-lived OAuth access token (about seven hours on a real machine). The
+ * app will happily borrow it when it's there — that's what makes hosting
  * work with no setup at all — but it stops working mid-afternoon, and the only
  * durable fix is a token the user owns. See
  * `docs/internal/hosting-provider-matrix.md`.
@@ -18,6 +18,9 @@ import { useState } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
+import { Spinner } from '../primitives/Spinner';
+import { TextField } from '../primitives/TextField';
+import { ExternalLinkIcon } from '@/components/icons';
 import { setAccountCredential, type CredentialKey } from '../../lib/accounts';
 import { asCommandError, formatCommandError, isExpectedCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -110,14 +113,16 @@ export function HostingTokenModal({
             : `Create a token for the ${name} account ${workspaceName} deploys with, then paste it below. It's stored in your Keychain and used only by this workspace.`}
         </p>
         {copy.requirement ? <p className="connect-modal-muted">{copy.requirement}</p> : null}
-        <Button variant="secondary" onClick={() => void openUrl(copy.tokensUrl)}>
-          Open {copy.tokensLabel} →
+        <Button
+          variant="secondary"
+          rightIcon={<ExternalLinkIcon size={14} />}
+          onClick={() => void openUrl(copy.tokensUrl)}
+        >
+          Open {copy.tokensLabel}
         </Button>
         <label className="connect-modal-field">
-          <span>
-            {name} token <span className="connect-modal-muted">(stays in your Keychain)</span>
-          </span>
-          <input
+          <span>{name} token</span>
+          <TextField
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
@@ -132,7 +137,12 @@ export function HostingTokenModal({
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => void save()} disabled={!token.trim() || saving}>
+          <Button
+            variant="primary"
+            leftIcon={saving ? <Spinner size="sm" /> : undefined}
+            onClick={() => void save()}
+            disabled={!token.trim() || saving}
+          >
             {saving ? 'Saving…' : 'Save'}
           </Button>
         </div>

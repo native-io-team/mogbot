@@ -92,6 +92,18 @@
   color: var(--text-muted);
 }
 
+/* What macOS needs to read Mail or Messages, with its two buttons under it. */
+.agent-when__access {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.agent-when__access-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
 .agent-when__actions {
   display: flex;
   justify-content: flex-end;

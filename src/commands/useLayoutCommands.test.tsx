@@ -132,7 +132,7 @@ describe('what the palette offers', () => {
     });
     mount();
     const stack = offered().find((command) => command.id === 'layout.stack.agent');
-    expect(stack?.title).toBe('Stack Agent with Team');
+    expect(stack?.title).toBe('Stack Session with Team');
   });
 
   it('offers stack directions and new-column moves only for panels in a stack', () => {
@@ -155,11 +155,11 @@ describe('what the palette offers', () => {
   });
 
   it('names what the command would do, not what the state is', () => {
-    // "Float Agent panel" while it is docked. A command titled with the state
+    // "Float Session panel" while it is docked. A command titled with the state
     // reads as a description and leaves you guessing what pressing it does.
     mount();
     const titles = new Map(offered().map((command) => [command.id, command.title]));
-    expect(titles.get('layout.dock.agent')).toBe('Float Agent panel');
+    expect(titles.get('layout.dock.agent')).toBe('Float Session panel');
     expect(titles.get('layout.dock.team')).toBe('Dock Team panel');
   });
 

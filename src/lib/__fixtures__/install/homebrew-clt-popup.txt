@@ -1,0 +1,19 @@
+%% Homebrew when softwareupdate finds no Command Line Tools to install
+%% headlessly: install.sh falls back to Apple's installer window and waits for
+%% any key ("Press any key when the installation has completed."). Picks up
+%% after the Return prompt.
+Downloading the Homebrew installer…
+\e[1;34m==>\e[1;39m Checking for `sudo` access (which may request your password)...\e[0m
+\e[1;34m==>\e[1;39m This script will install:\e[0m
+/opt/homebrew/bin/brew
+\e[1;34m==>\e[1;39m The Xcode Command Line Tools will be installed.\e[0m
+\a
+Press \e[1;39mRETURN\e[0m/\e[1;39mENTER\e[0m to continue or any other key to abort:
+⏸\e[1;34m==>\e[1;39m Searching online for the Command Line Tools\e[0m
+\e[1;34m==>\e[1;39m Installing the Command Line Tools (expect a GUI popup):\e[0m
+\e[1;34m==>\e[1;39m /usr/bin/xcode-select --install\e[0m
+xcode-select: note: install requested for command line developer tools
+Press any key when the installation has completed.
+⏸\e[1;34m==>\e[1;39m /usr/bin/sudo /usr/bin/xcode-select --switch /Library/Developer/CommandLineTools\e[0m
+\e[1;34m==>\e[1;39m Downloading and installing Homebrew...\e[0m
+\e[1;34m==>\e[1;39m Installation successful!\e[0m

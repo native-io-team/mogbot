@@ -6,7 +6,7 @@
  * Three answers, neutral like every answer (the strong one is never the
  * accent): **Wait** (outlined), **Just this time** (outlined, this outage
  * only) and **Always** (strong: the team's choice from now on, changeable
- * in Settings → Agents → Usage). They go to the Mac as Deny, Allow, and
+ * in Settings → Accounts & usage). They go to the Mac as Deny, Allow, and
  * Allow with always, so an older client's Allow / Deny still means Just
  * this time / Wait. Answered, it is one line.
  *

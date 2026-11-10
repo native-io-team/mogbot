@@ -74,6 +74,7 @@ import {
   clearSettingsSectionOnOpen,
 } from '../../lib/settings';
 import { peekAccountsRequest } from '../../lib/agentAccounts';
+import { onAppSettingsChanged } from '../../lib/settingsFromChat';
 import {
   SETTINGS_PAGES,
   openingPage,
@@ -181,6 +182,25 @@ export function SettingsModal({
   const [savingRoot, setSavingRoot] = useState(false);
   const [movePrompt, setMovePrompt] = useState<MovePrompt | null>(null);
   const [moving, setMoving] = useState(false);
+  // Bumped when the Chief changes a switch from chat, so an open page reads again.
+  const [changedFromChat, setChangedFromChat] = useState(0);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let off: (() => void) | undefined;
+    let gone = false;
+    try {
+      onAppSettingsChanged(() => setChangedFromChat((n) => n + 1))
+        .then((u) => (gone ? u() : (off = u)))
+        .catch(() => {});
+    } catch {
+      /* no event bridge (tests, the harness) */
+    }
+    return () => {
+      gone = true;
+      off?.();
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -231,7 +251,7 @@ export function SettingsModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, changedFromChat]);
 
   // Opens on Agents, unless a command asked for a page (⌘K → "Accent color…",
   // "Quiet hours…", the Chief's open_settings). Chosen during render, not in

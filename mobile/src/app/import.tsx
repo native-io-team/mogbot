@@ -34,11 +34,13 @@ import { MAC_FEATURES } from '@shipstudio/companion-protocol';
 import { useApp, useServed } from '../lib/store';
 import { space, typingDot } from '../lib/theme';
 import { TypingDots } from '../components/TypingDots';
-import { phoneImportStep } from '../lib/importChoice';
+import { importedHere, phoneImportStep, phoneTalkHeading } from '../lib/importChoice';
 import { ImportPaste } from '../components/ImportPaste';
 
 /** How often the screen asks the Mac where the import has got to. */
 const POLL_MS = 3000;
+/** A stable empty team, so the selector doesn't hand back a new list each render. */
+const NO_AGENTS: { id: string; name: string; isMain?: boolean }[] = [];
 
 const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 
@@ -89,7 +91,8 @@ export default function ImportScreen() {
   const servesTeam = useServed('agents.loginsTeam', MAC_FEATURES.logins);
   const servesPaste = useServed('agents.import.exportReview', MAC_FEATURES.importExport);
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
-  const chief = useApp((s) => s.overview?.agents.find((a) => a.isMain));
+  const team = useApp((s) => s.overview?.agents ?? NO_AGENTS);
+  const chief = team.find((a) => a.isMain);
   const chiefName = chief?.name ?? 'Chief of Staff';
   const [status, setStatus] = useState<PhoneImportStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +137,7 @@ export default function ImportScreen() {
   };
 
   const step = phoneImportStep(status);
+  const arrivals = talk ? importedHere(talk, team) : [];
 
   return (
     <SheetPage>
@@ -219,7 +223,7 @@ export default function ImportScreen() {
         {step.id === 'follow' && talk && (
           <View style={styles.step}>
             <T variant="headline" color={colors.textStrong}>
-              {talk.state === 'imported' ? 'Done' : `Answer ${chiefName} in its chat`}
+              {phoneTalkHeading(talk, chiefName)}
             </T>
             {talk.state === 'interviewing' ? (
               // Going on now: the typing dots, one line of what, one of how far.
@@ -241,6 +245,15 @@ export default function ImportScreen() {
                 {phoneTalkLine(talk, chiefName)}
               </T>
             )}
+            {/* The import ends with the user talking to them. */}
+            {arrivals.map((a) => (
+              <Button
+                key={a.id}
+                title={`Say hi to ${a.name}`}
+                variant="outline"
+                onPress={() => router.replace({ pathname: '/chat/[id]', params: { id: a.id } })}
+              />
+            ))}
             {(chief || status?.chiefId) && (
               <Button
                 title={`Open ${chiefName}`}

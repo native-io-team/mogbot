@@ -17,6 +17,7 @@ import { trackEvent } from './analytics';
 import { endProjectSession } from './session';
 import { logger } from './logger';
 import { getQuitCheck, requestQuit } from './agentsDesktop';
+import { closeSecondaryWindow } from './window';
 
 /**
  * Window we hold the close open for so the analytics IPC + Rust HTTP
@@ -53,6 +54,12 @@ export function installAppLifecycleTracking(): () => void {
       quitInProgress = true;
       event.preventDefault();
       void (async () => {
+        // A second window (File → New Window, a project's own window): just
+        // that window goes; the app and its agents carry on.
+        if (await closeSecondaryWindow().catch(() => false)) {
+          quitInProgress = false;
+          return;
+        }
         // "Keep running when closed" (Agents, opt-in, macOS): the backend
         // hides this window instead and Ship Studio keeps running.
         if (await closeToBackground()) {

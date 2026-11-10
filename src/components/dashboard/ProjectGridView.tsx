@@ -12,9 +12,10 @@ import { EmptyState } from '../primitives/EmptyState';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
 import { useProjectToolsChecking } from '../../lib/projectTools';
-import { PlusIcon } from '@/components/icons';
+import { CommentIcon, PlusIcon } from '@/components/icons';
 import type { DashboardProject } from '../../lib/project';
 import type { FolderInfo } from '../../lib/folders';
+import type { ProjectTeamSummary } from './ProjectTeam';
 
 interface ProjectWithThumbnail extends DashboardProject {
   thumbnailData: string | null;
@@ -58,6 +59,12 @@ export interface ProjectGridViewProps {
   onTogglePin?: (projectPath: string, pinned: boolean) => void | Promise<void>;
   /** Start the create-project flow (drives the zero-projects empty-state CTA). */
   onCreateProject?: () => void;
+  /** The agents that work in a project (`projectTeam`), by its path. */
+  teamFor?: (projectPath: string) => ProjectTeamSummary | null;
+  /** Opens an agent's chat from a project's team line. */
+  onOpenAgent?: (agentId: string) => void;
+  /** The Chief, when there is one: the empty state offers to ask it for a project. */
+  chief?: { name: string; ask: () => void } | null;
 }
 
 /**
@@ -92,6 +99,9 @@ export function ProjectGridView({
   pinnedSet,
   onTogglePin,
   onCreateProject,
+  teamFor,
+  onOpenAgent,
+  chief,
 }: ProjectGridViewProps) {
   const checking = useProjectToolsChecking();
   if (totalCount === 0) {
@@ -110,9 +120,19 @@ export function ProjectGridView({
         ) : (
           <EmptyState
             title="No projects yet"
-            description="When work becomes a site or an app, it lives here. No repo or code needed: start from a template and an agent builds it."
+            description={
+              chief
+                ? `When work becomes a site or an app, it lives here. No repo or code needed: ask ${chief.name} for one, or start it yourself with New project.`
+                : 'When work becomes a site or an app, it lives here. No repo or code needed: start one and an agent builds it.'
+            }
             action={
-              onCreateProject ? (
+              chief ? (
+                // New project is already the primary action above; this is the
+                // Agents-first way in, so it isn't a second primary.
+                <Button variant="default" onClick={chief.ask} leftIcon={<CommentIcon size={16} />}>
+                  Ask {chief.name}
+                </Button>
+              ) : onCreateProject ? (
                 <Button
                   variant="primary"
                   onClick={onCreateProject}
@@ -166,6 +186,8 @@ export function ProjectGridView({
             onRemoveProject={onRemoveProject}
             pinnedSet={pinnedSet}
             onTogglePin={onTogglePin}
+            teamFor={teamFor}
+            onOpenAgent={onOpenAgent}
           />
         )}
       </div>
@@ -204,6 +226,8 @@ export function ProjectGridView({
           onRemove={() => onRemoveProject(project)}
           isPinned={pinnedSet?.has(project.path) ?? false}
           onTogglePin={onTogglePin ? (pinned) => onTogglePin(project.path, pinned) : undefined}
+          team={teamFor?.(project.path) ?? null}
+          onOpenAgent={onOpenAgent}
         />
       ))}
     </div>

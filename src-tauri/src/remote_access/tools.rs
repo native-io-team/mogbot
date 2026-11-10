@@ -50,7 +50,7 @@ const START_AGENT_TIMEOUT: Duration = Duration::from_secs(60);
 /// conversation and a stream of approval taps.
 #[derive(Clone, Copy)]
 enum Effect {
-    /// Looks only. May switch which project Ship Studio is showing.
+    /// Looks only. May switch which project the app is showing.
     Reads,
     /// Types into an agent, opens a tab, creates a project.
     Acts,
@@ -459,13 +459,13 @@ pub fn exists(name: &str) -> bool {
 }
 
 /// A tool's input schema, for a surface that serves it under its own name
-/// and description (Ship Studio's own agents, `agents/sessions.rs`).
+/// and description (this app's own agents, `agents/sessions.rs`).
 pub(crate) fn schema_of(name: &str) -> Option<Value> {
     TOOLS.iter().find(|t| t.name == name).map(|t| (t.schema)())
 }
 
 // ============================================================================
-// Serving Ship Studio's own agents
+// Serving this app's own agents
 // ============================================================================
 //
 // The same tools also serve the agents in Agents mode (`agents/sessions.rs`),
@@ -594,7 +594,7 @@ tokio::task_local! {
     pub(crate) static AGENTS_CALL: AgentsCall;
 }
 
-/// Serving one of Ship Studio's own agents rather than the remote assistant.
+/// Serving one of this app's own agents rather than the remote assistant.
 fn for_agents() -> bool {
     AGENTS_CALL.try_with(|_| ()).is_ok()
 }
@@ -630,7 +630,7 @@ pub async fn call(app: &tauri::AppHandle, config: &RemoteConfig, name: &str, arg
 }
 
 /// The project tools, over `projects`: the ones shared for remote access, or
-/// every Ship Studio project for an agent.
+/// every project here for an agent.
 pub(crate) async fn call_in(
     app: &tauri::AppHandle,
     projects: &[String],
@@ -1209,7 +1209,7 @@ fn describe(state: &AgentState, lines: &[String], head: &str, reply: &[String]) 
 }
 
 const NEXT_DECISION: &str = "NEXT: Ask the user now, in one short sentence, what the agent wants to do and which option they want (in plain words). When they answer, call press_key with that option's number (or y / n); for options without numbers, press up / down to move to it, then enter. Don't answer it yourself unless the user already asked for exactly this.";
-/// For Ship Studio's own agents a question is never theirs to answer: the
+/// For this app's own agents a question is never theirs to answer: the
 /// user gets a card for it (`agents/decisions.rs`), and this is what an agent
 /// reads when the user hasn't answered it yet.
 const NEXT_DECISION_AGENTS: &str = "NEXT: The app has put this question in front of the user as a card in the chat, with these options. Only the user can answer it, on the card; you can't, and neither can another agent passing on their reply. Tell them in one short line what it's asking and to answer it on the card above, then stop. When they answer, you'll be woken to carry on.";
@@ -2015,10 +2015,10 @@ fn canonical_path(project: &str) -> String {
         .unwrap_or_else(|_| project.to_string())
 }
 
-/// Make sure `project`'s preview is up, switching Ship Studio to it if
+/// Make sure `project`'s preview is up, switching the app to it if
 /// another project is showing. Only remote access does this, and only when
 /// no dev server is running for the project: asking the user to "switch over"
-/// would be asking someone who isn't there. Ship Studio's own agents never
+/// would be asking someone who isn't there. this app's own agents never
 /// move the window (see `capture`).
 async fn ensure_preview(app: &tauri::AppHandle, project: &str) -> Result<(), String> {
     let canonical = canonical_path(project);

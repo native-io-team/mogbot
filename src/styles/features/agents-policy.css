@@ -1,5 +1,5 @@
 /* What each agent can do (agents/policy.rs): the agent editor's "What it can
-   do" (AgentPolicy.tsx), Settings → Agents → What agents can do
+   do" (AgentPolicy.tsx), Settings → Independence → What agents can reach
    (AgentTeamPolicySettings.tsx), and the body of a "Change … settings?" card
    (AgentSettingsChange.tsx). Semantic tokens only: both themes. A chosen
    preset is neutral (a stronger border), never the accent. */

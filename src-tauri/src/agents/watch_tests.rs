@@ -1454,7 +1454,7 @@ fn review_12_retry_alerts_say_when_routine_and_quits_dont_pause_it() {
 }
 
 #[test]
-fn review_12_the_mac_refuses_phone_changes_to_a_when_routine() {
+fn review_12_the_phone_edits_each_kind_of_routine_only_as_its_own_kind() {
     let _serial = store::tests_lock();
     let dir = tempfile::tempdir().unwrap();
     store::set_root_for_tests(Some(dir.path().to_path_buf()));
@@ -1467,26 +1467,31 @@ fn review_12_the_mac_refuses_phone_changes_to_a_when_routine() {
         .unwrap()
         .check_in
         .id;
-    use crate::companion::desktop::refuse_watch_from_phone;
+    use crate::companion::desktop::refuse_wrong_kind_from_phone as refuse;
     use crate::companion::router::ScheduleOp;
-    let err = refuse_watch_from_phone(&agent.id, &watch).unwrap_err();
-    assert!(err.to_string().contains("on the Mac only"), "{err}");
-    assert!(refuse_watch_from_phone(&agent.id, &timed).is_ok());
-    for op in [
-        ScheduleOp::Pause {
-            agent_id: agent.id.clone(),
-            id: watch.clone(),
-            paused: true,
-        },
-        ScheduleOp::Cancel {
-            agent_id: agent.id.clone(),
-            id: watch.clone(),
-        },
-        ScheduleOp::RunNow {
-            agent_id: agent.id.clone(),
-            id: watch.clone(),
-        },
-    ] {
+    let a = agent.id.clone();
+    let run_now = |id: &str| ScheduleOp::RunNow {
+        agent_id: a.clone(),
+        id: id.into(),
+    };
+    let check_now = |id: &str| ScheduleOp::WatchCheckNow {
+        agent_id: a.clone(),
+        id: id.into(),
+    };
+    let pause = |id: &str| ScheduleOp::Pause {
+        agent_id: a.clone(),
+        id: id.into(),
+        paused: true,
+    };
+    // A time routine's Run now on a "When…" one, and Check now on a time one.
+    let err = refuse(&run_now(&watch), &a, &watch).unwrap_err();
+    assert!(err.to_string().contains("when something happens"), "{err}");
+    assert!(refuse(&check_now(&timed), &a, &timed).is_err());
+    assert!(refuse(&check_now(&watch), &a, &watch).is_ok());
+    assert!(refuse(&run_now(&timed), &a, &timed).is_ok());
+    // Pause and Cancel are shared.
+    assert!(refuse(&pause(&watch), &a, &watch).is_ok());
+    for op in [pause(&watch), check_now(&watch), run_now(&watch)] {
         assert_eq!(op.target(), Some((agent.id.as_str(), watch.as_str())));
     }
     store::set_root_for_tests(None);

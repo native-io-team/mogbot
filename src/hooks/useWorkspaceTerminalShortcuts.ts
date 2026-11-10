@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import { isMac } from '../lib/setup';
+import { menuNumber, menuOwnsShortcuts, onMenuAction } from '../lib/nativeMenu';
 import type { ToastType } from './useToasts';
 import type { TerminalTab } from './useTerminalManagement';
 
@@ -25,6 +25,9 @@ export function useWorkspaceTerminalShortcuts({
   // Cmd/Ctrl+T adds a tab and Cmd/Ctrl+W closes the active tab.
   // Control+1-9 switches terminal/agent tabs; the F1-F10 range remains
   // available to the operating system and existing app controls.
+  // On macOS the menu bar owns all three (File → New Terminal Tab / Close
+  // Tab, Go → Terminal Tab), so they work from the preview's iframe too and
+  // act once; its choices arrive through `onMenuAction`.
   useEffect(() => {
     const switchTerminalTab = (number: number) => {
       if (!Number.isInteger(number) || number < 1 || number > 9) return;
@@ -40,13 +43,16 @@ export function useWorkspaceTerminalShortcuts({
       setActiveTerminalTab(tab.id);
     };
 
+    const closeTab = () => {
+      if (terminalTabs.length > 1) closeTerminalTab(activeTerminalTab);
+    };
+
     function handleKeyDown(e: KeyboardEvent) {
+      if (menuOwnsShortcuts()) return;
       // Cmd+W — close active terminal tab (instead of closing the window)
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === 'w') {
         e.preventDefault();
-        if (terminalTabs.length > 1) {
-          closeTerminalTab(activeTerminalTab);
-        }
+        closeTab();
         return;
       }
 
@@ -70,12 +76,15 @@ export function useWorkspaceTerminalShortcuts({
       switchTerminalTab(num);
     }
     window.addEventListener('keydown', handleKeyDown);
-    const unlisten = listen<number>('switch-terminal-shortcut', ({ payload }) => {
-      switchTerminalTab(payload);
+    const offMenu = onMenuAction((action) => {
+      const n = menuNumber(action, 'switch_terminal');
+      if (n !== null) switchTerminalTab(n);
+      else if (action === 'close_tab') closeTab();
+      else if (action === 'new_terminal_tab') addTerminalTab();
     });
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      void unlisten.then((fn) => fn());
+      offMenu();
     };
   }, [
     terminalTabs,
