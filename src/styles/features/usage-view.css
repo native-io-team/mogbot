@@ -273,6 +273,10 @@
   flex-direction: column;
   gap: var(--spacing-xl);
   min-width: 0;
+  /* Every line here has its own leading. Inherited, it was the app's 1:
+     two-line pairs (an account and what's left) and the hero's three lines
+     touched. */
+  line-height: var(--line-height-compact);
 }
 
 .agents-usage-view__column {
@@ -297,7 +301,7 @@
 .usage-hero__answer {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 .usage-hero__stack {
@@ -315,7 +319,7 @@
 }
 
 .usage-hero .usage-stack__label {
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-2xs);
 }
 
 .usage-hero__refill {
@@ -338,7 +342,7 @@
   font-size: var(--usage-hero-headline);
   font-weight: var(--font-weight-title);
   letter-spacing: var(--tracking-title);
-  line-height: var(--line-height-heading);
+  line-height: var(--line-height-compact);
 }
 
 .usage-hero__name {
@@ -370,24 +374,34 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--spacing-sm) var(--spacing-md);
+  gap: var(--spacing-md) var(--spacing-xl);
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--surface-warning);
   border-radius: var(--radius-card);
 }
 
 .usage-bar__text {
-  flex: 1 1 auto;
+  flex: 1 1 20em;
   margin: 0;
   color: var(--text-primary);
   font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
 }
 
+/* Full-height answers, a step apart. */
 .usage-bar__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
+}
+
+.usage-bar__actions > .button--size-compact,
+.usage-nudge__actions > .button--size-compact,
+.usage-key__actions > .button--size-compact {
+  height: var(--control-height-standard);
+  min-height: var(--control-height-standard);
+  padding-inline: var(--spacing-md);
 }
 
 .usage-bar__wait {
@@ -399,6 +413,22 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
+}
+
+/* A section's heading and, at its right, a control that belongs to it
+   (Limits | Tokens). */
+.usage-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  min-height: var(--control-height-standard);
+}
+
+/* A segmented control hugs its options; stretched, three options bunched at
+   the left of an empty tray. */
+.usage-section > .segmented-control {
+  align-self: flex-start;
 }
 
 .usage-section__title {
@@ -488,10 +518,12 @@
   gap: var(--spacing-sm);
 }
 
+/* One rhythm: 16px round the key and inside each limit card, 16px between
+   its groups (head, limits, who used it, actions). */
 .usage-key {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-lg);
   padding: var(--spacing-lg);
   background: var(--surface-panel);
   border-radius: var(--radius-card);
@@ -506,15 +538,15 @@
   outline-offset: calc(var(--border-width-default) * -1);
 }
 
+/* Grip, place, name and ⋯ centred on one line; the detail under the name. */
 .usage-key__head {
   display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
+  align-items: center;
+  gap: var(--spacing-md);
 }
 
 .usage-key__grip {
   flex: none;
-  margin-top: var(--spacing-3xs);
   color: var(--text-muted);
   cursor: grab;
 }
@@ -545,7 +577,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-2xs);
   min-width: 0;
 }
 
@@ -553,7 +585,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
   min-width: 0;
   color: var(--text-secondary);
 }
@@ -593,7 +625,7 @@
 .usage-key__limit {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xs);
+  gap: var(--spacing-xs);
   min-width: 0;
 }
 
@@ -617,7 +649,7 @@
 
 /* A limit as a card: its own sheet inside the key. */
 .usage-key__limit {
-  padding: var(--spacing-md);
+  padding: var(--spacing-lg);
   background: var(--surface-recessed);
   border-radius: var(--radius-control);
 }
@@ -637,6 +669,7 @@
 }
 
 .usage-key__figure {
+  margin-bottom: var(--spacing-2xs);
   color: var(--text-primary);
   font-size: var(--font-size-24);
   font-weight: var(--font-weight-label);
@@ -803,7 +836,40 @@
 .usage-key__spent {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-sm);
+}
+
+/* Who used it: a small table, the name then tokens and turns in right-aligned
+   columns, a hairline between rows. */
+.usage-key__spent-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+}
+
+.usage-key__spent-row {
+  display: contents;
+}
+
+.usage-key__spent-row > * {
+  padding-block: var(--spacing-xs);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.usage-key__spent-row:first-child > * {
+  border-top: none;
+}
+
+.usage-key__spent-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The column gap is padding, so each row's hairline runs unbroken. */
+.usage-key__spent-num {
+  padding-left: var(--spacing-xl);
+  text-align: right;
 }
 
 .usage-key__spent-list,
@@ -889,7 +955,7 @@
 .usage-add {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-md);
 }
 
 .usage-add__buttons {

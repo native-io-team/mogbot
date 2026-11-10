@@ -396,10 +396,21 @@ export function UsageKey({
       {k.spent.length > 0 && (
         <div className="usage-key__spent">
           <span className="usage-key__label">Used by these agents this week</span>
+          {/* A small table: the agent, its tokens, its turns, in columns. The
+              line arrives as "Name · 4.8M tokens · 23 turns". */}
           <ul className="usage-key__spent-list">
-            {k.spent.map((s) => (
-              <li key={s}>{s}</li>
-            ))}
+            {k.spent.map((s) => {
+              const parts = s.split(' · ');
+              const turns = parts.length > 2 ? parts.pop() : undefined;
+              const tokens = parts.length > 1 ? parts.pop() : undefined;
+              return (
+                <li key={s} className="usage-key__spent-row">
+                  <span className="usage-key__spent-name">{parts.join(' · ')}</span>
+                  <span className="usage-key__spent-num">{tokens}</span>
+                  <span className="usage-key__spent-num">{turns}</span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
