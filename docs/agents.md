@@ -2458,8 +2458,8 @@ Commands: `agents_login_not_needed`, `agents_logins_not_needed(keys?)`,
 `agents_logins_undecline`, `agents_logins_declined`; on the phone
 `agents.loginNotNeeded`, `agents.loginsNotNeeded`, `agents.loginsUndecline`
 (additive: an older Mac doesn't list them and the phone doesn't offer them).
-The per-agent action on a row is now **Skip** (`agents_login_dismiss`: that
-agent's card). The access chain counts both as a no (below, "Just try
+The per-agent action on a row is **Not now** (`agents_login_dismiss`: that
+agent's card), the word its own card uses for the same answer, desk and phone. The access chain counts both as a no (below, "Just try
 first", step 1): the team-wide list feeds its "Not needed" keys, and turning
 an app back on records when (`turnedOn` in the same file), so a no on a card
 from before then stops counting.
@@ -3224,7 +3224,16 @@ needs-sign-in), the browser (and whether Claude in Chrome's helper is
 installed), secrets (variables), and blocked apps. Each is removed in one
 click (`agents_reach_remove`): a connection's grant (the connection stays
 for others; disconnecting it for everyone deletes its Keychain item), the
-browser, a site, a secret (its Keychain items), a block.
+browser, a site, a secret (its Keychain items), a block. A secret is the one
+removal that can't be undone, so its Remove asks once in place ("Delete
+key?"); each Remove's label names the thing and the agent. A connection that
+needs signing in again carries **Sign in again**, which opens Apps (its row
+there signs in for every agent it's shared with). A connected login card's
+outcome line links here ("What it can reach"), as does ⌘K "What <agent> can
+reach…" (`agents.reach`): both open Edit agent scrolled to it. On the phone
+the list is read-only; its footer opens Apps on that agent (who can use each
+app, Remove), and says the browser and keys change on the Mac. Keys are named
+by what they're for on both, never their identifier.
 
 ### This Mac's apps (`agents/mac_apps.rs`)
 
@@ -3323,7 +3332,7 @@ claude.ai). Each row lists every agent that asked, with what it asked to
 do; one Connect answers them all: the first card of each service signs in,
 and when it's connected the others are granted the same connection
 (`connect_need`); the browser is given to each agent that can use it.
-Untick an agent to leave it out, or "Skip" (`agents_login_dismiss`:
+Untick an agent to leave it out, or "Not now" (`agents_login_dismiss`:
 declined with "Not needed", the agent isn't woken; it asks again if it
 really needs it). With `since`, rows answered since then are included, so
 the screen can say "4 of 9 connected". Identical asks are one line: three

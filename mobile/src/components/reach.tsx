@@ -1,14 +1,16 @@
 /**
  * "What it can reach" (desktop `agents_reach`): the apps an agent was
- * connected to, its browser, and its secrets. Read-only here: taking one
- * away is a choice for the desk, where each is one click. The one thing
- * that can be changed here is giving back: an app the user chose not to
- * connect ("Not needed", for every agent) can be turned back on.
+ * connected to, its browser, and its keys. The list itself is read-only;
+ * which agents can use an app is changed (or the app removed) one tap away
+ * in Apps, which the footer opens on this agent. Its browser and keys change
+ * on the desk. An app the user chose not to connect ("Not needed", for
+ * every agent) can be turned back on here.
  */
 
 import { MAC_FEATURES, type AgentReach } from '@shipstudio/companion-protocol';
 import { reachRows } from '../lib/loginState';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import { loginsUndecline, readReach } from '../lib/logins';
@@ -30,6 +32,8 @@ export function WhatItCanReach({ agentId }: { agentId: string }) {
   const [turnedOn, setTurnedOn] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const canUndecline = useServed('agents.loginsUndecline');
+  const servesApps = useServed('agents.apps');
+  const router = useRouter();
   useEffect(() => {
     if (!served || !live) return;
     let on = true;
@@ -107,9 +111,25 @@ export function WhatItCanReach({ agentId }: { agentId: string }) {
           {error}
         </T>
       )}
-      <T variant="caption" color={colors.textMuted} style={styles.note}>
-        Change this on your Mac.
-      </T>
+      {/* Where taking it away is: Apps for its apps, here on the phone; the
+          browser and keys on the Mac. Never a footer that says only "not here". */}
+      {servesApps && reach.connections.length > 0 ? (
+        <View style={styles.note}>
+          <TextAction
+            label="Change who can use each app"
+            onPress={() => router.push({ pathname: '/apps', params: { agentId } })}
+          />
+          {(!!reach.browser?.on || reach.secrets.length > 0) && (
+            <T variant="caption" color={colors.textMuted}>
+              Its browser and keys change on your Mac.
+            </T>
+          )}
+        </View>
+      ) : (
+        <T variant="caption" color={colors.textMuted} style={styles.note}>
+          Change this on your Mac.
+        </T>
+      )}
     </>
   );
 }

@@ -148,6 +148,11 @@
   color: var(--accent-warning);
 }
 
+/* "Delete key?": the one Remove that can't be undone, asked in place. */
+.agent-reach .agent-permissions__revoke[data-confirming] {
+  color: var(--accent-error-light);
+}
+
 .team-logins-modal__body {
   max-height: min(70vh, 640px); /* css-ok: dialog height cap, as the ideas dialog */
   padding: var(--spacing-sm) var(--spacing-xl) var(--spacing-xl);

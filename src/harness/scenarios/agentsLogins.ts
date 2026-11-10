@@ -297,7 +297,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   recruiterScenario(
     'agents-login-device-code',
     'Agents — GitHub signing in on the phone with a one-time code',
-    'A “Recruiter needs your GitHub” card mid sign-in: spinner and “Type this code at github.com/login/device, on this phone or anywhere.”, then a bordered box “Your code WDJB-MJHT” in mono with a quiet Copy and the link github.com/login/device under it, then a muted phone icon with “Signing in on your phone”. Only a secondary Cancel.',
+    'A “Recruiter needs your GitHub” card mid sign-in: spinner and “Type this code at github.com/login/device, on your phone or anywhere.”, then a bordered box “Your code WDJB-MJHT” in mono with a quiet Copy and the link github.com/login/device under it, then a muted phone icon with “Signing in on your phone”. Only a secondary Cancel.',
     loginCard('hiring', 'Recruiter needs your GitHub', {
       service: 'github',
       title: 'GitHub',
@@ -307,7 +307,7 @@ export const agentsLoginsScenarios: Scenario[] = [
       flow: {
         state: 'waiting',
         option: 'gh',
-        message: 'Type this code at github.com/login/device, on this phone or anywhere.',
+        message: 'Type this code at github.com/login/device, on your phone or anywhere.',
         startedAt: now - MIN,
         fromPhone: true,
         onPhone: true,
@@ -362,7 +362,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   recruiterScenario(
     'agents-login-connected',
     'Agents — a login card once connected',
-    'The card folded to its outcome in the done tone: “Connected · Gmail (work@acme.com)”. No buttons, no field.',
+    'The card folded to its outcome in the done tone: “Connected · Gmail (work@acme.com)”, then a quiet “What it can reach” link (opens Edit agent there, to change or take it back). No buttons, no field.',
     loginCard('hiring', 'Recruiter needs your Gmail (work)', GMAIL_LOGIN, {
       status: 'allowed',
       choice: 'Connected · Gmail (work@acme.com)',
@@ -400,7 +400,7 @@ export const agentsLoginsScenarios: Scenario[] = [
     id: 'agents-login-codex',
     title: 'Agents — a Codex agent asking for Gmail: nothing here can',
     looksRightWhen:
-      'Prospector’s chat: “Prospector needs your Gmail” with the read line, and a muted honest line that Gmail comes through a claude.ai connector, which only agents on Claude Code can use, and Prospector runs on Codex. Only “Not now”; no Connect, no password field.',
+      'Prospector’s chat: “Prospector needs your Gmail” with the read line, and one muted honest line that Gmail comes through claude.ai or your own Chrome, both need Claude Code and Prospector runs on Codex, then the one fix: switch it to Claude Code under Model. Only “Not now”; no Connect, no password field.',
     requires: '.agent-login',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="leadgen"]' }],
@@ -416,7 +416,7 @@ export const agentsLoginsScenarios: Scenario[] = [
           abilities: [{ id: 'read', label: 'Read and search your email' }],
           options: [],
           noConnector:
-            'Gmail comes through a claude.ai connector, which only agents on Claude Code can use. Prospector runs on Codex. Using your browser needs Claude Code, and Prospector runs on Codex.',
+            'Gmail comes through claude.ai or your own Chrome, and both need Claude Code; Prospector runs on Codex. To give it Gmail, switch it to Claude Code under Model.',
         }),
       ]),
       ...COMMANDS,
@@ -425,7 +425,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   teamScenario(
     'agents-team-logins',
     'Agents — What your team needs (one row per app)',
-    'A dialog “What your team needs”: a lede that connecting signs in on this Mac and no agent sees a password; “0 of 3 connected”. Rows, each a bordered panel: “GitHub — Used by Acme Site, Native App and Client Sites QA” with three ticked agents and a neutral “Use GitHub on this Mac for 3”; “Google · Gmail + Calendar — Used by Recruiter, Prospector and Finance”, Recruiter and Prospector ticked with “Not needed” beside each, Finance muted “Not needed”, the honest Google line, a secondary “Use my browser” and neutral “Connect Google for 2”; “LinkedIn” for Publicist with only “Use my browser”.',
+    'A dialog “What your team needs”: a lede that connecting signs in on this Mac and no agent sees a password; “0 of 3 connected”. Each ticked agent’s own answer is “Not now”, the word its card uses; “Not needed” is the row’s, for every agent. Rows, each a bordered panel: “GitHub — Used by Acme Site, Native App and Client Sites QA” with three ticked agents and a neutral “Use GitHub on this Mac for 3”; “Google · Gmail + Calendar — Used by Recruiter, Prospector and Finance”, Recruiter and Prospector ticked with “Not needed” beside each, Finance muted “Not needed”, the honest Google line, a secondary “Use my browser” and neutral “Connect Google for 2”; “LinkedIn” for Publicist with only “Use my browser”.',
     false
   ),
   teamScenario(
@@ -438,7 +438,7 @@ export const agentsLoginsScenarios: Scenario[] = [
     id: 'agents-reach-editor',
     title: 'Agents — What it can reach, in Edit agent',
     looksRightWhen:
-      'Editing Recruiter, continuing “What it can reach” (no second heading of its own): “Apps”: “Gmail · work@acme.com — Can read; asks before it sends or changes anything · Connected on claude.ai; the sign-in is held there · used 2 hours ago” and “Linear” with an amber “Needs signing in again” line; “Your browser”: Chrome through Claude in Chrome, for www.linkedin.com, every click asks; “Keys in your Keychain”: one key; each row with a quiet Remove.',
+      'Editing Recruiter, continuing “What it can reach” (no second heading of its own): “Apps”: “Gmail · work@acme.com — Can read; asks before it sends or changes anything · Connected on claude.ai; the sign-in is held there · used 2 hours ago” and “Linear” with an amber “Needs signing in again” line; “Your browser”: “Chrome, through Claude in Chrome” in plain sentences (reads www.linkedin.com without asking; any other site, and every click, post or send, asks first); “Keys in your Keychain”: one key; each row with a quiet Remove, and Linear also a “Sign in again” (opens Apps).',
     openSelector: AGENTS_TAB,
     requires: '.agent-reach__section',
     clipSelector: '.agent-editor .agent-reach',
@@ -473,7 +473,13 @@ export const agentsLoginsScenarios: Scenario[] = [
             needsSignIn: true,
           },
         ],
-        browser: { on: true, sites: ['www.linkedin.com'], helperInstalled: true },
+        browser: {
+          on: true,
+          teamOn: true,
+          ownOff: false,
+          sites: ['www.linkedin.com'],
+          helperInstalled: true,
+        },
         secrets: [
           {
             secretId: 's1',

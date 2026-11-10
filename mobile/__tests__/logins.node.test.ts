@@ -246,10 +246,15 @@ describe('a login card, in words', () => {
       'Gmail · work@acme.com',
       'Linear',
       'Your browser',
-      'x_key',
+      // A key by what it's for, as on the desk: never its identifier.
+      'Post',
       'figma',
     ]);
-    expect(rows[1]).toMatchObject({ warning: true, detail: 'Needs signing in again on your Mac' });
+    expect(rows[3].detail).toBe('A key in your Mac’s Keychain · not used yet');
+    expect(rows[1]).toMatchObject({
+      warning: true,
+      detail: 'Needs signing in again. Until then it asks on a card.',
+    });
     expect(rows[2].detail).toMatch(/www\.linkedin\.com.*isn’t set up/);
   });
 });

@@ -35,6 +35,7 @@ import { menuOwnsShortcuts, onMenuAction, reportMenuContext } from '../../lib/na
 import { AgentEditorModal, type EditorTab } from './AgentEditorModal';
 import { AgentProjectsProvider } from './AgentProject';
 import { TakeoverProvider, useTakeover } from './AgentTakeover';
+import { OpenReachContext } from './openReach';
 import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { AgentOnItsOwnModal } from './AgentOnItsOwn';
@@ -102,6 +103,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   FolderIcon,
+  LockedIcon,
   PinIcon,
   PlusIcon,
   ShieldCheckIcon,
@@ -196,7 +198,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     agent: Agent | null;
     tab?: EditorTab;
     /** Scrolled to one section on opening (⌘K "<agent>’s skills"). */
-    focus?: 'skills';
+    focus?: 'skills' | 'reach';
     /** Creating: the ready-made agent it opens on. */
     template?: string;
   }>({
@@ -329,6 +331,13 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     setImportPath(from ?? null);
     setImportOpen(true);
   }, []);
+  const openReach = useCallback(
+    (agentId: string) => {
+      const agent = agents.find((a) => a.id === agentId);
+      if (agent) setEditor({ open: true, agent, focus: 'reach' });
+    },
+    [agents]
+  );
   const openApps = useCallback((agentId?: string | null) => {
     setAppsFor(agentId ?? null);
     setAppsOpen(true);
@@ -772,6 +781,24 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
               ],
               run: () => setEditor({ open: true, agent: selected, focus: 'skills' }),
             },
+            {
+              id: 'agents.reach',
+              title: `What ${selected.name} can reach…`,
+              icon: <LockedIcon size={14} />,
+              category: 'action' as const,
+              keywords: [
+                'agents',
+                'access',
+                'logins',
+                'connections',
+                'revoke',
+                'remove',
+                'keys',
+                'apps',
+                'browser',
+              ],
+              run: () => setEditor({ open: true, agent: selected, focus: 'reach' }),
+            },
           ]
         : []),
       // The open agent's own actions: everything in its … menu, by name.
@@ -1057,304 +1084,310 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   );
 
   return (
-    <div className="app workspace workspace-home agents-mode">
-      <div className={`projects-with-rail${isCompact ? ' is-compact' : ''}`} key="view-agents">
-        {!isCompact && (
-          <HomeSidebar
-            {...sidebarProps}
-            activeNav="agents"
-            // Home belongs to the Projects side; here the one control is
-            // What's in flight, with how many need you.
-            navContent={
-              <InFlightBell count={needsYouCount} current={teamOpen} onOpen={openInFlight} />
-            }
-            searchContent={
-              <AgentsTopSearch
-                search={search}
-                field={searchRef}
-                collapsed={sidebarProps.isSidebarHidden}
-                onOpen={focusSearch}
-              />
-            }
-            listActions={
-              query.trim().length === 0 || popoverSearch ? (
-                <AgentsSidebarActions
-                  agentCount={listed.length}
-                  onNew={() => openNew()}
-                  onNewRoom={openNewRoom}
+    <OpenReachContext.Provider value={openReach}>
+      <div className="app workspace workspace-home agents-mode">
+        <div className={`projects-with-rail${isCompact ? ' is-compact' : ''}`} key="view-agents">
+          {!isCompact && (
+            <HomeSidebar
+              {...sidebarProps}
+              activeNav="agents"
+              // Home belongs to the Projects side; here the one control is
+              // What's in flight, with how many need you.
+              navContent={
+                <InFlightBell count={needsYouCount} current={teamOpen} onOpen={openInFlight} />
+              }
+              searchContent={
+                <AgentsTopSearch
+                  search={search}
+                  field={searchRef}
+                  collapsed={sidebarProps.isSidebarHidden}
+                  onOpen={focusSearch}
                 />
-              ) : undefined
-            }
-            footerContent={
-              <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
-                {/* Pages together: Routines beside Usage, actions above the list's end. */}
-                <RoutinesRow
-                  open={routinesOpen}
-                  collapsed={sidebarProps.isSidebarHidden ?? false}
-                  onOpen={() => openRoutines()}
-                />
-                <AccountSwitcher
-                  collapsed={sidebarProps.isSidebarHidden ?? false}
-                  open={usageOpen}
-                  onOpen={openUsage}
-                />
-              </SidebarBoundary>
-            }
-            listContent={
-              <SidebarBoundary>
-                <AgentsSidebar
-                  agents={listed}
-                  selectedId={room ? roomKey(room.id) : (selected?.id ?? null)}
-                  showHidden={showHidden}
-                  onToggleShowHidden={toggleShowHidden}
-                  onSelect={setSelectedId}
-                  rooms={roomRows}
-                  roomActions={roomActions}
-                  actions={actions}
-                  query={popoverSearch ? '' : query}
-                  searchRef={searchRef}
-                  onOpenHit={openHit}
-                  onOpenAgent={openAgentByName}
-                  currentHit={currentHit}
-                />
-              </SidebarBoundary>
-            }
-          />
-        )}
-
-        <main className="agents-main">
-          {popoverSearch && (
-            <AgentsSearchPopover
-              search={search}
-              open={popoverOpen}
-              field={searchRef}
-              onOpenHit={openHit}
-              onOpenAgent={openAgentByName}
+              }
+              listActions={
+                query.trim().length === 0 || popoverSearch ? (
+                  <AgentsSidebarActions
+                    agentCount={listed.length}
+                    onNew={() => openNew()}
+                    onNewRoom={openNewRoom}
+                  />
+                ) : undefined
+              }
+              footerContent={
+                <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
+                  {/* Pages together: Routines beside Usage, actions above the list's end. */}
+                  <RoutinesRow
+                    open={routinesOpen}
+                    collapsed={sidebarProps.isSidebarHidden ?? false}
+                    onOpen={() => openRoutines()}
+                  />
+                  <AccountSwitcher
+                    collapsed={sidebarProps.isSidebarHidden ?? false}
+                    open={usageOpen}
+                    onOpen={openUsage}
+                  />
+                </SidebarBoundary>
+              }
+              listContent={
+                <SidebarBoundary>
+                  <AgentsSidebar
+                    agents={listed}
+                    selectedId={room ? roomKey(room.id) : (selected?.id ?? null)}
+                    showHidden={showHidden}
+                    onToggleShowHidden={toggleShowHidden}
+                    onSelect={setSelectedId}
+                    rooms={roomRows}
+                    roomActions={roomActions}
+                    actions={actions}
+                    query={popoverSearch ? '' : query}
+                    searchRef={searchRef}
+                    onOpenHit={openHit}
+                    onOpenAgent={openAgentByName}
+                    currentHit={currentHit}
+                  />
+                </SidebarBoundary>
+              }
             />
           )}
-          <PaneBoundary
-            resetKey={
-              room
-                ? roomKey(room.id)
-                : teamOpen
-                  ? TEAM_ID
-                  : usageOpen
-                    ? USAGE_ID
-                    : routinesOpen
-                      ? ROUTINES_ID
-                      : (shown?.id ?? null)
-            }
-          >
-            {error && !loaded ? (
-              <div className="agents-main__state">{error}</div>
-            ) : loaded && noEngineInstalled(engines) ? (
-              <NoEngine
-                onSetUp={(engine) => setEngineSetup({ engine, step: 'install' })}
-                onGoProjects={sidebarProps.onGoProjects}
-              />
-            ) : room ? (
-              <RoomChat
-                key={room.id}
-                room={room}
-                agentsById={agentsById}
-                onOpenAgent={openAgent}
-                compact={pageCompact}
-                {...roomActions}
-              />
-            ) : usageOpen ? (
-              <AgentsUsageView compact={pageCompact} onOpenAgent={openAgent} />
-            ) : routinesOpen ? (
-              <AgentsRoutinesView
-                compact={pageCompact}
-                onOpenAgent={openAgent}
-                ask={routinesAsk}
-                onAsked={clearRoutinesAsk}
-              />
-            ) : teamOpen ? (
-              <AgentsTeamView
-                onOpenAgent={openAgent}
-                onNewAgent={openNew}
-                onOpenMessage={openMessage}
-                onSignIn={signIn}
-                onInstallEngine={installEngine}
-                compact={pageCompact}
-              />
-            ) : !shown ? (
-              <div className="agents-main__state">
-                <Spinner />
-              </div>
-            ) : (
-              <AgentChat
-                key={shown.id}
-                agent={shown}
-                onOpenAgent={setSelectedId}
-                onSetUpEngine={setUpShownEngine}
-                onSignIn={signInShown}
-                onInstallEngine={installShown}
-                onImport={openImport}
-                onSetUpPhone={shown.isMain ? openPhone : undefined}
-                onOpenApps={openShownApps}
-                onMoreIdeas={shown.isMain ? openIdeas : undefined}
-                onEscape={escapeSearch}
-                compact={chatCompact}
-                {...actions}
-                jumpTo={jump?.agentId === shown.id ? jump.messageId : null}
-                onJumped={clearJump}
-                prefill={prefill?.agentId === shown.id ? prefill : null}
+
+          <main className="agents-main">
+            {popoverSearch && (
+              <AgentsSearchPopover
+                search={search}
+                open={popoverOpen}
+                field={searchRef}
+                onOpenHit={openHit}
+                onOpenAgent={openAgentByName}
               />
             )}
-          </PaneBoundary>
-          {isCompact && preview}
-        </main>
-        {!isCompact && preview}
-      </div>
-
-      <AgentEditorModal
-        key={
-          editor.open
-            ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.focus ?? ''}-${editor.template ?? ''}`
-            : 'closed'
-        }
-        isOpen={editor.open}
-        agent={editor.agent}
-        initialTab={editor.tab}
-        initialFocus={editor.focus}
-        initialTemplate={editor.template}
-        takenColors={agents.map((a) => a.color)}
-        onClose={() => setEditor({ open: false, agent: null })}
-        onSaved={(id) => {
-          void refreshAgents();
-          openAgent(id);
-        }}
-        onDelete={setDeleting}
-        onOpenApps={() => openApps(editor.agent?.id)}
-        onAskChief={
-          editor.agent
-            ? undefined
-            : () => {
-                const chief = agents.find((a) => a.isMain);
-                if (!chief) return;
-                setEditor({ open: false, agent: null });
-                setPrefill({ agentId: chief.id, text: 'Set up an agent that ', n: Date.now() });
-                setSelectedId(chief.id);
+            <PaneBoundary
+              resetKey={
+                room
+                  ? roomKey(room.id)
+                  : teamOpen
+                    ? TEAM_ID
+                    : usageOpen
+                      ? USAGE_ID
+                      : routinesOpen
+                        ? ROUTINES_ID
+                        : (shown?.id ?? null)
               }
-        }
-        onAskInChat={(text) => {
-          // Settings change in chat: the Chief proposes it on a card.
-          const chief = agents.find((a) => a.isMain);
-          if (!chief) return;
-          setEditor({ open: false, agent: null });
-          setPrefill({ agentId: chief.id, text, n: Date.now() });
-          setSelectedId(chief.id);
-        }}
-        onSetUpEngine={(engine, step) => setEngineSetup({ engine, step })}
-      />
-      <ChiefIdeasModal onPick={pickIdea} onReadyMade={() => openNew(ROLE_TEMPLATES[0]?.id)} />
-      <ImportAgentsModal
-        isOpen={importOpen}
-        initialPath={importPath}
-        onClose={(imported) => {
-          setImportOpen(false);
-          // The note that opened it may have gone with the import; land in the chat.
-          if (imported) setFocusAsk((n) => n + 1);
-        }}
-        onOpenAgent={(id) => {
-          setImportOpen(false);
-          openAgent(id);
-        }}
-      />
-      <AgentOnItsOwnModal agentId={onItsOwnFor} onClose={() => setOnItsOwnFor(null)} />
-      {briefingFor && (
-        <AgentBriefingModal
-          key={briefingFor.id}
-          agentId={briefingFor.id}
-          agentName={briefingFor.name}
-          onClose={() => setBriefingFor(null)}
-        />
-      )}
-      {recipeFor && (
-        <AgentRecipeModal key={recipeFor} agentId={recipeFor} onClose={() => setRecipeFor(null)} />
-      )}
-      <AgentAppsModal
-        isOpen={appsOpen}
-        onClose={() => setAppsOpen(false)}
-        agents={agents}
-        forAgentId={appsFor}
-      />
-      <TeamLoginsModal />
-      <BrowserSetupModal />
-      {roomEditor.open && (
-        <RoomEditorModal
-          isOpen
-          room={roomEditor.room}
-          agents={agents}
-          onClose={() => setRoomEditor({ open: false, room: null })}
-          onSaved={(saved) => {
-            setRoomEditor({ open: false, room: null });
-            void refreshRooms().then(() => openAgent(roomKey(saved.id)));
-          }}
-        />
-      )}
-      {deletingRoom && (
-        <ProjectActionConfirmModal
-          title={`Delete ${deletingRoom.name}?`}
-          body={
-            <p>
-              The room and its conversation are deleted. Its agents stay, with their memory and
-              their own chats.
-            </p>
+            >
+              {error && !loaded ? (
+                <div className="agents-main__state">{error}</div>
+              ) : loaded && noEngineInstalled(engines) ? (
+                <NoEngine
+                  onSetUp={(engine) => setEngineSetup({ engine, step: 'install' })}
+                  onGoProjects={sidebarProps.onGoProjects}
+                />
+              ) : room ? (
+                <RoomChat
+                  key={room.id}
+                  room={room}
+                  agentsById={agentsById}
+                  onOpenAgent={openAgent}
+                  compact={pageCompact}
+                  {...roomActions}
+                />
+              ) : usageOpen ? (
+                <AgentsUsageView compact={pageCompact} onOpenAgent={openAgent} />
+              ) : routinesOpen ? (
+                <AgentsRoutinesView
+                  compact={pageCompact}
+                  onOpenAgent={openAgent}
+                  ask={routinesAsk}
+                  onAsked={clearRoutinesAsk}
+                />
+              ) : teamOpen ? (
+                <AgentsTeamView
+                  onOpenAgent={openAgent}
+                  onNewAgent={openNew}
+                  onOpenMessage={openMessage}
+                  onSignIn={signIn}
+                  onInstallEngine={installEngine}
+                  compact={pageCompact}
+                />
+              ) : !shown ? (
+                <div className="agents-main__state">
+                  <Spinner />
+                </div>
+              ) : (
+                <AgentChat
+                  key={shown.id}
+                  agent={shown}
+                  onOpenAgent={setSelectedId}
+                  onSetUpEngine={setUpShownEngine}
+                  onSignIn={signInShown}
+                  onInstallEngine={installShown}
+                  onImport={openImport}
+                  onSetUpPhone={shown.isMain ? openPhone : undefined}
+                  onOpenApps={openShownApps}
+                  onMoreIdeas={shown.isMain ? openIdeas : undefined}
+                  onEscape={escapeSearch}
+                  compact={chatCompact}
+                  {...actions}
+                  jumpTo={jump?.agentId === shown.id ? jump.messageId : null}
+                  onJumped={clearJump}
+                  prefill={prefill?.agentId === shown.id ? prefill : null}
+                />
+              )}
+            </PaneBoundary>
+            {isCompact && preview}
+          </main>
+          {!isCompact && preview}
+        </div>
+
+        <AgentEditorModal
+          key={
+            editor.open
+              ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.focus ?? ''}-${editor.template ?? ''}`
+              : 'closed'
           }
-          hint="This can't be undone."
-          loading={false}
-          confirmLabel="Delete room"
-          loadingLabel="Deleting…"
-          confirmVariant="danger"
-          onCancel={() => setDeletingRoom(null)}
-          onConfirm={() => {
-            const gone = deletingRoom;
-            setDeletingRoom(null);
-            void run(async () => {
-              await deleteRoom(gone.id);
-              if (selectedId === roomKey(gone.id)) setSelectedId(null);
-              await refreshRooms();
-            });
+          isOpen={editor.open}
+          agent={editor.agent}
+          initialTab={editor.tab}
+          initialFocus={editor.focus}
+          initialTemplate={editor.template}
+          takenColors={agents.map((a) => a.color)}
+          onClose={() => setEditor({ open: false, agent: null })}
+          onSaved={(id) => {
+            void refreshAgents();
+            openAgent(id);
+          }}
+          onDelete={setDeleting}
+          onOpenApps={() => openApps(editor.agent?.id)}
+          onAskChief={
+            editor.agent
+              ? undefined
+              : () => {
+                  const chief = agents.find((a) => a.isMain);
+                  if (!chief) return;
+                  setEditor({ open: false, agent: null });
+                  setPrefill({ agentId: chief.id, text: 'Set up an agent that ', n: Date.now() });
+                  setSelectedId(chief.id);
+                }
+          }
+          onAskInChat={(text) => {
+            // Settings change in chat: the Chief proposes it on a card.
+            const chief = agents.find((a) => a.isMain);
+            if (!chief) return;
+            setEditor({ open: false, agent: null });
+            setPrefill({ agentId: chief.id, text, n: Date.now() });
+            setSelectedId(chief.id);
+          }}
+          onSetUpEngine={(engine, step) => setEngineSetup({ engine, step })}
+        />
+        <ChiefIdeasModal onPick={pickIdea} onReadyMade={() => openNew(ROLE_TEMPLATES[0]?.id)} />
+        <ImportAgentsModal
+          isOpen={importOpen}
+          initialPath={importPath}
+          onClose={(imported) => {
+            setImportOpen(false);
+            // The note that opened it may have gone with the import; land in the chat.
+            if (imported) setFocusAsk((n) => n + 1);
+          }}
+          onOpenAgent={(id) => {
+            setImportOpen(false);
+            openAgent(id);
           }}
         />
-      )}
-      {engineSetup && <EngineSignInModal {...engineSetup} onClose={() => setEngineSetup(null)} />}
-      {stopping && (
-        // In the agent's own colour: a confirm about Acme is Acme's.
-        <AccentScope color={stopping.color}>
-          <ProjectActionConfirmModal
-            title={`Stop ${stopping.name}?`}
-            body={<p>What it’s doing now ends here, and anything queued for it is dropped.</p>}
-            hint="Its conversation is kept."
-            loading={false}
-            confirmLabel="Stop"
-            loadingLabel="Stopping…"
-            confirmVariant="danger"
-            onCancel={() => setStopping(null)}
-            onConfirm={() => void confirmStop()}
+        <AgentOnItsOwnModal agentId={onItsOwnFor} onClose={() => setOnItsOwnFor(null)} />
+        {briefingFor && (
+          <AgentBriefingModal
+            key={briefingFor.id}
+            agentId={briefingFor.id}
+            agentName={briefingFor.name}
+            onClose={() => setBriefingFor(null)}
           />
-        </AccentScope>
-      )}
-      {deleting && (
-        // In the agent's own colour: a confirm about Acme is Acme's.
-        <AccentScope color={deleting.color}>
+        )}
+        {recipeFor && (
+          <AgentRecipeModal
+            key={recipeFor}
+            agentId={recipeFor}
+            onClose={() => setRecipeFor(null)}
+          />
+        )}
+        <AgentAppsModal
+          isOpen={appsOpen}
+          onClose={() => setAppsOpen(false)}
+          agents={agents}
+          forAgentId={appsFor}
+        />
+        <TeamLoginsModal />
+        <BrowserSetupModal />
+        {roomEditor.open && (
+          <RoomEditorModal
+            isOpen
+            room={roomEditor.room}
+            agents={agents}
+            onClose={() => setRoomEditor({ open: false, room: null })}
+            onSaved={(saved) => {
+              setRoomEditor({ open: false, room: null });
+              void refreshRooms().then(() => openAgent(roomKey(saved.id)));
+            }}
+          />
+        )}
+        {deletingRoom && (
           <ProjectActionConfirmModal
-            title={`Delete ${deleting.name}?`}
-            body={<p>Its memory and its whole conversation are deleted with it.</p>}
+            title={`Delete ${deletingRoom.name}?`}
+            body={
+              <p>
+                The room and its conversation are deleted. Its agents stay, with their memory and
+                their own chats.
+              </p>
+            }
             hint="This can't be undone."
-            loading={deleteBusy}
-            confirmLabel="Delete"
+            loading={false}
+            confirmLabel="Delete room"
             loadingLabel="Deleting…"
             confirmVariant="danger"
-            onCancel={() => setDeleting(null)}
-            onConfirm={() => void confirmDelete()}
+            onCancel={() => setDeletingRoom(null)}
+            onConfirm={() => {
+              const gone = deletingRoom;
+              setDeletingRoom(null);
+              void run(async () => {
+                await deleteRoom(gone.id);
+                if (selectedId === roomKey(gone.id)) setSelectedId(null);
+                await refreshRooms();
+              });
+            }}
           />
-        </AccentScope>
-      )}
-    </div>
+        )}
+        {engineSetup && <EngineSignInModal {...engineSetup} onClose={() => setEngineSetup(null)} />}
+        {stopping && (
+          // In the agent's own colour: a confirm about Acme is Acme's.
+          <AccentScope color={stopping.color}>
+            <ProjectActionConfirmModal
+              title={`Stop ${stopping.name}?`}
+              body={<p>What it’s doing now ends here, and anything queued for it is dropped.</p>}
+              hint="Its conversation is kept."
+              loading={false}
+              confirmLabel="Stop"
+              loadingLabel="Stopping…"
+              confirmVariant="danger"
+              onCancel={() => setStopping(null)}
+              onConfirm={() => void confirmStop()}
+            />
+          </AccentScope>
+        )}
+        {deleting && (
+          // In the agent's own colour: a confirm about Acme is Acme's.
+          <AccentScope color={deleting.color}>
+            <ProjectActionConfirmModal
+              title={`Delete ${deleting.name}?`}
+              body={<p>Its memory and its whole conversation are deleted with it.</p>}
+              hint="This can't be undone."
+              loading={deleteBusy}
+              confirmLabel="Delete"
+              loadingLabel="Deleting…"
+              confirmVariant="danger"
+              onCancel={() => setDeleting(null)}
+              onConfirm={() => void confirmDelete()}
+            />
+          </AccentScope>
+        )}
+      </div>
+    </OpenReachContext.Provider>
   );
 }
 

@@ -215,8 +215,8 @@ interface AgentEditorModalProps {
   onOpenApps?: () => void;
   /** Editing: open on its memory rather than its settings. */
   initialTab?: EditorTab;
-  /** Editing: bring this section into view on opening ("Skills"). */
-  initialFocus?: 'skills';
+  /** Editing: bring this section into view on opening ("Skills", "What it can reach"). */
+  initialFocus?: 'skills' | 'reach';
   /** Install or sign in to an engine that isn't ready, over the editor. */
   onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;
   /** Creating: close and draft the request in the Chief of Staff's chat instead. */
@@ -753,7 +753,7 @@ export function AgentEditorModal({
           <AdminSwitch agent={agent} />
           <Permissions agent={agent} />
           <AgentPolicy agent={agent} onAskInChat={onAskInChat} />
-          <AgentReach agent={agent} />
+          <AgentReach agent={agent} onOpenApps={onOpenApps} focus={initialFocus === 'reach'} />
           <AgentSkills agent={agent} focus={initialFocus === 'skills'} />
         </div>
       )}

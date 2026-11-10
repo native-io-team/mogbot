@@ -162,7 +162,7 @@ export function SecretCard({
     return (
       <Card
         icon="lock.fill"
-        title={`${agent.name} asks for “${secretTitle(request.name)}”`}
+        title={`${agent.name} needs your ${secretTitle(request.name)}`}
         source={project ? `In ${project}` : undefined}
         note={connected ? problem : OFFLINE_NOTE}
         actions={
@@ -183,7 +183,7 @@ export function SecretCard({
   return (
     <Card
       icon="lock.fill"
-      title={`${agent.name} asks for “${secretTitle(request.name)}”`}
+      title={`${agent.name} needs your ${secretTitle(request.name)}`}
       source={project ? `In ${project}` : undefined}
     >
       {purpose}

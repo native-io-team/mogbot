@@ -508,7 +508,7 @@ pub(crate) async fn gh_device(run: &Run) -> Result<String, CommandError> {
     let mut flow = run.flow(
         FlowState::Waiting,
         Some(if run.origin.on_phone {
-            "Type this code at github.com/login/device, on this phone or anywhere.".into()
+            "Type this code at github.com/login/device, on your phone or anywhere.".into()
         } else {
             "Type this code at github.com/login/device. It's open in this Mac's browser.".into()
         }),

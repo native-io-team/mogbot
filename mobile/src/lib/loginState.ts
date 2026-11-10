@@ -13,7 +13,9 @@ import {
   type TeamCard,
   type TeamLogins,
   type WelcomeFrame,
+  secretTitle,
 } from '@shipstudio/companion-protocol';
+import { formatAgo } from './agents';
 
 /** The Mac says it serves login cards (`welcome.features`), and the methods to answer them. */
 export const servesLogins = (
@@ -194,7 +196,7 @@ export function reachRows(
       key: `c:${c.connectionId}`,
       label: c.account && c.account !== c.title ? `${c.title} · ${c.account}` : c.title,
       detail: c.needsSignIn
-        ? 'Needs signing in again on your Mac'
+        ? 'Needs signing in again. Until then it asks on a card.'
         : `${c.access === 'read' ? 'Can read' : 'Can read; asks before it sends or changes anything'}. ${c.kept}.`,
       warning: c.needsSignIn,
     });
@@ -210,10 +212,12 @@ export function reachRows(
     });
   }
   for (const s of reach.secrets) {
+    // Named by what it's for, as on the desk; the identifier and its
+    // variables are the agent's business, not the row's.
     rows.push({
       key: `s:${s.secretId}`,
-      label: s.name,
-      detail: `${s.variables.join(', ')} · in your Mac’s Keychain. ${s.purpose}`,
+      label: s.purpose || secretTitle(s.name),
+      detail: `A key in your Mac’s Keychain · ${s.lastUsedAt ? `used ${formatAgo(s.lastUsedAt)}` : 'not used yet'}`,
     });
   }
   for (const name of reach.blockedApps) {

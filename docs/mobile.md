@@ -714,7 +714,8 @@ request, the diff and the photo viewer push over them. At
   it's open there". It follows `login.flow` live, then shows the answer. A Mac without `logins` never sends one; a phone without it
   sees Allow / Deny, and its Allow starts the first way in on the Mac.
   "What your team needs" (`agents.loginsTeam`) and "What it can reach"
-  (`agents.reach`, read-only) are on the phone too.
+  (`agents.reach`, read-only; its footer opens Apps on that agent, where
+  who can use each app is changed or the app removed) are on the phone too.
 - **Step-in cards** (`approval.stepIn`): "<Agent> needs you in its browser:
   <reason>". With a Mac that has `stepIn.phone`, **Step in** opens the
   sign-in screen (`app/signin.tsx`, `stepIn=1`) on the agent's own tab: the
