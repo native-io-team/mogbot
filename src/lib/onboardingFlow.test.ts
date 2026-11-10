@@ -139,9 +139,11 @@ describe('the engine screens', () => {
     expect(engineItemCheck(item('codex_auth', 'not_installed'), true, false)).toBeNull();
     const signIn = failed(engineItemCheck(item('codex_auth', 'not_installed'), true, true)!);
     expect(signIn.line).toBe('Sign-in was closed before it finished.');
-    expect(signIn.fix).toMatch(/^Press Try again\./);
+    expect(signIn.fix).toMatch(/^Already signed in in the browser\?/);
     const install = failed(engineItemCheck(item('codex', 'not_installed'), false, true)!);
     expect(install.line).toBe('The install was closed before it finished.');
+    // Try again is the screen's own button; a line repeating it says nothing.
+    expect(install.fix).toBeUndefined();
     // What the app found always wins over "it was closed".
     expect(engineItemCheck(item('codex_auth', 'ready'), true, true)?.state).toBe('pass');
     expect(engineItemCheck(item('codex', 'error', 'npm failed'), false, true)).toMatchObject({

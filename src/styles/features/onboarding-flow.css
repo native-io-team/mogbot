@@ -66,7 +66,9 @@
   align-items: center;
   gap: var(--spacing-lg);
   padding: 0 var(--spacing-xl);
-  background: var(--surface-app);
+  /* No fill: the desk shows through, so the band never draws a seam across
+     the lit mat (it read as a grey strip in light). */
+  background: transparent;
   z-index: var(--z-dropdown);
 }
 
@@ -227,10 +229,17 @@
   color: var(--text-muted);
 }
 
+/* A status check that couldn't run: the same "Not done yet" check as every
+   screen, pinned at the foot so the cards above still work. */
 .flow-error {
   position: fixed;
   left: 50%;
   bottom: var(--spacing-xl);
   transform: translateX(-50%);
+  width: min(var(--flow-body-width), calc(100% - 2 * var(--spacing-xl)));
   z-index: var(--z-dropdown);
+}
+
+.flow-error .flow-check {
+  box-shadow: var(--shadow-md);
 }

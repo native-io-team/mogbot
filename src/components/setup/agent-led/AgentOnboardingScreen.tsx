@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '../../primitives/Spinner';
-import { Button } from '../../primitives/Button';
+import { CheckLine } from '../flow/FlowParts';
 import { EngineStep } from '../flow/EngineStep';
 import { WelcomeStep } from '../flow/SimpleSteps';
 import type { AgentCardKey } from './AgentPickGrid';
@@ -61,7 +61,9 @@ interface AgentOnboardingScreenProps {
 export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps) {
   const [step, setStep] = useState<FlowStep | null>(null);
   const [items, setItems] = useState<SetupItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // A status check that couldn't run, said the way every other check is:
+  // "Not done yet", the one fix, and Check again.
+  const [error, setError] = useState<{ line: string; fix?: string } | null>(null);
   const [testMode, setTestMode] = useState<OnboardingTestMode>({
     mock: false,
     forceOnboarding: false,
@@ -81,8 +83,11 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
       logger.warn('Onboarding: failed to fetch setup status', { error: err });
       setError(
         err instanceof TimeoutError
-          ? 'Checking this Mac took too long. Try again, and if it keeps happening, quit and reopen the app.'
-          : 'Couldn’t check this Mac. Try again.'
+          ? {
+              line: 'Checking this Mac took too long.',
+              fix: 'If it keeps happening, quit and reopen the app.',
+            }
+          : { line: 'Couldn’t check this Mac.' }
       );
       return null;
     }
@@ -169,11 +174,8 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
   return (
     <>
       {error && (
-        <div className="onboarding-error flow-error" role="alert">
-          <p>{error}</p>
-          <Button variant="secondary" onClick={() => void fetchStatus()}>
-            Try again
-          </Button>
+        <div className="flow-error">
+          <CheckLine result={{ state: 'fail', ...error }} onCheckAgain={() => void fetchStatus()} />
         </div>
       )}
       {screen}

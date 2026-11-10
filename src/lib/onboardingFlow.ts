@@ -159,8 +159,12 @@ export type CheckResult =
   | {
       state: 'fail';
       line: string;
-      /** The one thing to do, in a sentence. */
-      fix: string;
+      /**
+       * The one thing to do, in a sentence. Left out when the screen's own
+       * button is the whole answer: "Press Try again" under a Try again
+       * button is a line that says nothing.
+       */
+      fix?: string;
       /** A page that does it, when there is one. */
       action?: { label: string; url: string };
     };
@@ -201,7 +205,7 @@ export function engineItemCopy(
   if (itemId === engine.binaryId) {
     return {
       title: `Install ${engine.name}`,
-      lede: 'It installs in a window here. If it asks for your Mac password, type it and press Enter: nothing shows as you type.',
+      lede: 'A window opens here and installs it. If it asks for your Mac password, type it and press Enter: nothing shows as you type.',
       action: `Install ${engine.name}`,
     };
   }
@@ -260,8 +264,8 @@ export function engineItemCheck(
               ? 'Sign-in was closed before it finished.'
               : 'The install was closed before it finished.',
             fix: isAuth
-              ? 'Press Try again. Already signed in in the browser? This screen notices in a moment.'
-              : 'Press Try again.',
+              ? 'Already signed in in the browser? This screen notices in a moment.'
+              : undefined,
           }
         : null;
   }

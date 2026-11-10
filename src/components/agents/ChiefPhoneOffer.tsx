@@ -38,6 +38,11 @@ export const PHONE_OFFER_NOTE =
  * Whether the conversation has reached its first result: the user has said
  * something, and the Chief has replied to the newest thing they said (a
  * result card arrives on a reply too).
+ *
+ * A reply that ends by asking the user something ("…Want me to?") is the
+ * Chief waiting on them, not a result: a phone card under it put a second
+ * question between the user and the answer they were about to type. The
+ * offer waits for the next reply, unless this one brought a result card.
  */
 export function reachedFirstResult(messages: readonly AgentMessage[]): boolean {
   let lastUser = -1;
@@ -45,7 +50,10 @@ export function reachedFirstResult(messages: readonly AgentMessage[]): boolean {
     if (m.kind === 'user') lastUser = i;
   });
   if (lastUser < 0) return false;
-  return messages.slice(lastUser + 1).some((m) => m.kind === 'agent');
+  const replies = messages.slice(lastUser + 1).filter((m) => m.kind === 'agent');
+  if (replies.length === 0) return false;
+  if (replies.some((m) => m.result)) return true;
+  return !replies[replies.length - 1].text.trim().endsWith('?');
 }
 
 function answered(): boolean {

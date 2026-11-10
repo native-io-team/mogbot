@@ -148,3 +148,45 @@ screens counts as finished.
 Not checked: a real install or sign-in, WKWebView, the phone's own import
 card wording, and whether the phone card's timing feels right on a real
 first run (it keys off the first reply, not a result card).
+
+## Second pass, 2026-11-10: the engine screens and the first reply
+
+Walked again in the harness, light and dark, Welcome to the first result.
+Fixed:
+
+- **The install and sign-in screens were never actually looked at running.**
+  The harness's mock action answered at once, so `onboarding-engine-install`,
+  `-signin` and `-codex-prereqs` captured "Not done yet. … closed before it
+  finished" instead of the spinner. They now hold the action open
+  (`neverAnswers`), and the closed state has its own scenario,
+  `onboarding-engine-closed`.
+- **No line repeating the button.** A cancelled install said "Press Try
+  again." over a Try again button; it now says only what happened. A
+  cancelled sign-in keeps the one useful line ("Already signed in in the
+  browser? This screen notices in a moment."). `CheckResult.fix` is optional.
+- **The check box was taller at the bottom than the top**: an empty actions
+  row still took its gap. It renders only with an action in it.
+- **"Couldn't check this Mac" was the one red box in onboarding**, and said
+  Try again twice (sentence and button). It is now the same check every
+  screen uses: "Not done yet. Couldn't check this Mac." and Check again.
+- **A grey strip across the top in light.** The fixed top band was filled
+  with the app surface over the lit mat; it is transparent now.
+- **"It installs in a window here"** with no window yet: "A window opens
+  here and installs it."
+- **The phone card no longer interrupts the Chief's question.** After a
+  first reply ending "…Want me to?", the card sat between the question and
+  the answer the user was about to type. `reachedFirstResult` now waits for
+  a reply that doesn't end on a question, unless it brought a result card.
+
+Not changed, worth deciding:
+
+- The import card's bright button is "Bring my agents", while the 2026-11-09
+  pass made "Start fresh" the big answer on the old Ready screen.
+- First-run chrome: Usage and Routines each appear twice (header and
+  sidebar), and the sidebar says "Usage · Not read yet" before anything has
+  run.
+- A starter fills the composer ending "My topics:" with Send live, so an
+  empty blank can be sent.
+- Installing still shows a raw terminal to someone non-technical.
+
+Not checked: a real install or sign-in, WKWebView, the phone.
