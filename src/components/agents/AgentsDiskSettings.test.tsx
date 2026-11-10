@@ -14,6 +14,7 @@ vi.mock('../../lib/agentsDisk', async (orig) => ({
 
 import { AgentsDiskSettings } from './AgentsDiskSettings';
 import type { DiskOverview } from '../../lib/agentsDisk';
+import { requestSettingsSectionOnOpen } from '../../lib/settings';
 
 const FLOOR: DiskOverview = {
   freeBytes: 1_800_000_000,
@@ -37,6 +38,17 @@ describe('AgentsDiskSettings', () => {
     const { container } = render(<AgentsDiskSettings />);
     await flush();
     expect(container.textContent).toBe('');
+  });
+
+  it('opened from ⌘K with nothing to do, it still answers', async () => {
+    api.diskOverview.mockResolvedValue(FINE);
+    requestSettingsSectionOnOpen('agent-disk');
+    render(<AgentsDiskSettings />);
+    await flush();
+    expect(screen.getByText('Disk space')).toBeTruthy();
+    expect(
+      screen.getByText('This Mac has 200 GB free. No agent’s folder is 1 GB or more.')
+    ).toBeTruthy();
   });
 
   it('shows free space, each large home, and Free up space only where it frees something', async () => {
