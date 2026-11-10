@@ -108,6 +108,11 @@ import {
   describeWatchCheck,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
+// "At a time / When…", in the phone's words too.
+import {
+  ROUTINE_MODES,
+  type RoutineMode,
+} from '../../../packages/companion-protocol/src/whenComposer';
 import { AgentRoutineModel } from './AgentRoutineModel';
 import { useQuotaLines } from './AgentsQuota';
 import {
@@ -234,7 +239,7 @@ function ScheduleBody({
     void refreshConversations(agent.id);
   }, [agent.id]);
   /** A new routine's kind; an edit keeps the kind of the row. */
-  const [newMode, setNewMode] = useState<'time' | 'when'>(startWhen ? 'when' : 'time');
+  const [newMode, setNewMode] = useState<RoutineMode>(startWhen ? 'when' : 'time');
   const mode = editing ? (editing.watch ? 'when' : 'time') : newMode;
   const close = () => {
     setError(null);
@@ -293,10 +298,7 @@ function ScheduleBody({
                 setError(null);
                 setNewMode(m);
               }}
-              options={[
-                { value: 'time', label: 'At a time' },
-                { value: 'when', label: 'When…' },
-              ]}
+              options={ROUTINE_MODES}
             />
           </div>
         )}
