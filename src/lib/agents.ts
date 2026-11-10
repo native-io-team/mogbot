@@ -1642,6 +1642,8 @@ export interface ImportProposal {
   foreignPaths?: string[];
   /** The other assistant's tools its text names, and the nearest here (none: not available). */
   foreignTools?: { name: string; here?: string }[];
+  /** A recipe's key look and the independence it suggests (applied only when stricter). */
+  look?: { colorway?: string; icon?: string; key?: string; independence?: AgentIndependence };
 }
 
 /** The agent here a proposal's name is taken by, with everything Replace would change. */

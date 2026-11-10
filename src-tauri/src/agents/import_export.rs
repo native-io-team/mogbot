@@ -119,6 +119,8 @@ pub struct Agent {
     pub preferences: String,
     pub context: String,
     pub sent: BTreeSet<&'static str>,
+    /// A recipe's key look and suggested independence (`recipe`).
+    pub look: Option<review::ProposedLook>,
 }
 
 /// Everything read from one file, folder or reply.
@@ -376,6 +378,9 @@ fn merge_agent(into: &mut Agent, next: Agent) {
     text(&mut into.preferences, next.preferences);
     text(&mut into.context, next.context);
     into.is_main |= next.is_main;
+    if into.look.is_none() {
+        into.look = next.look;
+    }
     fn add<T: PartialEq>(list: &mut Vec<T>, more: Vec<T>) {
         for m in more {
             if !list.contains(&m) {
@@ -536,6 +541,9 @@ pub fn read_text(text: &str) -> Export {
             "The JSON".to_string()
         };
         match super::paste::parse_block(raw, &label) {
+            Ok(v) if super::recipe::is_recipe(&v) => {
+                super::recipe::read_value(&v, &label, &mut out)
+            }
             Ok(v) => out.add_value(v, &label),
             Err(p) => out.problems.push(p),
         }
@@ -732,6 +740,7 @@ pub fn to_review(e: &Export, chief: &str) -> (Review, Vec<String>, usize) {
             "watches": watches,
             "apps": apps,
             "logins": logins,
+            "look": a.look,
         });
         match review::proposal(format!("x{i}"), &args, chief) {
             Ok(p)

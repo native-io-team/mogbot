@@ -1,0 +1,130 @@
+/* Share an agent as a recipe (AgentRecipeModal.tsx): exactly what the file
+   holds, what was removed, and what is never in one. Semantic tokens only:
+   both themes. Copy and Save are neutral, never the accent. */
+
+.agent-recipe-modal {
+  width: min(560px, calc(100vw - var(--spacing-2xl))); /* css-ok: reading width */
+}
+
+.agent-recipe-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  max-height: 64vh; /* css-ok: the recipe scrolls inside the dialog */
+  overflow-y: auto;
+  padding: var(--spacing-md) var(--spacing-xl) var(--spacing-lg);
+}
+
+.agent-recipe-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-xl);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-recipe__lede,
+.agent-recipe__line,
+.agent-recipe__none {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+}
+
+.agent-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.agent-recipe__who {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.agent-recipe__name-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agent-recipe__name {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-primary);
+}
+
+.agent-recipe__role {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-recipe__removed {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-recessed);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-primary);
+}
+
+.agent-recipe__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.agent-recipe__heading {
+  margin: 0;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agent-recipe__instructions {
+  margin: 0;
+  max-height: 180px; /* css-ok: long briefings scroll in place */
+  overflow-y: auto;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-recessed);
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.agent-recipe__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-primary);
+}
+
+.agent-recipe__list--out {
+  color: var(--text-muted);
+}
+
+.agent-recipe__loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-lg);
+}
+
+.agent-recipe__error {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--accent-error);
+}

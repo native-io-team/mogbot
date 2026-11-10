@@ -25,6 +25,7 @@ import { useAgentsSelector, type AgentsState } from '../lib/agentsStore';
 import type { AppView } from '../lib/types';
 import { AGENT_EVENTS, OTHER_APP_NAME, otherAppExists, TEAM_ID } from '../lib/agents';
 import { DESCRIBE_START, ROLE_TEMPLATES } from '../lib/agentTemplates';
+import { SHARE_RECIPE_EVENT } from '../lib/agentRecipe';
 import {
   checkTeamReach,
   resumeTeamSetup,
@@ -40,6 +41,7 @@ type AgentsIntent =
   | { kind: 'ideas' }
   | { kind: 'logins' }
   | { kind: 'browser' }
+  | { kind: 'recipe'; agentId: string }
   | { kind: 'open'; agentId: string };
 let pendingIntent: AgentsIntent | null = null;
 const intentListeners = new Set<(intent: AgentsIntent) => void>();
@@ -68,6 +70,8 @@ export function useAgentsIntents(handlers: {
   onLogins?: () => void;
   /** "Let agents use your browser": the guided card. */
   onBrowser?: () => void;
+  /** Share an agent as a recipe (the Chief's `share_recipe`). */
+  onShareRecipe?: (agentId: string) => void;
 }) {
   const {
     onNewAgent,
@@ -78,6 +82,7 @@ export function useAgentsIntents(handlers: {
     onIdeas,
     onLogins,
     onBrowser,
+    onShareRecipe,
   } = handlers;
   useEffect(() => {
     const listener = (intent: AgentsIntent) => {
@@ -88,6 +93,7 @@ export function useAgentsIntents(handlers: {
       else if (intent.kind === 'ideas') onIdeas();
       else if (intent.kind === 'logins') onLogins?.();
       else if (intent.kind === 'browser') onBrowser?.();
+      else if (intent.kind === 'recipe') onShareRecipe?.(intent.agentId);
       else onOpenAgent(intent.agentId);
     };
     intentListeners.add(listener);
@@ -99,7 +105,17 @@ export function useAgentsIntents(handlers: {
     return () => {
       intentListeners.delete(listener);
     };
-  }, [onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas, onLogins, onBrowser]);
+  }, [
+    onNewAgent,
+    onImportAgents,
+    onApps,
+    onOpenAgent,
+    onSearch,
+    onIdeas,
+    onLogins,
+    onBrowser,
+    onShareRecipe,
+  ]);
 }
 
 /** What the "Open <agent>" commands name: a status or a new message doesn't change them. */
@@ -165,6 +181,14 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
   useEffect(() => {
     const unlisten = listen<string>(AGENT_EVENTS.open, (e) => {
       requestAgentsIntent({ kind: 'open', agentId: e.payload });
+      setView('agents');
+    });
+    return () => void unlisten.then((off) => off());
+  }, [setView]);
+  // The Chief's `share_recipe`: that agent's recipe, on the desk.
+  useEffect(() => {
+    const unlisten = listen<string>(SHARE_RECIPE_EVENT, (e) => {
+      requestAgentsIntent({ kind: 'recipe', agentId: e.payload });
       setView('agents');
     });
     return () => void unlisten.then((off) => off());

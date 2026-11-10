@@ -117,6 +117,7 @@ import {
   newestResults,
   foldResultReplies,
   sendAgentMessage,
+  reviewTextImport,
   stopAgent,
   type Agent,
   type AgentTurn,
@@ -167,6 +168,7 @@ import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 import { guardRow, useGuardedRows } from './AgentsErrorBoundary';
 import { AreaBoundary } from '../primitives/AreaBoundary';
+import { isRecipeFile, looksLikeRecipe } from '../../lib/agentRecipe';
 
 /**
  * The Chief's first open: three workflows that run without the user
@@ -597,11 +599,12 @@ export const AgentChat = memo(function AgentChat({
 
   const toastError = useCallback((message: string) => showToast(message, 'error'), [showToast]);
   const attachments = useComposerAttachments(toastError);
+  // A recipe file isn't an attachment: the window's drop puts it up for review.
   const { over: dropping, dom: dropHandlers } = useFileDrop(
     sectionRef,
     engineReady,
-    (paths) => void attachments.addPaths(paths),
-    attachments.addFiles
+    (paths) => void attachments.addPaths(paths.filter((p) => !isRecipeFile(p))),
+    (files) => attachments.addFiles(files.filter((f) => !isRecipeFile(f.name)))
   );
   const { pick } = attachments;
   const pickFiles = useCallback(() => {
@@ -1262,6 +1265,17 @@ export const AgentChat = memo(function AgentChat({
     const canSend = draft.trim().length > 0 || staged.length > 0 || quotes.length > 0;
     if (!canSend || dictating) return;
     const typed = draft.trim();
+    // A recipe pasted into the Chief's chat is never a message to it: the
+    // app reads it (no turn, no model) and puts its review card up here.
+    if (agent.isMain && staged.length === 0 && quotes.length === 0 && looksLikeRecipe(typed)) {
+      setDraft('');
+      void reviewTextImport(typed).catch((error: unknown) => {
+        setDraft(typed);
+        const err = asCommandError(error);
+        showToast(err.type === 'Validation' ? err.reason : formatCommandError(err), 'error');
+      });
+      return;
+    }
     setDraft('');
     setQuotes([]);
     setRevising(null);

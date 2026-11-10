@@ -120,7 +120,21 @@ pub const TOOLS: &[Def] = &[
             })
         },
     },
+    Def {
+        name: "share_recipe",
+        description: "The user wants to share an agent as a recipe (\"share Finance as a recipe\", \"send my research agent to a friend\"): opens the share sheet for `agent` on the Mac, which shows exactly what the recipe holds (its instructions, routines as words, the apps it needs by name, its look) with personal details removed and counted; never its memory, conversations or logins. The user saves the file or copies it there; you never see or send it. Say in one line that it's open on the Mac.",
+        schema: || {
+            json!({
+                "type": "object",
+                "properties": { "agent": { "type": "string", "description": "Its name." } },
+                "required": ["agent"]
+            })
+        },
+    },
 ];
+
+/// The desk opens an agent's recipe share sheet on this: payload is its id.
+pub const EVENT_SHARE_RECIPE: &str = "agents-share-recipe";
 
 /// The desk opens Import agents on this, at the copy-and-paste step.
 pub const EVENT_OPEN_IMPORT: &str = "agents-open-import";
@@ -245,7 +259,26 @@ pub async fn call(
             bring_agents_over(app, args).await
         }
         "open_settings" => open_settings(app, caller, args),
+        "share_recipe" => share_recipe(app, args),
         _ => error("Unknown tool"),
+    }
+}
+
+/// Opening the share sheet changes nothing and sends nothing: the user
+/// saves or copies the recipe on the Mac.
+fn share_recipe(app: &AppHandle, args: &Value) -> Value {
+    let Some(who) = arg(args, "agent") else {
+        return error("`agent` is required: its name.");
+    };
+    match store::find(who) {
+        Ok(Some(a)) => {
+            let _ = app.emit(EVENT_SHARE_RECIPE, a.id.clone());
+            text(format!(
+                "Opened {}'s recipe on the Mac: the user sees what's in it, then saves the file or copies it. Say so in one line.",
+                a.name
+            ))
+        }
+        _ => error(format!("There's no agent called {who}.")),
     }
 }
 

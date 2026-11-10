@@ -2148,6 +2148,28 @@ pub async fn agents_import_file_review(
     .await
 }
 
+/// An agent as a recipe, exactly as it would be saved or copied: its
+/// definition with anything personal removed and counted (`agents::recipe`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_recipe_preview(
+    agent_id: String,
+) -> Result<agents::recipe::Preview, CommandError> {
+    blocking(move || agents::recipe::for_agent(&agent_id)).await
+}
+
+/// Save the recipe where the user picked, only if it's still what the
+/// preview showed (`shown`: its JSON).
+#[tauri::command]
+#[tracing::instrument(skip(shown))]
+pub async fn agents_recipe_save(
+    agent_id: String,
+    path: String,
+    shown: String,
+) -> Result<(), CommandError> {
+    blocking(move || agents::recipe::save(&agent_id, std::path::Path::new(&path), &shown)).await
+}
+
 /// The other app's agents on this Mac, and what importing them would do;
 /// `None` when it isn't here or has none. Reads only.
 #[tauri::command]

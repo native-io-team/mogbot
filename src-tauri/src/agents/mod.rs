@@ -148,6 +148,7 @@ pub mod quick_entry;
 pub mod quiet;
 pub mod quota;
 pub mod reach;
+pub mod recipe;
 pub mod remember;
 pub mod results;
 pub mod review;

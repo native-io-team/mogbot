@@ -1343,6 +1343,8 @@ export interface ImportProposal {
   clash?: ImportClash;
   foreignPaths?: string[];
   foreignTools?: { name: string; here?: string }[];
+  /** A recipe's key look and the independence it suggests (applied only when stricter). */
+  look?: { colorway?: string; icon?: string; key?: string; independence?: AgentIndependence };
 }
 
 export interface ImportClash {

@@ -144,6 +144,51 @@ pub struct Proposal {
     /// The other assistant's tools its text names, and what is nearest here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub foreign_tools: Vec<super::arrival::ToolNote>,
+    /// A recipe's look and suggested independence, each checked against
+    /// what this build has (`recipe::apply_look` applies it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub look: Option<ProposedLook>,
+}
+
+/// A key look and an independence a recipe suggests: only ids this build
+/// draws and levels it knows; anything else is dropped, never guessed.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedLook {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colorway: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub independence: Option<super::independence::Level>,
+}
+
+impl ProposedLook {
+    pub fn read(
+        colorway: Option<&str>,
+        icon: Option<&str>,
+        key: Option<&str>,
+        independence: Option<&str>,
+    ) -> Option<ProposedLook> {
+        let id = |v: Option<&str>| v.map(|s| s.trim().to_ascii_lowercase());
+        let look = ProposedLook {
+            colorway: id(colorway).filter(|c| super::keys::is_colorway(c)),
+            icon: id(icon).filter(|i| super::keys::is_icon(i)),
+            key: key.and_then(super::keys::normalize_bound_key),
+            independence: independence.and_then(|l| super::independence::Level::parse(l).ok()),
+        };
+        (look != ProposedLook::default()).then_some(look)
+    }
+
+    /// From a proposal's arguments (`{"look": {...}}`, as `to_review` writes it).
+    fn from_args(v: Option<&serde_json::Value>) -> Option<ProposedLook> {
+        let v = v?;
+        let s = |k: &str| v.get(k).and_then(|x| x.as_str());
+        let level = v.get("independence").and_then(|x| x.as_str());
+        ProposedLook::read(s("colorway"), s("icon"), s("key"), level)
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -590,6 +635,7 @@ pub fn proposal(key: String, args: &serde_json::Value, chief: &str) -> Result<Pr
         clash: None,
         foreign_paths: Vec::new(),
         foreign_tools: Vec::new(),
+        look: ProposedLook::from_args(args.get("look")),
     };
     if let Some(what) = secret_in(&p) {
         return Err(format!(
@@ -853,6 +899,12 @@ fn apply_one(
         source,
     )?;
     import::add_routines(&agent, &routines, true, &mut summary);
+    // A recipe's look and independence, on a new agent only: Replace keeps
+    // the one here as the user set it up.
+    let look_lines = match (&p.look, replaced) {
+        (Some(look), false) => super::recipe::apply_look(&agent.id, look),
+        _ => Vec::new(),
+    };
     // Last, so it names what is now in its home.
     super::arrival::arrive(&agent.id, source)?;
     if let Some(app) = app {
@@ -868,6 +920,10 @@ fn apply_one(
         } else {
             super::team_setup::import_note(source)
         };
+        let note = std::iter::once(note)
+            .chain(look_lines)
+            .collect::<Vec<_>>()
+            .join(" ");
         let _ = runner::record(app, runner::new_message(&agent.id, MessageKind::Note, note));
     }
     Ok((agent.name, replaced, summary.routines_refused, agent.id))
