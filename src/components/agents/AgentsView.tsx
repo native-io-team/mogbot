@@ -97,6 +97,7 @@ import {
   CollaboratorsIcon,
   CommentIcon,
   EditFieldIcon,
+  GraduationCapIcon,
   EditIcon,
   EyeIcon,
   EyeOffIcon,
@@ -194,6 +195,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     open: boolean;
     agent: Agent | null;
     tab?: EditorTab;
+    /** Scrolled to one section on opening (⌘K "What … knows how to do"). */
+    focus?: 'skills';
     /** Creating: the ready-made agent it opens on. */
     template?: string;
   }>({
@@ -752,6 +755,15 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
               keywords: ['agents', 'memory', 'remember', 'forget', 'claude.md', 'facts'],
               run: () => setEditor({ open: true, agent: selected, tab: 'memory' }),
             },
+            {
+              // At the foot of a long editor: found by name here, as on the phone's agent sheet.
+              id: 'agents.skills',
+              title: `What ${selected.name} knows how to do…`,
+              icon: <GraduationCapIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['agents', 'skills', 'learned', 'save what it learns', 'how to', 'steps'],
+              run: () => setEditor({ open: true, agent: selected, focus: 'skills' }),
+            },
           ]
         : []),
       // The open agent's own actions: everything in its … menu, by name.
@@ -1192,12 +1204,13 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
       <AgentEditorModal
         key={
           editor.open
-            ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.template ?? ''}`
+            ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.focus ?? ''}-${editor.template ?? ''}`
             : 'closed'
         }
         isOpen={editor.open}
         agent={editor.agent}
         initialTab={editor.tab}
+        initialFocus={editor.focus}
         initialTemplate={editor.template}
         takenColors={agents.map((a) => a.color)}
         onClose={() => setEditor({ open: false, agent: null })}

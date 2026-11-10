@@ -89,6 +89,25 @@ describe('AgentSkills in the editor', () => {
     });
   });
 
+  it('opened for it (⌘K "What … knows how to do"), it scrolls into view', () => {
+    const scroll = vi.fn();
+    const was = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scroll,
+    });
+    try {
+      const { unmount } = render(<AgentSkills agent={ledger} />);
+      expect(scroll).not.toHaveBeenCalled();
+      unmount();
+      render(<AgentSkills agent={ledger} focus />);
+      expect(scroll).toHaveBeenCalledWith({ block: 'start' });
+    } finally {
+      if (was) Object.defineProperty(Element.prototype, 'scrollIntoView', was);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
   it('says what happens when it has none', async () => {
     api.agentSkills.mockResolvedValue({ agentId: 'a1', setting: 'off', skills: [] });
     store.value = { agents: [{ ...ledger, learnSkills: 'off' }] };
