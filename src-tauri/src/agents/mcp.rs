@@ -1166,8 +1166,28 @@ pub fn routine_line_text(c: &schedule::CheckIn) -> String {
             short_line(&c.note),
             super::watch::cost_words(w)
         ),
-        None => format!("Set up a routine: {}", short_line(&c.note)),
+        None => routine_time_line(c, &chrono::Local, store::now_ms()),
     }
+}
+
+/// A time routine's line: what, when, and its first run, so a new routine
+/// is seen to be set ("Set up a routine: Brief me on Acme · every weekday at
+/// 8:00 AM, first run tomorrow at 8:00 AM").
+pub fn routine_time_line<Tz: chrono::TimeZone>(c: &schedule::CheckIn, tz: &Tz, now: i64) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let at = super::failure::clock_phrase(tz, c.next_at, now);
+    // "at 9:00 AM" alone is today.
+    let at = match at.strip_prefix("at ") {
+        Some(time) => format!("today at {time}"),
+        None => at,
+    };
+    let when = match &c.repeat {
+        Some(r) => format!("{}, first run {at}", schedule::describe(r)),
+        None => format!("once, {at}"),
+    };
+    format!("Set up a routine: {} · {when}", short_line(&c.note))
 }
 
 /// `watch_for`'s source, from its flat arguments.
@@ -1937,11 +1957,14 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
             for note in create_notes(caller, &agent, &on) {
                 let _ = runner::record(app, note);
             }
-            let set = super::draft::add_routines(app, &agent.id, &routines);
-            // Its first open: a welcome, and starters unless it's already on a task.
+            let added = super::draft::add_routines(&agent.id, &routines);
+            let set = added.set;
+            // Its first open: a welcome, and starters unless it's already on a
+            // task; then what it will do on its own.
             let opening = super::starters::opening_arg(args);
             super::starters::open(app, &agent.id, &opening, arg(args, "first_task").is_none())
                 .await;
+            added.post(app);
             let routines_said = match (routines.len(), set) {
                 (0, _) => String::new(),
                 (n, s) if s == n => format!(" with {s} routine{}", if s == 1 { "" } else { "s" }),
