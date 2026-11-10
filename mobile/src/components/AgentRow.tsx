@@ -305,6 +305,20 @@ function RowBody({
   // Waiting on you, a turn that didn't finish, or out of usage: the state as
   // a pill, the rest in the line's own ink (one coloured thing per row).
   const pill = state && live ? rowPill(agent, line) : null;
+  // Unread is the line's ink, not a dot: the right edge is the key's and the time's.
+  const unread = agent.unread > 0;
+  // What the key says, in words for VoiceOver ("Inbox, working").
+  const keyState = live ? agentKeyState(agent, running) : 'idle';
+  const keyWords =
+    keyState === 'working'
+      ? ', working'
+      : keyState === 'live'
+        ? ', live'
+        : keyState === 'paused'
+          ? ', paused'
+          : '';
+  // You're driving it: "Live", in green, leads the line (as on the desk).
+  const driving = live && !!agent.takeover && !needsYou(agent);
   const cut = line.indexOf(' · ');
   // Steadied while it works, so step → "Thinking" → step doesn't flicker.
   const head = useSteadyLine(cut < 0 ? line : line.slice(0, cut), running);
@@ -337,7 +351,7 @@ function RowBody({
       ]}
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
-      accessibilityLabel={`${agent.name}. ${line}${agent.unread ? '. Unread' : ''}${
+      accessibilityLabel={`${agent.name}${keyWords}. ${line}${unread ? '. Unread' : ''}${
         live ? '' : '. Last known'
       }`}
       accessibilityActions={actions.map((a) => ({ name: a.id, label: a.title }))}
@@ -353,7 +367,7 @@ function RowBody({
           id={agent.id}
           name={agent.name}
           color={agent.color}
-          state={live ? agentKeyState(agent, running) : 'idle'}
+          state={keyState}
           size={keySize.lg}
         />
       </View>
@@ -411,9 +425,10 @@ function RowBody({
             variant="small"
             numberOfLines={stacked ? 3 : 1}
             maxFontSizeMultiplier={NAME_SCALE}
-            color={colors.textSecondary}
+            color={unread ? colors.textStrong : colors.textSecondary}
             style={{ flex: 1 }}
           >
+            {driving && <T color={colors.accentSuccess}>Live · </T>}
             {/* Working: the steadied step, so step → "Thinking" → step doesn't flicker. */}
             {pill ? pill.rest : `${head}${tail}`}
           </T>
@@ -423,7 +438,9 @@ function RowBody({
             beside them as well. Every other state keeps its mark.
           */}
           <View style={styles.mark}>
-            {!needsYou(agent) && !running && <StatusMark agent={agent} live={live} onMac={onMac} />}
+            {!needsYou(agent) && !running && (
+              <StatusMark agent={live ? { ...agent, unread: 0 } : agent} live={live} onMac={onMac} />
+            )}
           </View>
         </View>
         {stacked && time}

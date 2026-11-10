@@ -9,7 +9,7 @@
  */
 
 import { shareStructure } from '../../../lib/structure';
-import { teamLine, workingCount, type Agent, type RoomView } from '@shipstudio/companion-protocol';
+import { type Agent, type RoomView } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { takeExitNotice } from '../../../lib/crash';
@@ -38,7 +38,7 @@ import { useGlance } from '../../../lib/glance';
 import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
 import { DemoCard } from '../../../components/DemoCard';
-import { Button, Dot, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
+import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
 import { formatAgo, needsYou, pendingApproval } from '../../../lib/agents';
 import { buildHome } from '../../../lib/home';
@@ -69,8 +69,7 @@ import {
 import { makeStyles, useColors } from '../../../lib/appearance';
 
 type Row =
-  | { kind: 'header'; key: string; title: string; team?: number }
-  | { kind: 'team'; key: string; working: number }
+  | { kind: 'header'; key: string; title: string }
   | { kind: 'agent'; key: string; agent: Agent; quiet?: boolean }
   | { kind: 'room'; key: string; room: RoomView }
   | { kind: 'hidden'; key: string; count: number };
@@ -201,12 +200,8 @@ export default function Agents() {
     const add = (a: Agent) =>
       out.push({ kind: 'agent', key: a.id, agent: a, quiet: home.quiet.has(a.id) });
     // Offline (to say "as of"), or with Rooms below: the agents get their own label.
-    // The team at a glance, as on the desk: "3 working" or "All quiet". Only
-    // while connected: offline, who is working isn't known.
-    const working = live ? workingCount(overview.agents) : undefined;
-    if (!live || rooms?.length)
-      out.push({ kind: 'header', key: 'h-rest', title: 'Agents', team: working });
-    else if (working !== undefined) out.push({ kind: 'team', key: 'team', working });
+    // No "3 working" line: each key says whether its agent works, is free or needs you.
+    if (!live || rooms?.length) out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
     if (home.chief) add(home.chief);
     home.pinned.forEach(add);
     home.rest.forEach(add);
@@ -357,12 +352,7 @@ export default function Agents() {
             title={item.title}
             live={live}
             first={index === 0}
-            action={item.team !== undefined ? <TeamLine working={item.team} /> : undefined}
           />
-        ) : item.kind === 'team' ? (
-          <View style={styles.team}>
-            <TeamLine working={item.working} />
-          </View>
         ) : item.kind === 'hidden' ? (
           <Pressable
             onPress={() => {
@@ -503,23 +493,6 @@ function SectionHeader({
   );
 }
 
-/**
- * "3 working", with a running dot (status, never the accent), or "All quiet".
- * Always there while connected, so the rows under it never move.
- */
-function TeamLine({ working }: { working: number }) {
-  const colors = useColors();
-  const styles = useStyles();
-  return (
-    <View style={styles.teamLine} accessibilityRole="text">
-      <Dot color={working > 0 ? colors.statusRunning : colors.textFaint} size={space.tight} />
-      <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={chromeScale}>
-        {teamLine(working)}
-      </T>
-    </View>
-  );
-}
-
 /** The Mac said no for good: removed, or one side needs updating. */
 function Refused() {
   const colors = useColors();
@@ -626,8 +599,6 @@ const useStyles = makeStyles((colors) => ({
   },
   sectionLabel: { flex: 1, letterSpacing: 0.4 },
   sectionNext: { paddingTop: space.xl },
-  team: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs },
-  teamLine: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   quota: { paddingHorizontal: space.lg, paddingTop: space.md },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
   hiddenToggle: {

@@ -56,6 +56,7 @@ import {
   failurePill,
   type StatusTone,
   needsYou,
+  usageLimited,
   roleWithoutPath,
   type Agent,
   type AgentMessage,
@@ -65,7 +66,6 @@ import { groupLine, groupRequests } from '../../lib/agentRequests';
 import { secretTitle } from '../../lib/agentSecrets';
 import { kbd } from '../../lib/shortcuts';
 import { previewText } from '../../../packages/companion-protocol/src/preview';
-import { teamLine, workingCount } from '../../../packages/companion-protocol/src/attention';
 
 interface AgentsSidebarProps {
   agents: Agent[];
@@ -155,6 +155,19 @@ function rowPill(
   if (agent.takeover || agent.status.state === 'working') return null;
   const failure = failedTurn(agent);
   return failure ? failurePill(failure, previewText(agent.preview), agent.engine) : null;
+}
+
+/**
+ * What the key and the row's ink say, in words for a screen reader: ", working",
+ * ", paused", ", unread". The line itself says needs-your-OK and the time.
+ */
+function rowStateWords(agent: Agent, unread: boolean): string {
+  const words: string[] = [];
+  if (agent.takeover && !needsYou(agent)) words.push('live');
+  else if (agent.status.state === 'working' && !needsYou(agent)) words.push('working');
+  else if (usageLimited(agent)) words.push('paused');
+  if (unread) words.push('unread');
+  return words.length ? `, ${words.join(', ')}` : '';
 }
 
 /** The row's second line takes the colour of its state. */
@@ -281,7 +294,6 @@ export function AgentsSidebar({
   onNewRoom,
 }: AgentsSidebarProps) {
   const searching = query.trim().length > 0;
-  const working = workingCount(agents);
   // By attention (waiting on you, working, recent), held still while the
   // list is in use so a row never moves under the pointer, and re-sorted at
   // most every few seconds.
@@ -338,12 +350,6 @@ export function AgentsSidebar({
         />
       ) : (
         <>
-          {/* The team at a glance: one calm line, always there so the rows
-              under it never move. The dot is status (running), never the accent. */}
-          <div className="agents-list__team" data-working={working > 0 || undefined}>
-            <span className="agents-list__team-dot" aria-hidden="true" />
-            <span className="agents-list__team-line">{teamLine(working)}</span>
-          </div>
           {/* The Chief first, always (as on the phone); then what waits on you.
               How many wait is said once, on the bell (`InFlightBell`); each
               waiting row says it once more, in its own pill. */}
@@ -430,6 +436,8 @@ const AgentRow = memo(function AgentRow({
   const lines = useAgentsSelector((s) => (needsYou(agent) ? s.messages[agent.id] : undefined));
   const asking = needsYou(agent) ? askingLine(agent, lines) : null;
   const pill = rowPill(agent, asking);
+  // Read already when it's the one open.
+  const unread = !current && agent.unread > 0;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -442,6 +450,7 @@ const AgentRow = memo(function AgentRow({
           data-role={roleWithoutPath(agent.role ?? '') || undefined}
           data-hidden={agent.hidden || undefined}
           data-arrived={arrived || undefined}
+          data-unread={unread || undefined}
           aria-current={current ? 'true' : undefined}
           onPointerEnter={tooltipIfTruncated}
           onClick={() => onSelect(agent.id)}
@@ -479,26 +488,15 @@ const AgentRow = memo(function AgentRow({
               </span>
             )}
           </span>
+          {/* The key says working, free or needs you, and unread is the row's
+              ink, so the right edge stays clean. Said in words for a screen
+              reader (the elapsed time is already in the line). Only the
+              collapsed rail, with no line to read, keeps a mark on the badge. */}
+          <span className="sr-only">{rowStateWords(agent, unread)}</span>
           <span className="agents-list__status">
-            {/* Read already when it's the one open: no unread dot for it.
-                With a pill the state is said there, so the column keeps one
-                meaning (unread; working has its own spinner) and the state
-                dot shows only on the collapsed rail, where the pill can't. */}
-            {pill ? (
-              <>
-                <span className="agents-list__rail-mark">
-                  <AgentMark agent={{ ...agent, unread: 0 }} />
-                </span>
-                {!current && agent.unread > 0 && (
-                  <span
-                    className="sidebar-row-dot dot-unread agents-list__row-unread"
-                    aria-label="Unread"
-                  />
-                )}
-              </>
-            ) : (
-              <AgentMark agent={current ? { ...agent, unread: 0 } : agent} />
-            )}
+            <span className="agents-list__rail-mark">
+              <AgentMark agent={unread ? agent : { ...agent, unread: 0 }} />
+            </span>
           </span>
         </button>
       </ContextMenuTrigger>
