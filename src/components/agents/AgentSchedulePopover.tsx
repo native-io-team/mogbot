@@ -34,7 +34,7 @@
  * @module components/agents/AgentSchedulePopover
  */
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
   ArrowLeftIcon,
   ChevronIcon,
@@ -269,13 +269,6 @@ function ScheduleBody({
             Runs {routineConversationLine(conversations, editing.id)}
           </p>
         )}
-        {editing && editing.repeat && !editing.watch && (
-          <AgentRoutineModel
-            agent={agent}
-            // The live row: the editor opened on a copy.
-            routine={items.find((c) => c.id === editing.id) ?? editing}
-          />
-        )}
         {!editing && (
           <div className="agent-schedule__mode">
             <SegmentedControl
@@ -311,6 +304,16 @@ function ScheduleBody({
             editing={editing}
             busy={busy}
             error={error}
+            // Its model is a fine-tuning, not the first question: under What, not over When.
+            model={
+              editing?.repeat ? (
+                <AgentRoutineModel
+                  agent={agent}
+                  // The live row: the editor opened on a copy.
+                  routine={items.find((c) => c.id === editing.id) ?? editing}
+                />
+              ) : null
+            }
             onCancel={items.length > 0 || editing ? close : undefined}
             onSave={(phrase, note, then) =>
               void run(async () => {
@@ -423,6 +426,7 @@ function RoutinePicker({
   editing,
   busy,
   error,
+  model,
   onCancel,
   onSave,
 }: {
@@ -430,6 +434,8 @@ function RoutinePicker({
   editing: CheckIn | null;
   busy: boolean;
   error: string | null;
+  /** An existing repeating routine's model picker, shown under What. */
+  model?: ReactNode;
   /** Absent when there's nothing else to show (no routines yet). */
   onCancel?: () => void;
   /** `phrase` is empty for an edit that left When as it was; `then` is every step after What. */
@@ -633,6 +639,8 @@ function RoutinePicker({
         />
         <AgentStepsEditor steps={then} onChange={setThen} onKeyDown={onKeyDown} />
       </div>
+
+      {model}
 
       <div className="agent-schedule__echo" aria-live="polite">
         {when && <p className="agent-schedule__echo-line">{routineEcho(when, note)}</p>}
