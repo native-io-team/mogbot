@@ -26,7 +26,7 @@ import { Icon, InsetDivider, Segmented, SheetPage, T, groupSurface } from '../co
 import { plainText } from '../lib/actions';
 import { folderName } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
-import { lineQuote, splitPath, type DiffRow } from '../lib/diffModel';
+import { lineQuote, reviewOrder, splitPath, type DiffRow } from '@shipstudio/companion-protocol';
 import { setComposer } from '../lib/drafts';
 import { haptic } from '../lib/haptics';
 import { loadReviewed, setReviewed, useReviewed } from '../lib/reviewed';
@@ -173,6 +173,10 @@ export default function Diff() {
     );
   }
 
+  // The order a reviewer wants: the change first, then its tests, then upkeep.
+  const groups = reviewOrder(changes.files);
+  const ordered = groups.flatMap((g) => g.files);
+  const most = Math.max(1, ...changes.files.map((x) => (x.added ?? 0) + (x.removed ?? 0)));
   const done = changes.files.filter((f) => reviewed.has(f.path)).length;
   const total = changes.files.length;
   const toggle = (path: string, on: boolean) => {
@@ -214,7 +218,19 @@ export default function Diff() {
   const children: React.ReactNode[] = [headerBlock];
   const sticky: number[] = [];
   if (tab === 'files') {
-    changes.files.forEach((f) => {
+    ordered.forEach((f) => {
+      const group = groups.find((g) => g.files[0] === f);
+      if (group && groups.length > 1)
+        children.push(
+          <T
+            key={`g-${group.group}`}
+            variant="caption"
+            color={colors.textMuted}
+            style={styles.groupTitle}
+          >
+            {group.title.toUpperCase()}
+          </T>
+        );
       sticky.push(children.length);
       children.push(
         <View
@@ -292,22 +308,35 @@ export default function Diff() {
         </View>
       );
     }
-    children.push(
-      <View key="list" style={styles.group}>
-        {changes.files.map((f, i) => (
-          <View key={f.path}>
-            <FileRow
-              file={f}
-              reviewed={reviewed.has(f.path)}
-              most={Math.max(1, ...changes.files.map((x) => (x.added ?? 0) + (x.removed ?? 0)))}
-              onPress={() => openFile(f.path)}
-              onToggle={(on) => toggle(f.path, on)}
-            />
-            {i < changes.files.length - 1 && <InsetDivider />}
-          </View>
-        ))}
-      </View>
-    );
+    for (const g of groups) {
+      if (groups.length > 1)
+        children.push(
+          <T
+            key={`g-${g.group}`}
+            variant="caption"
+            color={colors.textMuted}
+            style={styles.groupTitle}
+          >
+            {g.title.toUpperCase()}
+          </T>
+        );
+      children.push(
+        <View key={`list-${g.group}`} style={styles.group}>
+          {g.files.map((f, i) => (
+            <View key={f.path}>
+              <FileRow
+                file={f}
+                reviewed={reviewed.has(f.path)}
+                most={most}
+                onPress={() => openFile(f.path)}
+                onToggle={(on) => toggle(f.path, on)}
+              />
+              {i < g.files.length - 1 && <InsetDivider />}
+            </View>
+          ))}
+        </View>
+      );
+    }
     children.push(
       <T key="hint" variant="caption" color={colors.textMuted} style={styles.hint}>
         Long press a line in Files to ask for a change there.
@@ -457,9 +486,7 @@ function FileRow({
         </View>
         <View style={styles.fileCounts}>
           <T variant="caption" color={colors.textMuted} style={styles.count}>
-            {!!file.added && (
-              <T variant="caption" color={colors.diffAdd}>{`+${file.added}`}</T>
-            )}
+            {!!file.added && <T variant="caption" color={colors.diffAdd}>{`+${file.added}`}</T>}
             {!!file.removed && (
               <T variant="caption" color={colors.diffDel}>{` −${file.removed}`}</T>
             )}
@@ -494,9 +521,7 @@ function FileHead({
       </View>
       <T variant="caption" color={colors.textMuted} style={styles.count}>
         {!!file.added && <T variant="caption" color={colors.diffAdd}>{`+${file.added}`}</T>}
-        {!!file.removed && (
-          <T variant="caption" color={colors.diffDel}>{` −${file.removed}`}</T>
-        )}
+        {!!file.removed && <T variant="caption" color={colors.diffDel}>{` −${file.removed}`}</T>}
       </T>
       <Tick on={reviewed} onToggle={onToggle} name={name} />
     </View>
@@ -511,6 +536,7 @@ const useStyles = makeStyles((colors) => ({
   count: { fontVariant: ['tabular-nums'] },
   said: { ...groupSurface(colors), padding: space.lg, gap: space.xs },
   hint: { textAlign: 'center' },
+  groupTitle: { marginTop: space.sm, marginBottom: -space.xs, letterSpacing: 0.4 },
   track: {
     height: space.xs,
     borderRadius: radius.pill,

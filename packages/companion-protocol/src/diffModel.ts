@@ -24,6 +24,11 @@ export interface DiffRow {
   newNo?: number;
   /** Set when the line has a pair to compare with: what changed in it. */
   spans?: Span[];
+  /**
+   * An unchanged line that git showed as removed and added only because its
+   * spacing or line breaks moved (a re-indent, a re-wrap): read as unchanged.
+   */
+  formatting?: boolean;
 }
 
 /** Unchanged lines folded away, opened with a tap. */
@@ -38,6 +43,8 @@ export interface Hunk {
   /** Where the hunk starts in the new file. */
   newStart: number;
   parts: (DiffRow | Fold)[];
+  /** Lines git marked changed that only moved their spacing, shown as unchanged. */
+  formatting: number;
 }
 
 const HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@ ?(.*)$/;
@@ -56,12 +63,14 @@ export function parseDiff(content: string): Hunk[] {
   let oldNo = 0;
   let newNo = 0;
   const flush = () => {
-    if (hunk)
-      hunks.push({
-        context: hunk.context,
-        newStart: hunk.newStart,
-        parts: fold(pairWords(hunk.rows)),
-      });
+    if (!hunk) return;
+    const quiet = quietFormatting(hunk.rows);
+    hunks.push({
+      context: hunk.context,
+      newStart: hunk.newStart,
+      parts: fold(pairWords(quiet.rows)),
+      formatting: quiet.count,
+    });
   };
   for (const line of content.replace(/\n$/, '').split('\n')) {
     const head = HUNK.exec(line);
@@ -83,6 +92,52 @@ export function parseDiff(content: string): Hunk[] {
   }
   flush();
   return hunks;
+}
+
+/** A line's text with every space and line break taken out: what the program reads. */
+const ink = (rows: DiffRow[]) => rows.map((r) => r.text.replace(/\s+/g, '')).join('');
+
+/**
+ * Structural, the way a reviewer reads it: a run of removed lines whose
+ * replacement says exactly the same once spacing and line breaks are set
+ * aside (a re-indent, a line re-wrapped) is not a change to what the code
+ * does. Its new lines are shown as unchanged, and counted, so the page shows
+ * the real change instead of the churn around it.
+ */
+function quietFormatting(rows: DiffRow[]): { rows: DiffRow[]; count: number } {
+  const out: DiffRow[] = [];
+  let count = 0;
+  let i = 0;
+  while (i < rows.length) {
+    if (rows[i].kind !== 'del') {
+      out.push(rows[i++]);
+      continue;
+    }
+    const delStart = i;
+    while (i < rows.length && rows[i].kind === 'del') i++;
+    const addStart = i;
+    while (i < rows.length && rows[i].kind === 'add') i++;
+    const dels = rows.slice(delStart, addStart);
+    const adds = rows.slice(addStart, i);
+    const same = adds.length > 0 && ink(dels) === ink(adds) && ink(adds).length > 0;
+    if (!same) {
+      out.push(...dels, ...adds);
+      continue;
+    }
+    count += dels.length + adds.length;
+    const oldFirst = dels[0].oldNo;
+    adds.forEach((a, k) =>
+      out.push({
+        kind: 'context',
+        text: a.text,
+        newNo: a.newNo,
+        // One line for one line keeps the old numbers; a re-wrap has none to give.
+        oldNo: dels.length === adds.length && oldFirst != null ? oldFirst + k : undefined,
+        formatting: true,
+      })
+    );
+  }
+  return { rows: out, count };
 }
 
 /**
@@ -205,4 +260,44 @@ export function lineQuote(path: string, row: DiffRow): string {
   const no = row.newNo ?? row.oldNo;
   const where = row.kind === 'del' ? `${path}, removed line ${no}` : `${path}:${no}`;
   return `${where}\n${row.text.trim()}`;
+}
+
+/** Where a file sits in a review: the change itself first, what checks it next, upkeep last. */
+export type ReviewGroup = 'main' | 'tests' | 'upkeep';
+
+export const REVIEW_GROUP_TITLE: Record<ReviewGroup, string> = {
+  main: 'The change',
+  tests: 'Tests',
+  upkeep: 'Setup and generated files',
+};
+
+const TEST = /(^|\/)(__tests__|tests?|spec|e2e)\/|\.(test|spec)\.[^/]+$|_test\.(go|py|rs)$/i;
+const UPKEEP =
+  /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|Cargo\.lock|Gemfile\.lock|poetry\.lock|Podfile\.lock|composer\.lock|go\.sum)$|\.(snap|min\.js|min\.css|map|lock)$|(^|\/)(dist|build|generated|__generated__|\.next|vendor)\/|\.gen\.[^/]+$|(^|\/)\.[^/]+rc(\.[a-z]+)?$|(^|\/)(tsconfig[^/]*|package)\.json$|\.config\.[cm]?[jt]s$/i;
+
+/** Which group a path belongs in, from its name alone. */
+export function reviewGroup(path: string): ReviewGroup {
+  if (UPKEEP.test(path)) return 'upkeep';
+  if (TEST.test(path)) return 'tests';
+  return 'main';
+}
+
+/**
+ * Files in the order a reviewer wants them, not the order the filesystem
+ * gave: the change first (the most-changed file leading), then its tests,
+ * then lockfiles, config and generated files. Groups with nothing are left out.
+ */
+export function reviewOrder<F extends { path: string; added?: number; removed?: number }>(
+  files: F[]
+): { group: ReviewGroup; title: string; files: F[] }[] {
+  const size = (f: F) => (f.added ?? 0) + (f.removed ?? 0);
+  return (['main', 'tests', 'upkeep'] as const)
+    .map((group) => ({
+      group,
+      title: REVIEW_GROUP_TITLE[group],
+      files: files
+        .filter((f) => reviewGroup(f.path) === group)
+        .sort((a, b) => size(b) - size(a) || a.path.localeCompare(b.path)),
+    }))
+    .filter((g) => g.files.length > 0);
 }

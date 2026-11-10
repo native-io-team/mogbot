@@ -4,14 +4,17 @@
  * line was really edited, and the quote a long press puts in the chat.
  */
 
+import { describe, expect, it } from 'vitest';
 import {
   lineQuote,
+  reviewGroup,
+  reviewOrder,
   parseDiff,
   splitPath,
   wordSpans,
   type DiffRow,
   type Fold,
-} from '../src/lib/diffModel';
+} from './diffModel';
 
 const rowsOf = (parts: (DiffRow | Fold)[]) =>
   parts.flatMap((p) => (p.kind === 'fold' ? p.rows : [p]));
@@ -81,5 +84,53 @@ describe('splitPath and lineQuote', () => {
     expect(lineQuote('src/a.ts', { kind: 'del', text: 'y', oldNo: 9 })).toBe(
       'src/a.ts, removed line 9\ny'
     );
+  });
+});
+
+describe('formatting-only changes', () => {
+  it('reads a re-indent as unchanged, and counts it', () => {
+    const [h] = parseDiff(
+      ['@@ -1,2 +1,2 @@', '-if (a) {', '-  go();', '+if (a) {', '+    go();'].join('\n')
+    );
+    const rows = rowsOf(h.parts);
+    expect(rows.every((r) => r.kind === 'context' && r.formatting)).toBe(true);
+    expect(rows.map((r) => [r.oldNo, r.newNo])).toEqual([
+      [1, 1],
+      [2, 2],
+    ]);
+    expect(h.formatting).toBe(4);
+  });
+
+  it('reads a line re-wrapped onto two as unchanged', () => {
+    const [h] = parseDiff(['@@ -1 +1,2 @@', '-call(a, b);', '+call(a,', '+  b);'].join('\n'));
+    expect(rowsOf(h.parts).map((r) => r.kind)).toEqual(['context', 'context']);
+  });
+
+  it('keeps a real edit hiding among spacing changes', () => {
+    const [h] = parseDiff(['@@ -1 +1 @@', '-  size = 12', '+    size = 16'].join('\n'));
+    expect(rowsOf(h.parts).map((r) => r.kind)).toEqual(['del', 'add']);
+    expect(h.formatting).toBe(0);
+  });
+});
+
+describe('review order', () => {
+  it('puts the change first, then tests, then upkeep', () => {
+    expect(reviewGroup('src/app/page.tsx')).toBe('main');
+    expect(reviewGroup('src/app/page.test.tsx')).toBe('tests');
+    expect(reviewGroup('__tests__/x.ts')).toBe('tests');
+    expect(reviewGroup('pnpm-lock.yaml')).toBe('upkeep');
+    expect(reviewGroup('package.json')).toBe('upkeep');
+    expect(reviewGroup('src/brand.gen.ts')).toBe('upkeep');
+    const order = reviewOrder([
+      { path: 'pnpm-lock.yaml', added: 300 },
+      { path: 'src/a.test.ts', added: 5 },
+      { path: 'src/small.ts', added: 1 },
+      { path: 'src/big.ts', added: 40, removed: 2 },
+    ]);
+    expect(order.map((g) => [g.group, g.files.map((f) => f.path)])).toEqual([
+      ['main', ['src/big.ts', 'src/small.ts']],
+      ['tests', ['src/a.test.ts']],
+      ['upkeep', ['pnpm-lock.yaml']],
+    ]);
   });
 });

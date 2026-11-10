@@ -3,19 +3,19 @@
  * the words that changed lit inside a changed line, long unchanged stretches
  * folded to a tap, and a long press on a line to ask the agent about it.
  * Lines never re-wrap: the file's body scrolls sideways as one, so the
- * numbers and marks stay lined up with what they number.
+ * numbers stay lined up with what they number. Dense, as Linear's Diffs: one
+ * number column, a thin coloured edge for a changed line (no +/− column), the
+ * code a size down, and lines that only moved their spacing shown unchanged.
  */
 
 import { memo, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
-import { type DiffRow, type Fold, type Hunk, parseDiff } from '../lib/diffModel';
+import { type DiffRow, type Fold, type Hunk, parseDiff } from '@shipstudio/companion-protocol';
 import { haptic } from '../lib/haptics';
 import { fonts, PRESSED, radius, space, type as typeScale, type Palette } from '../lib/theme';
 import { SideScroll } from './SideScroll';
 import { T } from './ui';
-
-const MARK: Record<DiffRow['kind'], string> = { add: '+', del: '−', context: ' ' };
 
 const inkOf = (colors: Palette, kind: DiffRow['kind']) =>
   kind === 'add' ? colors.diffAdd : kind === 'del' ? colors.diffDel : colors.textMuted;
@@ -32,7 +32,7 @@ function gutterWidth(hunks: Hunk[]): number {
       const rows = p.kind === 'fold' ? p.rows : [p];
       for (const r of rows) max = Math.max(max, r.newNo ?? 0, r.oldNo ?? 0);
     }
-  return String(max).length * typeScale.caption * 0.62 + space.sm;
+  return String(max).length * typeScale.caption * 0.62 + space.md;
 }
 
 export const ReviewDiff = memo(function ReviewDiff({
@@ -51,6 +51,7 @@ export const ReviewDiff = memo(function ReviewDiff({
   const gutter = useMemo(() => gutterWidth(hunks), [hunks]);
   const [width, setWidth] = useState(0);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  const formatting = useMemo(() => hunks.reduce((n, h) => n + h.formatting, 0), [hunks]);
 
   if (!hunks.length) {
     return (
@@ -77,7 +78,7 @@ export const ReviewDiff = memo(function ReviewDiff({
         }}
         style={({ pressed }) => [styles.fold, pressed && { opacity: 0.6 }]}
       >
-        <T variant="caption" color={colors.textMuted} style={{ width: gutter + space.lg }}>
+        <T variant="caption" color={colors.textMuted} style={{ width: gutter + space.md }}>
           ⋯
         </T>
         <T variant="caption" color={colors.textMuted}>
@@ -94,6 +95,11 @@ export const ReviewDiff = memo(function ReviewDiff({
         contentContainerStyle={{ flexGrow: 1 }}
       >
         <View style={[styles.inner, width > 0 && { minWidth: width }]}>
+          {formatting > 0 && (
+            <T variant="caption" color={colors.textMuted} style={styles.note}>
+              {`${formatting} line${formatting === 1 ? '' : 's'} only re-spaced, shown as unchanged`}
+            </T>
+          )}
           {hunks.map((h, hi) => (
             <View key={hi}>
               {(hi > 0 || h.newStart > 1) && (
@@ -151,17 +157,25 @@ const Line = memo(function Line({
       ]}
       testID={`line-${path}-${row.kind}-${no}`}
     >
-      <T variant="caption" color={colors.textMuted} style={[styles.no, { width: gutter }]}>
+      {/* A changed line's thin edge in its colour: the +/− said without a column. */}
+      <View
+        style={[
+          styles.edge,
+          row.kind !== 'context' && { backgroundColor: inkOf(colors, row.kind) },
+        ]}
+      />
+      <T
+        variant="caption"
+        color={row.kind === 'context' ? colors.textMuted : inkOf(colors, row.kind)}
+        style={[styles.no, { width: gutter }]}
+      >
         {String(no ?? '')}
-      </T>
-      <T variant="mono" color={inkOf(colors, row.kind)} style={styles.mark}>
-        {MARK[row.kind]}
       </T>
       <T
         variant="mono"
         color={row.kind === 'context' ? colors.textSecondary : colors.textPrimary}
         maxFontSizeMultiplier={1.5}
-        style={styles.text}
+        style={styles.code}
       >
         {row.spans
           ? row.spans.map((s, i) =>
@@ -170,7 +184,7 @@ const Line = memo(function Line({
                   key={i}
                   variant="mono"
                   color={colors.textStrong}
-                  style={{ backgroundColor: wordOf(colors, row.kind), fontFamily: fonts.mono }}
+                  style={[styles.word, { backgroundColor: wordOf(colors, row.kind) }]}
                 >
                   {s.text}
                 </T>
@@ -191,12 +205,19 @@ const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', alignItems: 'flex-start', paddingRight: space.md },
   no: {
     textAlign: 'right',
-    paddingLeft: space.sm,
-    paddingTop: space['2xs'],
+    lineHeight: Math.round(typeScale.caption * 1.6),
     fontVariant: ['tabular-nums'],
   },
-  mark: { width: space.lg, textAlign: 'center' },
-  text: {},
+  word: { fontFamily: fonts.mono, fontSize: typeScale.caption },
+  edge: { width: space['2xs'], alignSelf: 'stretch' },
+  // A size down from the chat's code: a phone's width holds a real line.
+  code: {
+    fontFamily: fonts.mono,
+    fontSize: typeScale.caption,
+    lineHeight: Math.round(typeScale.caption * 1.6),
+    paddingLeft: space.sm,
+  },
+  note: { paddingHorizontal: space.md, paddingTop: space.xs, paddingBottom: space['2xs'] },
   hunk: {
     paddingHorizontal: space.md,
     paddingVertical: space.xs,

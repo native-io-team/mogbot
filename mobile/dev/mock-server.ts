@@ -1135,12 +1135,14 @@ export function createMockServer(opts: MockOptions = {}) {
           from: 'a1b2c3d',
           to: 'e4f5a6b',
           files: [
-            { path: 'src/components/Hero.tsx', status: 'modified', added: 3, removed: 2 },
+            { path: 'pnpm-lock.yaml', status: 'modified', added: 4, removed: 1 },
+            { path: 'src/components/Hero.test.tsx', status: 'added', added: 6, removed: 0 },
+            { path: 'src/components/Hero.tsx', status: 'modified', added: 5, removed: 4 },
             { path: 'src/styles/hero.css', status: 'added', added: 12, removed: 0 },
           ],
-          fileCount: 2,
-          added: 15,
-          removed: 2,
+          fileCount: 4,
+          added: 27,
+          removed: 5,
           copy: {
             id: 'copy_hero',
             path: '/Users/you/ShipStudio/.worktrees/acme-site/acme-site-hero-copy-9f2c',
@@ -4217,10 +4219,15 @@ export function createMockServer(opts: MockOptions = {}) {
       const card = (messages.get(String(p.agentId)) ?? []).find((m) => m.id === p.messageId);
       const file = card?.changes?.files.find((f) => f.path === p.path);
       if (!file) return fail({ type: 'Other', message: 'That change card no longer exists.' });
-      const content =
-        file.status === 'added'
-          ? `@@ -0,0 +1,4 @@\n+.hero {\n+  padding-block: 1.5rem 2.5rem;\n+}\n+@media (min-width: 640px) { .hero { padding-block: 6rem 5rem; } }\n`
-          : `@@ -18,7 +18,8 @@ export function Hero() {\n   return (\n-      <section className="pt-24 pb-20">\n-        <h1 className="text-6xl">Ship faster</h1>\n+      <section className="hero">\n+        <h1 className="text-4xl sm:text-6xl">Ship faster</h1>\n+        <CTA className="mt-6" />\n       </section>\n   );\n }\n`;
+      // A lockfile, a test, a real edit beside a re-indent, and a new file:
+      // the review orders them and reads the re-indent as unchanged.
+      const contentOf: Record<string, string> = {
+        'pnpm-lock.yaml': `@@ -412,6 +412,9 @@ packages:\n   /clsx@2.1.1:\n     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B6bjWSnHedDLDwMvNP2V3J0ncw==}\n-    engines: {node: '>=6'}\n+    engines: {node: '>=18'}\n+  /cta@1.0.0:\n+    resolution: {integrity: sha512-Q2xHn4vL0n0t6m3rZ==}\n+    dev: false\n`,
+        'src/components/Hero.test.tsx': `@@ -0,0 +1,6 @@\n+import { render, screen } from '@testing-library/react';\n+import { Hero } from './Hero';\n+\n+it('offers the call to action', () => {\n+  render(<Hero />);\n+  expect(screen.getByRole('link', { name: 'Start free' })).toBeTruthy();\n`,
+        'src/components/Hero.tsx': `@@ -1,4 +1,4 @@\n import { CTA } from './CTA';\n-const sizes = {sm: 'text-4xl',\n-  lg: 'text-6xl'};\n+const sizes = { sm: 'text-4xl',\n+                lg: 'text-6xl' };\n \n@@ -18,7 +18,8 @@ export function Hero() {\n   return (\n-      <section className="pt-24 pb-20">\n-        <h1 className="text-6xl">Ship faster</h1>\n+      <section className="hero">\n+        <h1 className="text-4xl sm:text-6xl">Ship faster</h1>\n+        <CTA className="mt-6" />\n       </section>\n   );\n }\n`,
+        'src/styles/hero.css': `@@ -0,0 +1,4 @@\n+.hero {\n+  padding-block: 1.5rem 2.5rem;\n+}\n+@media (min-width: 640px) { .hero { padding-block: 6rem 5rem; } }\n`,
+      };
+      const content = contentOf[file.path] ?? '';
       return {
         filePath: file.path,
         isNewFile: file.status === 'added',
