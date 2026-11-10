@@ -229,7 +229,7 @@ function PageBand({
           {history && (
             <View style={styles.history} testID="page-history">
               {!!pageKeptByLine(page) && (
-                <T variant="small" color={colors.textSecondary} style={styles.kept}>
+                <T variant="caption" color={colors.textSecondary} style={styles.kept}>
                   {pageKeptByLine(page)}
                 </T>
               )}
