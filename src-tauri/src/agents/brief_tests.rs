@@ -281,6 +281,56 @@ fn an_error_line_alone_is_a_failure_with_its_count() {
     );
 }
 
+#[test]
+fn a_greeting_nobody_answered_is_not_work() {
+    // Found by the fake-engine suite: the Chief's stored greeting (and a new
+    // agent's welcome) counted as a reply, so a brief named agents that had
+    // done nothing.
+    let since = at(8, 0) - 24 * HOUR_MS;
+    let boss = chief();
+    let greeting = said(
+        "chief",
+        MessageKind::Agent,
+        crate::agents::prompts::CHIEF_GREETING,
+        at(7, 0),
+    );
+    let only_greeting = vec![greeting.clone()];
+    let facts = gather(
+        &[AgentRecords {
+            agent: &boss,
+            log: after_greeting(&only_greeting, true),
+            cards: &[],
+        }],
+        since,
+        &utc(),
+        at(8, 0),
+    );
+    assert!(facts.did.is_empty(), "{:?}", facts.did.len());
+
+    // Once asked, its replies count; the greeting still doesn't.
+    let talked = vec![
+        greeting,
+        said("chief", MessageKind::User, "Plan my week", at(7, 10)),
+        said("chief", MessageKind::Agent, "Here's the plan", at(7, 11)),
+    ];
+    let facts = gather(
+        &[AgentRecords {
+            agent: &boss,
+            log: after_greeting(&talked, true),
+            cards: &[],
+        }],
+        since,
+        &utc(),
+        at(8, 0),
+    );
+    assert_eq!(facts.did.len(), 1);
+    assert_eq!(facts.did[0].replies, 1);
+
+    // A window that starts mid-chat keeps everything: a reply there isn't a greeting.
+    let window = vec![said("chief", MessageKind::Agent, "Done", at(7, 30))];
+    assert_eq!(after_greeting(&window, false).len(), 1);
+}
+
 /* ---------------------------------------------------------- compose */
 
 fn usage(read: u32, room: u32) -> Usage {

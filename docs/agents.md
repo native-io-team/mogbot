@@ -6551,6 +6551,50 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
 - `node scripts/harness-capture.mjs agents-first-win` / `agents-template-`: the starters and the gallery (`agents-ideas`, `agents-ideas-when`: team, brief and site typed; a document staged and New agent on Research, both from the gallery), first results (a team built, a document summarised), Inbox in the dialog with its connect line, and a Chief-made Inbox's first open.
 - `node scripts/harness-capture.mjs agents-result`: v1, asking, v2, not verified, a copy's card with before/after.
 - `pnpm vitest run src/lib/agents.test.ts`: chat grouping, dividers, ordering.
+- `scripts/agents-fake-e2e.sh [scenario…]` (free, offline, deterministic,
+  about two minutes, macOS, needs python3): whole agent turns against a **fake engine**.
+  `src-tauri/examples/agents_fake/main.rs` drives the real runner, store,
+  agent bridge, approval broker, wallet and MCP tools through the same
+  Tauri commands the UI calls, with `scripts/fake-engine/fake_claude.py`
+  first on PATH as `claude` (and, linked as `codex`, as Codex's `exec`
+  driver: `SHIPSTUDIO_AGENTS_CODEX_EXEC`). The fake speaks Claude Code's
+  stream-json as observed on 2.1.318 (init with its permission mode,
+  streamed text, tool_use / tool_result, `rate_limit_event`, `result` with
+  usage), calls the bridge's tools for real with the turn's bearer secret
+  from its `--mcp-config` file, asks through `--permission-prompt-tool`
+  before a Bash call, keeps transcripts where `--resume` looks (and fails
+  as Claude Code does when one is missing), and runs whatever script the
+  message carries: the last `#fake [...]` line of its prompt (say, slow
+  output, any bridge tool, Bash, Write, a rate-limit reading, the usage
+  limit unless an account's token is set, sleep, hang, crash, exit, an
+  error result, a mid-process `result`, raw lines; the list is in the
+  script's header). `FAKE_ENGINE_DEFAULT` scripts prompts with no marker
+  (a pick-up, a late Allow); `FAKE_ENGINE_LOG` gets every turn's prompt
+  and every bridge answer. Throwaway HOME, the Keychain in memory
+  (`keychain::use_memory_for_e2e`), no model, no account, no network.
+  Scenarios: a normal turn (the final reply as a bubble, the narration and
+  steps in "What it did", usage, the session resumed), approvals (Allow
+  runs, Deny doesn't, the step marked declined; Always allow; two agents'
+  cards at once), a plan grant (one card, the covered command's "Under your
+  OK" line), a login card (the agents' browser first, one card, asked once,
+  a decline wakes the agent), a result card and its v2 (Ask for changes),
+  tools the app refuses (an unknown agent, a file outside its folders),
+  delegation and the hop cap (a ping-pong stops at six), usage-limit
+  failover (the quiet "Switched to …" line; after acting, the same
+  conversation resumed on the other account; every account out, one line;
+  carrying on with Codex after the card), crashes, exits and error results
+  (each ends in a line, the partial kept, one pick-up then an error), a
+  `bypassPermissions` init stopped, Stop (mid-reply, on a hung engine, with
+  a card waiting), interrupt, queueing (batched; never across
+  conversations; while a card waits), several conversations (a session
+  each, swapped per turn, a crash picked up in its own), a lost transcript
+  put back, a `result` with the process left running, a second round after
+  a `result`, garbage lines, the approval wait running out, a 2 MB command
+  output, deleting an agent mid-turn, routines (one firing, one in steps
+  waiting on "OK to go on?", one failing into a retry), Codex `exec` turns,
+  and the morning brief composed from all of it. `AGENTS_FAKE_KEEP=1` keeps
+  the HOME. Not covered: Codex's app-server (the fake has none), the user's
+  Chrome, and anything a model decides.
 - `scripts/agents-e2e.sh [scenario…]` (opt-in, real turns, on Haiku): `src-tauri/examples/agents_e2e/main.rs` drives the real
   runner, store, bridge and MCP tools through the same Tauri commands the UI
   calls, on `claude --model haiku`, in a throwaway HOME (only the keychain is
