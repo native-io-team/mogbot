@@ -1084,10 +1084,10 @@ const LIVE = [
     ready: 'Usage',
     act: async (page) => {
       await sleep(1500);
-      await scrollToText('Spare-capacity list')(page);
+      await scrollToText('Ideas for leftover usage')(page);
     },
     check:
-      'Usage, under the accounts: "How agents use your limits" as a segmented Normal / Save / Use it all (the mode in force raised, neutral), its full name and one line under it; then "Spare-capacity list" with how many wait, a field with Add, and "Give agents something to do"',
+      'Usage, under the accounts: "How agents use your limits" as a segmented Normal / Save / Use it all (the mode in force raised, neutral), its full name and one line under it; then "Ideas for leftover usage" with how many wait, a field with Add, and "Give agents something to do"',
   },
   {
     name: 'catchup-done',
@@ -2167,9 +2167,9 @@ const LIVE = [
     name: 'settings-usage',
     route: '/settings',
     ready: 'Use it all before the refill',
-    act: scrollToText('Spare-capacity list'),
+    act: scrollToText('Ideas for leftover usage'),
     check:
-      'Usage: "Use it all before the refill" with its line; "Claude 5-hour limit resets … · 62% left"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
+      'Usage: "Use it all before the refill" with its line; "Claude 5-hour limit refills … · 62% left"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
   },
   {
     name: 'connection',

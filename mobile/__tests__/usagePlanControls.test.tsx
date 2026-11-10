@@ -45,7 +45,11 @@ jest.mock('../src/components/ui', () => {
       onPress: () => void;
       disabled?: boolean;
     }) => (
-      <Pressable accessibilityRole="button" accessibilityState={{ disabled }} onPress={disabled ? undefined : onPress}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        onPress={disabled ? undefined : onPress}
+      >
         <Text>{title}</Text>
       </Pressable>
     ),
@@ -84,7 +88,10 @@ it('changes the mode, adds to the list and starts it from the phone', async () =
   expect(onChanged).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'use_it_all' }));
 
   await act(async () => {
-    fireEvent.changeText(screen.getByLabelText('Add to your ideas for leftover usage'), '  Tidy the docs ');
+    fireEvent.changeText(
+      screen.getByLabelText('Add to your ideas for leftover usage'),
+      '  Tidy the docs '
+    );
   });
   await act(async () => {
     fireEvent.press(screen.getByText('Add'));
