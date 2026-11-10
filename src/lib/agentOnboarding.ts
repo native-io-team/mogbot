@@ -74,6 +74,12 @@ export interface OnboardingTestMode {
   mock: boolean;
   /** `SHIPSTUDIO_FORCE_ONBOARDING` is set — real checks, wizard forced open. */
   forceOnboarding: boolean;
+  /**
+   * `SHIPSTUDIO_FORCE_INSTALL_FAILURE` (mock mode only): the first mock run
+   * of each item that can fail this way does (`network`, `disk`,
+   * `permission`, `admin`, `homebrew`, `signin`; `lib/installProgress`).
+   */
+  mockFailure?: string | null;
 }
 
 export async function getOnboardingTestMode(): Promise<OnboardingTestMode> {
