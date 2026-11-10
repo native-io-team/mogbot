@@ -87,6 +87,10 @@
   gap: var(--spacing-md);
 }
 
+.agent-chat__header .agent-chat__title .agent-key {
+  --agent-key-s: var(--agent-key-size-header);
+}
+
 .agent-chat__header > .agent-chat__title > .agent-key {
   margin-inline-end: calc(var(--spacing-xs) * -1);
 }

@@ -141,6 +141,8 @@
   --agent-key-size-xl: calc(var(--spacing-lg) * 7);
   --agent-key-size-lg: calc(var(--spacing-lg) * 2.75);
   --agent-key-size-md: calc(var(--spacing-lg) * 1.875);
+  /* A page or chat header: smaller than a list row's key, so it sits inside the band with room. */
+  --agent-key-size-header: calc(var(--spacing-lg) * 1.5);
   --agent-key-size-sm: calc(var(--spacing-lg) * 1.25);
   --agent-key-size-xs: var(--spacing-lg);
 
