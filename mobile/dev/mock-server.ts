@@ -215,7 +215,7 @@ const LOGIN_OPTIONS: Record<string, LoginOption> = {
   gmail: {
     id: 'claude_ai',
     method: 'claude_ai',
-    label: 'Connect in Claude instead',
+    label: 'Connect on claude.ai',
     detail:
       'Connect Gmail in Claude: it opens Claude’s connectors page; turn on Gmail, then come back. The sign-in stays with your Claude account; never a password.',
   },

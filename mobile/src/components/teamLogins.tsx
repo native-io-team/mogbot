@@ -260,9 +260,10 @@ function Need({
   // One agent on the row: its "Not needed" sits beside the answer. Several:
   // each agent's line carries its own, so one can be put away and not the rest.
   const single = need.cards.length === 1 && waiting.length === 1 ? waiting[0] : null;
-  // With "Not needed" for the team on the row, one agent's own is "Skip".
+  // With "Not needed" for the team on the row, one agent's own is "Not now",
+  // the word its own card uses for the same answer.
   const dismiss = (c: TeamCard): RowWord => ({
-    label: onNotNeeded ? 'Skip' : 'Not needed',
+    label: onNotNeeded ? 'Not now' : 'Not needed',
     muted: true,
     hint: onNotNeeded
       ? `Puts away ${c.agentName}’s card`

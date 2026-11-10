@@ -1821,7 +1821,7 @@ const LIVE = [
       await scrollToText('Not needed')(page);
     },
     check:
-      'Gmail card, Other ways open: why there is no connector, Connect in Claude instead and Sign in from here each with what it means, then Not needed; "Hide other ways" closes it',
+      'Gmail card, Other ways open: why there is no connector, Connect on claude.ai and Sign in from here each with what it means, then Not needed; "Hide other ways" closes it',
   },
   {
     name: 'login-on-mac',
@@ -1941,7 +1941,7 @@ const LIVE = [
     ready: 'QA 2',
     act: scrollToText('WHAT IT CAN REACH'),
     check:
-      'What it can reach: Google Calendar connection, your browser, read-only with "Change this on your Mac."',
+      'What it can reach: Google Calendar connection, your browser, and “Change who can use each app” opening Apps on this agent (browser and keys: “change on your Mac”)',
   },
   {
     name: 'policy',

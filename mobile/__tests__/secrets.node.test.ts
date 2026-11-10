@@ -146,9 +146,9 @@ class SelfSignedOk extends WebSocket {
     expect(secretRouteProblem(ts, true)).toBe(null);
     expect(
       secretRouteProblem({ kind: 'tailscale', url: 'http://mac.tail1.ts.net:47443' }, true)
-    ).toMatch(/only go over Tailscale/);
+    ).toMatch(/only travels to your Mac over Tailscale/);
     expect(secretRouteProblem({ kind: 'lan', url: 'https://192.168.1.20:47444' }, true)).toMatch(
-      /only go over Tailscale/
+      /only travels to your Mac over Tailscale/
     );
     expect(secretRouteProblem(null, true)).toMatch(/needs your Mac/);
     // A Tailscale route whose welcome wasn't signed by the pinned key.
@@ -169,7 +169,7 @@ class SelfSignedOk extends WebSocket {
       request,
     };
     await expect(sendSecret(plain as never, 'fin', 'req_secret', [VALUE])).rejects.toThrow(
-      /only go over Tailscale/
+      /only travels to your Mac over Tailscale/
     );
     const offline = {
       state: { kind: 'connecting', attempt: 1 },
