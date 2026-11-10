@@ -25,7 +25,7 @@ import { contextMeter, ringPercent, type UsageMeter } from '../../lib/agentsUsag
 import { requestSwitcher } from '../../lib/agentAccounts';
 import { useQuotas } from './AgentsQuota';
 import { useUsageGlance } from './AccountSwitcher';
-import { SameNotes, StackMeter } from './UsageStack';
+import { SameNotes, TotalBar } from './UsageStack';
 
 interface AgentUsageRingProps {
   agent: Agent;
@@ -104,7 +104,12 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
           {glance.estimate && (
             <span className="agent-usage__muted">{glance.estimate}. An estimate.</span>
           )}
-          <StackMeter keys={glance.meterKeys} labelled />
+          {glance.total.left !== null && (
+            <span className="agent-usage__muted">
+              {glance.total.figure} {glance.total.across}
+            </span>
+          )}
+          <TotalBar total={glance.total} />
           <SameNotes notes={glance.sameNotes} />
           {glance.soonest && (
             <span className="agent-usage__muted">

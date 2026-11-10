@@ -30,7 +30,12 @@ import { AgentsUsageView } from './AgentsUsageView';
 import { AccountsPage } from './AgentsSettings';
 import { requestAccountSignIn } from '../../lib/settingsFromChat';
 import { AgentAccountItems } from './AgentModelMenu';
-import { requestSwitcher, switcherMounted, takeUsageAdd } from '../../lib/agentAccounts';
+import {
+  requestSwitcher,
+  requestUsageAccount,
+  switcherMounted,
+  takeUsageAdd,
+} from '../../lib/agentAccounts';
 
 afterEach(() => {
   cleanup();
@@ -139,7 +144,9 @@ describe('AccountSwitcher (the sidebar’s usage glance)', () => {
     expect(row).toHaveTextContent('2 accounts');
     // One segment per account: Work has no reading, so its slot is empty, never full.
     const meter = within(row).getByRole('img', { name: /Room left/ });
-    expect(meter).toHaveAccessibleName(/sam@example.com: 62% left; Work: no reading yet/);
+    expect(meter).toHaveAccessibleName(
+      /sam@example.com: 62% left, refills in .+; Work: shows after its first reply/
+    );
     // The row itself never asks for a reading: a glance.
     expect(
       calls.some(
@@ -176,22 +183,23 @@ describe('AccountSwitcher (the sidebar’s usage glance)', () => {
 });
 
 describe('Usage view', () => {
-  it('lists every account as a key in order, and swaps in one click', async () => {
+  const rows = () => screen.getAllByRole('button', { name: /\. Open$/ });
+
+  it('leads with the total, lists each account as a row in order, and opens its page', async () => {
     store.engines = [claude];
     store.agents = [{ id: 'r', name: 'Riley', engine: 'claude', account: 'a1' } as Agent];
     const calls = mock([mac, work]);
     render(<AgentsUsageView />);
 
-    const keys = await screen.findAllByRole('article');
-    await waitFor(() => expect(keys[0]).toHaveTextContent('In use'));
-    expect(keys[0]).toHaveTextContent('Max plan');
-    expect(keys[0]).toHaveTextContent('5-hour');
-    expect(keys[0]).toHaveTextContent('62% left');
-    expect(keys[0]).toHaveTextContent('Under pace');
-    expect(keys[1]).toHaveTextContent('Next');
-    expect(keys[1]).toHaveTextContent('me@work.example');
-    expect(keys[1]).toHaveTextContent('Riley runs only on this one');
-    expect(within(keys[0]).queryByRole('button', { name: 'Use this one now' })).toBeNull();
+    const hero = await screen.findByTestId('usage-hero');
+    await waitFor(() => expect(hero).toHaveTextContent('62% left'));
+    // The bar: the account with a reading first, the unread one an empty slot.
+    const parts = within(hero).getAllByRole('button');
+    expect(parts[0]).toHaveAccessibleName(/^sam@example.com: 62% left/);
+    expect(parts[1]).toHaveAccessibleName(/^Work: shows after its first reply/);
+    await waitFor(() => expect(rows()[0]).toHaveTextContent('In use'));
+    expect(rows()[0]).toHaveTextContent('sam@example.com');
+    expect(rows()[1]).toHaveTextContent('Next');
     // Someone is looking: a full read.
     expect(
       calls.some(
@@ -199,26 +207,58 @@ describe('Usage view', () => {
       )
     ).toBe(true);
 
+    // Into Work's page: its pins, "Use this one now", and back with Esc.
+    fireEvent.click(rows()[1]);
+    const page = await screen.findByRole('article');
+    expect(page).toHaveTextContent('me@work.example');
+    expect(page).toHaveTextContent('Riley runs only on this one');
+    expect(
+      screen.getByText('Usage', { selector: '.breadcrumb__link, .breadcrumb__link *' })
+    ).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(within(keys[1]).getByRole('button', { name: 'Use this one now' }));
+      fireEvent.click(within(page).getByRole('button', { name: 'Use this one now' }));
       await Promise.resolve();
     });
     expect(calls.some((c) => c.cmd === 'agents_account_use')).toBe(true);
-    await waitFor(() => expect(screen.getAllByRole('article')[0]).toHaveTextContent('Work'));
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('article')).toBeNull());
+    await waitFor(() => expect(rows()[0]).toHaveTextContent('Work'));
   });
 
-  it('moves an account up from its menu, without dragging', async () => {
+  it('an account’s page has its limits against pace, and no "Use this one now" when in use', async () => {
+    store.engines = [claude];
+    store.agents = [];
+    mock([mac, work]);
+    render(<AgentsUsageView />);
+    await waitFor(() => expect(rows()[0]).toHaveTextContent('62% left'));
+    fireEvent.click(rows()[0]);
+    const page = await screen.findByRole('article');
+    expect(page).toHaveTextContent('Max plan');
+    expect(page).toHaveTextContent('5-hour');
+    expect(page).toHaveTextContent('Under pace');
+    expect(within(page).queryByRole('button', { name: 'Use this one now' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Usage' }));
+    await waitFor(() => expect(screen.queryByRole('article')).toBeNull());
+  });
+
+  it('moves an account up from its page’s menu', async () => {
     store.engines = [claude];
     store.agents = [];
     const calls = mock([mac, work]);
     render(<AgentsUsageView />);
-    await screen.findAllByRole('article');
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    fireEvent.click(rows()[0]);
+    await screen.findByRole('article');
     // The first has nowhere to go up to.
     fireEvent.click(screen.getByRole('button', { name: `More for ${mac.name}` }));
     expect(await screen.findByText('Move down')).toBeInTheDocument();
     expect(screen.queryByText('Move up')).toBeNull();
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Usage' }));
 
+    await waitFor(() => expect(screen.queryByRole('article')).toBeNull());
+    fireEvent.click(rows()[1]);
+    await screen.findByRole('article');
     fireEvent.click(screen.getByRole('button', { name: 'More for Work' }));
     await act(async () => {
       fireEvent.click(await screen.findByText('Move up'));
@@ -229,12 +269,22 @@ describe('Usage view', () => {
     expect(moves[0].args).toMatchObject({ engine: 'claude', ids: ['a1', 'default'] });
   });
 
+  it('opens straight on an account asked for from elsewhere (the chat header’s chip)', async () => {
+    store.engines = [claude];
+    store.agents = [];
+    mock([mac, work]);
+    requestUsageAccount('claude', 'a1');
+    render(<AgentsUsageView />);
+    const page = await screen.findByRole('article');
+    expect(page).toHaveTextContent('Work');
+  });
+
   it('adds an account in one click, once, with a name not taken', async () => {
     store.engines = [claude];
     store.agents = [];
     const calls = mock([mac]);
     render(<AgentsUsageView />);
-    const add = await screen.findByRole('button', { name: 'Add a Claude Code account' });
+    const add = await screen.findByRole('button', { name: 'Add an account' });
     await act(async () => {
       fireEvent.click(add);
       await Promise.resolve();
@@ -244,23 +294,20 @@ describe('Usage view', () => {
     expect(adds[0].args).toMatchObject({ engine: 'claude', name: 'Account 2' });
   });
 
-  it('Settings → Accounts & usage is the same rendering: same keys, same words, drag to order', async () => {
+  it('Settings → Accounts & usage is the same rendering: same total, same rows', async () => {
     store.engines = [claude];
     store.agents = [];
     mock([mac, work]);
     const { unmount } = render(<AgentsUsageView />);
-    const inView = (await screen.findAllByRole('article')).map((k) => k.textContent);
-    await waitFor(() => expect(screen.getAllByRole('article')[0]).toHaveTextContent('62% left'));
-    const viewText = screen.getAllByRole('article').map((k) => k.textContent);
+    await waitFor(() => expect(rows()[0]).toHaveTextContent('62% left'));
+    const viewText = rows().map((k) => k.textContent);
+    const heroText = screen.getByTestId('usage-hero').textContent;
     unmount();
 
     render(<AccountsPage />);
-    await waitFor(() => expect(screen.getAllByRole('article')[0]).toHaveTextContent('62% left'));
-    expect(screen.getAllByRole('article').map((k) => k.textContent)).toEqual(viewText);
-    expect(inView).toHaveLength(2);
-    // One reorder method: the drag handle (which moves with the keyboard too), never ↑/↓ buttons.
-    expect(screen.getByRole('button', { name: 'Move Work in the order' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /earlier|later|Move up|Move down/ })).toBeNull();
+    await waitFor(() => expect(rows()[0]).toHaveTextContent('62% left'));
+    expect(rows().map((k) => k.textContent)).toEqual(viewText);
+    expect(screen.getByTestId('usage-hero').textContent).toEqual(heroText);
     // Always "left", never a bare used figure.
     expect(document.body.textContent).not.toMatch(/\b38%/);
     expect(document.body.textContent).not.toMatch(/This Mac\b(?!’s own sign-in)/);

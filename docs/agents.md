@@ -4695,41 +4695,60 @@ a place, not an account, so it is never shown as a name.
 
 **Usage at a glance, always in sight** (`AccountSwitcher`; words shared
 with the phone in `companion-protocol/src/usageGlance.ts`): the row at the
-sidebar's foot answers in one line ("Plenty of room", "Room to work",
-"Work is low · Personal is next", "Nearly out on every account", "Out of
-usage until 3:20 PM", or the Mac's run-out estimate "Runs out ~Thu
-afternoon, 2 days before reset", marked "est."), draws the whole stack as
-one segmented meter (each account a segment in the order turns try them,
-filled to what its tighter limit has left; the account in use in full ink;
-an account with no reading an empty dashed slot, never full), and says the
-count and the soonest reset. It never asks for a reading itself
-(`agents_usage_overview` with `look: false`).
+sidebar's foot says the total across every account ("72% left · 2
+accounts"), draws the total bar (one segment per real account, most room
+first, each filled to what it adds; an account with no reading an empty
+dashed slot, never full) and the next refill ("Refills in 2d 4h"). It never
+asks for a reading itself (`agents_usage_overview` with `look: false`).
+
+**The total** (`usageGlance` `total`, `totalOf`; the owner's words: "an
+account with 100% left and an account with 44% left … so you can see overall
+that I have most of my limit left"). Each real account adds its weekly
+limit's left (its tighter limit's when the engine reported no week) and
+counts equally: plans' sizes aren't reported, so none is weighted or
+guessed, and the words say "across 2 accounts" (or "across 2 Max accounts"
+when every one counted is on that plan). A second sign-in of an account
+already counted and an account with no reading add nothing ("1 account not
+read yet, not counted"); an account out of usage adds 0. The bar's
+segments run most room first, unread ones last; each says when it refills
+(an out account: when it is back). Desk and phone compute it in the same
+function.
 
 **The Usage view** (`AgentsUsageView`, `USAGE_ID`; opened by that row, ⌘K
-"Usage and accounts…", "Switch account…", "Add an account…", and a chat's
-account chip): the answer as a hero (headline, the big stack meter with each
-account named and its room, the next reset relative and absolute); then
-"Get the most from your limits" (the mode, and when a window on the account
-in use resets soon with at least 25% left, a nudge: "62% of Work's week
-resets in 9 h", the first waiting items of the spare-capacity list, and
-"Give agents something to do", which wakes the Chief with that list now:
+"Usage and accounts…", "Switch account…", "Add an account…"). Two levels.
+*The overview*: the total as a hero ("72% left across 2 Max accounts",
+"Next refill in 2d 4h · sam@example.com, Thu 3:15 AM", the bar with each
+account named under its segment and opening it); a calm bar when every
+account is nearly out (add an account, carry on with the other engine when
+it has room, or "Wait until …"); "Accounts", one row each in the order work
+tries them (`AccountRow`: keycap, name, a small bar, what it adds, In use /
+Next / "Out of usage", refill countdown), with "Add an account" at the
+heading's right; "How agents use your limits" (the mode as a hugging
+control and its one line, then, when a window on the account in use resets
+soon with at least 25% left, a nudge: "62% of Work's week resets in 9 h",
+the first waiting items of the spare-capacity list, and "Give agents
+something to do", which wakes the Chief with that list now:
 `agents_spare_spend_now` → `usage_tools::spend_now`, the same prompt "Use it
 all" sends, changing no approval; a press while the Chief is still starting
-that window says so instead of queuing it twice, `usage_plan::already_starting`); a calm bar when every account is nearly
-out (add an account, carry on with the other engine when it has room, or
-"Wait until …"); then each engine's accounts as keys in order (`UsageKey`):
-a numbered keycap, name, plan, organization and who, a state pill (In use,
-Next, Ready, "Out of usage until …", Not signed in, "Same account as …", No
-reading yet), its 5-hour and weekly limits with "Resets in 3 h · 3:20 PM"
-and the Mac's pace estimate, who used it this week, the one fix for a
-sign-in problem, "Use this one now", Rename, Sign in again, Remove, and
-"Where did my usage go". Keys are dragged to reorder (`DragSortScope`; the
-handle moves with the keyboard too, `agents_account_reorder`). Adding is one
-click per engine ("Add a Claude Code account": a free name, then its
-sign-in). The crossover choice, the spare-capacity list and other compute
-follow. Onboarding offers adding right after the engine's sign-in ("Add
-another account?", skippable). The phone's Usage sheet and Settings →
-Accounts draw the same glance and keys (`mobile/src/components/usageStack.tsx`).
+that window says so instead of queuing it twice,
+`usage_plan::already_starting`); then the crossover choice, the
+spare-capacity list and other compute. *An account's page*
+(`AccountDetail`; "Usage › Work" with a back arrow, Esc or ⌘[ to return;
+`requestUsageAccount` opens one from elsewhere, as the chat header's account
+chip does): its keycap, name, state pill, place in the order, plan and who,
+"Use this one now" and a menu (Rename, Move up / Move down, Sign in again,
+Remove); its notices (the one fix for a sign-in problem, "Same Claude
+account as …", this Mac's sign-in having changed); "Limits" with Limits |
+Tokens at its right: the limit cards (5-hour, weekly, per-model, each with
+its countdown chip, pace marker, the Mac's labelled run-out estimate and the
+pace in words) or "Used by these agents this week" as a table (agent key,
+name, tokens, messages); and "Where did my usage go". Adding is one click
+per engine (a free name, then its sign-in). Onboarding offers adding right
+after the engine's sign-in ("Add another account?", skippable). The phone
+has the same two levels: the Usage sheet (the total, then a row per
+account) and an account's screen (`mobile/src/app/usage-account.tsx`);
+Settings → Accounts leads with the same total
+(`mobile/src/components/usageStack.tsx`).
 
 **One account signed in twice** (`inventory::same_as`). A Claude account
 added here signs in with `claude setup-token` in the user's browser, which
@@ -4782,11 +4801,10 @@ weekly-reset samples: a reset that moved to another time of the week and
 stayed there is said as exactly that, naming nobody (`byReset`).
 
 **The sidebar row** says, in words anyone reads, what the agents can still
-do and when it refills (`usageGlance` `row`): "Usage 57% left this week" (the
-tighter limit of the account in use), a meter with one segment per real
-account, "Refills Sat 10:00 AM", and "2 accounts" only when there are. Its
-corner dot shows only when the user must act or agents are out; the phone's
-Agents list says the same.
+do and when it refills (`usageGlance` `row`): the total ("72% left", or
+"57% left this week" with one account), "2 accounts" only when there are,
+the total bar and "Refills in 2d 4h". Its corner dot shows only when the
+user must act or agents are out; the phone's Agents list says the same.
 
 **Where did my usage go** (`agents/usage_story.rs`). Each turn's tokens are
 recorded per account with its agent, and its routine when it ran one alone

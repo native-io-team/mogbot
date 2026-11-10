@@ -146,3 +146,31 @@ export const SIGN_IN_BROWSER_NOTE = {
   codex:
     'It signs in as whoever ChatGPT is signed in as in that browser. If that isn’t this account, sign out of ChatGPT there first, or open the link in a private window.',
 } as const;
+
+/*
+ * One account's page in Usage, asked for from elsewhere (the chat header's
+ * account chip, ⌘K): Usage opens on it, or switches to it if it is showing.
+ */
+export interface UsageAccountRef {
+  engine: AgentEngine;
+  id: string;
+}
+let usageAccount: UsageAccountRef | null = null;
+const usageAccountListeners = new Set<() => void>();
+
+export function requestUsageAccount(engine: AgentEngine, id: string): boolean {
+  usageAccount = { engine, id };
+  usageAccountListeners.forEach((fn) => fn());
+  return requestSwitcher('open');
+}
+
+export function takeUsageAccount(): UsageAccountRef | null {
+  const asked = usageAccount;
+  usageAccount = null;
+  return asked;
+}
+
+export function onUsageAccountRequest(fn: () => void): () => void {
+  usageAccountListeners.add(fn);
+  return () => usageAccountListeners.delete(fn);
+}

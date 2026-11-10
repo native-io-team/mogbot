@@ -120,6 +120,7 @@ function Screens() {
               <Stack.Screen name="one-at-a-time" options={{ headerShown: false }} />
               <Stack.Screen name="request" options={{ headerShown: false }} />
               <Stack.Screen name="usage" options={sheet(colors, [0.75, 1])} />
+              <Stack.Screen name="usage-account" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="controls" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen
                 name="settings"

@@ -853,7 +853,11 @@ const PROBE = [
       await page.clickText('Largest');
       await sleep(400);
       await page.goto(`${WEB}${to}`);
-      await page.waitFor(`document.body.innerText.includes(${JSON.stringify(ready)})`, 20_000, ready);
+      await page.waitFor(
+        `document.body.innerText.includes(${JSON.stringify(ready)})`,
+        20_000,
+        ready
+      );
       await sleep(1500);
     },
     after: async (page) => {
@@ -3190,6 +3194,25 @@ async function main() {
   }
 
   if (phase('usage-accounts')) {
+    await startMock('--usage', 'room');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await each([
+      {
+        name: 'usage-total',
+        route: '/usage',
+        ready: 'Usage',
+        check:
+          'The total first: "All accounts", a large "72% left", "across 2 accounts", "Next refill in …". One bar of two segments, Personal (full) on the left, then the account in use (44%); under it each account named with its % left and a ⟳ chip. Then "ACCOUNTS": one grouped card with a row each (keycap 1 filled for the one in use, name, % left, a thin bar, the pill and ⟳ countdown, a chevron).',
+      },
+      {
+        name: 'usage-account',
+        route: '/usage-account?engine=claude&account=default',
+        ready: 'Usage',
+        check:
+          '"‹ Usage" above the account’s name as the title; one card: keycap, name, plan, "In use", the 5-hour and Weekly limits with big "% left", the pace-marked bar and the pace sentence; then "Used by these agents this week" as a table (name, tokens, messages) with right-aligned figures.',
+      },
+    ]);
     for (const variant of ['two-claude', 'one-read']) {
       await startMock('--usage', variant);
       await page.goto(`${WEB}/agents`);
@@ -3199,7 +3222,7 @@ async function main() {
           name: `usage-accounts-${variant}`,
           route: '/usage?id=site',
           ready: 'Usage',
-          act: scrollToText('YOUR ACCOUNTS'),
+          act: scrollToText('Accounts'),
           check:
             'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) with each account named and its room under it, and the next reset; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
         },

@@ -1,25 +1,25 @@
 /**
  * Usage: the whole stack of accounts agents run on, as a full view (the
  * sidebar's usage row, ⌘K "Usage and accounts…", the chat header's account
- * chip).
+ * chip). Two levels:
  *
- * Read top-down:
- * 1. **The answer**: one headline ("Plenty of room", "Runs out ~Thu, 2 days
- *    before reset", labelled as an estimate when it is one), the stack as one
- *    big segmented meter with each account named under its segment, and the
- *    soonest reset, relative and absolute.
- * 2. **Max it out**: the mode (Normal / Save my limits / Use it all before
- *    reset), and when a window on the account in use resets soon with room
- *    left, a nudge with what it would spend it on and one button to start it.
- * 3. **Nearly out everywhere**: one calm bar with the options (add an
- *    account, carry on with the other engine, wait until the reset).
- * 4. **The stack**: each engine's accounts as keys in the order turns try
- *    them, dragged to reorder (the handle also moves with the keyboard).
- *    Each key: its place, name, plan and who, state, its 5-hour and weekly
- *    limits with resets, who used it this week, the fix for a sign-in
- *    problem, "Use this one now", and "Where did my usage go".
- * 5. Add an account in one click, the crossover choice, the spare-capacity
- *    list and other compute on this Mac.
+ * **The overview**, read top-down:
+ * 1. **The total**: the room across every real account as one figure ("72%
+ *    left across 2 accounts", each account counted equally), when the next
+ *    refill is, and one bar made of a segment per account, most room first,
+ *    each labelled under it and opening that account.
+ * 2. **Nearly out everywhere**: one calm bar with the options.
+ * 3. **Accounts**: one row each, in the order turns try them (its place,
+ *    name, a small bar, what it adds, In use / Next, refill), opening its page.
+ * 4. **How agents use your limits**: Normal / Save my limits / Use it all
+ *    before reset, its one line, and the spare-capacity nudge.
+ * 5. Add an account, the crossover choice, the spare-capacity list and other
+ *    compute on this Mac.
+ *
+ * **An account's page** (`AccountDetail`, "Usage › Work", Esc or the back
+ * arrow to return; `requestUsageAccount` opens one from elsewhere): its
+ * limit cards against pace, who used it this week (Limits | Tokens), where
+ * its usage went, its notices and what to do with it.
  *
  * Every figure is a reading the Mac served; none is made up here
  * (`companion-protocol/usageGlance`).
@@ -27,23 +27,34 @@
  * @module components/agents/AgentsUsageView
  */
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { AddIcon, ZapIcon } from '@/components/icons';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AddIcon, ArrowLeftIcon, ZapIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
+import { IconButton } from '../primitives/IconButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
-import { DragSortItem, DragSortScope } from '../primitives/DragSort';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '../primitives/Breadcrumb';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { ENGINE_LABEL, type AgentEngine } from '../../lib/agents';
 import {
   addUsageAccount,
+  onUsageAccountRequest,
   putAccountFirst,
   renameUsageAccount,
   reorderUsageAccounts,
   suggestName,
   takeAccountsRequest,
+  takeUsageAccount,
   takeUsageAdd,
   type UsageAccount,
+  type UsageAccountRef,
 } from '../../lib/agentAccounts';
 import {
   USAGE_MODES,
@@ -57,7 +68,8 @@ import {
   setUsageMode,
   setCrossover,
   spendSpareNow,
-  type StackEngine,
+  type StackKey,
+  type UsageGlance,
   type UsageMode,
 } from '../../lib/agentsUsage';
 import { takeSettingsSectionRequest } from '../../lib/settings';
@@ -68,7 +80,7 @@ import { EngineSignInModal } from './EngineSignInModal';
 import { AgentsCrossover } from './AgentsCrossover';
 import { SpareList } from './AgentsUsage';
 import { useUsageGlance } from './AccountSwitcher';
-import { SameNotes, StackMeter, UsageKey } from './UsageStack';
+import { AccountDetail, AccountRow, SameNotes, TotalBar } from './UsageStack';
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
 
@@ -92,6 +104,13 @@ export function AgentsUsageView() {
   );
 }
 
+/** `ids` with the entries at `a` and `b` exchanged. */
+function swap(ids: readonly string[], a: number, b: number): string[] {
+  const next = [...ids];
+  [next[a], next[b]] = [next[b], next[a]];
+  return next;
+}
+
 /**
  * Usage and accounts, the one rendering: the Usage view's body, and Settings
  * → Accounts & usage (`inSettings`), so the two can never disagree. In
@@ -105,8 +124,59 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
   const [signingIn, setSigningIn] = useState<UsageAccount | null>(null);
   const [macSignIn, setMacSignIn] = useState<AgentEngine | null>(null);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<'limits' | 'tokens'>('limits');
+  // The account whose page is showing; null on the overview.
+  const [open, setOpen] = useState<UsageAccountRef | null>(() => takeUsageAccount());
   const installed = engines.filter((e) => e.installed).map((e) => e.id);
+  const top = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const cameFrom = useRef<string | null>(null);
+
+  // Another surface asked for one account's page while this is showing.
+  useEffect(() => onUsageAccountRequest(() => setOpen(takeUsageAccount())), []);
+
+  const show = useCallback((ref: UsageAccountRef | null) => {
+    if (ref) cameFrom.current = ref.id;
+    setOpen(ref);
+    // Each level starts at its top.
+    const scroller = top.current?.closest('.agent-chat__scroll, .settings-content');
+    if (scroller) scroller.scrollTop = 0;
+  }, []);
+
+  const key = open ? glance.keys.find((k) => k.engine === open.engine && k.id === open.id) : null;
+
+  // Arriving on a page puts focus on its name; coming back, on the row it was opened from.
+  useEffect(() => {
+    if (key) heading.current?.focus({ preventScroll: true });
+    else if (cameFrom.current) {
+      top.current
+        ?.querySelector<HTMLElement>(`.usage-row[data-account="${CSS.escape(cameFrom.current)}"]`)
+        ?.focus({ preventScroll: true });
+      cameFrom.current = null;
+    }
+  }, [key?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Esc (or ⌘[) goes back to the overview, unless something on the page is
+  // taking it (a menu, a field being edited, a dialog).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      const back = e.key === 'Escape' || (e.metaKey && e.key === '[');
+      if (!back) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('input, textarea, [aria-modal="true"], [role="menu"]')) return;
+      if (document.querySelector('[role="menu"], [aria-modal="true"]')) return;
+      e.preventDefault();
+      show(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, show]);
+
+  // An account that went away (removed) leaves its page.
+  useEffect(() => {
+    if (open && accounts && !key) setOpen(null);
+  }, [open, accounts, key]);
 
   const add = async (engine: AgentEngine) => {
     let added: UsageAccount | null = null;
@@ -120,7 +190,6 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
   // ⌘K "Add an account…": straight to adding one, when there's one engine to
   // add to. In Settings, also the palette's request for a given engine, and
   // being scrolled to.
-  const top = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (installed.length === 0) return;
     const asked = inSettings ? takeAccountsRequest() : null;
@@ -202,72 +271,80 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
     reload();
   };
 
-  // Limits or tokens: a view of the accounts, so it sits at the right of
-  // their section's heading, not loose between sections.
-  const viewSwitch =
-    glance.burning.length > 0 ? (
-      <div className="usage-switch" data-testid="usage-view-switch">
-        <SegmentedControl
-          aria-label="Show limits or tokens"
-          value={view}
-          size="default"
-          options={[
-            { value: 'limits', label: 'Limits' },
-            { value: 'tokens', label: 'Tokens' },
-          ]}
-          onValueChange={(v) => setView(v)}
-        />
+  const signInChanged = glance.signInChanged && (
+    <div className="usage-bar" role="status" data-testid="usage-signin-changed">
+      <p className="usage-bar__text">{glance.signInChanged.text}</p>
+      <div className="usage-bar__actions">
+        <Button
+          variant="secondary"
+          leftIcon={<AddIcon size={14} />}
+          onClick={() => void answerChange(true)}
+        >
+          {ADD_IT}
+        </Button>
+        <Button variant="ghost" onClick={() => void answerChange(false)}>
+          {NOT_NOW}
+        </Button>
       </div>
-    ) : null;
+    </div>
+  );
+
+  const pageOf = (k: StackKey) => {
+    const ids = glance.engines.find((e) => e.engine === k.engine)?.keys.map((x) => x.id) ?? [];
+    const i = ids.indexOf(k.id);
+    const reorder = (order: string[]) => void attempt(() => reorderUsageAccounts(k.engine, order));
+    return (
+      <>
+        <div className="usage-crumbs">
+          <IconButton
+            variant="ghost"
+            size="medium"
+            icon={<ArrowLeftIcon size={14} />}
+            aria-label="Back to Usage"
+            onClick={() => show(null)}
+          />
+          <Breadcrumb aria-label="Where you are">
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink onClick={() => show(null)}>Usage</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage aria-current="page">{k.name}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+        <AccountDetail
+          key={k.key}
+          k={k}
+          headingRef={heading}
+          notice={glance.signInChanged?.engine === k.engine && k.thisMac ? signInChanged : null}
+          actions={{
+            onUse: () => void attempt(() => putAccountFirst(k.engine, k.id)),
+            onSignIn: () => signIn(k.engine, k.id),
+            onRename: (name) => attempt(() => renameUsageAccount(k.engine, k.id, name)),
+            onRemove: () => {
+              show(null);
+              void remove(k.engine, k.id);
+            },
+            onMoveUp: i > 0 ? () => reorder(swap(ids, i, i - 1)) : undefined,
+            onMoveDown:
+              i >= 0 && i < ids.length - 1 ? () => reorder(swap(ids, i, i + 1)) : undefined,
+          }}
+        />
+      </>
+    );
+  };
 
   return (
     <div className="usage-panel" ref={top} data-in-settings={inSettings || undefined}>
-      {!accounts ? null : (
+      {!accounts ? null : key ? (
+        pageOf(key)
+      ) : (
         <>
-          {glance.signInChanged && (
-            <div className="usage-bar" role="status" data-testid="usage-signin-changed">
-              <p className="usage-bar__text">{glance.signInChanged.text}</p>
-              <div className="usage-bar__actions">
-                <Button
-                  size="compact"
-                  variant="secondary"
-                  leftIcon={<AddIcon size={14} />}
-                  onClick={() => void answerChange(true)}
-                >
-                  {ADD_IT}
-                </Button>
-                <Button size="compact" variant="ghost" onClick={() => void answerChange(false)}>
-                  {NOT_NOW}
-                </Button>
-              </div>
-            </div>
-          )}
-          <div className="usage-hero" data-tone={glance.tone} data-testid="usage-hero">
-            {/* The answer first, in plain words: what's left and when it
-                refills; then the accounts; then the detail. */}
-            <div className="usage-hero__answer">
-              <p className="usage-hero__eyebrow">
-                {glance.row.count ? `Usage · ${glance.row.count}` : 'Usage'}
-              </p>
-              <h2 className="usage-hero__headline">{glance.row.figure}</h2>
-              {glance.row.refill && <p className="usage-hero__refill">{glance.row.refill}</p>}
-            </div>
-            {glance.estimate && (
-              <p className="usage-hero__estimate">
-                {glance.headline}. {glance.estimate}: an estimate, not a reading.
-              </p>
-            )}
-            <div className="usage-hero__stack">
-              <StackMeter keys={glance.meterKeys} size="large" labelled paced />
-              <SameNotes notes={glance.sameNotes} />
-            </div>
-            {glance.soonest && glance.meterKeys.length > 1 && (
-              <p className="usage-hero__reset">
-                Next to refill: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()}{' '}
-                limit, {glance.soonest.resetsIn} ({glance.soonest.resetsAt})
-              </p>
-            )}
-          </div>
+          {signInChanged}
+          <TotalHero glance={glance} onOpen={(engine, id) => show({ engine, id })} />
 
           {glance.low && (
             <div className="usage-bar" role="status" data-testid="usage-low">
@@ -275,7 +352,6 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
               <div className="usage-bar__actions">
                 {installed.length > 0 && (
                   <Button
-                    size="compact"
                     variant="secondary"
                     leftIcon={<AddIcon size={14} />}
                     onClick={() => void add(glance.keys[0]?.engine ?? installed[0])}
@@ -285,7 +361,6 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
                 )}
                 {glance.low.otherEngine && (
                   <Button
-                    size="compact"
                     variant="secondary"
                     onClick={() =>
                       void carryOn(
@@ -304,11 +379,84 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
             </div>
           )}
 
+          {glance.keys.length > 0 && (
+            <section className="usage-section" aria-labelledby="usage-accounts">
+              <div className="usage-section__head">
+                <h3 className="usage-section__title" id="usage-accounts">
+                  Accounts
+                </h3>
+                {installed.length > 0 && (
+                  <div className="usage-add__buttons">
+                    {installed.map((engine) => (
+                      <Button
+                        key={engine}
+                        variant="ghost"
+                        leftIcon={<AddIcon size={14} />}
+                        onClick={() => void add(engine)}
+                        data-add-account={engine}
+                      >
+                        {installed.length > 1
+                          ? `Add a ${ENGINE_LABEL[engine]} account`
+                          : 'Add an account'}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="usage-section__muted">
+                {glance.keys.length > 1
+                  ? 'Work starts on the first account with room and carries on down. Open one to change its place.'
+                  : `Your agents use this one. ${ADD_ACCOUNT_WHY}`}
+              </p>
+              {glance.engines.map((e) => (
+                <div key={e.engine} className="usage-rows" data-engine={e.engine}>
+                  {glance.engines.length > 1 && <h4 className="usage-rows__engine">{e.label}</h4>}
+                  <ul className="usage-rows__list" aria-label={`${e.label} accounts, in order`}>
+                    {e.keys.map((k) => (
+                      <AccountRow
+                        key={k.key}
+                        k={k}
+                        onOpen={() => show({ engine: k.engine, id: k.id })}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {glance.keys.length === 0 && installed.length > 0 && (
+            <div className="usage-add">
+              <div className="usage-add__buttons">
+                {installed.map((engine) => (
+                  <Button
+                    key={engine}
+                    variant="secondary"
+                    leftIcon={<AddIcon size={14} />}
+                    onClick={() => void add(engine)}
+                    data-add-account={engine}
+                  >
+                    Add a {ENGINE_LABEL[engine]} account
+                  </Button>
+                ))}
+              </div>
+              <p className="usage-section__muted">{ADD_ACCOUNT_WHY}</p>
+            </div>
+          )}
+
           {inventory && (
             <section className="usage-section" aria-labelledby="usage-max">
               <h3 className="usage-section__title" id="usage-max">
-                Get the most from your limits
+                How agents use your limits
               </h3>
+              <SegmentedControl
+                aria-label="How agents use your limits"
+                value={inventory.mode}
+                size="default"
+                options={USAGE_MODES.map((m) => ({ value: m, label: USAGE_MODE_LABEL[m] }))}
+                onValueChange={(m) => void choose(m)}
+              />
+              <p className="usage-section__muted">{USAGE_MODE_DETAIL[inventory.mode]}</p>
               {glance.nudge && (
                 <div className="usage-nudge" data-testid="usage-nudge">
                   <ZapIcon size={16} className="usage-nudge__icon" />
@@ -327,12 +475,7 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
                     )}
                     {!glance.nudge.empty && (
                       <div className="usage-nudge__actions">
-                        <Button
-                          variant="strong"
-                          size="compact"
-                          disabled={busy}
-                          onClick={() => void spend()}
-                        >
+                        <Button variant="strong" disabled={busy} onClick={() => void spend()}>
                           Give agents something to do
                         </Button>
                       </div>
@@ -340,78 +483,7 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
                   </div>
                 </div>
               )}
-              <SegmentedControl
-                aria-label="How agents use your limits"
-                value={inventory.mode}
-                size="default"
-                options={USAGE_MODES.map((m) => ({ value: m, label: USAGE_MODE_LABEL[m] }))}
-                onValueChange={(m) => void choose(m)}
-              />
-              <p className="usage-section__muted">{USAGE_MODE_DETAIL[inventory.mode]}</p>
             </section>
-          )}
-
-          {view === 'tokens' && glance.burning.length > 0 && (
-            <section className="usage-section" aria-labelledby="usage-tokens">
-              <div className="usage-section__head">
-                <h3 className="usage-section__title" id="usage-tokens">
-                  Who used it this week
-                </h3>
-                {viewSwitch}
-              </div>
-              <p className="usage-section__muted">
-                Tokens as the engines reported them for turns these agents ran, across your
-                accounts. Not a cost: your plans aren’t billed per token.
-              </p>
-              <ol className="usage-burn" data-testid="usage-tokens">
-                {glance.burning.map((b) => (
-                  <li key={b.key} className="usage-burn__row">
-                    <span className="usage-burn__name">{b.name}</span>
-                    <span className="usage-burn__detail">{b.detail}</span>
-                    <span
-                      className="usage-burn__bar"
-                      style={{ '--usage-burn-share': `${b.share}%` } as CSSProperties}
-                      aria-label={`${b.share}% of this week’s tokens`}
-                      role="img"
-                    />
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-
-          {view === 'limits' &&
-            glance.engines.map((e, i) => (
-              <EngineStack
-                key={e.engine}
-                engine={e}
-                aside={i === 0 ? viewSwitch : null}
-                several={glance.engines.length > 1}
-                onReorder={(ids) => void attempt(() => reorderUsageAccounts(e.engine, ids))}
-                onUse={(id) => void attempt(() => putAccountFirst(e.engine, id))}
-                onSignIn={(id) => signIn(e.engine, id)}
-                onRename={(id, name) => attempt(() => renameUsageAccount(e.engine, id, name))}
-                onRemove={(id) => void remove(e.engine, id)}
-              />
-            ))}
-
-          {installed.length > 0 && (
-            <div className="usage-add">
-              <div className="usage-add__buttons">
-                {installed.map((engine) => (
-                  <Button
-                    key={engine}
-                    variant="secondary"
-                    leftIcon={<AddIcon size={14} />}
-                    onClick={() => void add(engine)}
-                    data-add-account={engine}
-                  >
-                    Add a {ENGINE_LABEL[engine]} account
-                  </Button>
-                ))}
-              </div>
-              <p className="usage-section__muted">{ADD_ACCOUNT_WHY}</p>
-            </div>
           )}
 
           {installed.length > 0 && <AgentsCrossover installed={installed} now={now} />}
@@ -473,86 +545,61 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
   );
 }
 
-/** `ids` with the entries at `a` and `b` exchanged. */
-function swap(ids: readonly string[], a: number, b: number): string[] {
-  const next = [...ids];
-  [next[a], next[b]] = [next[b], next[a]];
-  return next;
-}
-
-function EngineStack({
-  engine,
-  aside,
-  several,
-  onReorder,
-  onUse,
-  onSignIn,
-  onRename,
-  onRemove,
+/**
+ * The total first: what is left across every account, of what, and when it
+ * next refills; then the bar, most room first, each account under its
+ * segment. Out everywhere, or nothing read, it says that instead of a figure.
+ */
+function TotalHero({
+  glance,
+  onOpen,
 }: {
-  engine: StackEngine;
-  aside?: ReactNode;
-  several: boolean;
-  onReorder: (ids: string[]) => void;
-  onUse: (id: string) => void;
-  onSignIn: (id: string) => void;
-  onRename: (id: string, name: string) => Promise<boolean>;
-  onRemove: (id: string) => void;
+  glance: UsageGlance;
+  onOpen: (engine: AgentEngine, id: string) => void;
 }) {
-  const ids = engine.keys.map((k) => k.id);
-  const draggable = engine.keys.length > 1;
+  const { total } = glance;
+  const out = glance.tone === 'limited';
+  const figure = glance.unread
+    ? glance.headline
+    : out || total.left === null
+      ? glance.row.figure
+      : total.figure;
+  const refill = out
+    ? glance.row.refill
+    : total.refill
+      ? `Next refill in ${total.refill.in}${
+          total.counted > 1 ? ` · ${total.refill.account}` : ''
+        }, ${total.refill.at}`
+      : null;
   return (
-    <section
-      className="usage-section usage-engine"
-      aria-labelledby={`usage-engine-${engine.engine}`}
-      data-engine={engine.engine}
+    <div
+      className="usage-hero"
+      data-tone={glance.tone}
+      data-unread={total.left === null || undefined}
+      data-testid="usage-hero"
     >
-      <div className="usage-section__head">
-        <h3 className="usage-section__title" id={`usage-engine-${engine.engine}`}>
-          {several ? `${engine.label} accounts` : 'Accounts'}
-        </h3>
-        {aside}
+      <div className="usage-hero__answer">
+        <p className="usage-hero__eyebrow">{total.counted > 1 ? 'All accounts' : 'Usage'}</p>
+        <h2 className="usage-hero__headline">
+          {figure}
+          {!out && total.left !== null && total.across && (
+            <span className="usage-hero__across"> {total.across}</span>
+          )}
+        </h2>
+        {refill && <p className="usage-hero__refill">{refill}</p>}
       </div>
-      <p className="usage-section__muted">
-        {draggable
-          ? 'Turns start on the first with room and carry on down. Drag to change the order, or use its menu.'
-          : 'Turns run on this one.'}
-      </p>
-      <DragSortScope
-        label={`${engine.label} account order`}
-        items={ids}
-        onMove={(move) => {
-          const order = move.projectedOrder?.map(String);
-          if (order && order.join() !== ids.join()) onReorder(order);
-        }}
-      >
-        <div className="usage-engine__keys">
-          {engine.keys.map((k, i) => (
-            <DragSortItem
-              key={k.key}
-              id={k.id}
-              group={engine.engine}
-              index={i}
-              label={k.name}
-              disabled={!draggable}
-              className="usage-engine__slot"
-            >
-              <UsageKey
-                k={k}
-                draggable={draggable}
-                actions={{
-                  onUse: () => onUse(k.id),
-                  onSignIn: () => onSignIn(k.id),
-                  onRename: (name) => onRename(k.id, name),
-                  onRemove: () => onRemove(k.id),
-                  onMoveUp: i > 0 ? () => onReorder(swap(ids, i, i - 1)) : undefined,
-                  onMoveDown: i < ids.length - 1 ? () => onReorder(swap(ids, i, i + 1)) : undefined,
-                }}
-              />
-            </DragSortItem>
-          ))}
+      <TotalBar total={total} size="large" onOpen={onOpen} />
+      {(glance.estimate || total.unread || glance.sameNotes.length > 0) && (
+        <div className="usage-hero__notes">
+          {glance.estimate && (
+            <p className="usage-hero__estimate">
+              {glance.headline}. {glance.estimate}: an estimate, not a reading.
+            </p>
+          )}
+          {total.unread && <p className="usage-hero__estimate">{total.unread}.</p>}
+          <SameNotes notes={glance.sameNotes} />
         </div>
-      </DragSortScope>
-    </section>
+      )}
+    </div>
   );
 }
