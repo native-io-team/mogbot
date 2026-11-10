@@ -756,6 +756,17 @@ digit nobody else has), sent as `agents.update` `colorway` / `icon` /
 a Mac, seeded with a colourway nobody wears, an icon read from what it's
 for and the first free letter of its name.
 
+Icons beyond the 22 featured legends come from the shared Lucide pack
+(docs/internal/agent-keys.md, "The icon pack"): under the featured row,
+"Search 2,029 more icons" opens `components/KeyIconSheet.tsx`, a sheet with
+the 112pt key, a search focused on open (the desk's `searchIcons`), the
+categories as chips, the icons picked this session and a virtualised grid.
+A pack icon is drawn round-capped once its drawings file has been required
+(blank for that moment). Metro doesn't split `import()` into bundles, so
+`metro.config.js` (and the Jest config) resolve the pack's loaders to
+`agentKeyPackShards.require.ts`: each drawings file a bundled module,
+evaluated the first time it's required.
+
 ### Conversations
 
 Several conversations with one agent ([agents.md](agents.md), "Several

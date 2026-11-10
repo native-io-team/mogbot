@@ -1676,6 +1676,25 @@ const LIVE = [
       'The key tapped: a row of eight small keys, one per colourway, a row of the icons on keys in its colourway, and a row of free keyboard keys (its own ringed); the current choice in each ringed in a neutral grey. The big key at the top shows its sublegend and pips',
   },
   {
+    name: 'agent-sheet-icons',
+    route: '/agent/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await page.clickLabel('Change how it looks');
+      await sleep(500);
+      await page.clickLabel('Search 2,029 more icons');
+      await page.waitFor(
+        `document.body.innerText.includes('2,051 icons')`,
+        20_000,
+        'the icon pack'
+      );
+      await page.type('money', 'input[aria-label="Search icons"]');
+      await sleep(800);
+    },
+    check:
+      'The icon sheet over the agent: Icon and Done, the agent’s key at 112pt, the search reading “money”, category chips (All, Featured, Accessibility…), “N for “money””, then a grid of small keys in the agent’s colourway: the Money legend first, then Lucide’s banknote, coins, currency, wallet, dollar sign…',
+  },
+  {
     name: 'agent-sheet-level',
     route: '/agent/fin',
     ready: 'Finance',

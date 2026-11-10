@@ -1,5 +1,6 @@
 /**
- * The legends printed on agent keys: the one registry of their drawings, so
+ * The featured legends printed on agent keys (the defaults, and what a new
+ * agent is given; the pack's are `agentKeyPack.ts`): the one registry of their drawings, so
  * a designer's final set replaces this file and nothing else
  * (docs/internal/agent-keys.md, "Icons"). Which icons exist, and their names,
  * are in `agent-keys.json` (the Mac reads it too); a test holds the two to
@@ -16,6 +17,11 @@
 export interface KeyIconDrawing {
   paths: string[];
   circles?: [number, number, number][];
+  /**
+   * Round caps and joins: a pack icon (`agentKeyPack.ts`), drawn the way its
+   * designers drew it. Ours are square-capped and mitred.
+   */
+  round?: boolean;
 }
 
 /** The grid every legend is drawn on. */

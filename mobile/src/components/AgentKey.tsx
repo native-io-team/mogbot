@@ -23,13 +23,15 @@ import {
   KEY_PIP_COUNT,
   KEY_GEOMETRY,
   colorwayOf,
-  iconDrawing,
   keyLookFor,
+  legendDrawing,
+  packDrawingsVersion,
   pipsFor,
+  subscribePackDrawings,
   type AgentIndependence,
   type KeyState,
 } from '@shipstudio/companion-protocol';
-import { useEffect, useId, useMemo, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -380,24 +382,30 @@ function Legend({
   light: KeyLight;
   dim: boolean;
 }) {
-  const drawing = iconDrawing(icon);
+  // A pack icon's drawing arrives with its file (agentKeyPack.ts): until
+  // then the face is blank, and the version bump re-draws it.
+  useSyncExternalStore(subscribePackDrawings, packDrawingsVersion);
+  const drawing = legendDrawing(icon);
+  // Ours are square-capped and mitred; a pack icon keeps its round caps.
+  const cap = drawing?.round ? 'round' : 'square';
+  const join = drawing?.round ? 'round' : 'miter';
   const strokes = (stroke: string, width: number, opacity = 1) => (
     <>
-      {drawing.paths.map((d) => (
+      {drawing?.paths.map((d, i) => (
         <Path
-          key={d}
+          key={`${i}:${d}`}
           d={d}
           fill="none"
           stroke={stroke}
           strokeWidth={width}
           strokeOpacity={opacity}
-          strokeLinecap="square"
-          strokeLinejoin="miter"
+          strokeLinecap={cap}
+          strokeLinejoin={join}
         />
       ))}
-      {drawing.circles?.map(([cx, cy, r]) => (
+      {drawing?.circles?.map(([cx, cy, r], i) => (
         <Circle
-          key={`${cx},${cy}`}
+          key={`${i}:${cx},${cy}`}
           cx={cx}
           cy={cy}
           r={r}

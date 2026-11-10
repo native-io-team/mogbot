@@ -2,7 +2,7 @@
  * Standalone harness surface for agent keys (docs/internal/agent-keys.md),
  * laid out like the approved reference (docs/internal/agent-keys-reference.html)
  * so the two can be put side by side: one key in every state at 112px and
- * 30px, in sidebar rows, the independence pips, the eight colourways as a
+ * 30px, in sidebar rows, the independence pips, the fourteen colourways as a
  * board, every legend, and the sizes. Either theme:
  *
  *   harness-keys.html?theme=light
@@ -44,6 +44,12 @@ const BOARD: [string, string, string][] = [
   ['mustard', 'send', 'P'],
   ['pink', 'chat', 'M'],
   ['sage', 'grid', 'D'],
+  ['brick', 'megaphone', 'B'],
+  ['plum', 'people', 'H'],
+  ['navy', 'shield', 'N'],
+  ['forest', 'chart', 'F'],
+  ['sky', 'globe', 'G'],
+  ['lilac', 'mic', 'V'],
 ];
 
 const DETAIL: Record<string, string> = {

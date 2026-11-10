@@ -30,7 +30,7 @@ const contrast = (a: string, b: string) => {
 };
 
 describe('colourways', () => {
-  it('are the eight of the spec, each a legend that reads on its face', () => {
+  it('are the fourteen of the spec, each a legend that reads on its face', () => {
     expect(COLORWAYS.map((c) => c.id)).toEqual([
       'blue',
       'orange',
@@ -40,6 +40,21 @@ describe('colourways', () => {
       'mustard',
       'pink',
       'sage',
+      'brick',
+      'plum',
+      'navy',
+      'forest',
+      'sky',
+      'lilac',
+    ]);
+    // The pale faces are marked light (a lit legend needs the deeper wash).
+    expect(COLORWAYS.filter((c) => c.light).map((c) => c.id)).toEqual([
+      'putty',
+      'mustard',
+      'pink',
+      'sage',
+      'sky',
+      'lilac',
     ]);
     for (const c of COLORWAYS) {
       expect(contrast(c.legend, c.face), c.id).toBeGreaterThanOrEqual(4.5);
@@ -155,6 +170,9 @@ describe('an agent from an older Mac', () => {
       keyLookFor({ name: 'Finance', color: 'amber', colorway: 'teal', icon: 'chat', boundKey: 'q' })
     ).toEqual({ colorway: 'teal', icon: 'chat', boundKey: 'Q' });
     expect(keyLookFor({ name: 'X', colorway: 'chrome', icon: 'unicorn' }).icon).toBe('grid');
+    // A pack icon is kept as chosen (which exist is the Mac's to say).
+    expect(keyLookFor({ name: 'X', icon: 'lucide:wallet' }).icon).toBe('lucide:wallet');
+    expect(keyLookFor({ name: 'X', icon: 'lucide:Wallet!' }).icon).toBe('grid');
   });
 });
 

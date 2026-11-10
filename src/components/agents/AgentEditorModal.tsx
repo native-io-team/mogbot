@@ -278,6 +278,8 @@ export function AgentEditorModal({
   const [pickedIcon, setIcon] = useState<string | null>(saved?.icon ?? null);
   const [pickedKey, setBoundKey] = useState<string | null>(saved?.boundKey ?? null);
   const [showLook, setShowLook] = useState(!agent);
+  // Opened by hand (not a new agent's, open from the start): its icon search takes focus.
+  const [lookByHand, setLookByHand] = useState(false);
   const [role, setRole] = useState(agent?.role ?? first?.role ?? '');
   const icon = pickedIcon ?? iconFor(name, role);
   const taken = useMemo(
@@ -573,7 +575,10 @@ export function AgentEditorModal({
           title={showLook ? 'Done changing how it looks' : 'Change how it looks'}
           aria-expanded={showLook}
           data-open={showLook || undefined}
-          onClick={() => setShowLook((open) => !open)}
+          onClick={() => {
+            setLookByHand(true);
+            setShowLook((open) => !open);
+          }}
         >
           {/* Open, the picker's big key is the key: this one would be it twice, 40px apart. */}
           {showLook ? (
@@ -602,6 +607,7 @@ export function AgentEditorModal({
           onColorwayChange={setColorway}
           onIconChange={setIcon}
           onBoundKeyChange={setBoundKey}
+          autoFocusSearch={lookByHand}
         />
       )}
 
