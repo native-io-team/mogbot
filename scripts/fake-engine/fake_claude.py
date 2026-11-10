@@ -53,6 +53,8 @@ With none, it runs `$FAKE_ENGINE_DEFAULT` (the same JSON), else replies
   {"result": true}                a `result` now, the process carrying on
                                   (a background task, a helper's round).
   {"raw": "text"}                 a raw stdout line (torn JSON, garbage).
+  {"list_tools": true}            log the app server's `tools/list` as this engine
+                                  reaches it (`served` in the log).
 
 Run as `codex` (a link named so), it is Codex's `app-server` (JSON-RPC on
 stdin/stdout, as observed on Codex 0.166, `testdata/codex-app-server.jsonl`),
@@ -373,6 +375,8 @@ class Turn:
                     resets = int(time.time()) + 3600
                     self.result(error="Claude AI usage limit reached|%d" % resets)
                     sys.exit(1)
+            elif "list_tools" in step:
+                log({"served": self.bridge.tools()})
             elif "sleep" in step:
                 time.sleep(float(step["sleep"]))
             elif "hang" in step:
@@ -553,6 +557,8 @@ class CodexTurn:
                     out({"type": "turn.failed", "error": {"message":
                         "You've hit your usage limit. Try again at 7:18 PM."}})
                     sys.exit(1)
+            elif "list_tools" in step:
+                log({"served": self.bridge.tools()})
             elif "sleep" in step:
                 time.sleep(float(step["sleep"]))
             elif "hang" in step:
@@ -880,6 +886,8 @@ class CodexApp:
             elif "usage_limit" in step:
                 if step.get("codex") and not os.environ.get(step.get("unless_env", "\0") or "\0"):
                     self.failed = "You've hit your usage limit. Try again at 7:18 PM."
+            elif "list_tools" in step:
+                log({"served": self.bridge.tools()})
             elif "sleep" in step:
                 self.wait(float(step["sleep"]))
             elif "hang" in step:
@@ -1138,6 +1146,8 @@ class Acp:
                 with open(full, "w") as f:
                     f.write(step.get("text", ""))
                 self.done(cid, "Wrote file successfully.")
+            elif "list_tools" in step:
+                log({"served": self.bridge.tools()})
             elif "sleep" in step:
                 time.sleep(float(step["sleep"]))
             elif "hang" in step:

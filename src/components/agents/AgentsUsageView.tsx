@@ -535,7 +535,8 @@ export function UsagePanel({
                 Other compute on this Mac
               </h3>
               <p className="usage-section__muted">
-                Detected here. Agents don’t run on it; project terminals can.
+                Detected here, with no plan limits to read. Agents can run on OpenCode; they reach
+                Ollama and LM Studio models only through it.
               </p>
               <ul className="usage-section__list">
                 {inventory.local.map((l) => (

@@ -5530,7 +5530,8 @@ never slow down for limits unless the user chose that.
   no redirects, so nothing leaves this Mac) and said
   "installed, not running" when it doesn't answer. OpenCode is an engine
   (agents can run on it, and through it on these local models), but it
-  reports no limits, so it is listed here rather than as an account.
+  reports no limits, so it is listed here rather than as an account; its line counts the
+  agents on it, and their tokens are in each agent's usage.
 
 **Readings vs estimates.** The rule "only what the engines report, never
 estimated" is about *readings* and stands unchanged. A forecast is an
@@ -6883,7 +6884,13 @@ question ("Tap a fruit above"), and again ("I put up a table with…") with
 the receipt saying to end the turn with no more text. So once a live turn's
 `show` asks (`blocks::asks`, `runner::note_blocks_asked`), the turn's
 further words go in "What it did" as notes and the question stays the
-chat's last word; the scenario `blocks` holds this.
+chat's last word; the scenario `blocks` holds this. Only words read after
+the `show` call itself fold (`blocks::is_call`, recognised from each
+engine's own event: Claude Code's `tool_use`, Codex's `mcp_tool_call` /
+`mcpToolCall`, OpenCode's `app_show`): the bridge hears the call as soon as
+the engine makes it, maybe before the runner has read what the engine wrote
+just before, and that is the chat's. The `parity-*` scenarios hold it on
+every engine.
 
 Harness: `agents-blocks-*` (numbers, a chart's tooltip, a sorted table, more
 charts, deciding, a form left empty, progress, answered, outside text).
@@ -7488,7 +7495,7 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
   Allow, a bridge tool, the reply streamed, the thread resumed, a declined
   command that never runs with the steer telling the agent why, Stop on a
   hung turn, a failed turn and a crash each ending in a line, and a lost
-  thread replaced. The `opencode` scenario runs an OpenCode agent through
+  thread replaced. The `parity-claude`, `parity-codex-app`, `parity-codex-exec` and `parity-opencode` scenarios run the same checks on each: `show` served through the engine's own MCP config and kept, its receipt reaching the engine, words after an asking `show` in "What it did" (their draft withdrawn) and words before it in the chat; the same Bash card and Allow, or `asks: false` said for exec; Steady and Bold deciding through `mcp::decide`; a result card; `usage_overview`; tokens counted with no price the engine didn't report; two conversations each resuming its own session. The `opencode` scenario runs an OpenCode agent through
   it: a command that asks and runs on Allow, a bridge tool, the reply
   streamed, the session resumed, a denied command that never runs and the
   note after it, a crash and an error each ending in a line, a lost session

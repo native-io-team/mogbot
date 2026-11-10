@@ -2055,11 +2055,17 @@ export interface UsagePace {
   spanMinutes: number;
 }
 
-/** Other compute detected on this Mac; agents here don't run on it. */
+/**
+ * Other compute detected on this Mac, with no plan limits to read. OpenCode
+ * is an engine agents can run on (`agents`: how many do); Ollama and LM
+ * Studio models reach agents only through OpenCode.
+ */
 export interface LocalCompute {
   name: string;
   running?: boolean;
   models: string[];
+  /** OpenCode only: the agents that run on it. */
+  agents?: number;
 }
 
 /** A window near its reset with capacity left, as reported. */

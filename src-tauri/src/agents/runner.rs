@@ -6242,6 +6242,9 @@ async fn run_turn(
     // Short lines written mid-turn go to the timeline (`narration`).
     let mut narration = super::narration::Narration::default();
     clear_blocks_asked(agent_id);
+    // The `show` call itself has been read: only words after it can follow
+    // the question (`blocks::is_call`).
+    let mut show_read = false;
     // When the engine's process tree was last looked at (`dev_servers`).
     let mut tree_seen_at = 0_i64;
     // `claude` exited. Its output normally closes with it, but a child that
@@ -6409,7 +6412,7 @@ async fn run_turn(
                                 continue;
                             }
                             // Asked with blocks: the question is the last word.
-                            if !text.is_empty() && !quiet && blocks_asked(agent_id) {
+                            if !text.is_empty() && !quiet && show_read && blocks_asked(agent_id) {
                                 said_anything = true;
                                 let fold = super::narration::Fate::Fold(super::narration::Held {
                                     draft_id,
@@ -6434,6 +6437,7 @@ async fn run_turn(
                         }
                         Step::Action(action) => {
                             note_acted(agent_id);
+                            show_read |= super::blocks::is_call(&action);
                             settle_narration(app, agent_id, narration.work(), &mut said_anything).await;
                             super::workplace::note(app, agent_id, &layout.cwd, &action);
                             let doing = super::work::on_action(agent_id, action, store::now_ms());

@@ -2319,11 +2319,13 @@ impl Backend for Stub {
                     name: "Ollama",
                     running: Some(true),
                     models: vec!["llama3.2:3b".into()],
+                    agents: None,
                 },
                 LocalCompute {
                     name: "OpenCode",
                     running: None,
                     models: vec![],
+                    agents: None,
                 },
             ],
             spare: vec![Spare {

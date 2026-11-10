@@ -119,6 +119,10 @@ pub struct LocalCompute {
     pub running: Option<bool>,
     /// The models its server listed. Empty when not running or none.
     pub models: Vec<String>,
+    /// OpenCode only: the agents that run on it. It is an engine with no
+    /// plan to read (tokens only), so it's listed here, not with accounts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agents: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -514,7 +518,7 @@ pub fn build(parts: Parts) -> Inventory {
         totals: compute::totals(&accounts, now),
         engines,
         accounts,
-        local: parts.local,
+        local: with_agents(parts.local, &parts.agents),
         backlog: parts.backlog,
         agents,
         routines,
@@ -580,6 +584,23 @@ fn sign_in_changes(
 
 /* ---------------------------------------------------- other compute */
 
+/// OpenCode's line counts the agents that run on it (hidden ones aside).
+fn with_agents(local: Vec<LocalCompute>, agents: &[Agent]) -> Vec<LocalCompute> {
+    let on_opencode = agents
+        .iter()
+        .filter(|a| !a.hidden && a.engine == Engine::OpenCode)
+        .count();
+    local
+        .into_iter()
+        .map(|mut l| {
+            if l.agents.is_some() {
+                l.agents = Some(u32::try_from(on_opencode).unwrap_or(u32::MAX));
+            }
+            l
+        })
+        .collect()
+}
+
 /// What was found, and when.
 type Found = Option<(Vec<LocalCompute>, Instant)>;
 static LOCAL: LazyLock<Mutex<Found>> = LazyLock::new(|| Mutex::new(None));
@@ -630,6 +651,8 @@ pub async fn local_compute() -> Vec<LocalCompute> {
             name: "OpenCode",
             running: None,
             models: Vec::new(),
+            // Counted when the inventory is built (`build`).
+            agents: Some(0),
         });
     }
     if find("ollama").await || std::path::Path::new("/Applications/Ollama.app").exists() {
@@ -638,6 +661,7 @@ pub async fn local_compute() -> Vec<LocalCompute> {
             name: "Ollama",
             running: Some(models.is_some()),
             models: models.unwrap_or_default(),
+            agents: None,
         });
     }
     if find("lms").await
@@ -649,6 +673,7 @@ pub async fn local_compute() -> Vec<LocalCompute> {
             name: "LM Studio",
             running: Some(models.is_some()),
             models: models.unwrap_or_default(),
+            agents: None,
         });
     }
     *LOCAL.lock().unwrap_or_else(|e| e.into_inner()) = Some((found.clone(), Instant::now()));
@@ -946,14 +971,21 @@ where
         }
     }
     if !inv.local.is_empty() {
-        s.push_str("\nOTHER COMPUTE ON THIS MAC (detected; agents here don't run on it):\n");
+        s.push_str("\nOTHER COMPUTE ON THIS MAC (detected; no plan limits to read. OpenCode is an engine agents can run on, tokens counted per agent; Ollama and LM Studio models reach agents only through OpenCode):\n");
         for l in &inv.local {
-            let state = match l.running {
+            let mut state = match l.running {
                 None => "installed".to_string(),
                 Some(false) => "installed, not running".to_string(),
                 Some(true) if l.models.is_empty() => "running, no models listed".to_string(),
                 Some(true) => format!("running, models: {}", l.models.join(", ")),
             };
+            if let Some(n) = l.agents {
+                state.push_str(&format!(
+                    ", {n} agent{} run{} on it",
+                    if n == 1 { "" } else { "s" },
+                    if n == 1 { "s" } else { "" }
+                ));
+            }
             s.push_str(&format!("- {}: {state}.\n", l.name));
         }
     }
@@ -1284,6 +1316,43 @@ mod tests {
             org: Some(org.into()),
             org_name: None,
         }
+    }
+
+    /// OpenCode became an engine: the overview says agents run on it (and
+    /// how many), never "agents here don't run on it", which once told an
+    /// OpenCode agent its own engine wasn't one.
+    #[test]
+    fn opencode_is_said_to_run_agents_and_counts_them() {
+        let mut p = parts();
+        p.agents = vec![
+            agent("a", Engine::OpenCode, Vec::new()),
+            agent("b", Engine::OpenCode, Vec::new()),
+            agent("c", Engine::Claude, Vec::new()),
+        ];
+        p.local = vec![
+            LocalCompute {
+                name: "OpenCode",
+                running: None,
+                models: Vec::new(),
+                agents: Some(0),
+            },
+            LocalCompute {
+                name: "Ollama",
+                running: Some(false),
+                models: Vec::new(),
+                agents: None,
+            },
+        ];
+        let inv = build(p);
+        assert_eq!(inv.local[0].agents, Some(2));
+        assert_eq!(inv.local[1].agents, None);
+        let text = overview_text(&inv, &chrono::Utc);
+        assert!(!text.contains("don't run on it"), "{text}");
+        assert!(
+            text.contains("- OpenCode: installed, 2 agents run on it."),
+            "{text}"
+        );
+        assert!(text.contains("- Ollama: installed, not running."), "{text}");
     }
 
     /// The owner's case: This Mac's sign-in and a setup-token "Personal

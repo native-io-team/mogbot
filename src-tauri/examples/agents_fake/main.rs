@@ -2749,6 +2749,318 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
+/* ------------------------------------------------------------------ parity */
+
+/// The engines a feature must work the same on: Claude Code, Codex on its
+/// `app-server` (what a current Codex runs on), Codex on `exec` (the
+/// fallback for an older one) and OpenCode over ACP.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum On {
+    Claude,
+    CodexApp,
+    CodexExec,
+    OpenCode,
+}
+
+impl On {
+    fn engine(self) -> Engine {
+        match self {
+            On::Claude => Engine::Claude,
+            On::CodexApp | On::CodexExec => Engine::Codex,
+            On::OpenCode => Engine::OpenCode,
+        }
+    }
+
+    /// Whether its turns can stop on a card (`EngineInfo::asks`).
+    fn asks(self) -> bool {
+        self != On::CodexExec
+    }
+
+    /// Set the Codex driver the next turns use (debug builds read this).
+    fn drive(self) {
+        if self == On::CodexApp {
+            std::env::remove_var("SHIPSTUDIO_AGENTS_CODEX_EXEC");
+        } else {
+            std::env::set_var("SHIPSTUDIO_AGENTS_CODEX_EXEC", "1");
+        }
+    }
+}
+
+/// One agent on `on`, muted.
+fn parity_agent(h: &H, name: &str, on: On) -> store::Agent {
+    on.drive();
+    let a = h.agent(name);
+    store::update(&a.id, |a| a.engine = on.engine()).unwrap()
+}
+
+/// Every feature that landed tonight, the same on each engine:
+/// - `show` is served (the engine reaches it through its own MCP config),
+///   is kept as one message with blocks, the receipt reaches the engine,
+///   and what the engine writes after an asking `show` goes in "What it
+///   did", whatever its streaming events are;
+/// - a command asks through the same card and runs on Allow, or, on an
+///   engine that can't ask, the app says so rather than pretending;
+/// - a result card is kept;
+/// - the turn's tokens are counted (never a price it didn't report);
+/// - the usage tools answer;
+/// - two conversations each resume their own session.
+async fn parity(h: &H, on: On) -> Check {
+    let name = match on {
+        On::Claude => "ParityClaude",
+        On::CodexApp => "ParityCodexApp",
+        On::CodexExec => "ParityCodexExec",
+        On::OpenCode => "ParityOpenCode",
+    };
+    let a = parity_agent(h, name, on);
+    let home = store::agent_home(&a.id).unwrap();
+    let step = |what: &str, e: String| format!("{on:?} {what}: {e}");
+
+    // 1. Blocks, and the words after the question.
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"list_tools": true},
+            {"say": "What I found:\n\n- Apples are up\n- Mangoes are short"},
+            {"tool": "show", "args": blocks_show()},
+            {"slow": "I put up a table of prices. Which one do you want? Tap a fruit above.", "every": 0.05}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await.map_err(|e| step("show", e))?;
+    no_errors(&a.id).map_err(|e| step("show", e))?;
+    // `show` reached it through its own MCP config.
+    let served = h
+        .fake_log()
+        .into_iter()
+        .rev()
+        .find_map(|e| e.get("served").cloned())
+        .unwrap_or_default();
+    ensure(
+        served
+            .as_array()
+            .is_some_and(|t| t.iter().any(|t| t == agents::blocks::TOOL)),
+        step("tools", format!("`show` not served: {served}")),
+    )?;
+    let shown = log(&a.id).iter().filter(|m| m.blocks.is_some()).count();
+    ensure(
+        shown == 1,
+        step("show", format!("{shown} messages with blocks")),
+    )?;
+    let said = replies(&a.id);
+    ensure(
+        !said.iter().any(|r| r.contains("Tap a fruit above")),
+        step(
+            "show",
+            format!("the words after it reached the chat: {said:?}"),
+        ),
+    )?;
+    // Its streamed draft was withdrawn, not left under the question.
+    let last_draft = h
+        .drafts
+        .lock()
+        .unwrap()
+        .iter()
+        .rev()
+        .find(|(id, _)| *id == a.id)
+        .map(|(_, t)| t.clone())
+        .unwrap_or_default();
+    ensure(
+        !last_draft.contains("Tap a fruit"),
+        step("show", format!("its draft stayed: {last_draft:?}")),
+    )?;
+    // What it wrote before asking is the chat's, whenever the bridge heard
+    // the `show` relative to the runner reading those words.
+    ensure(
+        said.iter().any(|r| r.starts_with("What I found:")),
+        step(
+            "show",
+            format!("the words before it left the chat: {said:?}"),
+        ),
+    )?;
+    let in_timeline = log(&a.id).iter().any(|m| {
+        let work = m.work.clone().or_else(|| agents::work::load(&a.id, &m.id));
+        format!("{work:?}").contains("Tap a fruit above")
+    });
+    ensure(
+        in_timeline,
+        step(
+            "show",
+            "the words after it aren't in \"What it did\"".into(),
+        ),
+    )?;
+    let told = h.fake_log().iter().any(|e| {
+        e["tool"] == agents::blocks::TOOL && e.to_string().contains("stop here and wait for it")
+    });
+    ensure(
+        told,
+        step("show", "the receipt never reached the engine".into()),
+    )?;
+    let usage = store::get(&a.id).unwrap().usage.all_time;
+    ensure(
+        usage.turns >= 1 && usage.input_tokens + usage.output_tokens > 0,
+        step("usage", format!("not counted: {usage:?}")),
+    )?;
+    ensure(
+        on == On::Claude || usage.priced_turns == 0,
+        step("usage", format!("a price it never reported: {usage:?}")),
+    )?;
+
+    // 2. A command: the same card, or said plainly that it can't ask.
+    let info = agents::engine::info(on.engine()).await;
+    ensure(
+        info.asks == on.asks(),
+        step("asks", format!("the app says asks={} for it", info.asks)),
+    )?;
+    let before = approvals(&a.id).len();
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "python3 -c 'print(6*7)' > parity.txt"},
+            {"say": "Ran it."}
+        ])),
+    )
+    .await?;
+    if on.asks() {
+        let c = card(h, &a.id, before).await.map_err(|e| step("card", e))?;
+        ensure(
+            c.tool.as_deref() == Some("Bash"),
+            step("card", format!("card for {:?}", c.tool)),
+        )?;
+        answer(h, &a.id, &c, true).await?;
+    }
+    h.turn(&a.id).await.map_err(|e| step("card", e))?;
+    no_errors(&a.id).map_err(|e| step("card", e))?;
+    ensure(
+        std::fs::read_to_string(home.join("parity.txt"))
+            .unwrap_or_default()
+            .trim()
+            == "42",
+        step("card", "the allowed command didn't run".into()),
+    )?;
+    ensure(
+        last_reply(&a.id) == "Ran it.",
+        step("card", format!("reply {:?}", last_reply(&a.id))),
+    )?;
+
+    // 2b. The independence level decides for it, as for Claude Code
+    // (`mcp::decide`): a read at Steady and local work at Bold go through
+    // with no card; a push at Bold still asks.
+    if on.asks() {
+        let quiet_before = approvals(&a.id).len();
+        h.send(&a.id, &fake(json!([{"bash": "ls"}, {"say": "Looked."}])))
+            .await?;
+        h.turn(&a.id).await.map_err(|e| step("steady", e))?;
+        ensure(
+            approvals(&a.id).len() == quiet_before && last_reply(&a.id) == "Looked.",
+            step(
+                "steady",
+                format!("a read asked: {:?}", approvals(&a.id).last()),
+            ),
+        )?;
+        agents::independence::set_level(agents::independence::Level::GoHard, 0)
+            .map_err(|e| e.to_string())?;
+        let bold = async {
+            h.send(
+                &a.id,
+                &fake(json!([
+                    {"bash": "python3 -c 'print(1)' > bold.txt"},
+                    {"bash": "git push origin main"},
+                    {"say": "Pushed?"}
+                ])),
+            )
+            .await?;
+            let c = card(h, &a.id, quiet_before).await?;
+            ensure(
+                format!("{:?}", c.input).contains("push origin"),
+                format!("the card is for {:?}", c.input),
+            )?;
+            ensure(home.join("bold.txt").exists(), "local work asked at Bold")?;
+            answer(h, &a.id, &c, false).await?;
+            h.turn(&a.id).await
+        }
+        .await;
+        agents::independence::set_level(agents::independence::Level::Judgement, 0)
+            .map_err(|e| e.to_string())?;
+        bold.map_err(|e| step("bold", e))?;
+    }
+
+    // 3. A result card, and the usage tools.
+    std::fs::write(home.join("report.csv"), "a,b\n1,2\n").unwrap();
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"tool": "share_result", "args": {
+                "title": "Tiny report",
+                "summary": "Two columns, one row.",
+                "items": [{"path": "report.csv", "label": "The CSV"}],
+                "checked": ["Opened it"],
+                "not_verified": ["Nothing else"]}},
+            {"tool": "usage_overview"},
+            {"say": "Here it is."}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await.map_err(|e| step("result", e))?;
+    no_errors(&a.id).map_err(|e| step("result", e))?;
+    let cards = log(&a.id).iter().filter(|m| m.result.is_some()).count();
+    ensure(cards == 1, step("result", format!("{cards} result cards")))?;
+    let overview = h
+        .fake_log()
+        .into_iter()
+        .rev()
+        .find(|e| e["tool"] == "usage_overview")
+        .ok_or_else(|| step("usage tools", "usage_overview never called".into()))?;
+    ensure(
+        overview["reply"]["result"]["isError"] != true,
+        step("usage tools", format!("{}", overview["reply"])),
+    )?;
+
+    // 4. Several conversations: each its own session, each resumed.
+    let s1 = store::get(&a.id)
+        .unwrap()
+        .session_id
+        .ok_or_else(|| step("conversations", "no session".into()))?;
+    let first = agents::conversations::list(&a.id)
+        .map_err(|e| e.to_string())?
+        .current;
+    let second = cmd::agents_conversation_new(h.app.clone(), a.id.clone())
+        .await
+        .map_err(|e| e.to_string())?
+        .current;
+    h.send_in(
+        &a.id,
+        &fake(json!([{"say": "two {session} {turn}"}])),
+        Some(&second),
+    )
+    .await?;
+    h.turn(&a.id).await.map_err(|e| step("conversations", e))?;
+    let s2 = store::get(&a.id).unwrap().session_id.unwrap_or_default();
+    ensure(
+        s2 != s1 && last_reply(&a.id) == format!("two {s2} 1"),
+        step(
+            "conversations",
+            format!("second: {s2} / {:?}", last_reply(&a.id)),
+        ),
+    )?;
+    h.send_in(
+        &a.id,
+        &fake(json!([{"say": "one again {session}"}])),
+        Some(&first),
+    )
+    .await?;
+    h.turn(&a.id).await.map_err(|e| step("conversations", e))?;
+    no_errors(&a.id).map_err(|e| step("conversations", e))?;
+    ensure(
+        last_reply(&a.id) == format!("one again {s1}"),
+        step(
+            "conversations",
+            format!("first not resumed: {:?}", last_reply(&a.id)),
+        ),
+    )?;
+    std::env::set_var("SHIPSTUDIO_AGENTS_CODEX_EXEC", "1");
+    Ok(())
+}
+
 const ALL: &[&str] = &[
     "normal",
     "approvals",
@@ -2791,6 +3103,10 @@ const ALL: &[&str] = &[
     "untrusted-init",
     "brief",
     "blocks",
+    "parity-claude",
+    "parity-codex-app",
+    "parity-codex-exec",
+    "parity-opencode",
     "page",
 ];
 
@@ -3008,6 +3324,10 @@ fn main() {
                 "login" => login(&h).await,
                 "untrusted-init" => untrusted_init(&h).await,
                 "blocks" => blocks(&h).await,
+                "parity-claude" => parity(&h, On::Claude).await,
+                "parity-codex-app" => parity(&h, On::CodexApp).await,
+                "parity-codex-exec" => parity(&h, On::CodexExec).await,
+                "parity-opencode" => parity(&h, On::OpenCode).await,
                 "page" => page::page_scenario(&h).await,
                 "real-blocks" => real_blocks(&h).await,
                 "real-chief" => real_chief::real_chief(&h).await,

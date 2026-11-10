@@ -88,6 +88,13 @@ describe('the capacity inventory, in words', () => {
 
   it('says what other compute was detected, never more', () => {
     expect(localLine({ name: 'OpenCode', models: [] })).toBe('OpenCode · installed');
+    expect(localLine({ name: 'OpenCode', models: [], agents: 0 })).toBe('OpenCode · installed');
+    expect(localLine({ name: 'OpenCode', models: [], agents: 1 })).toBe(
+      'OpenCode · installed · 1 agent runs on it'
+    );
+    expect(localLine({ name: 'OpenCode', models: [], agents: 3 })).toBe(
+      'OpenCode · installed · 3 agents run on it'
+    );
     expect(localLine({ name: 'Ollama', running: false, models: [] })).toBe(
       'Ollama · installed, not running'
     );
