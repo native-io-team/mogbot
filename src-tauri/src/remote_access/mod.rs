@@ -42,11 +42,16 @@ pub use server::{is_running, running_port, start_server, stop_server};
 
 /// What the user chose, in its own owner-only file next to app_state.json —
 /// same reasoning as the agent bridge's identity file: app_state.json is
-/// read-modify-written by many writers, and this one holds a credential.
+/// read-modify-written by many writers. The connector token itself lives in
+/// the login Keychain ([`token_store`]); the file carries it only while the
+/// Keychain refuses it, and an older file's copy is moved over on first read.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct RemoteConfig {
     pub enabled: bool,
+    /// Filled from the Keychain on read; written to the file only as the
+    /// fallback when the Keychain refused it.
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub token: String,
     pub port: Option<u16>,
     /// Project paths the remote may see, exactly as the dashboard knows them.
@@ -74,22 +79,211 @@ fn config_path() -> Option<std::path::PathBuf> {
         .map(|dir| dir.join("remote_access.json"))
 }
 
+fn lock_config() -> std::sync::MutexGuard<'static, ()> {
+    CONFIG_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn read_config() -> RemoteConfig {
-    config_path()
-        .and_then(|p| std::fs::read_to_string(p).ok())
+    let _guard = lock_config();
+    match config_path() {
+        Some(path) => load_config(&path, token_store::app()),
+        None => RemoteConfig::default(),
+    }
+}
+
+/// The file at `path`, with the token from `store`. Holding [`CONFIG_LOCK`].
+///
+/// An older file carries the token itself: it is copied into `store`, read
+/// back, and only once it reads back the same is the file rewritten without
+/// it. If the Keychain refuses (locked, denied), the file's copy keeps
+/// working and the move is tried again next read.
+fn load_config(path: &std::path::Path, store: &dyn token_store::Store) -> RemoteConfig {
+    let mut config: RemoteConfig = std::fs::read_to_string(path)
+        .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    let in_file = std::mem::take(&mut config.token);
+    match store.load() {
+        Ok(Some(kept)) if in_file.is_empty() || in_file == kept => {
+            config.token = kept;
+            if !in_file.is_empty() {
+                // Already moved: the file's copy goes.
+                if let Err(e) = write_file(path, &config, false) {
+                    tracing::warn!(error = %e, "[Remote] Could not drop the token from the settings file");
+                }
+            }
+        }
+        Ok(None) if in_file.is_empty() => {}
+        // The file holds a token only when the Keychain refused it, so one
+        // that differs from the Keychain's is the newer link: it moves too.
+        Ok(_) => {
+            config.token = in_file;
+            if token_store::save_verified(store, &config.token) {
+                tracing::info!("[Remote] Moved the connector token into the Keychain");
+                if let Err(e) = write_file(path, &config, false) {
+                    tracing::warn!(error = %e, "[Remote] Could not drop the token from the settings file");
+                }
+            }
+        }
+        // The Keychain didn't answer: never mistake that for "no token" (a
+        // new one would break the link the assistant holds).
+        Err(e) => {
+            tracing::warn!(error = %e, "[Remote] Keychain didn't answer; using the settings file's token");
+            config.token = in_file;
+        }
+    }
+    config
 }
 
 fn write_config(config: &RemoteConfig) -> Result<(), CommandError> {
     let path = config_path().ok_or_else(|| CommandError::expected("No home folder."))?;
+    store_config(&path, config, token_store::app())
+}
+
+/// Write `config`: the token into `store` (unless it is already there), the
+/// rest into the file. A token the Keychain refused stays in the file, as
+/// before, so the link keeps working.
+fn store_config(
+    path: &std::path::Path,
+    config: &RemoteConfig,
+    store: &dyn token_store::Store,
+) -> Result<(), CommandError> {
+    let in_keychain = config.token.is_empty()
+        || store.load().ok().flatten().as_deref() == Some(config.token.as_str())
+        || token_store::save_verified(store, &config.token);
+    if !in_keychain {
+        tracing::warn!(
+            "[Remote] Keychain refused the connector token; keeping it in the settings file"
+        );
+    }
+    write_file(path, config, !in_keychain)
+}
+
+/// The settings file, with the token only when `with_token`.
+fn write_file(
+    path: &std::path::Path,
+    config: &RemoteConfig,
+    with_token: bool,
+) -> Result<(), CommandError> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let json = serde_json::to_string_pretty(config)
+    let mut on_disk = config.clone();
+    if !with_token {
+        on_disk.token.clear();
+    }
+    let json = serde_json::to_string_pretty(&on_disk)
         .map_err(|e| CommandError::from(format!("serialize remote config: {e}")))?;
-    write_private(&path, json.as_bytes())?;
+    write_private(path, json.as_bytes())?;
     Ok(())
+}
+
+/// Where the connector token lives: one generic-password item in the login
+/// Keychain (`crate::keychain`, the same path as every other secret here),
+/// kept in memory after the first read since the server checks it on every
+/// request. Tests never reach the real Keychain.
+pub(crate) mod token_store {
+    use std::sync::Mutex;
+
+    /// `Ok(None)` only when there is definitely no token.
+    pub trait Store: Send + Sync {
+        fn load(&self) -> Result<Option<String>, String>;
+        fn save(&self, token: &str) -> Result<(), String>;
+    }
+
+    /// Save, then read back: only a token that reads back the same counts as
+    /// kept (the old file's copy is deleted on that alone).
+    pub fn save_verified(store: &dyn Store, token: &str) -> bool {
+        store.save(token).is_ok() && store.load().ok().flatten().as_deref() == Some(token)
+    }
+
+    /// The app's own item, through a cache.
+    pub fn app() -> &'static dyn Store {
+        &CACHED
+    }
+
+    struct Cached;
+    static CACHED: Cached = Cached;
+    static CACHE: Mutex<Option<String>> = Mutex::new(None);
+
+    impl Store for Cached {
+        fn load(&self) -> Result<Option<String>, String> {
+            let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(t) = cache.as_ref() {
+                return Ok(Some(t.clone()));
+            }
+            let found = backend::load()?;
+            cache.clone_from(&found);
+            Ok(found)
+        }
+
+        fn save(&self, token: &str) -> Result<(), String> {
+            let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            *cache = None;
+            backend::save(token)?;
+            *cache = Some(token.to_string());
+            Ok(())
+        }
+    }
+
+    #[cfg(not(test))]
+    mod backend {
+        fn item() -> crate::companion::keystore::Keychain {
+            crate::companion::keystore::Keychain::named(
+                format!("{}token", crate::brand::keychain_prefix("remote-access")),
+                "connector-token".into(),
+            )
+        }
+        pub fn load() -> Result<Option<String>, String> {
+            use crate::companion::keystore::KeyStore;
+            item().load()
+        }
+        pub fn save(token: &str) -> Result<(), String> {
+            use crate::companion::keystore::KeyStore;
+            item().save(token)
+        }
+    }
+
+    #[cfg(test)]
+    mod backend {
+        use std::sync::Mutex;
+        static ITEM: Mutex<Option<String>> = Mutex::new(None);
+        pub fn load() -> Result<Option<String>, String> {
+            Ok(ITEM.lock().unwrap().clone())
+        }
+        pub fn save(token: &str) -> Result<(), String> {
+            *ITEM.lock().unwrap() = Some(token.to_string());
+            Ok(())
+        }
+    }
+
+    /// In memory, for tests: a token, and switches to make it fail.
+    #[cfg(test)]
+    #[derive(Default)]
+    pub struct Memory {
+        pub token: Mutex<Option<String>>,
+        pub fail_load: std::sync::atomic::AtomicBool,
+        pub fail_save: std::sync::atomic::AtomicBool,
+    }
+
+    #[cfg(test)]
+    impl Store for Memory {
+        fn load(&self) -> Result<Option<String>, String> {
+            use std::sync::atomic::Ordering;
+            if self.fail_load.load(Ordering::SeqCst) {
+                return Err("locked".into());
+            }
+            Ok(self.token.lock().unwrap().clone())
+        }
+        fn save(&self, token: &str) -> Result<(), String> {
+            use std::sync::atomic::Ordering;
+            if self.fail_save.load(Ordering::SeqCst) {
+                return Err("refused".into());
+            }
+            *self.token.lock().unwrap() = Some(token.to_string());
+            Ok(())
+        }
+    }
 }
 
 /// Write a file only its owner can read. Created 0600 rather than chmod-ed
@@ -116,10 +310,9 @@ pub(crate) fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Re
 
 /// Read-modify-write the config under one lock.
 pub fn update_config<T>(f: impl FnOnce(&mut RemoteConfig) -> T) -> Result<T, CommandError> {
-    let _guard = CONFIG_LOCK
-        .lock()
-        .map_err(|e| format!("remote config lock poisoned: {e}"))?;
-    let mut config = read_config();
+    let _guard = lock_config();
+    let path = config_path().ok_or_else(|| CommandError::expected("No home folder."))?;
+    let mut config = load_config(&path, token_store::app());
     let out = f(&mut config);
     write_config(&config)?;
     Ok(out)
@@ -891,6 +1084,81 @@ pub async fn resume_on_launch(app: tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn file_has_token(path: &std::path::Path, token: &str) -> bool {
+        std::fs::read_to_string(path).unwrap().contains(token)
+    }
+
+    /// An older settings file held the token. The first read moves it into
+    /// the Keychain, checks it reads back, and only then drops it from the
+    /// file; the link (the token) is unchanged.
+    #[test]
+    fn an_old_files_token_moves_to_the_keychain() {
+        use std::sync::atomic::Ordering;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("remote_access.json");
+        let old = "a".repeat(64);
+        std::fs::write(
+            &path,
+            serde_json::json!({ "enabled": true, "token": old, "projects": ["/p/site"] })
+                .to_string(),
+        )
+        .unwrap();
+
+        // The Keychain is locked: the file's copy keeps working, untouched.
+        let store = token_store::Memory::default();
+        store.fail_load.store(true, Ordering::SeqCst);
+        let c = load_config(&path, &store);
+        assert_eq!(c.token, old);
+        assert!(file_has_token(&path, &old));
+
+        // It refuses the write: still the file's copy, still in the file.
+        store.fail_load.store(false, Ordering::SeqCst);
+        store.fail_save.store(true, Ordering::SeqCst);
+        assert_eq!(load_config(&path, &store).token, old);
+        assert!(file_has_token(&path, &old));
+
+        // It takes it: moved, verified, and gone from the file.
+        store.fail_save.store(false, Ordering::SeqCst);
+        let c = load_config(&path, &store);
+        assert_eq!(c.token, old);
+        assert!(c.enabled && c.projects == vec!["/p/site".to_string()]);
+        assert_eq!(store.token.lock().unwrap().as_deref(), Some(old.as_str()));
+        assert!(!file_has_token(&path, &old), "the file no longer holds it");
+        // And reads back from the Keychain from then on.
+        assert_eq!(load_config(&path, &store).token, old);
+    }
+
+    /// A new token goes to the Keychain, never the file; one the Keychain
+    /// refuses is kept in the file so the link still works.
+    #[test]
+    fn a_new_token_is_kept_in_the_keychain() {
+        use std::sync::atomic::Ordering;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("remote_access.json");
+        let store = token_store::Memory::default();
+        let mut c = load_config(&path, &store);
+        assert!(c.token.is_empty());
+        c.token = new_token();
+        store_config(&path, &c, &store).unwrap();
+        assert!(!file_has_token(&path, &c.token));
+        assert_eq!(load_config(&path, &store).token, c.token);
+
+        // Replaced while the Keychain refuses writes: the file carries it.
+        store.fail_save.store(true, Ordering::SeqCst);
+        let replaced = new_token();
+        c.token = replaced.clone();
+        store_config(&path, &c, &store).unwrap();
+        assert!(file_has_token(&path, &replaced));
+        // The Keychain still holds the old one; the file's is the link the
+        // user copied, so it wins and is moved on the next read.
+        assert_eq!(load_config(&path, &store).token, replaced);
+        assert!(file_has_token(&path, &replaced), "still refused: kept");
+        store.fail_save.store(false, Ordering::SeqCst);
+        assert_eq!(load_config(&path, &store).token, replaced);
+        assert!(!file_has_token(&path, &replaced));
+        assert_eq!(load_config(&path, &store).token, replaced);
+    }
 
     #[test]
     fn pins_must_be_digits_and_not_obvious() {
