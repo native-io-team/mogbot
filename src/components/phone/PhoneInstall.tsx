@@ -99,9 +99,55 @@ interface ChoiceProps {
 
 function RouteChoice({ platform, tailscale, onPlatform, onBuild, onBack }: ChoiceProps) {
   const official = platform === 'ios' ? TESTFLIGHT_URL : ANDROID_APK_URL;
-  // Building it yourself is the advanced route: folded away while there is an
-  // official build to get, open when it is the only way.
-  const [advanced, setAdvanced] = useState(!official);
+  // Building it yourself is the advanced route while there is an official
+  // build to get: folded away under it. With no official build it is the only
+  // way, so it leads, unfolded and not called advanced, and the official card
+  // that isn't there yet goes last (it led, a dead end, with the real route
+  // below it labelled "advanced").
+  const [advanced, setAdvanced] = useState(false);
+  const officialRoute = (
+    <div className="phone-route" data-unavailable={official ? undefined : ''}>
+      <div className="phone-route__body">
+        <span className="phone-route__title">
+          {platform === 'ios' ? 'TestFlight' : 'Download the app'}
+        </span>
+        <span className="phone-route__detail">
+          {platform === 'ios'
+            ? 'The official build, through Apple’s TestFlight app. Two taps, nothing to build, and updates arrive on their own.'
+            : 'The official APK: scan, download, and allow installing from your browser. Updates arrive on their own.'}
+        </span>
+      </div>
+      {official ? (
+        <Button
+          variant="secondary"
+          rightIcon={<ExternalLinkIcon size={12} />}
+          onClick={() => void openUrl(official)}
+        >
+          {platform === 'ios' ? 'Open TestFlight' : 'Get the APK'}
+        </Button>
+      ) : (
+        <span className="phone-route__badge">Not available yet</span>
+      )}
+    </div>
+  );
+  const buildRoute = (
+    <div className="phone-route">
+      <div className="phone-route__body">
+        <span className="phone-route__title">Build it on this Mac</span>
+        <span className="phone-route__detail">
+          Your agent builds the app and installs it over a cable, and this app checks each step.
+        </span>
+        <span className="phone-route__detail">
+          {platform === 'ios'
+            ? 'Needs Xcode and an Apple ID. With a free Apple ID the app stops opening after 7 days; Reinstall here fixes that in one click.'
+            : 'Needs USB debugging turned on on the phone. It doesn’t expire.'}
+        </span>
+      </div>
+      <Button variant="primary" data-install-route="build" onClick={onBuild}>
+        Set up
+      </Button>
+    </div>
+  );
   return (
     <div className="settings-modal-body phone-install">
       <div className="phone-install__bar">
@@ -116,57 +162,26 @@ function RouteChoice({ platform, tailscale, onPlatform, onBuild, onBack }: Choic
         />
       </div>
 
-      <div className="phone-route" data-unavailable={official ? undefined : ''}>
-        <div className="phone-route__body">
-          <span className="phone-route__title">
-            {platform === 'ios' ? 'TestFlight' : 'Download the app'}
-          </span>
-          <span className="phone-route__detail">
-            {platform === 'ios'
-              ? 'The official build, through Apple’s TestFlight app. Two taps, nothing to build, and updates arrive on their own.'
-              : 'The official APK: scan, download, and allow installing from your browser. Updates arrive on their own.'}
-          </span>
-        </div>
-        {official ? (
-          <Button
-            variant="secondary"
-            rightIcon={<ExternalLinkIcon size={12} />}
-            onClick={() => void openUrl(official)}
+      {official ? (
+        <>
+          {officialRoute}
+          <PhoneTailscaleRoute platform={platform} tailscale={tailscale} />
+          <TextButton
+            className="phone-route__advanced"
+            aria-expanded={advanced}
+            rightIcon={<ChevronRightIcon size={10} className="phone-route__chevron" />}
+            onClick={() => setAdvanced((v) => !v)}
           >
-            {platform === 'ios' ? 'Open TestFlight' : 'Get the APK'}
-          </Button>
-        ) : (
-          <span className="phone-route__badge">Not available yet</span>
-        )}
-      </div>
-
-      <PhoneTailscaleRoute platform={platform} tailscale={tailscale} />
-
-      <TextButton
-        className="phone-route__advanced"
-        aria-expanded={advanced}
-        rightIcon={<ChevronRightIcon size={10} className="phone-route__chevron" />}
-        onClick={() => setAdvanced((v) => !v)}
-      >
-        Install it yourself (advanced)
-      </TextButton>
-      {advanced && (
-        <div className="phone-route">
-          <div className="phone-route__body">
-            <span className="phone-route__title">Build it on this Mac</span>
-            <span className="phone-route__detail">
-              Your agent builds the app and installs it over a cable, and this app checks each step.
-            </span>
-            <span className="phone-route__detail">
-              {platform === 'ios'
-                ? 'Needs Xcode and an Apple ID. With a free Apple ID the app stops opening after 7 days; Reinstall here fixes that in one click.'
-                : 'Needs USB debugging turned on on the phone. It doesn’t expire.'}
-            </span>
-          </div>
-          <Button variant="primary" data-install-route="build" onClick={onBuild}>
-            Set up
-          </Button>
-        </div>
+            Install it yourself (advanced)
+          </TextButton>
+          {advanced && buildRoute}
+        </>
+      ) : (
+        <>
+          {buildRoute}
+          <PhoneTailscaleRoute platform={platform} tailscale={tailscale} />
+          {officialRoute}
+        </>
       )}
     </div>
   );
