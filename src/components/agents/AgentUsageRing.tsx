@@ -119,7 +119,7 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
           <SameNotes notes={glance.sameNotes} />
           {glance.soonest && (
             <span className="agent-usage__muted">
-              Next reset: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
+              Next refill: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
               {glance.soonest.resetsIn} ({glance.soonest.resetsAt})
             </span>
           )}
@@ -154,7 +154,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** The conversation's context: "32% used", its bar, and how many tokens. */
+/** The conversation's context: "32% full", its bar, and how many tokens. */
 function Meter({ meter, title }: { meter: UsageMeter; title: string }) {
   return (
     <div className="agent-usage__meter" data-tone={meter.tone}>

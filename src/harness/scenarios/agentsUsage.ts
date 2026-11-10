@@ -576,7 +576,7 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'agents-chat-usage',
     title: 'Agents — the chat header’s usage ring and its popover',
     looksRightWhen:
-      'Finance’s chat. In the header, left of the clock, a small ring about two-thirds filled (62% of the 5-hour window left), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% used with a bar and “128.4K of 200K tokens”; Your accounts — the stack’s one line in ink, the segmented meter with each account named under its segment and what it has left (“62% left”, “No reading”, never a used figure, never “This Mac” as a name), the next reset, and a full-width “Usage and accounts” button. Readable in both themes.',
+      'Finance’s chat. In the header, left of the clock, a small ring about two-thirds filled (62% of the 5-hour window left), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% full with a bar and “128.4K of 200K tokens”; Your accounts — the stack’s one line in ink, the segmented meter with each account named under its segment and what it has left (“62% left”, “No reading”, never a used figure, never “This Mac” as a name), “Next refill: …”, and a full-width “Usage and accounts” button. Readable in both themes.',
     openSelector: AGENTS_TAB,
     requires: '.agent-usage .usage-total',
     clipSelector: '.agent-usage',
