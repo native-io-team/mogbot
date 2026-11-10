@@ -504,7 +504,16 @@ async fn resolve_default_claude_identity() -> ClaudeIdentity {
 /// failure/timeout, or output that isn't the expected status JSON (e.g. an
 /// older CLI without the `auth` subcommand) — so callers may fall back to
 /// weaker signals.
+///
+/// Callers that ask while a probe is already running share its answer
+/// (`joined`): the overview, usage and setup ask at the same moment.
 pub async fn claude_cli_auth_status() -> Option<(bool, Option<String>)> {
+    static PROBE: crate::joined::Joined<Option<(bool, Option<String>)>> =
+        crate::joined::Joined::new();
+    PROBE.run(probe_claude_cli_auth_status).await
+}
+
+async fn probe_claude_cli_auth_status() -> Option<(bool, Option<String>)> {
     let binary = find_binary_by_name("claude")?;
     let mut cmd = create_command(binary);
     cmd.args(["auth", "status"]);
