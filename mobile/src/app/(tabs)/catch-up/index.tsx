@@ -203,7 +203,10 @@ export default function CatchUp() {
       <Stack.Screen options={screenOptions} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          items.length === 0 && !happened.length && styles.grow,
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -216,7 +219,7 @@ export default function CatchUp() {
         <DemoCard />
         <ConnectionNotice />
         {items.length === 0 ? (
-          <AllClear loading={missing.length > 0} />
+          <AllClear loading={missing.length > 0} compact={happened.length > 0} />
         ) : (
           <View style={styles.summary} accessibilityRole="header">
             <T variant="title" color={colors.textStrong}>
@@ -275,10 +278,25 @@ function AsOf() {
 }
 
 /** Nothing waiting: said once, calmly, with the way to your agents. */
-function AllClear({ loading }: { loading: boolean }) {
+function AllClear({ loading, compact }: { loading: boolean; compact: boolean }) {
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
+  // With a "since you last caught up" list below, the all-clear is a header like the
+  // waiting state's, so the screen reads top to bottom with one rhythm; the centred
+  // hero is only for a screen with nothing else on it.
+  if (compact && !loading) {
+    return (
+      <Animated.View entering={ENTER} style={styles.summary} accessibilityRole="header">
+        <T variant="title" color={colors.textStrong}>
+          All caught up
+        </T>
+        <T variant="small" color={colors.textSecondary}>
+          Nothing needs you right now.
+        </T>
+      </Animated.View>
+    );
+  }
   return (
     <Animated.View entering={ENTER} style={styles.empty}>
       <View style={styles.check}>
@@ -688,7 +706,7 @@ const useStyles = makeStyles((colors) => ({
   answers: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm },
   swipe: { width: SWIPE_W, backgroundColor: colors.surfaceSelected },
   swipeInner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space['2xs'] },
-  empty: { alignItems: 'center', gap: space.md, paddingTop: space['2xl'] * 2 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
   emptyText: { textAlign: 'center', paddingHorizontal: space.xl },
   check: {
     width: heroMark,
