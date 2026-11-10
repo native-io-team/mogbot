@@ -15,10 +15,12 @@
  *   node scripts/perf-agents.mjs --build --profile       # also write .cpuprofile files
  *   node scripts/perf-agents.mjs --build --trace         # and a main-thread breakdown per phase
  *
- * Phases: open, background, openEvents, stream, reopened, idle (default: all).
+ * Phases: open, background, openEvents, stream, reopened, idle (default: all);
+ * not in all: cold, scroll, typing, arrive, switch (18 agents in turn), usage.
  * Options: --port (served harness, default 1805), --cdp (debugging port,
  * default 9711), --out (results directory, default $TMPDIR/perf-agents),
- * --css (rules added to the page, to try a change without rebuilding).
+ * --css (rules added to the page, to try a change without rebuilding),
+ * --ipc-ms (every command answers that late, as the Mac's round trip would).
  *
  * Method and targets: docs/ui-harness.md, "Measuring performance".
  * Chrome is not WKWebView: Chrome composites `filter` animations and WebKit
@@ -42,7 +44,9 @@ const PORT = Number(opt('port', 1805));
 const CDP_PORT = Number(opt('cdp', 9711));
 const OUT = opt('out', path.join(os.tmpdir(), 'perf-agents'));
 const LINES = Number(opt('lines', 2000));
-const VALUE_FLAGS = new Set(['--port', '--cdp', '--out', '--css', '--lines']);
+// Every command answers this late (the harness's `?ipcMs=`): the Mac's round trip.
+const IPC_MS = Number(opt('ipc-ms', 0));
+const VALUE_FLAGS = new Set(['--port', '--cdp', '--out', '--css', '--lines', '--ipc-ms']);
 const positional = argv.filter((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(argv[i - 1]));
 const PHASES = (positional[0] ?? 'all').split(',');
 const want = (p) => PHASES.includes('all') || PHASES.includes(p);
@@ -227,7 +231,7 @@ if (EXTRA_CSS) {
   });
 }
 
-const URL = `http://127.0.0.1:${PORT}/harness.html?scenario=agents-stress&chrome=off&freeze=off&lines=${LINES}`;
+const URL = `http://127.0.0.1:${PORT}/harness.html?scenario=agents-stress&chrome=off&freeze=off&lines=${LINES}${IPC_MS ? `&ipcMs=${IPC_MS}` : ''}`;
 const metrics = async () =>
   Object.fromEntries((await send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
 const pct = (a, z, key, secs) => +(((z[key] - a[key]) / secs) * 100).toFixed(1);
@@ -737,6 +741,77 @@ if (want('arrive')) {
       topRenders: Object.fromEntries(Object.entries(rc).slice(0, 8)),
     });
   }
+}
+
+// ---------- 6. switching agents: 18 in turn, first visit (its page read) and again
+const NAMES = Array.from(
+  { length: 17 },
+  (_, i) =>
+    `Agent ${String(i + 1).padStart(2, '0')} ${['Finance', 'Research', 'Travel', 'Inbox', 'Acme Site'][i % 5]}`
+);
+const SWITCH = [
+  ...NAMES.map((n, i) => ({ sel: `[data-agent-id="a${i}"]`, name: n })),
+  {
+    sel: CHIEF,
+    name: 'Chief',
+  },
+];
+const switchTo = ({ sel, name }) =>
+  clickAndWait(
+    sel,
+    `document.querySelector('.agent-chat')?.getAttribute('aria-label')?.includes(${JSON.stringify(name)}) && document.querySelector('.agent-chat [data-message-ids]')`
+  );
+const summary = (ms) => {
+  const s = [...ms].sort((a, b) => a - b);
+  return { median: s[Math.floor(s.length / 2)], worst: s[s.length - 1] };
+};
+if (want('switch')) {
+  await load();
+  await sleep(500);
+  const passes = {};
+  let rc = {};
+  for (const pass of ['first', 'again']) {
+    const t0 = await now();
+    const ms = [];
+    const run = async () => {
+      for (const a of SWITCH) {
+        const t = await switchTo(a);
+        if (t.error) throw new Error(`${a.name}: ${t.error}`);
+        ms.push(t.ms);
+        await sleep(150);
+      }
+    };
+    if (pass === 'again') rc = await renders(run);
+    else await run();
+    passes[pass] = { ...summary(ms), longTasks: await longTasksSince(t0), ms };
+  }
+  report('switch_18', {
+    ...passes,
+    rendersAgain: pick(rc, WATCH),
+    topRenders: Object.fromEntries(Object.entries(rc).slice(0, 10)),
+  });
+}
+
+// ---------- 7. the Usage view: open it from the sidebar, then sit on it
+if (want('usage')) {
+  await load();
+  await sleep(500);
+  const runs = [];
+  for (let i = 0; i < 4; i++) {
+    const t = await clickAndWait(
+      '[data-testid="account-switcher"]',
+      `document.querySelector('[data-testid="usage-hero"]')`
+    );
+    if (t.error) throw new Error(`usage: ${t.error}`);
+    runs.push({ ms: t.ms, maxLongTask: (await longTasksSince(t.t0)).max });
+    await sleep(400);
+    if (i < 3) {
+      await switchTo(SWITCH[SWITCH.length - 1]);
+      await sleep(400);
+    }
+  }
+  const c = await cpu('usage-idle', async () => {}, 15);
+  report('usage_view', { runs, worstWarmMs: Math.max(...runs.slice(1).map((r) => r.ms)), idle: c });
 }
 
 // ---------- the targets

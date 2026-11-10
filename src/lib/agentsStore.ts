@@ -816,6 +816,7 @@ export function __resetAgentsStore() {
   resyncTimer = null;
   loadingOlder.clear();
   loadingNewest.clear();
+  askingViewing.clear();
   arriving.clear();
   finished.clear();
 }
@@ -844,15 +845,39 @@ export async function refreshConversations(agentId: string): Promise<Conversatio
  * The conversation an agent's chat opens on: the one the user was last in
  * (the Mac's `current`), or the first when the Mac can't say.
  */
-export async function ensureViewing(agentId: string): Promise<string> {
+export function ensureViewing(agentId: string): Promise<string> {
   const known = state.viewing[agentId];
-  if (known) return known;
-  const list = await refreshConversations(agentId);
-  const id = state.viewing[agentId] ?? list?.current ?? FIRST_CONVERSATION;
-  if (state.viewing[agentId] !== id) {
-    emit({ ...state, viewing: { ...state.viewing, [agentId]: id } });
-  }
-  return id;
+  if (known) return Promise.resolve(known);
+  // One read per agent at a time: the chat and `readChat` both ask.
+  const inFlight = askingViewing.get(agentId);
+  if (inFlight) return inFlight;
+  const ask = (async () => {
+    const list = await refreshConversations(agentId);
+    const id = state.viewing[agentId] ?? list?.current ?? FIRST_CONVERSATION;
+    if (state.viewing[agentId] !== id) {
+      emit({ ...state, viewing: { ...state.viewing, [agentId]: id } });
+    }
+    return id;
+  })().finally(() => askingViewing.delete(agentId));
+  askingViewing.set(agentId, ask);
+  return ask;
+}
+const askingViewing = new Map<string, Promise<string>>();
+
+/**
+ * Everything an agent's chat opens on, asked for at once: its log (what the
+ * view waits on before it shows the chat), which conversation it is in, and
+ * that conversation's page (what the chat itself waits on). The chat asked
+ * for the last two only once the first had come back, so a chat not opened
+ * yet this session was three round trips to the Mac one after another.
+ * Anything already loaded or on its way is not asked for again.
+ */
+export function readChat(agentId: string): void {
+  if (!state.messages[agentId]) void loadMessages(agentId);
+  void ensureViewing(agentId).then((conversation) => {
+    const key = conversationKey(agentId, conversation);
+    if (!state.messages[key]) void loadMessages(key);
+  });
 }
 
 /** Show one of an agent's conversations, and tell the Mac the user is in it. */

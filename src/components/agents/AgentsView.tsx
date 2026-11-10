@@ -71,6 +71,7 @@ import {
   loadMessages,
   loadRoomMessages,
   openConversation,
+  readChat,
   refreshAgents,
   refreshRooms,
   startConversation,
@@ -288,8 +289,14 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     }
     writeSelected(selected.id);
     void focusAgent(selected.id);
-    if (!getAgentsSnapshot().messages[selected.id]) void loadMessages(selected.id);
+    readChat(selected.id);
   }, [selected?.id, teamOpen, usageOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // On launch the chat Agents reopens on is known before the list of agents
+  // is: its reads start now, beside the list's, rather than after it.
+  useEffect(() => {
+    const id = readSelected();
+    if (id && roomIdOf(id) === null) readChat(id);
+  }, []);
 
   // Leaving Agents mode: nothing is on screen any more, so new replies count as unread.
   useEffect(() => () => void focusAgent(null), []);

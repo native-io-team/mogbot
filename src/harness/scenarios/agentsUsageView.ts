@@ -498,6 +498,12 @@ const TWO = {
 
 const OPEN = [{ click: '[data-testid="account-switcher"]' }];
 
+/** The Usage view's commands with three accounts, for the perf fixture (`agents-stress`). */
+export function usagePerfCommands() {
+  const { agents_overview: _o, agents_messages: _m, ...rest } = commands(THREE.accounts, THREE.inv);
+  return rest;
+}
+
 /** The overview, an account's page, and the sidebar row, for one state. */
 function trio(
   id: string,
