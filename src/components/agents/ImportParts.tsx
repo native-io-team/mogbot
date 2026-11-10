@@ -107,7 +107,7 @@ export function MessageCard({
         <span className="agents-import-message__hint" aria-live="polite">
           {isCopied
             ? 'Now paste it into a chat with your assistant.'
-            : 'Grok Bot, Muse or any other assistant.'}
+            : 'Grok Bot, ChatGPT, Claude or any other assistant.'}
         </span>
       </div>
     </div>

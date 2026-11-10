@@ -176,7 +176,7 @@ export function ImportPastePanel({ onCancel, onPosted, aside }: ImportPastePanel
                 <p className="agents-import-drop__title">Drop an export here</p>
                 <p className="agents-import-drop__hint">
                   A file (.json, .zip, .tar.gz) or the app’s folder: ~/.openclaw, ~/.hermes, or
-                  OpenBot’s export zip. ⌘⇧. shows hidden folders.
+                  OpenBot’s export zip. In the picker, ⇧⌘. shows hidden folders.
                 </p>
                 <div className="agents-import-drop__actions">
                   <Button size="compact" variant="secondary" onClick={() => void pick(false)}>
