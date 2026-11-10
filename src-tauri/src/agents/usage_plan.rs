@@ -271,6 +271,22 @@ pub struct AccountReading {
     pub quota: Quota,
 }
 
+/// Whether the account's other whole-plan limits (5-hour, weekly) leave
+/// room for `w`'s spare: each has at least [`SPARE_MIN_PERCENT`] left and
+/// isn't used up. Spending a 5-hour window's room spends the week too, so a
+/// week nearly gone makes the 5-hour room nothing to use up: it would burn
+/// what doesn't expire. A per-model limit (Opus) doesn't hold it back.
+fn others_can_take_it(windows: &[QuotaWindow], w: &QuotaWindow) -> bool {
+    windows
+        .iter()
+        .filter(|o| !std::ptr::eq(*o, w) && super::compute::family(o).is_some())
+        .all(|o| {
+            !o.limited
+                && o.used_percent
+                    .is_none_or(|p| 100.0 - p >= SPARE_MIN_PERCENT)
+        })
+}
+
 /// Every spare window, soonest reset first.
 pub fn spare(readings: &[AccountReading], now: i64) -> Vec<Spare> {
     let mut out: Vec<Spare> = readings
@@ -279,7 +295,7 @@ pub fn spare(readings: &[AccountReading], now: i64) -> Vec<Spare> {
             r.quota
                 .windows
                 .iter()
-                .filter(|w| is_spare(w, now))
+                .filter(|w| is_spare(w, now) && others_can_take_it(&r.quota.windows, w))
                 .map(move |w| Spare {
                     engine: r.engine,
                     account_id: r.account_id.clone(),
@@ -323,6 +339,15 @@ pub fn should_nudge<'a>(
     spare
         .iter()
         .find(|s| s.next && !nudged.iter().any(|k| same_window(k, s)))
+}
+
+/// Whether a press of "Give agents something to do" for `s` would only
+/// start the list a second time: the Chief was already woken for this
+/// window (by the mode or an earlier press) and hasn't finished that turn.
+/// A double click, or the press while "Use it all" is starting it, handed
+/// the same items out twice (persona review 2026-11-09).
+pub fn already_starting(s: &Spare, nudged: &[String], chief_busy: bool) -> bool {
+    chief_busy && nudged.iter().any(|k| same_window(k, s))
 }
 
 /// Whether `key` (a `spare_key`) is `s`'s window instance. A reset time
@@ -817,6 +842,37 @@ mod tests {
     }
 
     #[test]
+    fn a_window_is_not_spare_when_another_limit_on_the_account_has_less_left() {
+        // The 5-hour window resets in 40 minutes with 90% unused, but the
+        // week is nearly gone: spending the "spare" 5-hour room would spend
+        // the week, which doesn't reset soon. Persona review 2026-11-09.
+        let nearly_out_week = [reading(
+            "a",
+            true,
+            vec![
+                w("five_hour", 10.0, 40 * 60_000, None),
+                w("seven_day", 92.0, 3 * 24 * HOUR_MS, None),
+            ],
+        )];
+        assert!(spare(&nearly_out_week, NOW).is_empty());
+        let mut week_used_up = nearly_out_week.clone();
+        week_used_up[0].quota.windows[1].used_percent = Some(100.0);
+        week_used_up[0].quota.windows[1].limited = true;
+        assert!(spare(&week_used_up, NOW).is_empty());
+        // A week with room to take it: the 5-hour room is spare.
+        let mut roomy = nearly_out_week.clone();
+        roomy[0].quota.windows[1].used_percent = Some(40.0);
+        assert_eq!(spare(&roomy, NOW).len(), 1);
+        // A per-model limit (Opus) doesn't hold the whole account back.
+        let mut opus = roomy.clone();
+        opus[0]
+            .quota
+            .windows
+            .push(w("seven_day_opus", 99.0, 3 * 24 * HOUR_MS, None));
+        assert_eq!(spare(&opus, NOW).len(), 1);
+    }
+
+    #[test]
     fn the_chief_is_woken_only_in_use_it_all_and_once_per_window() {
         let all = [
             reading(
@@ -849,6 +905,22 @@ mod tests {
             ..chosen.clone()
         })];
         assert!(should_nudge(Mode::UseItAll, &s, 3, false, &earlier).is_some());
+    }
+
+    #[test]
+    fn a_second_press_while_the_chief_starts_the_window_is_not_a_second_start() {
+        let all = [reading(
+            "a",
+            true,
+            vec![w("five_hour", 30.0, 40 * 60_000, None)],
+        )];
+        let s = spare(&all, NOW);
+        let woken = [spare_key(&s[0])];
+        assert!(already_starting(&s[0], &woken, true));
+        // The Chief finished that turn: a press starts what is still waiting.
+        assert!(!already_starting(&s[0], &woken, false));
+        // Busy with something else, never woken for this window: it queues.
+        assert!(!already_starting(&s[0], &[], true));
     }
 
     #[test]

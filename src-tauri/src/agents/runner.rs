@@ -5391,7 +5391,7 @@ async fn run_on_engine(
             return result;
         }
         let now = store::now_ms();
-        wallet::mark_out(engine, &account.id, failure.resets_at, now);
+        wallet::mark_out_with_twins(engine, &account.id, failure.resets_at, now);
         tried.push(account.id.clone());
         let candidates = mine().await;
         let signed_in = candidates.iter().filter(|c| c.signed_in).count();
@@ -6127,7 +6127,7 @@ async fn run_turn(
                             let now_ms = store::now_ms();
                             // Its plan, used up: the account is out until the reset it names.
                             if let Some(at) = super::quota::limited_until(std::slice::from_ref(&reading), reading.engine, now_ms) {
-                                super::wallet::reported_out(reading.engine, &account.id, at, now_ms);
+                                super::wallet::reported_out_with_twins(reading.engine, &account.id, at, now_ms);
                             }
                             // Kept as this account's own too, with a sample for forecasts.
                             super::usage_plan::archive(&account.id, &reading, now_ms);

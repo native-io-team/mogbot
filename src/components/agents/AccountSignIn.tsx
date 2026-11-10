@@ -20,7 +20,7 @@ import { Button } from '../primitives/Button';
 import { TextField } from '../primitives/TextField';
 import { ClaudeConnectTerminal, WorkspaceConnectTerminal } from '../terminal/lazyTerminals';
 import { ENGINE_LABEL } from '../../lib/agents';
-import type { UsageAccount } from '../../lib/agentAccounts';
+import { SIGN_IN_BROWSER_NOTE as BROWSER_NOTE, type UsageAccount } from '../../lib/agentAccounts';
 
 export function AccountSignIn({ account, onDone }: { account: UsageAccount; onDone: () => void }) {
   const label = ENGINE_LABEL[account.engine];
@@ -66,6 +66,9 @@ export function AccountSignIn({ account, onDone }: { account: UsageAccount; onDo
           <p className="connect-modal-instructions">
             Use the Claude account this should be. Its sign-in stays separate from this Mac’s own.
           </p>
+          <p className="connect-modal-instructions" data-testid="account-sign-in-browser-note">
+            {BROWSER_NOTE.claude}
+          </p>
           <label className="connect-modal-field">
             <span>
               Account email <span className="connect-modal-muted">(shown in Usage)</span>
@@ -97,6 +100,11 @@ export function AccountSignIn({ account, onDone }: { account: UsageAccount; onDo
               ? 'Sign in in the browser, then paste the code it shows into the terminal below and press Enter.'
               : 'A browser window opens: sign in to ChatGPT there. This finishes on its own.'}
           </p>
+          {account.engine === 'codex' ? (
+            <p className="connect-modal-instructions" data-testid="account-sign-in-browser-note">
+              {BROWSER_NOTE.codex}
+            </p>
+          ) : null}
           <div className="agents-panel-terminal-body">
             {account.engine === 'claude' ? (
               <ClaudeConnectTerminal
