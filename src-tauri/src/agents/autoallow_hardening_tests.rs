@@ -379,6 +379,10 @@ fn after_outside_content_only_sending_and_new_packages_ask() {
 // 5. The owner's everyday flows stay card-free
 // ----------------------------------------------------------------------------
 
+/// None of these is outside content by itself. `gh pr view 268` and a run's
+/// log are judged by author once their output is seen
+/// (`exposure::by_author`): the owner's own pull request stays unmarked, a
+/// fork's and a run's log mark.
 #[test]
 fn the_owners_normal_flows_stay_card_free_and_unmarked() {
     let (_dir, c) = project();

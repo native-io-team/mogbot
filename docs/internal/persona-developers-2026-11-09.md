@@ -54,8 +54,10 @@ above the team's, browser on, exact-text off) and the admin role; stricter choic
 `review::tests::replace_takes_back_trust_given_to_the_old_instructions`,
 `review::tests::a_stricter_own_level_survives_replace`.
 
-**Still open.** Own scopes (`apps`, `folders`, `projects`) carry over: they can't be ordered
-"wider/narrower" than the team's without a rule per field. The Replace card should list them.
+**Closed since.** Own scopes are narrowed too, with a rule per field (`policy::narrow_projects`,
+`narrow_folders`, `narrow_apps`): the narrower of own and team's on each axis, two lists keep
+what's on both, a folder kept only inside a team folder. Test:
+`review::tests::replace_narrows_own_scopes_to_the_teams`.
 
 ### S3. An unreviewed import command was still registered (fixed, medium)
 
@@ -91,8 +93,9 @@ it would carry it into `messages.jsonl`, "What it did" and the phone.
 
 **Fixed.** Registered on every `env_for` (the registry dedupes).
 
-**Still open.** The per-turn bridge secret isn't registered either. It dies with the turn, so it's
-low, but registering it would cost one line.
+**Closed since.** The per-turn and sealed-check bridge secrets are registered while they live
+and forgotten when dropped (`broker::grant`). Test:
+`broker::tests::a_bridge_secret_is_redacted_while_it_lives`.
 
 ### S6. `curl` without a scheme didn't count as an outside read (fixed, medium)
 
@@ -118,16 +121,40 @@ flags alone (`--version`) read nothing. Tests in `exposure::tests`.
 - Browser `javascript_tool` returning `innerText` from a tab the user already had open (a
   `navigate` marks; reading an existing tab may not). Suspected, not verified.
 
+**Closed since (mostly).**
+- `gh pr view`, `gh issue view`, `gh api …/pulls/N|issues/N`, `gh pr diff` and `gh run view --log`
+  are judged from their output in the engine's stream (`exposure::by_author`): every author named
+  must be the account in gh's `hosts.yml`, else the conversation is marked. Fails safe: no author
+  in the output, an unknown account, a diff of a PR not first viewed, a run's log, or an output
+  that never came all mark. `gh api …/contents|files|logs` always marks. Tests in
+  `exposure::tests` (`only_reads_of_the_users_own_work_stay_unmarked`,
+  `a_gh_read_is_judged_by_its_output_in_the_stream`). Still unmarked: `gh issue list`, `gh pr
+  list`, `gh search`, `gh release view`, `gh repo view` (titles and descriptions only).
+- `python`/`node`/`bun`/`deno`/`ruby`/`perl` code that fetches (inline, `<<<` or a here-document)
+  marks unless every address it writes is this Mac's; anything reading `~/Library/Messages` or
+  `~/Library/Mail`, and `osascript` telling Mail, Messages or Outlook, marks. Still a denylist,
+  documented as such in docs/agents.md ("Other programs that fetch"): script files, `xh`, `git
+  fetch` + `git log` aren't seen.
+- Verified: `javascript_tool` on a tab the agent never navigated did **not** mark (it wasn't in the
+  read list). Fixed, and the app's own browsers (`mcp__browser__*`, `mcp__user_chrome__*`) didn't
+  mark any read either; they now do, judged on the same page memory. Tests:
+  `reading_a_users_own_open_tab_marks`, `a_script_on_an_unknown_tab_marks_the_conversation`.
+
 ### S8. Smaller
 
-- `MIN_REDACT` is 6: a short PIN entered on a secret card isn't redacted.
+- `MIN_REDACT` is 6: a short PIN entered on a secret card isn't redacted. **Closed since:** known
+  values of 4–5 characters are replaced where they stand alone (`secrets::replace_standalone`).
 - `navigation_guard.rs` logs the full URL of a navigation sent to the browser (a signed query or an
-  OAuth code would land in the log).
+  OAuth code would land in the log). **Closed since:** scheme and host only.
 - `store::prepend_log_block` (Ship Studio import) writes the other app's lines without redaction.
+  (Still open.)
 - Ship Studio import keeps `extra["admin"]` and the project binding (`other_app::adopt`). The user's
-  own other app, so low, but the preview doesn't say "arrives as an admin".
+  own other app, so low, but the preview doesn't say "arrives as an admin". **Closed since:** the
+  admin role is dropped on import; the project binding still carries (kept only when its folder
+  exists).
 - The Remote Access token is a 0600 JSON file, not the Keychain, which the security model's wording
-  implies.
+  implies. **Closed since:** moved to the Keychain, with a verified migration and the file as the
+  fallback when the Keychain refuses.
 
 ### Confirmed holding
 

@@ -1351,25 +1351,155 @@ mod tests {
     #[test]
     fn a_stricter_own_level_survives_replace() {
         use super::super::independence::Level;
-        use super::super::policy::Overrides;
+        use super::super::policy::{Overrides, Preset};
+        let team = Preset::Balanced.team();
         let o = Overrides {
             independence: Some(Level::Often),
             browser: Some(false),
             outward_text_needs_ok: Some(true),
             ..Default::default()
         };
-        assert_eq!(o.without_widening(Level::GoHard), o);
+        assert_eq!(o.without_widening(&team, Level::GoHard), o);
         let wide = Overrides {
             independence: Some(Level::FullSend),
             ..Default::default()
         };
-        assert!(wide.without_widening(Level::GoHard).is_empty());
+        assert!(wide.without_widening(&team, Level::GoHard).is_empty());
         // At the team's own level it was no grant; nothing to take back.
         let same = Overrides {
             independence: Some(Level::GoHard),
             ..Default::default()
         };
-        assert_eq!(same.without_widening(Level::GoHard), same);
+        assert_eq!(same.without_widening(&team, Level::GoHard), same);
+    }
+
+    /// Replace narrows the agent's own projects, folders and apps like its
+    /// level: what the team doesn't give is taken back, stricter stays.
+    #[test]
+    fn replace_narrows_own_scopes_to_the_teams() {
+        use super::super::independence::Level;
+        use super::super::policy::{
+            Apps, AppsMode, Elsewhere, Folder, How, Overrides, Preset, Projects, Scope,
+        };
+        let mut team = Preset::Balanced.team();
+        team.projects = Projects {
+            scope: Scope::Listed,
+            listed: vec!["/p/site".into(), "/p/app".into()],
+            how: How::Copy,
+            elsewhere: Elsewhere::Read,
+        };
+        team.folders = vec![
+            Folder {
+                path: "/Users/x/Documents".into(),
+                write: false,
+            },
+            Folder {
+                path: "/Users/x/Drafts".into(),
+                write: true,
+            },
+        ];
+        team.apps = Apps {
+            mode: AppsMode::Only,
+            only: vec!["Gmail".into(), "Linear".into()],
+        };
+        // The old instructions were given more than the team has.
+        let wide = Overrides {
+            projects: Some(Projects {
+                scope: Scope::All,
+                listed: Vec::new(),
+                how: How::Direct,
+                elsewhere: Elsewhere::Change,
+            }),
+            folders: Some(vec![
+                Folder {
+                    path: "/Users/x/Documents/Taxes".into(),
+                    write: true,
+                },
+                Folder {
+                    path: "/Users/x/.ssh".into(),
+                    write: true,
+                },
+                Folder {
+                    path: "/Users/x/Drafts".into(),
+                    write: true,
+                },
+                Folder {
+                    path: "/Users/x/DocumentsOld".into(),
+                    write: false,
+                },
+            ]),
+            apps: Some(Apps {
+                mode: AppsMode::All,
+                only: Vec::new(),
+            }),
+            ..Default::default()
+        };
+        let kept = wide.without_widening(&team, Level::GoHard);
+        // Every project and full change narrows to the team's own; that is
+        // no override at all.
+        assert_eq!(kept.projects, None);
+        assert_eq!(kept.apps, None, "every app becomes the team's two");
+        assert_eq!(
+            kept.folders,
+            Some(vec![
+                // Inside a read-only team folder: kept, read only.
+                Folder {
+                    path: "/Users/x/Documents/Taxes".into(),
+                    write: false,
+                },
+                Folder {
+                    path: "/Users/x/Drafts".into(),
+                    write: true,
+                },
+            ]),
+            "a folder only it had is dropped; a name that merely starts the same isn't inside"
+        );
+
+        // Stricter choices stay.
+        let strict = Overrides {
+            projects: Some(Projects {
+                scope: Scope::Listed,
+                listed: vec!["/p/site".into(), "/p/other".into()],
+                how: How::ReadOnly,
+                elsewhere: Elsewhere::Read,
+            }),
+            folders: Some(Vec::new()),
+            apps: Some(Apps {
+                mode: AppsMode::Only,
+                only: vec!["gmail".into(), "Slack".into()],
+            }),
+            ..Default::default()
+        };
+        let kept = strict.without_widening(&team, Level::GoHard);
+        assert_eq!(
+            kept.projects,
+            Some(Projects {
+                scope: Scope::Listed,
+                listed: vec!["/p/site".into()],
+                how: How::ReadOnly,
+                elsewhere: Elsewhere::Read,
+            })
+        );
+        assert_eq!(
+            kept.folders,
+            Some(Vec::new()),
+            "no folders stays no folders"
+        );
+        assert_eq!(
+            kept.apps,
+            Some(Apps {
+                mode: AppsMode::Only,
+                only: vec!["gmail".into()],
+            })
+        );
+        let none = Overrides {
+            apps: Some(Apps {
+                mode: AppsMode::None,
+                only: Vec::new(),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(none.without_widening(&team, Level::GoHard), none);
     }
 
     #[test]

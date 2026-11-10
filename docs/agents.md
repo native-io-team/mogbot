@@ -1711,12 +1711,15 @@ writes, packages fetched by name).
 **After outside content, sending and new code ask** (`agents/exposure.rs`).
 The first time a turn reads something from outside this Mac — a web page or
 search result (WebFetch, WebSearch, Codex's web search, `curl` / `wget` to
-anything but `localhost`), issue or pull request comments (`gh issue view`,
-`gh pr view --comments` or `--json …comments…`, `gh api
-…/comments|reviews|issues…`), a cloned repository, mail, chat or documents
-through a connection (a claude.ai connector, or on Codex the ChatGPT apps it
-serves as `codex_apps`), or a page in the browser that isn't this Mac's own —
-the turn is marked, and for the rest of it two things ask on a card even at
+anything but `localhost`), issue or pull request comments (`gh issue view
+--comments`, `gh pr view --comments` or `--json …comments…`, `gh api
+…/comments|reviews|issues|contents|files|logs…`), a cloned repository, mail,
+chat or documents through a connection (a claude.ai connector, or on Codex
+the ChatGPT apps it serves as `codex_apps`), or a page in the browser that
+isn't this Mac's own (a script's answer from `javascript_tool` included, on a
+tab the user already had open too, and the agents' browser and "Your Chrome"
+the same as Claude in Chrome) — the turn is marked, and for the rest of it two
+things ask on a card even at
 Bold (`autoallow::after_outside_asks`): **sending to the network** beyond
 a read, to anywhere but this Mac (a `curl` body, form or upload, a non-GET,
 `wget --post-*`, a `gh` write, `git push`, `ssh` / `scp` / `rsync` / `nc`,
@@ -1734,6 +1737,36 @@ by Start fresh or a new conversation), since the outside text stays in it:
 the next turn resumes the same context, and a routine or another agent's
 request in it could act on an instruction planted in what was read. Only
 sends and new packages ask; local work, `gh` reads and renders never do.
+
+**Pull requests and runs, by author** (`exposure::by_author`). A fork's pull
+request is the classic way in, but most of an owner's reads are of their own
+work, so a pull request's or issue's own text (`gh pr view`, `gh issue view`,
+`gh api …/pulls/N` or `…/issues/N`), a pull request's diff (`gh pr diff`) and a
+run's log (`gh run view --log`, `--log-failed`) are judged from what came
+back, in the engine's stream: every author the output names (`author:` header
+lines, the top-level `author` / `user` login of JSON) must be the account `gh`
+is signed in as here (`hosts.yml`, no network). Anything less marks, failing
+safe: an output naming no author (`--json title`), someone else's, an unknown
+account, a diff of a pull request not first seen to be the owner's (a view of
+the same number proves it), a run's log (it names no author), or a call whose
+output never came (marked when the next turn starts). `--json` asking only for
+status fields (`state,statusCheckRollup`) reads no one's words and doesn't
+count. A body can add a name to the output but never remove its real author's
+line, so it can't pass for the owner's.
+
+**Other programs that fetch** (`autoallow::command_reads_outside`). Beside
+`curl` / `wget`: `python -c` / `python3` with `urllib`, `requests`, `httpx`,
+`http.client`, `socket`, `imaplib`…; `node -e` / `bun` / `deno` with `fetch`,
+`http(s).get`, `axios`…; `ruby -e` with `net/http`, `open-uri`…; `perl -e` with
+`LWP`, `HTTP::Tiny`…, as inline code, `<<<` text or a here-document. Every
+address the code writes out decides (this Mac's own doesn't count); with none
+(a variable), only one naming `localhost` is local. Reading Mail or Messages
+on this Mac counts whatever does it: `sqlite3 ~/Library/Messages/chat.db`,
+`cat …/Library/Mail/…`, `osascript` telling Mail, Messages or Outlook. **This is
+a denylist, and a denylist can't be complete**: a script file (`python3
+fetch.py`), a library not listed, a compiled program, `xh` / `httpie`, or
+`git fetch` then `git log` aren't seen. It narrows the common ways in; the
+outside-text cap and the network-write asks are what hold when it misses.
 
 **Notes the app queues are not the user asking.** A late Allow, a card
 answered (login, settings, hand-off, secret), a step-in handed back, a
@@ -2192,13 +2225,19 @@ refused as names. "Last used" is the last turn started with it; whether the
 agent read it isn't known.
 
 **Redaction** (defence in depth): every known value (loaded at launch, and on
-save or injection; 6+ characters) becomes `[secret:…]` in every line the
+save or injection; the connection, Slack and Claude account tokens; each
+turn's bridge secret while the turn lives, `broker::grant`) becomes
+`[secret:…]` in every line the
 store appends (chat log, card answers), the queue, recorded and emitted
 messages (a session's question card included: its question, options and
 the answer picked, in every chat that holds it), drafts, the activity line,
 the prompt piped to the next turn, and the remote/agents audit log. Not covered: a turn that prints the variable
 sends it to Claude as tool output and into Claude Code's own transcript; the
-prompt forbids printing one.
+prompt forbids printing one. A value of 6+ characters is replaced wherever it
+appears. A shorter known value (a PIN; 4 or 5 characters) is exact-matched
+from the same set, never guessed, but replaced only where it stands on its
+own, with no letter or digit touching it (`1739150` keeps the `73915` inside
+it); `egress` never looks for one in an address. Under 4, nothing is.
 
 Every agent is told to ask for an account with `request_login` (below,
 "Logins"), to use `request_secret` only for an API key made for programs,
@@ -3634,7 +3673,13 @@ the full threat model in docs/remote-access.md):
    that agent: new instructions (the diff), a fresh conversation (memory
    kept), its running routines paused, its project unbound, its
    Always-allow rules removed, and its saved logins removed unless "Keep its
-   saved logins" is ticked (off by default). The managing agent's notes are
+   saved logins" is ticked (off by default). Trust given to the old
+   instructions doesn't carry (`policy::narrow_for_replace`): its own level
+   above the team's, its browser, exact-text off, the admin role and any
+   plan yes are taken back, and its own projects, folders and apps are
+   narrowed to the team's on every axis (which projects, how, elsewhere;
+   folders inside a team folder, change only where both allow it; apps on
+   both lists). Stricter choices stay. The managing agent's notes are
    an optional "Add to <Chief>'s notes", off by default. **Import** creates
    what's ticked; **Don't import** creates nothing. The phone's card
    imports too, as new agents only (`agents.import.review`): Replace and the
@@ -3989,7 +4034,9 @@ routines and project, then **Import** copies:
 | Routines | kept, **paused**, so nothing runs in both apps while both are open |
 | Chief of Staff | merged by `import.rs`'s rules: ours keeps its name, role, avatar, engine and session; theirs adds its instructions under `### From Ship Studio` (unless they're the stock Chief's), its memory section under `### Imported from Ship Studio`, its conversation as **one block before ours** under a "From Ship Studio" divider note (`store::prepend_log_block`, never interleaved), its files (an existing name here wins, reported), its routines (paused) and, if kept, its rules, without doubling any. Since our Chief keeps its own session, a recap of the other Chief's last 24 messages is written to `history-from-ship-studio.md` in its home and named in its memory; the chat note says "Merged in", not "Brought over" |
 
-Not copied, on purpose: **saved secrets** (values in its Keychain items,
+Not copied, on purpose: **the admin role** (`extra.admin`; their Chief and
+any agent made an admin there arrive as ordinary agents, `other_app::adopt`,
+since admin is a role the user gives here); **saved secrets** (values in its Keychain items,
 `ship-studio-agent-<id>`; reading them would raise Keychain prompts owned by
 the other app and copy credentials without the user choosing to: the tab and
 the agent's chat name which secrets stayed behind, and the agent asks again
