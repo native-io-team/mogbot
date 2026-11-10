@@ -1751,6 +1751,31 @@ impl Backend for Stub {
         Ok(policy_fixture())
     }
 
+    async fn skills(&self, agent_id: &str) -> Result<Value, CommandError> {
+        if agent_id != AGENT {
+            return Err(CommandError::expected("No such agent."));
+        }
+        Ok(skills_fixture())
+    }
+
+    async fn skill_edit(
+        &self,
+        agent_id: &str,
+        edit: super::router::SkillEdit,
+    ) -> Result<Value, CommandError> {
+        if agent_id != AGENT {
+            return Err(CommandError::expected("No such agent."));
+        }
+        Ok(json!({ "slug": edit.slug, "name": edit.name, "when": edit.when, "steps": edit.steps }))
+    }
+
+    async fn skill_remove(&self, agent_id: &str, _slug: &str) -> Result<(), CommandError> {
+        if agent_id != AGENT {
+            return Err(CommandError::expected("No such agent."));
+        }
+        Ok(())
+    }
+
     async fn on_its_own(&self, _agent_id: &str) -> Result<Value, CommandError> {
         Ok(on_its_own_fixture())
     }
@@ -2736,6 +2761,20 @@ pub fn on_its_own_team_fixture() -> Value {
     v
 }
 
+/// "What it knows how to do", as `agents_skills` serializes it.
+pub fn skills_fixture() -> Value {
+    json!({
+        "agentId": AGENT,
+        "setting": "ask",
+        "skills": [{
+            "slug": "export-invoices-from-xero",
+            "name": "Export invoices from Xero",
+            "when": "When the user asks for last month's invoices",
+            "steps": "1. Open Reports → Invoices.\n2. Filter to last month.\n3. Export as CSV and share it."
+        }]
+    })
+}
+
 pub fn policy_fixture() -> Value {
     use crate::agents::policy::{self, Overrides, Preset, Saved};
     let mut agent: crate::agents::store::Agent = serde_json::from_value(json!({
@@ -2833,6 +2872,7 @@ pub fn settings_card() -> crate::agents::store::AgentMessage {
         step_in: None,
         crossover: None,
         account_switch: None,
+        skill: None,
         slack_reply: None,
         risk: None,
     });
@@ -2951,6 +2991,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         step_in: None,
         crossover: None,
         account_switch: None,
+        skill: None,
         slack_reply: None,
         risk: None,
         from_outside: None,

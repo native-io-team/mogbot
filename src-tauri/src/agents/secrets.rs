@@ -779,6 +779,7 @@ mod tests {
             step_in: None,
             crossover: None,
             account_switch: None,
+            skill: None,
             slack_reply: None,
             risk: None,
         });

@@ -123,6 +123,13 @@ pub struct Agent {
     /// No OS notifications for this agent. Unread and the Dock badge still count it.
     #[serde(default)]
     pub muted: bool,
+    /// "Save what it learns": Automatically / Ask me (the default) / Off
+    /// (`agents/skills_learn.rs`). Absent in registries from before it.
+    #[serde(
+        default,
+        skip_serializing_if = "super::skills_learn::Learning::is_default"
+    )]
+    pub learn_skills: super::skills_learn::Learning,
     /// Check-ins and routines this agent is woken by (see `schedule`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub check_ins: Vec<super::schedule::CheckIn>,
@@ -441,6 +448,12 @@ pub struct Approval {
     /// Older clients show a plain Allow / Deny over the same summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slack_reply: Option<super::slack::ReplyCard>,
+    /// "Save “Export invoices” as a skill?" (`save_skill`,
+    /// `agents/skills_learn.rs`): the skill exactly as it would be saved.
+    /// Nothing waits on it; Save (Allow) writes it, Not now (Deny) doesn't.
+    /// Older clients show a plain Allow / Deny over the same summary and detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill: Option<super::skills_learn::SkillCard>,
     /// How risky Allow is, decided here from the classifiers the levels use
     /// (`mcp::risk_of`: `go_hard::floor` for a tool call). Only `Low` may be
     /// answered in place on the phone's list or from a Lock Screen
@@ -1322,6 +1335,7 @@ fn register_new(id: String, name: String, new: NewAgent) -> Result<Agent, Comman
         away: None,
         context: None,
         routine_model: None,
+        learn_skills: Default::default(),
         account: None,
         template: None,
         reach: Default::default(),
@@ -2957,6 +2971,7 @@ mod tests {
                         step_in: None,
                         crossover: None,
                         account_switch: None,
+                        skill: None,
                         slack_reply: None,
                         risk: None,
                     });
@@ -3173,6 +3188,7 @@ mod tests {
                     step_in: None,
                     crossover: None,
                     account_switch: None,
+                    skill: None,
                     slack_reply: None,
                     risk: None,
                 }),
@@ -3308,6 +3324,7 @@ mod tests {
                 step_in: None,
                 crossover: None,
                 account_switch: None,
+                skill: None,
                 slack_reply: None,
                 risk: None,
             });

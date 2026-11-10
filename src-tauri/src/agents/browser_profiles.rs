@@ -611,6 +611,7 @@ pub async fn bring_to_front(
         step_in: None,
         crossover: None,
         account_switch: None,
+        skill: None,
         slack_reply: None,
         // Check again only looks again.
         risk: Some(store::Risk::Low),

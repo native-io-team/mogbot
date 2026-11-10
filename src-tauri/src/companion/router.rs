@@ -39,6 +39,9 @@ pub const METHODS: &[&str] = &[
     "agents.loginSaveKey",
     "agents.reach",
     "agents.policy",
+    "agents.skills",
+    "agents.skillEdit",
+    "agents.skillRemove",
     "agents.onItsOwn",
     "agents.onItsOwnTeam",
     "agents.onItsOwnNarrow",
@@ -155,6 +158,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.memory",
     "agents.reach",
     "agents.policy",
+    "agents.skills",
     "agents.onItsOwn",
     "agents.onItsOwnTeam",
     "agents.loginsTeam",
@@ -353,6 +357,10 @@ pub struct AgentToggles {
     /// From a Mac that serves `agents.accounts.use`.
     #[serde(default)]
     pub account: Option<String>,
+    /// "Save what it learns": `auto`, `ask` or `off`. From a Mac that
+    /// serves `agents.skills`.
+    #[serde(default, rename = "learnSkills")]
+    pub learn_skills: Option<crate::agents::skills_learn::Learning>,
 }
 
 /// Instructions are a brief, not a document: the phone's editor stops here.
@@ -852,6 +860,12 @@ pub trait Backend: Send + Sync + 'static {
     async fn reach(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_policy`: "What it can do". Read-only on the phone; changed in chat.
     async fn policy(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_skills`: "What it knows how to do" and its setting.
+    async fn skills(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_skill_edit`: the user's edit of one skill.
+    async fn skill_edit(&self, agent_id: &str, edit: SkillEdit) -> Result<Value, CommandError>;
+    /// `agents_skill_remove`: one skill removed.
+    async fn skill_remove(&self, agent_id: &str, slug: &str) -> Result<(), CommandError>;
     /// `agents_on_its_own`: what it may do without asking, in plain words.
     async fn on_its_own(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_on_its_own_team`: the same for the team.
@@ -1114,6 +1128,31 @@ struct SetPushParams {
 #[serde(rename_all = "camelCase")]
 struct AgentParam {
     agent_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillParams {
+    agent_id: String,
+    slug: String,
+}
+
+/// One skill as the phone's editor sends it back.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SkillEdit {
+    pub slug: String,
+    pub name: String,
+    pub when: String,
+    pub steps: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillEditParams {
+    agent_id: String,
+    #[serde(flatten)]
+    edit: SkillEdit,
 }
 
 #[derive(Deserialize)]
@@ -1797,6 +1836,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         },
         "agents.fetchPath" => preview(field("path")),
         "agents.revokePermission" => format!("revoke {} {}", field("ruleId"), field("agentId")),
+        "agents.skillEdit" => format!("edit skill {} of {}", field("slug"), field("agentId")),
+        "agents.skillRemove" => format!("remove skill {} of {}", field("slug"), field("agentId")),
         "agents.onItsOwnNarrow" => format!(
             "take back {} {}",
             params
@@ -2727,6 +2768,27 @@ async fn run(
         "agents.policy" => {
             let p: AgentParam = parse(params)?;
             Ok(b.policy(&p.agent_id).await?)
+        }
+        "agents.skills" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.skills(&p.agent_id).await?)
+        }
+        "agents.skillEdit" => {
+            let p: SkillEditParams = parse(params)?;
+            if !crate::agents::skills_learn::valid_slug(&p.edit.slug)
+                || p.edit.steps.chars().count() > crate::agents::skills_learn::STEPS_CHARS * 2
+            {
+                return Err(bad_params("Which skill?"));
+            }
+            Ok(b.skill_edit(&p.agent_id, p.edit).await?)
+        }
+        "agents.skillRemove" => {
+            let p: SkillParams = parse(params)?;
+            if !crate::agents::skills_learn::valid_slug(&p.slug) {
+                return Err(bad_params("Which skill?"));
+            }
+            b.skill_remove(&p.agent_id, &p.slug).await?;
+            Ok(Value::Null)
         }
         "agents.onItsOwn" => {
             let p: AgentParam = parse(params)?;

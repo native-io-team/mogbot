@@ -224,7 +224,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude`, `codex` or `opencode`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku, which the app calls Smartest, Balanced and Fastest and which you may pass by those words; Codex or OpenCode: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on the smartest model\", \"have Finance think harder\". Tell the user in the app's words, the model's name second: \"Research now uses Smartest (Opus)\", never just \"opus\"; \"model\" alone means little to most people, so say \"the AI it thinks with\" when they seem unsure. `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `account` is its Runs on: one of its engine's accounts by the name usage_overview lists (\"run Finance only on Work\"), or \"any\" to run on whichever has room; no card. Its key: `colorway`, `icon` (the legend) and `key` (the keyboard key, one letter or digit, that jumps to it; unique on the team) change how it looks (\"make Hiring teal with the people icon\", \"put Finance on F\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
+        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude`, `codex` or `opencode`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku, which the app calls Smartest, Balanced and Fastest and which you may pass by those words; Codex or OpenCode: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on the smartest model\", \"have Finance think harder\". Tell the user in the app's words, the model's name second: \"Research now uses Smartest (Opus)\", never just \"opus\"; \"model\" alone means little to most people, so say \"the AI it thinks with\" when they seem unsure. `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `learn_skills` (\"automatically\", \"ask me\" or \"off\") is whether it saves how it did a hard task as a skill. `account` is its Runs on: one of its engine's accounts by the name usage_overview lists (\"run Finance only on Work\"), or \"any\" to run on whichever has room; no card. Its key: `colorway`, `icon` (the legend) and `key` (the keyboard key, one letter or digit, that jumps to it; unique on the team) change how it looks (\"make Hiring teal with the people icon\", \"put Finance on F\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -239,6 +239,7 @@ const TOOLS: &[Tool] = &[
                 "effort": { "type": "string", "enum": ["low", "medium", "high", "default"] },
                 "routine_model": { "type": "string" },
                 "muted": { "type": "boolean" },
+                "learn_skills": { "type": "string", "enum": ["automatically", "ask me", "off"] },
                 "account": { "type": "string", "description": "Runs on: an account's name or id, or \"any\"." },
                 "colorway": { "type": "string", "enum": super::keys::colorways() },
                 "icon": { "type": "string", "description": super::keys::icon_hint() },
@@ -442,6 +443,12 @@ const TOOLS: &[Tool] = &[
         schema: super::remember::schema,
     },
     Tool {
+        name: super::skills_learn::TOOL,
+        description: super::skills_learn::DESCRIPTION,
+        main_only: false,
+        schema: super::skills_learn::schema,
+    },
+    Tool {
         name: "remember_browser_account",
         description: "After you checked, on the page itself, which account one of your sites is signed in as in the user's Chrome: remember which Chrome profile (browser) that was, so next time starts there. Only for your own sites; never a guess.",
         main_only: false,
@@ -515,6 +522,8 @@ fn serves(tool: &Tool, caller: &store::Agent) -> bool {
     match tool.name {
         "delete_agent" => super::admin::admin_now(caller),
         "read_agent" => caller.is_main || super::admin::admin_now(caller),
+        // "Save what it learns: Off": not offered at all.
+        super::skills_learn::TOOL => caller.learn_skills != super::skills_learn::Learning::Off,
         _ => !tool.main_only || caller.is_main,
     }
 }
@@ -870,6 +879,7 @@ async fn call(
         }
         super::policy_card::TOOL => super::policy_card::propose(app, caller, turn, args).await,
         super::remember::TOOL => super::remember::call(app, caller, turn, args).await,
+        super::skills_learn::TOOL => super::skills_learn::call(app, caller, turn, args).await,
         super::plan_grant::TOOL => super::plan_grant::call(app, caller, args).await,
         _ => error("Unknown tool"),
     }
@@ -2112,6 +2122,13 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
             .unwrap_or_else(|| "any account".to_string());
         widens.insert(0, format!("Runs on: {shown}"));
     }
+    // Saving skills without asking is more room: the user's own message
+    // alone, else a card. Ask me and Off apply at once.
+    if run.learn_skills == Some(super::skills_learn::Learning::Auto)
+        && agent.learn_skills != super::skills_learn::Learning::Auto
+    {
+        widens.push("Save what it learns: Automatically, without asking".to_string());
+    }
     if update_asks(&caller.id, &widens) {
         let title = if account_changes && widens.len() == 1 {
             format!("Change which account {} runs on?", agent.name)
@@ -2257,6 +2274,8 @@ pub(super) struct RunSettings {
     pub effort: Option<Option<String>>,
     pub routine_model: Option<Option<String>>,
     pub muted: Option<bool>,
+    /// "Save what it learns" (`skills_learn`).
+    pub learn_skills: Option<super::skills_learn::Learning>,
 }
 
 fn is_default_word(raw: &str) -> bool {
@@ -2318,6 +2337,9 @@ pub(super) fn run_settings(engine: Engine, args: &Value) -> Result<RunSettings, 
         effort,
         routine_model,
         muted: args.get("muted").and_then(Value::as_bool),
+        learn_skills: raw("learn_skills")
+            .map(super::skills_learn::Learning::parse)
+            .transpose()?,
     })
 }
 
@@ -2346,6 +2368,9 @@ impl RunSettings {
         if self.muted.is_some_and(|m| m != agent.muted) {
             out.push("notifications");
         }
+        if self.learn_skills.is_some_and(|l| l != agent.learn_skills) {
+            out.push("saving skills");
+        }
         out
     }
 
@@ -2362,6 +2387,9 @@ impl RunSettings {
         if let Some(m) = self.muted {
             a.muted = m;
         }
+        if let Some(l) = self.learn_skills {
+            a.learn_skills = l;
+        }
     }
 
     /// The tool's words for what changed beyond the model and effort (the
@@ -2377,6 +2405,13 @@ impl RunSettings {
                 }
                 .to_string(),
             );
+        }
+        if after.learn_skills != before.learn_skills {
+            out.push(format!(
+                "Save what it learns: {} (it {})",
+                after.learn_skills.label(),
+                after.learn_skills.said()
+            ));
         }
         if self.routine_model.is_some() && after.routine_model != before.routine_model {
             out.push(format!(
@@ -2880,6 +2915,7 @@ pub(crate) fn new_card(
         step_in: None,
         crossover: None,
         account_switch: None,
+        skill: None,
         slack_reply: None,
         risk: None,
     }
@@ -4392,6 +4428,7 @@ mod tests {
             away: None,
             context: None,
             routine_model: None,
+            learn_skills: Default::default(),
             account: None,
             template: None,
             reach: Default::default(),
