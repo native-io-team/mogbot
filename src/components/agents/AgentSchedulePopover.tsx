@@ -167,13 +167,17 @@ export function AgentSchedulePopover({
             variant="ghost"
             className="agent-chat__action agent-chat__scheduled"
             leftIcon={<RoutineIcon size={14} />}
-            title={`${count} scheduled ${count === 1 ? 'routine' : 'routines'}`}
-            // Narrow, the word is hidden; the name keeps it.
-            aria-label={`${count} scheduled`}
+            title={`${count} ${count === 1 ? 'routine' : 'routines'}`}
+            // Narrow, the word is hidden; the name keeps it. "Routines", the
+            // sidebar's word and the popover's ("New routine"): one idea, one
+            // word (it said "3 scheduled", and "Schedule" with none).
+            aria-label={`${count} ${count === 1 ? 'routine' : 'routines'}`}
           >
             <span>
               {count}
-              <span className="agent-chat__scheduled-word agent-chat__action-word"> scheduled</span>
+              <span className="agent-chat__scheduled-word agent-chat__action-word">
+                {count === 1 ? ' routine' : ' routines'}
+              </span>
             </span>
           </Button>
         ) : (
@@ -187,7 +191,7 @@ export function AgentSchedulePopover({
             title="Schedule a routine"
             aria-label={`Schedule a routine for ${agent.name}`}
           >
-            <span className="agent-chat__scheduled-word agent-chat__action-word">Schedule</span>
+            <span className="agent-chat__scheduled-word agent-chat__action-word">Routines</span>
           </Button>
         )
       }

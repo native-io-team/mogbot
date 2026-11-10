@@ -1902,7 +1902,7 @@ const crowdedHeader = (id: string, width?: number): Scenario => ({
   id,
   title: `Agents — the chat header at its fullest${width ? `, ${width}px` : ''}`,
   looksRightWhen:
-    'Acme Site’s header: at the leading edge its key and name, then quiet chips: the folder “acme-marketing” and the conversation “Plan the November launch email” (the account chip doesn’t fit the conversation’s column; Usage says it). No role sentence (it is the name’s tooltip). At the trailing edge one family of ghost buttons, 4px apart, the same height: the usage gauge “Usage”, the clock “1 scheduled”, the sliders “Model”, then …. The key starts over the messages’ left edge and … ends over the composer’s right edge. Narrow, the words go (icons stay), then the project chip. Nothing truncates at 1280px.',
+    'Acme Site’s header: at the leading edge its key and name, then quiet chips: the folder “acme-marketing” and the conversation “Plan the November launch email” (the account chip doesn’t fit the conversation’s column; Usage says it). No role sentence (it is the name’s tooltip). At the trailing edge one family of ghost buttons, 4px apart, the same height: the usage gauge “Usage”, the clock “1 routine”, the sliders “Model”, then …. The key starts over the messages’ left edge and … ends over the composer’s right edge. Narrow, the words go (icons stay), then the project chip. Nothing truncates at 1280px.',
   ...(width ? { viewport: { width, height: 800 } } : {}),
   openSelector: AGENTS_TAB,
   requires: '.agent-conversations__title',
@@ -2028,7 +2028,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-check-in',
     title: 'Agents — a scheduled check-in fired in the chat',
     looksRightWhen:
-      'The Finance chat shows a centred “Scheduled · late, was due …” line (never “check-in”) with the note under it, then the reply. The header shows “3 scheduled” beside the … menu.',
+      'The Finance chat shows a centred “Scheduled · late, was due …” line (never “check-in”) with the note under it, then the reply. The header shows “3 routines” beside the … menu.',
     requires: '.agent-checkin',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
@@ -2311,7 +2311,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-scheduled',
     title: 'Agents — the schedule popover',
     looksRightWhen:
-      'Clicking “3 scheduled” in the Finance header opens a popover under it: the one-time check-in, the weekday routine with “Every weekday at 9:00 AM” and “Next: tomorrow at 9:00 AM” on two whole lines, and the paused Monday routine muted and last. “New routine” opens the picker below: When chips (Every day / Weekdays (selected) / Weekly / Every few hours / Once), “At 09:00”, What holding “Brief me on Acme”, then the echo “Every weekday at 9:00 AM — Brief me on Acme” with “First run tomorrow at 9:00 AM” under it, Cancel and Schedule right-aligned. No typed grammar anywhere. Then a one-sentence footnote ending in an inline “Keep this Mac awake” link.',
+      'Clicking “3 routines” in the Finance header opens a popover under it: the one-time check-in, the weekday routine with “Every weekday at 9:00 AM” and “Next: tomorrow at 9:00 AM” on two whole lines, and the paused Monday routine muted and last. “New routine” opens the picker below: When chips (Every day / Weekdays (selected) / Weekly / Every few hours / Once), “At 09:00”, What holding “Brief me on Acme”, then the echo “Every weekday at 9:00 AM — Brief me on Acme” with “First run tomorrow at 9:00 AM” under it, Cancel and Schedule right-aligned. No typed grammar anywhere. Then a one-sentence footnote ending in an inline “Keep this Mac awake” link.',
     requires: '.agent-schedule__foot .text-button',
     openSelector: AGENTS_TAB,
     steps: [

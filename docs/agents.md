@@ -4114,8 +4114,8 @@ minutes, a working day of the month, two days in one) is said so on staging and
 on the review card, and the interview is told not to ask again for a time that
 was already exact.
 
-The user sees them in a popover on the chat header ("N scheduled", or a clock
-when there are none; Cmd+K → "Schedule a check-in for <agent>…"). Each row
+The user sees them in a popover on the chat header ("N routines", or
+"Routines" when there are none; Cmd+K → "Schedule a check-in for <agent>…"). Each row
 can be paused (routines) or cancelled. The composer takes one line, `when:
 what`, split at the first colon followed by a space, and reads the time back
 as the backend resolved it before Return adds it.
