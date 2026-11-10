@@ -93,7 +93,6 @@ fn loop_words(name: &'static str) -> &'static str {
         "watch" => "\"When…\" routines",
         "slack" => "Slack",
         "usage_read" => "Reading your plans' usage",
-        "workflows" => "Workflows",
         _ => "A background check",
     }
 }

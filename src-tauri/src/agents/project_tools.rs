@@ -1072,7 +1072,6 @@ async fn pull_request(app: &AppHandle, caller: &store::Agent, t: &Target, args: 
         return error(refused);
     }
     match crate::commands::pull_requests::create_pull_request(
-        app.clone(),
         t.path.clone(),
         title.to_string(),
         body,

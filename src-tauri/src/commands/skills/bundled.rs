@@ -31,7 +31,7 @@ use tracing::{debug, warn};
 
 /// One skill this app ships.
 pub struct BundledSkill {
-    /// The skill's name without the app prefix (`workflows`). The directory
+    /// The skill's name without the app prefix (`team`). The directory
     /// under the agent's `skills/` is [`BundledSkill::dir_name`].
     pub name: &'static str,
     /// Bump when `body` changes so installed copies refresh.
@@ -42,11 +42,6 @@ pub struct BundledSkill {
 
 /// Every skill Ship Studio installs.
 pub const BUNDLED_SKILLS: &[BundledSkill] = &[
-    BundledSkill {
-        name: "workflows",
-        version: "2",
-        body: super::super::workflows::skill::skill_markdown,
-    },
     BundledSkill {
         name: "team",
         version: "5",
@@ -65,7 +60,7 @@ pub const BUNDLED_SKILLS: &[BundledSkill] = &[
 ];
 
 impl BundledSkill {
-    /// `<slug>-<name>` (`mogbot-workflows`): ours, from brand.json. Ship
+    /// `<slug>-<name>` (`mogbot-team`): ours, from brand.json. Ship
     /// Studio installs its own `shipstudio-*` copies into the same shared
     /// skills directories; this app never writes or removes those.
     pub fn dir_name(&self) -> String {
@@ -569,6 +564,40 @@ fn remove_previous_brand_copy(ours: &std::path::Path, name: &str) {
     }
 }
 
+/// Skills this app used to install and no longer ships. The Workflows feature
+/// (and its Inbox) was removed: an agent still holding its skill would write
+/// workflow files nothing here runs.
+const RETIRED_SKILLS: &[&str] = &["workflows"];
+
+/// Remove this app's own copy of a retired skill, under its current or its
+/// previous name. Only a folder carrying our version stamp and a SKILL.md is
+/// removed: that pair is what this app wrote. Ship Studio's `shipstudio-*`
+/// copies are never touched, nor anything the user wrote.
+fn remove_retired_skill(dir: &std::path::Path) {
+    if dir.join(VERSION_STAMP).is_file() && dir.join("SKILL.md").is_file() {
+        if let Err(err) = std::fs::remove_dir_all(dir) {
+            warn!(skill = %dir.display(), error = %err, "could not remove a retired skill");
+        }
+    }
+}
+
+/// The folders a retired skill of ours may sit in: `<slug>-<name>` and, after
+/// a rename, `<previous slug>-<name>`. Never `shipstudio-<name>`.
+fn retired_skill_dirs(name: &str) -> Vec<PathBuf> {
+    let mut slugs = vec![crate::brand::SLUG];
+    if let Some(prev) = crate::brand::previous::SLUG {
+        if prev != crate::brand::SLUG {
+            slugs.push(prev);
+        }
+    }
+    slugs
+        .into_iter()
+        .filter(|slug| *slug != "shipstudio")
+        .flat_map(|slug| skill_dirs(&format!("{slug}-{name}")))
+        .map(|(_, dir)| dir)
+        .collect()
+}
+
 /// Write every bundled skill for every agent that supports one.
 ///
 /// Except where Ship Studio's own copy of the same skill is already
@@ -579,6 +608,12 @@ fn remove_previous_brand_copy(ours: &std::path::Path, name: &str) {
 /// ours; theirs is never touched).
 pub fn install_bundled_skills() -> Vec<BundledSkillStatus> {
     let mut statuses = Vec::new();
+
+    for name in RETIRED_SKILLS {
+        for dir in retired_skill_dirs(name) {
+            remove_retired_skill(&dir);
+        }
+    }
 
     for skill in BUNDLED_SKILLS {
         let body = branded_body(&(skill.body)());
@@ -844,6 +879,41 @@ mod tests {
                 "{} is declared twice and would overwrite itself",
                 skill.dir_name()
             );
+        }
+    }
+
+    #[test]
+    fn a_retired_skill_is_removed_only_when_this_app_wrote_it() {
+        let skills = tempfile::tempdir().unwrap();
+        // Ours: SKILL.md plus our version stamp.
+        let ours = skills.path().join(crate::brand::scoped("workflows"));
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(ours.join("SKILL.md"), "---\nname: x\n---\n").unwrap();
+        std::fs::write(ours.join(VERSION_STAMP), "2\n").unwrap();
+        remove_retired_skill(&ours);
+        assert!(!ours.exists());
+
+        // Unstamped: the user's (or someone else's), left alone.
+        let theirs = skills.path().join("someone-workflows");
+        std::fs::create_dir_all(&theirs).unwrap();
+        std::fs::write(theirs.join("SKILL.md"), "---\nname: y\n---\n").unwrap();
+        remove_retired_skill(&theirs);
+        assert!(theirs.join("SKILL.md").is_file());
+    }
+
+    #[test]
+    fn retired_skill_folders_never_name_ship_studios_copy() {
+        for dir in retired_skill_dirs("workflows") {
+            let name = dir.file_name().unwrap().to_string_lossy().to_string();
+            assert_ne!(name, "shipstudio-workflows");
+            assert!(name.ends_with("-workflows"), "{name}");
+        }
+    }
+
+    #[test]
+    fn retired_skills_are_not_bundled() {
+        for name in RETIRED_SKILLS {
+            assert!(BUNDLED_SKILLS.iter().all(|s| s.name != *name), "{name}");
         }
     }
 

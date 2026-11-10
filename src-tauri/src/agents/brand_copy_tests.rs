@@ -78,7 +78,6 @@ fn no_app_owned_agent_text_calls_the_app_ship_studio() {
         "agent_bridge.rs",
         "commands/agents.rs",
         "commands/skills/bundled.rs",
-        "commands/workflows/skill.rs",
         "commands/team/skill.rs",
     ] {
         files.push(src.join(extra));
