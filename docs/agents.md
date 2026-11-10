@@ -4202,7 +4202,9 @@ and its answer post one notification per turn.
 
 The sidebar's Routines row and ⌘K "Routines" open one list of every agent's
 routines: the agent's key, the note, how it runs in words, its next run, its
-last run's outcome, and an on/off switch. **Pause all routines…** and
+last run's outcome, **Change** and an on/off switch. Change opens that agent's
+chat with its schedule popover already on the routine's editor
+(`lib/routineHandoff.ts`, a one-slot ask its chat takes as it mounts). **Pause all routines…** and
 **Resume all routines…** (the list's buttons, or ⌘K) ask first. Resume all
 is the exact undo of Pause all: it wakes only routines marked
 `pausedByBulk`, never one paused by hand, by an admin (`pausedByAdmin`) or by

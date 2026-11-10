@@ -962,7 +962,7 @@ const inspectFiles = (args: Record<string, unknown>) =>
       size: image ? 40_266 : 6_220,
     };
   });
-const schedulePreview = (args: Record<string, unknown>) => {
+export const schedulePreview = (args: Record<string, unknown>) => {
   const when = String(args.when).toLowerCase();
   // The picker's words (routine-phrases.json): "every 2 hours", "2026-11-20 09:00".
   const hours = /^every (?:(\d+) )?(hour|hours|minutes)$/.exec(when);

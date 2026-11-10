@@ -141,6 +141,8 @@ interface AgentSchedulePopoverProps {
   onOpenChange: (open: boolean) => void;
   /** Open on the "When…" composer (⌘K → "Start work when something happens…"). */
   startWhen?: boolean;
+  /** Open on this routine's editor (the Routines page's Change). */
+  startEditing?: string | null;
 }
 
 export function AgentSchedulePopover({
@@ -148,6 +150,7 @@ export function AgentSchedulePopover({
   open,
   onOpenChange,
   startWhen = false,
+  startEditing = null,
 }: AgentSchedulePopoverProps) {
   const count = agent.checkIns?.length ?? 0;
   return (
@@ -192,7 +195,12 @@ export function AgentSchedulePopover({
         )
       }
     >
-      <ScheduleBody agent={agent} startWhen={startWhen} onRan={() => onOpenChange(false)} />
+      <ScheduleBody
+        agent={agent}
+        startWhen={startWhen}
+        startEditing={startEditing}
+        onRan={() => onOpenChange(false)}
+      />
     </Dropdown>
   );
 }
@@ -201,16 +209,19 @@ export function AgentSchedulePopover({
 function ScheduleBody({
   agent,
   startWhen,
+  startEditing,
   onRan,
 }: {
   agent: Agent;
   startWhen: boolean;
+  startEditing: string | null;
   onRan: () => void;
 }) {
   const items = sortCheckIns(agent.checkIns ?? []);
   /** The composer: open for a new routine (`'new'`) or for a row's edit. */
-  const [composing, setComposing] = useState<CheckIn | 'new' | null>(() =>
-    items.length === 0 || startWhen ? 'new' : null
+  const [composing, setComposing] = useState<CheckIn | 'new' | null>(
+    () =>
+      items.find((c) => c.id === startEditing) ?? (items.length === 0 || startWhen ? 'new' : null)
   );
   const editing = composing && composing !== 'new' ? composing : null;
   // Which conversation each routine runs in, read once per opening.
