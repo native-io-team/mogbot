@@ -368,6 +368,19 @@ pub struct CheckLine {
     /// Why it couldn't check.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// What it ran on ("Codex"), named beside the app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub engine: Option<String>,
+}
+
+impl CheckLine {
+    /// "Google Calendar" or "Google Calendar, on Codex".
+    fn through(&self) -> String {
+        match &self.engine {
+            Some(e) => format!("{}, on {}", plain(&self.app), plain(e)),
+            None => plain(&self.app),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -769,13 +782,11 @@ where
                     plain(&c.app),
                     plain(why)
                 )),
-                None if c.items.is_empty() => out.push(format!(
-                    "- {} ({}): nothing.",
-                    plain(&c.what),
-                    plain(&c.app)
-                )),
+                None if c.items.is_empty() => {
+                    out.push(format!("- {} ({}): nothing.", plain(&c.what), c.through()))
+                }
                 None => {
-                    out.push(format!("- {} ({}):", plain(&c.what), plain(&c.app)));
+                    out.push(format!("- {} ({}):", plain(&c.what), c.through()));
                     let items: Vec<String> = c
                         .items
                         .iter()
@@ -973,6 +984,7 @@ async fn prepare(app: &tauri::AppHandle, day: &str) -> Result<Prepared, CommandE
             Ok(f) => CheckLine {
                 what: c.what.clone(),
                 app: c.app.clone(),
+                engine: f.engine.map(|e| e.label().to_string()),
                 items: f.events.into_iter().map(|e| e.title).collect(),
                 error: None,
             },
@@ -981,6 +993,7 @@ async fn prepare(app: &tauri::AppHandle, day: &str) -> Result<Prepared, CommandE
                 app: c.app.clone(),
                 items: Vec::new(),
                 error: Some(why),
+                engine: None,
             },
         });
     }

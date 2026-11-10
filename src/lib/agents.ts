@@ -2093,6 +2093,20 @@ export interface WatchCheckOutcome {
   unconfirmed?: boolean;
   error?: string;
   paused?: string;
+  /** A model check: what it ran on ("Claude Code", "Codex"). */
+  engine?: string;
+}
+
+/** What Check now came to, in a line; a model check says what it ran on. */
+export function describeWatchCheck(o: WatchCheckOutcome): string {
+  if (o.paused) return o.paused;
+  if (o.error) return `Check failed: ${o.error}`;
+  const on = o.engine ? ` Checked on ${o.engine}.` : '';
+  if (o.baseline) return `Noted what’s there now; anything new from here starts work.${on}`;
+  if (o.unconfirmed)
+    return `Found nothing. The next check confirms that before anything starts work.${on}`;
+  if (o.found > 0) return `Found ${o.found} new; it’s on it.${on}`;
+  return `Nothing new.${on}`;
 }
 
 export const createWatch = (

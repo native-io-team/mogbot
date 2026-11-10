@@ -192,6 +192,7 @@ pub mod usage_tools;
 pub mod wallet;
 pub mod watch;
 pub mod watch_seal;
+pub mod watch_seal_codex;
 pub mod work;
 pub mod workplace;
 
