@@ -285,6 +285,12 @@
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
+      "path": "src/styles/features/agents-dialogs.css",
+      "token": "--font-weight-semibold",
+      "count": 1,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
+    },
+    {
       "path": "src/styles/features/agents-panel.css",
       "token": "--radius-full",
       "count": 1,
@@ -1643,7 +1649,7 @@
     {
       "path": "src/styles/features/workspace/sidebar.css",
       "token": "--font-size-11",
-      "count": 7,
+      "count": 5,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
@@ -1655,13 +1661,7 @@
     {
       "path": "src/styles/features/workspace/sidebar.css",
       "token": "--font-weight-medium",
-      "count": 2,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/features/workspace/sidebar.css",
-      "token": "--font-weight-regular",
-      "count": 1,
+      "count": 3,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
