@@ -2398,8 +2398,8 @@ async fn parity(h: &H, on: On) -> Check {
     let served = h
         .fake_log()
         .into_iter()
-        .filter_map(|e| e.get("served").cloned())
-        .last()
+        .rev()
+        .find_map(|e| e.get("served").cloned())
         .unwrap_or_default();
     ensure(
         served
@@ -2573,8 +2573,8 @@ async fn parity(h: &H, on: On) -> Check {
     let overview = h
         .fake_log()
         .into_iter()
-        .filter(|e| e["tool"] == "usage_overview")
-        .last()
+        .rev()
+        .find(|e| e["tool"] == "usage_overview")
         .ok_or_else(|| step("usage tools", "usage_overview never called".into()))?;
     ensure(
         overview["reply"]["result"]["isError"] != true,
