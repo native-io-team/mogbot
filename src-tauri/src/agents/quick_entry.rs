@@ -30,8 +30,9 @@ pub const LABEL: &str = "quick-entry";
 /// Sent to the composer each time it is shown: reset, refocus, refetch.
 pub const EVENT_SHOWN: &str = "quick-entry://shown";
 pub const DEFAULT_SHORTCUT: &str = "Alt+Space";
-const WIDTH: f64 = 600.0;
-const HEIGHT: f64 = 168.0;
+/// The card is 568 wide; the rest is room for its shadow (agents-quick-entry.css).
+const WIDTH: f64 = 632.0;
+const HEIGHT: f64 = 212.0;
 
 /// Ship Studio wasn't in front when the composer opened: give focus back on close.
 static RETURN_FOCUS: AtomicBool = AtomicBool::new(false);

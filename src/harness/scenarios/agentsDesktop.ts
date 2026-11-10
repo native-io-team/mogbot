@@ -12,7 +12,7 @@ import { AGENTS_TAB, DEFAULTS, ENGINES, msg, now, overview, TEAM } from './agent
 import { FULL_INVENTORY } from './agentsUsage';
 
 /** The composer's window is 600pt wide; the capture gives it a little air. */
-const QUICK_ENTRY_VIEWPORT = { width: 600, height: 320 };
+const QUICK_ENTRY_VIEWPORT = { width: 632, height: 360 };
 const SCREENSHOT = '/harness/agents-demo/attachments/m-att1/Pricing on mobile.jpg';
 
 const DESKTOP_SETTINGS = {

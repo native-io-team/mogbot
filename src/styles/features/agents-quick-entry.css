@@ -18,9 +18,13 @@ html[data-window='quick-entry'] #root {
 }
 
 /* Room inside the transparent window for the card's shadow. Nothing is drawn
-   outside the card: under it is whatever app was in front. */
+   outside the card: under it is whatever app was in front, and the window's
+   edge cuts whatever reaches past it. --shadow-lg drops 16px and blurs 48px,
+   so it needs 64px below (its full reach) and 32px at the sides; with less, the shadow
+   ended in a hard line at the window's foot. The window is 64px wider than
+   the card for it (quick_entry.rs WIDTH). */
 .quick-entry {
-  padding: var(--spacing-md) var(--spacing-lg) var(--spacing-xl);
+  padding: var(--spacing-lg) var(--spacing-2xl) calc(var(--spacing-2xl) * 2);
 }
 
 .quick-entry .agent-composer.quick-entry__composer {
