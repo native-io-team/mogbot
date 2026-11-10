@@ -386,7 +386,7 @@ export function addProbeAccount(
           title: `Your Codex account is out until ${resetPhrase(back, now)}. Carry on with Claude Code until then?`,
           detail: '',
           summary:
-            "Claude Code can't open Codex's conversation, so Ledger starts there from your chat and its memory. When Codex has room again, Ledger goes back to it and is told what happened meanwhile. Always: whenever every Codex account is out. Change it in Settings → Agents → Usage.",
+            "Claude Code can't open Codex's conversation, so Ledger starts there from your chat and its memory. When Codex has room again, Ledger goes back to it and is told what happened meanwhile. Always: whenever every Codex account is out. Change it in Settings → Accounts & usage.",
           status: 'pending',
           crossover: { from: 'codex', to: 'claude', until: back, resume: true },
         },

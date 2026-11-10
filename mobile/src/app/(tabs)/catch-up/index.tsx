@@ -259,7 +259,7 @@ export default function CatchUp() {
                 style={styles.sinceTitle}
                 accessibilityRole="header"
               >
-                {sinceTitle(recent ? null : lastVisit).toUpperCase()}
+                {sinceTitle(recent ? null : lastVisit)}
               </T>
               <View style={styles.sinceList}>
                 {happened.map((h, i) => {
