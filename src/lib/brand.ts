@@ -32,6 +32,11 @@ export interface BrandLinks {
   starterRepoBase: string | null;
   /** Git repo the phone app is built from on the user's Mac. */
   companionSource: string | null;
+  /**
+   * The phone app's App Store page. Null until it is live there: the app
+   * never links to a store page that may not exist yet.
+   */
+  appStore: string | null;
   pushRelay: string | null;
 }
 

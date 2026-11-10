@@ -23,16 +23,18 @@ import { Button } from '../primitives/Button';
 import { AgentCard } from './AgentCard';
 import { getPhoneStatus } from '../../lib/companion';
 import type { AgentMessage } from '../../lib/agents';
+import { PHONE_APP_ROUTE, phoneOfferNote } from '../../lib/phoneApp';
 
 export const PHONE_OFFER_KEY = 'shipstudio.chief.phoneOffer';
 
 /**
- * Honest about the time: "about ten minutes" held only when the phone app
- * was already on the phone. With no App Store build yet, a first-timer's
- * phone app is built on this Mac (Expo Go in minutes, Xcode up to an hour).
+ * Honest about the time, by how this build gets the app (`lib/phoneApp`):
+ * a minute from the App Store, or built on this Mac (Expo Go in minutes,
+ * Xcode up to an hour). With neither, there is no card at all: it opened a
+ * panel that said the app isn't available, a dead end as the first-hour
+ * next step.
  */
-export const PHONE_OFFER_NOTE =
-  'Chat, answer and approve from anywhere. Your phone talks only to this Mac. There’s no App Store app yet, so setting it up takes ten minutes to an hour.';
+export const PHONE_OFFER_NOTE = phoneOfferNote(PHONE_APP_ROUTE);
 
 /**
  * Whether the conversation has reached its first result: the user has said
@@ -72,8 +74,15 @@ function remember(answer: 'later' | 'setup'): void {
   }
 }
 
-export function ChiefPhoneOffer({ onSetUp }: { onSetUp: () => void }) {
-  const [hidden, setHidden] = useState(answered);
+export function ChiefPhoneOffer({
+  onSetUp,
+  note = PHONE_OFFER_NOTE,
+}: {
+  onSetUp: () => void;
+  /** This build's line; null when it can't get the app onto a phone yet. */
+  note?: string | null;
+}) {
+  const [hidden, setHidden] = useState(() => note === null || answered());
   // Null until the Mac says: no card on a guess.
   const [paired, setPaired] = useState<boolean | null>(null);
   useEffect(() => {
@@ -100,7 +109,7 @@ export function ChiefPhoneOffer({ onSetUp }: { onSetUp: () => void }) {
       data-testid="chief-phone-offer"
       icon={<MobileIcon size={14} />}
       title="Use your agents from your phone?"
-      note={PHONE_OFFER_NOTE}
+      note={note}
       actions={
         <>
           <Button variant="secondary" size="compact" onClick={() => answer('later')}>

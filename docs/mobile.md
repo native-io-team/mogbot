@@ -1670,6 +1670,14 @@ behind them.
 
 ## Installing the app
 
+**Which route a build offers** (`src/lib/phoneApp.ts`): the App Store first, when
+`links.appStore` in `brand.json` names the listing (set it the day the app is live; the
+Phone panel's first step becomes "Get it on the App Store" and the Chief's phone card says a
+minute, not an hour); else a build on this Mac when `links.companionSource` is set or in a
+dev build; else none. With none (a downloaded 1.0 before the listing is live) the Chief's
+phone card isn't shown at all and the panel says "The phone app isn't out yet", rather than
+a card leading to a panel that can't do anything.
+
 There is no App Store listing yet. The store build (`COMPANION_STORE_BUILD=1`),
 what was checked, the review notes, listing drafts and what only the owner
 can do are in [app-store.md](app-store.md). `TESTFLIGHT_URL` and `ANDROID_APK_URL` in

@@ -25,6 +25,7 @@ export const ALL_LINKS: BrandModule.BrandLinks = {
   templateApi: 'https://example.com/api/v1/templates',
   starterRepoBase: 'https://github.com/ship-studio',
   companionSource: 'https://github.com/ship-studio/ship-studio.git',
+  appStore: 'https://apps.apple.com/app/id0000000000',
   pushRelay: null,
 };
 

@@ -87,6 +87,13 @@ describe('ChiefPhoneOffer', () => {
     expect(localStorage.getItem(PHONE_OFFER_KEY)).toBe('setup');
   });
 
+  it('isn’t offered at all when this build can’t get the app onto a phone', async () => {
+    render(<ChiefPhoneOffer onSetUp={vi.fn()} note={null} />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByTestId('chief-phone-offer')).not.toBeInTheDocument();
+    expect(getPhoneStatus).not.toHaveBeenCalled();
+  });
+
   it('Not now puts it away without opening anything', async () => {
     const onSetUp = vi.fn();
     render(<ChiefPhoneOffer onSetUp={onSetUp} />);
