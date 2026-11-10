@@ -1,6 +1,7 @@
 {
   "name": "@shipstudio/push-relay",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Ship Studio's content-free push relay: a Cloudflare Worker that holds the APNs key so the Mac never ships it.",
   "type": "module",

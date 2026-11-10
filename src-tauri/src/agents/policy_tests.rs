@@ -1172,7 +1172,7 @@ fn working_in_a_copy_never_stops_an_edit_at_go_hard() {
     let _serial = super::super::store::tests_lock();
     let root = tempfile::tempdir().unwrap();
     super::super::store::set_root_for_tests(Some(root.path().to_path_buf()));
-    let mut ms = agent("ms", "Memberstack");
+    let mut ms = agent("ms", "Northwind");
     ms.project = Some(MARKETING.into());
     let team = Preset::Balanced.team();
     let e = eff_of(&team, &Overrides::default(), &ms);

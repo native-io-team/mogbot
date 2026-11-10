@@ -51,11 +51,11 @@ describe('StaleEnvBanner', () => {
 
   it('appears when the matching workspace credentials change, then clears on dismiss', async () => {
     seedRunningTab();
-    getProjectAccountId.mockResolvedValue('circa');
+    getProjectAccountId.mockResolvedValue('northwind');
     render(<StaleEnvBanner projectPath={PATH} />);
 
     await act(async () => {
-      notifyAccountCredentialsChanged('circa');
+      notifyAccountCredentialsChanged('northwind');
       await Promise.resolve();
     });
 
@@ -69,7 +69,7 @@ describe('StaleEnvBanner', () => {
 
   it('ignores a credential change for a different workspace', async () => {
     seedRunningTab();
-    getProjectAccountId.mockResolvedValue('circa');
+    getProjectAccountId.mockResolvedValue('northwind');
     render(<StaleEnvBanner projectPath={PATH} />);
 
     await act(async () => {

@@ -84,7 +84,7 @@ fn every_standing_rule_is_listed_in_plain_words_with_its_way_off() {
         rule(
             "r2",
             RuleKind::Tool,
-            "Post · Native OS",
+            "Post · Acme CRM",
             Some("ur always allowed to do those"),
         ),
     ];

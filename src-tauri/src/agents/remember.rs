@@ -260,7 +260,7 @@ pub fn plan(
     Ok(Plan { scope, team })
 }
 
-/// "post to social media · Native OS", "run `npm test`", "open pages on example.com".
+/// "post to social media · Acme CRM", "run `npm test`", "open pages on example.com".
 pub fn phrase(scope: &Scope) -> String {
     match scope.kind {
         RuleKind::Command | RuleKind::CommandPrefix => format!("run {}", scope.label),

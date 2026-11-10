@@ -32,7 +32,7 @@ export function richOnItsOwn(agentId: string, agentName: string): OnItsOwn {
       {
         key: 'rule:r2',
         kind: 'said',
-        text: 'Post to social media · Native OS',
+        text: 'Post to social media · Acme CRM',
         detail: 'From what you said: “ur always allowed to do those”',
         narrow: [{ kind: 'rule', ruleId: 'r2' }],
       },

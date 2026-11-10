@@ -31,7 +31,7 @@ signed-in Codex account, a real Team/Enterprise seat, and whether a setup token'
 | 1 | Maximizer, Adversary | A 5-hour window near its reset was "spare" even when the same account's week was nearly or wholly used up. "Use it all" then woke the Chief to spend the 5-hour room, which spends the *week*: exactly the capacity that doesn't expire soon. | `usage_plan::spare` keeps a window only when the account's other plan windows (5-hour, weekly; per-model ones like Opus excluded) each have ≥ 25% left and aren't limited (`others_can_take_it`). | `a_window_is_not_spare_when_another_limit_on_the_account_has_less_left` |
 | 2 | Adversary | An account that can't run offered spare capacity from its last reading: out until a reset, signed out since, or a second sign-in of an account already listed (the same window offered twice). | `inventory::build` builds spare windows only from accounts signed in, not out, and not `same_as`. | `an_account_that_cant_run_offers_no_spare_capacity` |
 | 3 | Stacker | The duplicate-account trap in failover: when This Mac's account hit its limit, failover switched to "Personal Account" (the same account signed in a second time), posted "Switched to Personal Account", and spent a refused try on it. The background read marking one out didn't mark its twin either, so the sidebar called the twin "Next". | `wallet::mark_out_with_twins` / `reported_out_with_twins` mark every known sign-in of the same account (`twins_in`, the Usage view's own `inventory::same_as` rule: same org, not a seat plan, never guessed). Used by failover, the mid-turn `rate_limit_event` and the background read. | `a_second_sign_in_of_an_account_is_out_with_it` |
-| 4 | Stacker | Adding an account never said that the browser decides who signs in. The email field reads like it picks the account; it is a label. That is how the owner got two entries for one gmail account while julian@native.agency was never added. | `AccountSignIn` says, before the terminal starts: the browser signs in as whoever claude.ai (or ChatGPT) is signed in as there; sign out or switch first, or open the link in a private window (`SIGN_IN_BROWSER_NOTE`, `lib/agentAccounts.ts`). | `AccountSignIn.test.tsx` |
+| 4 | Stacker | Adding an account never said that the browser decides who signs in. The email field reads like it picks the account; it is a label. That is how the owner got two entries for one gmail account while you@work.example was never added. | `AccountSignIn` says, before the terminal starts: the browser signs in as whoever claude.ai (or ChatGPT) is signed in as there; sign out or switch first, or open the link in a private window (`SIGN_IN_BROWSER_NOTE`, `lib/agentAccounts.ts`). | `AccountSignIn.test.tsx` |
 | 5 | Stacker | A duplicate was only noticed at the first usage read (up to 30 minutes later for a setup token), never at sign-in, though the sign-in already makes a one-token request. | `claude_token_check` (was `claude_token_is_rejected`) keeps the `anthropic-organization-id` header when the answer carries one and records it right after the token is stored, so "Same account as …" can show at once. Unverified: the header has not yet been observed on a setup token's answer. | none (network) |
 | 6 | Maximizer, Adversary | "Give agents something to do" pressed twice (or while "Use it all" was already starting the window) queued the same list for the Chief twice, so items were handed out twice. | `spend_now` answers "… is already starting your spare-capacity list for this limit." when the Chief was woken for that window and hasn't finished (`usage_plan::already_starting`). | `a_second_press_while_the_chief_starts_the_window_is_not_a_second_start` |
 
@@ -130,9 +130,9 @@ tighter limit as one segment; failover and crossover are explained under the key
 
 ## (c) The Stacker: personal + work + a friend's seat, keeps adding
 
-**Journey.** Adds "Work" from the Usage view: types julian@native.agency, the browser opens
+**Journey.** Adds "Work" from the Usage view: types you@work.example, the browser opens
 already signed in to the personal gmail claude.ai, the code is pasted, and the key says
-"julian@native.agency", the email typed. Before fix 4 nothing warned; now the sign-in says the
+"you@work.example", the email typed. Before fix 4 nothing warned; now the sign-in says the
 browser decides. Reorders by drag (keyboard too), renames from …, removes (waits for a running
 turn). Pins an agent with "Runs on". The `usage-same-account` scenario names the duplicate well
 ("Same account as sam@example.com", an amber fix line, "Sign in with another account"). On the
@@ -159,7 +159,7 @@ engine shown, so it reads as a second first account.
 
 **Recommendations, ranked.**
 
-1. **[redesign]** Mark a typed email as a label, not an identity: "julian@native.agency (you typed
+1. **[redesign]** Mark a typed email as a label, not an identity: "you@work.example (you typed
    this)" until the engine reports who it is, and never show it as the plan line's who.
 2. Lockstep as a *question*, not a verdict: when two accounts' weekly readings share the same reset
    to the second and move together across 3+ readings with no turn on one of them, show "These

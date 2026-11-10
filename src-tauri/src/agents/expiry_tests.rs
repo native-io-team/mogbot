@@ -299,14 +299,14 @@ fn only_old_style_secure_inputs_close_young() {
     }
 }
 
-/// "Change Memberstack's settings?" waits for the user: its turn ending,
+/// "Change Northwind's settings?" waits for the user: its turn ending,
 /// a launch or a long wait never close it (the owner typed "Approve it"
 /// after the Chief's turn had ended and found it expired).
 #[test]
 fn a_settings_card_waits_for_the_user() {
     let mut card = super::super::mcp::new_card(
         "s1".into(),
-        "Change Memberstack's settings?".into(),
+        "Change Northwind's settings?".into(),
         "Independence: Go hard".into(),
         None,
     );

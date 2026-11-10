@@ -1,6 +1,7 @@
 {
   "name": "@shipstudio/companion-app",
   "version": "1.0.0",
+  "license": "MIT",
   "main": "expo-router/entry",
   "expo": {
     "autolinking": {

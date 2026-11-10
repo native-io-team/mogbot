@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report something that's broken in Ship Studio
+about: Report something that's broken
 title: "[Bug] "
 labels: bug
 assignees: ""
@@ -8,7 +8,7 @@ assignees: ""
 
 ## What happened
 
-<!-- A clear description of the bug. What did you do, and what went wrong? -->
+<!-- What did you do, and what went wrong? -->
 
 ## What you expected
 
@@ -22,19 +22,20 @@ assignees: ""
 
 ## Environment
 
-- **Ship Studio version:** <!-- e.g. 0.6.3. Find it in the Ship Studio menu → About (the leftmost app menu). -->
-- **OS:** <!-- macOS 14.4 / Windows 11 23H2 / etc. -->
-- **Install method:** <!-- `.dmg`, `.exe` installer, or `pnpm tauri dev` from source -->
-- **Agent (if relevant):** <!-- Claude Code / Codex / both / N/A -->
+- **App version:** <!-- app menu → About -->
+- **macOS:** <!-- e.g. 26.1 -->
+- **Install method:** <!-- downloaded .dmg, or built from source -->
+- **Engine (if relevant):** <!-- Claude Code / Codex / OpenCode -->
+- **Phone (if relevant):** <!-- iPhone or Android, TestFlight / Xcode build / Expo Go -->
 
 ## Logs
 
 <!--
-macOS: ~/Library/Logs/ShipStudio/
-Windows: %LOCALAPPDATA%\ShipStudio\logs\
+~/Library/Logs/Mogbot/
 
-Paste the last ~100 lines of the most recent log file, or attach the file.
-Redact anything you don't want to share — paths, project names, branch names.
+Paste the last ~100 lines of the most recent log file, or attach it.
+Remove anything you don't want public first: paths, project names, agent
+names, email addresses.
 -->
 
 ```
@@ -43,7 +44,7 @@ Redact anything you don't want to share — paths, project names, branch names.
 
 ## Screenshots
 
-<!-- Drag and drop if it helps. -->
+<!-- Drag and drop if it helps. Check them for anything private. -->
 
 ## Anything else
 

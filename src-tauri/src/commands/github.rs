@@ -1638,14 +1638,14 @@ mod tests {
         let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         invalidate_github_username_cache();
         GITHUB_USERNAME_CACHE.insert("default".to_string(), "adambwhitten".to_string());
-        GITHUB_USERNAME_CACHE.insert("circa".to_string(), "circa-brand-agency".to_string());
+        GITHUB_USERNAME_CACHE.insert("northwind".to_string(), "northwind-studio".to_string());
         assert_eq!(
             GITHUB_USERNAME_CACHE.get("default").as_deref(),
             Some("adambwhitten")
         );
         assert_eq!(
-            GITHUB_USERNAME_CACHE.get("circa").as_deref(),
-            Some("circa-brand-agency"),
+            GITHUB_USERNAME_CACHE.get("northwind").as_deref(),
+            Some("northwind-studio"),
             "each workspace must keep its own cached login"
         );
         invalidate_github_username_cache();

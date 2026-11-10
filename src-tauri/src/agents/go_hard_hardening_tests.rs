@@ -201,7 +201,7 @@ fn wrappers_are_judged_by_what_they_run() {
     }
 }
 
-/// The owner's Memberstack cards at "Go hard" (paths fictional): in-place
+/// The owner's Northwind cards at "Go hard" (paths fictional): in-place
 /// edits with `sed -i`, `perl -pi` and here-document scripts, in a project,
 /// a worktree of one, or a scratch folder, never ask. A `sed` or `perl`
 /// script such as `/^import/d` is not a file outside the home. Profiles and
