@@ -6201,6 +6201,12 @@ cards.
   (removable; more ⌘L presses add more) and is sent as a Markdown blockquote
   ahead of what you typed. User bubbles show those blockquotes as quote bars
   (`splitQuotes`); nothing else in a user's text is read as Markdown.
+- ↑ in an empty composer (nothing staged, quoted or being revised) brings back
+  the last thing you sent in that conversation, to change and send again; it
+  goes as a new message. Typing while the history has focus (a clicked
+  message, the scroll area) moves focus to the composer on that key, so the
+  character lands there; Space, arrows, shortcuts and fields inside cards keep
+  their own keys.
 
 ## @mentions and What's in flight
 

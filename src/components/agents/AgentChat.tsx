@@ -24,6 +24,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -499,6 +500,16 @@ export const AgentChat = memo(function AgentChat({
   const getDraft = useCallback(() => composerDraft(agent.id), [agent.id]);
   const setDraft = useCallback((text: string) => setComposerDraft(agent.id, text), [agent.id]);
   const [pending, setPending] = useState<Pending[]>([]);
+  // ↑ in an empty composer: the last thing you said here, back in the field
+  // to change and send again (it goes as a new message; the old one stays).
+  const lastSent = useStableEvent((): string | null => {
+    for (let i = pending.length - 1; i >= 0; i--) if (pending[i].text.trim()) return pending[i].text;
+    const said = messages ?? [];
+    for (let i = said.length - 1; i >= 0; i--) {
+      if (said[i].kind === 'user' && said[i].text.trim()) return said[i].text;
+    }
+    return null;
+  });
   const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
@@ -696,6 +707,23 @@ export const AgentChat = memo(function AgentChat({
     ],
     [agent.name, engineReady, pickFiles]
   );
+
+  // Typing with the history focused (a clicked message, the scroll area)
+  // writes in the composer, as in a messaging app: focus moves on the key
+  // down, so the character itself lands in the field. Space, arrows and
+  // shortcuts keep scrolling and acting where they are; a field inside a card
+  // (a secret, a note) keeps its own keys.
+  const typeIntoComposer = useCallback((event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key.length !== 1 || event.key === ' ' || event.nativeEvent.isComposing) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable="true"], [role="menu"]')) return;
+    const input = inputRef.current;
+    if (!input || input.readOnly || input.disabled) return;
+    input.focus({ preventScroll: true });
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  }, []);
 
   // Focus the composer on open (mounted once per agent, keyed by id, so the
   // draft starts empty) and again when dictation ends, wherever it started.
@@ -1791,6 +1819,7 @@ export const AgentChat = memo(function AgentChat({
                 className="agent-chat__scroll"
                 ref={scrollRef}
                 onScroll={onScroll}
+                onKeyDown={typeIntoComposer}
                 tabIndex={0}
                 role="region"
                 aria-label="Messages"
@@ -1887,7 +1916,6 @@ export const AgentChat = memo(function AgentChat({
                 {jump.mounted && (
                   <IconButton
                     tabIndex={0}
-                    size="compact"
                     className="agent-chat__jump"
                     data-leaving={jump.leaving || undefined}
                     onAnimationEnd={jump.leaving ? jump.onExited : undefined}
@@ -2025,6 +2053,7 @@ export const AgentChat = memo(function AgentChat({
                     onSend={send}
                     onPickFiles={pickFiles}
                     unfilled={unfilled}
+                    lastSent={lastSent}
                   />
                 ) : (
                   <div className="agent-composer agent-composer--blocked" role="status">
