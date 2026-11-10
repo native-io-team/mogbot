@@ -74,3 +74,19 @@ export function importedHere(
     return found ? [{ id: found.id, name: found.name }] : [];
   });
 }
+
+/**
+ * A pasted reply's problem, as the desk says it (`pasteProblemInWords` in
+ * ImportParts): one already in plain words with its own fix (cut off: send
+ * that part again) is said as it is; anything else is the plain sentence,
+ * with the parser's own line after it.
+ */
+export function pasteProblemLine(problems: string[]): string {
+  const generic =
+    'That reply isn’t in the format we asked for. Copy the message again and ask for just the code block.';
+  if (!problems.length) return generic;
+  const [p] = problems;
+  const parserLine = /\bline \d|valid JSON|should be|"[a-z_]+"/.test(p);
+  const saysTheFix = /\b(Ask|Paste|Send)\b/.test(p);
+  return problems.length === 1 && !parserLine && saysTheFix ? p : `${generic} ${p}`;
+}

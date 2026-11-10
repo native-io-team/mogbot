@@ -15,6 +15,7 @@ import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { call, describeError } from '../lib/session';
 import { fonts, radius, space, type } from '../lib/theme';
+import { pasteProblemLine } from '../lib/importChoice';
 
 const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 
@@ -128,8 +129,7 @@ export function ImportPaste({
         <View style={styles.preview} accessibilityLiveRegion="polite">
           {preview.problems.length > 0 ? (
             <T variant="small" color={colors.textSecondary}>
-              That reply isn’t in the format we asked for. Copy the message again and ask for just
-              the code block. {preview.problems[0]}
+              {pasteProblemLine(preview.problems)}
             </T>
           ) : (
             <T variant="small" color={colors.textBody}>

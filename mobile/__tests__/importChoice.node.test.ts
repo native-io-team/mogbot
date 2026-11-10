@@ -9,6 +9,7 @@ import {
   asksImportChoice,
   importedHere,
   phoneImportStep,
+  pasteProblemLine,
   phoneTalkHeading,
 } from '../src/lib/importChoice';
 
@@ -94,5 +95,16 @@ describe('phoneTalkHeading', () => {
       { id: 'a1', name: 'Travel' },
     ]);
     expect(importedHere(talk('review', ['Travel']), agents)).toEqual([]);
+  });
+});
+
+describe('pasteProblemLine', () => {
+  it('says a cut-off reply’s own fix, not "copy the message again" as well', () => {
+    const cut =
+      'The JSON stops before it’s complete, so it was probably cut off. Ask the assistant to send that part again.';
+    expect(pasteProblemLine([cut])).toBe(cut);
+    expect(pasteProblemLine(['Block 2 has a trailing comma at line 14.'])).toMatch(
+      /^That reply isn’t in the format we asked for\. .* line 14\.$/
+    );
   });
 });
