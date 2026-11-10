@@ -68,7 +68,12 @@ const draw = async (agentId = 'budget') =>
     />
   );
 
+// A phone's screen, in points: a page starts folded to its bar there.
+const rn = jest.requireActual<typeof import('react-native')>('react-native');
 beforeEach(() => {
+  jest
+    .spyOn(rn, 'useWindowDimensions')
+    .mockReturnValue({ width: 402, height: 874, scale: 3, fontScale: 1 });
   resetPages();
   mockServed.page = true;
   mockCall.mockClear();
@@ -76,10 +81,12 @@ beforeEach(() => {
 });
 
 describe('ConversationPage (phone)', () => {
-  it('draws the page under its bar, with when it changed', async () => {
+  it('starts folded to its bar on a phone, and opens on a tap', async () => {
     await draw();
     expect(await screen.findByText('November budget')).toBeTruthy();
     expect(screen.getByText('Updated 3 min ago · v4')).toBeTruthy();
+    expect(screen.queryByText('Where it went')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('November budget. Show the page'));
     expect(screen.getByText('Where it went')).toBeTruthy();
     expect(mockCall).toHaveBeenCalledWith('agents.page', {
       agentId: 'budget',
@@ -90,7 +97,9 @@ describe('ConversationPage (phone)', () => {
   it('lists versions on a tap, and opens an older one', async () => {
     await draw();
     await fireEvent.press(await screen.findByLabelText('Updated 3 min ago · v4. What changed'));
-    expect(screen.getByText('v4 · 3 min ago · by a routine')).toBeTruthy();
+    // A routine's version names it; one whose routine isn't known says "a routine".
+    expect(screen.getByText('v4 · 3 min ago · by Log the day’s card spend')).toBeTruthy();
+    expect(screen.getByText('v2 · 2 d ago · by a routine')).toBeTruthy();
     expect(screen.getByText('Made the page — Started the month')).toBeTruthy();
     await act(async () => {
       await fireEvent.press(screen.getByText('v1 · 4 d ago'));
@@ -101,6 +110,7 @@ describe('ConversationPage (phone)', () => {
 
   it('folds, and unpins', async () => {
     await draw();
+    await fireEvent.press(await screen.findByLabelText('November budget. Show the page'));
     await fireEvent.press(await screen.findByLabelText('November budget. Fold the page'));
     expect(screen.queryByText('Where it went')).toBeNull();
     await act(async () => {
@@ -135,5 +145,18 @@ describe('ConversationPage (phone)', () => {
     await act(async () => {});
     expect(mockCall).not.toHaveBeenCalled();
     expect(screen.queryByTestId('conversation-page')).toBeNull();
+  });
+});
+
+describe('ConversationPage (a tall screen)', () => {
+  it('starts open where there is room, its tiles flat', async () => {
+    jest
+      .spyOn(rn, 'useWindowDimensions')
+      .mockReturnValue({ width: 1024, height: 1366, scale: 2, fontScale: 1 });
+    await draw();
+    expect(await screen.findByText('Where it went')).toBeTruthy();
+    const tile = screen.getAllByTestId('metric-tile')[0];
+    const style = Object.assign({}, ...[tile.props.style].flat(Infinity).filter(Boolean));
+    expect(style.boxShadow).toBe('none');
   });
 });

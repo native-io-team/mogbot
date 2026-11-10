@@ -134,6 +134,9 @@ pub struct Version {
     /// Made by a routine's turn, not one the user started.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub by_routine: bool,
+    /// That routine's name, when the turn ran exactly one (`Update::routine`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routine: Option<String>,
 }
 
 /// `<home>/pages/<conversation>.json`.
@@ -167,6 +170,8 @@ pub struct VersionView {
     pub changes: Changes,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub by_routine: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub routine: Option<String>,
 }
 
 /// One line of the history list: no blocks.
@@ -181,6 +186,8 @@ pub struct HistoryEntry {
     pub changes: Changes,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub by_routine: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub routine: Option<String>,
 }
 
 /// `agents_page` / `agents.page`: the page as it is, and its history.
@@ -205,6 +212,7 @@ pub fn view_of(v: &Version) -> VersionView {
         note: v.note.clone(),
         changes: v.changes.clone(),
         by_routine: v.by_routine,
+        routine: v.routine.clone(),
     }
 }
 
@@ -226,6 +234,7 @@ pub fn view(agent_id: &str, file: &PageFile) -> Option<PageView> {
                 note: v.note.clone(),
                 changes: v.changes.clone(),
                 by_routine: v.by_routine,
+                routine: v.routine.clone(),
             })
             .collect(),
     })
@@ -242,6 +251,10 @@ pub struct Update {
     pub remove: Vec<String>,
     pub replace: bool,
     pub note: Option<String>,
+    /// The routine whose turn makes this change, named so the page's history
+    /// says which (`runner::routine_running`). Set by the app, never by the
+    /// agent's call.
+    pub routine: Option<String>,
 }
 
 impl Update {
@@ -403,6 +416,7 @@ pub fn parse(args: &Value) -> Result<Update, String> {
         remove,
         replace,
         note,
+        routine: None,
     })
 }
 
@@ -447,6 +461,7 @@ pub fn apply(
                 },
                 items,
                 note: update.note.clone(),
+                routine: update.routine.clone().filter(|_| by_routine),
                 by_routine,
             }],
         }));
@@ -520,6 +535,7 @@ pub fn apply(
         items,
         note: update.note.clone(),
         changes,
+        routine: update.routine.clone().filter(|_| by_routine),
         by_routine,
     });
     if next.versions.len() > MAX_HISTORY {

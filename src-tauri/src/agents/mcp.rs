@@ -1676,7 +1676,7 @@ async fn show(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &
 /// answering outside text changes it only after a card.
 async fn page(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &Value) -> Value {
     use super::page;
-    let update = match page::parse(args) {
+    let mut update = match page::parse(args) {
         Ok(u) => u,
         Err(e) => return error(e),
     };
@@ -1691,6 +1691,7 @@ async fn page(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &
         return text(page::for_agent(before.as_ref()));
     }
     let by_routine = runner::in_routine(&caller.id);
+    update.routine = runner::routine_running(&caller.id);
     // Checked in full first, so a card never asks about a change that can't be made.
     let preview = match page::apply(
         before.as_ref(),

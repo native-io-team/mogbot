@@ -75,6 +75,7 @@ export function pageMock(now: number) {
       note: 'Logged Tuesday’s card spend',
       changes: { added: ['heads-up'], changed: ['month', 'categories'], removed: [] },
       byRoutine: true,
+      routine: 'Log the day’s card spend',
     },
     {
       version: 3,

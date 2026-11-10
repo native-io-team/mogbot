@@ -3,15 +3,19 @@
  * (fold, title, "Updated 3 min ago · v4", Unpin) and the page's blocks under
  * it, drawn by `Blocks` as any `show`. Tapping the "Updated" line lists the
  * kept versions with what changed; tapping one shows it as it was. The page
- * scrolls inside a band so the chat keeps most of the screen. Unpinned, one
- * quiet line with Pin brings it back. Nothing when the conversation has no
- * page or the Mac keeps none.
+ * scrolls inside a band capped at the smaller of 40% of the screen and 320pt,
+ * and on a phone-height screen it starts folded to its bar until the user
+ * opens it, so the chat keeps the screen. It is furniture, not a reply: a
+ * tinted band whose tiles lie flat (`FlatBlocks`), as on the desk. Unpinned,
+ * one quiet line with Pin brings it back. Nothing when the conversation has
+ * no page or the Mac keeps none.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import {
   pageAgo,
+  pageByLine,
   pageBlocks,
   pageChangeLine,
   pageUpdatedLine,
@@ -24,10 +28,14 @@ import { haptic } from '../lib/haptics';
 import { pageVersion, pinPage, setFolded, useConversationPage } from '../lib/page';
 import { iconSize, PRESSED, radius, space } from '../lib/theme';
 import { Blocks } from './blocks/Blocks';
+import { FlatBlocks } from './blocks/BlockParts';
 import { Icon, IconButton, T } from './ui';
 
-/** The most of the screen the open page takes before it scrolls. */
-const BAND = 0.42;
+/** The most of the screen the open page takes before it scrolls, and its cap in points. */
+const BAND = 0.4;
+const BAND_MAX = 320;
+/** Below this height (every phone), a page starts folded until the user opens it. */
+const OPEN_FROM = 1000;
 
 export function ConversationPage({
   agentId,
@@ -43,7 +51,9 @@ export function ConversationPage({
   side: { left: number; right: number };
   onError: (message: string) => void;
 }) {
-  const { page, folded } = useConversationPage(agentId, conversation, turn);
+  const { page, folded: chosen } = useConversationPage(agentId, conversation, turn);
+  const { height } = useWindowDimensions();
+  const folded = chosen ?? height < OPEN_FROM;
   if (!page || !conversation) return null;
   if (!page.pinned) return <PinBack page={page} side={side} onError={onError} />;
   return (
@@ -209,7 +219,10 @@ function PageBand({
         />
       </View>
       {!folded && (
-        <ScrollView style={{ maxHeight: height * BAND }} nestedScrollEnabled>
+        <ScrollView
+          style={{ maxHeight: Math.min(height * BAND, BAND_MAX) }}
+          nestedScrollEnabled
+        >
           {history && (
             <View style={styles.history} testID="page-history">
               {page.history.map((h, i) => (
@@ -225,7 +238,7 @@ function PageBand({
                   ]}
                 >
                   <T variant="caption" color={colors.textMuted}>
-                    {`v${h.version} · ${pageAgo(h.at, now)}${h.byRoutine ? ' · by a routine' : ''}`}
+                    {`v${h.version} · ${pageAgo(h.at, now)}${pageByLine(h) ? ` · ${pageByLine(h)}` : ''}`}
                   </T>
                   <T variant="small" color={colors.textSecondary}>
                     {(h.version === 1 && !page.history[i + 1]
@@ -250,7 +263,9 @@ function PageBand({
             </Pressable>
           )}
           {set ? (
-            <Blocks message={message} set={set} />
+            <FlatBlocks.Provider value>
+              <Blocks message={message} set={set} />
+            </FlatBlocks.Provider>
           ) : (
             <T variant="small" color={colors.textMuted}>
               This version can’t be shown in this version of the app.
@@ -266,6 +281,8 @@ const useStyles = makeStyles((colors) => ({
   band: {
     paddingTop: space.xs,
     paddingBottom: space.sm,
+    // A step off the chat behind it, toward the ink in light and the light in dark.
+    backgroundColor: colors.surfacePanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
   },

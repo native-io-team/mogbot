@@ -80,7 +80,7 @@ vi.mock('../../contexts/ToastContext', () => ({
   useOptionalToast: () => ({ showToast: vi.fn() }),
 }));
 
-import { ConversationPage, ConversationPagePin } from './ConversationPage';
+import { ConversationPage, ConversationPagePin, SHORT_WINDOW } from './ConversationPage';
 import { resetPageCache } from '../../lib/agentPage';
 
 const agent = {
@@ -148,6 +148,23 @@ describe('ConversationPage', () => {
     unmount();
     both();
     await screen.findByRole('button', { name: /Job search/, expanded: false });
+  });
+
+  it('starts folded in a short window until the user opens it, then remembers that', async () => {
+    const mm = vi.fn((q: string) => ({ matches: q === SHORT_WINDOW }) as MediaQueryList);
+    vi.stubGlobal('matchMedia', mm);
+    try {
+      const { unmount } = both();
+      const toggle = await screen.findByRole('button', { name: /Job search/, expanded: false });
+      expect(screen.queryByText('Applications')).toBeNull();
+      fireEvent.click(toggle);
+      expect(screen.getByText('Applications')).toBeTruthy();
+      unmount();
+      both();
+      await screen.findByRole('button', { name: /Job search/, expanded: true });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('⌘K folds the page and opens what changed, by name', async () => {

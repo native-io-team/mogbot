@@ -6883,7 +6883,10 @@ point-in-time messages and result cards.
 - **Every version kept.** A change is the next version, with what changed
   (`Changes`: blocks added, changed, removed, renamed), the agent's
   one-line `note`, and whether a routine's turn made it (`by_routine`, from
-  the run's ticket). An update that changes nothing makes no version. The
+  the run's ticket) and which (`routine`, its name, when the turn ran exactly
+  one routine: `runner::routine_running`). The history line reads "by Log the
+  day's card spend", or "by a routine" when it isn't known which
+  (`pageByLine`). An update that changes nothing makes no version. The
   last 30 versions are kept, oldest dropped first; the numbers keep counting.
 - **Beside the log, never in it.** `<home>/pages/<conversation>.json`, one
   file per conversation; `messages.jsonl` is untouched. The trace in the chat
@@ -6916,16 +6919,23 @@ point-in-time messages and result cards.
 - **Desk** (`components/agents/ConversationPage.tsx`, `lib/agentPage.ts`):
   under the chat header, in the conversation's column: a bar (fold, title,
   "Updated 3 min ago · v4", unpin) over the page's blocks, which scroll inside
-  a band so the chat keeps the window. Pressing the "Updated" line lists every
-  kept version, newest first, with what changed in words (`pageChangeLine`,
-  block titles where they have one) and the note; pressing one shows it as it
-  was, read-only, with "Back to v4". Folding is remembered per conversation on
-  this Mac. Unpinned, the header has a pin button to bring it back; ⌘K has
+  a band capped at the smaller of 40% of the window and 320px, so the chat
+  keeps the window. It is furniture, not a reply: the band is a tint off the
+  chat and its tiles lie flat (a hairline, no lift), so a metric on the page
+  never looks like one in a reply (`agents-page.css`). Pressing the "Updated"
+  line opens a popover listing every kept version, newest first, with what
+  changed in words (`pageChangeLine`, block titles where they have one) and
+  the note, so the page itself doesn't move; pressing one shows it as it was,
+  read-only, with "Back to v4". Folding is remembered per conversation on
+  this Mac; until the user picks, a window 820px tall or less starts it
+  folded (`SHORT_WINDOW`). Unpinned, the header has a pin button to bring it back; ⌘K has
   "Pin / Unpin this conversation's page".
 - **Phone** (`components/ConversationPage.tsx`, `lib/page.ts`): the same band
   above the messages, on a Mac that lists `agents.page`; read again when the
   conversation on screen changes and as the agent's turn moves on. Fold
-  (for as long as the app runs), versions, an older one, Unpin.
+  (for as long as the app runs), versions, an older one, Unpin. The same
+  tinted band and flat tiles (`FlatBlocks`), capped at 40% of the screen and
+  320pt; on a phone-height screen it starts folded to its bar until opened.
 - **Wire**: `agents.page` and `agents.pageVersion` (read-only, not audited)
   and `agents.pagePin` (audited "pinned/unpinned the page of …"); types and
   the pure rules (`readPage`, `pageUpdatedLine`, `pageChangeLine`) in

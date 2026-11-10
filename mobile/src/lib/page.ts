@@ -4,7 +4,8 @@
  * it), kept in a small cache the chat reads, read again when the
  * conversation on screen changes or the agent's turn moves on (the page
  * changes inside turns and routines). Folding is this phone's own, per
- * conversation, for as long as the app runs.
+ * conversation, for as long as the app runs; until the user picks, the
+ * screen's height decides (`ConversationPage`).
  */
 
 import { useEffect, useSyncExternalStore } from 'react';
@@ -13,7 +14,8 @@ import { call, canCall } from './session';
 
 const key = (agentId: string, conversation: string) => `${agentId}#${conversation}`;
 const pages = new Map<string, ConversationPage | null>();
-const folded = new Set<string>();
+/** The user's own fold choice per page; none means the screen decides. */
+const folded = new Map<string, boolean>();
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
 const subscribe = (l: () => void) => {
@@ -52,12 +54,12 @@ export const pageVersion = (agentId: string, conversation: string, version: numb
 export const pageOf = (agentId: string, conversation: string) =>
   pages.get(key(agentId, conversation)) ?? null;
 
+/** The user's fold choice for a page, or null when they haven't made one. */
 export const isFolded = (agentId: string, conversation: string) =>
-  folded.has(key(agentId, conversation));
+  folded.get(key(agentId, conversation)) ?? null;
 
 export function setFolded(agentId: string, conversation: string, fold: boolean) {
-  if (fold) folded.add(key(agentId, conversation));
-  else folded.delete(key(agentId, conversation));
+  folded.set(key(agentId, conversation), fold);
   notify();
 }
 
@@ -70,10 +72,10 @@ export function useConversationPage(
   agentId: string,
   conversation: string | undefined,
   turn: string
-): { page: ConversationPage | null; folded: boolean } {
+): { page: ConversationPage | null; folded: boolean | null } {
   const k = conversation ? key(agentId, conversation) : '';
   const page = useSyncExternalStore(subscribe, () => (k ? (pages.get(k) ?? null) : null));
-  const isFold = useSyncExternalStore(subscribe, () => (k ? folded.has(k) : false));
+  const isFold = useSyncExternalStore(subscribe, () => (k ? (folded.get(k) ?? null) : null));
   useEffect(() => {
     if (conversation) void refreshPage(agentId, conversation);
   }, [agentId, conversation, turn]);

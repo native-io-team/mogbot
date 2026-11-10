@@ -5,16 +5,23 @@
  * like any `show`; nothing on it answers.
  *
  * The bar: a fold toggle with the page's title, "Updated 3 min ago · v4"
- * (press it for what changed, version by version; press a version to read
- * it as it was), and Unpin. Unpinned, the page leaves the top of the chat
- * and the header offers Pin page instead (`ConversationPagePin`); the agent
- * keeps it current either way. Folded or not is remembered per
- * conversation on this Mac.
+ * (press it for what changed, version by version, in a popover off that
+ * line, so the page itself doesn't move; press a version to read it as it
+ * was), and Unpin. Unpinned, the page leaves the top of the chat and the
+ * header offers Pin page instead (`ConversationPagePin`); the agent keeps it
+ * current either way. Folded or not is remembered per conversation on this
+ * Mac; until the user picks, a short window starts it folded
+ * (`SHORT_WINDOW`), so the chat keeps the room.
+ *
+ * It is furniture, not a reply: a recessed band whose tiles are flat
+ * (agents-page.css), and its body scrolls inside a cap of the smaller of
+ * 40% of the window and 320px.
  *
  * @module components/agents/ConversationPage
  */
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { Dropdown } from '../primitives/Dropdown';
 import { ChevronIcon, HistoryIcon, PinIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
@@ -24,6 +31,7 @@ import {
   getPageVersion,
   pageAgo,
   pageBlocks,
+  pageByLine,
   pageChangeLine,
   pageUpdatedLine,
   setPagePinned,
@@ -38,18 +46,32 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 
 const FOLD_KEY = 'agents.page.folded:';
 
-function readFolded(id: string): boolean {
+/** A window this short starts a page folded until the user opens it. */
+export const SHORT_WINDOW = '(max-height: 820px)';
+
+function isShortWindow(): boolean {
   try {
-    return window.localStorage.getItem(FOLD_KEY + id) === '1';
+    return window.matchMedia?.(SHORT_WINDOW).matches ?? false;
   } catch {
     return false;
   }
 }
 
+/** The user's own choice for this page, or the window's height when there's none. */
+function readFolded(id: string): boolean {
+  try {
+    const saved = window.localStorage.getItem(FOLD_KEY + id);
+    if (saved === '1') return true;
+    if (saved === '0') return false;
+  } catch {
+    // A private window: nothing remembered, so the window decides.
+  }
+  return isShortWindow();
+}
+
 function writeFolded(id: string, folded: boolean) {
   try {
-    if (folded) window.localStorage.setItem(FOLD_KEY + id, '1');
-    else window.localStorage.removeItem(FOLD_KEY + id);
+    window.localStorage.setItem(FOLD_KEY + id, folded ? '1' : '0');
   } catch {
     // A private window: folding just isn't remembered.
   }
@@ -109,11 +131,9 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
   const fold = () => {
     setFolded(!folded);
     writeFolded(id, !folded);
+    setHistory(false);
   };
-  const toggleHistory = () => {
-    setHistory(!history);
-    if (folded) fold();
-  };
+  const toggleHistory = () => setHistory(!history);
   // The bar's two controls by name: the page is new, and "Updated … · v4"
   // doesn't read as the way to its versions until it's been pressed once.
   useCommands(
@@ -138,6 +158,12 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
     [folded, history, page.title, fold, toggleHistory]
   );
   const open = async (version: number) => {
+    setHistory(false);
+    // Reading a version means seeing the page.
+    if (folded) {
+      setFolded(false);
+      writeFolded(id, false);
+    }
     if (version === page.version) {
       setOlder(null);
       return;
@@ -168,14 +194,52 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
           <ChevronIcon size={12} className="agent-page__chevron" />
           <span className="agent-page__title">{page.title}</span>
         </button>
-        <TextButton
-          className="agent-page__when"
-          aria-expanded={history}
-          onClick={toggleHistory}
-          title="What changed"
+        <Dropdown
+          presentation="popover"
+          ariaLabel="What changed on this page"
+          align="right"
+          portal
+          open={history}
+          onOpenChange={setHistory}
+          menuClassName="agent-page__history-menu"
+          trigger={(p) => (
+            <TextButton
+              {...p}
+              className="agent-page__when"
+              onClick={toggleHistory}
+              title="What changed"
+            >
+              {pageUpdatedLine(page, now)}
+            </TextButton>
+          )}
         >
-          {pageUpdatedLine(page, now)}
-        </TextButton>
+          <ol className="agent-page__history" aria-label="Versions">
+            {page.history.map((h, i) => {
+              const prev = page.history[i + 1];
+              return (
+                <li key={h.version}>
+                  <button
+                    type="button"
+                    className="agent-page__version"
+                    aria-current={h.version === shown.version || undefined}
+                    onClick={() => void open(h.version)}
+                  >
+                    <span className="agent-page__version-head">
+                      v{h.version} · {pageAgo(h.at, now)}
+                      {pageByLine(h) ? ` · ${pageByLine(h)}` : ''}
+                    </span>
+                    <span className="agent-page__version-what">
+                      {h.version === 1 && !prev
+                        ? 'Made the page'
+                        : pageChangeLine(h.changes, page.blocks) || 'Updated'}
+                      {h.note ? ` — ${h.note}` : ''}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </Dropdown>
         <IconButton
           variant="ghost"
           size="compact"
@@ -187,34 +251,6 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
       </div>
       {!folded && (
         <div className="agent-page__body">
-          {history && (
-            <ol className="agent-page__history" aria-label="Versions">
-              {page.history.map((h, i) => {
-                const prev = page.history[i + 1];
-                return (
-                  <li key={h.version}>
-                    <button
-                      type="button"
-                      className="agent-page__version"
-                      aria-current={h.version === shown.version || undefined}
-                      onClick={() => void open(h.version)}
-                    >
-                      <span className="agent-page__version-head">
-                        v{h.version} · {pageAgo(h.at, now)}
-                        {h.byRoutine ? ' · by a routine' : ''}
-                      </span>
-                      <span className="agent-page__version-what">
-                        {h.version === 1 && !prev
-                          ? 'Made the page'
-                          : pageChangeLine(h.changes, page.blocks) || 'Updated'}
-                        {h.note ? ` — ${h.note}` : ''}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
           {older && (
             <p className="agent-page__older">
               v{older.version}, as it was {pageAgo(older.at, now)}.{' '}

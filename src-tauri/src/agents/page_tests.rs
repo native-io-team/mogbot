@@ -412,3 +412,27 @@ fn a_fork_gets_the_page_as_it_was_then_or_none() {
         2
     );
 }
+
+#[test]
+fn a_routine_s_version_names_the_routine_and_only_a_routine_s() {
+    let f = first(json!({ "title": "Budget", "blocks": [checklist("a", false)] }));
+    let mut u = up(json!({ "blocks": [checklist("a", true)] }));
+    u.routine = Some("Evening budget check".into());
+    let g = apply(Some(&f), "first", &u, 2_000, true).unwrap().unwrap();
+    assert_eq!(
+        g.current().unwrap().routine.as_deref(),
+        Some("Evening budget check")
+    );
+    let shown = view("a1", &g).unwrap();
+    assert_eq!(
+        serde_json::to_value(&shown.history[0]).unwrap()["routine"],
+        "Evening budget check"
+    );
+    // Not a routine's turn: no name, whatever was passed.
+    let h = apply(Some(&f), "first", &u, 2_000, false).unwrap().unwrap();
+    assert!(h.current().unwrap().routine.is_none());
+    assert!(serde_json::to_value(&view("a1", &h).unwrap().history[0])
+        .unwrap()
+        .get("routine")
+        .is_none());
+}

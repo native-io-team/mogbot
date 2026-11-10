@@ -22,6 +22,7 @@ import { logger } from './logger';
 export {
   pageAgo,
   pageBlocks,
+  pageByLine,
   pageChangeLine,
   pageTouched,
   pageUpdatedLine,
