@@ -1,12 +1,27 @@
 /* Result cards (`share_result`): the one card an agent ends a piece of work
    on (components/agents/AgentResult.tsx). The same surface as the approval
-   and copy cards. The work comes first, at the chat's own reading size; what
-   it checked and what it didn't come after it, side by side. */
+   and copy cards. Read top to bottom: a header (kind, title, status, version),
+   what changed, the summary, the media, files and links as rows, one Checks
+   block, then a project copy's footer and the actions. One rhythm: 12px
+   between parts, rows and panels on the same 10px radius. */
 
 :root {
-  --agents-result-shot-height: 180px; /* css-ok: a before/after thumbnail */
+  --agents-result-shot-ratio: 16 / 10; /* css-ok: a landscape thumbnail's shape */
+  --agents-result-shot-max: 240px; /* css-ok: a single wide picture's cap */
+  --agents-result-device-height: 340px; /* css-ok: a phone screen shown whole */
+  --agents-result-device-bezel: 6px; /* css-ok: the device frame's edge */
+  --agents-result-device-radius: 26px; /* css-ok: a phone's corner */
+  --agents-result-device-ink: #111113; /* a phone's black glass, in both themes */
+  --agents-result-device-screen: calc(
+    var(--agents-result-device-height) - 2 * var(--agents-result-device-bezel)
+  );
+  --agents-result-device-screen-radius: 20px; /* css-ok: inside the bezel */
+  --agents-result-slider-max: 380px; /* css-ok: a wide slider's cap */
+  --agents-result-knob: 28px; /* css-ok: the slider's grip */
+  --agents-result-tile: 28px; /* css-ok: a row's kind tile */
+  --agents-result-ask-min: 56px; /* css-ok: two lines of the ask field */
+  --agents-result-check-title: 16px; /* css-ok: a check heading's icon height */
   --agents-local-link-width: 360px; /* css-ok: a link row under a reply */
-  --agents-result-check-min: 220px; /* css-ok: below this the two lists stack */
 }
 
 /* The card, then the folded "what it did" line under it. */
@@ -16,17 +31,49 @@
   gap: var(--spacing-2xs);
 }
 
-/* The surface, title row and actions are the shared card's
-   (agents-surfaces.css); only the result's own parts are here. */
-.agent-result__meta {
+.agent-result {
+  gap: var(--spacing-md);
+  container-type: inline-size;
+}
+
+/* ------------------------------------------------------------------ header */
+
+/* What kind of thing was made, in a tile: a site, pictures, a document. */
+.agent-result > .agent-card__title .agent-card__icon {
+  align-self: flex-start;
+}
+
+.agent-result__kind {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: var(--agents-result-tile);
+  height: var(--agents-result-tile);
+  color: var(--text-secondary);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-sm);
+}
+
+.agent-result > .agent-card__title {
+  min-height: var(--agents-result-tile);
+}
+
+.agent-result__meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--spacing-sm);
+}
+
+.agent-result__status {
+  flex: 0 0 auto;
 }
 
 .agent-result__version {
   flex: 0 0 auto;
   padding: 0 var(--spacing-xs);
+  font-family: var(--font-code);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-label);
   color: var(--text-secondary);
@@ -34,7 +81,37 @@
   border-radius: var(--radius-sm);
 }
 
+/* "What changed since v1": the agent's line, set apart by a rule at its edge. */
 .agent-result__changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-2xs) 0 var(--spacing-2xs) var(--spacing-md);
+  border-left: var(--border-width-emphasis) solid var(--border-strong);
+}
+
+.agent-result__changes-title {
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-muted);
+}
+
+.agent-result__changes-text {
+  margin: 0;
+  font-size: var(--font-size-subhead);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Reading an earlier version through the switcher. */
+.agent-result__reading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
   margin: 0;
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
@@ -52,107 +129,21 @@
   user-select: text;
 }
 
-/* Checks: what it says it checked, then what it didn't verify, side by side
-   under the work (stacked when the card is narrow). Never folded. */
-.agent-result__checks {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--agents-result-check-min), 1fr));
-  gap: var(--spacing-sm);
-  align-items: start;
-}
+/* -------------------------------------------------------------- the media */
 
-/* The two halves are one Checks block: the same box, so side by side their
-   titles and first lines line up (an unboxed half sat a box-inset to the left
-   and read as a different kind of thing). The titles tell them apart. */
-.agent-result__checked,
-.agent-result__unverified {
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: var(--border-width-default) solid var(--border-subtle);
-  border-radius: var(--radius-card);
-}
-
-.agent-result__unverified-title,
-.agent-result__checked-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  margin: 0 0 var(--spacing-2xs);
-  font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-label);
-  line-height: var(--line-height-compact);
-}
-
-/* What wasn't checked is normal and expected: a quiet question, not an
-   alarm (the warning triangle is only for real danger). */
-.agent-result__unverified-title {
-  color: var(--text-secondary);
-}
-
-.agent-result__unverified-title svg {
-  color: var(--text-muted);
-}
-
-.agent-result__unverified ul,
-.agent-result__checked ul {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.agent-result__unverified ul,
-.agent-result__checked ul {
-  padding-left: var(--spacing-xl);
-  list-style: disc;
-}
-
-/* One size for both lists (as on the phone), the chat's body size like the
-   summary: the title and its icon set "Not verified" apart. */
-.agent-result__unverified li,
-.agent-result__checked li {
-  font-size: var(--font-size-subhead-lg);
-  line-height: var(--line-height-help);
-}
-
-.agent-result__unverified li {
-  color: var(--text-primary);
-  -webkit-user-select: text;
-  user-select: text;
-}
-
-.agent-result__checked-title {
-  color: var(--text-muted);
-}
-
-.agent-result__checked li {
-  color: var(--text-secondary);
-  -webkit-user-select: text;
-  user-select: text;
-}
-
-.agent-result__checked li::marker {
-  color: var(--text-muted);
-}
-
-/* Before and after, side by side. */
-.agent-result__pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-sm);
-}
-
+/* A picture: a landscape one in a 16:10 frame from the top; a phone screen
+   whole, in a device frame. Each opens full size. */
 .agent-result__shot {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xs);
+  align-items: stretch;
+  gap: var(--spacing-xs);
   min-width: 0;
   margin: 0;
 }
 
 .agent-result__shot figcaption {
-  font-size: var(--font-size-caption);
+  font-size: var(--font-size-body-sm);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -160,18 +151,30 @@
 }
 
 .agent-result__shot-image {
-  display: block;
+  position: relative;
+  display: flex;
+  justify-content: center;
   width: 100%;
-  height: var(--agents-result-shot-height);
   padding: 0;
-  overflow: hidden;
+  font: inherit;
   cursor: zoom-in;
-  background: var(--surface-recessed);
-  border: var(--border-width-default) solid var(--border-subtle);
+  background: none;
+  border: none;
   border-radius: var(--radius-card);
 }
 
-.agent-result__shot-image img {
+.agent-result__frame {
+  display: block;
+  width: 100%;
+  aspect-ratio: var(--agents-result-shot-ratio);
+  overflow: hidden;
+  background: var(--surface-recessed);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  transition: border-color var(--transition-interaction);
+}
+
+.agent-result__frame img {
   display: block;
   width: 100%;
   height: 100%;
@@ -179,45 +182,361 @@
   object-position: top;
 }
 
+.agent-result__shot-image:hover .agent-result__frame {
+  border-color: var(--border-strong);
+}
+
 .agent-result__shot-image:focus-visible {
   outline: none;
+}
+
+.agent-result__shot-image:focus-visible .agent-result__frame {
   box-shadow: var(--focus-ring);
 }
 
-/* Files and links: each row opens. */
-.agent-result__items {
+/* A phone screen: shown whole, in a device's bezel. */
+.agent-result__shot[data-portrait] .agent-result__frame {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: auto;
+  background: var(--agents-result-device-ink);
+  border: var(--agents-result-device-bezel) solid var(--agents-result-device-ink);
+  border-radius: var(--agents-result-device-radius);
+  /* A hairline ring, so the black glass still has an edge on a dark card. */
+  box-shadow:
+    0 0 0 var(--border-width-default) var(--border-strong),
+    var(--shadow-card);
+}
+
+/* Capped, never stretched: the picture keeps its shape when the column is
+   narrower than the device, and the frame shrink-wraps it. */
+.agent-result__shot[data-portrait] .agent-result__frame img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: var(--agents-result-device-screen);
+  object-fit: contain;
+  border-radius: var(--agents-result-device-screen-radius);
+}
+
+.agent-result__shot[data-portrait] .agent-result__shot-image:hover .agent-result__frame {
+  border-color: var(--agents-result-device-ink);
+}
+
+/* A label on the picture ("Before", "After"): the agent's words, small. */
+.agent-result__tag {
+  position: absolute;
+  top: var(--spacing-sm);
+  left: var(--spacing-sm);
+  max-width: calc(100% - var(--spacing-lg));
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-compact);
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--agents-card-surface);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
+/* A device's tag sits under it, clear of the screen it labels. */
+.agent-result__shot[data-portrait] .agent-result__shot-image {
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.agent-result__shot[data-portrait] .agent-result__tag {
+  position: static;
+  max-width: 100%;
+  box-shadow: none;
+  border: var(--border-width-default) solid var(--border-subtle);
+}
+
+/* Before and after: a toolbar (the page, how to compare), then the stage. */
+.agent-compare {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xs);
+  gap: var(--spacing-sm);
+  min-width: 0;
+  padding: var(--spacing-sm);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-lg);
+}
+
+.agent-compare__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.agent-compare__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding-left: var(--spacing-xs);
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agent-compare__label svg {
+  color: var(--text-muted);
+}
+
+.agent-compare__pages {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.agent-compare__mode {
+  margin-left: auto;
+}
+
+.agent-result__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-sm);
+  align-items: start;
+}
+
+/* On the stage the frames sit on the recessed fill: a hairline is enough. */
+.agent-compare .agent-result__frame {
+  background: var(--agents-card-surface);
+}
+
+/* One picture of a page shows at half width, where its pair would sit. */
+.agent-result__pair[data-single] {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* The slider: after underneath, before on top clipped at the handle. It
+   takes the picture's own shape; a phone screen keeps its device frame. */
+.agent-compare__stage {
+  display: flex;
+  justify-content: center;
+}
+
+.agent-compare__slider {
+  position: relative;
+  width: 100%;
+  max-height: var(--agents-result-slider-max);
+  aspect-ratio: var(--agent-compare-ratio, var(--agents-result-shot-ratio));
+  overflow: hidden;
+  background: var(--agents-card-surface);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agent-compare__stage[data-portrait] .agent-compare__slider {
+  width: auto;
+  height: var(--agents-result-device-height);
+  max-height: none;
+  border: var(--agents-result-device-bezel) solid var(--agents-result-device-ink);
+  border-radius: var(--agents-result-device-radius);
+  box-shadow:
+    0 0 0 var(--border-width-default) var(--border-strong),
+    var(--shadow-card);
+}
+
+.agent-compare__after,
+.agent-compare__before img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.agent-compare__before {
+  position: absolute;
+  inset: 0;
+  clip-path: inset(0 calc(100% - var(--agent-compare-at)) 0 0);
+}
+
+.agent-compare__divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--agent-compare-at);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--border-width-emphasis);
+  transform: translateX(-50%);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
+.agent-compare__knob {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: var(--agents-result-knob);
+  height: var(--agents-result-knob);
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+}
+
+.agent-compare__flip {
+  transform: scaleX(-1);
+}
+
+.agent-compare__tag--after {
+  right: var(--spacing-sm);
+  left: auto;
+}
+
+/* The range covers the picture: drag anywhere, or arrow keys once focused. */
+.agent-compare__range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: ew-resize;
+  opacity: 0;
+}
+
+.agent-compare__slider:has(.agent-compare__range:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+/* Other pictures: a small gallery. One wide, two or three to a row. */
+.agent-result__gallery {
+  display: grid;
+  grid-template-columns: repeat(var(--agents-result-gallery-cols, 1), minmax(0, 1fr));
+  gap: var(--spacing-sm);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.agent-result__item[data-kind='image'] .agent-result__shot-image {
-  height: auto;
-  max-height: var(--agents-result-shot-height);
+.agent-result__gallery[data-count='2'] {
+  --agents-result-gallery-cols: 2;
+}
+
+.agent-result__gallery[data-count='3'] {
+  --agents-result-gallery-cols: 3;
+}
+
+.agent-result__gallery[data-count='1'] .agent-result__frame {
+  max-height: var(--agents-result-shot-max);
+}
+
+.agent-result__gallery .agent-result__shot[data-portrait] .agent-result__frame img {
+  max-height: calc(var(--agents-result-device-screen) * 0.7);
+}
+
+/* A site's live preview: a row of its own, with the way in on the right. */
+.agent-result__preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agent-result__preview-tile {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: var(--agents-result-tile);
+  height: var(--agents-result-tile);
+  color: var(--text-secondary);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-sm);
+}
+
+.agent-result__preview-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agent-result__preview-title {
+  font-size: var(--font-size-subhead);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agent-result__preview-meta {
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-result__preview-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--spacing-sm);
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------- files and links */
+
+/* One grouped list, a hairline between rows: each row opens. */
+.agent-result__items {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agent-result__item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-right: var(--spacing-xs);
+  transition: background var(--transition-interaction);
+}
+
+.agent-result__item + .agent-result__item {
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-result__item:hover {
+  background: var(--surface-control-hover);
 }
 
 .agent-result__open {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
-  gap: var(--spacing-sm);
-  width: 100%;
+  gap: var(--spacing-md);
   min-width: 0;
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
   font: inherit;
   text-align: left;
   color: var(--text-primary);
   cursor: pointer;
-  background: var(--surface-recessed);
+  background: none;
   border: none;
   border-radius: var(--radius-card);
-  transition: background var(--transition-interaction);
-}
-
-.agent-result__open:hover {
-  background: var(--surface-control-hover);
 }
 
 .agent-result__open:focus-visible {
@@ -228,7 +547,13 @@
 .agent-result__glyph {
   display: inline-flex;
   flex: 0 0 auto;
-  color: var(--text-muted);
+  align-items: center;
+  justify-content: center;
+  width: var(--agents-result-tile);
+  height: var(--agents-result-tile);
+  color: var(--text-secondary);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-sm);
 }
 
 .agent-result__item-text {
@@ -245,9 +570,10 @@
   white-space: nowrap;
 }
 
-/* A file or link it made is the work itself: the chat's size. */
 .agent-result__item-name {
-  font-size: var(--font-size-subhead-lg);
+  font-size: var(--font-size-subhead);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-compact);
 }
 
 .agent-result__item-meta {
@@ -264,24 +590,124 @@
   color: var(--text-muted);
 }
 
-.agent-result__open:hover .agent-result__open-word {
+.agent-result__item:hover .agent-result__open-word {
   color: var(--text-primary);
 }
 
-/* A project copy's change card, inside the result: no second surface. */
+.agent-result__copy {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ checks */
+
+/* What it says it checked, beside what it didn't verify: one calm block,
+   split by a hairline (stacked when narrow). Never folded. */
+.agent-result__checks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agent-result__checks[data-split] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.agent-result__checked,
+.agent-result__unverified {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  padding: var(--spacing-md);
+}
+
+.agent-result__checks[data-split] > .agent-result__unverified {
+  border-left: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-result__unverified-title,
+.agent-result__checked-title {
+  display: flex;
+  /* The icon's height on both, so the two lists start on one line. */
+  min-height: var(--agents-result-check-title);
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
+}
+
+/* What wasn't checked is normal and expected: a quiet question, not an
+   alarm (the warning triangle is only for real danger). Its lines read in
+   full ink; the claims a step quieter. */
+.agent-result__unverified-title {
+  color: var(--text-secondary);
+}
+
+.agent-result__unverified-title svg {
+  color: var(--text-muted);
+}
+
+.agent-result__unverified ul,
+.agent-result__checked ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding: 0 0 0 var(--spacing-lg);
+  list-style: disc;
+}
+
+.agent-result__unverified li,
+.agent-result__checked li {
+  font-size: var(--font-size-subhead);
+  line-height: var(--line-height-help);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.agent-result__unverified li {
+  color: var(--text-primary);
+}
+
+.agent-result__checked li {
+  color: var(--text-secondary);
+}
+
+.agent-result__unverified li::marker,
+.agent-result__checked li::marker {
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------- the copy's footer */
+
+/* A project copy's change card, inside the result: the card's own footer,
+   on the recessed fill to its edges, never a second surface. */
 .agent-changes[data-in-result] {
   align-self: stretch;
   width: auto;
-  padding: var(--spacing-sm) 0 0;
-  background: none;
+  margin: var(--spacing-xs) calc(-1 * var(--spacing-lg)) calc(-1 * var(--spacing-lg));
+  padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
+  background: var(--surface-recessed);
   border-top: var(--border-width-default) solid var(--border-subtle);
-  border-radius: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 /* Its title is a section of the result, not a second card's heading. */
 .agent-changes[data-in-result] > .agent-card__title {
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-subhead);
   font-weight: var(--font-weight-label);
+}
+
+/* "+123 −16 · 3 files", by the title. */
+.agent-changes__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 /* An older version, folded to one line that points at the newer one. */
@@ -317,7 +743,64 @@
   opacity: 0.85;
 }
 
-/* "Ask for changes": above the composer, and on the message it sent. */
+/* ----------------------------------------------------- Ask for changes */
+
+/* In the card: one field and Send, like the composer it stands in for. */
+.agent-result-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
+  background: var(--surface-recessed);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-card);
+}
+
+.agent-result-ask:focus-within {
+  border-color: var(--border-strong);
+}
+
+.agent-result-ask__label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--spacing-xs) var(--spacing-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-result-ask__label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-result-ask__input {
+  grid-column: 1 / -1;
+  min-height: var(--agents-result-ask-min);
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-size-subhead-lg);
+  line-height: var(--line-height-help);
+  color: var(--text-primary);
+  resize: vertical;
+  background: none;
+  border: none;
+  outline: none;
+}
+
+.agent-result-ask__input::placeholder {
+  color: var(--text-muted);
+}
+
+.agent-result-ask__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+/* Above the composer, and on the message it sent. */
 .agent-composer__revising {
   display: flex;
   padding: var(--spacing-2xs) var(--spacing-2xs) var(--spacing-xs);
@@ -338,119 +821,32 @@
   margin-top: var(--spacing-xs);
 }
 
-/* "Partway through": a checkpoint, never read as the finished work. */
-.agent-result__checkpoint {
-  flex: 0 0 auto;
-  padding: 0 var(--spacing-xs);
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-  background: var(--surface-recessed);
-  border-radius: var(--radius-sm);
-}
+/* ------------------------------------------------------------- narrow */
 
-/* ------------------------------------------------- before / after compare */
+/* The chat beside the preview pane, or a small window: the checks stack,
+   the preview's buttons take their own line, and the meta wraps. */
+@container (max-width: 520px) {
+  .agent-result__checks[data-split] {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-.agent-compare {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-  min-width: 0;
-}
+  .agent-result__checks[data-split] > .agent-result__unverified {
+    border-top: var(--border-width-default) solid var(--border-subtle);
+    border-left: none;
+  }
 
-.agent-compare__bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-}
+  .agent-result__preview-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
 
-.agent-compare__pages {
-  max-width: 100%;
-  overflow-x: auto;
-}
+  .agent-result__open-word {
+    display: none;
+  }
 
-.agent-compare__mode {
-  margin-left: auto;
-}
-
-/* One picture of a page shows at half width, where its pair would sit. */
-.agent-result__pair[data-single] {
-  grid-template-columns: 1fr 1fr;
-}
-
-/* The slider: after underneath, before on top clipped at the handle. */
-.agent-compare__slider {
-  position: relative;
-  height: calc(var(--agents-result-shot-height) * 1.6);
-  overflow: hidden;
-  background: var(--surface-recessed);
-  border: var(--border-width-default) solid var(--border-subtle);
-  border-radius: var(--radius-card);
-}
-
-.agent-compare__after,
-.agent-compare__before img {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top;
-}
-
-.agent-compare__before {
-  position: absolute;
-  inset: 0;
-  clip-path: inset(0 calc(100% - var(--agent-compare-at)) 0 0);
-}
-
-.agent-compare__divider {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--agent-compare-at);
-  width: var(--border-width-emphasis);
-  transform: translateX(-50%);
-  background: var(--text-primary);
-  box-shadow: var(--shadow-sm);
-  pointer-events: none;
-}
-
-.agent-compare__tag {
-  position: absolute;
-  top: var(--spacing-xs);
-  padding: 0 var(--spacing-xs);
-  font-size: var(--font-size-caption);
-  color: var(--text-primary);
-  background: var(--surface-panel);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
-  pointer-events: none;
-}
-
-.agent-compare__tag--before {
-  left: var(--spacing-xs);
-}
-
-.agent-compare__tag--after {
-  right: var(--spacing-xs);
-}
-
-/* The range covers the picture: drag anywhere, or arrow keys once focused. */
-.agent-compare__range {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  cursor: ew-resize;
-  opacity: 0;
-}
-
-.agent-compare__slider:has(.agent-compare__range:focus-visible) {
-  box-shadow: var(--focus-ring);
+  .agent-result__gallery[data-count='3'] {
+    --agents-result-gallery-cols: 2;
+  }
 }
 
 /* ----------------------------------------------- links to this Mac's servers */

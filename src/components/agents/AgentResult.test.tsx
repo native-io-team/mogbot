@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { ComposerRevising, ResultCardView, RevisesBar } from './AgentResult';
+import { ComposerRevising, ResultCardView, ResultChatProvider, RevisesBar } from './AgentResult';
 import { AgentProjectsProvider, ChangeCard } from './AgentProject';
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('../../contexts/ToastContext', async (importOriginal) => ({
@@ -83,13 +83,13 @@ describe('the result card', () => {
       />
     );
     expect(onPreview).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open preview' }));
     expect(onPreview).toHaveBeenCalledWith('/p/bakery-site');
     // No project on the card: no Preview.
     rerender(
       <ResultCardView message={message(V1)} card={V1} agent={agent} newest onPreview={onPreview} />
     );
-    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open preview' })).toBeNull();
   });
 
   it('shows the work first, then what it checked and what it didn’t, together', () => {
@@ -221,7 +221,126 @@ describe('the result card', () => {
       />
     );
     expect(screen.getByText('v2')).toBeTruthy();
-    expect(screen.getByText('Changes since v1: Used the invoice-date rate')).toBeTruthy();
+    expect(screen.getByText('Changes since v1')).toBeTruthy();
+    expect(screen.getByText('Used the invoice-date rate')).toBeTruthy();
+  });
+});
+
+describe('the redesigned card', () => {
+  const V2: ResultCard = {
+    ...V1,
+    version: 2,
+    summary: 'Rates fixed.',
+    changes: 'Invoice-date rates',
+  };
+
+  it('says its state in a pill, never that it was verified', () => {
+    const { rerender } = render(
+      <ResultCardView message={message(V1)} card={V1} agent={agent} newest />
+    );
+    expect(screen.getByText('Finished')).toBeTruthy();
+    const partway = { ...V1, checkpoint: true };
+    rerender(<ResultCardView message={message(partway)} card={partway} agent={agent} newest />);
+    expect(screen.getByText('Partway through')).toBeTruthy();
+    expect(screen.queryByText(/verified/i, { selector: '.status-pill__label' })).toBeNull();
+  });
+
+  it('switches between versions in place, for reading', () => {
+    render(
+      <ResultChatProvider value={{ versionsOf: () => [V1, V2] }}>
+        <ResultCardView
+          message={message(V2, 'r2')}
+          card={V2}
+          agent={agent}
+          newest
+          onAskForChanges={vi.fn()}
+        />
+      </ResultChatProvider>
+    );
+    const versions = screen.getByRole('group', { name: 'Version' });
+    expect(screen.getByText('Rates fixed.')).toBeTruthy();
+    fireEvent.click(within(versions).getByRole('button', { name: 'v1' }));
+    expect(screen.getByText('Every invoice on one page.')).toBeTruthy();
+    expect(screen.getByText(/Reading v1, an earlier version/)).toBeTruthy();
+    // Ask for changes still revises the newest version.
+    fireEvent.click(screen.getByRole('button', { name: 'Back to v2' }));
+    expect(screen.getByText('Rates fixed.')).toBeTruthy();
+  });
+
+  it('asks for changes in the card when the chat can send it', () => {
+    const send = vi.fn();
+    const composer = vi.fn();
+    render(
+      <ResultChatProvider value={{ versionsOf: () => undefined, sendChanges: send }}>
+        <ResultCardView
+          message={message(V1)}
+          card={V1}
+          agent={agent}
+          newest
+          onAskForChanges={composer}
+        />
+      </ResultChatProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Ask for changes/ }));
+    const form = screen.getByRole('form', { name: 'Changes to October summary · v1' });
+    const field = within(form).getByRole('textbox');
+    // Nothing to send yet.
+    expect(within(form).getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.change(field, { target: { value: 'Use the invoice date' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(send).toHaveBeenCalledWith(
+      { id: 'res-1', version: 1, title: 'October summary' },
+      'Use the invoice date'
+    );
+    expect(composer).not.toHaveBeenCalled();
+    expect(screen.queryByRole('form')).toBeNull();
+  });
+
+  it('Escape puts the field away without sending', () => {
+    const send = vi.fn();
+    render(
+      <ResultChatProvider value={{ versionsOf: () => undefined, sendChanges: send }}>
+        <ResultCardView
+          message={message(V1)}
+          card={V1}
+          agent={agent}
+          newest
+          onAskForChanges={vi.fn()}
+        />
+      </ResultChatProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Ask for changes/ }));
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+    expect(screen.queryByRole('form')).toBeNull();
+    expect(send).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Ask for changes/ })).toBeTruthy();
+  });
+
+  it('gives a link a copy button and its host, a file its type and size', () => {
+    render(<ResultCardView message={message(V1)} card={V1} agent={agent} newest />);
+    const list = screen.getByRole('list', { name: 'What it made' });
+    expect(within(list).getByText('PDF · 2 KB')).toBeTruthy();
+    expect(within(list).getByText('docs.example.com')).toBeTruthy();
+    expect(within(list).getByRole('button', { name: 'Copy link to Source sheet' })).toBeTruthy();
+    // Files are opened, not copied.
+    expect(within(list).getAllByRole('button', { name: /Copy link/ })).toHaveLength(1);
+  });
+
+  it('shows other pictures as a gallery, not as rows', () => {
+    const card: ResultCard = {
+      ...V1,
+      items: [
+        { kind: 'file', file: BEFORE, label: 'Hero' },
+        { kind: 'file', file: AFTER, label: 'Footer' },
+        { kind: 'file', file: PDF },
+      ],
+    };
+    render(<ResultCardView message={message(card)} card={card} agent={agent} newest />);
+    const gallery = screen.getByRole('list', { name: '2 pictures' });
+    expect(within(gallery).getByRole('button', { name: /View Hero/ })).toBeTruthy();
+    expect(
+      within(screen.getByRole('list', { name: 'What it made' })).queryByText('Hero')
+    ).toBeNull();
   });
 });
 
@@ -266,6 +385,56 @@ describe('a project copy’s card carrying the result', () => {
     expect(asks).toHaveLength(1);
     fireEvent.click(asks[0]);
     expect(ask).toHaveBeenCalledWith({ id: 'res-1', version: 1, title: 'October summary' });
+    // The diff stat sits by the footer's title.
+    expect(screen.getByLabelText('Lines changed').textContent).toBe('+1');
+  });
+
+  it('opens the card’s own field from the copy’s Ask for changes', () => {
+    const copy = { id: 'copy-1', path: '/w/copy', branch: 'fin/x' };
+    const owner = {
+      ...agent,
+      project: '/p/site',
+      copy: { ...copy, project: '/p/site', base: 'b', createdAt: 1, deps: false },
+    } as Agent;
+    const changes: AgentMessage = {
+      ...message(V1),
+      kind: 'changes',
+      changes: {
+        project: '/p/site',
+        from: 'a',
+        to: 'b',
+        files: [{ path: 'a.ts', status: 'modified', added: 3, removed: 2 }],
+        fileCount: 1,
+        added: 3,
+        removed: 2,
+        copy,
+      },
+    };
+    const ask = vi.fn();
+    const send = vi.fn();
+    render(
+      <ResultChatProvider value={{ versionsOf: () => undefined, sendChanges: send }}>
+        <AgentProjectsProvider onOpenProject={vi.fn()}>
+          <ChangeCard
+            message={changes}
+            agent={owner}
+            live
+            owner={owner}
+            newestResult
+            onAskForChanges={ask}
+          />
+        </AgentProjectsProvider>
+      </ResultChatProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Ask for changes/ }));
+    expect(ask).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Smaller' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      { id: 'res-1', version: 1, title: 'October summary' },
+      'Smaller'
+    );
+    expect(screen.getByLabelText('Lines changed').textContent).toBe('+3−2');
   });
 });
 

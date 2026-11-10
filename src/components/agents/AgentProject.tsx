@@ -321,7 +321,15 @@ export const ChangeCard = memo(function ChangeCard({
       // its quiet ways to look (Preview, Review changes) by the title too.
       meta={
         offering ? (
-          toggle
+          // The diff stat beside the file count: only the totals git gave.
+          <span className="agent-changes__stat">
+            {Boolean(changes.added || changes.removed) && (
+              <span className="agent-changes__counts" aria-label="Lines changed">
+                <LineCounts added={changes.added} removed={changes.removed} />
+              </span>
+            )}
+            {toggle}
+          </span>
         ) : (
           <span className="agent-changes__record-actions">
             {/* What it looks like now. A past copy's card is a record: the

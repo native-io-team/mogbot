@@ -149,8 +149,8 @@ export const agentsShowWorkScenarios: Scenario[] = [
     id: 'agents-visual-checkpoint',
     title: 'Agents — a checkpoint card partway through visual work',
     looksRightWhen:
-      'Acme Site’s chat ends on one result card titled “Redesign: pricing first” with a small muted “Partway through” chip in its header. Under the summary, two screenshots side by side captioned Before and After, and above them a “Side by side · Slider” segmented control (no page switcher: one page). Actions: Preview, Test it, Ask for changes — neutral, not accent.',
-    requires: '.agent-result__checkpoint',
+      'Acme Site’s chat ends on one result card titled “Redesign: pricing first” with a “Partway through” status pill (a running dot, not the accent) in its header. Under the summary, a recessed before-and-after stage: “Before and after” on the left of its toolbar and “Side by side · Slider” on the right (no page switcher: one page), then two screenshots side by side with “Before” and “After” tags on the pictures. A “Live preview” row (acme-marketing · runs on this Mac) with Test it and Open preview, then Ask for changes — neutral, not accent.',
+    requires: '.agent-result[data-status="partway"]',
     openSelector: AGENTS_TAB,
     steps: [open],
     commands: commands(CHAT.slice(0, 2)),
@@ -179,7 +179,7 @@ export const agentsShowWorkScenarios: Scenario[] = [
     id: 'agents-visual-slider',
     title: 'Agents — the compare as a slider, on the Footer page',
     looksRightWhen:
-      'The final card shows the Footer page selected in the switcher and Slider selected: one picture area with the before on the left of a thin vertical divider at the middle and the after on its right, small “Before” and “After” tags in the top corners.',
+      'The final card shows the Footer page selected in the switcher and Slider selected: one picture area with the before on the left of a thin vertical divider at the middle and the after on its right, a round grip with two chevrons on it, and small “Before” and “After” tags in the top corners.',
     requires: '.agent-compare__slider',
     openSelector: AGENTS_TAB,
     steps: [
