@@ -10,18 +10,20 @@
 
 import { usageRows, type UsageInventory, type UsageRow } from '@shipstudio/companion-protocol';
 import { useCallback, useState } from 'react';
-import { call, canCall } from './session';
+import { callFresh, canCall, lastRead, READ_FRESH_MS } from './session';
 import { useApp } from './store';
 import { usePolling } from './usePolling';
 
 export function useUsageRows(): UsageRow[] {
   const welcome = useApp((s) => s.welcome);
   const serves = canCall('agents.usagePlan', welcome);
-  const [inventory, setInventory] = useState<UsageInventory | null>(null);
+  const [inventory, setInventory] = useState<UsageInventory | null>(
+    () => (serves && lastRead('agents.usagePlan', {})) || null
+  );
   const read = useCallback(async () => {
     if (!serves) return;
     try {
-      setInventory(await call('agents.usagePlan', {}));
+      setInventory(await callFresh('agents.usagePlan', {}, READ_FRESH_MS));
     } catch {
       // Unanswered: keep what was last read.
     }

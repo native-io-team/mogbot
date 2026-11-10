@@ -8,7 +8,7 @@
 
 import { quotaLines, type Quota, type QuotaLine } from '@shipstudio/companion-protocol';
 import { useCallback, useEffect, useState } from 'react';
-import { call, canCall } from './session';
+import { callFresh, canCall, lastRead, READ_FRESH_MS } from './session';
 import { useApp } from './store';
 import { usePolling } from './usePolling';
 
@@ -20,7 +20,9 @@ import { usePolling } from './usePolling';
 export function useQuotas(): { quotas: Quota[] | null; now: number; read: () => Promise<void> } {
   const welcome = useApp((s) => s.welcome);
   const serves = canCall('agents.quota', welcome);
-  const [quotas, setQuotas] = useState<Quota[] | null>(null);
+  const [quotas, setQuotas] = useState<Quota[] | null>(
+    () => (serves && lastRead('agents.quota', {})) || null
+  );
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000);
@@ -29,7 +31,7 @@ export function useQuotas(): { quotas: Quota[] | null; now: number; read: () => 
   const read = useCallback(async () => {
     if (!serves) return;
     try {
-      setQuotas(await call('agents.quota', {}));
+      setQuotas(await callFresh('agents.quota', {}, READ_FRESH_MS));
       setNow(Date.now());
     } catch {
       // Unanswered: keep what was last read rather than flicker it away.

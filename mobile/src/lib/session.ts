@@ -70,6 +70,7 @@ import {
   setPendingFailed,
 } from './sync';
 import { clearCache, http, type PickedFile } from './files';
+import { createReads } from './reads';
 import { roomIdOf, roomKey, roomsOffered } from './rooms';
 import { registerPush } from './push';
 import { sendSecret } from './secrets';
@@ -199,6 +200,8 @@ let caughtUp = false;
 function connect(c: Credentials) {
   transport?.close();
   transport = null;
+  if (readsFor !== c.serverId) reads.forget();
+  readsFor = c.serverId;
   if (!c.fingerprint) return refuseUnpinned();
   // The store is in memory, so a cold start has no cursor and gets a
   // snapshot; within a run, every reconnect resumes where it left off.
@@ -221,8 +224,8 @@ function connect(c: Credentials) {
       refusal: null,
     });
     // Focus is per connection: the Mac forgot it when the last one dropped.
-    const open = getApp().openChat;
-    if (open) void focusChat(open).catch(() => {});
+    focusHeld = null;
+    syncFocus(0);
     // An older Mac (or one without rooms) shows none: forget any kept from before.
     if (!roomsOffered(welcome)) setApp({ rooms: null });
     if (!canCall('agents.teamSetup', welcome)) setApp({ teamSetup: null });
@@ -272,9 +275,49 @@ function learnRoutes(routes: Credentials['routes']) {
 export const canCall = (method: MethodName, welcome = getApp().welcome) =>
   !!welcome?.methods.includes(method);
 
+/** Every request to the Mac: reads shared, queued and remembered (`lib/reads`). */
+const reads = createReads();
+/** The Mac the kept reads are for. */
+let readsFor: string | null = null;
+
 export function call<M extends MethodName>(method: M, params: Params<M>): Promise<Result<M>> {
   if (!transport) return Promise.reject(new Error('Not paired'));
-  return transport.request(method, params);
+  return reads.call(method, params, () => {
+    if (!transport) return Promise.reject(new Error('Not paired'));
+    return transport.request(method, params);
+  });
+}
+
+/**
+ * How long a reading a screen polls (usage, accounts) is good for when
+ * another screen opens wanting it: under its once-a-minute poll, so the
+ * poll still reads, but a tab switched back to doesn't.
+ */
+export const READ_FRESH_MS = 20_000;
+
+/**
+ * What a read last answered, from any screen: a screen opening shows it from
+ * its first frame while it reads again. Undefined when it hasn't been read
+ * for this Mac.
+ */
+export const lastRead = <M extends MethodName>(method: M, params: Params<M>) =>
+  reads.last<Result<M>>(method, params);
+
+/**
+ * A read answered from the last one when that is under `maxAgeMs` old and
+ * nothing has changed since: switching tabs, or opening chats one after
+ * another, doesn't ask the Mac the same thing each time.
+ */
+export function callFresh<M extends MethodName>(
+  method: M,
+  params: Params<M>,
+  maxAgeMs: number
+): Promise<Result<M>> {
+  if (!transport) return Promise.reject(new Error('Not paired'));
+  return reads.fresh(method, params, maxAgeMs, () => {
+    if (!transport) return Promise.reject(new Error('Not paired'));
+    return transport.request(method, params);
+  });
 }
 
 /** Hand the Mac this phone's push token, when it may have one. Never asks. */
@@ -320,10 +363,7 @@ export function watchLifecycle(): () => void {
       void flushDrafts();
     }
     // Focus is per socket and only counts in the foreground: say so both ways.
-    const open = getApp().openChat;
-    if (open && transport?.state.kind === 'connected') {
-      void call('agents.focus', { agentId: fg ? open : null }).catch(() => {});
-    }
+    syncFocus(0, fg);
   });
   let network = '';
   const net = NetInfo.addEventListener((s) => {
@@ -379,6 +419,31 @@ function readPage(key: string, before?: string) {
     : // Timelines as their folded lines: the steps were most of a page, and
       // are read as one opens (`lib/turnSteps`). An older Mac sends them anyway.
       call('agents.messages', { agentId: key, limit: PAGE, work: 'summary', ...at });
+}
+
+/** What the Mac holds as this socket's focus; undefined when unsure (a send failed). */
+let focusHeld: string | null | undefined = null;
+let focusTimer: ReturnType<typeof setTimeout> | null = null;
+/** Chats opened and left within this long say only where they ended up. */
+const FOCUS_SETTLE_MS = 150;
+
+/**
+ * Tell the Mac which chat is on screen (none in the background), once it
+ * has settled: tapping in and out of chats is one focus, not two a chat,
+ * and one it already holds isn't sent again.
+ */
+function syncFocus(delay = FOCUS_SETTLE_MS, foreground = AppState.currentState === 'active') {
+  if (focusTimer) clearTimeout(focusTimer);
+  focusTimer = setTimeout(() => {
+    focusTimer = null;
+    if (transport?.state.kind !== 'connected') return;
+    const want = foreground ? getApp().openChat : null;
+    if (want === focusHeld) return;
+    focusHeld = want;
+    void focusChat(want).catch(() => {
+      if (focusHeld === want) focusHeld = undefined;
+    });
+  }, delay);
 }
 
 /** `agents.focus`, or `rooms.focus` for a room's key. */
@@ -475,7 +540,7 @@ export function setOpenChat(agentId: string | null) {
         ? s.rooms.map((r) => (r.id === roomId ? { ...r, unread: 0 } : r))
         : s.rooms,
   }));
-  if (transport?.state.kind === 'connected') void focusChat(agentId).catch(() => {});
+  syncFocus();
   if (roomId) return;
   if (agentId) {
     const agent = getApp().overview?.agents.find((a) => a.id === agentId);
