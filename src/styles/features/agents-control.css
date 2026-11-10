@@ -554,12 +554,14 @@
   color: var(--text-secondary);
 }
 
-.agent-login__flow > span {
+/* The Spinner is a span too (valid inside this <p>): only the words stretch. */
+.agent-login__flow > span:not(.ss-spinner) {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.agent-login__flow > :first-child:not(span) {
+.agent-login__flow > :first-child:not(span),
+.agent-login__flow > .ss-spinner:first-child {
   flex: 0 0 auto;
   margin-top: var(--spacing-2xs);
 }
