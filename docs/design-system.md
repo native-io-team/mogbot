@@ -105,12 +105,15 @@ wrapper, and record its `old-icons` source in the metadata.
 
 To add feature artwork, place the SVG in `src/assets/graphics/` and import it directly with
 `?react` from the owning feature. The feature passes its class and layout props and marks
-decorative artwork as hidden. Static inline SVG is prohibited in feature components. There are two marked
-dynamic exceptions, each one generated root assembled from data at runtime:
-`BranchGraph.tsx` (`data-dynamic-svg="branch-graph"`), and `AgentKey.tsx`
+decorative artwork as hidden. Static inline SVG is prohibited in feature components (tests
+excepted). The marked dynamic exceptions are roots assembled from data at runtime, each
+carrying its marker: `BranchGraph.tsx` (`data-dynamic-svg="branch-graph"`); `AgentKey.tsx`
 (`data-dynamic-svg="agent-key"`), which draws an agent key's legend from the icon
 registry it shares with the phone (`packages/companion-protocol/src/agentKeyIcons.ts`;
-see `docs/internal/agent-keys.md`). The key itself is pure CSS (`agent-key.css`).
+see `docs/internal/agent-keys.md`; the key itself is pure CSS, `agent-key.css`); and an
+agent's chart block, which plots the numbers it sent: `blocks/BlockChart.tsx` (a cartesian
+chart and a pie, `agent-block-chart`) and the metric tile's sparkline in `blocks/BlockParts.tsx`
+(`agent-block-spark`). `pnpm icons:check` holds each file to its count of marked roots.
 
 `pnpm icons:status` reports the asset and export inventory, and `pnpm icons:check` validates the
 tree, metadata, public module exports, and dynamic SVG exception. The development-only gallery is

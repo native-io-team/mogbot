@@ -94,6 +94,7 @@ function Spark({ values }: { values: number[] }) {
   const last = line?.points.filter(Boolean).pop();
   return (
     <svg
+      data-dynamic-svg="agent-block-spark"
       className="agent-block-metric__spark"
       width={w}
       height={h}
