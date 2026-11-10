@@ -68,6 +68,7 @@ import { choose } from './menu';
 import { SettingsChange } from './settingsChange';
 import { PlanList } from './planList';
 import { GateBody } from './gateBody';
+import { SkillCardBody } from './skills';
 import { ShowAll } from './ShowAll';
 import { SideScroll } from './SideScroll';
 import { Card, Line, OFFLINE_NOTE, TextAction, useActionShare } from './surfaces';
@@ -502,17 +503,14 @@ export function ApprovalCard({
     >
       {/* A step-in card's reason is its title, and its detail is the desk's
           ("opens on this Mac"): the note says where to step in instead. */}
-      {!!(crossover ? approval.summary : !stepIn && approval.detail) && (
+      {skill ? (
+        // When to use it, then the steps as they'd be saved: never in the
+        // fitted scroll area, which cut the steps off on a short pane.
+        <SkillCardBody skill={skill} />
+      ) : !!(crossover ? approval.summary : !stepIn && approval.detail) && (
         <FittedDetail fit={fit}>
           {crossover ? (
             <T color={colors.textBody}>{approval.summary}</T>
-          ) : skill ? (
-            // When to use it, then the steps as they'd be saved.
-            <T color={colors.textBody}>
-              {skill.when ? `${skill.when}
-
-${skill.steps}` : skill.steps}
-            </T>
           ) : consent ? (
             // Consent asks in sentences, not a command: prose that wraps.
             <T color={colors.textBody}>{approval.detail}</T>

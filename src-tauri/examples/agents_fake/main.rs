@@ -471,9 +471,9 @@ async fn skills(h: &H) -> Check {
         let mut steps: Vec<Value> = (0..8)
             .map(|i| json!({"write": format!("r{i}.txt"), "text": format!("{i}")}))
             .collect();
-        // The app reads the engine's stream as it goes: give it a beat to
-        // have seen the steps before the call asks what the turn did.
-        steps.push(json!({"sleep": 1.0}));
+        // Straight after the steps, no pause: the call can reach the app
+        // before its stream reader has recorded them, and must still see
+        // all eight (`work::caught_up`).
         steps.push(extra);
         steps.push(json!({"say": "done"}));
         fake(Value::Array(steps))

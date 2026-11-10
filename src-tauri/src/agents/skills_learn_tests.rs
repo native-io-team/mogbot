@@ -393,3 +393,106 @@ fn a_proposed_skill_is_cleaned_like_a_saved_one() {
     assert!(!p.skills[0].steps.contains("sam@acme.com"));
     assert_eq!(p.skills[0].slug, "export");
 }
+
+/* ------------------------------------------------- the stream catching up */
+
+fn reported_call(name: &str, id: &str, input: serde_json::Value) -> crate::agents::work::Action {
+    let mut a = crate::agents::work::describe_tool(name, Some(&input)).unwrap();
+    a.id = Some(id.into());
+    a
+}
+
+fn ours(tool: &str) -> String {
+    format!("mcp__{}__{tool}", crate::agents::prompts::SERVER_KEY)
+}
+
+/// `save_skill` arrives over the bridge before the stream reader has
+/// recorded the steps the engine reported ahead of it: the judgement waits
+/// for the engine's report of the call itself, so all eight count.
+#[tokio::test]
+async fn save_skill_sent_right_after_its_steps_sees_them_all() {
+    use crate::agents::work;
+    let agent = "skills-race-1";
+    work::begin(agent, store::now_ms());
+    // The stream reader, a beat behind the bridge.
+    let reader = tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        for i in 0..8 {
+            let input = serde_json::json!({"file_path": format!("/tmp/r{i}.txt"), "content": "x"});
+            work::on_action(
+                agent,
+                reported_call("Write", &format!("w{i}"), input),
+                store::now_ms(),
+            );
+        }
+        work::on_action(
+            agent,
+            reported_call(&ours(TOOL), "s1", serde_json::json!({})),
+            store::now_ms(),
+        );
+    });
+    // Before waiting, the app has seen nothing.
+    assert_eq!(work::snapshot(agent).map(|w| w.step_count).unwrap_or(0), 0);
+    assert!(work::caught_up(agent, TOOL, 2_000).await);
+    let e = without_own_calls(
+        effort(&work::snapshot(agent).unwrap(), store::now_ms()),
+        work::reported(agent, TOOL),
+    );
+    assert_eq!(e.steps, 8, "{e:?}");
+    assert!(took_effort(e));
+    reader.await.unwrap();
+    work::forget_agent(agent);
+}
+
+/// A second `save_skill` in the same turn waits for the engine's report of
+/// that second call, not the first one's.
+#[tokio::test]
+async fn a_second_call_waits_for_its_own_report() {
+    use crate::agents::work;
+    let agent = "skills-race-2";
+    work::begin(agent, store::now_ms());
+    work::on_action(
+        agent,
+        reported_call(&ours(TOOL), "s1", serde_json::json!({})),
+        store::now_ms(),
+    );
+    assert!(work::caught_up(agent, TOOL, 500).await);
+    // The same call reported again (Codex, as it starts and ends) is one.
+    work::on_action(
+        agent,
+        reported_call(&ours(TOOL), "s1", serde_json::json!({})),
+        store::now_ms(),
+    );
+    assert!(
+        !work::caught_up(agent, TOOL, 100).await,
+        "counted the first call's report for the second"
+    );
+    work::on_action(
+        agent,
+        reported_call(&ours(TOOL), "s2", serde_json::json!({})),
+        store::now_ms(),
+    );
+    assert_eq!(work::reported(agent, TOOL), 2);
+    work::forget_agent(agent);
+}
+
+/// The engine never reports the call (or no turn is live): the wait is
+/// bounded and the judgement goes on with what was seen.
+#[tokio::test]
+async fn the_wait_is_bounded() {
+    use crate::agents::work;
+    assert!(!work::caught_up("skills-race-none", TOOL, 50).await);
+    let agent = "skills-race-3";
+    work::begin(agent, store::now_ms());
+    let t = std::time::Instant::now();
+    assert!(!work::caught_up(agent, TOOL, 120).await);
+    assert!(t.elapsed() < std::time::Duration::from_millis(1_000));
+    work::forget_agent(agent);
+}
+
+#[test]
+fn its_own_calls_are_not_the_work() {
+    let e = Effort { steps: 9, ms: 0 };
+    assert_eq!(without_own_calls(e, 1).steps, 8);
+    assert_eq!(without_own_calls(e, 20).steps, 0);
+}
