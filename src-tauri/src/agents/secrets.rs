@@ -680,6 +680,7 @@ mod tests {
             remembered: None,
             via: None,
             fix: None,
+            conversation: None,
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {

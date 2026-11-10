@@ -38,6 +38,7 @@ fn users(text: &str) -> Inbound {
         outside: false,
         resume: 0,
         typed: Some(text.into()),
+        conversation: None,
     }
 }
 
@@ -47,6 +48,7 @@ fn when_items(text: &str) -> Inbound {
         ticket: Some("t-when".into()),
         outside: true,
         typed: None,
+        conversation: None,
         ..users(text)
     }
 }

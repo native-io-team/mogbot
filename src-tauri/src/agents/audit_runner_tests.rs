@@ -37,6 +37,7 @@ fn user(text: &str) -> Inbound {
         outside: false,
         resume: 0,
         typed: None,
+        conversation: None,
     }
 }
 
@@ -58,6 +59,7 @@ fn from_chief(text: &str, reply: bool) -> Inbound {
         outside: false,
         resume: 0,
         typed: None,
+        conversation: None,
     }
 }
 

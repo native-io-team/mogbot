@@ -33,6 +33,7 @@ fn notice(text: &str) -> Inbound {
         outside: false,
         resume: 0,
         typed: None,
+        conversation: None,
     }
 }
 

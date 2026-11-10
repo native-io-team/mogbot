@@ -1438,7 +1438,9 @@ fn wake(
     );
     let ticket_id = ticket.id.clone();
     runs::issue(ticket);
-    runner::enqueue_from_outside(app, agent_id, prompt, ticket_id);
+    let conversation = super::conversations::routine_in(agent_id, &c.id);
+    line.conversation = Some(conversation.clone());
+    runner::enqueue_from_outside_in(app, agent_id, prompt, ticket_id, Some(conversation));
     runner::record(app, line).map(|_| ())
 }
 
@@ -1983,6 +1985,8 @@ pub(crate) fn create_in(
     if let Some(err) = refused {
         return Err(err);
     }
+    // It runs in the conversation it was set up in.
+    super::conversations::note_routine(agent_id, &check_in.id);
     let cost = if source.uses_model() {
         " Each check is a short read-only Claude Code call on Haiku, at most 24 a day, which counts toward the user's usage; say so."
     } else {

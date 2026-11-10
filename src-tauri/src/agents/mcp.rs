@@ -4006,6 +4006,7 @@ mod tests {
             account: None,
             template: None,
             reach: Default::default(),
+            conversations: Default::default(),
             muted: false,
             check_ins: Vec::new(),
             usage: Default::default(),

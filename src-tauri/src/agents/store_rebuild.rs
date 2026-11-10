@@ -91,6 +91,7 @@ pub(super) fn from_homes(root: &Path) -> Registry {
                 browser_off: true,
                 ..Default::default()
             },
+            conversations: Default::default(),
             muted: false,
             check_ins: Vec::new(),
             usage: Default::default(),

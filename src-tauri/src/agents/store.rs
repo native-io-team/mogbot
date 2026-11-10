@@ -363,6 +363,14 @@ pub struct Agent {
     /// reach"). Connections it may use are granted in `connections.json`.
     #[serde(default, skip_serializing_if = "AgentReach::is_empty")]
     pub reach: AgentReach,
+    /// Its conversations' engine sessions (`conversations`): which one the
+    /// session fields above belong to, and the others', parked until a turn
+    /// in that conversation loads them.
+    #[serde(
+        default,
+        skip_serializing_if = "super::conversations::Sessions::is_empty"
+    )]
+    pub conversations: super::conversations::Sessions,
     /// Fields a newer Ship Studio wrote that this build doesn't know: kept
     /// and written back as they were, so running an older build never
     /// strips what a newer one saved.
@@ -409,6 +417,8 @@ impl Agent {
         self.context = None;
         // Carrying on elsewhere was for the engine it's leaving.
         self.away = None;
+        // So were its other conversations' sessions.
+        super::conversations::engine_switched(self);
     }
 
     /// Whether its next turn would continue a conversation: there is one to
@@ -422,6 +432,7 @@ impl Agent {
     pub fn set_model(&mut self, model: Option<String>) {
         if self.model != model {
             self.context = None;
+            super::conversations::forget_readings(self);
         }
         self.model = model;
     }
@@ -725,6 +736,10 @@ pub struct AgentMessage {
     /// Chrome", `chrome_health`). Older builds show the note alone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix: Option<NoteFix>,
+    /// Which of the agent's conversations it was said in (`conversations`).
+    /// Absent on lines written before there were several: the first one's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<String>,
 }
 
 /// A fix a note offers, as a button that opens where it's done.
@@ -1346,6 +1361,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         account: None,
         template: None,
         reach: Default::default(),
+        conversations: Default::default(),
         muted: false,
         check_ins: Vec::new(),
         usage: Default::default(),
@@ -1772,6 +1788,16 @@ pub(crate) fn append_line<T: Serialize>(path: &Path, value: &T) -> Result<(), Co
 }
 
 pub fn append_message(message: &AgentMessage) -> Result<(), CommandError> {
+    // A line that doesn't say which conversation it was said in is the
+    // conversation its agent's engine has loaded (`conversations::stamped`).
+    // Read before the log's lock: the registry has a lock of its own.
+    let stamped;
+    let message = if message.conversation.is_none() && !message.agent_id.is_empty() {
+        stamped = super::conversations::stamped(message);
+        &stamped
+    } else {
+        message
+    };
     let lock = log_lock(&message.agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     ensure_home(&message.agent_id)?;
@@ -2147,6 +2173,17 @@ pub(crate) fn page_back(
     before: Option<&str>,
     through: Option<(&str, usize)>,
 ) -> Result<Vec<AgentMessage>, CommandError> {
+    page_back_where(path, limit, before, through, &|_| true)
+}
+
+/// [`page_back`] counting only the lines `keep` takes (one conversation's).
+fn page_back_where(
+    path: &Path,
+    limit: usize,
+    before: Option<&str>,
+    through: Option<(&str, usize)>,
+    keep: &dyn Fn(&AgentMessage) -> bool,
+) -> Result<Vec<AgentMessage>, CommandError> {
     let mut lines = BackLines::open(path)?;
     if let Some(id) = before {
         let needle = id_needle(id);
@@ -2169,7 +2206,9 @@ pub(crate) fn page_back(
             break;
         };
         if let Ok(m) = parse_line(&line) {
-            page.push(m);
+            if keep(&m) {
+                page.push(m);
+            }
         }
     }
     if let Some((id, cap)) = through {
@@ -2180,6 +2219,9 @@ pub(crate) fn page_back(
                 let Ok(m) = parse_line(&line) else {
                     continue;
                 };
+                if !keep(&m) {
+                    continue;
+                }
                 let hit = m.id == id;
                 further.push(m);
                 if hit {
@@ -2280,6 +2322,39 @@ pub fn messages_page(
         all
     } else {
         page_back(&path, limit, before, through)?
+    };
+    apply_answers(agent_id, &mut page)?;
+    Ok(page)
+}
+
+/// [`messages_page`] for one of the agent's conversations
+/// (`conversations::of`): only its lines, paged the same way.
+pub fn conversation_page(
+    agent_id: &str,
+    conversation: &str,
+    limit: usize,
+    before: Option<&str>,
+    through: Option<(&str, usize)>,
+) -> Result<Vec<AgentMessage>, CommandError> {
+    let keep = |m: &AgentMessage| super::conversations::of(m) == conversation;
+    let lock = log_lock(agent_id);
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let path = log_path(agent_id)?;
+    let mut page = if limit == usize::MAX {
+        let raw = read_text(&path)?;
+        let mut all: Vec<AgentMessage> = raw
+            .lines()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect();
+        let end = match before {
+            Some(id) => all.iter().position(|m| m.id == id).unwrap_or(0),
+            None => all.len(),
+        };
+        all.truncate(end);
+        all.retain(keep);
+        all
+    } else {
+        page_back_where(&path, limit, before, through, &keep)?
     };
     apply_answers(agent_id, &mut page)?;
     Ok(page)
@@ -2727,6 +2802,7 @@ mod tests {
                     remembered: None,
                     via: None,
                     fix: None,
+                    conversation: None,
                 })
                 .unwrap();
             }
@@ -3034,6 +3110,7 @@ mod tests {
                 remembered: None,
                 via: None,
                 fix: None,
+                conversation: None,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -3085,6 +3162,7 @@ mod tests {
             remembered: None,
             via: None,
             fix: None,
+            conversation: None,
         }
     }
 

@@ -1510,6 +1510,8 @@ where
     if let Some(err) = refused {
         return Err(err);
     }
+    // It runs in the conversation it was set up in.
+    super::conversations::note_routine(agent_id, &check_in.id);
     let when_text = format_time(tz, check_in.next_at);
     let summary = match &check_in.repeat {
         None => format!(
@@ -1989,7 +1991,17 @@ where
         row_at: now,
     });
     let routine = firing.check_in.repeat.is_some();
-    runner::enqueue_scheduled(app, &firing.agent_id, prompt, routine, ticket);
+    // In the conversation it was set up in, line and turn alike.
+    let conversation = super::conversations::routine_in(&firing.agent_id, &firing.check_in.id);
+    line.conversation = Some(conversation.clone());
+    runner::enqueue_scheduled_in(
+        app,
+        &firing.agent_id,
+        prompt,
+        routine,
+        ticket,
+        Some(conversation),
+    );
     runner::record(app, line).map(|_| ())
 }
 
@@ -2426,6 +2438,7 @@ mod tests {
             account: None,
             template: None,
             reach: Default::default(),
+            conversations: Default::default(),
             muted: false,
             check_ins,
             usage: Default::default(),
