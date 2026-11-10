@@ -1,6 +1,8 @@
 /**
- * Welcome and pairing: "Before you scan" (Tailscale on, same account as the
- * Mac), one Scan button (with the steps folded under it), then a confirm
+ * Welcome and pairing: one screen with the four numbered steps (the Mac app,
+ * Tailscale on both, the desk's "Pair your phone", scan) said in the desk's
+ * own words (`companion-protocol/src/pairWords.ts`), one big "Scan the code"
+ * and "Try the demo" under it; then a confirm
  * screen that says which Mac and where, "Reaching <Mac>…" while it proves
  * itself, wait for someone at the desk to allow it (said only once the code
  * has really gone), then a moment that says which Mac it's paired
@@ -9,17 +11,26 @@
  * web page or message can open one.
  */
 
-import { CHIEF_COLORWAY, CHIEF_ICON, type PairingLink } from '@shipstudio/companion-protocol';
+import {
+  APP_NAME,
+  CHIEF_COLORWAY,
+  CHIEF_ICON,
+  PAIR_BUTTON,
+  PAIR_WHERE,
+  PAIR_YOUR_PHONE,
+  SCAN_THE_CODE,
+  type PairingLink,
+} from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '../components/agent';
 import { AgentKey } from '../components/AgentKey';
-import { Button, Dot, Icon, T } from '../components/ui';
+import { Button, Icon, T } from '../components/ui';
 import { ALERTS_WHILE_OPEN } from '../lib/push';
 import {
   cleanName,
@@ -31,6 +42,7 @@ import {
   pairPlan,
   parseLink,
   tailscaleInstalled,
+  MAC_DOWNLOAD_URL,
   PHONE_SETTINGS,
   WHERE_TO_PAIR,
   type PairFailure,
@@ -69,8 +81,6 @@ export default function Pair() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ d?: string; link?: string }>();
   const [phase, setPhase] = useState<Phase>({ kind: 'start' });
-  // Before a scan, one question per screen: is Tailscale on here? Then scan.
-  const [startStep, setStartStep] = useState<'tailscale' | 'scan'>('tailscale');
   const abort = useRef<AbortController | null>(null);
   const current = useApp((s) => s.credentials);
   const pairingLost = useApp((s) => s.pairingLost);
@@ -170,24 +180,23 @@ export default function Pair() {
             colorway={CHIEF_COLORWAY}
             icon={CHIEF_ICON}
             boundKey="C"
-            size={phase.kind === 'start' ? keySize.xl : keySize.lg}
+            size={keySize.lg}
           />
         </View>
         {phase.kind === 'start' && (
           <>
-            <T variant="display" color={colors.textStrong}>
-              Your agents, on your phone
+            <T variant="display" color={colors.textStrong} accessibilityRole="header">
+              Pair with your Mac
             </T>
             <T color={colors.textSecondary}>
-              They keep working on your Mac. This phone talks to it directly, over your own
-              Tailscale.
+              Your agents run in {APP_NAME} on your Mac. Pair once, and talk to them from here.
             </T>
           </>
         )}
       </View>
 
       {phase.kind === 'start' && (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.block} key={startStep}>
+        <Animated.View entering={FadeIn.duration(200)} style={styles.block}>
           {pairingLost && (
             <View testID="pairing-lost">
               <T variant="headline" color={colors.textStrong}>
@@ -203,36 +212,21 @@ export default function Pair() {
               </T>
             </Animated.View>
           )}
-          <T variant="caption" color={colors.textMuted} testID="pair-progress">
-            Step {startStep === 'tailscale' ? 1 : 2} of 2
-          </T>
-          {startStep === 'tailscale' ? (
-            <BeforeYouScan onNext={() => setStartStep('scan')} />
-          ) : (
-            <>
-              <T variant="title" color={colors.textStrong} accessibilityRole="header">
-                Scan the code on your Mac
-              </T>
-              <T color={colors.textSecondary}>
-                On your Mac, open {WHERE_TO_PAIR}. When this phone has scanned it, click Allow
-                there.
-              </T>
-              <Button
-                title="Scan the code"
-                variant="primary"
-                size="large"
-                icon="qrcode.viewfinder"
-                onPress={() => router.push('/scan')}
-              />
-              <Button
-                title="Paste a pairing link instead"
-                variant="ghost"
-                icon="doc.on.clipboard"
-                onPress={() => void paste()}
-              />
-              <Button title="Back" variant="ghost" onPress={() => setStartStep('tailscale')} />
-            </>
-          )}
+          <PairSteps />
+          <Button
+            title={SCAN_THE_CODE}
+            variant="primary"
+            size="large"
+            icon="qrcode.viewfinder"
+            onPress={() => router.push('/scan')}
+          />
+          <Button
+            title="Paste a pairing link instead"
+            variant="ghost"
+            icon="doc.on.clipboard"
+            onPress={() => void paste()}
+          />
+          <TryDemo />
         </Animated.View>
       )}
 
@@ -443,12 +437,13 @@ function Confirm({
 }
 
 /**
- * The first screen: what has to be true before a scan can work, said
- * before the scan rather than after a spinner that never ends. The phone
- * reaches the Mac only over Tailscale, on the same account, switched on.
- * One thing to do (open or get Tailscale), then "It's on".
+ * The first screen, in one glance: four numbered steps, each in the words
+ * the Mac really shows. Tailscale is a step of its own, before the scan,
+ * because the phone reaches the Mac only through it (a `*.ts.net` address):
+ * said after a spinner that never ends, it was the surprise nobody solved.
+ * Each step that needs something from outside carries its one link.
  */
-function BeforeYouScan({ onNext }: { onNext: () => void }) {
+function PairSteps() {
   const colors = useColors();
   const styles = useStyles();
   // "Open" only when the OS says the app is there; otherwise "Get".
@@ -460,39 +455,59 @@ function BeforeYouScan({ onNext }: { onNext: () => void }) {
       live = false;
     };
   }, []);
+  const steps: { title: string; detail?: string; action?: ReactNode }[] = [
+    {
+      title: `On your Mac, open ${APP_NAME}.`,
+      detail: MAC_DOWNLOAD_URL ? `Don’t have it yet? Download it for your Mac first.` : undefined,
+      action: MAC_DOWNLOAD_URL ? (
+        <Button
+          title={`Get ${APP_NAME} for Mac`}
+          variant="outline"
+          icon="square.and.arrow.down"
+          onPress={() => void Linking.openURL(MAC_DOWNLOAD_URL!)}
+        />
+      ) : undefined,
+    },
+    {
+      title: 'Turn on Tailscale on this phone and on your Mac.',
+      detail:
+        'A free app that links the two privately. Sign in to the same account on both, and switch it on.',
+      action: (
+        <Button
+          title={installed === false ? 'Get Tailscale' : 'Open Tailscale'}
+          variant="outline"
+          icon="network"
+          onPress={() => void openTailscale()}
+        />
+      ),
+    },
+    {
+      title: `On your Mac, click “${PAIR_YOUR_PHONE}” ${PAIR_WHERE}.`,
+      detail: 'A code appears on the Mac.',
+    },
+    {
+      title: `Tap ${SCAN_THE_CODE} here and point the camera at it.`,
+      detail: `Then tap ${PAIR_BUTTON}, and click Allow on your Mac.`,
+    },
+  ];
   return (
-    <View style={styles.block} testID="pair-before-scan">
-      <T variant="title" color={colors.textStrong} accessibilityRole="header">
-        Turn on Tailscale on this phone
-      </T>
-      <T color={colors.textSecondary}>
-        Tailscale is a free app that links this phone to your Mac privately. It’s the only way this
-        phone reaches your Mac, so it needs to be on first.
-      </T>
-      <View style={styles.checks}>
-        {[
-          'Tailscale installed on this phone',
-          'Signed in to the same account as your Mac',
-          'The switch is on in the Tailscale app',
-        ].map((line) => (
-          <View key={line} style={styles.checkLine}>
-            <View style={styles.point}>
-              <Dot color={colors.textMuted} size={space.tight} />
-            </View>
-            <T color={colors.textPrimary} style={{ flex: 1 }}>
-              {line}
+    <View style={[styles.card, styles.steps]} testID="pair-steps">
+      {steps.map((step, i) => (
+        <View key={step.title} style={styles.step}>
+          <View style={styles.stepNumber}>
+            <T variant="small" color={colors.textStrong} style={styles.stepDigit}>
+              {i + 1}
             </T>
           </View>
-        ))}
-      </View>
-      <Button
-        title={installed === false ? 'Get Tailscale' : 'Open Tailscale'}
-        variant="outline"
-        icon="network"
-        onPress={() => void openTailscale()}
-      />
-      <Button title="It’s on — next" variant="primary" size="large" onPress={onNext} />
-      <TryDemo />
+          <View style={styles.stepBody}>
+            <T variant="headline" color={colors.textStrong}>
+              {step.title}
+            </T>
+            {step.detail && <T color={colors.textSecondary}>{step.detail}</T>}
+            {step.action && <View style={styles.stepAction}>{step.action}</View>}
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -556,22 +571,22 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
       case 'no_answer':
         return [
           `No answer from ${mac}`,
-          `The Mac had the request, but nothing came back within two minutes. If you clicked Allow, check ${PHONE_SETTINGS} on the Mac; otherwise make a new code there and scan it.`,
+          `The Mac had the request, but nothing came back within two minutes. If you clicked Allow, open ${PHONE_SETTINGS} on the Mac to check this phone is listed; otherwise click ${WHERE_TO_PAIR} for a new code and scan it.`,
         ];
       case 'not_your_mac':
         return [
           'This isn’t your Mac',
-          `The server at this address couldn’t prove it’s ${mac}, so this phone didn’t send it your code or anything else. Make a new code on your Mac and scan it there.`,
+          `The server at this address couldn’t prove it’s ${mac}, so this phone didn’t send it your code or anything else. On your Mac, click ${WHERE_TO_PAIR} for a new code and scan that.`,
         ];
       case 'lan_only':
         return [
           'This code only offers your local network',
-          `This version of the app connects over Tailscale. Turn on Tailscale on your Mac, then make a new code in ${PHONE_SETTINGS}.`,
+          `This version of the app connects over Tailscale. Turn on Tailscale on your Mac, then click ${WHERE_TO_PAIR} for a new code.`,
         ];
       case 'expired':
         return [
           'This code has expired',
-          `A code works once and for five minutes. Make a new one on your Mac: ${WHERE_TO_PAIR}.`,
+          `A code works once and for five minutes. On your Mac, click ${WHERE_TO_PAIR} for a new one, then scan it.`,
         ];
       case 'refused':
         return [
@@ -616,10 +631,19 @@ const useStyles = makeStyles((colors) => ({
     overflow: 'hidden',
   },
   waitingTitle: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  checks: { gap: space.sm },
-  checkLine: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
-  // Centred on the first line of body text.
-  point: { paddingTop: space.sm + space['2xs'] },
+  steps: { gap: space.lg },
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
+  stepNumber: {
+    width: iconSize.hero,
+    height: iconSize.hero,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceControl,
+  },
+  stepDigit: { fontVariant: ['tabular-nums'] },
+  stepBody: { flex: 1, gap: space.xs },
+  stepAction: { alignSelf: 'flex-start', marginTop: space.xs },
   mono: { fontVariant: ['tabular-nums'], letterSpacing: 1 },
   check: {
     width: 44,
