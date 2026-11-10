@@ -2,6 +2,8 @@
  * The phone, offered in the Chief's chat once the first thing asked for is
  * back: never before a reply, never with a phone paired, never twice.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { AgentMessage } from '../../lib/agents';
@@ -104,4 +106,10 @@ describe('ChiefPhoneOffer', () => {
     await waitFor(() => expect(getPhoneStatus).toHaveBeenCalledTimes(2));
     expect(screen.queryByTestId('chief-phone-offer')).not.toBeInTheDocument();
   });
+});
+
+it('the harness quiets the offer under the same key it is stored at', () => {
+  // resetStorage.ts writes the key out (it runs before app modules load).
+  const harness = readFileSync(resolve('src/harness/resetStorage.ts'), 'utf8');
+  expect(harness).toContain(`'${PHONE_OFFER_KEY}'`);
 });
