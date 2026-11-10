@@ -5371,6 +5371,8 @@ async fn run_on_engine(
         // attempt's conversation or doesn't run: a fresh start there would
         // see only the chat, not what its tools did, and do it all again.
         let switched_after_acting = !tried.is_empty() && took_action(agent_id);
+        // "What it did" says which account ran it (its model, once the engine says).
+        super::work::on_ran_on(agent_id, engine.label(), &wallet::line_name(&account.name));
         let result = run_turn(
             app,
             agent_id,
@@ -5691,6 +5693,26 @@ async fn run_turn(
     if let Some(note) = outside_note(outside) {
         system_prompt.push_str("\n\n");
         system_prompt.push_str(note);
+    }
+    // What it was told, for the desk's read-only "What it was told". A bound
+    // agent's CLAUDE.md is in the prompt already; an unbound one's engine
+    // reads it from its home.
+    {
+        let instructions = layout.project.is_none().then(|| {
+            std::fs::read_to_string(home.join("CLAUDE.md"))
+                .unwrap_or_default()
+                .chars()
+                .take(40_000)
+                .collect::<String>()
+        });
+        if let Some(key) = super::briefing::keep(
+            agent_id,
+            &system_prompt,
+            instructions.as_deref(),
+            store::now_ms(),
+        ) {
+            super::work::on_briefing(agent_id, key);
+        }
     }
     let model = if routine {
         agent.routine_model()
@@ -6196,6 +6218,7 @@ async fn run_turn(
                         }
                         Step::Context(_) => {}
                         Step::Compacted => super::tidy::note_compacted(agent_id),
+                        Step::Model(model) => super::work::on_model(agent_id, &model),
                         Step::Failed(text) => result_error = Some(text),
                         Step::Detail(text) => last_detail = Some(text),
                         Step::Done => {

@@ -389,6 +389,7 @@ impl Conversation {
                 };
                 self.thread = Some(thread.to_string());
                 self.model = str_at(msg, "/result/model").map(str::to_string);
+                let model = self.model.clone().map(|m| Out::Step(Step::Model(m)));
                 if self.compact {
                     return vec![
                         Out::Step(Step::Session(thread.to_string())),
@@ -406,10 +407,12 @@ impl Conversation {
                 if let Some(effort) = &self.effort {
                     turn["effort"] = json!(effort);
                 }
-                vec![
+                let mut out = vec![
                     Out::Step(Step::Session(thread.to_string())),
                     Out::Send(request(TURN, "turn/start", turn)),
-                ]
+                ];
+                out.extend(model);
+                out
             }
             TURN => {
                 if let Some(turn) = str_at(msg, "/result/turn/id") {
@@ -1149,6 +1152,21 @@ mod tests {
     fn started(c: &mut Conversation) {
         c.on_message(&json!({ "id": 2, "result": { "thread": { "id": "t1" } } }));
         c.on_message(&json!({ "id": 3, "result": { "turn": { "id": "u1" } } }));
+    }
+
+    /// The model Codex said the thread runs on, for "What it did".
+    #[test]
+    fn the_model_codex_reports_is_a_step() {
+        let (mut c, _) = conversation(None);
+        let out = c.on_message(
+            &json!({ "id": 2, "result": { "thread": { "id": "t1" }, "model": "gpt-5.5" } }),
+        );
+        assert!(out
+            .iter()
+            .any(|o| matches!(o, Out::Step(Step::Model(m)) if m == "gpt-5.5")));
+        let (mut quiet, _) = conversation(None);
+        let out = quiet.on_message(&json!({ "id": 2, "result": { "thread": { "id": "t1" } } }));
+        assert!(!out.iter().any(|o| matches!(o, Out::Step(Step::Model(_)))));
     }
 
     #[test]
