@@ -414,11 +414,16 @@ export function pendingApprovalIds(messages: AgentMessage[] | undefined): string
  */
 export function pendingApproval(messages: AgentMessage[] | undefined): AgentMessage | undefined {
   if (!messages) return undefined;
+  // What blocks the agent before a skill offer, which never does: a newer
+  // offer doesn't stand in for the card the agent is stopped on.
+  let offer: AgentMessage | undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
     const card = pendingCard(messages[i]);
-    if (card && answerableHere(card)) return messages[i];
+    if (!card || !answerableHere(card)) continue;
+    if (!card.skill) return messages[i];
+    offer ??= messages[i];
   }
-  return undefined;
+  return offer;
 }
 
 /**
