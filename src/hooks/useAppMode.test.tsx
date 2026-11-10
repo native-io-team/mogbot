@@ -54,11 +54,10 @@ describe('useAppMode', () => {
 
   it('stands an open down for every non-project screen, never for the workspace', () => {
     const { result, cancelPendingOpen } = setup('agents');
-    act(() => result.current.navigate('inbox'));
     act(() => result.current.navigate('projects'));
-    expect(cancelPendingOpen).toHaveBeenCalledTimes(2);
+    expect(cancelPendingOpen).toHaveBeenCalledTimes(1);
     act(() => result.current.navigate('workspace'));
-    expect(cancelPendingOpen).toHaveBeenCalledTimes(2);
+    expect(cancelPendingOpen).toHaveBeenCalledTimes(1);
   });
 
   it('keeps its callbacks stable when the App re-renders with a new openProject', () => {
@@ -91,13 +90,6 @@ describe('useAppMode', () => {
       view = next;
       rerender({ view, path: null });
     }
-  });
-
-  it('remembers Workflows and the Inbox too', () => {
-    const { result, rerender, setView } = setup('inbox');
-    rerender({ view: 'agents', path: null });
-    act(() => result.current.onGoProjects());
-    expect(setView).toHaveBeenLastCalledWith('inbox');
   });
 
   it('flips modes with ⌘⇧A', () => {

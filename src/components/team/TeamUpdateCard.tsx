@@ -39,7 +39,7 @@ import { TeamAvatar } from './TeamAvatar';
 import { TeamActorName } from './TeamActorName';
 import { ExpandableTeamText } from './ExpandableTeamText';
 import { Button } from '../primitives/Button';
-import { formatAgo } from '../../lib/workflows';
+import { formatAgo } from '../../lib/formatAgo';
 import { fileTotals, TEAM_STATUS_LABEL, type TeamUpdate } from '../../lib/team';
 
 /** Selects a known agent icon while retaining a neutral fallback for other names. */

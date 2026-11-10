@@ -253,9 +253,6 @@ export interface WorkspaceViewProps {
   onGoHome: () => void;
   /** Home-level destinations, kept reachable from inside a project. */
   homeNav?: {
-    onGoWorkflows: () => void;
-    onGoInbox: () => void;
-    inboxUnreadCount: number;
     /** Switch to Agents mode, from the sidebar's mode toggle or the compact top bar. */
     onGoAgents?: () => void;
   };

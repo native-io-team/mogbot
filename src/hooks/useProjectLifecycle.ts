@@ -233,7 +233,7 @@ export function useProjectLifecycle({
   const navigationVersionRef = useRef(0);
 
   // Bumped when the user goes somewhere that isn't a project (Agents, the
-  // dashboard, Workflows, the Inbox) — see `cancelPendingOpen`. An open that
+  // dashboard) — see `cancelPendingOpen`. An open that
   // has not yet shown its workspace gives up rather than pulling them back.
   const leaveVersionRef = useRef(0);
 
@@ -249,7 +249,7 @@ export function useProjectLifecycle({
   }, []);
 
   // Send prompt to the agent terminal. Returns false when there is no terminal
-  // yet — the workflow handoff retries on that.
+  // yet — the prompt handoff retries on that.
   const sendToClaude = useCallback(
     (prompt: string): boolean => pasteToActiveTerminal(prompt),
     [pasteToActiveTerminal]

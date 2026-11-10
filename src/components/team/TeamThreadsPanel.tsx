@@ -35,7 +35,7 @@ import { SegmentedControl } from '../primitives/SegmentedControl';
 import { ExpandableTeamText } from './ExpandableTeamText';
 import { TeamAvatar, TeamAvatarStack } from './TeamAvatar';
 import { TeamActorName } from './TeamActorName';
-import { formatAgo } from '../../lib/workflows';
+import { formatAgo } from '../../lib/formatAgo';
 import { lastMessageAt, threadParticipants, type TeamThread } from '../../lib/team';
 import {
   clearThreadSelection,

@@ -2,7 +2,7 @@
  * Projects | Agents: the app's two modes, and where each one picks up.
  *
  * Switching to Projects returns to the last place you were on that side: the
- * dashboard, Workflows, the Inbox, or the project you had open (re-entered
+ * dashboard or the project you had open (re-entered
  * the way a sidebar click does, so its hot session is reattached rather than
  * remounted under it). Switching to Agents returns to the last conversation,
  * or Team, which AgentsView remembers itself.
@@ -31,13 +31,7 @@ import { useAgentsNavCommands } from '../commands/useAgentsCommands';
 import { MODE_TOGGLE_SHORTCUT } from '../components/workspace/ModeToggle';
 import type { AppView } from '../lib/types';
 
-const PROJECTS_SIDE: readonly AppView[] = [
-  'projects',
-  'workflows',
-  'inbox',
-  'workspace',
-  'project-loading',
-];
+const PROJECTS_SIDE: readonly AppView[] = ['projects', 'workspace', 'project-loading'];
 
 interface Place {
   view: AppView;

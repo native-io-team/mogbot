@@ -30,11 +30,8 @@ function renderSidebar(ui: React.ReactElement) {
 const props = {
   activeNav: 'home' as const,
   onGoHome: vi.fn(),
-  onGoWorkflows: vi.fn(),
-  onGoInbox: vi.fn(),
   onGoProjects: vi.fn(),
   onGoAgents: vi.fn(),
-  inboxUnreadCount: 0,
   isSidebarHidden: false,
   onToggleSidebar: vi.fn(),
   onOpenProjectPicker: vi.fn(),
@@ -69,10 +66,10 @@ describe('HomeSidebar', () => {
     expect(onTogglePinProject).toHaveBeenCalledWith('/tmp/project-a', false);
   });
 
-  it('renders the Workflows and Inbox destinations', () => {
+  it('has no Workflows or Inbox destinations', () => {
     renderSidebar(<HomeSidebar {...props} activeNav="home" />);
-    expect(screen.getByRole('button', { name: 'Workflows' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Workflows' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Inbox/ })).not.toBeInTheDocument();
   });
 
   it('has no Team destination — Team lives inside a project', () => {
@@ -81,18 +78,6 @@ describe('HomeSidebar', () => {
     // in particular cannot be acted on without opening the project anyway.
     renderSidebar(<HomeSidebar {...props} activeNav="home" />);
     expect(screen.queryByRole('button', { name: 'Team' })).not.toBeInTheDocument();
-  });
-
-  it('badges the Inbox with the unread count', () => {
-    renderSidebar(<HomeSidebar {...props} inboxUnreadCount={3} activeNav="home" />);
-    expect(screen.getByRole('button', { name: 'Inbox — 3 unread' })).toBeInTheDocument();
-  });
-
-  it('marks the current destination and disables its button', () => {
-    renderSidebar(<HomeSidebar {...props} activeNav="workflows" />);
-    const workflows = screen.getByRole('button', { name: 'Workflows' });
-    expect(workflows).toBeDisabled();
-    expect(workflows).toHaveAttribute('aria-current', 'page');
   });
 
   describe('Projects | Agents toggle', () => {

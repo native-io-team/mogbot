@@ -83,11 +83,8 @@ const row = (projectPath: string): PinnedProjectRow => ({
 const props = {
   activeNav: 'home' as const,
   onGoHome: vi.fn(),
-  onGoWorkflows: vi.fn(),
-  onGoInbox: vi.fn(),
   onGoProjects: vi.fn(),
   onGoAgents: vi.fn(),
-  inboxUnreadCount: 0,
   isSidebarHidden: false,
   onToggleSidebar: vi.fn(),
   onOpenProjectPicker: vi.fn(),

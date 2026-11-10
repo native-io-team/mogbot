@@ -1,7 +1,7 @@
 /**
  * The one way text from outside the app becomes HTML.
  *
- * Agent replies, agent-to-agent threads and Inbox reports are written by agents
+ * Agent replies and agent-to-agent threads are written by agents
  * that have just read repositories and web pages, so their markdown — and any
  * raw HTML inside it — is untrusted. DOMPurify's defaults keep far too much for
  * that: `style` (a reply drawn over an Allow / Deny card), forms and buttons
@@ -115,7 +115,7 @@ function imagesToLinks(html: string): string {
   return doc.body.innerHTML;
 }
 
-/** Sanitize HTML rendered from agent / workflow / outside text. */
+/** Sanitize HTML rendered from agent or outside text. */
 export function sanitizeMessageHtml(html: string): string {
   return purifier().sanitize(imagesToLinks(html), CONFIG);
 }

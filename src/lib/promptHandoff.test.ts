@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearHandoff, consumeHandoff, peekHandoff, queueHandoff } from './workflowHandoff';
+import { clearHandoff, consumeHandoff, peekHandoff, queueHandoff } from './promptHandoff';
 
 afterEach(() => {
   clearHandoff();
   vi.useRealTimers();
 });
 
-describe('workflowHandoff', () => {
+describe('promptHandoff', () => {
   it('returns a queued prompt only for its own project', () => {
     queueHandoff('/p/one', 'fix the thing');
     expect(peekHandoff('/p/one')).toBe('fix the thing');

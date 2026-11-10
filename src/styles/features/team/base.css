@@ -2,8 +2,7 @@
 
    Three surfaces sharing one panel: an activity feed, a people list, and a
    comment reader. The feed borrows the dashboard column; the comment reader
-   borrows the Inbox's two-pane geometry, because it is the same job (a list
-   that drives a reader beside it) and it should not look like a different app.
+   is two panes, a list that drives a reader beside it.
 
    Per-person colours are the only new visual idea here. They are file-local
    tokens rather than semantic roles: they carry no product meaning, they are

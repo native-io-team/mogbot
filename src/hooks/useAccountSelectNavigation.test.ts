@@ -8,13 +8,13 @@ describe('useAccountSelectNavigation', () => {
     const setView = vi.fn();
     const { result, rerender } = renderHook(
       ({ view }: { view: AppView }) => useAccountSelectNavigation(view, setView),
-      { initialProps: { view: 'inbox' as AppView } }
+      { initialProps: { view: 'workspace' as AppView } }
     );
     act(() => result.current.openAccountSelect());
     expect(setView).toHaveBeenLastCalledWith('account-select');
     rerender({ view: 'account-select' });
     act(() => result.current.accountSelectProps.onBack());
-    expect(setView).toHaveBeenLastCalledWith('inbox');
+    expect(setView).toHaveBeenLastCalledWith('workspace');
   });
 
   it('falls back to Home for screens that are not worth returning to', () => {

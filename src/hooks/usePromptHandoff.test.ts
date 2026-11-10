@@ -1,10 +1,10 @@
 import { renderHook } from '@testing-library/react';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useFindingHandoff } from './useWorkflowHandoff';
-import { clearHandoff, queueHandoff, peekHandoff } from '../lib/workflowHandoff';
+import { usePromptHandoff } from './usePromptHandoff';
+import { clearHandoff, queueHandoff, peekHandoff } from '../lib/promptHandoff';
 
-describe('useFindingHandoff', () => {
+describe('usePromptHandoff', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     clearHandoff();
@@ -22,14 +22,13 @@ describe('useFindingHandoff', () => {
         addTerminalTab,
       },
     };
-    const view = renderHook(
-      (p: typeof props) => useFindingHandoff(p.path, p.terminals, showToast),
-      { initialProps: props }
-    );
+    const view = renderHook((p: typeof props) => usePromptHandoff(p.path, p.terminals, showToast), {
+      initialProps: props,
+    });
     return { addTerminalTab, showToast, view, props };
   };
 
-  it('starts a new agent with the finding in its argv', () => {
+  it('starts a new agent with the prompt in its argv', () => {
     // The delivery is a spawn, not a paste: the prompt reaches the CLI as an
     // argument, so there is no window where the terminal exists but the agent
     // is not yet listening, and nothing has to press Return.
@@ -60,23 +59,23 @@ describe('useFindingHandoff', () => {
     expect(addTerminalTab).toHaveBeenCalled();
   });
 
-  it('delivers a second finding for the project that is already hot', () => {
-    // Inbox → Fix → workspace → Inbox (via the sidebar, which keeps the hot
-    // project current) → Fix again. Nothing about the terminals changes, so
+  it('delivers a second prompt for the project that is already hot', () => {
+    // Queue → workspace → away (via the sidebar, which keeps the hot
+    // project current) → queue again. Nothing about the terminals changes, so
     // the caller signals the round trip by passing null while off-workspace.
-    queueHandoff('/p/demo', 'First finding');
+    queueHandoff('/p/demo', 'First prompt');
     const { addTerminalTab, view, props } = setup();
     act(() => void vi.advanceTimersByTime(500));
     expect(addTerminalTab).toHaveBeenCalledTimes(1);
 
     view.rerender({ ...props, path: null as unknown as string });
-    queueHandoff('/p/demo', 'Second finding');
+    queueHandoff('/p/demo', 'Second prompt');
     view.rerender(props);
     act(() => void vi.advanceTimersByTime(500));
 
     expect(addTerminalTab).toHaveBeenCalledTimes(2);
     expect(addTerminalTab).toHaveBeenLastCalledWith(undefined, {
-      initialPrompt: 'Second finding',
+      initialPrompt: 'Second prompt',
       projectPath: '/p/demo',
     });
     expect(peekHandoff('/p/demo')).toBeNull();
@@ -100,7 +99,7 @@ describe('useFindingHandoff', () => {
     expect(peekHandoff('/p/demo')).toBeNull();
     // A handoff that genuinely failed is still reported as a fault.
     expect(showToast).toHaveBeenCalledWith(
-      expect.stringContaining('Copy prompt'),
+      expect.stringContaining('Could not start'),
       'error',
       undefined,
       { expected: false }
@@ -116,7 +115,7 @@ describe('useFindingHandoff', () => {
 
   it('says there is no room rather than retrying a blocker that cannot clear', () => {
     // At the cap `addTerminalTab` no-ops; consuming the prompt on a call that
-    // did nothing is how a finding silently disappears.
+    // did nothing is how a prompt silently disappears.
     queueHandoff('/p/demo', 'Fix it');
     const { addTerminalTab, showToast } = setup({ tabCount: 6, maxTabs: 6 });
 

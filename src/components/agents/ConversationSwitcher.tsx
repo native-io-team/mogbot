@@ -36,7 +36,7 @@ import {
   startConversation,
   useAgentsSelector,
 } from '../../lib/agentsStore';
-import { formatAgo } from '../../lib/workflows';
+import { formatAgo } from '../../lib/formatAgo';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 
