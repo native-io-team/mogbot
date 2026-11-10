@@ -33,6 +33,7 @@ import {
   formatAgo,
 } from '../../../lib/agents';
 import { makeStyles, useColors } from '../../../lib/appearance';
+import { announce } from '../../../lib/a11y';
 import { haptic } from '../../../lib/haptics';
 import { SETUP_TITLE } from '../../../lib/home';
 import { largeTitle } from '../../../lib/navigation';
@@ -273,7 +274,10 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
         else haptic.warning();
       } catch (e) {
         haptic.error();
-        setError(describeError(e));
+        const said = describeError(e);
+        setError(said);
+        // iOS has no live regions: say the failure, or it lands in silence.
+        announce(said);
       } finally {
         setBusy(null);
       }

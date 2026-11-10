@@ -794,6 +794,45 @@ const PROBE = [
     check:
       'Request in full: every one of the 19 lines (no “Show all”), Deny · Allow pinned at the bottom',
   },
+  // The two screens a request is answered on, at the largest text size: the
+  // words wrap rather than clip, and Deny · Allow stay whole and reachable.
+  ...[
+    {
+      name: 'probe-needs-you-largest',
+      to: '/needs',
+      ready: 'Needs you',
+      pages: 2,
+      check:
+        'Needs you at Largest: names, titles and lines wrap with nothing cut through; Deny · Allow and Review whole, never squeezed into one line',
+    },
+    {
+      name: 'probe-request-risky-largest',
+      to: '/request?agent=doomed&id=doomed_001',
+      ready: 'Request',
+      pages: 2,
+      check:
+        'The risky request at Largest: the command wraps, the warning icon beside the title, Deny and Allow side by side or stacked, each label whole',
+    },
+  ].map(({ to, ready, ...shot }) => ({
+    ...shot,
+    route: '/settings',
+    ready: 'Largest',
+    act: async (page) => {
+      await scrollToText('Largest')(page);
+      await page.clickText('Largest');
+      await sleep(400);
+      await page.goto(`${WEB}${to}`);
+      await page.waitFor(`document.body.innerText.includes(${JSON.stringify(ready)})`, 20_000, ready);
+      await sleep(1500);
+    },
+    after: async (page) => {
+      await page.goto(`${WEB}/settings`);
+      await page.waitFor(`document.body.innerText.includes('Largest')`, 20_000, 'Largest');
+      await scrollToText('Largest')(page);
+      await page.clickText('Default');
+      await sleep(400);
+    },
+  })),
   {
     name: 'probe-fifty',
     route: '/agents',

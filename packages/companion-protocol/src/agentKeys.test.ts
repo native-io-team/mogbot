@@ -9,6 +9,7 @@ import {
   colorwayForColor,
   freshColorway,
   iconFor,
+  keyAccessibleName,
   keyLookFor,
   keyStateOf,
   normalizeBoundKey,
@@ -170,5 +171,19 @@ describe('states and pips', () => {
     expect(KEY_PIPS).toEqual({ often: 1, judgement: 2, go_hard: 3, full_send: 4 });
     expect(pipsFor('go_hard')).toBe(3);
     expect(pipsFor(undefined)).toBe(0);
+  });
+});
+
+describe('keyAccessibleName', () => {
+  it('names the agent, then the state when it is news', () => {
+    expect(keyAccessibleName('Finance', 'needsOk')).toBe('Finance, needs your OK');
+    expect(keyAccessibleName('Finance', 'working')).toBe('Finance, working');
+    expect(keyAccessibleName('Finance', 'paused')).toBe('Finance, paused');
+    expect(keyAccessibleName('Finance', 'idle')).toBe('Finance');
+    expect(keyAccessibleName('Finance')).toBe('Finance');
+  });
+  it('a key with no agent yet is a new agent', () => {
+    expect(keyAccessibleName('', 'new')).toBe('New agent');
+    expect(keyAccessibleName(undefined)).toBe('New agent');
   });
 });

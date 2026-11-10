@@ -168,6 +168,7 @@ export const MessageRow = memo(function MessageRow({
             <Pressable
               onLongPress={hold}
               delayLongPress={300}
+              accessibilityRole="text"
               accessibilityHint={hold ? 'Hold for Copy, Quote and Select Text' : undefined}
               style={({ pressed }) => [styles.userBubble, pressed && styles.held]}
             >
@@ -200,6 +201,15 @@ export const MessageRow = memo(function MessageRow({
         <Pressable
           onLongPress={hold}
           delayLongPress={300}
+          // One element to VoiceOver only while it's just words: grouped, the
+          // buttons in its links, choices, files and timeline were out of reach.
+          accessible={
+            !message.localLinks?.length &&
+            !message.decide?.length &&
+            !message.attachments?.length &&
+            !message.work
+          }
+          accessibilityRole="text"
           accessibilityHint={hold ? 'Hold for Copy, Quote and Select Text' : undefined}
           style={({ pressed }) => [styles.agentRow, pressed && styles.heldProse]}
         >
