@@ -152,6 +152,14 @@ pub fn effort(work: &TurnWork, now: i64) -> Effort {
     }
 }
 
+/// Calls to `save_skill` itself are not the work it is judging.
+pub fn without_own_calls(e: Effort, own: u32) -> Effort {
+    Effort {
+        steps: e.steps.saturating_sub(own),
+        ..e
+    }
+}
+
 pub fn took_effort(e: Effort) -> bool {
     e.steps >= MANY_STEPS || (e.steps >= SOME_STEPS && e.ms >= LONG_MS)
 }
@@ -598,8 +606,14 @@ pub const EVENT: &str = "agents-skills-changed";
 pub async fn call(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &Value) -> Value {
     let live = super::broker::is_live(&caller.id, turn);
     let outside = runner::from_outside(&caller.id) || super::exposure::read_outside(&caller.id);
+    // Judge on every step the engine took before this call: the bridge can
+    // be asked before the stream reader has recorded them.
+    if caller.learn_skills != Learning::Off && live {
+        super::work::caught_up(&caller.id, TOOL, super::work::CATCH_UP_MS).await;
+    }
     let work_effort = super::work::snapshot(&caller.id)
         .map(|w| effort(&w, store::now_ms()))
+        .map(|e| without_own_calls(e, super::work::reported(&caller.id, TOOL)))
         .unwrap_or_default();
     let verdict = gate(caller.learn_skills, outside, live, took_effort(work_effort));
     if let Gate::Refuse(why) = verdict {

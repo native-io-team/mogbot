@@ -3608,8 +3608,14 @@ the same request is one sentence. The agent calls `save_skill { name, when,
 steps }` at the end of the task; **the app, not the model, judges whether
 the turn took real effort**, from what it observed (`work::snapshot`): at
 least 8 tool steps, or 4 over three minutes, never counting its own
-narration, cards or plans (`skills_learn::effort`). A quick turn's call is
-refused ("This task was quick… Nothing was saved").
+narration, cards, plans or the `save_skill` call itself
+(`skills_learn::effort`). A quick turn's call is refused ("This task was
+quick… Nothing was saved"). The bridge call and the engine's stream are
+read by separate tasks, so the call can arrive before the steps ahead of it
+are recorded; the judgement first waits (up to 3 s, `work::caught_up`) for
+the stream to report the `save_skill` call itself, which both engines do
+before making it, so every earlier step is counted. A wait that runs out
+judges on what was seen and logs it.
 
 **Per agent: Save what it learns — Automatically / Ask me / Off**
 (`Agent::learn_skills`, stored `auto` / `ask` / `off`, absent is `ask`).

@@ -16,6 +16,7 @@ import {
   noSkillsLine,
   type Agent,
   type Skill,
+  type SkillCard,
   type SkillsView,
 } from '@shipstudio/companion-protocol';
 import { router } from 'expo-router';
@@ -27,7 +28,42 @@ import { call, describeError, setAgentToggles } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
 import { radius, space } from '../lib/theme';
 import { choose } from './menu';
+import { TextAction } from './surfaces';
 import { Row, SectionTitle, T } from './ui';
+
+/** Lines of a skill's steps a card shows before "Show all steps". */
+export const SKILL_CARD_LINES = 8;
+
+/**
+ * The body of a "Save … as a skill?" card: when to use it, then the steps as
+ * they'd be saved. Not inside the card's fitted scroll area, where on a
+ * short pane the steps sat cut off below the fold of a box that didn't look
+ * scrollable: past `SKILL_CARD_LINES` the rest folds behind "Show all
+ * steps", and opened the card grows and the chat scrolls as usual.
+ */
+export function SkillCardBody({ skill }: { skill: SkillCard }) {
+  const colors = useColors();
+  const [open, setOpen] = useState(false);
+  const lines = skill.steps.split('\n');
+  const long = lines.length > SKILL_CARD_LINES;
+  const shown = long && !open ? lines.slice(0, SKILL_CARD_LINES).join('\n') : skill.steps;
+  return (
+    <View style={{ gap: space.sm }}>
+      {!!skill.when && <T color={colors.textBody}>{skill.when}</T>}
+      <T color={colors.textBody}>{shown}</T>
+      {long && (
+        <View style={{ alignSelf: 'flex-start' }}>
+          <TextAction
+            label={open ? 'Show fewer steps' : 'Show all steps'}
+            muted
+            expanded={open}
+            onPress={() => setOpen((v) => !v)}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
 
 export const readSkills = (agentId: string) => call('agents.skills', { agentId });
 

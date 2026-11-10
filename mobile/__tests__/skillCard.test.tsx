@@ -4,7 +4,7 @@
  */
 
 import type { AgentMessage, Approval } from '@shipstudio/companion-protocol';
-import { act, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { ARM_MS, ApprovalCard } from '../src/components/ApprovalCard';
 import { setApp } from '../src/lib/store';
 import { agent } from './helpers';
@@ -85,6 +85,24 @@ it('previews the skill and answers Not now / Save, with nothing behind ⋯', asy
   expect(screen.getByText('Not now')).toBeTruthy();
   expect(screen.queryByText('Allow')).toBeNull();
   expect(screen.queryByLabelText('More answers')).toBeNull();
+});
+
+it('shows every step: a long skill folds behind Show all steps, outside any scroll box', async () => {
+  const steps = Array.from({ length: 12 }, (_, i) => `${i + 1}. Step number ${i + 1}`).join('\n');
+  await show({ ...card, detail: steps, skill: { ...card.skill!, steps } });
+  expect(screen.getByText(/8\. Step number 8/)).toBeTruthy();
+  expect(screen.queryByText(/12\. Step number 12/)).toBeNull();
+  // Not inside the card's fitted scroll area, which cut the steps off.
+  expect(JSON.stringify(screen.toJSON())).not.toContain('RCTScrollView');
+  await fireEvent.press(screen.getByLabelText('Show all steps'));
+  expect(screen.getByText(/12\. Step number 12/)).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Show fewer steps'));
+  expect(screen.queryByText(/12\. Step number 12/)).toBeNull();
+});
+
+it('a short skill shows all its steps with no toggle', async () => {
+  await show(card);
+  expect(screen.queryByLabelText('Show all steps')).toBeNull();
 });
 
 it('reads as a receipt once saved', async () => {
