@@ -16,10 +16,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckIcon, ChevronIcon, CommentIcon, PencilIcon, PlusIcon } from '@/components/icons';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
+import { StatusPill } from '../primitives/StatusPill';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { TextField } from '../primitives/TextField';
 import { Button } from '../primitives/Button';
-import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import type { Agent } from '../../lib/agents';
 import {
   CONVERSATION_TITLE_CHARS,
@@ -122,14 +122,19 @@ export function ConversationSwitcher({
             title={single ? 'Conversations' : `Conversation: ${title}`}
             aria-label={single ? 'Conversations' : `Conversation: ${title}. Switch conversation`}
           >
-            <CommentIcon size={12} />
+            {/* Another conversation waiting is a badge on the icon, never a dot
+                after this one's title, which read as this one needing you. */}
+            <span className="agent-conversations__icon">
+              <CommentIcon size={12} />
+              {waiting > 0 && (
+                <span
+                  className="agent-conversations__badge"
+                  role="img"
+                  aria-label={`${waiting === 1 ? 'Another conversation needs' : `${waiting} other conversations need`} your OK`}
+                />
+              )}
+            </span>
             {!single && <span className="agent-conversations__title">{title}</span>}
-            {waiting > 0 && (
-              <span
-                className="sidebar-row-dot dot-attention"
-                aria-label={`${waiting === 1 ? 'Another conversation needs' : `${waiting} other conversations need`} your OK`}
-              />
-            )}
             <ChevronIcon size={10} className={p['aria-expanded'] ? 'chevron-flipped' : undefined} />
           </MenuButton>
         )}
@@ -156,18 +161,23 @@ export function ConversationSwitcher({
           >
             <span className="agent-model-menu__label agent-conversations__item">
               <span className="agent-conversations__name">{conversationTitle(c)}</span>
-              <span className="agent-model-menu__detail agent-conversations__when">
-                {detailOf(c, now, workingIn)}
-              </span>
+              {/* A state is a pill, as in the sidebar and the In flight rows. */}
+              {c.waiting > 0 ? (
+                <StatusPill tone="waiting" className="agent-conversations__pill">
+                  Needs your OK
+                </StatusPill>
+              ) : c.id === workingIn ? (
+                <StatusPill tone="running" className="agent-conversations__pill">
+                  Working
+                </StatusPill>
+              ) : (
+                <span className="agent-model-menu__detail agent-conversations__when">
+                  {detailOf(c, now)}
+                </span>
+              )}
             </span>
             <span className="agent-switcher__mark">
-              {c.id === viewing ? (
-                <CheckIcon size={12} aria-label="On screen" />
-              ) : c.waiting > 0 ? (
-                <span className="sidebar-row-dot dot-attention" aria-label="Needs your OK" />
-              ) : c.id === workingIn ? (
-                <PixelLoaderRings size="sm" label={`${agent.name} is working in it`} />
-              ) : null}
+              {c.id === viewing && <CheckIcon size={12} aria-label="On screen" />}
             </span>
           </DropdownItem>
         ))}
@@ -193,10 +203,8 @@ export function ConversationSwitcher({
   );
 }
 
-/** The small text beside a conversation in the menu. */
-function detailOf(c: ConversationView, now: number, workingIn: string | null): string {
-  if (c.waiting > 0) return 'Needs your OK';
-  if (c.id === workingIn) return 'Working';
+/** The small text beside a conversation in the menu (its state is a pill instead). */
+function detailOf(c: ConversationView, now: number): string {
   // No time known (0) says nothing rather than "2966w ago".
   return now && c.lastActivityAt > 0 ? formatAgo(c.lastActivityAt, now) : '';
 }
