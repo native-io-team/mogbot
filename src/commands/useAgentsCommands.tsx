@@ -12,9 +12,11 @@ import {
   AgentsIcon,
   CollaboratorsIcon,
   DownloadIcon,
+  FileTextIcon,
   GlobeIcon,
   PlugIcon,
   PlusIcon,
+  RoutineIcon,
   SearchIcon,
   ZapIcon,
 } from '@/components/icons';
@@ -26,6 +28,15 @@ import type { AppView } from '../lib/types';
 import { AGENT_EVENTS, OTHER_APP_NAME, otherAppExists, TEAM_ID } from '../lib/agents';
 import { DESCRIBE_START, ROLE_TEMPLATES } from '../lib/agentTemplates';
 import { SHARE_RECIPE_EVENT } from '../lib/agentRecipe';
+import { openLogs } from '../lib/agentDesk';
+import { setGroupMode, startNamingGroup, useAgentGroups, type GroupMode } from '../lib/agentGroups';
+
+/** ⌘K switches for the agent list's optional groups. */
+const GROUP_COMMANDS: { mode: GroupMode; title: string; keywords: string[] }[] = [
+  { mode: 'project', title: 'Group agents by project', keywords: ['client', 'bound', 'folder'] },
+  { mode: 'custom', title: 'Group agents into your own groups', keywords: ['client', 'folder'] },
+  { mode: 'off', title: 'Stop grouping agents', keywords: ['flat', 'ungroup', 'one list'] },
+];
 import {
   checkTeamReach,
   resumeTeamSetup,
@@ -42,6 +53,7 @@ type AgentsIntent =
   | { kind: 'logins' }
   | { kind: 'browser' }
   | { kind: 'recipe'; agentId: string }
+  | { kind: 'routines'; ask?: 'pause' | 'resume' }
   | { kind: 'open'; agentId: string };
 let pendingIntent: AgentsIntent | null = null;
 const intentListeners = new Set<(intent: AgentsIntent) => void>();
@@ -72,6 +84,8 @@ export function useAgentsIntents(handlers: {
   onBrowser?: () => void;
   /** Share an agent as a recipe (the Chief's `share_recipe`). */
   onShareRecipe?: (agentId: string) => void;
+  /** Routines, every agent's; `ask`: open on "Pause all" / "Resume all". */
+  onRoutines?: (ask?: 'pause' | 'resume') => void;
 }) {
   const {
     onNewAgent,
@@ -83,6 +97,7 @@ export function useAgentsIntents(handlers: {
     onLogins,
     onBrowser,
     onShareRecipe,
+    onRoutines,
   } = handlers;
   useEffect(() => {
     const listener = (intent: AgentsIntent) => {
@@ -94,6 +109,7 @@ export function useAgentsIntents(handlers: {
       else if (intent.kind === 'logins') onLogins?.();
       else if (intent.kind === 'browser') onBrowser?.();
       else if (intent.kind === 'recipe') onShareRecipe?.(intent.agentId);
+      else if (intent.kind === 'routines') onRoutines?.(intent.ask);
       else onOpenAgent(intent.agentId);
     };
     intentListeners.add(listener);
@@ -115,6 +131,7 @@ export function useAgentsIntents(handlers: {
     onLogins,
     onBrowser,
     onShareRecipe,
+    onRoutines,
   ]);
 }
 
@@ -164,6 +181,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
   // "Setting up your team", offered while there's one to finish (put away or not).
   const setup = useResumableTeamSetup();
   const chiefId = agents.find((a) => a.isMain)?.id;
+  const groupMode = useAgentGroups().mode;
   // Whether the other app has agents on this Mac, asked once from its
   // registry alone (not the preview, which reads every agent's folder): it
   // gates the palette's "Import agents from …", which only means something then.
@@ -449,6 +467,72 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
           setView('agents');
         },
       },
+      {
+        id: 'agents.routines',
+        title: 'Routines',
+        icon: <RoutineIcon size={14} />,
+        category: 'navigation',
+        keywords: ['agents', 'routines', 'schedule', 'scheduled', 'all', 'overview', 'next run'],
+        run: () => {
+          requestAgentsIntent({ kind: 'routines' });
+          setView('agents');
+        },
+      },
+      {
+        id: 'agents.routines.pauseAll',
+        title: 'Pause all routines…',
+        icon: <RoutineIcon size={14} />,
+        category: 'navigation',
+        keywords: ['agents', 'routines', 'stop', 'freeze', 'quiet', 'every', 'bulk'],
+        run: () => {
+          requestAgentsIntent({ kind: 'routines', ask: 'pause' });
+          setView('agents');
+        },
+      },
+      {
+        id: 'agents.routines.resumeAll',
+        title: 'Resume all routines…',
+        icon: <RoutineIcon size={14} />,
+        category: 'navigation',
+        keywords: ['agents', 'routines', 'start', 'unpause', 'every', 'bulk'],
+        run: () => {
+          requestAgentsIntent({ kind: 'routines', ask: 'resume' });
+          setView('agents');
+        },
+      },
+      {
+        id: 'agents.openLogs',
+        title: 'Open logs',
+        icon: <FileTextIcon size={14} />,
+        category: 'navigation',
+        keywords: ['logs', 'debug', 'why', 'died', 'error', 'finder', 'library', 'trace'],
+        run: () => {
+          openLogs().catch((e: unknown) => showToast(`Couldn't open the logs: ${String(e)}`, 'error'));
+        },
+      },
+      ...GROUP_COMMANDS.map((c) => ({
+        id: `agents.groups.${c.mode}`,
+        title: c.title,
+        icon: <AgentsIcon size={14} />,
+        category: 'navigation' as const,
+        when: () => groupMode !== c.mode,
+        keywords: ['agents', 'group', 'groups', 'sidebar', 'organise', 'organize', ...c.keywords],
+        run: () => {
+          setGroupMode(c.mode);
+          setView('agents');
+        },
+      })),
+      {
+        id: 'agents.groups.new',
+        title: 'New agent group…',
+        icon: <PlusIcon size={14} />,
+        category: 'navigation',
+        keywords: ['agents', 'group', 'client', 'folder', 'sidebar', 'organise', 'organize'],
+        run: () => {
+          startNamingGroup();
+          setView('agents');
+        },
+      },
       // Reachable any time, not only from the first-run screen: agents run on
       // this Mac, so they pause when it sleeps and stop when the app quits.
       ...STAY_ON_COMMANDS.map((c) => ({
@@ -484,6 +568,6 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         },
       })),
     ],
-    [setView, agents, showToast, otherApp, setup, chiefId]
+    [setView, agents, showToast, otherApp, setup, chiefId, groupMode]
   );
 }

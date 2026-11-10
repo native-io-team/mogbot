@@ -325,7 +325,8 @@
    Actions, not rows: shorter than an agent, one after the other with no gap,
    and in the secondary text colour so they read as available. */
 .workspace-sidebar:not(.is-hidden) .agents-list__new,
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room {
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room,
+.workspace-sidebar:not(.is-hidden) .agents-list__routines {
   justify-content: flex-start;
   gap: var(--spacing-sm);
   height: var(--control-height-standard);
@@ -335,7 +336,8 @@
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new:hover:not(:disabled),
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room:hover:not(:disabled) {
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room:hover:not(:disabled),
+.workspace-sidebar:not(.is-hidden) .agents-list__routines:hover:not(:disabled) {
   color: var(--text-primary);
 }
 
@@ -393,7 +395,8 @@
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room > svg {
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room > svg,
+.workspace-sidebar:not(.is-hidden) .agents-list__routines > svg {
   box-sizing: content-box;
   padding: 0 calc((var(--size-sidebar-project-shortcut) - 16px) / 2); /* css-ok: centre a 16px icon in the badge width */
 }
@@ -545,4 +548,78 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
+}
+
+/* ------------------------------------------- optional groups (lib/agentGroups) */
+
+/* components/agents/AgentGroupParts.tsx: a group's header reads as the
+   Hidden disclosure does, its count at the right edge. */
+.agents-list__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.agents-list__group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  height: var(--control-height-standard);
+  padding: 0 var(--spacing-md) 0 var(--spacing-sm);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agents-list__group-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.agents-list__group-toggle:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 var(--border-width-emphasis) var(--accent-focus);
+}
+
+.agents-list__group-toggle[aria-expanded='true'] .agents-list__hidden-chevron {
+  transform: rotate(90deg);
+}
+
+.agents-list__group-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agents-list__group-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A dragged agent over a group it can join. */
+.agents-list__group[data-drop-over] {
+  background: var(--surface-selected);
+}
+
+.agents-list__group-empty {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs)
+    calc(var(--size-sidebar-project-shortcut) + var(--spacing-md));
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agents-list__group-new {
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.workspace-sidebar.is-hidden :is(.agents-list__group-toggle, .agents-list__group-empty, .agents-list__group-new) {
+  display: none;
 }
