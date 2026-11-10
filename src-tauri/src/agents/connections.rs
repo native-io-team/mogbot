@@ -805,10 +805,14 @@ pub fn agents_browser_allowed(
 /// sign-in, and the turn goes without it (its prompt says so).
 pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAccess {
     let all = list().unwrap_or_default();
+    // The one way into the user's Chrome this turn (`chrome_route`): Your
+    // Chrome whenever it's connected, on any engine and any account; Claude
+    // in Chrome only as the fallback; never for outside text.
+    let now = super::chrome_route::for_turn(agent, outside);
+    let route = now.route;
+    let user_chrome = route == super::chrome_route::Route::YourChrome;
     let mut access = TurnAccess {
-        // The team's switch, this agent's, and never for outside text
-        // (`browser::for_turn`).
-        browser: super::browser::claude_in_chrome_for_turn(agent, outside),
+        browser: route == super::chrome_route::Route::ClaudeInChrome,
         ..Default::default()
     };
     let mut lines = Vec::new();
@@ -875,15 +879,22 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
     }
     // The user's own Chrome through the app's extension, for either engine:
     // the Settings switch, a Chrome answering, the agent's browser grant,
-    // never outside text. It replaces Claude in Chrome for this turn, so a
-    // turn never holds two ways into the same Chrome.
-    let user_chrome = crate::user_chrome::for_turn(agent, outside);
+    // never outside text. It replaces Claude in Chrome for this turn (no
+    // `--chrome`, and its tools kept from the turn), so a turn never holds
+    // two ways into the same Chrome and an account switch never needs the
+    // Claude extension signed in again.
     if user_chrome {
         access.servers.push(TurnServer {
             key: crate::user_chrome::tools::SERVER_KEY.to_string(),
             url: crate::user_chrome::tools::url(port),
         });
         access.browser = false;
+        if agent.engine == super::engine::Engine::Claude {
+            let block = super::chrome_route::CLAUDE_IN_CHROME_BLOCK.to_string();
+            if !access.blocked.contains(&block) {
+                access.blocked.push(block);
+            }
+        }
     }
     if !lines.is_empty() {
         access.prompt = format!(
@@ -900,9 +911,7 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
     // It would have had Claude in Chrome, but no browser answers it
     // (`chrome_health`): it runs `--no-chrome` and is told why, so it
     // neither calls tools it hasn't got nor sends the user to fix them.
-    let chrome_down = !user_chrome
-        && super::browser::allowed(super::browser::team_enabled(), agent, outside)
-        && super::chrome_health::known_down();
+    let chrome_down = now.why == super::chrome_route::Why::ClaudeInChromeDown;
     if chrome_down {
         if !access.prompt.is_empty() {
             access.prompt.push_str("\n\n");
@@ -916,7 +925,7 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
 pub const CHROME_DOWN_PROMPT: &str = "### The user's Chrome isn't reachable\n\nClaude in Chrome isn't answering this turn (the app checked, and has told the user the fix in this chat), so you have no tools for the user's Chrome. Use the agents' browser (mcp__browser__*) for sites signed in there; a step that needs a site signed in only in their Chrome waits: say so in one line. Never tell the user to sign out of or into the Claude extension, reinstall it, or restart Chrome. The fix is Settings → Chrome, the app's own extension, which doesn't depend on Claude's.";
 
 /// What a turn with the user's Chrome through the app's extension is told.
-pub const USER_CHROME_PROMPT: &str = "### Your Chrome\n\nThis turn reaches the user's own Chrome, where they're signed in, through the app's extension: the mcp__user_chrome__* tools, with the same names and arguments as the agents' browser's (mcp__browser__*). Wherever you're told to use the Claude in Chrome tools (mcp__claude-in-chrome__*), use these instead: there are no others this turn.";
+pub const USER_CHROME_PROMPT: &str = "### Your Chrome\n\nThis turn reaches the user's own Chrome, where they're signed in, through the app's extension: the mcp__user_chrome__* tools, with the same names and arguments as the agents' browser's (mcp__browser__*). Wherever you're told to use the Claude in Chrome tools (mcp__claude-in-chrome__*), use these instead: there are no others this turn. They don't depend on any Claude account or extension, so never tell the user to sign in to or out of the Claude extension.";
 
 /* ------------------------------------------------------------- relay */
 
