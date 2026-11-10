@@ -1,5 +1,5 @@
 /**
- * Settings → Agents → Independence: shows what the Mac says (the default when
+ * Settings → Independence: shows what the Mac says (the default when
  * it says nothing), saves a click for every agent, and says what always asks.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';

@@ -12,7 +12,7 @@
 //! answer other agents' pending requests for *local work* ([`classify`]),
 //! put logins nobody needs away (Not needed / Maybe later), pause and resume
 //! other agents, change their routines, delete them (a soft delete,
-//! restorable for 30 days from Settings → Agents → Recently deleted), and
+//! restorable for 30 days from Settings → Independence → Recently deleted), and
 //! brief them with `message_agent` as before.
 //!
 //! **What it may never do.** Approve anything that spends, sends, posts,
@@ -1514,7 +1514,7 @@ pub async fn soft_delete(
         &target.id,
         MessageKind::Note,
         format!(
-            "Deleted by {} · restorable for {} days from Settings → Agents → Recently deleted",
+            "Deleted by {} · restorable for {} days from Settings → Independence → Recently deleted",
             admin.name,
             store::TRASH_DAYS
         ),

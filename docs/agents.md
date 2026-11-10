@@ -2143,7 +2143,7 @@ know what they need." An **admin** is an agent the user lets manage, and
 answer for, the rest of the team.
 
 **Who.** One switch per agent, "Admin — can manage and approve for other
-agents": the agent editor, Settings → Agents → Admins (⌘K "Admins: who
+agents": the agent editor, Settings → Independence → Admins (⌘K "Admins: who
 manages and approves for your team…"), and the phone's agent sheet
 (`agents.setAdmin`, audited). Kept as `admin` on the registry entry; absent
 means on for the Chief of Staff and off for everyone else. Only the user sets
@@ -2173,7 +2173,7 @@ call, so turning it off holds from the next call):
   `read_agent`.
 - `delete_agent`: a **soft delete**. The agent leaves the team at once; its
   registry entry (whole) and home move to `recently-deleted/`, restorable from
-  Settings → Agents → Recently deleted for 30 days (`agents_restore`, which
+  Settings → Independence → Recently deleted for 30 days (`agents_restore`, which
   adds " (restored)" if the name was taken). Its secrets, connections and copy
   are kept until it's purged (`purge_expired`, when that list is read). It
   leaves its rooms. The user's own Delete is unchanged.
@@ -2480,7 +2480,7 @@ Code must be signed in with claude.ai (an API key keeps it off). Codex has no
 equivalent here: Codex agents never get the browser and ask instead.
 
 **Or the app's own extension, for any engine** ("Your Chrome",
-`user_chrome/`, off by default): Settings → Agents → Your Chrome sets up a
+`user_chrome/`, off by default): Settings → Chrome sets up a
 native host (the app's own binary) and the app's MV3 extension, and every
 turn, Claude Code or Codex on any account, gets `mcp__user_chrome__*` with the
 agents' browser's tool names. The same gate decides it (below), outside text
@@ -2512,7 +2512,7 @@ access chain sends sites to the agents' browser, the turn is told why
 (`connections::CHROME_DOWN_PROMPT`: never send the user to sign in or out of the
 Claude extension), and the app's own line, once per agent per outage, says
 "Chrome isn't reachable through Claude's extension. Set up Your Chrome once
-(Settings → Agents → Your Chrome) so this can't happen again." with a **Set up
+(Settings → Chrome) so this can't happen again." with a **Set up
 Your Chrome** button (`NoteFix::UserChrome`). Observed: after a Claude account
 switch Claude in Chrome's native host went stale, three routines ran into "0
 browsers", and the Chief told the owner to reopen Chrome signed in to the same
@@ -4563,7 +4563,7 @@ the desk banner and the phone notification say.
   run says why in one line ("Gmail isn't connected. Connect it in Apps.").
 - **Set from chat** with the Chief's `set_morning_brief` ("brief me at
   7:30", "stop the morning brief", `now: true` posts today's at once), from
-  Settings → Agents → Notifications (⌘K "Morning brief…") and from the
+  Settings → Notifications (⌘K "Morning brief…") and from the
   phone's Settings (`agents.morningBrief` / `agents.setMorningBrief`,
   audited; the phone sets on/off and the time). Adding a check is a card
   unless the user's own message asked; never from a turn answering outside
@@ -4578,7 +4578,7 @@ verified against a real connector, or across a real night on a sleeping Mac.
 Answers: **can I start my agents, and get their answer, from the Slack
 thread where the work came up, with no server in between?**
 
-**Connect (Settings → Agents → Slack, ⌘K "Talk to your agents from
+**Connect (Settings → Apps → Slack, ⌘K "Talk to your agents from
 Slack…").** There is no server of ours, so there is no Slack app of ours: an
 OAuth app needs a client secret and an HTTPS redirect, both of which would
 have to live somewhere we run (and Slack's own MCP server has no dynamic
@@ -5136,7 +5136,7 @@ installed and signed in with room. `runner::run_on_accounts` decides around
 the wallet's own loop (`run_on_engine`):
 
 - **The user's choice, per engine** (`crossover.json` beside the wallet;
-  Settings → Agents → Usage, "When every Claude Code account is out"; the
+  Settings → Accounts & usage, "When every Claude Code account is out"; the
   Chief's `set_engine_fallback`, behind a card): **Ask first** (default),
   **Carry on with Codex**, or **Wait for the reset**. Ask first puts one card
   in the agent's chat when a turn ends with every account out: "All your
@@ -5180,7 +5180,7 @@ the wallet's own loop (`run_on_engine`):
   under "### Saved on Codex" before it becomes the link. A bound agent's
   project's own `AGENTS.md` is never touched.
 - **Shown:** the account row "Claude out · on Codex" (until when in its
-  tooltip), Settings → Agents → Usage "Claude Code out · on Codex until
+  tooltip), Settings → Accounts & usage "Claude Code out · on Codex until
   4:00 PM", and the Chief's `usage_overview`.
 - **Not verified:** a live turn on Codex carrying a Claude Code conversation
   (Codex isn't signed in on the development Mac), how a real Codex treats
@@ -5359,7 +5359,7 @@ never a default.
   once in `packages/companion-protocol/src/usageSheet.ts`, shared by the desk
   ring and the phone sheet.
 
-**Modes** (`usage_plan::Mode`, `usage-plan.json`; Settings → Agents → Usage,
+**Modes** (`usage_plan::Mode`, `usage-plan.json`; Settings → Accounts & usage,
 or the Chief's `set_usage_mode`, which always asks on a card first):
 
 - **Normal** (default): no throttling. Before something big (a fan-out, a long
@@ -5444,7 +5444,7 @@ turn costs the engine's prompt cache on the whole conversation. Spare
 capacity reaches the Chief through the nudge, and the user through What's
 in flight.
 
-**UI.** Settings → Agents → Usage (⌘K "Usage limits and spare capacity…"):
+**UI.** Settings → Accounts & usage (⌘K "Usage limits and spare capacity…"):
 the mode, each account's reading or "No reading yet", tags ("Plus plan",
 "Next turns run here"), each engine's average turn (estimate), other
 compute, and the list. What's in flight ends with one muted line when a

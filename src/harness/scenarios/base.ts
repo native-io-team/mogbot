@@ -285,7 +285,7 @@ export const baseCommands: CommandMap = {
     line: 'Not connecting LinkedIn. No agent will ask for it again.',
     closed: 1,
   },
-  // Edit agent's "What it can do", and Settings → Agents → What agents can
+  // Edit agent's "What it can do", and Settings → Independence → What agents can
   // do (`agents/policy.rs`): a Balanced team, as `fixtures.gen.ts` has it.
   agents_policy: (args: Record<string, unknown>) => ({
     ...BALANCED_VIEW,

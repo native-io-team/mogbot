@@ -1,4 +1,4 @@
-//! Settings → Agents → Usage, What's in flight's spare-capacity line and the
+//! Settings → Accounts & usage, What's in flight's spare-capacity line and the
 //! phone's read-only view: the capacity inventory (`agents::inventory`), the
 //! usage mode and the spare-capacity list (`agents::usage_plan`).
 
@@ -149,7 +149,7 @@ pub async fn agents_spare_spend_now(app: AppHandle) -> Result<String, CommandErr
     Ok(line)
 }
 
-/// Settings → Agents → Usage, "When every account of an engine is out":
+/// Settings → Accounts & usage, "When every account of an engine is out":
 /// each engine's choice (`agents::crossover`) and the agents carrying on
 /// with the other engine right now.
 #[tauri::command]

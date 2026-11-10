@@ -2707,7 +2707,7 @@ pub async fn agents_set_admin(
     Ok(agent)
 }
 
-/// Settings → Agents → Admin activity: what admins did, newest first.
+/// Settings → Independence → Admin activity: what admins did, newest first.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_admin_activity(
@@ -2716,7 +2716,7 @@ pub async fn agents_admin_activity(
     blocking(move || Ok(agents::admin::activity(limit.unwrap_or(100).min(500)))).await
 }
 
-/// Settings → Agents → Recently deleted: agents an admin deleted, restorable
+/// Settings → Independence → Recently deleted: agents an admin deleted, restorable
 /// for 30 days. Ones past that are purged here.
 #[tauri::command]
 #[tracing::instrument]
@@ -2897,7 +2897,7 @@ pub async fn agents_disk_overview() -> Result<agents::disk::Overview, CommandErr
     blocking(|| Ok(agents::disk::overview())).await
 }
 
-/// Settings → Agents → Notifications, "Quiet hours": the team's window, or
+/// Settings → Notifications, "Quiet hours": the team's window, or
 /// `None` when off (`agents::quiet`).
 #[tauri::command]
 #[tracing::instrument]
@@ -2934,7 +2934,7 @@ pub(crate) fn set_quiet_hours(
     Ok(window)
 }
 
-/// Settings → Agents → Notifications, "Morning brief": on or off, its
+/// Settings → Notifications, "Morning brief": on or off, its
 /// time, whether it posts on days with nothing to say, and the user's own
 /// read-only checks (`agents::brief`).
 #[tauri::command]

@@ -1,5 +1,5 @@
 /**
- * Usage awareness: Settings → Agents → Usage and What's in flight's line for a
+ * Usage awareness: Settings → Accounts & usage and What's in flight's line for a
  * reset near with capacity left. Shapes are `agents::inventory::Inventory`
  * as serde writes it (camelCase, absent optionals left out).
  */

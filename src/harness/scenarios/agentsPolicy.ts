@@ -2,7 +2,7 @@
  * What each agent can do (`agents/policy.rs`): the "Change Hiring's
  * settings?" card the Chief raises from chat (`propose_settings_change`),
  * the same card once allowed, Edit agent's "What it can do" for an agent
- * with settings of its own, and Settings → Agents → What agents can do.
+ * with settings of its own, and Settings → Independence → What agents can reach.
  * Shapes copied from the Rust serde output, as `fixtures.gen.ts` has them.
  */
 

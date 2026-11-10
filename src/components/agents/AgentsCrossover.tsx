@@ -1,5 +1,5 @@
 /**
- * Settings → Agents → Usage, "When every Claude Code account is out" (and
+ * Settings → Accounts & usage, "When every Claude Code account is out" (and
  * the mirror for Codex): Ask first (the default), Carry on with the other
  * engine, or Wait for the reset (`agents/crossover.rs`). Shown only when
  * both engines are installed and each has an account signed in, since

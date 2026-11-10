@@ -1,5 +1,5 @@
 /**
- * Settings → Agents → Notifications, "Quiet hours": the team's window
+ * Settings → Notifications, "Quiet hours": the team's window
  * (`agents::quiet`), the same one the Chief sets from chat with
  * `set_quiet_hours` and the phone sets from its Settings. Off, a switch;
  * on, the switch and the two times. They only hold things back, so the
