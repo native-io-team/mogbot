@@ -39,7 +39,11 @@ const spending = {
   kind: 'table',
   title: 'Where it went',
   summary: 'Where it went',
-  columns: ['Category', { label: 'Spent', prefix: '$' }, { label: 'Budget', prefix: '$' }],
+  columns: [
+    { label: 'Category' },
+    { label: 'Spent', prefix: '$' },
+    { label: 'Budget', prefix: '$' },
+  ],
   rows: [
     ['Groceries', 412, 500],
     ['Eating out', 268, 200],

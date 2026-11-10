@@ -122,6 +122,7 @@ import { useArrivedKeys } from '../lib/arrivals';
 import { Composer } from './Composer';
 import { LinkProblem } from './ConnectionPill';
 import { Line } from './surfaces';
+import { ConversationPage } from './ConversationPage';
 import { RoomFoldRow } from './RoomRow';
 import { TeamSetupCard } from './TeamSetupCard';
 import { PathContext } from './Markdown';
@@ -657,6 +658,14 @@ export function ChatView({
           onPress={openConversations}
         />
       )}
+      {/* This conversation's living page, kept current by the agent (`agents/page.rs`). */}
+      <ConversationPage
+        agentId={agent.id}
+        conversation={offered ? (viewing ?? conversations?.current) : FIRST_CONVERSATION}
+        turn={`${agent.status?.state ?? ''}:${newest}`}
+        side={side}
+        onError={showError}
+      />
       <View style={{ flex: 1 }} onLayout={(e) => setRoomHeight(e.nativeEvent.layout.height)}>
         {pinQuestion && card?.approval && (
           <PinnedQuestion
