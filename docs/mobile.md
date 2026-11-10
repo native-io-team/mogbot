@@ -728,7 +728,7 @@ request, the diff and the photo viewer push over them. At
   a cold start (`lib/drafts.ts`). A mic in the field dictates into the draft
   (see "Dictation" below).
 - **Agent sheet.** "Claude · Opus" / "Codex · …", Runs on and Model read-only, Memory (view, edit, forget with
-  Undo, add; "Remember This" in a message's menu), Instructions (view and edit), pin/mute/hide, check-ins and
+  Undo, add; "Remember this" in a message's menu), Instructions (view and edit), pin/mute/hide, check-ins and
   routines (create and edit with the picker below, past runs, pause, run now,
   cancel), usage, and "Allowed without asking" with Revoke.
 - **Files** per agent; **search** across every chat, which pages a chat back

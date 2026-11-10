@@ -113,7 +113,7 @@ export const MessageRow = memo(function MessageRow({
    */
   onAskForChanges?: (agentId: string, ref: ResultRef) => void;
   onError: (text: string) => void;
-  /** Copy, Quote, Select Text: words only, so only user and agent messages. */
+  /** Copy, Quote, Select text: words only, so only user and agent messages. */
   onLongPress?: (message: AgentMessage) => void;
 }) {
   const styles = useStyles();
@@ -176,7 +176,7 @@ export const MessageRow = memo(function MessageRow({
               onLongPress={hold}
               delayLongPress={300}
               accessibilityRole="text"
-              accessibilityHint={hold ? 'Hold for Copy, Quote and Select Text' : undefined}
+              accessibilityHint={hold ? 'Hold for Copy, Quote and Select text' : undefined}
               style={({ pressed }) => [styles.userBubble, pressed && styles.held]}
             >
               {message.revises && (
@@ -221,7 +221,7 @@ export const MessageRow = memo(function MessageRow({
             !message.work
           }
           accessibilityRole="text"
-          accessibilityHint={hold ? 'Hold for Copy, Quote and Select Text' : undefined}
+          accessibilityHint={hold ? 'Hold for Copy, Quote and Select text' : undefined}
           style={({ pressed }) => [styles.agentRow, pressed && styles.heldProse]}
         >
           {set ? (

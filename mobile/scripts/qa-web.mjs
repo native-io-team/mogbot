@@ -1774,7 +1774,7 @@ const LIVE = [
       await holdMessage(page, HOURS_ASK);
     },
     check:
-      'Long-press on your own message: the sheet with Copy, Quote, Select Text, then Edit and resend, Fork from here, Rewind to here',
+      'Long-press on your own message: the sheet with Copy, Quote, Select text, then Edit and resend, Fork from here, Rewind to here',
     after: async (page) => {
       await page.clickText('Cancel').catch(() => {});
       await sleep(500);
