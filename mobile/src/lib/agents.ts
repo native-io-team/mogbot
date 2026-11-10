@@ -664,6 +664,9 @@ export function askingLine(
   if (!diff && lines[0] && !json) return lines[0];
   const edit = /^do you want to make this edit to (.+?)\?*$/i.exec(approval.title.trim());
   if (edit) return `Wants to edit ${edit[1]}`;
+  // A newer Mac's title says it plainly ("Edit Hero.tsx?"): the row says who wants it.
+  const plain = /^(Edit|Create) (.+?)\?$/.exec(approval.title.trim());
+  if (plain) return `Wants to ${plain[1].toLowerCase()} ${plain[2]}`;
   return approval.title;
 }
 
