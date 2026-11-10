@@ -102,6 +102,12 @@ export const FEATURES = {
    * none, and the app posts approval cards it hears by itself.
    */
   alerts: 'alerts',
+  /**
+   * This app understands `refused.reason: 'other_account'` (Tailscale on
+   * the phone signed in as someone else) and keeps trying. Without it the
+   * Mac says `unauthorized`, as before.
+   */
+  otherAccount: 'refused.otherAccount',
 } as const;
 export type Feature = (typeof FEATURES)[keyof typeof FEATURES];
 
@@ -259,6 +265,13 @@ export interface RefusedFrame {
     | 'too_many_connections'
     /** The Mac can't read its identity key right now (Keychain locked): try again later. */
     | 'unavailable'
+    /**
+     * The token is right, but Tailscale on this phone is signed in as a
+     * different tailnet user from the one that paired it. Sent only to apps
+     * that list `FEATURES.otherAccount` (older ones get `unauthorized`):
+     * switching Tailscale back fixes it, so the phone keeps trying.
+     */
+    | 'other_account'
     /**
      * Never sent by a Mac: the phone's own, when the server couldn't prove
      * it's the Mac this phone pinned (wrong key, or a host it doesn't serve).

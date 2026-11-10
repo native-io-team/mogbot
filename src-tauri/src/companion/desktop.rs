@@ -1635,8 +1635,18 @@ async fn start_server(c: Arc<Companion>) -> Result<u16, CommandError> {
     Ok(port)
 }
 
+/// Held across anything that changes the serve handler (publishing it,
+/// the keeper's checks, taking it down), so the keeper never puts back a
+/// handler the user just switched off.
+static SERVE_LOCK: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
+
 /// Publish the server on the tailnet. Each outcome is kept for the panel.
 async fn publish(port: u16) {
+    let _held = SERVE_LOCK.lock().await;
+    publish_locked(port).await;
+}
+
+async fn publish_locked(port: u16) {
     let state = match tailscale::status().await {
         tailscale::TailscaleState::Connected { dns_name, .. } => {
             match tailscale::enable_serve(TAILNET_HTTPS_PORT, port, &dns_name).await {
@@ -1666,7 +1676,119 @@ pub async fn bring_up(app: &AppHandle) -> Result<(), CommandError> {
     let port = start_server(c.clone()).await?;
     publish(port).await;
     c.backend.changed();
+    start_keeper(c);
     Ok(())
+}
+
+// ---- Keeping the route up -----------------------------------------------------
+
+/// How often the keeper reads Tailscale back while the phone server is on.
+const KEEP_EVERY: Duration = Duration::from_secs(30);
+
+/// What the keeper does after reading Tailscale back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum KeepStep {
+    /// The route is what the phone should use, or nothing says otherwise.
+    Leave,
+    /// Ask Tailscale to serve it (again).
+    Publish,
+    /// Tailscale is gone from under it: the route is down, and this is why.
+    Down(String),
+}
+
+/// Publishing happened once, at launch or when it was switched on; nothing
+/// put it back after. So a Mac whose app reopened at login before Tailscale
+/// had connected, or whose Tailscale signed out and back in, was renamed,
+/// moved to another tailnet, or lost its serve config, kept a route that
+/// wasn't there (or none) until someone pressed Retry on the desk, and its
+/// phone said it couldn't reach the Mac all that while. `serving` is whether
+/// the handler read back from `tailscale serve status` (None: not read).
+fn keep_step(
+    current: &ServeState,
+    now: &tailscale::TailscaleState,
+    serving: Option<bool>,
+) -> KeepStep {
+    use tailscale::TailscaleState as Ts;
+    let down = |detail: &str| match current {
+        ServeState::Failed { detail: d } if d == detail => KeepStep::Leave,
+        _ => KeepStep::Down(detail.to_string()),
+    };
+    match now {
+        Ts::Connected { dns_name, .. } => match current {
+            ServeState::On { url } => {
+                let host = super::identity::host_of(url);
+                if host.as_deref() != Some(dns_name.to_ascii_lowercase().as_str()) {
+                    // Another name: the phone must use the new one, and the
+                    // hosts the Mac signs must name it.
+                    KeepStep::Publish
+                } else if serving == Some(false) {
+                    KeepStep::Publish
+                } else {
+                    KeepStep::Leave
+                }
+            }
+            ServeState::Off | ServeState::Failed { .. } | ServeState::NeedsApproval { .. } => {
+                KeepStep::Publish
+            }
+        },
+        Ts::NeedsLogin => down(TAILSCALE_OFF),
+        Ts::NotInstalled => down("Tailscale isn't installed."),
+        // A CLI that didn't answer clearly is no evidence either way.
+        Ts::Unknown { .. } => KeepStep::Leave,
+    }
+}
+
+/// The route is down because Tailscale on this Mac is off or signed out.
+const TAILSCALE_OFF: &str = "Tailscale is off or signed out on this Mac.";
+
+static KEEPER: AtomicBool = AtomicBool::new(false);
+
+/// Read Tailscale back every [`KEEP_EVERY`] while the phone server is on,
+/// and put the route back (or say it's down) when it changed. Once per run.
+fn start_keeper(c: Arc<Companion>) {
+    if KEEPER.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(KEEP_EVERY).await;
+            keep_once(&c).await;
+        }
+    });
+}
+
+async fn keep_once(c: &Arc<Companion>) {
+    let _held = SERVE_LOCK.lock().await;
+    let Some(port) = running_port() else { return };
+    if !c.registry.read(|s| s.enabled) {
+        return;
+    }
+    let now = tailscale::status().await;
+    let current = serve_state();
+    let serving = match (&current, &now) {
+        (ServeState::On { .. }, tailscale::TailscaleState::Connected { dns_name, .. }) => {
+            Some(tailscale::serve_active(dns_name, TAILNET_HTTPS_PORT, port).await)
+        }
+        _ => None,
+    };
+    match keep_step(&current, &now, serving) {
+        KeepStep::Leave => return,
+        KeepStep::Publish => {
+            tracing::info!(
+                ?current,
+                "[Companion] Tailscale changed; serving the phone route again"
+            );
+            publish_locked(port).await;
+        }
+        KeepStep::Down(detail) => {
+            tracing::warn!("[Companion] phone route down: {detail}");
+            set_serve(ServeState::Failed { detail });
+        }
+    }
+    if serve_state() != current {
+        tracing::info!(state = ?serve_state(), "[Companion] phone route is now");
+        c.backend.changed();
+    }
 }
 
 /// The watch proxy, once a phone has asked for it: the tailnet URL it's
@@ -1743,6 +1865,7 @@ pub async fn tear_down(app: &AppHandle) {
     let c = ensure(app);
     c.pairing.cancel();
     stop_watch().await;
+    let _held = SERVE_LOCK.lock().await;
     if tailscale::find_binary().is_some() {
         if let Err(e) = tailscale::disable_serve(TAILNET_HTTPS_PORT).await {
             tracing::warn!("[Companion] {}", e);
@@ -1813,6 +1936,93 @@ fn wrong_kind(op: &ScheduleOp, is_watch: Option<bool>) -> Result<(), CommandErro
             CommandError::expected("That routine runs at a time; it doesn’t check for anything."),
         ),
         _ => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod keep_tests {
+    use super::*;
+    use crate::remote_access::tailscale::TailscaleState as Ts;
+
+    fn on(host: &str) -> ServeState {
+        ServeState::On {
+            url: format!("https://{host}:{TAILNET_HTTPS_PORT}"),
+        }
+    }
+    fn up(host: &str) -> Ts {
+        Ts::Connected {
+            dns_name: host.into(),
+            login: None,
+        }
+    }
+
+    #[test]
+    fn a_route_that_reads_back_is_left_alone() {
+        assert_eq!(
+            keep_step(&on("mac.ts.net"), &up("mac.ts.net"), Some(true)),
+            KeepStep::Leave
+        );
+        assert_eq!(
+            keep_step(&on("mac.ts.net"), &up("MAC.ts.net"), Some(true)),
+            KeepStep::Leave
+        );
+    }
+
+    #[test]
+    fn tailscale_coming_up_after_the_app_puts_the_route_up() {
+        // The app reopened at login before Tailscale had connected.
+        let failed = ServeState::Failed {
+            detail: "Sign in to Tailscale first.".into(),
+        };
+        assert_eq!(
+            keep_step(&failed, &up("mac.ts.net"), None),
+            KeepStep::Publish
+        );
+        assert_eq!(
+            keep_step(&ServeState::Off, &up("mac.ts.net"), None),
+            KeepStep::Publish
+        );
+        // HTTPS certificates switched on on the tailnet: it comes on by itself.
+        let approval = ServeState::NeedsApproval {
+            url: "https://login.tailscale.com/x".into(),
+        };
+        assert_eq!(
+            keep_step(&approval, &up("mac.ts.net"), None),
+            KeepStep::Publish
+        );
+    }
+
+    #[test]
+    fn a_new_name_or_a_lost_handler_is_served_again() {
+        assert_eq!(
+            keep_step(&on("old.ts.net"), &up("new.ts.net"), Some(true)),
+            KeepStep::Publish
+        );
+        assert_eq!(
+            keep_step(&on("mac.ts.net"), &up("mac.ts.net"), Some(false)),
+            KeepStep::Publish
+        );
+    }
+
+    #[test]
+    fn tailscale_off_says_the_route_is_down_once() {
+        let step = keep_step(&on("mac.ts.net"), &Ts::NeedsLogin, None);
+        assert_eq!(step, KeepStep::Down(TAILSCALE_OFF.into()));
+        let down = ServeState::Failed {
+            detail: TAILSCALE_OFF.into(),
+        };
+        assert_eq!(keep_step(&down, &Ts::NeedsLogin, None), KeepStep::Leave);
+    }
+
+    #[test]
+    fn a_cli_that_didnt_answer_changes_nothing() {
+        let unknown = Ts::Unknown {
+            detail: "timed out".into(),
+        };
+        assert_eq!(
+            keep_step(&on("mac.ts.net"), &unknown, None),
+            KeepStep::Leave
+        );
     }
 }
 

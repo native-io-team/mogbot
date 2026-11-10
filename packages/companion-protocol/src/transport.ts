@@ -12,13 +12,23 @@ import type { Cursor } from './frames';
 import type { MethodName, Params, Result, BlobRef } from './methods';
 import type { RouteKind } from './model';
 
+/** A passing refusal (`LinkState.macSaid`). */
+export type MacSaid = 'too_many_connections' | 'unavailable' | 'other_account';
+
 export type LinkState =
   /**
    * Trying routes in order. `since`: when this spell of trying began (or the
    * app last came forward during it), so a short one reads as calm.
    * `appStuck`: as for `reconnecting`.
    */
-  | { kind: 'connecting'; attempt: number; since?: number; appStuck?: boolean }
+  | {
+      kind: 'connecting';
+      attempt: number;
+      since?: number;
+      appStuck?: boolean;
+      /** As for `reconnecting`. */
+      macSaid?: MacSaid;
+    }
   /**
    * `stuck`: since when a request went unanswered though the Mac's heartbeat
    * still arrives. Its connection is fine; the app on it isn't answering.
@@ -42,6 +52,13 @@ export type LinkState =
        * reachable, the app is stuck. Absent when nothing answered at all.
        */
       appStuck?: boolean;
+      /**
+       * In this spell the Mac answered and turned the phone away for a
+       * reason that passes, or that the user fixes without pairing again
+       * (`RefusedFrame.reason`): the phone keeps trying and says this,
+       * never "can't reach".
+       */
+      macSaid?: MacSaid;
     }
   /** The Mac said no for good: re-pair (revoked) or update a side. */
   | {

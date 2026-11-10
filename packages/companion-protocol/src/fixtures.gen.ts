@@ -5682,6 +5682,11 @@ export const frames = [
     "message": "Your Mac can't read its identity key from the Keychain right now."
   },
   {
+    "t": "refused",
+    "reason": "other_account",
+    "message": "Tailscale on this phone is signed in to another account than the one it was paired on."
+  },
+  {
     "t": "res",
     "id": 1,
     "ok": true,

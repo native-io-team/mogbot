@@ -294,6 +294,10 @@ fn frames() -> Vec<ServerFrame> {
             RefusedReason::Unavailable,
             "Your Mac can't read its identity key from the Keychain right now.",
         ),
+        (
+            RefusedReason::OtherAccount,
+            "Tailscale on this phone is signed in to another account than the one it was paired on.",
+        ),
     ] {
         out.push(ServerFrame::Refused {
             reason,

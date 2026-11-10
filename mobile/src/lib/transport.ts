@@ -21,6 +21,7 @@ import {
   type HelloFrame,
   type IdentityFrame,
   type LinkState,
+  type MacSaid,
   type MethodName,
   type Params,
   type RefusedFrame,
@@ -168,8 +169,29 @@ export const BACKGROUND_BACKOFF_MS = [2000, 5000, 15000, 30000, 60000];
  * packets rather than refusing, like a home address from a cellular network,
  * waits out the OS's own timeout of a minute or more): give it up and try
  * the next route. Grows with each failed try, for a slow first path over Tailscale.
+ *
+ * The first try gets 16 s: opening a socket is three round trips (TCP, TLS,
+ * the upgrade), and on a link with 4–5 s round trips (one bar of signal, a
+ * relayed Tailscale path) 8 s gave every first try up just before it opened.
  */
-export const connectTimeoutMs = (attempt: number) => 8000 + 4000 * Math.min(attempt, 3);
+export const connectTimeoutMs = (attempt: number) => 16_000 + 4000 * Math.min(attempt, 3);
+
+/**
+ * The longest any one try is given, however slow the link has shown itself
+ * to be: past this a try is stuck, not slow.
+ */
+export const MAX_TRY_MS = 60_000;
+
+/**
+ * How long a try may take before it's given up, by the attempt and by how
+ * slow this link has been. `handshakeMs` is the last try that made it, from
+ * opening the socket to the Mac's welcome: on a link with seconds of latency
+ * (a weak cellular signal, a relayed Tailscale path) a handshake is a few
+ * round trips and can take longer than the fixed timeout, and giving it up
+ * there started the same slow handshake again, forever.
+ */
+export const tryBudgetMs = (attempt: number, handshakeMs = 0) =>
+  Math.min(MAX_TRY_MS, Math.max(connectTimeoutMs(attempt), 2 * handshakeMs));
 
 /**
  * When the app comes forward, or the network changes, on a socket that
@@ -177,6 +199,30 @@ export const connectTimeoutMs = (attempt: number) => 8000 + 4000 * Math.min(atte
  * (a socket iOS suspended in the background often is), not after 40 s.
  */
 export const PROBE_MS = 4000;
+
+/**
+ * The probe's wait on this link: `PROBE_MS`, or three of its measured round
+ * trips when those are slower (up to 15 s), so a link with seconds of
+ * latency isn't torn down for being slow and then made to handshake again.
+ */
+export const probeWaitMs = (latencyMs: number | null) =>
+  Math.max(PROBE_MS, Math.min(15_000, 3 * (latencyMs ?? 0)));
+
+/**
+ * A refusal the Mac may lift by itself, or the user can fix without pairing
+ * again: the phone keeps trying, and says what the Mac said
+ * (`LinkState.macSaid`) instead of "can't reach".
+ */
+const PASSING_REFUSALS = new Set<string>(['too_many_connections', 'unavailable', 'other_account']);
+const passing = (reason: RefusedFrame['reason']): reason is MacSaid => PASSING_REFUSALS.has(reason);
+
+/**
+ * After the Mac said this phone's Tailscale is on another account, tries
+ * wait at least this long: switching accounts is something the user does,
+ * and coming back to the app (or the network changing as Tailscale
+ * reconnects) tries at once anyway.
+ */
+export const OTHER_ACCOUNT_RETRY_MS = 15_000;
 
 /** `retryNow` leaves a try this young alone, so a burst of triggers doesn't churn sockets. */
 const FRESH_TRY_MS = 1500;
@@ -232,6 +278,10 @@ export class DirectTransport implements Transport {
   private appStuck = false;
   /** An old-Mac probe already ran (once per transport is plenty). */
   private probed = false;
+  /** The last try that made it: socket opened to welcome (ms). 0 before one. */
+  private handshakeMs = 0;
+  /** In this spell of trouble, what the Mac said as it turned the phone away. */
+  private macSaid: MacSaid | undefined;
 
   constructor(private readonly opts: DirectTransportOptions) {
     this.foreground = opts.foreground;
@@ -394,7 +444,7 @@ export class DirectTransport implements Transport {
     this.send({ t: 'ping' });
     // Any frame re-arms the full wait (`onmessage`).
     if (this.deadTimer) clearTimeout(this.deadTimer);
-    this.deadTimer = setTimeout(() => this.lost(), PROBE_MS);
+    this.deadTimer = setTimeout(() => this.lost(), probeWaitMs(this.latencyMs));
   }
 
   close() {
@@ -416,6 +466,7 @@ export class DirectTransport implements Transport {
         attempt: this.attempt,
         since: this.troubleSince,
         ...(this.appStuck ? { appStuck: true } : {}),
+        ...(this.macSaid ? { macSaid: this.macSaid } : {}),
       });
     }
     const Impl = this.opts.WebSocketImpl ?? WebSocket;
@@ -423,13 +474,18 @@ export class DirectTransport implements Transport {
     const ws = new Impl(url) as unknown as SocketLike;
     this.ws = ws;
     this.triedAt = Date.now();
-    if (this.connectTimer) clearTimeout(this.connectTimer);
-    this.connectTimer = setTimeout(() => {
-      if (ws === this.ws && !this.ready) this.lost();
-    }, connectTimeoutMs(this.attempt));
+    this.armConnectTimer(ws, tryBudgetMs(this.attempt, this.handshakeMs));
     this.opened = false;
     ws.onopen = () => {
       this.opened = true;
+      // The route works: the rest of the handshake is two more round
+      // trips, so it's given time by how long opening took, not cut off
+      // by a timeout meant for a route that never answers.
+      const took = Date.now() - this.triedAt;
+      this.armConnectTimer(
+        ws,
+        Math.min(MAX_TRY_MS, Math.max(tryBudgetMs(this.attempt, this.handshakeMs), 3 * took))
+      );
       this.armDeadTimer();
       // Nothing private until the Mac proves itself: just a challenge.
       this.challenge = this.opts.challenge();
@@ -466,6 +522,13 @@ export class DirectTransport implements Transport {
     };
   }
 
+  private armConnectTimer(ws: SocketLike, ms: number) {
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    this.connectTimer = setTimeout(() => {
+      if (ws === this.ws && !this.ready) this.lost();
+    }, ms);
+  }
+
   /** Stop for good with a refusal of the phone's own: nothing more is said to this server. */
   private refuseLocally(reason: 'not_your_mac' | 'mac_reset' | 'update_mac', message: string) {
     const refusal: RefusedFrame = { t: 'refused', reason, message };
@@ -493,7 +556,7 @@ export class DirectTransport implements Transport {
       app: this.opts.app,
       ...(resume ? { resume } : {}),
       foreground: this.foreground,
-      features: [FEATURES.liveWork, FEATURES.rooms, FEATURES.alerts],
+      features: [FEATURES.liveWork, FEATURES.rooms, FEATURES.alerts, FEATURES.otherAccount],
     });
   }
 
@@ -520,6 +583,8 @@ export class DirectTransport implements Transport {
         this.macClosing = false;
         this.appStuck = false;
         this.stuckSince = 0;
+        this.macSaid = undefined;
+        this.handshakeMs = Date.now() - this.triedAt;
         if (this.connectTimer) clearTimeout(this.connectTimer);
         this.connectTimer = null;
         this.welcome = frame;
@@ -532,8 +597,11 @@ export class DirectTransport implements Transport {
       case 'refused': {
         this.refusal = frame;
         each(this.refusedListeners, frame);
-        // Close follows; retry with backoff.
-        if (frame.reason === 'too_many_connections' || frame.reason === 'unavailable') return;
+        // Close follows; retry with backoff, saying what the Mac said.
+        if (passing(frame.reason)) {
+          this.macSaid = frame.reason;
+          return;
+        }
         this.refused = true;
         this.setState({ kind: 'refused', reason: frame.reason });
         this.teardown();
@@ -591,7 +659,9 @@ export class DirectTransport implements Transport {
     if (!this.troubleSince) this.troubleSince = Date.now();
     const schedule = this.foreground ? FOREGROUND_BACKOFF_MS : BACKGROUND_BACKOFF_MS;
     const base = schedule[Math.min(this.attempt, schedule.length - 1)];
-    const delay = Math.round(base * (0.8 + Math.random() * 0.4));
+    const jittered = Math.round(base * (0.8 + Math.random() * 0.4));
+    const delay =
+      this.macSaid === 'other_account' ? Math.max(jittered, OTHER_ACCOUNT_RETRY_MS) : jittered;
     this.attempt++;
     this.setState(
       this.everConnected
@@ -602,12 +672,14 @@ export class DirectTransport implements Transport {
             since: this.troubleSince,
             ...(this.macClosing ? { macClosing: true } : {}),
             ...(this.appStuck && !this.macClosing ? { appStuck: true } : {}),
+            ...(this.macSaid ? { macSaid: this.macSaid } : {}),
           }
         : {
             kind: 'connecting',
             attempt: this.attempt,
             since: this.troubleSince,
             ...(this.appStuck ? { appStuck: true } : {}),
+            ...(this.macSaid ? { macSaid: this.macSaid } : {}),
           }
     );
     this.retryTimer = setTimeout(() => this.connect(), delay);

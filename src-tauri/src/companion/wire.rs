@@ -343,6 +343,10 @@ pub const MAC_FEATURE_ALERTS: &str = "alerts";
 /// lines only a room has (an empty `agentId`).
 pub const FEATURE_ROOMS: &str = "rooms";
 
+/// `hello.features`: the app understands [`RefusedReason::OtherAccount`]
+/// and keeps trying through it (switching Tailscale back fixes it).
+pub const FEATURE_OTHER_ACCOUNT: &str = "refused.otherAccount";
+
 /// `welcome.features`: the `rooms.*` methods and `rooms.changed`.
 pub const MAC_FEATURE_ROOMS: &str = "rooms";
 
@@ -483,6 +487,11 @@ pub enum RefusedReason {
     /// The identity key can't be read right now (Keychain locked or
     /// refusing): nothing can be proven, so try again later.
     Unavailable,
+    /// The token is right but came from another tailnet user than the one
+    /// that paired it: Tailscale on the phone is signed in to another
+    /// account. Only to apps that list [`FEATURE_OTHER_ACCOUNT`]; older ones
+    /// get `Unauthorized`, which they know.
+    OtherAccount,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]

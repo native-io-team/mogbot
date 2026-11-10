@@ -5,7 +5,7 @@
  * when the server answered, because silence looks the same either way.
  */
 
-import type { AgentEngine, EngineInfo, Known } from '@shipstudio/companion-protocol';
+import type { AgentEngine, EngineInfo, Known, MacSaid } from '@shipstudio/companion-protocol';
 import { formatAgo } from './agents';
 import type { AppState } from './store';
 
@@ -135,6 +135,10 @@ export function pill(s: Inputs, now = Date.now()): Pill {
       : { tone: 'ok', label: 'Connected' };
   }
   if (s.phoneOnline === false) return { tone: 'problem', label: 'Can’t reach Mac' };
+  // The Mac answered and said why: that, at once, whatever the calm.
+  if (link.macSaid && !(link.kind === 'reconnecting' && link.macClosing)) {
+    return { tone: 'problem', label: MAC_SAID[link.macSaid].pill };
+  }
   // The first moments of trying read as calm: the phone tries every few
   // seconds with the app in front, and the Mac is usually back by then.
   const calm = link.since != null && now - link.since < CALM_MS;
@@ -155,6 +159,37 @@ export function pill(s: Inputs, now = Date.now()): Pill {
     ? { tone: 'problem', label: 'Can’t reach Mac' }
     : { tone: 'busy', label: 'Connecting…' };
 }
+
+/**
+ * What the Mac said as it turned the phone away (`LinkState.macSaid`), in
+ * the pill's words and the bar's: each with its one fix, none of them
+ * "pair again", and each one the phone keeps trying through.
+ */
+export const MAC_SAID: Record<MacSaid, { pill: string; title: string; checks: string[] }> = {
+  other_account: {
+    pill: 'Other Tailscale account',
+    title: 'Tailscale on this phone is on another account',
+    checks: [
+      'Open Tailscale on this phone and switch to the account it was paired on, the same account as your Mac. It reconnects by itself.',
+    ],
+  },
+  unavailable: {
+    pill: 'Mac’s Keychain locked',
+    title: 'Your Mac can’t open its Keychain right now',
+    checks: [
+      'Log in on your Mac: the app there needs its Keychain to prove it’s your Mac. It reconnects by itself.',
+      'If you’re logged in, quit the app on your Mac and open it again: your agents and chats are kept.',
+    ],
+  },
+  too_many_connections: {
+    pill: 'Mac turning phones away',
+    title: 'Your Mac has too many connections open',
+    checks: [
+      'Close the app on another phone or iPad paired with your Mac. It reconnects by itself.',
+      'If that’s not it, quit the app on your Mac and open it again: your agents and chats are kept.',
+    ],
+  },
+};
 
 /** How long trying reads as "Reconnecting…" before it may say it can't reach the Mac. */
 export const CALM_MS = 15_000;
@@ -181,7 +216,7 @@ export interface LinkBar {
   detail: string;
   /** "What to check": the likely causes, most likely first, each with its fix. */
   checks: string[];
-  kind: 'offline' | 'connecting' | 'closing' | 'stuck' | 'unreachable';
+  kind: 'offline' | 'connecting' | 'closing' | 'stuck' | 'unreachable' | MacSaid;
 }
 
 /** "Last heard from it 2 min ago", or that nothing has been heard yet. */
@@ -223,6 +258,9 @@ export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
   const unreachable = [
     'Your Mac may be asleep or shut. Wake it, with the app open on it.',
     'Tailscale may be off on this phone or on your Mac. Open Tailscale and check it’s on, with the same account on both.',
+    // MagicDNS off on the phone: the Mac's *.ts.net name doesn't resolve,
+    // which looks exactly like Tailscale being off.
+    'If Tailscale is on here, check “Use Tailscale DNS” is on in its settings: your Mac’s address is a Tailscale name.',
     'If the app on your Mac is stuck, quit it and open it again.',
   ];
   const mac = s.mac;
@@ -239,6 +277,16 @@ export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
       title: 'Waiting for the app on your Mac',
       detail: `It said it was closing, for an update or a restart · ${heard(lastSeen, now).toLowerCase()}`,
       checks: ['If it isn’t back in a minute or two, open the app on your Mac.'],
+    };
+  }
+  if (link.macSaid && p.tone === 'problem') {
+    const said = MAC_SAID[link.macSaid];
+    return {
+      kind: link.macSaid,
+      tone: 'problem',
+      title: said.title,
+      detail: `Your Mac answered · ${heard(lastSeen, now).toLowerCase()}${lastSeen ? SAVED : ''}`,
+      checks: said.checks,
     };
   }
   // Known stuck: said once the calm first seconds are over, not after the

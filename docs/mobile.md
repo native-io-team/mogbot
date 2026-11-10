@@ -107,18 +107,39 @@ a dead link, which catches sleep and Wi-Fi handoffs faster than TCP.
 
 **Reconnecting** (`lib/transport.ts`): with the app in front the phone waits
 1, 2, 4, then at most 5 s between tries (in the background 2 s up to 60 s, to
-spare the battery). A try not welcomed within 8–20 s is given up and the next
+spare the battery). A socket not open within 16–28 s is given up and the next
 route tried (a route that drops packets, like a home address from cellular,
-otherwise hangs for the OS's own minute). A route that was working is tried
+otherwise hangs for the OS's own minute); once it opens, the rest of the
+handshake gets at least three times what opening took, and the next try twice
+what the last whole handshake took (never past a minute), so a link with 4–5 s
+round trips connects instead of starting the same slow handshake over
+(`tryBudgetMs`). A route that was working is tried
 again first. Coming forward, a network change (NetInfo: online, Wi-Fi to
 cellular, a VPN like Tailscale coming up) or Try again tries at once; on a
-socket that looks open they send a ping that must be answered within 4 s. As
+socket that looks open they send a ping that must be answered within 4 s, or
+three of the link's measured round trips when those are slower (up to 15 s,
+`probeWaitMs`). A Mac that answers and turns the phone away for a reason that
+passes (`unavailable`: its Keychain can't be read; `too_many_connections`;
+`other_account`: Tailscale on the phone signed in as another tailnet user than
+the one that paired it, sent only to apps listing `refused.otherAccount`) is
+tried again by itself, and the bar says what it said (`LinkState.macSaid`)
+instead of "can't reach"; `other_account` waits at least 15 s between tries. As
 its app exits (a quit or an update's restart) the Mac closes every socket
 with 1001 "going away" (`CLOSE_MAC_CLOSING`, `HubItem::AppClosing`), and the
 phone says "Waiting for the app on your Mac" for up to 2 minutes. A socket
 that opens and then says nothing, or a request that times out while the
 heartbeat still comes, marks the app as stuck rather than the Mac as away
 (see "The connection bar").
+
+**A send the Mac didn't answer** (`unreached` in `lib/outbox.ts`): a timeout,
+a dropped socket, `rate_limited`, or the Mac's own "Your Mac is busy…" (past
+its 20 s deadline the work carries on, so the send may well have landed) keeps
+the message waiting, never "Not sent". It goes again by its `clientId` at the
+next welcome, or after 3, 8, 20, then every 30 s while the link stays up
+(`RETRY_WAITING_MS`); the Mac answers a `clientId` it has seen with the
+original. Before, a busy answer read as a refusal ("Not sent", and an edited
+resend was a second copy), and a timeout on a live link waited for the next
+reconnect.
 
 **Limits:** 600 requests a minute per device, socket and HTTP together,
 of which at most 10 may create an agent (`MAX_AGENTS_CREATED_PER_MINUTE`;
@@ -306,6 +327,18 @@ sees the real `*.ts.net` certificate with stock `fetch` and `WebSocket`. The
 route is reported on only when `tailscale serve status --json` shows that exact
 handler, unfunnelled. Off runs `tailscale serve --https=47443 off`; nothing
 else in the serve config is touched.
+
+**Kept up** (`keep_step` in `companion/desktop.rs`): while the phone server is
+on, the Mac reads Tailscale back every 30 s. Tailscale connected with no route
+(the app reopened at login before Tailscale had, HTTPS certificates just
+switched on), a route under another name (the machine renamed, another
+tailnet), or a handler that's gone: it serves the route again. Tailscale off or
+signed out: the route is reported down ("Tailscale is off or signed out on this
+Mac.") until it's back. A CLI that doesn't answer clearly changes nothing. Before
+this, publishing happened only at launch, when switched on, or on Retry.
+Certificate renewal is Tailscale's: `tailscale serve` renews the `*.ts.net`
+certificate itself, and the phone pins the Mac's Ed25519 identity, never the
+certificate, so a renewed one changes nothing for it.
 
 **Why 47443:** Funnel can only publish 443, 8443 and 10000, per port, and
 Remote Access already funnels 443. A mount on a Funnel port would be one
@@ -1428,7 +1461,11 @@ came, `connected.stuck`; or a socket that opened and stayed silent,
 Mac"** (nothing answered: asleep or shut, Tailscale off or another account,
 or the app stuck). Every cause is a "may"; none is the user's fault. When a
 bar that was shown clears, "Back in touch with your Mac" shows for 2.5 s,
-then nothing. `pnpm qa:web --phases link-down` captures each of these
+then nothing. When the Mac answered and turned the phone away for a reason
+that passes (`macSaid`), the bar says that at once, with its one fix: "Tailscale
+on this phone is on another account" (switch it back), "Your Mac can't open
+its Keychain right now" (log in on the Mac), "Your Mac has too many
+connections open". `pnpm qa:web --phases link-down` captures each of these
 (`--hung` makes the mock take sockets and say nothing).
 
 ### Offline cache and outbox

@@ -1820,6 +1820,70 @@ async fn thumbnails_refuse_a_decompression_bomb_and_cache_the_rest() {
     assert!(image::load_from_memory(&first).unwrap().width() <= 100);
 }
 
+/// Tailscale on the phone switched to another account: an app that knows
+/// the word hears it (and keeps trying), an older one hears `unauthorized`
+/// as before, and a request naming nobody never hears it.
+#[tokio::test]
+async fn another_tailnet_account_is_told_so_to_an_app_that_knows_the_word() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(
+            &phone(),
+            String::new(),
+            1,
+            &[],
+            Some("julian@example.com".into()),
+        )
+        .unwrap();
+    let open_as = |login: Option<&'static str>| async move {
+        let mut req =
+            tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+                format!("ws://127.0.0.1:{port}/v1/ws"),
+            )
+            .unwrap();
+        if let Some(login) = login {
+            req.headers_mut()
+                .insert("Tailscale-User-Login", login.parse().unwrap());
+        }
+        tokio_tungstenite::connect_async(req).await.unwrap().0
+    };
+    let knowing = |token: &str| {
+        let mut h = hello(token, None);
+        h["features"] = json!([crate::companion::wire::FEATURE_OTHER_ACCOUNT]);
+        h
+    };
+    let mut ws = open_as(Some("work@example.com")).await;
+    prove(&mut ws).await;
+    send(&mut ws, knowing(&token)).await;
+    assert_eq!(next(&mut ws).await["reason"], "other_account");
+
+    let mut ws = open_as(Some("work@example.com")).await;
+    prove(&mut ws).await;
+    send(&mut ws, hello(&token, None)).await;
+    assert_eq!(
+        next(&mut ws).await["reason"],
+        "unauthorized",
+        "an older app"
+    );
+
+    let mut ws = open_as(None).await;
+    prove(&mut ws).await;
+    send(&mut ws, knowing(&token)).await;
+    assert_eq!(
+        next(&mut ws).await["reason"],
+        "unauthorized",
+        "nobody named"
+    );
+
+    // Switched back: in, with the same token.
+    let mut ws = open_as(Some("julian@example.com")).await;
+    prove(&mut ws).await;
+    send(&mut ws, knowing(&token)).await;
+    assert_eq!(next(&mut ws).await["t"], "welcome");
+}
+
 #[tokio::test]
 async fn a_token_used_by_another_tailnet_user_is_refused() {
     let (c, _) = Stub::companion();
@@ -2031,4 +2095,17 @@ async fn requests_past_the_cap_are_busy_at_once_and_slots_come_back_when_work_en
     .await
     .unwrap();
     assert_eq!(ok, json!({"ok": true}));
+}
+
+/// The phone keeps a send waiting (and tries it again by its clientId)
+/// rather than calling it "Not sent" when the Mac answers with these words
+/// (`mobile/src/lib/outbox.ts`, `MAC_DIDNT_FINISH`): past the deadline the
+/// work carries on, so the send may have landed.
+#[test]
+fn the_busy_words_are_the_ones_the_phone_tries_again_on() {
+    assert!(
+        super::BUSY.starts_with("Your Mac is busy"),
+        "{}",
+        super::BUSY
+    );
 }
