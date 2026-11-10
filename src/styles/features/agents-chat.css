@@ -501,8 +501,21 @@
   > .agent-chat__row--agent:not(.agent-chat__row--card)
   > .agent-message__actions {
   position: absolute;
-  top: 100%;
+  bottom: 0;
   left: calc(var(--spacing-2xs) * -1);
+}
+
+/* Every line of the history skips paint while off screen
+   (content-visibility, agents-chat-history.css), and that containment clips
+   whatever reaches past the line's box: actions hung below the reply were
+   never drawn, so a reply's Copy and time didn't show on hover at all. The
+   row's own box reaches down over the actions instead (padding) and gives the
+   room straight back (margin), so the rhythm is unchanged, and the pointer
+   moving down to Copy stays on the reply that owns it. */
+.agent-chat__messages
+  > .agent-chat__row--agent:not(.agent-chat__row--card):has(> .agent-message__actions) {
+  padding-bottom: var(--button-height-compact);
+  margin-bottom: calc(var(--button-height-compact) * -1);
 }
 
 .agent-chat__line {
