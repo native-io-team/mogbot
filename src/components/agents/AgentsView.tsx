@@ -28,6 +28,9 @@ import { EngineSignInModal, type EngineSetup } from './EngineSignInModal';
 import { AgentChat } from './AgentChat';
 import { PaneBoundary, SidebarBoundary } from './AgentsErrorBoundary';
 import { AgentsTeamView } from './AgentsTeamView';
+import { AgentBriefingModal } from './AgentWorkDetail';
+import { AgentsRoutinesView, type BulkAsk } from './AgentsRoutinesView';
+import { ROUTINES_ID } from '../../lib/agentDesk';
 import { AgentEditorModal, type EditorTab } from './AgentEditorModal';
 import { AgentProjectsProvider } from './AgentProject';
 import { TakeoverProvider, useTakeover } from './AgentTakeover';
@@ -137,7 +140,7 @@ function readSelected(): string | null {
   try {
     // "What's in flight" (the sidebar’s bell, or ⌘K) is a detour, never where Agents reopens.
     const id = localStorage.getItem(SELECTED_KEY);
-    return id === TEAM_ID || id === USAGE_ID ? null : id;
+    return id === TEAM_ID || id === USAGE_ID || id === ROUTINES_ID ? null : id;
   } catch {
     return null;
   }
@@ -205,6 +208,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const [onItsOwnFor, setOnItsOwnFor] = useState<string | null>(null);
   /** Its recipe is being shared. */
   const [recipeFor, setRecipeFor] = useState<string | null>(null);
+  // "What it was told" (the … menu): the newest briefing, read-only.
+  const [briefingFor, setBriefingFor] = useState<Agent | null>(null);
   const [deleting, setDeleting] = useState<Agent | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -228,9 +233,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const teamOpen = selectedId === TEAM_ID;
   // Usage (the sidebar's usage row, ⌘K, a chat's account chip): a detour too.
   const usageOpen = selectedId === USAGE_ID;
+  // Routines (the sidebar's Routines row, ⌘K): every agent's routines in one list.
+  const routinesOpen = selectedId === ROUTINES_ID;
   const roomOpen = room !== null;
   const selected =
-    teamOpen || usageOpen || roomOpen
+    teamOpen || usageOpen || routinesOpen || roomOpen
       ? null
       : (selectedId && agentsById.get(selectedId)) ||
         agents.find((a) => a.isMain) ||
@@ -318,6 +325,13 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const openAppsForAll = useCallback(() => openApps(), [openApps]);
   const openInFlight = useCallback(() => setSelectedId(TEAM_ID), []);
   const openUsage = useCallback(() => setSelectedId(USAGE_ID), []);
+  // ⌘K "Pause all routines…" opens Routines on that question.
+  const [routinesAsk, setRoutinesAsk] = useState<BulkAsk | null>(null);
+  const openRoutines = useCallback((ask?: BulkAsk) => {
+    setRoutinesAsk(ask ?? null);
+    setSelectedId(ROUTINES_ID);
+  }, []);
+  const clearRoutinesAsk = useCallback(() => setRoutinesAsk(null), []);
   /** New agent's "Ask your Chief of Staff": the request, drafted in the Chief's composer. */
   const [prefill, setPrefill] = useState<{ agentId: string; text: string; n: number } | null>(null);
   // Delivered once: leaving that chat and coming back doesn't type it again.
@@ -438,6 +452,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     onLogins: openLogins,
     onBrowser: openBrowser,
     onShareRecipe: setRecipeFor,
+    onRoutines: openRoutines,
   });
   // A recipe file dropped anywhere on the window (not on Import, which
   // reads it itself): its review card goes up in the Chief's chat.
@@ -556,6 +571,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
       onHandBack: takeover?.handBack,
       onOnItsOwn: (a: Agent) => setOnItsOwnFor(a.id),
       onShareRecipe: (a: Agent) => setRecipeFor(a.id),
+      onWhatItWasTold: (a: Agent) => setBriefingFor(a),
     }),
     [run, takeover]
   );
@@ -985,6 +1001,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   rooms={roomRows}
                   roomActions={roomActions}
                   onNewRoom={openNewRoom}
+                  onOpenRoutines={() => openRoutines()}
+                  routinesOpen={routinesOpen}
                   actions={actions}
                   query={popoverSearch ? '' : query}
                   searchRef={searchRef}
@@ -1015,7 +1033,9 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   ? TEAM_ID
                   : usageOpen
                     ? USAGE_ID
-                    : (shown?.id ?? null)
+                    : routinesOpen
+                      ? ROUTINES_ID
+                      : (shown?.id ?? null)
             }
           >
             {error && !loaded ? (
@@ -1044,6 +1064,12 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
               />
             ) : usageOpen ? (
               <AgentsUsageView />
+            ) : routinesOpen ? (
+              <AgentsRoutinesView
+                onOpenAgent={openAgent}
+                ask={routinesAsk}
+                onAsked={clearRoutinesAsk}
+              />
             ) : teamOpen ? (
               <AgentsTeamView
                 onOpenAgent={openAgent}
@@ -1145,6 +1171,14 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
         }}
       />
       <AgentOnItsOwnModal agentId={onItsOwnFor} onClose={() => setOnItsOwnFor(null)} />
+      {briefingFor && (
+        <AgentBriefingModal
+          key={briefingFor.id}
+          agentId={briefingFor.id}
+          agentName={briefingFor.name}
+          onClose={() => setBriefingFor(null)}
+        />
+      )}
       {recipeFor && (
         <AgentRecipeModal key={recipeFor} agentId={recipeFor} onClose={() => setRecipeFor(null)} />
       )}

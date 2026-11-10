@@ -15,6 +15,7 @@ import {
   EditIcon,
   EyeIcon,
   EyeOffIcon,
+  FileTextIcon,
   RoutineIcon,
   PaperclipIcon,
   PinIcon,
@@ -47,6 +48,8 @@ export interface AgentActions {
   onOnItsOwn?: (agent: Agent) => void;
   /** Share it as a recipe: its definition, never what it knows. */
   onShareRecipe?: (agent: Agent) => void;
+  /** "What it was told": the briefing its newest turn was given, read-only. Desk only. */
+  onWhatItWasTold?: (agent: Agent) => void;
 }
 
 interface Item {
@@ -72,6 +75,7 @@ export function AgentActionItems({
   onHandBack,
   onOnItsOwn,
   onShareRecipe,
+  onWhatItWasTold,
   onSchedule,
   onFiles,
 }: {
@@ -101,6 +105,15 @@ export function AgentActionItems({
       ? [{ label: 'Schedule a routine…', icon: <RoutineIcon size={12} />, run: onSchedule }]
       : []),
     ...(onFiles ? [{ label: 'Files', icon: <PaperclipIcon size={12} />, run: onFiles }] : []),
+    ...(onWhatItWasTold
+      ? [
+          {
+            label: 'What it was told…',
+            icon: <FileTextIcon size={12} />,
+            run: () => onWhatItWasTold(agent),
+          },
+        ]
+      : []),
     ...(onShareRecipe && !agent.isMain
       ? [{ label: RECIPE_MENU, icon: <UploadIcon size={12} />, run: () => onShareRecipe(agent) }]
       : []),

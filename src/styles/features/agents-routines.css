@@ -1,0 +1,96 @@
+/* Agents mode: Routines, every agent's routines in one list
+   (components/agents/AgentsRoutinesView.tsx). The team view's column, one
+   row per routine on a hairline, as a sidebar row reads. */
+
+.agents-routines__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.agents-routines__count {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agents-routines__bulk {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.agents-routines__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-panel);
+}
+
+.agents-routines__confirm-text {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+}
+
+.agents-routines__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agents-routines__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agents-routines__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+}
+
+.agents-routines__what {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  font-size: var(--font-size-body-md);
+}
+
+.text-button.button.agents-routines__agent {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-weight: var(--font-weight-label);
+}
+
+.agents-routines__note {
+  overflow: hidden;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agents-routines__when {
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agents-routines__row[data-paused] .agents-routines__note {
+  color: var(--text-muted);
+}

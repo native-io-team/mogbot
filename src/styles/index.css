@@ -140,6 +140,7 @@
 @import './features/agents-dialogs.css';
 @import './features/agents-menus.css';
 @import './features/agents-team.css';
+@import './features/agents-routines.css';
 @import './features/agents-requests.css';
 @import './features/agents-team-setup.css';
 @import './features/agents-motion.css';
