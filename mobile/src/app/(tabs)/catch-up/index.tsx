@@ -717,7 +717,7 @@ const useStyles = makeStyles((colors) => ({
   rowMain: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rowStacked: { flexDirection: 'column', alignItems: 'stretch', gap: space.sm },
   stackedAction: { alignSelf: 'flex-end' },
-  rowTextStacked: { flex: 0 },
+  rowTextStacked: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' },
   rowText: { flex: 1, gap: space['2xs'] },
   command: { fontFamily: fonts.mono },
   rowTitle: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
