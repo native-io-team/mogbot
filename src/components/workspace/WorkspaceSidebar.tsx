@@ -181,6 +181,13 @@ interface Props {
   /** Agents mode's create actions: pinned under the list, outside its scroller. */
   listActions?: ReactNode;
   /**
+   * Agents mode's page row (Routines). Given, the foot's last row is one
+   * row: it, then the phone and remote as small icons, then Settings as an
+   * icon (`compactFoot`), instead of a row each. The collapsed rail and a
+   * workspace switcher keep the stack.
+   */
+  footerLead?: ReactNode;
+  /**
    * Switch to Agents mode. Shows the Projects | Agents toggle above Search;
    * without it there is no toggle.
    */
@@ -430,6 +437,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   listContent,
   footerContent,
   listActions,
+  footerLead,
   onGoHome,
   onOpenProjectPicker,
   isSidebarHidden,
@@ -504,7 +512,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   const showWorkspaceSwitcher = Boolean(onSwitchAccount && activeAccount && hasMultipleWorkspaces);
   // With no workspace switcher between them, Slack and Settings share the row
   // as two labelled halves instead of two icons with a gap in the middle.
-  const labeledFooterActions = !showWorkspaceSwitcher && !isSidebarHidden;
+  // Agents: the page row, the phone, remote and Settings share one row.
+  const compactFoot = Boolean(footerLead) && !showWorkspaceSwitcher && !isSidebarHidden;
+  const labeledFooterActions = !showWorkspaceSwitcher && !isSidebarHidden && !compactFoot;
   const otherWorkspaces = accounts.filter((account) => account.id !== activeAccount?.id);
   const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
   const currentServerSnapshot: ProjectDevServerSnapshot = currentProjectPath
@@ -1877,13 +1887,32 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         <div className="workspace-sidebar-footer">
           <UpdateBanner />
           {footerContent}
-          <PhoneIndicator isSidebarHidden={isSidebarHidden ?? false} />
-          <RemoteAccessIndicator isSidebarHidden={isSidebarHidden ?? false} />
+          {!compactFoot && footerLead}
+          {!compactFoot && <PhoneIndicator isSidebarHidden={isSidebarHidden ?? false} />}
+          {!compactFoot && <RemoteAccessIndicator isSidebarHidden={isSidebarHidden ?? false} />}
           <div
             className={`workspace-sidebar-footer-actions has-settings-drawer${
               showWorkspaceSwitcher ? ' has-workspace-switcher' : ''
-            }${labeledFooterActions ? ' is-labeled' : ''}`}
+            }${labeledFooterActions ? ' is-labeled' : ''}${compactFoot ? ' is-compact-foot' : ''}`}
           >
+            {compactFoot && (
+              <div className="workspace-sidebar-footer-lead">
+                {footerLead}
+                <PhoneIndicator isSidebarHidden={false} compact />
+                <RemoteAccessIndicator isSidebarHidden={false} compact />
+                {SLACK_INVITE_URL && (
+                  <IconButton
+                    variant="ghost"
+                    className="workspace-sidebar-support workspace-sidebar-footer-icon"
+                    icon={<SlackIcon size={14} />}
+                    onClick={() => SLACK_INVITE_URL && void openUrl(SLACK_INVITE_URL)}
+                    title="Join the community on Slack"
+                    aria-label="Join the community on Slack"
+                    data-education-id="support-button"
+                  />
+                )}
+              </div>
+            )}
             {onSwitchAccount && activeAccount && hasMultipleWorkspaces && (
               <div
                 ref={workspaceSwitcherRef}
@@ -1968,7 +1997,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                   document.body
                 )
               : null}
-            {!SLACK_INVITE_URL ? null : labeledFooterActions ? (
+            {!SLACK_INVITE_URL || compactFoot ? null : labeledFooterActions ? (
               <Button
                 variant="default"
                 width="fill"
@@ -2027,9 +2056,12 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 if (!settingsMenuOpen) {
                   return (
                     <MenuButton
-                      variant="default"
-                      className="button--icon-only workspace-sidebar-settings"
-                      leftIcon={<SettingsIcon size={12} />}
+                      // Beside the phone and remote icons in the Agents foot: the same weight.
+                      variant={compactFoot ? 'ghost' : 'default'}
+                      className={`button--icon-only workspace-sidebar-settings${
+                        compactFoot ? ' workspace-sidebar-footer-icon' : ''
+                      }`}
+                      leftIcon={<SettingsIcon size={compactFoot ? 14 : 12} />}
                       title="Settings & Help"
                       aria-label="Settings & Help"
                       data-settings-menu-trigger="workspace"

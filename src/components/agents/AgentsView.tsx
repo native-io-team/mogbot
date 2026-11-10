@@ -1104,29 +1104,34 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   onOpen={focusSearch}
                 />
               }
-              listActions={
-                query.trim().length === 0 || popoverSearch ? (
-                  <AgentsSidebarActions
-                    agentCount={listed.length}
-                    onNew={() => openNew()}
-                    onNewRoom={openNewRoom}
-                  />
-                ) : undefined
-              }
+              // The foot, compact (owner, round 5: "getting tall"): usage
+              // first, then New agent | New room as one row, then Routines
+              // sharing the last row with the phone, remote and Settings.
               footerContent={
-                <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
-                  {/* Pages together: Routines beside Usage, actions above the list's end. */}
-                  <RoutinesRow
-                    open={routinesOpen}
-                    collapsed={sidebarProps.isSidebarHidden ?? false}
-                    onOpen={() => openRoutines()}
-                  />
-                  <AccountSwitcher
-                    collapsed={sidebarProps.isSidebarHidden ?? false}
-                    open={usageOpen}
-                    onOpen={openUsage}
-                  />
-                </SidebarBoundary>
+                <>
+                  <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
+                    <AccountSwitcher
+                      collapsed={sidebarProps.isSidebarHidden ?? false}
+                      open={usageOpen}
+                      onOpen={openUsage}
+                    />
+                  </SidebarBoundary>
+                  {(query.trim().length === 0 || popoverSearch) && (
+                    <AgentsSidebarActions
+                      agentCount={listed.length}
+                      collapsed={sidebarProps.isSidebarHidden ?? false}
+                      onNew={() => openNew()}
+                      onNewRoom={openNewRoom}
+                    />
+                  )}
+                </>
+              }
+              footerLead={
+                <RoutinesRow
+                  open={routinesOpen}
+                  collapsed={sidebarProps.isSidebarHidden ?? false}
+                  onOpen={() => openRoutines()}
+                />
               }
               listContent={
                 <SidebarBoundary>

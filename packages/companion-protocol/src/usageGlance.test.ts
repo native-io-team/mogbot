@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { UsageAccount, UsageAccountLine, UsageInventory } from './model';
 import {
   changeLines,
+  glanceUsed,
   relativeIn,
+  shortCountdown,
   runsOnRows,
   totalWords,
   usageGlance,
   usersLine,
   weightingOf,
+  type UsageTotal,
 } from './usageGlance';
 
 const NOW = new Date(2026, 10, 9, 12, 0).getTime();
@@ -859,5 +862,65 @@ describe('totalWords', () => {
     expect(w.across).toBeNull();
     expect(w.eyebrow).toBeNull();
     expect(w.figure).toBe(g.headline);
+  });
+});
+
+describe('glanceUsed (the glance, said as what is used)', () => {
+  const total = (left: number | null, extra: Partial<UsageTotal> = {}): UsageTotal => ({
+    left,
+    figure: left === null ? 'Not read yet' : `${left}% left`,
+    across: left === null ? '' : 'this week',
+    unread: null,
+    notRead: null,
+    weighting: null,
+    tone: 'calm',
+    counted: left === null ? 0 : 1,
+    refill: left === null ? null : { in: '6d 2h', at: 'Mon 9:00 AM', account: 'Work' },
+    segments: [],
+    ...extra,
+  });
+  const row = (figure: string, refill: string | null = 'Refills in 6d 2h') => ({
+    figure,
+    refill,
+    count: null,
+    notRead: null,
+    needsYou: false,
+  });
+
+  it('92% left is 8% used: a short fill, ordinary ink, the countdown shortened', () => {
+    const u = glanceUsed({ total: total(92), tone: 'calm', row: row('92% left this week') });
+    expect(u.used).toBe(8);
+    expect(u.line).toBe('8% used · refills in 6d');
+    expect(u.detail).toBe('8% used this week. Refills in 6d 2h');
+    expect(u.tone).toBe('calm');
+  });
+
+  it('takes the warning role from 80% used', () => {
+    expect(glanceUsed({ total: total(21), tone: 'calm', row: row('x') }).tone).toBe('calm');
+    expect(glanceUsed({ total: total(20), tone: 'calm', row: row('x') }).tone).toBe('high');
+  });
+
+  it('out everywhere is a full bar and the row’s own words', () => {
+    const u = glanceUsed({
+      total: total(0),
+      tone: 'limited',
+      row: row('Out of usage', 'Refills Sat 10:00 AM'),
+    });
+    expect(u.used).toBe(100);
+    expect(u.line).toBe('Out of usage · refills Sat 10:00 AM');
+    expect(u.tone).toBe('out');
+  });
+
+  it('nothing read is no number and no bar', () => {
+    const u = glanceUsed({ total: total(null), tone: 'calm', row: row('Not read yet', null) });
+    expect(u.used).toBeNull();
+    expect(u.line).toBe('Not read yet');
+    expect(u.tone).toBe('quiet');
+  });
+
+  it('shortCountdown keeps the largest unit', () => {
+    expect(shortCountdown('6d 2h')).toBe('6d');
+    expect(shortCountdown('4h 59m')).toBe('4h');
+    expect(shortCountdown('12m')).toBe('12m');
   });
 });

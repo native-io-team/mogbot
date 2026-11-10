@@ -16,6 +16,8 @@ import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { MobileIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
+import { IconButton } from '../primitives/IconButton';
+import { Tooltip } from '../primitives/Tooltip';
 import { FooterRowIcon } from '../workspace/FooterRowIcon';
 import { useOpenModal } from '../../contexts/ModalContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
@@ -72,7 +74,18 @@ export function phoneIndicatorState(
   };
 }
 
-export function PhoneIndicator({ isSidebarHidden }: { isSidebarHidden: boolean }) {
+export function PhoneIndicator({
+  isSidebarHidden,
+  compact = false,
+}: {
+  isSidebarHidden: boolean;
+  /**
+   * Sized as a small icon button with a tooltip, beside Settings in the
+   * foot's last row (the Agents sidebar). Placement and size only: the words
+   * are the same, in the tooltip and the VoiceOver label.
+   */
+  compact?: boolean;
+}) {
   const openModal = useOpenModal();
   // No `immediate`: the poll below reads on mount, and both made it two reads at once.
   const status = useAsyncState<PhoneStatus>(getPhoneStatus);
@@ -107,13 +120,34 @@ export function PhoneIndicator({ isSidebarHidden }: { isSidebarHidden: boolean }
   const state = status.data ? phoneIndicatorState(status.data, now) : null;
   if (!state) return null;
 
+  const open = () => {
+    if (state.pair) requestPairOnOpen();
+    openModal('phone');
+  };
+  // Paired, it is a status: a small icon beside Settings. With nothing to
+  // pair yet it stays a labelled row, the way in (CSS gives it its own line).
+  if (compact && !state.pair) {
+    return (
+      <Tooltip content={`${state.line}. ${state.detail}`}>
+        <IconButton
+          variant="ghost"
+          className={`remote-indicator remote-indicator--icon remote-indicator--${state.tone}`}
+          onClick={open}
+          aria-label={`${state.line}. ${state.detail}`}
+          data-testid="phone-indicator"
+          icon={<FooterRowIcon icon={<MobileIcon size={14} />} status={state.tone} />}
+        />
+      </Tooltip>
+    );
+  }
+
   return (
     <Button
       variant="ghost"
       width="fill"
       className={`remote-indicator remote-indicator--${state.tone}${
         isSidebarHidden ? ' remote-indicator--compact' : ''
-      }`}
+      }${compact ? ' remote-indicator--own-line' : ''}`}
       onClick={() => {
         if (state.pair) requestPairOnOpen();
         openModal('phone');

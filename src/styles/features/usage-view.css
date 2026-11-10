@@ -25,18 +25,18 @@
 
 /* ------------------------------------------------------- the sidebar row */
 
-/* Room to breathe: a small card of its own, three lines with a clear order
-   (what this is and when it refills; what's left; the meter). */
+/* Two lines, first in the foot: "8% used · refills in 6d", then a thin bar
+   that fills with use. Compact, so the foot under the list stays short. */
 .usage-glance.account-switcher__row {
   align-items: flex-start;
   height: auto;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding-block: var(--spacing-xs);
 }
 
 .usage-glance__body {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-2xs);
   min-width: 0;
   flex: 1;
   line-height: var(--line-height-compact);
@@ -46,13 +46,55 @@
 .usage-glance__headline {
   min-width: 0;
   overflow: hidden;
-  color: var(--text-primary);
-  font-size: var(--font-size-body-md);
-  font-weight: var(--font-weight-label);
-  letter-spacing: var(--tracking-name);
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-sm);
+  font-variant-numeric: tabular-nums;
   line-height: var(--line-height-compact);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.usage-glance__figure {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-label);
+}
+
+/* Heavy use (80% and up) and out: the figure in the warning role. Status,
+   never the accent. */
+.usage-glance[data-tone='high'] .usage-glance__figure,
+.usage-glance[data-tone='out'] .usage-glance__figure,
+.usage-glance[data-needs-you] .usage-glance__figure {
+  color: var(--accent-warning);
+}
+
+/* The glance's bar: it fills with USE. A short fill is light use, a full
+   bar is out. The track is the recessed surface, visible in both themes. */
+.usage-used {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: var(--usage-total-height-small);
+  margin-block-end: var(--spacing-2xs);
+  overflow: hidden;
+  background: var(--usage-stack-track);
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 var(--border-width-default) var(--border-subtle);
+}
+
+.usage-used__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--usage-used-fill);
+  min-width: var(--usage-total-height-small);
+  background: var(--usage-stack-ink);
+  border-radius: inherit;
+  transition: width var(--transition-arrive);
+}
+
+.usage-used[data-tone='high'] .usage-used__fill,
+.usage-used[data-tone='out'] .usage-used__fill {
+  background: var(--accent-warning);
 }
 
 .usage-glance__label {
@@ -61,10 +103,6 @@
   font-weight: var(--font-weight-body);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.usage-glance[data-needs-you] .usage-glance__headline {
-  color: var(--accent-warning);
 }
 
 /* One line under a meter: an account signed in twice, which draws no segment. */
@@ -571,6 +609,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .usage-used__fill,
   .usage-total__fill,
   .usage-row__fill,
   .usage-row {

@@ -4033,7 +4033,7 @@ async function main() {
         route: '/agents',
         ready: 'Agents',
         check:
-          'Under the Agents title, one compact card before the first row: "Usage" over "72% left · 2 accounts", a refill chip and a chevron at the right, then ONE ordinary bar filled to 72% (never a segment per account); air above and below, neutral ink',
+          'Under the Agents title, one compact card before the first row: "Usage" over "28% used · 2 accounts" (said as used, as the desk sidebar), a refill chip and a chevron at the right, then ONE bar that fills with use, a short fill at 28% (never a segment per account); air above and below, neutral ink',
       },
       {
         name: 'usage-total',

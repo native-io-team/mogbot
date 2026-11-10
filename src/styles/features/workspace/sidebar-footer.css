@@ -112,3 +112,53 @@
   position: relative;
   display: inline-flex;
 }
+
+/* The Agents foot's last row (`compactFoot`): Routines takes the room, then
+   the phone and remote as small icons with tooltips, then the Settings gear
+   in the grid's own column. With no phone paired the phone keeps its
+   labelled row, wrapped onto its own line above (`--own-line`), and the
+   gear stays at the bottom beside Routines. */
+.workspace-sidebar-footer-actions.is-compact-foot > .workspace-sidebar-footer-lead {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.workspace-sidebar-footer-lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--button-group-spacing);
+  min-width: 0;
+}
+
+.workspace-sidebar-footer-lead > .agents-list__routines {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.workspace-sidebar-footer-lead > .remote-indicator--own-line {
+  order: -1;
+  flex: 1 0 100%;
+}
+
+.workspace-sidebar-footer .remote-indicator--icon,
+.workspace-sidebar-footer-icon {
+  flex: 0 0 var(--control-height-standard);
+  width: var(--control-height-standard);
+  min-width: var(--control-height-standard);
+  height: var(--control-height-standard);
+  padding: 0;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.workspace-sidebar:not(.is-hidden) .workspace-sidebar-footer .remote-indicator--icon {
+  padding-inline-start: 0;
+}
+
+.workspace-sidebar:not(.is-hidden)
+  .workspace-sidebar-footer
+  .remote-indicator--icon
+  > .button__icon {
+  padding-inline: 0;
+}

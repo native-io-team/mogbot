@@ -19,6 +19,8 @@
 import { useState } from 'react';
 import { GlobeIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
+import { IconButton } from '../primitives/IconButton';
+import { Tooltip } from '../primitives/Tooltip';
 import { FooterRowIcon } from '../workspace/FooterRowIcon';
 import { useOpenModal } from '../../contexts/ModalContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
@@ -72,7 +74,18 @@ export function indicatorState(
   };
 }
 
-export function RemoteAccessIndicator({ isSidebarHidden }: { isSidebarHidden: boolean }) {
+export function RemoteAccessIndicator({
+  isSidebarHidden,
+  compact = false,
+}: {
+  isSidebarHidden: boolean;
+  /**
+   * Sized as a small icon button with a tooltip, beside Settings in the
+   * foot's last row (the Agents sidebar). Placement and size only: the words
+   * are the same, in the tooltip and the VoiceOver label.
+   */
+  compact?: boolean;
+}) {
   const openModal = useOpenModal();
   // No `immediate`: the poll below reads on mount, and both made it two reads at once.
   const brief = useAsyncState<RemoteAccessBrief>(getRemoteAccessBrief);
@@ -91,6 +104,23 @@ export function RemoteAccessIndicator({ isSidebarHidden }: { isSidebarHidden: bo
   // (PhoneIndicator), and remote access is reached from the Phone panel and
   // ⌘K. On, it stays, because battery and a stopped server need seeing.
   if (!state || state.tone === 'off') return null;
+
+  // Beside Settings in the Agents foot: the globe and its dot, the words in
+  // the tooltip. Battery and a stopped server still show, as the dot's hue.
+  if (compact) {
+    return (
+      <Tooltip content={`${state.line}. ${state.detail}`}>
+        <IconButton
+          variant="ghost"
+          className={`remote-indicator remote-indicator--icon remote-indicator--${state.tone}`}
+          onClick={() => openModal('remoteAccess')}
+          aria-label={`${state.line}. ${state.detail}`}
+          data-testid="remote-indicator"
+          icon={<FooterRowIcon icon={<GlobeIcon size={14} />} status={state.tone} />}
+        />
+      </Tooltip>
+    );
+  }
 
   return (
     <Button

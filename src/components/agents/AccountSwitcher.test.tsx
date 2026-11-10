@@ -139,18 +139,20 @@ describe('AccountSwitcher (the sidebar’s usage glance)', () => {
     render(<AccountSwitcher collapsed={false} onOpen={onOpen} />);
 
     const row = await screen.findByTestId('account-switcher');
-    // What's left and of what, in plain words. The figure is of the one
-    // account read, so no "2 accounts" beside it: Work isn't in it.
-    await waitFor(() => expect(row).toHaveTextContent('62% left for now'));
-    expect(row).toHaveTextContent(/^Usage/);
-    expect(row).toHaveTextContent('Refills');
+    // Said as what is USED, in plain words: "38% used · refills in …". The
+    // figure is of the one account read, so no "2 accounts" beside it.
+    await waitFor(() => expect(row).toHaveTextContent('38% used'));
+    expect(row).toHaveTextContent('refills in');
+    expect(row).not.toHaveTextContent('left');
     expect(row).not.toHaveTextContent('2 accounts');
-    // Work has no reading: left out of the figure, and the row says so.
-    expect(row).toHaveTextContent('1 account not read');
-    // ONE bar of the total, never a segment per account.
+    // The whole sentence is its name: of what, and Work (no reading) left out of it.
+    expect(row).toHaveAttribute('aria-label', expect.stringContaining('38% used for now'));
+    expect(row).toHaveAttribute('aria-label', expect.stringContaining('1 account not read'));
+    // ONE bar, filling with use: 38% used is a 38% fill, never a segment per account.
     const meter = within(row).getByRole('meter');
-    expect(meter).toHaveAttribute('aria-valuenow', '62');
-    expect(row.querySelectorAll('.usage-total__fill')).toHaveLength(1);
+    expect(meter).toHaveAttribute('aria-valuenow', '38');
+    expect(meter).toHaveAttribute('aria-valuetext', '38% used');
+    expect(row.querySelectorAll('.usage-used__fill')).toHaveLength(1);
     // The row itself never asks for a reading: a glance.
     expect(
       calls.some(

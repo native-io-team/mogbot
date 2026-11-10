@@ -375,6 +375,68 @@ export function totalWords(
   };
 }
 
+/** At or over this much used, the glance's bar and figure take the warning role. */
+export const HIGH_USED = 80;
+
+/**
+ * The sidebar's and the phone list's glance, said as what is USED: its bar
+ * fills with use, so 8% used is a short fill and a full bar means out.
+ * "92% left" beside a nearly full bar read as "92% used" (owner, round 5);
+ * a bar filling up is how every meter people know reads. The Usage view
+ * itself still says what's left, in words, beside its own bars.
+ *
+ * Only what the engines reported: `used` is 100 minus the total's `left`,
+ * absent when nothing was read, and the words are the row's own for every
+ * state that isn't a reading ("Out of usage", "Not read yet").
+ */
+export interface GlanceUsed {
+  /** 0–100, null with nothing read. */
+  used: number | null;
+  /** "8% used", "Out of usage", "Not read yet", "Not signed in". */
+  figure: string;
+  /** "refills in 6d", "refills Sat 10:00 AM": lower case, to follow the figure. */
+  refill: string | null;
+  /** The one line: "8% used · refills in 6d". */
+  line: string;
+  /** Everything, for a tooltip and VoiceOver: "8% used this week. 2 accounts. Refills in 6d 2h". */
+  detail: string;
+  /** `high` at `HIGH_USED`, `out` at 100 or out everywhere, `quiet` unread; never accent. */
+  tone: 'calm' | 'high' | 'out' | 'quiet';
+}
+
+/** "6d 2h" → "6d", "4h 59m" → "4h": the glance's countdown, its largest unit. */
+export function shortCountdown(countdown: string): string {
+  return countdown.trim().split(/\s+/)[0] ?? countdown;
+}
+
+export function glanceUsed(glance: Pick<UsageGlance, 'total' | 'tone' | 'row'>): GlanceUsed {
+  const { total, row } = glance;
+  const out = glance.tone === 'limited';
+  const reading = total.left !== null && !out;
+  const used = out ? 100 : total.left === null ? null : Math.max(0, 100 - total.left);
+  const figure = reading ? `${used}% used` : row.figure;
+  const refill =
+    reading && total.refill
+      ? `refills in ${shortCountdown(total.refill.in)}`
+      : row.refill
+        ? row.refill.charAt(0).toLowerCase() + row.refill.slice(1)
+        : null;
+  const of = reading ? `${figure} ${total.across}`.trim() : figure;
+  const detail = [of, reading ? row.count : null, reading ? row.notRead : null, row.refill]
+    .filter(Boolean)
+    .join('. ');
+  const tone: GlanceUsed['tone'] =
+    used === null ? 'quiet' : used >= 100 || out ? 'out' : used >= HIGH_USED ? 'high' : 'calm';
+  return {
+    used,
+    figure,
+    refill,
+    line: [figure, refill].filter(Boolean).join(' · '),
+    detail,
+    tone,
+  };
+}
+
 /** One agent and the account it runs on, for the Usage view's "Runs on" list. */
 export interface RunsOnRow {
   agentId: string;
