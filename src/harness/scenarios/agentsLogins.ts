@@ -378,7 +378,8 @@ export const agentsLoginsScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="social"]' }],
     commands: {
-      agents_overview: overview(),
+      // The renamed team, so the chat it opens is Publicist's, as the card says.
+      agents_overview: overview(TEAM),
       agents_messages: chatFor('social', [
         loginCard('social', 'Publicist needs your LinkedIn', {
           service: 'linkedin',
