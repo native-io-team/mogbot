@@ -13,6 +13,7 @@ import type { AgentPolicyView } from './policy';
 import type { OnItsOwn, OnItsOwnNarrow, OnItsOwnTeam } from './onItsOwn';
 import type { QuietHours, QuietWindow } from './quiet';
 import type { MorningBrief } from './brief';
+import type { WatchCheckOutcome, WatchOptions } from './whenComposer';
 import type {
   AgentDraft,
   AgentEngine,
@@ -35,6 +36,7 @@ import type {
   AgentSecret,
   AgentsOverview,
   CheckIn,
+  WatchSource,
   Device,
   FileDiff,
   ImportApplied,
@@ -656,6 +658,33 @@ export interface Methods {
   'agents.schedule.cancel': { params: { agentId: string; id: string }; result: null };
   'agents.schedule.runNow': { params: { agentId: string; id: string }; result: null };
 
+  /**
+   * "When…" routines from the phone (a Mac that lists these methods): the
+   * desk's `agents_watch_*` commands. `options` is what the composer may
+   * offer for this agent: the apps a check could read through and the
+   * folders on the Mac it may pick from (a phone can't type a path; one off
+   * that list is refused). Pause and Cancel are `agents.schedule.pause|cancel`.
+   * Adding one leaves a line in the agent's chat, as on the desk; the
+   * 12-per-agent cap and every rule of the check are the Mac's.
+   */
+  'agents.watch.options': { params: { agentId: string }; result: WatchOptions };
+  'agents.watch.create': {
+    params: { agentId: string; source: WatchSource; everyMinutes: number; note: string };
+    result: CheckIn;
+  };
+  'agents.watch.update': {
+    params: {
+      agentId: string;
+      id: string;
+      source: WatchSource;
+      everyMinutes: number;
+      note: string;
+    };
+    result: CheckIn;
+  };
+  /** Check now: the agent is woken only if something's new. */
+  'agents.watch.checkNow': { params: { agentId: string; id: string }; result: WatchCheckOutcome };
+
   /** The import over the connector, as the phone follows it. */
   'agents.import.status': { params: Record<string, never>; result: PhoneImportStatus };
   /** Start: one import may begin (it still asks on a card in the Chief's chat). */
@@ -806,6 +835,7 @@ export const READ_ONLY_METHODS = [
   'agents.changeDiff',
   'agents.search',
   'agents.schedule.preview',
+  'agents.watch.options',
   'rooms.list',
   'rooms.messages',
   'agents.import.pastePrompt',

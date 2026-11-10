@@ -49,6 +49,7 @@ import {
   type Attachment,
   type BlobRef,
   type CheckIn,
+  type WatchSource,
   type ProjectSummary,
   type MonthDay,
   type Repeat,
@@ -1361,6 +1362,25 @@ export function createMockServer(opts: MockOptions = {}) {
         paused: false,
       },
     ];
+    // A "When…" routine (`watch.rs`), sent apart from the timed ones.
+    agent('site')!.watches = [
+      {
+        id: 'w_mentions',
+        note: 'Triage it and tell me if it’s urgent',
+        nextAt: at + 6 * 60_000,
+        createdAt: at - 3 * 86_400_000,
+        paused: false,
+        watch: {
+          source: { kind: 'github_mentions' },
+          everyMinutes: 10,
+          baselineAt: at - 3 * 86_400_000,
+          lastCheckedAt: at - 4 * 60_000,
+          lastFoundAt: at - 5 * 3_600_000,
+          lastFound: 2,
+          failures: 0,
+        },
+      },
+    ];
     agent('qa')!.checkIns = [
       {
         id: 'ci_smoke',
@@ -1384,8 +1404,7 @@ export function createMockServer(opts: MockOptions = {}) {
     const list = engines();
     const ready = (id: string) => list.some((e) => e.id === id && e.installed && e.signedIn);
     const offered = (id: 'claude' | 'codex' | 'opencode') => {
-      const model =
-        id === 'claude' ? saved.claudeModel : id === 'codex' ? saved.codexModel : null;
+      const model = id === 'claude' ? saved.claudeModel : id === 'codex' ? saved.codexModel : null;
       const info = list.find((e) => e.id === id);
       return model && info?.models.some((m) => m.value === model) ? model : null;
     };
@@ -1469,7 +1488,9 @@ export function createMockServer(opts: MockOptions = {}) {
         copy: undefined,
         takeover: undefined,
       });
-      messages.set('chief', [{ id: 'chief_greeting', agentId: 'chief', ts, kind: 'agent', text: greeting }]);
+      messages.set('chief', [
+        { id: 'chief_greeting', agentId: 'chief', ts, kind: 'agent', text: greeting },
+      ]);
     }
     projects.splice(0, projects.length);
     memories.delete('chief');
@@ -1833,8 +1854,47 @@ export function createMockServer(opts: MockOptions = {}) {
 
   // ---- Methods ------------------------------------------------------------------------
 
+  /** `watch::create` / `watch::edit`, as far as the phone can tell. */
+  function watchSave(p: Record<string, unknown>): CheckIn {
+    const a = agent(String(p.agentId))!;
+    const source = p.source as WatchSource;
+    if (typeof p.note !== 'string' || !p.note.trim())
+      return fail({ type: 'Validation', field: 'note', reason: 'Say what to do when it happens.' });
+    if (
+      source.kind === 'new_file' &&
+      !['/Users/sam/Downloads', '/Users/sam/Desktop', '/Users/sam/Documents'].includes(
+        source.folder
+      )
+    )
+      return fail({
+        type: 'Other',
+        message: 'Pick one of the folders your Mac offers. For another, set it up on your Mac.',
+      });
+    const every = Number(p.everyMinutes);
+    if (p.id) {
+      const w = checkIn(p);
+      w.note = String(p.note).trim();
+      w.watch = { ...w.watch!, source, everyMinutes: every };
+      emit({ type: 'agents.registry', overview: overview() });
+      return w;
+    }
+    const created: CheckIn = {
+      id: `w_${randomUUID().slice(0, 6)}`,
+      note: String(p.note).trim(),
+      nextAt: Date.now() + every * 60_000,
+      createdAt: Date.now(),
+      paused: false,
+      watch: { source, everyMinutes: every, lastFound: 0, failures: 0 },
+    };
+    a.watches = [...(a.watches ?? []), created];
+    emit({ type: 'agents.registry', overview: overview() });
+    return created;
+  }
+
   function checkIn(p: Record<string, unknown>): CheckIn {
-    const found = agent(String(p.agentId))?.checkIns?.find((x) => x.id === p.id);
+    const a = agent(String(p.agentId));
+    // Pause and Cancel are shared with "When…" routines.
+    const found = [...(a?.checkIns ?? []), ...(a?.watches ?? [])].find((x) => x.id === p.id);
     return found ?? fail({ type: 'Other', message: 'That check-in no longer exists.' });
   }
 
@@ -3211,9 +3271,41 @@ export function createMockServer(opts: MockOptions = {}) {
       const a = agent(String(p.agentId))!;
       checkIn(p);
       a.checkIns = (a.checkIns ?? []).filter((x) => x.id !== p.id);
+      if (a.watches) a.watches = a.watches.filter((x) => x.id !== p.id);
       emit({ type: 'agents.registry', overview: overview() });
       return null;
     },
+    // "When…" routines (`agents/watch.rs`, `watch_options.rs`): what the
+    // composer may offer, and the Mac's own refusals for a folder it didn't.
+    'agents.watch.options': (p) => ({
+      connections: [
+        {
+          service: 'gmail',
+          title: 'Gmail',
+          account: 'sam@example.com',
+          kind: { type: 'oauth' },
+          serverKey: 'gmail',
+          needsSignIn: false,
+          grants: [{ agentId: String(p.agentId) }],
+        },
+      ],
+      claudeApps: [
+        {
+          name: 'linear',
+          target: 'https://mcp.linear.app/mcp',
+          status: 'connected',
+          source: 'user',
+        },
+      ],
+      folders: [
+        { path: '/Users/sam/Downloads', label: '~/Downloads' },
+        { path: '/Users/sam/Desktop', label: '~/Desktop' },
+        { path: '/Users/sam/Documents', label: '~/Documents' },
+      ],
+    }),
+    'agents.watch.create': (p) => watchSave(p),
+    'agents.watch.update': (p) => watchSave(p),
+    'agents.watch.checkNow': () => ({ found: 0, baseline: false }),
     'agents.schedule.runNow': (p) => {
       const ci = checkIn(p);
       const agentId = String(p.agentId);

@@ -12,6 +12,7 @@ import {
   ON_ITS_OWN_STANDING,
   describeCheckInTime,
   stepsLine,
+  describeWatchCheck,
   describeWatchStatus,
   describeWatchTitle,
   isAdmin,
@@ -71,6 +72,7 @@ import {
   schedule,
   setAgentToggles,
   startFresh,
+  watch,
 } from '../../lib/session';
 import { useApp } from '../../lib/store';
 import { useSwitchColors } from '../../lib/accent';
@@ -132,6 +134,8 @@ function AgentSheet() {
   const onPlan = onClaudePlan(useQuotaLines());
   if (!agent) return null;
   const canSchedule = canCall('agents.schedule.create', welcome);
+  // "When…" routines set up and changed here too, on a Mac that serves it.
+  const canWhen = canCall('agents.watch.update', welcome);
   const checkIns = sortCheckIns(agent.checkIns ?? []);
   // "When…" routines: shown (read-only) by a Mac that sends them apart.
   const watches = welcome?.features?.includes(MAC_FEATURES.whenRoutines)
@@ -397,16 +401,21 @@ function AgentSheet() {
               {watches.map((c, i) => (
                 <WatchRow
                   key={c.id}
+                  agent={agent}
                   checkIn={c}
+                  enabled={canWhen && live}
+                  onError={setError}
                   // One cost store for checks and runs, worded for the plan.
                   spent={routineWeekLine(usage?.routines?.find((r) => r.id === c.id)?.week, onPlan)}
                   last={i === watches.length - 1}
                 />
               ))}
             </View>
-            <T variant="caption" color={colors.textMuted} style={styles.none}>
-              Set up and changed on your Mac.
-            </T>
+            {!canWhen && (
+              <T variant="caption" color={colors.textMuted} style={styles.none}>
+                Set up and changed on your Mac.
+              </T>
+            )}
           </>
         )}
       </ScrollView>
@@ -537,30 +546,87 @@ function CheckInRow({
 }
 
 /**
- * A "When…" routine, read-only: what it waits for, what it does, and what
- * its last check came to. It's set up and changed on the Mac.
+ * A "When…" routine: what it waits for, what it does, and what its last
+ * check came to. On a Mac that serves it, tapping it offers the desk's row
+ * actions: Check now, Pause or Resume, Edit (the "When…" composer) and
+ * Cancel; Check now's answer shows under it. Else it's read-only.
  */
 function WatchRow({
+  agent,
   checkIn: c,
   spent: cost,
   last,
+  enabled,
+  onError,
 }: {
+  agent: Agent;
   checkIn: CheckIn;
   /** Its checks' and runs' week, as `routineWeekLine` words it. */
   spent: string | null;
   last: boolean;
+  /** Its actions are served and the Mac is there. */
+  enabled: boolean;
+  onError: (text: string | null) => void;
 }) {
   const colors = useColors();
   const styles = useStyles();
+  const router = useRouter();
   const now = useNow(30_000);
+  const [busy, setBusy] = useState(false);
+  // What Check now came to, in the desk's words.
+  const [checked, setChecked] = useState<string | null>(null);
   if (!c.watch) return null;
   const title = describeWatchTitle(c.watch.source);
   const status = describeWatchStatus(c, now);
+  const act = (run: () => Promise<unknown>) => () => {
+    setBusy(true);
+    onError(null);
+    setChecked(null);
+    run()
+      .catch((e: unknown) => onError(describeError(e)))
+      .finally(() => setBusy(false));
+  };
+  const menu = () =>
+    choose(title, [
+      {
+        label: 'Check now',
+        run: act(async () => setChecked(describeWatchCheck(await watch.checkNow(agent.id, c.id)))),
+      },
+      {
+        label: c.paused ? 'Resume' : 'Pause',
+        run: act(() => schedule.pause(agent.id, c.id, !c.paused)),
+      },
+      {
+        label: 'Edit',
+        run: () => router.push({ pathname: '/schedule', params: { agentId: agent.id, id: c.id } }),
+      },
+      {
+        label: 'Cancel routine',
+        destructive: true,
+        run: () =>
+          Alert.alert('Cancel this routine?', `${agent.name} won’t be woken for it again.`, [
+            { text: 'Keep', style: 'cancel' },
+            {
+              text: 'Cancel it',
+              style: 'destructive',
+              onPress: act(() => schedule.cancel(agent.id, c.id)),
+            },
+          ]),
+      },
+    ]);
   return (
-    <View
-      style={styles.row}
+    <Pressable
+      disabled={!enabled || busy}
+      onPress={menu}
       accessible
-      accessibilityLabel={[title, c.note, status, cost].filter(Boolean).join('. ')}
+      accessibilityRole={enabled ? 'button' : undefined}
+      accessibilityState={enabled ? { busy } : undefined}
+      accessibilityHint={enabled ? 'Check now, pause, edit or cancel' : undefined}
+      accessibilityLabel={[title, c.note, status, cost, checked].filter(Boolean).join('. ')}
+      style={({ pressed }) => [
+        styles.row,
+        pressed && enabled && { backgroundColor: colors.surfaceControl },
+      ]}
     >
       <Icon
         name="bolt"
@@ -578,9 +644,19 @@ function WatchRow({
           {status}
           {cost ? ` · ${cost}` : ''}
         </T>
+        {!!checked && (
+          <T variant="caption" color={colors.textSecondary}>
+            {checked}
+          </T>
+        )}
       </View>
+      {busy ? (
+        <Spinner />
+      ) : (
+        enabled && <Icon name="ellipsis" size={iconSize.body} color={colors.textMuted} />
+      )}
       {!last && <InsetDivider />}
-    </View>
+    </Pressable>
   );
 }
 

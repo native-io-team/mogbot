@@ -112,6 +112,10 @@ pub const METHODS: &[&str] = &[
     "agents.schedule.pause",
     "agents.schedule.cancel",
     "agents.schedule.runNow",
+    "agents.watch.options",
+    "agents.watch.create",
+    "agents.watch.update",
+    "agents.watch.checkNow",
     "rooms.list",
     "rooms.messages",
     "rooms.send",
@@ -170,6 +174,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.files",
     "agents.search",
     "agents.schedule.preview",
+    "agents.watch.options",
     "rooms.list",
     "rooms.messages",
     "projects.list",
@@ -261,6 +266,30 @@ pub enum ScheduleOp {
         agent_id: String,
         id: String,
     },
+    /// What the "When…" composer may offer for this agent (`watch_options`).
+    WatchOptions {
+        agent_id: String,
+    },
+    /// Add a "When…" routine (`agents_watch_create`).
+    WatchCreate {
+        agent_id: String,
+        source: crate::agents::watch::Source,
+        every_minutes: u32,
+        note: String,
+    },
+    /// Change one (`agents_watch_update`).
+    WatchUpdate {
+        agent_id: String,
+        id: String,
+        source: crate::agents::watch::Source,
+        every_minutes: u32,
+        note: String,
+    },
+    /// Check one now (`agents_watch_check_now`).
+    WatchCheckNow {
+        agent_id: String,
+        id: String,
+    },
 }
 
 impl ScheduleOp {
@@ -270,8 +299,13 @@ impl ScheduleOp {
             ScheduleOp::Update { agent_id, id, .. }
             | ScheduleOp::Pause { agent_id, id, .. }
             | ScheduleOp::Cancel { agent_id, id }
-            | ScheduleOp::RunNow { agent_id, id } => Some((agent_id, id)),
-            ScheduleOp::Preview { .. } | ScheduleOp::Create { .. } => None,
+            | ScheduleOp::RunNow { agent_id, id }
+            | ScheduleOp::WatchUpdate { agent_id, id, .. }
+            | ScheduleOp::WatchCheckNow { agent_id, id } => Some((agent_id, id)),
+            ScheduleOp::Preview { .. }
+            | ScheduleOp::Create { .. }
+            | ScheduleOp::WatchOptions { .. }
+            | ScheduleOp::WatchCreate { .. } => None,
         }
     }
 }
@@ -1230,6 +1264,18 @@ struct ScheduleParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct WatchRoutineParams {
+    agent_id: String,
+    #[serde(default)]
+    id: String,
+    source: crate::agents::watch::Source,
+    every_minutes: u32,
+    #[serde(default)]
+    note: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SessionParams {
     session_id: String,
 }
@@ -1790,6 +1836,15 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             )
         }
         "agents.schedule.cancel" | "agents.schedule.runNow" => field("id").to_string(),
+        "agents.watch.create" | "agents.watch.update" => {
+            let kind = params
+                .get("source")
+                .and_then(|s| s.get("kind"))
+                .and_then(Value::as_str)
+                .unwrap_or("?");
+            preview(&format!("when {kind} — {}", field("note")))
+        }
+        "agents.watch.checkNow" => format!("check now {}", field("id")),
         "agents.conversationRoutine" => {
             format!("move {} to {}", field("routineId"), field("conversationId"))
         }
@@ -2842,6 +2897,55 @@ async fn run(
                 },
             };
             Ok(b.schedule(op).await?)
+        }
+        "agents.watch.options" => {
+            let p: ScheduleParams = parse(params)?;
+            Ok(b.schedule(ScheduleOp::WatchOptions {
+                agent_id: p.agent_id,
+            })
+            .await?)
+        }
+        "agents.watch.create" | "agents.watch.update" => {
+            let p: WatchRoutineParams = parse(params)?;
+            let update = method == "agents.watch.update";
+            if update && p.id.trim().is_empty() {
+                return Err(bad_params("id is required."));
+            }
+            // What to do, and a check in the user's own words, are prompts
+            // the routine sends later with nobody watching: the same rules as
+            // a message typed now.
+            refuse_unsafe_text(&p.note, "A routine's note")?;
+            if let crate::agents::watch::Source::Custom { check, .. } = &p.source {
+                refuse_unsafe_text(check.as_str(), "What a routine looks out for")?;
+            }
+            let op = if update {
+                ScheduleOp::WatchUpdate {
+                    agent_id: p.agent_id,
+                    id: p.id,
+                    source: p.source,
+                    every_minutes: p.every_minutes,
+                    note: p.note,
+                }
+            } else {
+                ScheduleOp::WatchCreate {
+                    agent_id: p.agent_id,
+                    source: p.source,
+                    every_minutes: p.every_minutes,
+                    note: p.note,
+                }
+            };
+            Ok(b.schedule(op).await?)
+        }
+        "agents.watch.checkNow" => {
+            let p: ScheduleParams = parse(params)?;
+            if p.id.trim().is_empty() {
+                return Err(bad_params("id is required."));
+            }
+            Ok(b.schedule(ScheduleOp::WatchCheckNow {
+                agent_id: p.agent_id,
+                id: p.id,
+            })
+            .await?)
         }
         "projects.list" => Ok(b.projects().await?),
         "sessions.read" => {
