@@ -19,7 +19,7 @@
 .agents-routines__bulk {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 .agents-routines__confirm {
@@ -30,6 +30,11 @@
   border: var(--border-width-default) solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--surface-panel);
+}
+
+.agents-routines__confirm .agents-routines__bulk {
+  /* Answers sit at the card's trailing edge, as on every other card. */
+  align-self: flex-end;
 }
 
 .agents-routines__confirm-text {

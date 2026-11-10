@@ -9,8 +9,8 @@ talk only to the Chief and let it run everything else.
 Agents is a mode, not a page. The **Agents | Projects** toggle at the top of
 the sidebar (⌘⇧A, or ⌘K → Switch to Agents) turns the whole window into the
 chat app: agent list on the left, one conversation on the right. Switching
-back returns to wherever you were on the Projects side (the dashboard,
-Workflows, the Inbox, or the open project); switching in returns to the last
+back returns to wherever you were on the Projects side (the dashboard or the
+open project); switching in returns to the last
 conversation. While Projects is showing, an amber badge on the
 Agents segment says an agent needs your OK or has news, and its tooltip says
 which. New agent is ⌘N, the row at the foot of the agent list, or ⌘K. In the

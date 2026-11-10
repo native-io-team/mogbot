@@ -118,8 +118,8 @@ export function AgentsBoard({ agents, onOpenAgent, onNewAgent }: AgentsBoardProp
             aria-label="New agent"
           >
             <AgentKey name="New agent" state="new" size="xl" />
+            {/* Just its name: "Empty socket" was the design's word, not the user's. */}
             <span className="agents-board__name">New agent</span>
-            <span className="agents-board__state">Empty socket</span>
           </button>
         )}
       </div>

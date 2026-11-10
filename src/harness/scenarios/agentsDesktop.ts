@@ -453,7 +453,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     steps: [
       { key: 'mod+k' },
       { fill: '.command-palette-input', value: 'What new agents run on' },
-      { click: '.command-palette [role="option"]', text: 'Engine and model' },
+      { click: '.command-palette [role="option"]', text: 'What new agents run on' },
       { click: '.agent-defaults-settings [data-engine="claude"]' },
     ],
     commands: {
@@ -518,7 +518,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     looksRightWhen:
       'Settings → Accounts & usage is the Usage view’s panel. Claude Code’s accounts are key cards in order, each with a grip (drag, or the grip with the keyboard; no ↑/↓ buttons): 1 this Mac’s own sign-in named “Claude Code account” (never “This Mac”, with “this Mac’s own sign-in” as its detail), 2 “Work” with a neutral “Out of usage until …” pill and its email, 3 “Personal” with its email. Codex: its own sign-in named “Codex account”, and “ChatGPT Plus” “Not signed in” with a Sign in button and its fix line. Each key has a “…” menu (Rename, Sign in again, Remove…). “Add a … account” buttons below. Neutral buttons only, no accent.',
     command: 'settings.page.accounts',
-    requires: '.usage-panel .usage-key',
+    requires: '.usage-panel .usage-row',
     clipSelector: '.settings-window',
     viewport: { width: 1280, height: 2800 },
     commands: {
@@ -600,7 +600,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     looksRightWhen:
       'The Usage panel in Settings: Claude Code’s two keys named in full, “sam@example.com” (Max plan, this Mac’s own sign-in) and “Personal Account”, never “This Mac”; Codex’s own sign-in “Codex account” with “Not signed in” and one Sign in button. Grips to reorder, no ↑/↓ buttons. Neutral only, no accent.',
     command: 'settings.page.accounts',
-    requires: '.usage-panel .usage-key',
+    requires: '.usage-panel .usage-row',
     clipSelector: '.settings-window',
     viewport: { width: 1280, height: 2800 },
     commands: {
@@ -634,7 +634,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     looksRightWhen:
       'Opened on the Accounts & usage page, in one tall shot: exactly the Usage view’s panel (hero, mode control, the keys, adding, crossover, spare-capacity list, estimates, other compute), one rendering, so its figures and names match the Usage view’s. Every limit says “N% left”. Both themes readable; nothing accent-coloured except chosen state.',
     command: 'settings.page.accounts',
-    requires: '.usage-panel .usage-key',
+    requires: '.usage-panel .usage-row',
     clipSelector: '.agents-settings',
     viewport: { width: 1280, height: 3000 },
     commands: {

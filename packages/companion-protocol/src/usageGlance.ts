@@ -256,6 +256,11 @@ export interface GlanceRowWords {
   needsYou: boolean;
 }
 
+/** The read accounts that are out, when others weren't read: "Work is out", "2 accounts are out". */
+function outOf(read: StackKey[]): string {
+  return read.length === 1 ? `${read[0].name} is out` : `${plural(read.length, 'account')} are out`;
+}
+
 /** The figure that matters: the total across every account (`totalOf`), and its next refill. */
 function rowWords(
   keys: StackKey[],
@@ -281,7 +286,10 @@ function rowWords(
   if (read.length === 0) return { figure: 'Not read yet', refill: null, count, needsYou };
   if (roomy.length === 0) {
     const at = back ? resetPhrase(back, now) : (soonest?.resetsAt ?? null);
-    return { figure: OUT_OF_USAGE, refill: at ? `Refills ${at}` : null, count, needsYou };
+    // Out everywhere only when every account was read: one out and three
+    // never read is not "out of usage", it's that one account (round 4).
+    const figure = read.length < counted.length ? outOf(read) : OUT_OF_USAGE;
+    return { figure, refill: at ? `Refills ${at}` : null, count, needsYou };
   }
   // The total across every account, as the Usage view's hero says it, and
   // the accounts that figure is of: an account not read yet isn't in it, so
@@ -921,9 +929,12 @@ export function usageGlance(
     headline = 'Your usage shows here after an agent’s first reply.';
   } else if (roomy.length === 0) {
     tone = 'limited';
-    headline = back
-      ? `${OUT_OF_USAGE} until ${resetPhrase(back.at, now)}`
-      : `${OUT_OF_USAGE} everywhere`;
+    headline =
+      read.length < counted.length
+        ? outOf(read)
+        : back
+          ? `${OUT_OF_USAGE} until ${resetPhrase(back.at, now)}`
+          : `${OUT_OF_USAGE} everywhere`;
   } else if (runOut.length > 0) {
     const r = runOut.reduce((a, b) => (b.reachesAt < a.reachesAt ? b : a));
     const engineResets = resets
@@ -961,10 +972,14 @@ export function usageGlance(
     .join(' · ');
 
   // Engines whose every read account is nearly or wholly out.
-  const readOf = (e: StackEngine) =>
-    e.keys.filter((k) => k.signedIn && k.state !== 'same' && k.left !== null);
+  const countedOf = (e: StackEngine) => e.keys.filter((k) => k.signedIn && k.state !== 'same');
+  const readOf = (e: StackEngine) => countedOf(e).filter((k) => k.left !== null);
+  // "Every account is out" only of an engine whose every account was read.
   const lowEngines = engines.filter(
-    (e) => readOf(e).length > 0 && readOf(e).every((k) => (k.left ?? 0) <= LOW_LEFT)
+    (e) =>
+      readOf(e).length > 0 &&
+      readOf(e).length === countedOf(e).length &&
+      readOf(e).every((k) => (k.left ?? 0) <= LOW_LEFT)
   );
   const other = engines.find(
     (o) => !lowEngines.includes(o) && readOf(o).some((k) => (k.left ?? 0) > LOW_LEFT)

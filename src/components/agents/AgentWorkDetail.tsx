@@ -55,8 +55,13 @@ function CopyText({ text, label }: { text: string; label: string }) {
   );
 }
 
-/** "Show exact command" under a step: read once, when first opened. */
-export function ExactCommand({ at }: { at: ExactRef }) {
+/**
+ * "Show exact command" under a step that ran one; any other step (a read, an
+ * edit, a tool) kept the tool and its input, so it says "details", not
+ * "command". Read once, when first opened.
+ */
+export function ExactCommand({ at, command = true }: { at: ExactRef; command?: boolean }) {
+  const what = command ? 'exact command' : 'details';
   const [open, setOpen] = useState(false);
   const read = useAsyncState(() => getStepExact(at.agentId, at.messageId, at.index));
   const toggle = () => {
@@ -67,7 +72,7 @@ export function ExactCommand({ at }: { at: ExactRef }) {
   return (
     <div className="agent-work__exact">
       <TextButton tabIndex={0} aria-expanded={open} onClick={toggle}>
-        {open ? 'Hide exact command' : 'Show exact command'}
+        {open ? `Hide ${what}` : `Show ${what}`}
       </TextButton>
       {open &&
         (read.isLoading ? (
@@ -196,7 +201,7 @@ export function AgentBriefingModal({
             ))}
             {briefing.instructions && (
               <details className="agent-briefing__section">
-                <summary>Its instructions and memory (CLAUDE.md)</summary>
+                <summary>Its instructions and memory</summary>
                 <pre className="agent-briefing__text">{briefing.instructions}</pre>
               </details>
             )}

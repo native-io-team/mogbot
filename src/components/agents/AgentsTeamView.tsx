@@ -26,14 +26,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronRightIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { StatusPill } from '../primitives/StatusPill';
-import { CompactModeToggle } from '../workspace/ModeToggle';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { AgentKey } from './AgentKey';
 import { AgentsBoard } from './AgentsBoard';
 import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
 import { ApprovalCard, ErrorLine } from './AgentChatItems';
-import { AgentMark, AgentSwitcher } from './AgentSwitcher';
+import { AgentMark } from './AgentSwitcher';
+import { AgentsPageHeader, type AgentsPageCompact } from './AgentsPageHeader';
 import { useHeightReveal, useNewKeys } from './useAgentMotion';
 import {
   answerApproval,
@@ -297,7 +297,7 @@ interface AgentsTeamViewProps {
   /** Its engine isn't on this Mac: install it again. */
   onInstallEngine?: (engine: AgentEngine) => void;
   /** Below the compact breakpoint there's no sidebar; the header switches agents. */
-  compact?: { agents: Agent[]; onGoHome: () => void; onGoProjects: () => void };
+  compact?: AgentsPageCompact;
   /** The board's empty socket: make a new agent. */
   onNewAgent?: () => void;
 }
@@ -499,36 +499,15 @@ export function AgentsTeamView({
     team.replies.length > 0
   );
 
-  const title = (
-    <>
-      <AgentKey name="Everyone" colorway="putty" icon="people" size="md" />
-      <h2 className="agent-chat__name">What’s in flight</h2>
-    </>
-  );
-
   return (
     <section className="agent-chat agents-team" aria-label="What’s in flight">
-      <header className="agent-chat__header">
-        {compact && (
-          <CompactModeToggle
-            mode="agents"
-            onProjects={compact.onGoProjects}
-            className="agent-chat__mode"
-          />
-        )}
-        {compact ? (
-          <AgentSwitcher
-            agents={compact.agents}
-            currentId={TEAM_ID}
-            title={title}
-            label="What’s in flight. Switch agent"
-            onOpenAgent={onOpenAgent}
-            onGoHome={compact.onGoHome}
-          />
-        ) : (
-          <div className="agent-chat__title">{title}</div>
-        )}
-      </header>
+      <AgentsPageHeader
+        name="What’s in flight"
+        icon="people"
+        pageId={TEAM_ID}
+        compact={compact}
+        onOpenAgent={onOpenAgent}
+      />
 
       <div
         className="agent-chat__scroll"

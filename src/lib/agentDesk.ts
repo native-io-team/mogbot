@@ -12,7 +12,7 @@ import {
   describeRepeat,
   describeRun,
   describeWatchTitle,
-  formatWhen,
+  formatWhenInline,
   type Agent,
   type CheckIn,
   type CheckInRun,
@@ -118,7 +118,32 @@ export function routineWhenWords(routine: CheckIn): string {
 /** When it next runs: null while paused (it runs at no time). */
 export function nextRunWords(routine: CheckIn, now = Date.now()): string | null {
   if (routine.paused) return null;
-  return formatWhen(routine.nextAt, now);
+  return formatWhenInline(routine.nextAt, now);
+}
+
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** A routine's second line: "Every weekday at 9:00 AM · next tomorrow at 9:00 AM · last: ran". */
+export function routineLine(routine: CheckIn, now = Date.now()): string {
+  const next = nextRunWords(routine, now);
+  const last = lastResultWords(routine, now);
+  return [
+    routineWhenWords(routine),
+    next ? `next ${next}` : 'paused',
+    last && `last: ${lowerFirst(last)}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** The overview's count: "3 on · 2 paused, across 2 agents"; one agent is "for Finance". */
+export function routineCountLine(rows: RoutineRow[]): string {
+  if (rows.length === 0) return 'No routines yet.';
+  const on = rows.filter((r) => !r.routine.paused).length;
+  const agents = new Map(rows.map((r) => [r.agent.id, r.agent.name]));
+  const whose =
+    agents.size === 1 ? `for ${[...agents.values()][0]}` : `across ${agents.size} agents`;
+  return `${on} on · ${rows.length - on} paused, ${whose}`;
 }
 
 /** How many routines run, and how many a bulk resume would wake. */

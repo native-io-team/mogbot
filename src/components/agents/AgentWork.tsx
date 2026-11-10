@@ -115,7 +115,7 @@ function StepRow({
           <StepOutput step={step} />
         </div>
       )}
-      {step.hasExact && exact && <ExactCommand at={exact} />}
+      {step.hasExact && exact && <ExactCommand at={exact} command={step.kind === 'command'} />}
     </li>
   );
 }
