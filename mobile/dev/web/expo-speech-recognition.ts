@@ -7,7 +7,9 @@
  * goes quiet (so the auto-stop after silence can be seen), and finalises it
  * on stop. `window.__qaDictation = { deny: true }` refuses permission;
  * `{ error: 'network' }` fails a second in; `{ long: true }` hears a paragraph
- * (over five lines), fast, to show how a long dictation wraps.
+ * (over five lines), fast, to show how a long dictation wraps. A `qaSay`
+ * in the page's address hears that sentence instead, from the first listen
+ * (Talk's shots say "deploy" to get a card; a shot's globals come too late).
  */
 
 type Listener = (e: unknown) => void;
@@ -32,6 +34,11 @@ let running = false;
 let heard = '';
 
 type QaOptions = { deny?: boolean; error?: string; long?: boolean };
+
+const said = (): string | null => {
+  const search = (globalThis as unknown as { location?: { search?: string } }).location?.search;
+  return search ? new URLSearchParams(search).get('qaSay') : null;
+};
 const qa = (): QaOptions =>
   (globalThis as unknown as { __qaDictation?: QaOptions }).__qaDictation ?? {};
 
@@ -68,7 +75,8 @@ export const ExpoSpeechRecognitionModule = {
       );
       return;
     }
-    const words = qa().long ? PARAGRAPH : SENTENCE;
+    const say = said();
+    const words = say ? say.split(' ') : qa().long ? PARAGRAPH : SENTENCE;
     const wordMs = qa().long ? LONG_WORD_MS : WORD_MS;
     const speechEnd = 300 + words.length * wordMs;
     // A voice: syllables riding on a slower swell, then the room.

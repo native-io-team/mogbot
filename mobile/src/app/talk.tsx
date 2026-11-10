@@ -25,7 +25,7 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { VOICE_LEVEL, dictationHint, listeningNote, useDictation } from '../lib/dictation';
 import { haptic } from '../lib/haptics';
 import { canReadAloud, readAloud, stopReading, useReading } from '../lib/readAloud';
-import { describeError, send, setOpenChat } from '../lib/session';
+import { describeError, loadLatest, send, setOpenChat } from '../lib/session';
 import { useApp } from '../lib/store';
 import {
   approvalSpoken,
@@ -80,8 +80,14 @@ function TalkScreen({ id }: { id: string }) {
   stateRef.current = state;
 
   // What was in the chat when Talk opened is not read: only what lands after.
+  // A chat not loaded yet counts from its first load: its history isn't new.
+  const loaded = useApp((s) => Boolean(s.chats[id]?.loaded));
   const seen = useRef<Set<string> | null>(null);
-  seen.current ??= new Set((messages ?? []).map((m) => m.id));
+  if (!seen.current && loaded) seen.current = new Set((messages ?? []).map((m) => m.id));
+  const connected = useApp((s) => s.link.kind === 'connected');
+  useEffect(() => {
+    if (id && !loaded && connected) void loadLatest(id).catch(() => {});
+  }, [id, loaded, connected]);
   const [since] = useState(() => Date.now());
   const sentAt = useRef(0);
   const repliedSinceSend = useRef(false);
@@ -184,9 +190,10 @@ function TalkScreen({ id }: { id: string }) {
 
   // ---- Replies, the turn and cards ------------------------------------------------
   useEffect(() => {
-    const fresh = newReplies(messages, seen.current!);
-    for (const m of fresh) {
-      seen.current!.add(m.id);
+    const was = seen.current;
+    if (!was) return;
+    for (const m of newReplies(messages, was)) {
+      was.add(m.id);
       repliedSinceSend.current = true;
       dispatch({ type: 'reply', id: m.id });
     }
@@ -375,13 +382,14 @@ function TalkScreen({ id }: { id: string }) {
             {detail}
           </T>
         )}
-        <Waveform
-          level={level}
-          height={space['2xl']}
-          color={hearing ? accent.accent : colors.textMuted}
-          fill
-          style={styles.wave}
-        />
+        <View style={styles.wave}>
+          <Waveform
+            level={level}
+            height={space['2xl']}
+            color={hearing ? accent.accent : colors.textMuted}
+            fill
+          />
+        </View>
         {state.phase === 'countdown' && (
           <View style={styles.countdown}>
             {!still && (
@@ -471,7 +479,7 @@ const useStyles = makeStyles((colors) => ({
   middle: { alignItems: 'center', gap: space.sm, paddingHorizontal: space.xl },
   who: { alignItems: 'center', gap: space.sm, marginTop: space.lg },
   center: { textAlign: 'center' },
-  wave: { alignSelf: 'stretch', marginTop: space.md },
+  wave: { alignSelf: 'stretch', flexDirection: 'row', height: space['2xl'], marginTop: space.md },
   countdown: { alignSelf: 'stretch', gap: space.md, marginTop: space.sm },
   track: {
     height: space.xs,
