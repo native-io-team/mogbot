@@ -21,6 +21,16 @@ import * as Device from 'expo-device';
 import * as SecureStore from 'expo-secure-store';
 import { Linking, Platform } from 'react-native';
 
+/** Where the desk keeps the phone (its Settings section, `lib/settingsPages.ts`). */
+export const PHONE_SETTINGS = 'Settings → Phone';
+/**
+ * Where the desk shows a pairing code: the Phone panel's button. The panel is
+ * the same whether it's opened from Settings or the phone line at the foot of
+ * the sidebar ("Get the phone app"), and is titled "Phone" both ways.
+ */
+export const WHERE_TO_PAIR =
+  'Phone (in Settings, or the phone line at the foot of the sidebar) → Show code';
+
 /** One paired Mac. Multiple Macs are P3. */
 export interface Credentials {
   serverId: string;
@@ -65,7 +75,7 @@ export function linkProblem(text: string): string {
   const read = readLink(text);
   return !read.ok && read.problem === 'old_mac'
     ? 'Update the app on your Mac to pair. This code comes from an older version that can’t prove it’s your Mac; once it’s updated, make a new code there.'
-    : 'That isn’t a pairing code. Make one on your Mac: Settings → Agents → Phone → Pair a phone.';
+    : `That isn’t a pairing code. Make one on your Mac: ${WHERE_TO_PAIR}.`;
 }
 
 /**

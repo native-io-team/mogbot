@@ -5,7 +5,9 @@ import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from 'react-native';
-import { Icon, Row, Section, T, tap } from '../components/ui';
+import { Icon, Row, Section, SectionTitle, T, tap } from '../components/ui';
+import { GlanceRow } from '../components/usageStack';
+import { useGlance } from '../lib/glance';
 import { NewAgentDefaults } from '../components/NewAgentDefaults';
 import { IndependenceSetting } from '../components/IndependenceSetting';
 import { MorningBriefSetting } from '../components/MorningBriefSetting';
@@ -51,7 +53,7 @@ const TEXT_SIZE_LABELS: Record<TextSize, string> = {
 };
 
 const USAGE_FOOTER =
-  'Change it on the Mac in Settings → Agents → Usage, or ask your Chief of Staff. Estimates come from your past runs.';
+  'Change it on the Mac in Settings → Accounts & usage, or ask your Chief of Staff. Estimates come from your past runs.';
 
 type UpdateState =
   | { kind: 'idle' }
@@ -120,8 +122,8 @@ export default function Settings() {
       connected
         ? 'This phone stops reaching your agents, and the Mac removes it from its paired devices. You can pair again any time.'
         : !credentials?.fingerprint
-          ? `This phone stops reaching your agents now. This pairing is from before the app checked your Mac’s identity, so this phone won’t contact ${macName} to remove it: remove it on the Mac, in Settings → Agents → Phone.`
-          : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it on the Mac, in Settings → Agents → Phone.`,
+          ? `This phone stops reaching your agents now. This pairing is from before the app checked your Mac’s identity, so this phone won’t contact ${macName} to remove it: remove it on the Mac, in Settings → Phone.`
+          : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it on the Mac, in Settings → Phone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -132,7 +134,7 @@ export default function Settings() {
             if (result === 'queued' && connected) {
               Alert.alert(
                 'Forgotten on this phone',
-                `${macName} didn’t answer, so it still lists this phone. It’s asked again the next time this phone reaches it; or remove it on the Mac, in Settings → Agents → Phone.`
+                `${macName} didn’t answer, so it still lists this phone. It’s asked again the next time this phone reaches it; or remove it on the Mac, in Settings → Phone.`
               );
             }
             router.replace('/pair');
@@ -143,6 +145,12 @@ export default function Settings() {
 
   const accounts = useAccounts();
   const usage = useUsageRows();
+  // A Mac that serves the whole Usage screen: Settings is one way into it,
+  // the same card as the Agents list's, never a second account list in older
+  // words (the desk's Settings → Accounts & usage is its Usage view too).
+  const glance = useGlance();
+  const servesUsage = useApp((s) => canCall('agents.usagePlan', s.welcome));
+  const usageCard = servesUsage && glance !== null && glance.keys.length > 0;
   const { version, build } = appInfo();
   const updateLabel =
     update.kind === 'checking'
@@ -181,26 +189,30 @@ export default function Settings() {
         </Section>
       )}
 
-      <AccountsSections
-        state={accounts}
-        onOpenAccount={(engine, account) =>
-          router.push({ pathname: '/usage-account', params: { engine, account } })
-        }
-      />
+      {usageCard ? (
+        <View style={styles.usage}>
+          <SectionTitle title="Accounts & usage" />
+          <GlanceRow glance={glance} onPress={() => router.push('/usage')} />
+        </View>
+      ) : (
+        <>
+          <AccountsSections state={accounts} />
 
-      {usage.length > 0 && (
-        <Section title="Usage" footer={USAGE_FOOTER}>
-          {usage.map((row, i) => (
-            <Row
-              key={row.key}
-              label={row.label}
-              value={row.value}
-              detail={row.detail}
-              warning={row.warning}
-              last={i === usage.length - 1}
-            />
-          ))}
-        </Section>
+          {usage.length > 0 && (
+            <Section title="Usage" footer={USAGE_FOOTER}>
+              {usage.map((row, i) => (
+                <Row
+                  key={row.key}
+                  label={row.label}
+                  value={row.value}
+                  detail={row.detail}
+                  warning={row.warning}
+                  last={i === usage.length - 1}
+                />
+              ))}
+            </Section>
+          )}
+        </>
       )}
 
       <IndependenceSetting />
@@ -433,6 +445,7 @@ export default function Settings() {
 
 const styles = StyleSheet.create({
   page: { padding: space.lg },
+  usage: { marginBottom: space.xl },
   check: { width: 16 },
   sizeTrail: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   error: { marginHorizontal: space.lg, marginTop: -space.md, marginBottom: space.lg },

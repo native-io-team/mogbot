@@ -102,16 +102,8 @@ const STATUS_LABEL: Record<string, string> = {
 /** The status in words; nothing when Claude Code didn't say. */
 export const appStatusLabel = (status: string): string | null => STATUS_LABEL[status] ?? null;
 
-/** "claude.ai Google Drive" → "Google Drive": the connector, in its own name. */
-export function appTitle(app: Pick<AgentApp, 'name' | 'source'>): string {
-  if (app.source === 'claudeAi') return app.name.replace(/^claude\.ai\s+/, '');
-  // Config keys are lowercase ids ("figma", "google-drive"); show them as names.
-  return app.name
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
+/** "claude.ai Google Drive" → "Google Drive": the connector, in its own name (shared with the phone). */
+export { appTitle } from '../../packages/companion-protocol/src/whenComposer';
 
 /** A URL's host ("mcp.figma.com"); a local server's command as it is. */
 export function appTarget(target: string): string {

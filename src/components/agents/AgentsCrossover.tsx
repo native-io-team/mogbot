@@ -1,9 +1,10 @@
 /**
- * Settings → Agents → Usage, "When every Claude Code account is out" (and
+ * Settings → Accounts & usage, "When every Claude Code account is out" (and
  * the mirror for Codex): Ask first (the default), Carry on with the other
- * engine, or Wait for the reset (`agents/crossover.rs`). Shown only when
- * both engines are installed, since otherwise there is nothing to carry on
- * with. While agents are carrying on elsewhere, one Line says so: "Claude
+ * engine, or Wait for the refill (`agents/crossover.rs`). Shown only when
+ * both engines are installed and each has an account signed in, since
+ * otherwise there is nothing to carry on with (round 4: "When every Codex
+ * account is out" was offered with no Codex account). While agents are carrying on elsewhere, one Line says so: "Claude
  * Code out · on Codex until 4:00 PM".
  *
  * @module components/agents/AgentsCrossover
@@ -26,7 +27,16 @@ import {
   type CrossoverView,
 } from '../../../packages/companion-protocol/src/crossover';
 
-export function AgentsCrossover({ installed, now }: { installed: AgentEngine[]; now: number }) {
+export function AgentsCrossover({
+  installed,
+  signedIn,
+  now,
+}: {
+  installed: AgentEngine[];
+  /** Engines with at least one account signed in. */
+  signedIn: AgentEngine[];
+  now: number;
+}) {
   const { showToast } = useOptionalToast();
   const state = useAsyncState<CrossoverView>(getCrossover, { immediate: true });
   const { execute, setData } = state;
@@ -42,7 +52,8 @@ export function AgentsCrossover({ installed, now }: { installed: AgentEngine[]; 
     };
   }, [execute]);
   const view = state.data;
-  if (!view || !installed.includes('claude') || !installed.includes('codex')) return null;
+  const both = (list: AgentEngine[]) => list.includes('claude') && list.includes('codex');
+  if (!view || !both(installed) || !both(signedIn)) return null;
   const choose = async (engine: AgentEngine, mode: CrossoverMode) => {
     try {
       setData(await setCrossover(engine, mode));

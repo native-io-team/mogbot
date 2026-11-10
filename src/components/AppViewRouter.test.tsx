@@ -36,8 +36,6 @@ const props = {
   homeSidebarProps: {},
   projectsViewProps: {},
   pendingMonorepoPick: null,
-  toasts: [],
-  onDismissToast: () => {},
   quitConfirmModal: null,
 } as unknown as AppViewRouterProps;
 

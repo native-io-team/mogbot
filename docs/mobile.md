@@ -9,7 +9,7 @@ Tailscale tailnet.
 | --- | --- |
 | Wire types (the contract) | [`packages/companion-protocol`](../packages/companion-protocol/src/index.ts) |
 | Desktop server | `src-tauri/src/companion/`, commands in `src-tauri/src/commands/companion*.rs` |
-| Desktop Phone panel | `src/components/phone/`, `src/lib/companion.ts`, `src/lib/companionInstall.ts` |
+| Desktop Phone page (Settings → Phone) | `src/components/phone/`, `src/lib/companion.ts`, `src/lib/companionInstall.ts` |
 | Expo app | `mobile/` (running it and the mock Mac: [mobile/README.md](../mobile/README.md)) |
 | Push relay | `services/push-relay/` ([push-relay.md](push-relay.md)) |
 
@@ -136,12 +136,33 @@ a new one arrives with 48 open, the oldest stranger is closed to make room,
 and a socket that authenticated (or a pair request holding a live code) is
 never evicted, so a flood can't keep a paired phone out. Each source may
 have at most 4 sockets before their hello (`MAX_PREHELLO_PER_SOURCE`) and
-32 requests in flight (an open socket counts as one); 10 s for headers,
+32 requests in flight (an open socket counts as one). A paired socket's
+requests each run on the blocking pool with a 20 s deadline
+(`server::bounded`, `REQUEST_DEADLINE`), answered "Your Mac is busy" past
+it; at most 48 hold a thread at once across every socket, counting ones
+still running past their deadline (`MAX_IN_FLIGHT`), and the rest are
+answered busy at once, so no device can take the pool the whole app
+shares; 10 s for headers,
 10 s for the whole pair body, and no 30 s gap in an upload. Uploads go straight to disk with a running cap,
 never whole into memory. Thumbnails are refused (422) for images over
 40 MP by their own header, before decoding; two decode at a time, and the
 last 128 are cached. `agents.memorySuggest` runs two at a time and is
 audited. `agents.fetchPath` copies at most 25 MB even if the file grows.
+
+**Requests the phone makes** (`lib/reads.ts`, through `session.call`): a
+read (`READ_ONLY_METHODS`) already on its way with the same params answers
+every asker, so two screens or a quick tap back and forth are one request;
+at most 6 reads are at the Mac at once and the rest wait their turn (changes
+never wait); and the last answer to each read is kept for this Mac. Usage,
+accounts and quota start from it and read again only when it is 20 s old
+(`READ_FRESH_MS`) or a change was sent since (`agents.focus` and
+`rooms.focus` aren't changes), so switching tabs asks nothing. Focus is sent
+150 ms after the chat on screen settles, and only when it differs from what
+the socket holds: tapping in and out of chats is one `agents.focus`. The
+agents list reads a waiting agent's newest page once per connection, not on
+every reconnect; after a snapshot (the Mac restarted) every chat is read
+again. The offline copy is written at most every 4 s while events arrive,
+and at once when the app goes to the background.
 
 ### Methods
 
@@ -169,7 +190,10 @@ inside it.
   `agents.loginStart|loginsConnect`; Mac feature `signin.phone`:
   `agents.signinBegin|signinFrame|signinInput|signinDone|signinStop|signinFallback` (signing
   in to a site from the phone, in a window of the agents' own Chrome on the Mac, streamed with
-  `after: seq`; never audited by the router, see docs/agents.md, "The agents' browser"); "Not
+  `after: seq`; never audited by the router, see docs/agents.md, "The agents' browser"); Mac
+  feature `stepIn.phone`: `agents.stepInBegin` (step into an agent's own held tab for its
+  step-in card, then the same frames and input; `signinDone` answers `handed_back`; see
+  docs/agents.md, "Step in"); "Not
   needed" for the team (docs/agents.md, "Not needed"):
   `agents.loginNotNeeded|loginsNotNeeded|loginsUndecline` (shown only when the Mac lists them),
   `agents.reach`'s `declined` (each with "Turn back on"), and `agents.loginsRecheck` when the app
@@ -184,15 +208,24 @@ inside it.
   ready and starts a new session that carries the conversation over as a recap),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
-- `agents.create` (`name`, `role`, `color` only; idempotent by an optional
-  `clientId`; see "Starting things")
+- `agents.create` (`name`, `role`, `color`, and from a Mac listing
+  `agents.draft` a draft's `instructions` and `routines`; idempotent by an
+  optional `clientId`; see "Starting things"), `agents.draft|templates|setDefaults`
+- `agents.watch.options|create|update|checkNow` ("When…" routines),
+  `agents.conversations|conversationNew|conversationSelect|conversationRename|conversationRewind|conversationFork|conversationRoutine`,
+  `agents.page|pageVersion|pagePin`, `agents.skills|skillEdit|skillRemove`,
+  usage (`agents.quota|accounts|accounts.use|accounts.reorder|usagePlan|usage.setMode|spare.add|spare.spendNow`),
+  `agents.quietHours|setQuietHours|morningBrief|setMorningBrief`; the full list is
+  `router::METHODS`
 - `projects.list`, `sessions.read|send|key|start`, `preview.screenshot`
 - `rooms.list|messages|send|focus` (a Mac whose `welcome.features` has
   `rooms`; see "Rooms")
-- `agents.import.status|start|stop|review` (see "Starting things", Import)
+- `agents.import.status|start|stop|review` and, without Remote Access,
+  `agents.import.exportPrompt|exportPreview|exportReview` (a pasted reply;
+  see "Starting things", Import)
 
-Declared in the package but not served: `agents.delete`, the paste import
-methods. Pure reads (`READ_ONLY_METHODS`, mirrored in Rust) are not audited.
+Declared in the package but not served: `agents.delete` and
+`agents.import.pastePrompt|pastePreview|paste`. Pure reads (`READ_ONLY_METHODS`, mirrored in Rust) are not audited.
 
 ### Events, cursors and resync
 
@@ -210,7 +243,11 @@ connect it sends `hello.resume`:
   event after the cursor in order, then `sync.caughtUp`. Nothing is missed.
 - **Otherwise** (the app restarted, or a day away): `welcome{resume:'snapshot'}`,
   `sync.snapshot` (overview, Mac status, projects, cursor), `sync.caughtUp`;
-  the phone re-reads the chats it has cached.
+  the phone re-reads the chats it has cached. Each part is worked out within
+  6 s (`server::snapshot`, on the blocking pool): one that's slow goes as
+  `null` (overview, projects: the phone keeps what it has) or as the last
+  status sent, and a late status follows as `system.status`, so a busy Mac
+  sends a partial snapshot rather than a silent socket.
 
 Nothing is ever doubled: messages are upserts by id (an answered approval
 replaces its card), and `agents.send` requires a `clientId` that the Mac
@@ -283,7 +320,10 @@ CA and no trust-on-first-use.
 
 ## Pairing
 
-1. **Mac:** Phone panel → **Pair a phone** (or Cmd+K). A one-time code
+1. **Mac:** Settings → Phone (the same panel, titled "Phone" whether opened from Settings or the
+   sidebar's phone line, so the phone's "Phone (in Settings, or the phone line
+   at the foot of the sidebar) → Show code", `WHERE_TO_PAIR`, names what's on
+   screen) → **Show code** (or Cmd+K). A one-time code
    (128-bit, 5 minutes, single use) is shown as a QR code of
    `<companion.scheme>://pair?d=…` (`mogbot-companion` today) carrying the code, server id, Mac name,
    **exactly one route** and the **fingerprint of the Mac's identity key**,
@@ -425,7 +465,7 @@ server), and every link must carry a fingerprint.
   serve` to strip a client's own `Tailscale-User-*` headers, which is
   documented behaviour but not tested here against a real tailscaled.
 - The device is re-checked on every frame (a re-pair mints a new id, so this
-  is the token check). **Revoke** in the Phone panel deletes the hash and
+  is the token check). **Revoke** in Settings → Phone deletes the hash and
   closes that device's sockets at once, **aborts the requests those sockets
   had running**, stops an upload mid-body, and deletes its staged files
   right away; the phone says "This Mac removed this phone" and offers to
@@ -472,15 +512,13 @@ server), and every link must carry a fingerprint.
 request, the diff and the photo viewer push over them. At
 700 pt and wider (iPad, landscape) the Agents list and a chat sit side by side.
 
-- **Agents (home).** Needs you (approvals, signed out, usage limit) first,
-  then the Chief and pinned agents, then the rest by activity. Attention is
-  said once: the Needs you header, with **Open next** (straight to the first
-  card waiting) at its right, and each row's own words ("Needs your OK ·
-  …", the state word in amber). No summary card over the list and no dot
-  beside a row that already says it (rooms too); the tab badge counts it
-  from the other tabs. Every other state keeps its mark. Swipe to mute, hide (with Undo) or pin; hold for the
-  context menu. Quick actions on the icon: "Needs you" and "New message to
-  Chief of Staff".
+- **Agents (home).** The Chief first, then pinned agents, then the rest by
+  activity, then Rooms. What waits on you is Catch up's (below), counted on
+  its tab badge: here a waiting agent's row keeps only its own words
+  ("Needs your OK · …"), with no header, summary card or dot over it (rooms
+  too). Every other state keeps its mark. Swipe to mute, hide (with Undo) or pin; hold for the
+  context menu. Quick actions on the icon: "Needs your OK" (with how many,
+  while something waits) and "New message to Chief of Staff".
 - **Catch up** (`app/(tabs)/catch-up/index.tsx`, `lib/needsYou.ts`,
   `lib/catchUpTab.ts`), the first tab: the phone's inbox for its agents and
   its one place for everything waiting on you, across every agent. The tab
@@ -550,18 +588,25 @@ request, the diff and the photo viewer push over them. At
   `components/usageStack.tsx`), as the desk's Usage view says it
   (`usageGlance`, the same words and figures): the Agents list's glance (one
   compact card: the total and how many accounts it is of, a refill chip, the
-  total bar fullest first) and the ring left of ⓘ in a chat's header open it.
+  total bar in the work order) and the ring left of ⓘ in a chat's header open
+  it; on a Mac that serves Usage, Settings shows that same card (Accounts &
+  usage) instead of an account list of its own. Every one of them builds the
+  glance with `lib/glance.ts` `glanceFor`, the desk's engines and pins, so they
+  count the same accounts.
   Under a putty gauge key: this agent's context when its engine reported it,
   then the total first ("72% left across 2 Max accounts", "Next refill in …",
-  the bar with each account named under it), then **Accounts**, one list per
-  engine in the order turns try them (keycap, name, plan, room, pill, refill
-  chip). An account opens its own screen, the desk's account page: its place
+  the bar; `totalWords`, as the desk's hero), then **Accounts**, one list per
+  engine in the order turns try them (keycap numbered within its engine, the
+  heading names it; name, plan, room, pill, refill chip). An account opens its own screen, the desk's account page: its place
   and state, **Use this one now** and the ↑/↓ for its place (where the Mac
   takes `agents.accounts.use|reorder`), then **Limits | Tokens**: each limit a
   card (countdown chip, big "% left", the pace-marked bar, the Mac's run-out
   estimate between now and the refill, said as one, the pace sentence), or
-  who used it this week with their keys and share; then "Where did my usage
-  go". A Mac with no accounts list falls back to the per-account sheet
+  who used it this week with their keys and share; then "Where it went".
+  On a Mac that serves `agents.usage.setMode`, the Usage screen also has
+  "How agents use your limits" (Normal, Save my limits, Use it all before
+  the refill) and "Ideas for leftover usage" (Add, and "Give agents
+  something to do"; `components/usagePlanControls.tsx`). A Mac with no accounts list falls back to the per-account sheet
   (`usageSheet`, shared with the desk's popover). ↻ reads it all again.
   Adding and signing in to accounts stay on the Mac.
 - **One at a time** (`app/one-at-a-time.tsx`, `lib/catchUp.ts`), from
@@ -584,7 +629,12 @@ request, the diff and the photo viewer push over them. At
   back to Catch up. Chats the cards need are loaded once before it starts (up to
   5 s; offline it uses what's cached), so the order doesn't shift.
 - **Chat.** An inverted list: newest on the composer, older pages loaded on
-  scroll. Replies stream one display frame at a time (`lib/reveal.ts`) and the
+  scroll. While the Chief's stored greeting is all there is, the desk's three
+  ideas sit under it (`components/ChiefStarters.tsx`, the shared
+  `CHIEF_CHIPS`): a tap types the idea's whole brief into the composer and puts
+  the cursor there; nothing goes until Send, and they stay until you've said
+  something (docs/agents.md, "A first real result").
+  Replies stream one display frame at a time (`lib/reveal.ts`) and the
   finished message carries on from where its draft got to. **Following**
   (`lib/follow.ts`): at the newest line the chat is pinned, so your message
   glides in on the composer and a reply grows up from it, its newest words
@@ -645,7 +695,10 @@ request, the diff and the photo viewer push over them. At
   6 at large text) with "Show all", so the question and the answers fit
   together without scrolling (`__tests__/detailCap.test.tsx`); a new card
   landing while you're at or near the newest line scrolls its answers into
-  view (`revealsCard`, never when you'd scrolled back to read).
+  view (`revealsCard`, never when you'd scrolled back to read). "New" means
+  a card this chat hasn't shown waiting before (`seeCards`): with two
+  waiting, answering the newer on the Mac used to make the older one look
+  new and scroll the chat back up to it, past everything said since.
 - **A task's questions** (`PromptCard`): the question, whose task it is and
   where, the diff (tinted) or text it shows, and every option it offers,
   answered with `agents.answerApproval`'s `choice`; the same 400 ms guard.
@@ -662,6 +715,16 @@ request, the diff and the photo viewer push over them. At
   sees Allow / Deny, and its Allow starts the first way in on the Mac.
   "What your team needs" (`agents.loginsTeam`) and "What it can reach"
   (`agents.reach`, read-only) are on the phone too.
+- **Step-in cards** (`approval.stepIn`): "<Agent> needs you in its browser:
+  <reason>". With a Mac that has `stepIn.phone`, **Step in** opens the
+  sign-in screen (`app/signin.tsx`, `stepIn=1`) on the agent's own tab: the
+  Mac holds it so the agent can't use it, its window stays parked there, and
+  the page shows here, driven by touch, on the card's site and the sign-in
+  providers only. The top button is **Hand back**; leaving the screen hands
+  back too, so the agent is always woken (with where the page ended up,
+  never what was typed). While any device is in it the card offers nothing
+  and names where ("Sam's iPhone is in its browser"). An older Mac: Not now
+  only, and "Step in on your Mac".
 - **Secret cards** (`SecretCard`): masked fields straight to the Mac's
   Keychain via `agents.saveSecret`. Only over HTTPS on Tailscale, and only on
   a socket where the Mac proved the pinned identity (refused on the
@@ -677,10 +740,14 @@ request, the diff and the photo viewer push over them. At
   Drafts, including uploaded files (kept 55 min), survive leaving the chat and
   a cold start (`lib/drafts.ts`). A mic in the field dictates into the draft
   (see "Dictation" below).
-- **Agent sheet.** "Claude · Opus" / "Codex · …", Runs on and Model read-only, Memory (view, edit, forget with
-  Undo, add; "Remember This" in a message's menu), Instructions (view and edit), pin/mute/hide, check-ins and
+- **Agent sheet.** "Claude · Opus" / "Codex · …" / "OpenCode · …", Runs on and Model shown (changed from the model chip's Agent controls, below), Memory (view, edit, forget with
+  Undo, add; "Remember this" in a message's menu), Instructions (view and edit), pin/mute/hide, check-ins and
   routines (create and edit with the picker below, past runs, pause, run now,
-  cancel), usage, and "Allowed without asking" with Revoke.
+  cancel), usage, "What it knows how to do" (its saved skills, each opening
+  `app/skill.tsx` to correct or remove, and its Automatically / Ask me / Off
+  setting; docs/agents.md, "What it knows how to do"), and "Allowed without
+  asking" with Revoke. A skill offer arrives as a Save / Not now card that
+  never counts as needing your OK.
 - **Files** per agent; **search** across every chat, which pages a chat back
   (40 pages at most) to the hit and lights it.
 - **Projects and sessions.** Live from `projects.changed` events (the Mac
@@ -698,8 +765,10 @@ request, the diff and the photo viewer push over them. At
   right edge. You can type to it, start a new task or take a preview
   screenshot (a private blob, never a public link).
 - **Connection screen.** Every layer of the link (below).
-- **Settings.** The paired Mac, plan usage, what new agents start on, alerts
-  (with their limits), haptics, updates, about. **New agents start on** lists
+- **Settings.** The paired Mac; Accounts & usage (the Usage card, Without
+  asking, Logins, Bring agents in); New agents start on; Notifications, Quiet
+  hours and Morning brief; Appearance, Text size, Feel, Voice; Updates;
+  About. **New agents start on** lists
   the Mac's engines (one not installed or signed in is dimmed, saying which),
   and a **Model on …** section per installed engine offers "Default"
   and only the models that engine listed (`lib/newAgentDefaults.ts`). Read
@@ -823,6 +892,25 @@ conversation per agent and the chat is as it was.
   `routineConversationLine`), and its menu has "Run it in another
   conversation" on a Mac that lists `agents.conversationRoutine` (the most
   recent six, `routineMoveChoices`).
+- **Pages.** A conversation's living page ([agents.md](agents.md), "A
+  living page per conversation") sits above the messages on a Mac that lists
+  `agents.page` (`components/ConversationPage.tsx`, `lib/page.ts`).
+- **Rewind, fork and edit** (docs/agents.md, "Rewind, fork and edit").
+  Long-press one of your own messages for Edit and resend, Fork from here
+  and Rewind to here (on a Mac that serves `agents.conversationRewind` and
+  `agents.conversationFork`). Rewind and Fork confirm first, in the desk's
+  words (`rewindConfirm` / `forkConfirm`), naming the agent's copy when it
+  has one. Edit puts the message back in the field under an "Editing your
+  message" bar; sending goes back to just before it (`sendEdited`: the
+  rewind first, then the send), and a refused rewind leaves the words in the
+  field. Going back in place waits while the agent works or you drive it; a
+  fork never does, and opens the new conversation. What a rewind passed over
+  folds into one "Rewound · N messages" row that opens in place
+  (`lib/goBack.ts`, `foldRewound`), drawn as past as on the desk: a rule
+  down the left from that row to "End of what was rewound", the lines muted
+  (`PAST` in `lib/theme.ts`). On the web build, rows that rise in while
+  a rewind reshapes the list can overlap until the chat is drawn again;
+  qa:web's `goback-rewound` reloads before its shot.
 
 ### Rooms
 
@@ -909,6 +997,11 @@ The phone can start work as well as answer it. Each piece is gated by
   notes aren't added: Replace, with its diff and consequences, stays on the
   Mac's card. An older Mac's review card still says "Review on your Mac".
   **Stop import** is `agents.import.stop`.
+  Without Remote access, a Mac listing `import.export` also takes the old
+  assistant's reply pasted here (`components/ImportPaste.tsx`: Copy the
+  message, paste the reply back, `agents.import.exportReview`); a cut-off
+  or JSON-less paste says its own fix, and it ends on the same review card
+  in the Chief's chat (docs/agents.md, "Import").
 
 - **New agent** (the pencil on Agents, or the empty list's button;
   `app/new-agent.tsx`). On a Mac listing `MAC_FEATURES.draft` it opens as
@@ -937,7 +1030,8 @@ The phone can start work as well as answer it. Each piece is gated by
   Otherwise the phone can't set the engine, model,
   project or instructions at creation (refused with `bad_params`): the
   instructions are edited afterwards from the agent sheet, on either side,
-  and the engine, model and project at the desk. The name and role are one
+  the engine and model from Agent controls (below) or the desk, and the
+  project at the desk. The name and role are one
   line each, without control characters, at most 40 and 500 characters, and
   a phone can make at most 10 agents a minute (refused with `rate_limited`). The create is audited as `create <name> — <role>`,
   and a retry with the same `clientId` returns the first agent. Once the
@@ -963,6 +1057,19 @@ The phone can start work as well as answer it. Each piece is gated by
   lists every kind of phrase the picker writes; the mobile tests check the
   picker writes them and a Rust test (`agents::schedule`) checks the Mac's
   grammar reads each back as the same schedule.
+  **"When…" routines.** On a Mac that lists `agents.watch.create`, a new
+  routine opens with "At a time / When…" (`ROUTINE_MODES`), and When… is the
+  desk's composer (`components/whenComposer.tsx`, words and rules from
+  `whenComposer.ts` in companion-protocol): When this happens over the
+  sources (including an email arriving in the Mac's Mail or a text in its
+  Messages, free once Full Disk Access is on there, which the phone can only
+  name), a folder chosen from the Mac's own list (`agents.watch.options`;
+  never a typed path, which the Mac refuses), Through, Check every, What, the
+  echo and what each check costs. A "When…" row on the agent sheet offers
+  Check now, Pause, Edit and Cancel; on an older Mac it stays read-only.
+  docs/agents.md, "“When…” routines", has the rules. Captured as
+  `schedule-when`, `schedule-when-folder`, `schedule-when-custom` and
+  `agent-sheet-when`.
   **Times are the Mac's.** The Mac reads the words on its own clock
   (`chrono::Local`), so the picker works in `welcome.timeZone`: "Today", the
   date chips, the past check and a one-off's Edit are the Mac's, and when
@@ -1343,11 +1450,24 @@ Contrast brightens each grey a step. Every Text scales with Dynamic Type:
 chrome clamped at 1.3×, card titles at 1.5×, words at 2× (`READ_MAX_SCALE`,
 so a reply still sets a sentence a line at AX3), and at accessibility sizes
 the approval card folds its explanation so the answers stay on screen.
+From ×1.6 (`LARGE_TEXT`, `useLargeText`: Dynamic Type times Text size) rows
+stack rather than truncate: Catch up's action goes under its words, a name
+gets its own whole line in usage, and words go under a row's pill; tables
+measure their columns at the size the words are set, so a header never
+breaks mid-word (the table scrolls). Chips drawn 36 tall carry
+`tapSlop(CHIP_H)` to reach 44.
 **Settings → Text size** (Smaller 0.88×, Default, Larger 1.12×, Largest
 1.25×) multiplies the whole type scale on top of Dynamic Type, saved in
 `prefs.json`: `type` reads the size in force and `makeStyles` rebuilds each
 sheet per appearance and size, so anything sized from `type` follows it. VoiceOver and TalkBack hear
-replies, approvals, failures and toasts (`lib/a11y.ts`, not during replay).
+replies, approvals, failures and toasts (`lib/a11y.ts`, not during replay):
+a reply that lands in the chat that's open is read (as said aloud, cut at a
+sentence near 280 characters, `replyAnnouncement`), anywhere else "X replied";
+the connection bar's verdict is said once across tabs when it appears or
+changes (live regions are Android's only). A chart's accessible name says
+its values (`chartSummary`: each slice and share, a short series point by
+point, a long one by start, end, low and high), and every chart series is 3:1
+on app, panel and control in both themes.
 A command, code block, table or diff that runs past the edge scrolls sideways
 and says so: its far edge fades into the well while there's more, and the
 indicator flashes once (`SideScroll`), so a cut-off command never reads as the
@@ -1404,7 +1524,7 @@ some dev clients may log reconnect attempts.
 `lib/notify.ts` keeps them honest: one per alert, grouped per agent
 (`threadIdentifier`, the same thread id the relay sets), taken back once
 handled anywhere (an approval answered or a chat read, here or at the desk),
-the icon badge equal to the desk's Dock badge (`notify::badge_now`, who needs you), and all cleared on Forget
+the icon badge equal to the desk's Dock badge (`needsYouCount`, the rule `notify::badge_now` mirrors; it once added unread replies and every open card, and disagreed with the Dock), and all cleared on Forget
 this Mac. Android has "Needs you" (high) and "Replies" channels. A tap waits
 for fonts and credentials, opens at the message, and replaces a chat already
 on top instead of stacking.
@@ -1415,8 +1535,8 @@ only an opaque device handle, a kind (`needs_you`, `finished`, `message`), the
 agent's random id and the badge; the words are fixed in the Worker. An alert
 the desk would post (`agents::notify`, which already applies mute, on-screen
 and coalescing) is pushed to each phone not in front. It's for official builds
-only (a self-built app has no push entitlement), switched on in the Phone
-panel, and **built but not deployed**: design, threat model and deploy steps
+only (a self-built app has no push entitlement), switched on in Settings →
+Phone, and **built but not deployed**: design, threat model and deploy steps
 are in [push-relay.md](push-relay.md).
 
 **The live notifier** (`companion/alerts.rs`, `lib/liveAlerts.ts`). Every
@@ -1458,7 +1578,7 @@ ids, the agent's name and one line through `secrets::redact` and
   deployed, a phone in the background or killed gets nothing until it opens;
   then the badge and Catch up say what's waiting.
 
-Settings says plainly what arrives when.
+Settings says plainly what arrives when, including that only the Mac notifies while you're using it.
 
 **Answering from the Lock Screen** (`lib/actionable.ts`). An approval the Mac
 alerts for (above), or with an older Mac a new card the phone hears in the
@@ -1510,9 +1630,10 @@ yet"; when set, maintainers ship through EAS (`eas.json` profiles map to
 `expo-updates` channels), with a build at least every 60 days because
 TestFlight builds expire at 90.
 
-**Get the phone app** (sidebar, Phone panel or Cmd+K) is the route today, and follows
+**Get the phone app** (the sidebar's foot, Settings → Phone or Cmd+K) is the route today, and follows
 the agent-led onboarding pattern: **the agent drives, the app verifies.** It
-spawns the user's agent beside a checklist with a prescriptive prompt
+spawns the user's agent (their engine: Codex when that's the default agent,
+else Claude Code, `installAgent`) beside a checklist with a prescriptive prompt
 (`buildIosInstallPrompt` / `buildAndroidInstallPrompt`); every check is a
 read-only command in `commands/companion_install.rs`, and nothing runs until
 the user clicks Start (or Reinstall). The source is a sparse checkout of
@@ -1526,8 +1647,8 @@ uses its own checkout, and `SHIPSTUDIO_COMPANION_SOURCE` overrides both.
 | License, after every install or update (git and builds fail until then) | Agent (`sudo xcodebuild -license accept`) | `xcodebuild -license check` |
 | First-launch components | Agent (`sudo xcodebuild -runFirstLaunch`) | `xcodebuild -checkFirstLaunchStatus` |
 | CocoaPods, Node | Agent | `pod --version`, the node check |
-| Phone plugged in and trusted, Developer Mode | User | `xcrun devicectl list devices` (physical only; Xcode 27 lists simulators there too, as `simulated`) |
-| Signing | User, guided | An "Apple Development" identity; the team id comes from it |
+| Phone plugged in and trusted, Developer Mode | User (waits while there's no Xcode: devicectl comes with it) | `xcrun devicectl list devices` (physical only; Xcode 27 lists simulators there too, as `simulated`) |
+| Signing | User, guided (Xcode → Settings → Accounts) | An "Apple Development" identity's team; else a team of an Apple ID signed in to Xcode (`IDEProvisioningTeamByIdentifier` in Xcode's preferences, the free personal team first), which ticks before any certificate exists because the first build's `-allowProvisioningUpdates` makes it. Xcode's `isFreeProvisioningTeam` says whether builds last 7 days or a year |
 | Build and install (Release, so no Metro) | Agent: `expo prebuild`, then `xcodebuild … -destination id=<hardware UDID> -allowProvisioningUpdates DEVELOPMENT_TEAM=<team> CODE_SIGN_STYLE=Automatic build`, then `devicectl device install app` (`iosBuildSteps`) | `devicectl device info apps` lists the bundle id |
 | Trust the developer, pair | User (Settings → General → VPN & Device Management) | The device appears in the registry |
 
@@ -1567,6 +1688,21 @@ outbox are on disk, so a restart loses nothing. `app.config.ts` reads
 `COMPANION_BUNDLE_ID`, `EAS_PROJECT_ID`, `UPDATES_URL` and `APPLE_TEAM_ID`;
 with no `EAS_PROJECT_ID` updates are off, so an official update can never land
 on a fork's binary. For self-builders, Reinstall is the update.
+
+**When a Reinstall fails.** Reinstall runs the build with no agent, so it also
+`tee`s it (with `pipefail`) into `companion-build/last-build.log` in the app's
+own folder. On a non-zero exit the panel reads the log's end back
+(`companion_install_build_log`, a fixed path, read-only; the terminal's own
+tail stands in if it can't) and `diagnoseBuildLog` (`src/lib/companionBuildLog.ts`)
+names the one fix for what a self-build actually meets: Xcode's sign-in
+lapsed ("No Account for Team"), a free Apple ID's 3-apps-on-a-phone and
+10-app-ids-a-week limits, Developer Mode off, a locked or unreachable phone,
+the license after an Xcode update, an Xcode too old for the SDK, a full disk,
+no profile. A fix that's the user's offers Reinstall again; every failure
+offers **Hand it to** the agent, whose prompt then starts from that log. No
+match is never guessed at: it goes to the agent. A phone that won't answer
+`devicectl device info apps` with Developer Mode on is a locked phone, and the
+build row says to unlock it rather than waiting silently.
 
 ## Testing
 
@@ -1631,7 +1767,15 @@ cd mobile && pnpm qa:web
 pnpm qa:web --only chat-fixtures --themes dark --out /tmp/shots
 pnpm qa:web --phases heavy          # demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture
 pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681   # the defaults
+pnpm qa:web --font-scale 3.1 --themes light   # large text (AX5)
 ```
+
+`--font-scale N` stands in for Dynamic Type, which the web doesn't have
+(react-native-web reports 1 and ignores `maxFontSizeMultiplier`): the app
+reports N as its font scale, so layouts that stack at accessibility sizes
+stack, and every `T` is set at N or its own clamp, whichever is less
+(`lib/qaFontScale.ts`). Plain `Text` and inputs aren't scaled, so it's a close
+stand-in for the device, not the device.
 
 `--phases perf` (not in the default run) times the torture mock's "Long Rich"
 chat, 5,000 lines of every kind (markdown, code, timelines, result and
@@ -1640,6 +1784,15 @@ in from the agents list, and 20 s of scrolling back (frame times, long tasks,
 how far it got), into `perf-long-chat.json` in `--out`. It runs against Metro's
 development build, so read the numbers as relative. `QA_PROFILE=1` adds
 `perf-open.cpuprofile` (the last open from the agents list) and `perf-scroll.cpuprofile`.
+
+`--phases net` (not in the default run) counts what the phone costs the Mac
+and itself: every request the mock saw (`GET /dev/requests` on the mock, by
+method, with the most inside any 250 ms) and, through a stand-in React
+DevTools hook, commits, component renders and the component each render
+started at. Scenarios: a cold start on a saved copy, 10 s idle, the tabs
+three times round, a chat opened three times, tapping between two chats,
+the Mac killed and back, and a reply streaming in (in the chat, then from
+the agents list). Into `net.json` in `--out`.
 
 The ports also read `QA_WEB_PORT`, `QA_MOCK_PORT` and `QA_CDP_PORT`; `--verbose`
 streams the mock's and Expo's output. With a `TMPDIR` longer than 60 characters
@@ -1664,6 +1817,17 @@ What the web build can't show, so don't file it:
   time picker.
 - The composer field is two lines tall, and the task header's title can sit off
   centre: rn-web layout, check on a device.
+- Nothing rises in: a row arriving in a chat, or your own message, just
+  appears. Reanimated's web entering animation for the arrival preset can end
+  on its timer before `animationend` and pin the row `position: absolute` at
+  window coordinates, which inside the inverted chat drew it ~1,300px from its
+  place (`torture-events`: "Written second" above "Written first", the
+  burst's replies blank). `arriving()` (`components/Arrive.tsx`) is off on
+  the web for that reason; the same events in the iOS Simulator land in order.
+- The chat draws only `windowSize` screens around where you are, so a line far
+  back isn't in the page's text until you scroll to it: `torture-reconnect`
+  reads back to "Plan for the week?" before counting it (counted at the newest
+  end it was sometimes 0 with nothing missing).
 
 It says nothing about native-only surfaces (action sheets, Alerts, sheet detents,
 the share extension, the camera, real keyboard behaviour).
@@ -1677,8 +1841,8 @@ the share extension, the camera, real keyboard behaviour).
   the app next opens). The live notifier is verified in Rust and jest only:
   a banner and its Allow / Deny on a real iPhone, backgrounded and locked,
   are not yet.
-- Paste import, deleting agents from the phone, and setting a new agent's
-  engine, model or project there.
+- Deleting agents from the phone, and setting a new agent's engine, model or
+  project there (it starts on the defaults for new agents).
 - Pushing to git from the phone: Remote Access gates it behind a PIN, and the
   phone gets nothing until the owner decides how.
 - A needs-you Home Screen widget. The Live Activity is built behind

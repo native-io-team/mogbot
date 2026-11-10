@@ -108,6 +108,13 @@
   color: var(--text-muted);
 }
 
+/* Open (its menu or popover showing), the button takes the pressed surface;
+   the secondary word on it was 4.3:1 in dark. The word follows the button's
+   own pressed ink, as everywhere else. */
+.agent-chat__actions .agent-chat__action:is([aria-expanded='true'], [aria-pressed='true']) {
+  color: var(--button-text-hover);
+}
+
 /* Compact: the switcher's wrapper is the grid item, its button the title. */
 .agent-chat__switcher {
   display: flex;
@@ -117,6 +124,12 @@
 
 .agent-chat__switcher > .agent-chat__title {
   max-width: 100%;
+}
+
+/* The name gives way before the chevron does: squeezed, the chevron shrank
+   to a 3px dot beside a one-letter name. */
+.agent-chat__switcher-chevron {
+  flex: none;
 }
 
 .agent-chat__name {
@@ -193,6 +206,16 @@
 
 @container agent-chat-header (max-width: 440px) {
   .agent-chat__title > .agent-chat__project {
+    display: none;
+  }
+}
+
+/* Narrowest (compact, a 400px window): the mode toggle and the actions leave
+   the switcher about 20px for a name, which showed "C…". The key says who it
+   is (the button's label and the composer still name it); the switcher keeps
+   its key and chevron. */
+@container agent-chat-header (max-width: 420px) {
+  .agent-chat__switcher .agent-chat__name {
     display: none;
   }
 }
@@ -320,9 +343,11 @@
   text-align: center;
 }
 
+/* The one heading on an empty page: a step over the 15px a message is, or
+   the agent's name read as one more line of the hint under it. */
 .agent-chat__empty-name {
   margin: var(--spacing-xs) 0 0;
-  font-size: var(--font-size-h4);
+  font-size: var(--font-size-h3);
   font-weight: var(--font-weight-heading);
   line-height: var(--line-height-compact);
   color: var(--text-primary);
@@ -360,6 +385,15 @@
   justify-content: flex-start;
   max-width: none;
   margin-top: var(--spacing-sm);
+}
+
+/* Under the chips once one that sets up a routine is picked: where routines run. */
+.agent-chat__starters-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
 }
 
 /* A ready-made agent's own starters, under its centred "Created by" line or
@@ -465,6 +499,14 @@
   border-radius: 0;
 }
 
+/* A reply takes the whole measure, not the width of its longest line: a code
+   panel, a table's frame and a rule then share one right edge in every reply,
+   and a code block being written doesn't widen as each line arrives. Prose
+   has no fill, so a short reply looks the same either way. */
+.agent-chat__row--agent > .agent-bubble--agent {
+  width: 100%;
+}
+
 /* Yours is one neutral colour for every agent: identity lives in the badge,
    and a tinted bubble borrowed the meaning of the app's status colours. */
 .agent-bubble--user {
@@ -493,8 +535,21 @@
   > .agent-chat__row--agent:not(.agent-chat__row--card)
   > .agent-message__actions {
   position: absolute;
-  top: 100%;
+  bottom: 0;
   left: calc(var(--spacing-2xs) * -1);
+}
+
+/* Every line of the history skips paint while off screen
+   (content-visibility, agents-chat-history.css), and that containment clips
+   whatever reaches past the line's box: actions hung below the reply were
+   never drawn, so a reply's Copy and time didn't show on hover at all. The
+   row's own box reaches down over the actions instead (padding) and gives the
+   room straight back (margin), so the rhythm is unchanged, and the pointer
+   moving down to Copy stays on the reply that owns it. */
+.agent-chat__messages
+  > .agent-chat__row--agent:not(.agent-chat__row--card):has(> .agent-message__actions) {
+  padding-bottom: var(--button-height-compact);
+  margin-bottom: calc(var(--button-height-compact) * -1);
 }
 
 .agent-chat__line {
@@ -613,7 +668,21 @@
 }
 
 .agent-markdown li + li {
-  margin-top: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+/* A list item is a line of the list, not a paragraph: the item's own
+   paragraphs (a "loose" list) sit as tight as its lines do. */
+.agent-markdown li > p {
+  margin: 0;
+}
+
+.agent-markdown li > p + p {
+  margin-top: var(--spacing-xs);
+}
+
+.agent-markdown li::marker {
+  color: var(--text-muted);
 }
 
 .agent-markdown li > ul,
@@ -648,9 +717,13 @@
   line-height: var(--line-height-compact);
 }
 
-/* A heading opens a section: the top levels step up a size, and every level
+/* A heading opens a section: each top level steps up a size (a reply's "#"
+   and "##" both read as 16px before, a pixel off the prose), and every level
    takes more room above than a paragraph does. */
-.agent-markdown h1,
+.agent-markdown h1 {
+  font-size: var(--font-size-h3);
+}
+
 .agent-markdown h2 {
   font-size: var(--font-size-h4);
 }
@@ -660,10 +733,12 @@
   margin-top: var(--spacing-xl);
 }
 
+/* Code runs a step under the prose (13 in 15), as a monospace face reads
+   larger than its size; at 12 an inline path looked like a footnote. */
 .agent-markdown code {
   padding: 0 var(--spacing-xs);
   font-family: var(--font-code);
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-body-lg);
   /* A tint, not a surface: --surface-control is one step off the light
      theme's app background, so the chip vanished and read as stray spaces. */
   background: var(--tint-strong);
@@ -751,10 +826,10 @@
 
 .agent-code pre {
   margin: 0;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
   overflow-x: auto;
   font-family: var(--font-code);
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-body-lg);
   line-height: var(--line-height-help);
   scrollbar-width: thin;
 }
@@ -971,3 +1046,152 @@
 
 /* The working line (AgentWorkingIndicator) lives with the timeline it
    opens, in agents-work.css. */
+
+/* ------------------------------------- rewind, fork and edit (AgentGoBack) */
+
+/* What a rewind passed over: one quiet line that opens it. */
+.agent-go-back__summary .agent-go-back__chevron {
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agent-go-back__summary[data-open] .agent-go-back__chevron {
+  transform: rotate(90deg);
+}
+
+/* Opened, the run reads as past: one band from the summary line to "End of
+   what was rewound", a rule down its left and its rows muted. The rows stay
+   direct children of the chat (foldRows), so the band is the run of siblings
+   between the two lines; only one run is open at a time (openOneFold).
+   Inside it the rhythm is padding, not margin, so the rule doesn't break. */
+.agent-chat__messages > .agent-go-back__summary[data-open],
+.agent-chat__messages > .agent-go-back__end,
+.agent-chat__messages
+  > .agent-go-back__summary[data-open]
+  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *) {
+  align-self: stretch;
+  max-width: none;
+  padding-left: var(--spacing-lg);
+  border-left: var(--border-width-emphasis) solid var(--border-default);
+  text-align: start;
+}
+
+.agent-chat__messages > .agent-go-back__summary[data-open] {
+  padding-bottom: var(--spacing-xs);
+}
+
+.agent-chat__messages
+  > .agent-go-back__summary[data-open]
+  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *),
+.agent-chat__messages > .agent-go-back__end {
+  margin-top: 0;
+  padding-top: var(--spacing-xl);
+}
+
+.agent-chat__messages
+  > .agent-go-back__summary[data-open]
+  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *)
+  > * {
+  opacity: 0.55;
+  transition: opacity var(--transition-interaction);
+}
+
+/* What's in a past row is muted, not the row: the rule stays one even line.
+   Read closely (hovered or in focus), a past row comes up to full ink. */
+.agent-chat__messages
+  > .agent-go-back__summary[data-open]
+  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *):is(:hover, :focus-within)
+  > * {
+  opacity: 1;
+}
+
+.agent-chat__messages > .agent-go-back__end {
+  padding-bottom: var(--spacing-xs);
+}
+
+/* Why Edit and Rewind wait: under the menu's items. */
+.agent-go-back__reason {
+  max-width: 240px;
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}
+
+/* ⌘K's picker: your recent messages, each with the three ways back. */
+.agent-go-back__picks {
+  display: flex;
+  flex-direction: column;
+  max-height: min(60vh, 480px); /* css-ok: the list scrolls inside the dialog */
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.agent-go-back__pick {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-xs);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-go-back__pick:first-child {
+  border-top: 0;
+}
+
+.agent-go-back__pick-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  min-width: 0;
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.agent-go-back__pick-when {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-go-back__pick-actions {
+  display: flex;
+  flex: none;
+  gap: var(--spacing-3xs);
+}
+
+.agent-go-back__picker-reason {
+  margin: 0;
+  padding: 0 var(--spacing-xl) var(--spacing-lg);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-go-back__confirm .agent-go-back__body {
+  margin: 0;
+  padding: var(--spacing-lg) var(--spacing-xl) 0;
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+}
+
+.agent-go-back__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
+}
+
+.agent-go-back__editing .agent-quote-chip {
+  align-items: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-go-back__summary .agent-go-back__chevron,
+  .agent-chat__messages > .agent-go-back__summary[data-open] ~ * > * {
+    transition: none;
+  }
+}

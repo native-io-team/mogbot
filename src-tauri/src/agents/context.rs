@@ -54,7 +54,7 @@ pub struct ContextFill {
 }
 
 impl ContextFill {
-    fn new(used: u64, window: u64, at: i64, model: Option<String>) -> Option<Self> {
+    pub(super) fn new(used: u64, window: u64, at: i64, model: Option<String>) -> Option<Self> {
         (window > 0 && used > 0).then_some(Self {
             used,
             window,

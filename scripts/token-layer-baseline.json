@@ -1133,13 +1133,13 @@
     {
       "path": "src/styles/features/project-grid.css",
       "token": "--font-size-12",
-      "count": 2,
+      "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/project-grid.css",
       "token": "--font-weight-semibold",
-      "count": 1,
+      "count": 2,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
@@ -1228,9 +1228,21 @@
     },
     {
       "path": "src/styles/features/publish/toasts.css",
-      "token": "--shadow",
+      "token": "--duration-arrive",
       "count": 1,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
+    },
+    {
+      "path": "src/styles/features/publish/toasts.css",
+      "token": "--ease-arrive",
+      "count": 1,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
+    },
+    {
+      "path": "src/styles/features/publish/toasts.css",
+      "token": "--stroke-1",
+      "count": 1,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/publish/toasts.css",

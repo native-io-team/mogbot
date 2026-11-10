@@ -26,6 +26,7 @@ import { TextButton } from '../primitives/TextButton';
 import { TextArea } from '../primitives/TextField';
 import { ComposerAttachments, ComposerQuotes } from './AgentAttachments';
 import { ComposerRevising } from './AgentResult';
+import { ComposerEditing } from './AgentGoBack';
 import { AgentSecretHint } from './AgentSecretHint';
 import { useMentionPicker } from './AgentMentions';
 import type { DraftAttachment } from './useComposerAttachments';
@@ -60,6 +61,9 @@ interface AgentComposerProps {
   onRemoveQuote: (index: number) => void;
   revising: ResultRef | null;
   onClearRevising: () => void;
+  /** Editing a sent message (Edit and resend): its words as sent, or null. */
+  editing?: string | null;
+  onCancelEditing?: () => void;
   /** Mid-turn: what's sent waits for the next one. */
   busy: boolean;
   /** Working, not just holding a card open: Stop is offered. */
@@ -70,6 +74,19 @@ interface AgentComposerProps {
   /** `now`: interrupt the turn in progress rather than queue (⌘↵). */
   onSend: (now?: boolean) => void;
   onPickFiles: () => void;
+  /**
+   * A starter's brief typed in with its blank still empty ("… My topics: "):
+   * while the draft is exactly that, nothing sends (Send is off, Enter does
+   * nothing) and the hint says to finish it.
+   */
+  unfilled?: string | null;
+  /** The last message you sent in this chat, for ↑ in an empty composer. */
+  lastSent?: () => string | null;
+}
+
+/** True while the draft is the starter's brief with its blank still empty. */
+export function isUnfilled(draft: string, unfilled: string | null | undefined): boolean {
+  return Boolean(unfilled) && draft.trim() === (unfilled ?? '').trim();
 }
 
 /** "That looks like a key" over the composer, reading the draft itself. */
@@ -99,17 +116,22 @@ export const AgentComposer = memo(function AgentComposer({
   onRemoveQuote,
   revising,
   onClearRevising,
+  editing = null,
+  onCancelEditing,
   busy,
   working,
   onEscape,
   onStop,
   onSend,
   onPickFiles,
+  unfilled,
+  lastSent,
 }: AgentComposerProps) {
   const draft = useComposerDraft(agentId);
   const setDraft = useMemo(() => (text: string) => setComposerDraft(agentId, text), [agentId]);
   const dictating = dictation.phase !== 'idle';
-  const canSend = draft.trim().length > 0 || staged.length > 0 || quotes.length > 0;
+  const blank = isUnfilled(draft, unfilled);
+  const canSend = !blank && (draft.trim().length > 0 || staged.length > 0 || quotes.length > 0);
 
   // In sidebar order as it is now: computed again as you type, so the picker
   // opening on "@" lists them the way the sidebar does at that moment.
@@ -160,7 +182,7 @@ export const AgentComposer = memo(function AgentComposer({
       className="agent-composer"
       data-dictation={dictation.phase}
       data-has-attachments={
-        staged.length > 0 || quotes.length > 0 || revising !== null || undefined
+        staged.length > 0 || quotes.length > 0 || revising !== null || editing !== null || undefined
       }
       onSubmit={(e) => {
         e.preventDefault();
@@ -168,6 +190,7 @@ export const AgentComposer = memo(function AgentComposer({
       }}
     >
       {mentionPicker.menu}
+      <ComposerEditing text={editing} onCancel={() => onCancelEditing?.()} />
       <ComposerRevising revising={revising} onRemove={onClearRevising} />
       <ComposerQuotes quotes={quotes} onRemove={onRemoveQuote} />
       <ComposerAttachments items={staged} onRemove={onRemoveStaged} />
@@ -187,9 +210,30 @@ export const AgentComposer = memo(function AgentComposer({
         onKeyDown={(e) => {
           if (dictation.onComposerKeyDown(e)) return;
           if (mentionPicker.onKeyDown(e)) return;
-          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+          if (
+            e.key === 'ArrowUp' &&
+            !e.shiftKey &&
+            !e.altKey &&
+            !e.metaKey &&
+            !e.ctrlKey &&
+            !e.nativeEvent.isComposing &&
+            draft === '' &&
+            staged.length === 0 &&
+            quotes.length === 0 &&
+            revising === null
+          ) {
+            // ↑ in an empty field brings back what you last sent, caret at
+            // its end, as a terminal or Slack does. A field with anything in
+            // it keeps ↑ for moving the caret.
+            const last = lastSent?.();
+            if (!last) return;
             e.preventDefault();
-            onSend(e.metaKey);
+            setDraft(last);
+            const el = e.currentTarget;
+            requestAnimationFrame(() => el.setSelectionRange(last.length, last.length));
+          } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            if (!blank) onSend(e.metaKey);
           } else if (e.key === 'Escape' && onEscape?.()) {
             e.preventDefault();
           } else if (e.key === 'Escape' && working && !canSend) {
@@ -226,7 +270,11 @@ export const AgentComposer = memo(function AgentComposer({
           />
         )}
         {/* Its own row above the text, so a long hint never squeezes it. */}
-        {escArmed && working && !canSend && !dictating ? (
+        {blank && !dictating ? (
+          <span className="agent-composer__hint" role="status">
+            Fill in the end, then send
+          </span>
+        ) : escArmed && working && !canSend && !dictating ? (
           <span className="agent-composer__hint" data-armed role="status">
             Esc again to stop {agentName}
           </span>
@@ -252,7 +300,7 @@ export const AgentComposer = memo(function AgentComposer({
             aria-label={dictating ? 'Stop dictating' : 'Dictate'}
             title={dictating ? 'Stop dictating (Esc to discard)' : 'Dictate (⌘⇧D, or hold ⌥Space)'}
           />
-          {working && !canSend && !dictating ? (
+          {working && !canSend && !blank && !dictating ? (
             <IconButton
               tabIndex={0}
               variant="secondary"

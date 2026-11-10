@@ -71,9 +71,7 @@ export function keptRoutines(draft: AgentDraft, kept: boolean[]): NewRoutine[] {
 export function draftAppsLine(apps: string[]): string | null {
   if (apps.length === 0) return null;
   const names =
-    apps.length === 1
-      ? apps[0]
-      : `${apps.slice(0, -1).join(', ')} and ${apps[apps.length - 1]}`;
+    apps.length === 1 ? apps[0] : `${apps.slice(0, -1).join(', ')} and ${apps[apps.length - 1]}`;
   return `Uses ${names}. It asks you to connect ${apps.length === 1 ? 'it' : 'them'} the first time it needs ${apps.length === 1 ? 'it' : 'them'}.`;
 }
 
@@ -83,13 +81,18 @@ export function draftAppsLine(apps: string[]): string | null {
  */
 export const DESCRIBE_PLACEHOLDER = 'For example: “Brief me on my inbox every weekday at 8.”';
 
-const DAY_WORDS = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/g;
+const DAY_WORDS =
+  /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/g;
 
 /**
  * A drafted routine's time as the Mac's grammar read it ("every friday at
- * 16:00"), as a label: "Every Friday at 16:00". Only the case changes.
+ * 16:00"), as a label: "Every Friday at 16:00". The case changes, and a
+ * one-time run's UTC offset ("once, Thu 5 Nov 2026, 9:00 AM (UTC-05:00)",
+ * exact for an agent) is dropped: it is the Mac's own zone, which every
+ * other time on this screen is in too.
  */
 export function whenLabel(readsAs: string): string {
-  const named = readsAs.replace(DAY_WORDS, (w) => w[0].toUpperCase() + w.slice(1));
+  const plain = readsAs.replace(/\s*\(UTC[+-]\d{2}:\d{2}\)$/, '');
+  const named = plain.replace(DAY_WORDS, (w) => w[0].toUpperCase() + w.slice(1));
   return named.charAt(0).toUpperCase() + named.slice(1);
 }

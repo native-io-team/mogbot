@@ -8,6 +8,14 @@
 import { formatClock } from './clock';
 import type { CheckIn, CheckInRun, MonthDay, Repeat, Watch, WatchSource } from './model';
 
+/**
+ * The one honest limit of a routine, said where one is set up (the routine
+ * picker, desk and phone, and under the Chief's starters once one that
+ * repeats is picked): the same sentence everywhere.
+ */
+export const ROUTINES_NEED_THE_MAC =
+  'Routines run only while the app is open and this Mac is awake. One that was missed runs once when it’s back.';
+
 /** What a scheduled run came to, in a few words. */
 export function describeRun(run: CheckInRun, now = Date.now()): string {
   switch (run.outcome) {
@@ -29,10 +37,10 @@ export function describeRun(run: CheckInRun, now = Date.now()): string {
     case 'declined':
       return run.step ? `Stopped after step ${run.step}` : 'Stopped';
     case 'held':
-      // A usage limit to reset first (the detail says which, and when).
+      // A usage limit to refill first (the detail says which, and when).
       return run.retryAt
-        ? `Waiting for the reset · runs ${formatWhen(run.retryAt, now).replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())}`
-        : 'Waiting for the reset';
+        ? `Waiting for the refill · runs ${formatWhen(run.retryAt, now).replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())}`
+        : 'Waiting for the refill';
     default:
       return 'Unknown';
   }
@@ -414,6 +422,16 @@ export function localTs(date: string, hour: number, minute: number, timeZone?: s
 }
 
 /** "Today 9:00 AM" as `formatWhen` says it, in `timeZone`'s days and clock. */
+/**
+ * `formatWhenIn` inside a sentence: "tomorrow at 9:00 AM", "Fri, Nov 13 at
+ * 9:00 AM", as `formatWhenInline` writes this Mac's own times.
+ */
+export function formatWhenInlineIn(ts: number, now = Date.now(), timeZone?: string): string {
+  return formatWhenIn(ts, now, timeZone)
+    .replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())
+    .replace(/ (\d{1,2}[:.]\d{2}(?:\s?[^\s\d]+)?)$/, ' at $1');
+}
+
 export function formatWhenIn(ts: number, now = Date.now(), timeZone?: string): string {
   if (!timeZone || !wallFormat(timeZone)) return formatWhen(ts, now);
   const w = wallClock(ts, timeZone);
@@ -462,7 +480,7 @@ export function routineWhenOf(
 
 /**
  * What the picker will make, in the words the list shows it in:
- * "Every weekday at 9:00 AM", "Every 2 hours", "Once · Tomorrow 9:00 AM",
+ * "Every weekday at 9:00 AM", "Every 2 hours", "Once, tomorrow at 9:00 AM",
  * with "Mac time" after the time when the Mac's clock isn't this phone's.
  */
 export function describeRoutineWhen(w: RoutineWhen, now = Date.now(), timeZone?: string): string {
@@ -471,7 +489,7 @@ export function describeRoutineWhen(w: RoutineWhen, now = Date.now(), timeZone?:
   if (w.kind === 'monthly') return `${describeMonthly(w)}${note}`;
   if (w.kind === 'once') {
     const ts = localTs(w.date, w.hour, w.minute, timeZone);
-    return `Once · ${formatWhenIn(ts, now, timeZone)}${note}`;
+    return `Once, ${formatWhenInlineIn(ts, now, timeZone)}${note}`;
   }
   return `${describeRepeat({ ...w, days: [...new Set(w.days)] })}${note}`;
 }
@@ -501,6 +519,16 @@ export function describeWatchSource(source: WatchSource): string {
       return 'a Linear issue is assigned to you';
     case 'new_file':
       return `a new file appears in ${source.folder}`;
+    case 'new_mail': {
+      let s = 'an email arrives in Mail';
+      if (source.from) s += ` from ${source.from}`;
+      if (source.words) s += ` mentioning “${source.words}”`;
+      return s;
+    }
+    case 'new_text':
+      return source.from
+        ? `a text arrives in Messages from ${source.from}`
+        : 'a text arrives in Messages';
     case 'custom':
       return source.check.trim().replace(/\.$/, '');
     default:

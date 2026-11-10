@@ -1130,6 +1130,44 @@ fn review_4_every_new_routine_leaves_a_chat_line() {
 }
 
 #[test]
+fn a_new_time_routine_line_says_when_and_its_first_run() {
+    use super::super::mcp::routine_time_line;
+    use chrono::{TimeZone, Utc};
+    crate::agents::clock::test_hour24(false);
+    let now = Utc
+        .with_ymd_and_hms(2026, 11, 10, 15, 0, 0)
+        .unwrap()
+        .timestamp_millis();
+    let tomorrow_8 = Utc
+        .with_ymd_and_hms(2026, 11, 11, 8, 0, 0)
+        .unwrap()
+        .timestamp_millis();
+    let mut c = watch_check_in(Source::GithubMentions);
+    c.watch = None;
+    c.note = "Send me a summary of the Acme inbox".into();
+    c.repeat = Some(crate::agents::schedule::Repeat::Days {
+        days: vec![1, 2, 3, 4, 5],
+        hour: 8,
+        minute: 0,
+    });
+    c.next_at = tomorrow_8;
+    assert_eq!(
+        routine_time_line(&c, &Utc, now),
+        "Set up a routine: Send me a summary of the Acme inbox · every weekday at 8:00 AM, first run tomorrow at 8:00 AM"
+    );
+    // Once, later today: "today at", never a bare "at".
+    c.repeat = None;
+    c.next_at = Utc
+        .with_ymd_and_hms(2026, 11, 10, 17, 30, 0)
+        .unwrap()
+        .timestamp_millis();
+    assert_eq!(
+        routine_time_line(&c, &Utc, now),
+        "Set up a routine: Send me a summary of the Acme inbox · once, today at 5:30 PM"
+    );
+}
+
+#[test]
 fn review_6_a_seen_file_touched_again_doesnt_refire() {
     let mut w = folder_watch();
     merge(&mut w, &[ev("a.pdf"), ev("b.pdf")], true, &[], NOW);
@@ -1416,7 +1454,7 @@ fn review_12_retry_alerts_say_when_routine_and_quits_dont_pause_it() {
 }
 
 #[test]
-fn review_12_the_mac_refuses_phone_changes_to_a_when_routine() {
+fn review_12_the_phone_edits_each_kind_of_routine_only_as_its_own_kind() {
     let _serial = store::tests_lock();
     let dir = tempfile::tempdir().unwrap();
     store::set_root_for_tests(Some(dir.path().to_path_buf()));
@@ -1429,26 +1467,31 @@ fn review_12_the_mac_refuses_phone_changes_to_a_when_routine() {
         .unwrap()
         .check_in
         .id;
-    use crate::companion::desktop::refuse_watch_from_phone;
+    use crate::companion::desktop::refuse_wrong_kind_from_phone as refuse;
     use crate::companion::router::ScheduleOp;
-    let err = refuse_watch_from_phone(&agent.id, &watch).unwrap_err();
-    assert!(err.to_string().contains("on the Mac only"), "{err}");
-    assert!(refuse_watch_from_phone(&agent.id, &timed).is_ok());
-    for op in [
-        ScheduleOp::Pause {
-            agent_id: agent.id.clone(),
-            id: watch.clone(),
-            paused: true,
-        },
-        ScheduleOp::Cancel {
-            agent_id: agent.id.clone(),
-            id: watch.clone(),
-        },
-        ScheduleOp::RunNow {
-            agent_id: agent.id.clone(),
-            id: watch.clone(),
-        },
-    ] {
+    let a = agent.id.clone();
+    let run_now = |id: &str| ScheduleOp::RunNow {
+        agent_id: a.clone(),
+        id: id.into(),
+    };
+    let check_now = |id: &str| ScheduleOp::WatchCheckNow {
+        agent_id: a.clone(),
+        id: id.into(),
+    };
+    let pause = |id: &str| ScheduleOp::Pause {
+        agent_id: a.clone(),
+        id: id.into(),
+        paused: true,
+    };
+    // A time routine's Run now on a "When…" one, and Check now on a time one.
+    let err = refuse(&run_now(&watch), &a, &watch).unwrap_err();
+    assert!(err.to_string().contains("when something happens"), "{err}");
+    assert!(refuse(&check_now(&timed), &a, &timed).is_err());
+    assert!(refuse(&check_now(&watch), &a, &watch).is_ok());
+    assert!(refuse(&run_now(&timed), &a, &timed).is_ok());
+    // Pause and Cancel are shared.
+    assert!(refuse(&pause(&watch), &a, &watch).is_ok());
+    for op in [pause(&watch), check_now(&watch), run_now(&watch)] {
         assert_eq!(op.target(), Some((agent.id.as_str(), watch.as_str())));
     }
     store::set_root_for_tests(None);

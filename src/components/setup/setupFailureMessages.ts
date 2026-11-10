@@ -13,7 +13,7 @@ import { SETUP_FRIENDLY_NAMES } from '../../lib/setup';
 const AUTH_TOOL_LABELS: Record<string, string> = {
   claude_auth: 'Claude',
   codex_auth: 'Codex',
-  opencode_auth: 'Opencode',
+  opencode_auth: 'OpenCode',
   cursor_auth: 'Cursor',
   gh_auth: 'GitHub',
 };

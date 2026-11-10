@@ -13,8 +13,10 @@
 //!    a line, and wakes the agent with where the page ended up (address and
 //!    title only, `agent_browser::step_in::resume_note`). Closing the tab, or
 //!    [`LIMIT_MS`] with no hand-back, ends it the same way, with a line.
-//! 4. **The phone** shows the card with "Step in on your Mac" and Not now:
-//!    no remote control of the tab in v1.
+//! 4. **The phone** steps in too ([`begin_from_phone`]): the same hold, the
+//!    window left parked, and the tab shown and driven on the phone through
+//!    the sign-in screen's frames and taps (`agents::phone_signin`, its
+//!    `Op::StepIn`). Hand back from either device ends both.
 //!
 //! Never for a turn answering outside text: the browser server isn't given
 //! to those turns, and [`ask`] refuses one anyway.
@@ -51,14 +53,20 @@ pub struct StepIn {
     /// Live: when it is handed back by itself.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub until: Option<i64>,
+    /// Live: the user is in it from this phone (its name), not at the desk.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_phone: Option<String>,
 }
 
 /// A turn answering outside text.
 pub const OUTSIDE: &str = "You can't ask the user to step in while you answer text from outside (a routine's items, or a message that carried them). Do this from the user's own request.";
 /// The phone, or an older client's plain Allow.
 pub const ON_YOUR_MAC: &str = "Step in on your Mac: press Step in on the card there.";
-/// What a card's receipt says when it timed out.
-pub const TIMED_OUT_ASIDE: &str = "Handed back by itself after 15 min";
+/// What a card's receipt says when it was handed back for the user: 15
+/// minutes at the desk, or a phone left idle.
+pub fn timed_out_aside(minutes: i64) -> String {
+    format!("Handed back by itself after {minutes} min")
+}
 
 const MAX_REASON: usize = 120;
 
@@ -192,6 +200,7 @@ pub async fn ask(
         tab: tab.id,
         in_since: None,
         until: None,
+        on_phone: None,
     };
     let mut approval = super::mcp::new_card(
         store::new_id(),
@@ -228,7 +237,11 @@ pub fn apply(page: &mut [AgentMessage]) {
         if let Some(s) = a.step_in.as_mut() {
             let live = pending.then(|| hold::held_for(&id)).flatten();
             s.in_since = live.as_ref().map(|(_, h)| h.since_ms);
-            s.until = live.map(|(_, h)| h.since_ms + LIMIT_MS);
+            s.until = live.as_ref().map(|(_, h)| h.since_ms + LIMIT_MS);
+            s.on_phone = live
+                .is_some()
+                .then(|| super::phone_signin::step_in_device(&id))
+                .flatten();
         }
     }
 }
@@ -284,6 +297,55 @@ pub async fn step_in(
     Ok(())
 }
 
+/// Step in from the phone: the tab is held as at the desk, but its window
+/// stays parked; the caller (`phone_signin`) streams it to the phone and
+/// calls [`began`] once the session is live. Refused while the user is in
+/// it at the desk. Blocks the caller on the browser.
+pub async fn begin_from_phone(
+    agent_id: &str,
+    request_id: &str,
+) -> Result<
+    (
+        StepIn,
+        std::sync::Arc<crate::agent_browser::service::Service>,
+        crate::agent_browser::service::Tab,
+    ),
+    CommandError,
+> {
+    let (_claim, card) = pending_card(agent_id, request_id, "Stepped in from the phone")?;
+    store::get(agent_id)?;
+    let (a, r, url) = (
+        agent_id.to_string(),
+        request_id.to_string(),
+        card.url.clone(),
+    );
+    let tab = card.tab;
+    let (svc, t, _) = tokio::task::spawn_blocking(move || {
+        hold::begin_for_phone(&a, &r, tab, &url, store::now_ms())
+    })
+    .await
+    .map_err(super::err_other)?
+    .map_err(CommandError::expected)?;
+    tracing::info!(
+        agent = agent_id,
+        "[StepIn] the user stepped in from the phone"
+    );
+    Ok((card, svc, t))
+}
+
+/// The phone's session is live: the card shows it, and the hold is
+/// watched (tab closed, time up) as at the desk.
+pub fn began(app: &AppHandle, agent_id: &str, request_id: &str) {
+    emit_card(app, agent_id, request_id);
+    watch(app.clone(), agent_id.to_string(), request_id.to_string());
+}
+
+/// The phone's session didn't start after all: let the tab go, untouched,
+/// with nothing answered and nobody woken.
+pub fn abandon(agent_id: &str, request_id: &str) {
+    hold::release(agent_id, request_id);
+}
+
 /// Bring the held window forward again.
 pub async fn show(agent_id: &str) -> Result<(), CommandError> {
     let a = agent_id.to_string();
@@ -308,6 +370,8 @@ pub async fn hand_back(
         .await
         .map_err(super::err_other)?
         .ok_or_else(|| CommandError::expected("You're not in its browser."))?;
+    // A phone in it is done too (its own Hand back took its session first).
+    super::phone_signin::end_step_in(app, request_id).await;
     finish(app, &agent, request_id, &card, &ended);
     Ok(())
 }
@@ -315,7 +379,7 @@ pub async fn hand_back(
 fn finish(app: &AppHandle, agent: &store::Agent, request_id: &str, card: &StepIn, e: &hold::Ended) {
     tracing::info!(agent = %agent.id, how = ?e.how, minutes = e.minutes, "[StepIn] handed back");
     let closed = match e.how {
-        How::TimedOut => store::set_aside(&agent.id, request_id, TIMED_OUT_ASIDE),
+        How::TimedOut => store::set_aside(&agent.id, request_id, &timed_out_aside(e.minutes)),
         _ => store::set_approval_status(&agent.id, request_id, ApprovalStatus::Allowed),
     };
     // Something else closed it first: that answer stands, nobody woken twice.
@@ -349,6 +413,7 @@ pub async fn decline(
     let _ =
         tokio::task::spawn_blocking(move || hold::end(&a, &r, How::HandedBack, store::now_ms()))
             .await;
+    super::phone_signin::end_step_in(app, request_id).await;
     // Hand back (or the watcher ending it) answered it meanwhile: that
     // answer stands, and the agent isn't woken twice.
     if store::set_approval_status(agent_id, request_id, ApprovalStatus::Denied)?.is_none() {

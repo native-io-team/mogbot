@@ -11,6 +11,7 @@ import { listen } from '@tauri-apps/api/event';
 import {
   AgentsIcon,
   CollaboratorsIcon,
+  CommentIcon,
   DownloadIcon,
   FileTextIcon,
   GlobeIcon,
@@ -21,6 +22,8 @@ import {
   ZapIcon,
 } from '@/components/icons';
 import { useCommands } from './useCommands';
+import { kbd } from '../lib/shortcuts';
+import { onMenuAction } from '../lib/nativeMenu';
 import { useOptionalToast } from '../contexts/ToastContext';
 import { setStayOn, type StayOnChange } from '../lib/remoteAccess';
 import { useAgentsSelector, type AgentsState } from '../lib/agentsStore';
@@ -29,7 +32,12 @@ import { AGENT_EVENTS, OTHER_APP_NAME, otherAppExists, TEAM_ID } from '../lib/ag
 import { DESCRIBE_START, ROLE_TEMPLATES } from '../lib/agentTemplates';
 import { SHARE_RECIPE_EVENT } from '../lib/agentRecipe';
 import { openLogs } from '../lib/agentDesk';
+import { composerDraft, setComposerDraft } from '../lib/composerDraft';
 import { setGroupMode, startNamingGroup, useAgentGroups, type GroupMode } from '../lib/agentGroups';
+import { asCommandError, formatCommandError } from '../lib/errors';
+
+/** What went wrong, in words: never `String(e)`'s "Error: …" or "[object Object]". */
+const errorText = (e: unknown) => formatCommandError(asCommandError(e));
 
 /** ⌘K switches for the agent list's optional groups. */
 const GROUP_COMMANDS: { mode: GroupMode; title: string; keywords: string[] }[] = [
@@ -180,7 +188,9 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
   const { showToast } = useOptionalToast();
   // "Setting up your team", offered while there's one to finish (put away or not).
   const setup = useResumableTeamSetup();
-  const chiefId = agents.find((a) => a.isMain)?.id;
+  const chief = agents.find((a) => a.isMain);
+  const chiefId = chief?.id;
+  const chiefName = chief?.name;
   const groupMode = useAgentGroups().mode;
   // Whether the other app has agents on this Mac, asked once from its
   // registry alone (not the preview, which reads every agent's folder): it
@@ -203,6 +213,17 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
     });
     return () => void unlisten.then((off) => off());
   }, [setView]);
+  // File → New Agent… (⌘N on macOS; Agents' own key handler elsewhere).
+  useEffect(
+    () =>
+      onMenuAction((action) => {
+        if (action !== 'new_agent') return;
+        if (document.querySelector('[aria-modal="true"]')) return;
+        requestAgentsIntent({ kind: 'new' });
+        setView('agents');
+      }),
+    [setView]
+  );
   // The Chief's `share_recipe`: that agent's recipe, on the desk.
   useEffect(() => {
     const unlisten = listen<string>(SHARE_RECIPE_EVENT, (e) => {
@@ -222,6 +243,28 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
 
   useCommands(
     () => [
+      // ⌘K's way on from "nothing matches": what was typed, put in the
+      // Chief's message box (never sent), for it to work out.
+      ...(chiefId && chiefName
+        ? [
+            {
+              id: 'agents.askChief',
+              title: `Ask ${chiefName}`,
+              icon: <CommentIcon size={14} />,
+              category: 'action' as const,
+              fallback: true,
+              run: (query?: string) => {
+                const text = query?.trim();
+                if (text) {
+                  const before = composerDraft(chiefId).trimEnd();
+                  setComposerDraft(chiefId, before ? `${before}\n${text}` : text);
+                }
+                requestAgentsIntent({ kind: 'open', agentId: chiefId });
+                setView('agents');
+              },
+            },
+          ]
+        : []),
       {
         id: 'agents.open',
         title: 'Agents',
@@ -235,6 +278,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         title: 'New agent…',
         icon: <PlusIcon size={14} />,
         category: 'navigation',
+        shortcut: kbd('mod', 'N'),
         keywords: ['agents', 'create', 'bot'],
         run: () => {
           requestAgentsIntent({ kind: 'new' });
@@ -300,7 +344,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
                     requestAgentsIntent({ kind: 'open', agentId: chiefId });
                     setView('agents');
                   })
-                  .catch((e: unknown) => showToast(String(e), 'error'));
+                  .catch((e: unknown) => showToast(errorText(e), 'error'));
               },
             },
           ]
@@ -330,6 +374,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         title: 'Search agent conversations',
         icon: <SearchIcon size={14} />,
         category: 'navigation',
+        shortcut: kbd('mod', 'F'),
         keywords: ['agents', 'find', 'messages', 'chat', 'history'],
         run: () => {
           requestAgentsIntent({ kind: 'search' });
@@ -418,7 +463,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         when: () => !!setup,
         keywords: ['agents', 'import', 'logins', 'reach', 'access', 'connected', 'check'],
         run: () => {
-          checkTeamReach().catch((e: unknown) => showToast(String(e), 'error'));
+          checkTeamReach().catch((e: unknown) => showToast(errorText(e), 'error'));
           if (chiefId) requestAgentsIntent({ kind: 'open', agentId: chiefId });
           setView('agents');
         },
@@ -507,8 +552,10 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         category: 'navigation',
         keywords: ['logs', 'debug', 'why', 'died', 'error', 'finder', 'library', 'trace'],
         run: () => {
-          openLogs().catch((e: unknown) =>
-            showToast(`Couldn't open the logs: ${String(e)}`, 'error')
+          // Finder opens outside the app: a quiet line says it happened.
+          openLogs().then(
+            () => showToast('Opened the logs folder in Finder', 'success'),
+            (e: unknown) => showToast(`Couldn’t open the logs: ${errorText(e)}`, 'error')
           );
         },
       },
@@ -551,7 +598,7 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
               result.supported ? 'success' : 'info'
             );
           } catch (err) {
-            showToast(`Couldn't change that setting: ${String(err)}`, 'error');
+            showToast(`Couldn’t change that setting: ${errorText(err)}`, 'error');
           }
         },
       })),
@@ -570,6 +617,6 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         },
       })),
     ],
-    [setView, agents, showToast, otherApp, setup, chiefId, groupMode]
+    [setView, agents, showToast, otherApp, setup, chiefId, chiefName, groupMode]
   );
 }

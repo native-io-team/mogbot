@@ -12,7 +12,7 @@ import { useCompanionInstallReminder } from './phone/PhoneInstallEntry';
 import { ToastList } from './primitives/ToastList';
 import { useModal } from '../contexts/ModalContext';
 import { usePaletteContext } from './CommandPalette/paletteContext';
-import { ToastProvider, useToast } from '../contexts/ToastContext';
+import { useToast } from '../contexts/ToastContext';
 import { IssueReportModals } from './issue-reports/IssueReportModals';
 
 /**
@@ -25,20 +25,13 @@ import { IssueReportModals } from './issue-reports/IssueReportModals';
  * them once at the app level fixes that while preserving each modal's
  * own state (via `useModal`).
  *
- * These modals render *outside* AppContents' per-view ToastProvider, so this
- * layer owns its own — without it, `useOptionalToast()` inside a global modal
- * falls through to the no-op fallback and add/remove/error feedback is
- * silently dropped.
+ * It also draws the window's one toast stack. Toasts used to be drawn by each
+ * view (Agents, Projects, the workspace) *and* here, from a second provider of
+ * its own: two stacks, fixed to the same corner, so a toast from Settings and
+ * one from the chat landed on top of each other. One provider (App's), one
+ * list, here, whatever the view.
  */
 export function AppGlobalModals() {
-  return (
-    <ToastProvider>
-      <GlobalModalsBody />
-    </ToastProvider>
-  );
-}
-
-function GlobalModalsBody() {
   // Window-wide, mounted once per window: keep <html>'s accent equal to the
   // Chief of Staff's colour (lives here to keep App.tsx under its LOC limit).
   useAppAccent();
@@ -51,7 +44,7 @@ function GlobalModalsBody() {
   const remoteAccess = useModal('remoteAccess');
   const phone = useModal('phone');
   const projectTools = useModal('projectTools');
-  const { toasts, dismissToast } = useToast();
+  const { toasts, dismissToast, holdToast } = useToast();
   useCompanionInstallReminder();
 
   return (
@@ -65,7 +58,7 @@ function GlobalModalsBody() {
       <ProjectToolsModal isOpen={projectTools.isOpen} onClose={projectTools.close} />
       <IssueReportModals />
       <MigrationModals />
-      <ToastList toasts={toasts} onDismiss={dismissToast} />
+      <ToastList toasts={toasts} onDismiss={dismissToast} onHold={holdToast} />
     </>
   );
 }

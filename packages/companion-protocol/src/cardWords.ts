@@ -20,6 +20,19 @@ export const STEP_IN_ON_YOUR_MAC = 'Step in on your Mac: its tab opens there.';
 /** The phone's note while the user is in the agent's tab at the Mac. */
 export const STEP_IN_AT_MAC = 'You’re in its browser on your Mac. Hand back there.';
 
+/** The phone's note on a step-in card when this Mac lets the phone step in. */
+export const STEP_IN_FROM_HERE =
+  'Its tab shows here and you do it by touch. It never sees what you type, only where the page ends up.';
+
+/** The phone's note while some phone is in the agent's tab. */
+export const stepInOnPhone = (device: string) =>
+  `${device} is in its browser. Hand back there, or on your Mac.`;
+
+/** "You're in Research's browser", or from which phone. */
+export function stepInBarTitle(agentName: string, onPhone?: string): string {
+  return onPhone ? `${onPhone} is in ${agentName}’s browser` : `You’re in ${agentName}’s browser`;
+}
+
 /** Under the title, muted: "login.microsoftonline.com · Verify your identity". */
 export function stepInSource(card: Pick<StepInCard, 'site' | 'pageTitle'>): string {
   return card.pageTitle ? `${card.site} · ${card.pageTitle}` : card.site;

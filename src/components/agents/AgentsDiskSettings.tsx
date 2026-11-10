@@ -31,20 +31,30 @@ function freeLine(d: DiskOverview): string | null {
     : `${free} Agents are told to clean up before installing.`;
 }
 
+/** Disk is fine and no home is large: said only when someone asked. */
+function fineLine(d: DiskOverview): string {
+  const none = 'No agent’s folder is 1 GB or more.';
+  return d.freeBytes === null ? none : `This Mac has ${formatBytes(d.freeBytes)} free. ${none}`;
+}
+
 export function AgentsDiskSettings() {
   const { data, execute } = useAsyncState<DiskOverview>(diskOverview, { immediate: true });
   const [busy, setBusy] = useState<string | null>(null);
   const [done, setDone] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLElement>(null);
+  // Opened from ⌘K "Disk space used by agents…": shown even when there is
+  // nothing to do, so the command lands on an answer, not the top of the page.
+  const [asked, setAsked] = useState(false);
   const loaded = data !== null;
   useEffect(() => {
-    if (loaded && takeSettingsSectionRequest('agent-disk')) {
-      ref.current?.scrollIntoView?.({ block: 'start' });
-    }
+    if (loaded && takeSettingsSectionRequest('agent-disk')) setAsked(true);
   }, [loaded]);
+  useEffect(() => {
+    if (asked) ref.current?.scrollIntoView?.({ block: 'start' });
+  }, [asked]);
   if (!data) return null;
-  const line = freeLine(data);
+  const line = freeLine(data) ?? (asked && data.homes.length === 0 ? fineLine(data) : null);
   if (!line && data.homes.length === 0) return null;
 
   const freeUp = async (agentId: string) => {

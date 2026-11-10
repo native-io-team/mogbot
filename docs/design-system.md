@@ -105,12 +105,15 @@ wrapper, and record its `old-icons` source in the metadata.
 
 To add feature artwork, place the SVG in `src/assets/graphics/` and import it directly with
 `?react` from the owning feature. The feature passes its class and layout props and marks
-decorative artwork as hidden. Static inline SVG is prohibited in feature components. There are two marked
-dynamic exceptions, each one generated root assembled from data at runtime:
-`BranchGraph.tsx` (`data-dynamic-svg="branch-graph"`), and `AgentKey.tsx`
+decorative artwork as hidden. Static inline SVG is prohibited in feature components (tests
+excepted). The marked dynamic exceptions are roots assembled from data at runtime, each
+carrying its marker: `BranchGraph.tsx` (`data-dynamic-svg="branch-graph"`); `AgentKey.tsx`
 (`data-dynamic-svg="agent-key"`), which draws an agent key's legend from the icon
 registry it shares with the phone (`packages/companion-protocol/src/agentKeyIcons.ts`;
-see `docs/internal/agent-keys.md`). The key itself is pure CSS (`agent-key.css`).
+see `docs/internal/agent-keys.md`; the key itself is pure CSS, `agent-key.css`); and an
+agent's chart block, which plots the numbers it sent: `blocks/BlockChart.tsx` (a cartesian
+chart and a pie, `agent-block-chart`) and the metric tile's sparkline in `blocks/BlockParts.tsx`
+(`agent-block-spark`). `pnpm icons:check` holds each file to its count of marked roots.
 
 `pnpm icons:status` reports the asset and export inventory, and `pnpm icons:check` validates the
 tree, metadata, public module exports, and dynamic SVG exception. The development-only gallery is
@@ -171,6 +174,7 @@ value, consume a semantic role or an owner-appropriate component token.
 | Info blue | `--info(-hover/-light/-dark)` | Links, info banners, "open" PR state, focus accents. |
 | Purple | `--purple`, `--purple-light`, `--purple-deep-rgb` | AI / agent surfaces only (skills, MCP). |
 | Slack | `--slack-pink`, `--slack-lavender(-bright)` | Slack community CTA branding only (dashboard, setup, support panel). |
+| Status words | `--text-success`, `--text-warning`, `--text-error`, `--text-info` | A status word as text on a selected row or a status tint ("Live" on the open agent's row, a "Build failed" pill, a warning button). The status hue in dark; a deeper shade in light (and a paler red in dark), where the accent falls just under AA on those fills. `theme.test.ts` holds each to AA on the panel and the selected fill. |
 | RGB triplets | `--accent-success/warning/error*-rgb` and feature `--*-rgb` values | For alpha tints only, e.g. `rgba(var(--accent-error-rgb), 0.1)`. Each must stay in sync with its solid token. The accent has no triplet: tint it with `color-mix(in srgb, var(--accent-active) N%, transparent)` (`check:patterns` fails on the old `--accent-active-rgb`). |
 | Tints | `--tint-subtle` / `--tint` / `--tint-strong` | White hover/selection washes on dark surfaces (5/8/10% white). |
 | Overlays | `--overlay-30` … `--overlay-80` | Black scrims behind modals, image dimming. Suffix = alpha %. |

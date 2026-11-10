@@ -453,7 +453,7 @@ export const agentsBlocksScenarios: Scenario[] = [
     id: 'agents-blocks-progress',
     title: 'Agents — blocks: steps, a checklist, facts, callouts, links and a diff',
     looksRightWhen:
-      '“Launch plan”: five steps on a rail, two green ticks, a red ✕ on “Domain moved” with its reason in red, a blue ring on “Announcement drafted”, a numbered grey disc for Go live. “Before Friday”: a thin green progress bar, “3 of 5 done”, ticked boxes muted, open boxes with a note under Social images. “The domain”: label/value rows with hairlines. Three tinted notes, each with its icon and a word: amber “Heads up”, green “Redirects work”, blue “Note”. “Sources”: three chips with a letter tile, the label and the domain, an external-link mark (no favicons). Then a vercel.json diff with green and red line washes in the mono font.',
+      'One card holding four sections split by hairlines (a page: records and notes in a row share a card). “Launch plan”: five steps on a rail, two green ticks, a red ✕ on “Domain moved” with its reason in red, a blue ring on “Announcement drafted”, a numbered grey disc for Go live. “Before Friday”: a thin green progress bar, “3 of 5 done”, ticked boxes muted, open boxes with a note under Social images. “The domain”: label/value rows with hairlines. Three tinted notes, each with its icon and a word: amber “Heads up”, green “Redirects work”, blue “Note”. “Sources”: three chips with a letter tile, the label and the domain, an external-link mark (no favicons). Then a vercel.json diff with green and red line washes in the mono font.',
     requires: '.agent-block-steps',
     openSelector: AGENTS_TAB,
     steps: [open],

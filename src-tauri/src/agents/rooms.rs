@@ -32,6 +32,7 @@
 //! Deleting a room removes the registry entry and its folder, never an agent;
 //! the members' own logs keep their tagged lines, folded in their chats.
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -741,7 +742,8 @@ pub fn messages_page(
             continue;
         }
         let mut theirs: Vec<AgentMessage> = indexes.iter().map(|&i| page[i].clone()).collect();
-        let _ = store::apply_answers(&agent_id, &mut theirs);
+        store::apply_answers(&agent_id, &mut theirs)
+            .or_log("how a room member's cards were answered");
         super::work::apply(&agent_id, &mut theirs);
         for (slot, message) in indexes.into_iter().zip(theirs) {
             page[slot] = message;

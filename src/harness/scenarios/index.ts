@@ -11,6 +11,8 @@ import { agentsLiveScenarios } from './agentsLive';
 import { agentsResultsScenarios } from './agentsResults';
 import { agentsShowWorkScenarios } from './agentsShowWork';
 import { agentsBlocksScenarios } from './agentsBlocks';
+import { agentsPageScenarios } from './agentsPage';
+import { agentsBriefBlocksScenarios } from './agentsBriefBlocks';
 import { agentsPreviewScenarios } from './agentsPreview';
 import { agentsRoomsScenarios } from './agentsRooms';
 import { agentsTakeoverScenarios } from './agentsTakeover';
@@ -26,6 +28,7 @@ import { agentsLoginsScenarios } from './agentsLogins';
 import { agentsMacAppsScenarios } from './agentsMacApps';
 import { agentsPolicyScenarios } from './agentsPolicy';
 import { agentsRecipeScenarios } from './agentsRecipe';
+import { agentsSkillsScenarios } from './agentsSkills';
 import { settingsWindowScenarios } from './settingsWindow';
 import { agentsStepsScenarios } from './agentsSteps';
 import { agentsProbeScenarios } from './agentsProbe';
@@ -51,9 +54,12 @@ import { previewErrorScenarios } from './previewError';
 import { remoteScenarios } from './remote';
 import { teamScenarios } from './team';
 import { projectsAtWorkScenarios } from './projectsAtWork';
+import { projectsDashboardScenarios } from './projectsDashboard';
+import { connectiveScenarios } from './connective';
 
 export const scenarios: Scenario[] = [
   ...agentsScenarios,
+  ...connectiveScenarios,
   ...agentsKeysScenarios,
   ...agentsDesktopScenarios,
   ...agentsBriefScenarios,
@@ -64,6 +70,8 @@ export const scenarios: Scenario[] = [
   ...agentsResultsScenarios,
   ...agentsShowWorkScenarios,
   ...agentsBlocksScenarios,
+  ...agentsPageScenarios,
+  ...agentsBriefBlocksScenarios,
   ...agentsPreviewScenarios,
   ...agentsRoomsScenarios,
   ...agentsTakeoverScenarios,
@@ -79,6 +87,7 @@ export const scenarios: Scenario[] = [
   ...agentsMacAppsScenarios,
   ...agentsPolicyScenarios,
   ...agentsRecipeScenarios,
+  ...agentsSkillsScenarios,
   ...settingsWindowScenarios,
   ...agentsStepsScenarios,
   ...agentsProbeScenarios,
@@ -90,6 +99,7 @@ export const scenarios: Scenario[] = [
   ...agentsHeaderScenarios,
   ...agentsAccountsScenarios,
   ...appScenarios,
+  ...projectsDashboardScenarios,
   ...onboardingFlowScenarios,
   ...featureScenarios,
   ...hostingScenarios,

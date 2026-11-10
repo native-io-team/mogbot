@@ -20,7 +20,8 @@ import { AGENT_EVENTS, getQuotas, quotaLines, type Quota } from '../../lib/agent
 
 /** The plan readings as stored (`agents_quota`), with the time they're judged at. */
 export function useQuotas(): { quotas: Quota[] | null; now: number } {
-  const quotas = useAsyncState<Quota[]>(getQuotas, { immediate: true });
+  // No `immediate`: the poll below reads on mount, and both made it two reads at once.
+  const quotas = useAsyncState<Quota[]>(getQuotas);
   const [now, setNow] = useState(() => Date.now());
   const { execute } = quotas;
   usePolling(

@@ -32,7 +32,7 @@ interface HelpShortcut {
   keys: string[];
 }
 
-const DEFAULT_WORKSPACE_PANEL_LABELS = ['Agent', 'Elements', 'Variables', 'Assets'];
+const DEFAULT_WORKSPACE_PANEL_LABELS = ['Session', 'Elements', 'Variables', 'Assets'];
 
 function getWorkspacePanelLabels(): string[] {
   if (typeof document === 'undefined') return DEFAULT_WORKSPACE_PANEL_LABELS;
@@ -51,20 +51,45 @@ function getWorkspacePanelLabels(): string[] {
 /**
  * Agents first: it is the primary view. The quick-message key is the user's
  * own (Settings → Agents), so it is listed only once read, as they set it.
+ * Every key here is also in the menu bar on a Mac and in ⌘K; the full map,
+ * with where each one lives, is docs/keyboard-shortcuts.md.
  */
 function getAgentShortcuts(quickMessage: string | null): HelpShortcut[] {
+  const mac = isMac();
   return [
     {
-      id: 'agents-mode',
-      label: 'Switch between Agents and Projects',
-      description: 'Flip the whole window between your agents and your projects',
-      keys: [MODE_TOGGLE_SHORTCUT],
+      id: 'agents-new',
+      label: 'New agent',
+      description: 'Describe the agent you want, or start from a ready-made one',
+      keys: [kbd('mod', 'N')],
     },
+    ...(mac
+      ? [
+          {
+            id: 'agents-new-conversation',
+            label: 'New conversation',
+            description: 'A fresh conversation with the agent you have open; its memory stays',
+            keys: [kbd('mod', 'shift', 'N')],
+          },
+        ]
+      : []),
     {
       id: 'agents-next',
       label: 'Next agent that needs your OK',
       description: 'Open the next conversation waiting on an answer from you',
       keys: [kbd('mod', 'J')],
+    },
+    {
+      id: 'agents-step',
+      label: 'Previous or next agent',
+      description: 'Move up or down the agent list',
+      keys: [kbd('mod', '['), kbd('mod', ']')],
+    },
+    {
+      id: 'agents-key',
+      label: 'Open an agent',
+      description: 'Press the key on its avatar (when no text box has the cursor)',
+      keys: ['A–Z', '0–9'],
     },
     {
       id: 'agents-search',
@@ -91,6 +116,74 @@ function getAgentShortcuts(quickMessage: string | null): HelpShortcut[] {
   ];
 }
 
+/** Keys that work in every part of the app. */
+function getAppShortcuts(): HelpShortcut[] {
+  const mac = isMac();
+  return [
+    {
+      id: 'command-palette',
+      label: 'Open command palette',
+      description: 'Search agents, projects, actions, and settings',
+      keys: [kbd('mod', 'K')],
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      description: 'Open the Settings window',
+      keys: [kbd('mod', ',')],
+    },
+    {
+      id: 'agents-mode',
+      label: 'Switch between Agents and Projects',
+      description: 'Flip the whole window between your agents and your projects',
+      keys: [MODE_TOGGLE_SHORTCUT],
+    },
+    {
+      id: 'go-to',
+      label: mac ? 'Go to 1–9' : 'Switch project',
+      description: mac
+        ? 'In Agents, the agents in list order; elsewhere your pinned, then open, projects. The Go menu names them'
+        : 'Jump to a pinned or open project',
+      keys: [kbd('mod', '1–9')],
+    },
+    {
+      id: 'project-picker',
+      label: 'Open a project',
+      description: 'Open the command palette on the Projects tab',
+      keys: [kbd('mod', 'O')],
+    },
+    ...(mac
+      ? [
+          {
+            id: 'new-window',
+            label: 'New window',
+            description: 'Another window, for a second project side by side',
+            keys: [kbd('mod', 'alt', 'N')],
+          },
+          {
+            id: 'close-window',
+            label: 'Close window',
+            description:
+              'The main window quits (or hides, if agents keep running); others just close',
+            keys: [kbd('mod', 'shift', 'W')],
+          },
+        ]
+      : []),
+    {
+      id: 'help',
+      label: 'Keyboard shortcuts',
+      description: 'Show this reference',
+      keys: [kbd('mod', '/'), 'F1'],
+    },
+    {
+      id: 'escape',
+      label: 'Close or cancel',
+      description: 'Close dialogs and cancel preview crop mode',
+      keys: ['Esc'],
+    },
+  ];
+}
+
 function getHelpShortcuts(): HelpShortcut[] {
   const panelShortcuts = getWorkspacePanelLabels()
     .slice(0, 5)
@@ -102,24 +195,6 @@ function getHelpShortcuts(): HelpShortcut[] {
     }));
 
   return [
-    {
-      id: 'command-palette',
-      label: 'Open command palette',
-      description: 'Search projects, actions, and settings',
-      keys: [kbd('mod', 'K')],
-    },
-    {
-      id: 'project-picker',
-      label: 'Open project picker',
-      description: 'Open the command palette on the Projects tab',
-      keys: [kbd('mod', 'O')],
-    },
-    {
-      id: 'switch-project',
-      label: 'Switch project',
-      description: 'Jump to a pinned or active project',
-      keys: [kbd('mod', '1–9')],
-    },
     {
       id: 'switch-workspace',
       label: 'Switch workspace',
@@ -139,9 +214,27 @@ function getHelpShortcuts(): HelpShortcut[] {
       : []),
     {
       id: 'switch-terminal-tab',
-      label: 'Switch terminal/agent tab',
+      label: 'Switch session or terminal tab',
       description: 'Switch to terminal or agent tab 1–9 in the current project',
       keys: [isMac() ? kbd('ctrl', '1–9') : kbd('ctrl', 'alt', '1–9')],
+    },
+    {
+      id: 'new-terminal-tab',
+      label: 'New terminal tab',
+      description: 'Open a new agent terminal tab',
+      keys: [kbd('mod', 'T')],
+    },
+    {
+      id: 'close-terminal-tab',
+      label: 'Close terminal tab',
+      description: 'Close the active terminal tab (the last one stays)',
+      keys: [kbd('mod', 'W')],
+    },
+    {
+      id: 'multiline-input',
+      label: 'Multiline terminal input',
+      description: 'Insert a newline instead of sending the message',
+      keys: [kbd('shift', 'Enter')],
     },
     {
       id: 'toggle-edit-mode',
@@ -154,30 +247,6 @@ function getHelpShortcuts(): HelpShortcut[] {
       label: 'Toggle Inspector',
       description: 'Open or close the Preview inspector panel',
       keys: [kbd('mod', 'I')],
-    },
-    {
-      id: 'help',
-      label: 'Open Help & Commands',
-      description: 'Show this reference',
-      keys: [kbd('mod', '/'), 'F1'],
-    },
-    {
-      id: 'new-terminal-tab',
-      label: 'New terminal tab',
-      description: 'Open a new agent terminal tab',
-      keys: [kbd('mod', 'T')],
-    },
-    {
-      id: 'close-terminal-tab',
-      label: 'Close terminal tab',
-      description: 'Close the active terminal tab',
-      keys: [kbd('mod', 'W')],
-    },
-    {
-      id: 'multiline-input',
-      label: 'Multiline terminal input',
-      description: 'Insert a newline instead of sending the message',
-      keys: [kbd('shift', 'Enter')],
     },
     {
       id: 'undo',
@@ -238,12 +307,6 @@ function getHelpShortcuts(): HelpShortcut[] {
       label: 'Crop preview screenshot',
       description: 'Enter crop mode for the preview',
       keys: [kbd('mod', 'shift', 'C')],
-    },
-    {
-      id: 'escape',
-      label: 'Close or cancel',
-      description: 'Close dialogs and cancel preview crop mode',
-      keys: ['Esc'],
     },
   ];
 }
@@ -317,6 +380,7 @@ export function HelpModal({ projectPath }: HelpModalProps) {
   const projectSkills = skills.filter((s) => s.scope === 'project');
   const groups = [
     { title: 'Agents', shortcuts: getAgentShortcuts(quickMessage) },
+    { title: 'Anywhere', shortcuts: getAppShortcuts() },
     { title: 'Projects & workspace', shortcuts: getHelpShortcuts() },
   ];
 
@@ -437,7 +501,9 @@ export function HelpModal({ projectPath }: HelpModalProps) {
                 </div>
                 <div className="help-command">
                   <span className="help-command-name">/compact</span>
-                  <span className="help-command-desc">Toggle compact output mode</span>
+                  <span className="help-command-desc">
+                    Summarise the conversation to free up context
+                  </span>
                 </div>
                 <div className="help-command">
                   <span className="help-command-name">/cost</span>

@@ -2,6 +2,7 @@ import type { AgentMessage, RoomView, WelcomeFrame } from '@shipstudio/companion
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
 import {
   answerers,
+  askingNames,
   chatKeysOf,
   EVERYONE,
   foldRoomLines,
@@ -162,7 +163,10 @@ describe('the room’s list', () => {
   });
 
   it('a member stopped on a card in this room needs you, before anyone replying, card loaded or not', () => {
-    const waiting = { ...ops, status: { state: 'waiting' as const, activity: null, since: 1, room: room.id } };
+    const waiting = {
+      ...ops,
+      status: { state: 'waiting' as const, activity: null, since: 1, room: room.id },
+    };
     const working = {
       ...finance,
       status: { state: 'working' as const, activity: null, since: 1, room: room.id },
@@ -172,6 +176,18 @@ describe('the room’s list', () => {
     // Waiting in another room or its own chat: not this room's.
     const away = { ...waiting, status: { ...waiting.status, room: 'other' } };
     expect(roomLine(room, [away], [])).not.toBe('Needs your OK');
+  });
+
+  it('names who is waiting beside the pill: stopped here, or a card still open in the thread', () => {
+    const waiting = {
+      ...ops,
+      status: { state: 'waiting' as const, activity: null, since: 1, room: room.id },
+    };
+    expect(askingNames(room, [finance, waiting], undefined)).toBe(ops.name);
+    // The card is loaded but the member's status hasn't caught up.
+    expect(askingNames(room, [finance, ops], thread)).toBe(ops.name);
+    const away = { ...waiting, status: { ...waiting.status, room: 'other' } };
+    expect(askingNames(room, [away], [])).toBe('');
   });
 });
 

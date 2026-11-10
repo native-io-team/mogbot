@@ -1,6 +1,6 @@
 /**
  * The conversation header at the widths where it used to collide: the
- * description ran under "N scheduled". Built on the Agents team fixture
+ * description ran under "N routines" (then "N scheduled"). Built on the Agents team fixture
  * (`./agents`); every name and routine here is fictional.
  */
 
@@ -58,22 +58,22 @@ export const agentsHeaderScenarios: Scenario[] = [
   at(
     'agents-header-wide',
     1440,
-    'Chief of Staff’s header: avatar, name and the whole description centred; “2 scheduled” and the … menu at the trailing edge, clear of the text.'
+    'Chief of Staff’s header: avatar, name and the whole description centred; “2 routines” and the … menu at the trailing edge, clear of the text.'
   ),
   at(
     'agents-header-1100',
     1100,
-    'The description is whole, or ends in an ellipsis before “2 scheduled”, never under it; the clock, “2 scheduled” and … keep their size and spacing.'
+    'The description is whole, or ends in an ellipsis before “2 routines”, never under it; the clock, “2 routines” and … keep their size and spacing.'
   ),
   at(
     'agents-header-760',
     760,
-    'Narrowest with the sidebar: the description is gone (it stays in the tooltip), the name whole, “2 scheduled” and … at the trailing edge.'
+    'Narrowest with the sidebar: the description is gone (it stays in the tooltip), the name whole, “2 routines” and … at the trailing edge.'
   ),
   at(
     'agents-header-900',
     900,
-    'Narrower: the title slides left of centre rather than meet the actions; the description truncates with an ellipsis if it must, never under “2 scheduled”.'
+    'Narrower: the title slides left of centre rather than meet the actions; the description truncates with an ellipsis if it must, never under “2 routines”.'
   ),
   at(
     'agents-header-running',
@@ -95,7 +95,7 @@ export const agentsHeaderScenarios: Scenario[] = [
     id: 'agents-header-narrowest',
     title: 'Agents — chat header, narrowest window',
     looksRightWhen:
-      'The scheduled button keeps only its clock and “2” (hovering says “2 scheduled routines”); the switcher’s name truncates before it if it must. Nothing overlaps.',
+      'The scheduled button keeps only its clock and “2” (hovering says “2 routines”); the switcher is the Chief’s key and a whole chevron, no name (there was room for “C…” and a chevron squeezed to a dot). Nothing overlaps.',
     viewport: { width: 400, height: 800 },
     command: 'agents.open',
     requires: '.agent-chat__header .agent-chat__scheduled',

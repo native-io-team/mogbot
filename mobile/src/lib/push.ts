@@ -22,7 +22,7 @@ import { getApp, setApp } from './store';
 
 /** How alerts work without push: Settings and the after-pairing card say the same. */
 export const ALERTS_WHILE_OPEN =
-  'Notifications arrive while this app is open on your phone. Your Mac still notifies you at the desk.';
+  'Notifications arrive while this app is open on your phone. While you’re using your Mac, only your Mac notifies.';
 
 /** The App Store build (or an official EAS build): `extra.official` in app.config.ts. */
 export const isOfficialBuild = () => Boolean(Constants.expoConfig?.extra?.official);
@@ -44,22 +44,24 @@ export function pushLine(
       return {
         value: 'On',
         footer:
-          'Your Mac can wake this phone through the notification service. Notifications say only that an agent needs you or finished, never what it said.',
+          'Your Mac can wake this phone through the notification service. Notifications say only that an agent needs you or finished, never what it said. While you’re using your Mac, only your Mac notifies.',
       };
     case 'pending':
       return {
         value: 'Connecting',
-        footer: 'Your Mac couldn’t reach the notification service yet. It tries again with the next one.',
+        footer:
+          'Your Mac couldn’t reach the notification service yet. It tries again with the next one.',
       };
     case 'off':
       return {
         value: 'Off on your Mac',
-        footer: 'Turn on phone notifications on your Mac, in Settings → Agents → Phone.',
+        footer: 'Turn on phone notifications on your Mac, in Settings → Phone.',
       };
     case 'unavailable':
       return {
         value: 'Not on this Mac',
-        footer: 'The app on your Mac has no notification service. Notifications arrive while this app is open.',
+        footer:
+          'The app on your Mac has no notification service. Notifications arrive while this app is open.',
       };
     default:
       return null;

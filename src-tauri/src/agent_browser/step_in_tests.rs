@@ -219,3 +219,63 @@ fn a_tab_closed_meanwhile_is_opened_again_and_a_gone_one_ends_as_closed() {
     assert_eq!(e.how, How::Closed);
     assert!(e.after.is_none());
 }
+
+/// Step in from the phone: the same hold, but the window stays parked (the
+/// phone sees the screencast), and the desk being in it already refuses it.
+/// The phone's view of the tab is borrowed: ending it stops the pictures and
+/// leaves the agent's tab open, and the chat's live picture can't stop them
+/// meanwhile.
+#[test]
+fn the_phone_holds_the_tab_without_bringing_its_window_forward() {
+    let (b, fake) = fake_browser();
+    let svc = Service::start(b, PathBuf::from("/tmp/none")).unwrap();
+    let a = "hold_agent_phone";
+    let tab = svc
+        .open(Owner::Agent(a.into()), "https://example.com/")
+        .unwrap();
+    let before_calls = fake.calls.lock().unwrap().len();
+    let (t, before) = begin_for_phone_on(&svc, a, "req_p", tab.id, &tab.url, 1_000).unwrap();
+    assert_eq!(t.target_id, tab.target_id);
+    assert_eq!(before.url, "https://example.com/");
+    let calls = fake.calls.lock().unwrap()[before_calls..].to_vec();
+    assert!(
+        !calls.iter().any(|c| c == "Target.activateTarget"),
+        "the window came forward: {calls:?}"
+    );
+    assert_eq!(refusal(a, &tab), Some(REFUSAL));
+    assert!(holds_target(&tab.target_id));
+    // Already held (the desk is in it, or this phone): refused, not taken over.
+    assert_eq!(
+        begin_for_phone_on(&svc, a, "req_p", tab.id, &tab.url, 2_000).unwrap_err(),
+        AT_THE_MAC
+    );
+
+    let win =
+        crate::agent_browser::signin::SigninWindow::borrow("req_p", a, svc.clone(), t.clone())
+            .unwrap();
+    assert!(win.borrowed());
+    assert!(!win.gone());
+    // The agent's other calls aren't kept out (only the held tab is).
+    assert!(crate::agent_browser::signin::refusal_for(a).is_none());
+    // No other way in for the agent's own tab.
+    assert!(win.go_plain("https://example.com/", true).is_err());
+    let n = fake.calls.lock().unwrap().len();
+    win.close();
+    let calls = fake.calls.lock().unwrap()[n..].to_vec();
+    assert!(
+        calls.iter().any(|c| c == "Page.stopScreencast"),
+        "{calls:?}"
+    );
+    assert!(
+        !calls.iter().any(|c| c == "Target.closeTarget"),
+        "the agent's tab was closed: {calls:?}"
+    );
+    assert!(svc
+        .tabs_of(&Owner::Agent(a.into()))
+        .iter()
+        .any(|x| x.target_id == tab.target_id));
+
+    let e = end_on(Some(&svc), a, "req_p", How::HandedBack, 1_000 + 2 * 60_000).unwrap();
+    assert_eq!(e.minutes, 2);
+    assert!(!holds_target(&tab.target_id));
+}

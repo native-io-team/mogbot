@@ -30,10 +30,11 @@ the message column), not at the foot of an empty screen.
 
 In Agents mode the sidebar's top row is the toggle (Home belongs to the
 Projects side). **What's in flight** — the one name for
-the cross-agent overview — is reached from a **"Needs you · N"** row at the
-top of the agent list, shown only while an agent waits on you (a request, or a
-turn that didn't finish; the same set ⌘J visits), and from ⌘K. A usage limit
-is not waiting on you — it resets by itself — so it isn't counted: What's in
+the cross-agent overview — is reached from the bell beside the sidebar toggle,
+named **Needs you** and counting only while an agent waits on you (a request, or
+a turn that didn't finish; the same set ⌘J visits; see "Needs you: one place per
+surface"), and from ⌘K. A usage limit is not waiting on you — it refills by
+itself — so it isn't counted: What's in
 flight lists it under **Paused**, and in a chat it is a quiet centred line
 with "Retry at 4:45 AM" (and a quiet "Try now", since the limit may have
 lifted early), not a tinted box. There is no
@@ -51,8 +52,10 @@ work that keeps going without them. So the Chief's greeting starts on
 pipelines, not one-offs: something starts it (a time, a file, an email, a
 GitHub issue), agents hand the work between them, and it ends on a card the
 user answers, on the desk or the phone. Three starters and **More ideas…**,
-from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
-with one blank at its end; none sends by itself.
+from one catalogue (`packages/companion-protocol/src/chiefIdeas.ts`, re-exported
+by `lib/chiefIdeas.ts`), so the phone's chips (`ChiefStarters`) type the same
+words. Each types a whole, specific brief with one blank at its end; none sends
+by itself.
 
 The chips are **Brief me every morning…**, **Sort my inbox, draft replies…** and
 **Research it and write it up…**: one per group, everyday jobs someone who
@@ -132,9 +135,12 @@ any past default, so stale guidance isn't merged in as the user's.
 
 Research runs on the engine's own tools and account. On
 Claude Code every web search and every page opened is a tool call the
-approval broker asks about, so a first research turn can raise several
-Allow cards. The Chief and the Research assistant are told to say so
-before they start ("I'll ask before searching the web"), and a search's
+approval broker decides. At Steady and above they are reads
+(`autoallow`) and run without a card; at Careful a first research turn
+can raise several. The Chief and the Research assistant used to warn
+"I'll ask before searching the web" up front, which was false at the
+default level (seen live: the Chief told a new user each 8am run would
+ask); now they mention Always allow only once a search has shown a card. A search's
 card offers **Always allow web searches** (a `Tool` rule on `WebSearch`,
 `permissions::suggest`); a page's card offers its one host, so each new
 site still asks once. On Codex, web search is Codex's own built-in tool
@@ -198,7 +204,11 @@ role, a briefing, up to four routines and the apps it will need. The draft
 fills the dialog's own fields, all editable, and adds one review list,
 **Routines**, each ticked; Create makes the agent with the routines still
 ticked (`agents_create`'s `routines`). "Start over" puts the one prompt back.
-Nothing is made before Create.
+Nothing is made before Create. The draft opens on its review: its key folds
+to the avatar beside the name (one click opens colour, icon and key), since
+the open picker pushed the briefing and routines below two thousand icons; on
+the phone the key beside the name does the same, and the review takes no
+keyboard until a field is tapped.
 
 - **One sealed call, no tools.** Claude Code with `--tools ""`, no MCP
   servers, `--setting-sources ""`, no slash commands, no session kept, in the
@@ -261,6 +271,11 @@ user sends anything.
   skipped, never cut.
 - An agent the Chief starts on a `first_task` gets the welcome but no
   starters: it is already busy.
+- **Then what it will do on its own.** Each routine set at Create leaves one
+  line after the welcome, with when it runs and its first run ("Set up a
+  routine: Brief me on Acme · every weekday at 8:00 AM, first run tomorrow at
+  8:00 AM", `mcp::routine_time_line`), so a routine made in one sentence is
+  seen to be set; one the grammar refused says which and why in its place.
 
 Not verified: a fresh agent's reach is usually just `gh` and its project
 (its engine lists connectors only once a turn runs), so most first opens
@@ -349,8 +364,8 @@ From the stream:
 - an `is_error` result, or any exit without a `result` event (a crash, or
   output that wasn't stream-json, even with exit code 0), becomes an error
   line; a crash keeps what had streamed, marked `stopped`. `agents/failure.rs` words the two states people actually hit in
-  Agents' own terms and tags the line (`failure`): "Claude Code's usage limit
-  is reached. It resets at 3:00 PM." (`usage_limit`, with `resetsAt` only when
+  Agents' own terms and tags the line (`failure`): "Claude Code is out of
+  usage until 3:00 PM." (`usage_limit`, with `resetsAt` only when
   Claude Code printed an epoch, or a clock time in this Mac's zone; a time in
   another zone is quoted, never converted) and "Claude Code is signed out."
   (`signed_out`), and an engine that's gone from the Mac as `engine_missing`
@@ -556,6 +571,65 @@ all of them, so whatever it remembers in one it knows in the others.
   (`routineMoveChoices`).
 - **Phone.** See docs/mobile.md, "Conversations".
 
+### Rewind, fork and edit (`src-tauri/src/agents/rewind.rs`)
+
+Answers: **can I get out of a wrong turn without losing the work?** On any
+of the user's own messages (desk: the hover actions' … menu, a right-click on
+the message (Copy and Remember this first, as it stands in for the webview's
+menu; `GoBackContextMenu`), ⌘K for the last one, and ⌘K "Go back to an
+earlier message…", a picker of the last 12 with the three actions on each
+(`GoBackPicker`), which the conversation header's … menu also opens, since a
+wrong turn is looked for there rather than on a hover of your own message;
+phone: long-press): **Edit and resend** puts it back in the
+composer under "Editing your message"; sending goes back to just before it,
+then sends the new words there. **Fork from here** makes a new conversation
+(titled "Fork of …", which the user is then in) whose history is everything
+before that message; the original stays exactly as it was. **Rewind to here**
+carries the same conversation on from just before it.
+
+- **Nothing is deleted.** `messages.jsonl` is never rewritten. A rewind is
+  kept in `conversations.json` (`Conversation::rewinds`: the message it went
+  back before and the ids it folded); the chat shows those lines under one
+  "Rewound · N messages" line that opens them (`foldRewound`, shared by desk
+  and phone). Opened, they read as past on both: one band with a rule down
+  its left from that line to "End of what was rewound", the lines muted (the
+  desk keeps one fold open at a time, `openOneFold`). A recap leaves them out (`runner::recap_log`). A fork lists
+  the ids it was made with (`inherited`): `store::conversation_page` reads
+  them from the one log like its own lines, so nothing is copied and a fork
+  of a fork carries the whole history. Each ends on one quiet line saying
+  what happened and that files it changed and anything it sent since aren't
+  undone.
+- **Where the engine picks up.** At the start of every turn the app notes
+  where its conversation stood (`turn_points.jsonl`, at most 400 kept): on
+  Claude Code the session and its last main-chain entry
+  (`transcript::claude_leaf`); on Codex's app-server the thread and the last
+  turn the app saw in it (`codex_turns.json`, from `turn/start`); a new
+  session handed nothing (blank); or anything else (a recap, `codex exec`,
+  OpenCode). Going back to before a message is that point exactly: Claude
+  Code starts a new session with `--resume <s> --resume-session-at <entry>
+  --fork-session` (hidden flags, verified on 2.1.322: the new session knows
+  only what came before, and the original transcript is untouched); Codex
+  starts its turn with `thread/fork` and `lastTurnId` (inclusive, schema of
+  0.166) in place of `thread/start`; a blank point starts blank; and the
+  rest start a new session handed a recap of what is left of the chat
+  (`rewind::RECAP_HEADER`), which the line says. That covers OpenCode, the
+  exec fallback and a message batched behind another in one turn. If the
+  engine refuses the fork before starting a session (a Claude Code update
+  that drops the hidden flag, a Codex that won't fork the thread), the turn
+  runs again from a recap with the same line (`rewind::fell_back`), so an
+  engine update never breaks going back. The branch waits in
+  `branches.json` until the conversation has a session again.
+- **Never mid-turn.** Rewind and Edit are refused while the agent has a turn
+  running or the user is driving its session; Fork is allowed (it changes
+  nothing in the running conversation).
+- **Outside text stays marked.** A fork of a session that had read outside
+  content marks the new one too (`rewind::carries_outside`, `exposure`).
+- **What isn't undone** is said in the confirm and the line: files the agent
+  changed and anything it sent. A project-bound agent's copy keeps its
+  changes; the confirm points at its changes card's Discard.
+- Commands: `agents_conversation_rewind`, `agents_conversation_fork`; phone
+  `agents.conversationRewind`, `agents.conversationFork`.
+
 **Context meter.** `agents/context.rs` stores one reading per agent
 (`Agent.context`: `used`, `window`, the engine's `model` id) from the engine's
 own numbers: Claude Code's last `assistant` `message.usage` against the
@@ -575,7 +649,7 @@ or a model change clears it.
 
 ### Keeping context healthy (`src-tauri/src/agents/tidy.rs`)
 
-Two layers, both engines. **Every turn** has the engine's own compaction on
+Two layers. **Every turn** has the engine's own compaction on
 and tuned, so nothing in the user's config can leave an agent to run into
 the wall mid-task. **Between turns** the app tidies a conversation that has
 grown past 70% of its window or 200k tokens, whichever comes first, at a
@@ -628,7 +702,7 @@ characters, a Codex agent's 12,619, the Chief's 16,003 before its team list
 (budgets 12,500 / 13,100 / 16,600). The agents' browser in "Getting access"
 took them to 12,697 / 13,262 / 16,646 after trims elsewhere (the repeated
 "don't mention servers or ports", the password paragraph the Secrets section
-already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Blocks' one line ("Show, don't describe", `show`) took the budgets to 13,500 / 14,100 / 17,500. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. The Chief's draft-first line ("Asked to make one? Draft it in one reply ending “Make it?”") went in within the Chief’s (17,245 of 17,250) by trimming its delegate, `project` and `read_agent` bullets: live on Haiku, the tool description alone didn't hold against "do it, don't ask", and a first message asking for an agent was built at once. Measured with Claude Code (Haiku 5.5,
+already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Blocks' one line ("Show, don't describe", `show`) took the budgets to 13,500 / 14,100 / 17,500. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. The Chief's draft-first line ("Asked to make one? Draft it in one reply ending “Make it?”") went in within the Chief’s (17,245 of 17,250) by trimming its delegate, `project` and `read_agent` bullets: live on Haiku, the tool description alone didn't hold against "do it, don't ask", and a first message asking for an agent was built at once. A review of the Chief as a whole (2026-11-10, live on Claude Code with `agents_fake real-chief`) folded its two create-agent bullets into one (standing or recurring work gets an agent that owns it, drafted once with its routines ending “Make it?”, its first run started on yes), replaced "No tables unless asked", which contradicted `show`, said that a `show`'s text and a result card are the reply and aren't repeated, and gave the user's word for a limit coming back ("refill"): 13,477 / 14,062 / 17,175, within the same budgets. The Chief's default instructions lost the up-front "I'll ask before searching the web" (false at Steady, where searches run without a card) and the draft-first sentence the prompt already has (3,712 → 2,820 characters). Measured with Claude Code (Haiku 5.5,
 `--append-system-prompt-file`, input tokens over a bare run): on the base
 this work started from, 3,347 tokens before and 3,269 after for a plain agent
 (4,583 → 4,505 for the Chief), while gaining the paragraph above; with
@@ -976,13 +1050,15 @@ steps has no line.
 
 For people who live in a terminal and want to see what ran:
 
-- **Ran on**: beside the folded line, "Claude Code · sam@acme.com ·
-  claude-opus-4-6". The engine and account are the ones the runner started
+- **Ran on**: beside the folded line, "Claude Code · sam@acme.com · Opus"
+  (the model in the Model menu's words, `modelWords`; the id as reported in
+  its tooltip). The engine and account are the ones the runner started
   the turn on (`work::on_ran_on`; the last try's, when a limit moved it).
   The model is only what the engine said: Claude Code's `system/init`
   event, Codex's `thread/start` result (`Step::Model`). Absent when it
   didn't say; nothing is inferred from the agent's settings.
-- **Show exact command**: under a step, the command line (or the tool and
+- **Exact command**: a kept step's own words open it (a chevron at their
+  trailing edge; no link per step), the command line (or the tool and
   its input) exactly as it ran. It is kept beside the timeline in
   `<home>/turn-detail/<message-id>.json`, never on the step (which carries
   only `hasExact`), so the status, the phone and notifications never see it.
@@ -2130,7 +2206,7 @@ know what they need." An **admin** is an agent the user lets manage, and
 answer for, the rest of the team.
 
 **Who.** One switch per agent, "Admin — can manage and approve for other
-agents": the agent editor, Settings → Agents → Admins (⌘K "Admins: who
+agents": the agent editor, Settings → Independence → Admins (⌘K "Admins: who
 manages and approves for your team…"), and the phone's agent sheet
 (`agents.setAdmin`, audited). Kept as `admin` on the registry entry; absent
 means on for the Chief of Staff and off for everyone else. Only the user sets
@@ -2160,7 +2236,7 @@ call, so turning it off holds from the next call):
   `read_agent`.
 - `delete_agent`: a **soft delete**. The agent leaves the team at once; its
   registry entry (whole) and home move to `recently-deleted/`, restorable from
-  Settings → Agents → Recently deleted for 30 days (`agents_restore`, which
+  Settings → Independence → Recently deleted for 30 days (`agents_restore`, which
   adds " (restored)" if the name was taken). Its secrets, connections and copy
   are kept until it's purged (`purge_expired`, when that list is read). It
   leaves its rooms. The user's own Delete is unchanged.
@@ -2182,7 +2258,7 @@ aren't listed and every call is refused.
 **Nothing invisible.** Each answer leaves a line in the target's chat ("Chief
 of Staff allowed: look inside your KiteExport folder") and the admin's
 ("Allowed for Ledger: …"), each naming the other, and an entry in Settings →
-Agents → Admin activity (`admin-activity.jsonl`, last 500).
+Independence → Admin activity (`admin-activity.jsonl`, last 500).
 
 **Plain words on every card.** A permission card leads with what it does and
 why, from the tool and its input (`summary_for`: "Look inside your KiteExport
@@ -2295,7 +2371,7 @@ and change first (the agent it was opened for is ticked, else the Chief;
 never the whole team; none keeps it for a later card's "Use <account>"),
 then the provider's sign-in opens in this Mac's browser, the token goes into
 the Keychain, and the row says "Connected as …". Same states and words as a
-card (Open again · Copy link, Stop). Works for Claude Code and Codex agents
+card (Open again · Copy link, Stop). Works for agents on every engine
 (the relay). Who can use it is changed there too
 (`agents_connection_set_grants`: the user's own answer, so it can narrow).
 A granted agent's card waiting for that app is answered at once. Then
@@ -2377,7 +2453,7 @@ An app the catalogue doesn't know is declined by its title (`other:acme
 bank`), never as `other`, and gets a row of its own on the team list.
 Turning one back on: **Undo** (within 5 minutes the cards it closed come
 back as fresh cards), or "Turn back on" in "What it can reach" (desk and
-phone) and Settings → Agents, after which agents may simply ask again.
+phone) and Settings → Apps, after which agents may simply ask again.
 Commands: `agents_login_not_needed`, `agents_logins_not_needed(keys?)`,
 `agents_logins_undecline`, `agents_logins_declined`; on the phone
 `agents.loginNotNeeded`, `agents.loginsNotNeeded`, `agents.loginsUndecline`
@@ -2467,9 +2543,9 @@ Code must be signed in with claude.ai (an API key keeps it off). Codex has no
 equivalent here: Codex agents never get the browser and ask instead.
 
 **Or the app's own extension, for any engine** ("Your Chrome",
-`user_chrome/`, off by default): Settings → Agents → Your Chrome sets up a
+`user_chrome/`, off by default): Settings → Chrome sets up a
 native host (the app's own binary) and the app's MV3 extension, and every
-turn, Claude Code or Codex on any account, gets `mcp__user_chrome__*` with the
+turn, on any engine and any account, gets `mcp__user_chrome__*` with the
 agents' browser's tool names. The same gate decides it (below), outside text
 never gets it, and a turn that has it runs `--no-chrome`. Design, trust and
 what's verified: docs/internal/own-browser-layer.md.
@@ -2499,7 +2575,7 @@ access chain sends sites to the agents' browser, the turn is told why
 (`connections::CHROME_DOWN_PROMPT`: never send the user to sign in or out of the
 Claude extension), and the app's own line, once per agent per outage, says
 "Chrome isn't reachable through Claude's extension. Set up Your Chrome once
-(Settings → Agents → Your Chrome) so this can't happen again." with a **Set up
+(Settings → Chrome) so this can't happen again." with a **Set up
 Your Chrome** button (`NoteFix::UserChrome`). Observed: after a Claude account
 switch Claude in Chrome's native host went stale, three routines ran into "0
 browsers", and the Chief told the owner to reopen Chrome signed in to the same
@@ -2744,7 +2820,7 @@ their own, and the person signs in to it from the phone.
   in the bottom-right corner, not minimized. Started on first use, closed
   after 15 idle minutes, when its Settings switch goes off, for a plain
   sign-in, and when the app quits.
-- **Settings → Agents → Agents' browser**, on by default
+- **Settings → Chrome → Agents' browser**, on by default
   (`agent-browser.json`). Off: no turn gets it and cards don't offer it.
   In every build unless built with the `no-agent-browser` cargo feature
   (an opt-out: as a default feature it was dropped by `tauri dev`, and the
@@ -2842,7 +2918,7 @@ sign-in on a site it's signed out of is still `request_login` with
   sees what's typed. **Not now** and **Step in** (neutral, never the
   accent). The tool returns at once; the agent stops and is woken later.
   One per agent at a time; asked again while one waits, it's told so.
-- **Step in** (`agents_step_in`, desk only) brings that tab's real Chrome
+- **Step in** at the desk (`agents_step_in`; the phone's is below) brings that tab's real Chrome
   window on screen and in front (`Service::show`), so the keyboard, the
   mouse and macOS's own passkey and Touch ID sheets work as in any Chrome:
   nothing is relayed through the app. If Chrome closed meanwhile (15 idle
@@ -2852,10 +2928,12 @@ sign-in on a site it's signed out of is still `request_login` with
   reading included (`tools::tab_of`), `tabs` names it without reading it,
   and the chat's live picture of it stops (`live::frame_on`). Its other tabs
   and `open` still work. Chrome's idle close waits. The chat shows the bar
-  "You're in <Agent>'s browser · Hand back" (pinned, with the site and when
-  it hands back by itself) and the card says so with **Show window**
-  (`agents_step_in_show`) and **Hand back**; ⌘K "Hand <Agent> its browser
-  back". The live state is laid over the card on read (`step_in::apply`),
+  "You're in <Agent>'s browser" (pinned, with the site, when it hands back
+  by itself, **Show window** (`agents_step_in_show`) and **Hand back**); in
+  that chat the card only says so and points at the bar, so the two buttons
+  aren't shown twice with opposite weights. Drawn anywhere else (the team
+  view, another chat's requests) the card keeps both; ⌘K "Hand <Agent> its
+  browser back". The live state is laid over the card on read (`step_in::apply`),
   never stored.
 - **Hand back** (`agents_step_in_hand_back`) parks the window, answers the
   card ("Handed back"), leaves a line ("You handed Finance its browser back
@@ -2883,13 +2961,38 @@ sign-in on a site it's signed out of is still `request_login` with
   app to put a card in (`tools::dispatch`). An admin can't answer it
   (`admin::classify`: "only you can step into its browser"); the sweep puts
   an unanswered one away like a login card, never while the user is in it.
-- **The phone** shows the card with "Step in on your Mac: its tab opens
-  there." and **Not now** only; a plain Allow from an older phone is refused
-  with "Step in on your Mac". No remote control of the tab in v1 (the
-  sign-in screen's frames-and-taps could carry it; not built).
+- **From the phone** (Mac feature `stepIn.phone`): **Step in** on the
+  phone's card opens its sign-in screen on the agent's own tab
+  (`agents.stepInBegin` → `phone_signin::begin_step_in`). The tab is held
+  exactly as at the desk (`step_in::begin_from_phone`, the same answer
+  gate), but its window stays parked; the phone gets its screencast and
+  sends taps, typing, keys and scrolls through the same `agents.signin*`
+  calls, lent the tab by `SigninWindow::borrow` (ending it stops the
+  pictures and leaves the tab open). Same rules as a phone sign-in: only the
+  paired device that began it, one session per Mac, the card's site and the
+  sign-in providers only (`Scope`; elsewhere the phone sees nothing and may
+  go Back or Hand back), typed text never logged, audited or kept, frames
+  only over the verified Tailscale route. No "another way in": it's the
+  agent's tab. **Done is Hand back**; Stop, leaving the screen, the session's
+  five idle minutes (handed back by itself, with the minutes) and a
+  replaced session all hand back too (`finish_live`), so the agent is always
+  woken. Hand back, Not now, the tab closing or the 15-minute limit on the
+  Mac end the phone's session (`end_step_in`), never twice. While a phone is
+  in it, the desk's card and bar name the phone ("Sam's iPhone is in
+  Finance's browser", `onPhone`, laid over like `inSince`) without Show
+  window; Hand back there works. Stepping in from the phone while the user
+  is in it at the desk is refused ("Hand it back there first"). The chat's
+  live picture of a held tab stays off, and its lapsing lease no longer stops
+  the phone's screencast (`live::stop_session`). An older Mac: the phone
+  shows "Step in on your Mac: its tab opens there." and **Not now** only; a
+  plain Allow is refused with "Step in on your Mac".
 - **Not verified**: a real SSO, passkey, 2FA or CAPTCHA page; a live turn
   calling the tool on either engine; the window coming forward in a built
-  app (tested against the fake Chrome only, `step_in_tests.rs`).
+  app (tested against the fake Chrome only, `step_in_tests.rs`). From the
+  phone: the hold, the borrowed screencast and the end paths are tested
+  against the fake Chrome and the companion stub; no real phone has stepped
+  into a real tab, and a passkey or Touch ID prompt can't be answered from
+  the phone (it's the Mac's own sheet).
 
 **Signing in from the phone** (`agents/phone_signin.rs`, `Via::AgentsBrowser`):
 
@@ -2930,7 +3033,7 @@ closed and the same profile opens in a plain Chrome app window
 (`--app=<url>`, no debugging switch at all, `plain.rs`), which the phone sees
 through macOS window capture (`screencapture -l`) and drives with CGEvents
 (`macos.rs`). That needs Screen Recording and Accessibility for the app:
-Settings → Agents shows both with **Allow…** (Screen Recording's own prompt,
+Settings → Chrome shows both with **Allow…** (Screen Recording's own prompt,
 then the System Settings pane). Without them the phone says plainly that
 Google needs one sign-in at the Mac. At the desk the plain window just
 opens; quitting it (⌘Q) is when the card checks. Either way the agents'
@@ -3140,8 +3243,8 @@ already, nothing to connect.
 | `messages_recent`, `messages_search` | recent conversations with a chat id, one conversation, or words | `~/Library/Messages/chat.db`, read-only (Full Disk Access) |
 | `messages_send` | an iMessage to a phone number, an email or a chat id | Messages' scripting (Automation) |
 
-They're tools on the agent bridge (`/mcp/agent`), so Claude Code and Codex
-both get them, served to every agent; the app runs them itself, in a child
+They're tools on the agent bridge (`/mcp/agent`), so every engine gets
+them, served to every agent; the app runs them itself, in a child
 process (`mac_apps_os.rs`): JavaScript for Automation over EventKit and the
 Contacts framework (no app launched, macOS's prompt is this app's), the apps'
 own scripting for Notes and sending, `sqlite3 -readonly` for Messages'
@@ -3501,12 +3604,96 @@ The backend decides, since it knows when a message is recorded and when a turn e
 
 - **On screen** = a *focused* window is showing that agent (`agents_focus` reports which agent each window shows; focus is asked of the window at that moment). Messages on screen neither notify nor count as unread.
 - A reply or error off screen notifies with the agent's name and the first line. Inside a turn they are held and posted once when it ends, with the latest text. An approval posts at once, with a sound.
-- Bursts across agents are capped (3 per 20s); the rest stay silent but still count.
+- Bursts across agents are capped (3 per 20s); the rest stay silent but still count. An approval is never capped, on the desk or a phone: the agent is blocked on it.
 - **Mute** (row context menu) stops OS notifications for that agent; a bell-off mark shows in its row. Unread and the badge still count it.
 - **Phones** hear each alert the desk decides on: over the socket of each connected phone that posts alerts (`companion/alerts.rs`) and through the push relay when it is on. Not while the user is **at the desk** (`at_desk`: one of the app's windows has focus), where the banner here is enough. Mute and quiet hours apply to phones as here (docs/mobile.md, "Notifications").
-- **Dock badge** = how many agents need you, the one count every surface shows: the sidebar bell's count, the review bar in the Chief's chat, the phone's Home bar, tab badge and icon badge (`needsYouCount`, `packages/companion-protocol/src/attention.ts`; Rust mirrors it in `notify::needs_you`, and both run `attention-cases.json`). The Chief counts like anyone; unread replies and usage limits don't. The mode toggle's badge is on whenever any non-hidden agent is waiting or unread. Approval cards don't add to unread; they count as pending until answered.
+- **Dock badge** = how many agents need you, the same count as the sidebar bell, the review bar in the Chief's chat and the phone's icon badge (the phone's Catch up tab counts its rows instead, see "Needs you: one place per surface") (`needsYouCount`, `packages/companion-protocol/src/attention.ts`; Rust mirrors it in `notify::needs_you`, and both run `attention-cases.json`). The Chief counts like anyone; unread replies and usage limits don't. The mode toggle's badge is on whenever any non-hidden agent is waiting or unread. Approval cards don't add to unread; they count as pending until answered. It is refreshed whenever an agent's state changes, so a failed turn counts the moment it goes idle (its error line lands while it is still working).
 - Clicking a notification focuses a window and emits `agents://open`; the app switches to Agents and opens that agent. Focusing a window clears the unread of the agent it shows.
 - Uses `tauri-plugin-notification` (2.8, click reporting on macOS). Not verified in a real build yet: the dev binary posts under another app's identity, so click-through should be checked in a signed build.
+
+## Skills (`src-tauri/src/agents/skills_learn.rs`)
+
+After a hard task an agent can keep how it did it as a skill, so next time
+the same request is one sentence. The agent calls `save_skill { name, when,
+steps }` at the end of the task; **the app, not the model, judges whether
+the turn took real effort**, from what it observed (`work::snapshot`): at
+least 8 tool steps, or 4 over three minutes, never counting its own
+narration, cards, plans or the `save_skill` call itself
+(`skills_learn::effort`). A quick turn's call is refused ("This task was
+quick… Nothing was saved"). The bridge call and the engine's stream are
+read by separate tasks, so the call can arrive before the steps ahead of it
+are recorded; the judgement first waits (up to 3 s, `work::caught_up`) for
+the stream to report the `save_skill` call itself, which both engines do
+before making it, so every earlier step is counted. A wait that runs out
+judges on what was seen and logs it.
+
+**One vocabulary.** A skill is saved: the setting is "Save new skills", the
+list is "Skills", the card asks "Save “<name>” as a skill?", the line says
+"Saved a skill: <name>", and the answered card "Saved · under Skills".
+
+**Per agent: Save new skills — Automatically / Ask me / Off**
+(`Agent::learn_skills`, stored `auto` / `ask` / `off`, absent is `ask`).
+Automatically saves at once with the line "Saved a skill: <name>. Next time
+it follows these steps."; Ask me puts one card in the chat, "Save “<name>” as
+a skill?", showing when to use it and the steps exactly as they'd be saved,
+answered **Not now / Save** (nothing behind ⋯; nothing waits on it, it never
+expires, and it is drawn as an offer, not a gate: no raised surface, Not now
+plain and Save outlined, no A / D keys, desk and phone alike); Off doesn't serve the tool. **A turn answering
+outside text, or in a conversation that read outside content
+(`exposure::read_outside`), always gets the card, whatever the setting**,
+marked high risk (the warning icon; never answered in place on the phone's
+list) with "It read outside content in this conversation: check nothing in it
+came from there." (`skills_learn::gate`, tested).
+
+**Never in one.** Every field goes through the Keychain redaction
+(`secrets::redact`) and the recipe scrub (`recipe::scrub`: credentials,
+home-folder paths, email addresses, phone numbers), each "[removed: …]" and
+counted on the card. Names are capped at 60 characters, when at 300, steps at
+6,000; a fence (`---`) in the steps can't end the file's header; 40 skills
+per agent.
+
+**Where it lives.** `<home>/.claude/skills/<slug>/SKILL.md`, Claude Code's
+own format (`name: <slug>`, `description: <when>`, then `# <Name>` and the
+steps). Claude Code in the agent's home reads that folder itself
+(`Placement::Native`). Codex and OpenCode aren't verified to, and a
+project-bound agent's turn runs in the project, so for those the system
+prompt carries "## Skills you saved": each skill's name, when, and its
+file's path, to read first (`Placement::Index`, `skills_learn::prompt_for`;
+no skills, no section, so the prompt budgets are unchanged). One set of
+files for every engine, so switching engines keeps them. A SKILL.md the
+user put there by hand is listed too.
+
+**Listed and changed.** Edit agent → "Save new skills" (a segmented
+control, saved at once) and "Skills", each skill with Edit
+(name, when, steps; cleaned again, a new name moves its folder) and Remove
+(`agents_skills`, `agents_skill_edit`, `agents_skill_remove`;
+`agents-skills-changed` refreshes the list). Phone: the agent sheet's
+"Skills" (`agents.skills`, a menu for the setting through
+`agents.update` `learnSkills`, each skill's steps with Edit on its own sheet,
+`agents.skillEdit`, and Remove, `agents.skillRemove`). From chat:
+`update_agent` `learn_skills` (Chief): Ask me and Off apply at once;
+Automatically is more room, so it applies on the user's own message alone
+and is a card otherwise.
+
+**In recipes.** A recipe carries `skills: [{name, when, steps}]`, scrubbed
+like the rest and absent when there are none (version stays 1; older builds
+ignore it). On import each is cleaned again (`skills_learn::draft`), shown on
+the review card under "Skills" with its steps, and written
+into the new agent's home on Import ("It came with skills: …").
+
+**Residual.** The agent can still write a file into that folder with its
+own file tools, as it can any file in its home; `save_skill` is the path
+the app checks and shows. The effort thresholds are a judgement, not a
+measurement of difficulty.
+
+Tests: `cargo test --lib agents::skills_learn` (the gate, effort, redaction,
+each engine's placement, the card, recipes and imports),
+`pnpm vitest run src/components/agents/AgentSkills.test.tsx`,
+`mobile/__tests__/skillCard.test.tsx`, `scripts/agents-fake-e2e.sh skills`
+(a quick turn refused; a hard one's card, Save writing the file without the
+email; Automatically with no card; Off saving nothing), `node
+scripts/harness-capture.mjs agents-skill-card agents-editor-skills`, and
+`cd mobile && pnpm qa:web --only chat-skill-card` / `agent-sheet-skills`.
 
 ## Memory you can see (`src-tauri/src/agents/memory.rs`)
 
@@ -3666,8 +3853,16 @@ the full threat model in docs/remote-access.md):
    plan is with the user the other assistant is told `STATUS: with_user`.
    The playback card expires on a restart (the interview is in memory).
 7. `finish` (once the user says that's everything) posts the review card: each agent ticked, with its role and the
-   first lines of its instructions in view (**Show all** for the rest), its
-   memory, routines (paused) and the logins it asks for a click away; a
+   first lines of its instructions in view (**Show all** for the rest; six
+   lines, three on a card bringing more than five agents, and a briefing
+   written as one long paragraph cut at a word after about 480 characters),
+   its memory, routines (paused) and the logins it asks for a click away.
+   Past five agents a muted tally over the rows says "All 12 ticked" / "9 of
+   12 ticked" with one **Untick all** / **Tick all** (`agents-import-review-many`). Once
+   imported, each name in the card's "Imported …" line that is an agent here
+   opens its chat, as the pills on the import's done screen do and the
+   phone's Import screen's **Say hi to <name>** buttons: an import ends with
+   the user talking to the agents. A
    name already taken (or a lookalike of one) comes in as "<Name> (from
    Grok)" unless the user picks **Replace**, which lists what it does to
    that agent: new instructions (the diff), a fresh conversation (memory
@@ -3784,7 +3979,7 @@ paste), and the phone's Import screen (`agents.import.exportPrompt` /
 
    | From | What's read | Source |
    |---|---|---|
-   | Grok Bot | `{"format": "grok-bot-export", "bots": […]}` (`name`, `title`, `instructions`, `memories`, `user_facts`, `skills`, `routines` with `trigger` / `schedule_cron` / `timezone`, `apps`), one file or several, a `.json` or a reply holding it. Grok Bot has no export of its own: this is the shape the Hermes `agent-importers` plugin asks the bot to write | hermes-official-plugins `agent-importers/grok_bot.py` |
+   | Grok Bot | `{"format": "grok-bot-export", "bots": […]}` (`name`, `title`, `instructions`, `memories`, `user_facts`, `skills`, `routines` with `trigger` / `schedule_cron` / `timezone`, `apps`), one file or several, a `.json` or a reply holding it. Grok Bot has no export of its own: this is the shape the Hermes `agent-importers` plugin asks the bot to write, so the bot's own looser writing is read too: a list as one string (an item a line), apps and skills as bare names (a named-only skill goes in its context), the cron under `cron` or `schedule`. A `.json` that doesn't parse says which file and where ("…has a trailing comma at line 2"), not "doesn't look like an export" | hermes-official-plugins `agent-importers/grok_bot.py` |
    | OpenBot | `openbot-import.json` (`"format": "openbot-agent-import"`, its Grok Bot migration zip, with `agents/<key>/skills/*/SKILL.md`) and `openbot-transfer.json` (`"format": "openbot-instance-transfer"`). Its own agents live in `openbot.db`, which isn't read | nightly-labs/openbot `resources/agent-import/grok-bot/SKILL.md`, `src/main/instance-transfer-manifest.ts` |
    | OpenClaw | A workspace (`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `HEARTBEAT.md`, `MEMORY.md`, `memory/YYYY-MM-DD.md` newest first, `USER.md` as facts about the user), or `~/.openclaw` (`workspace`, `workspace-<id>`, names from `openclaw.json` `agents.entries` or the legacy `agents.list`), or an `openclaw backup` `.tar.gz`. Scheduled jobs live in SQLite since 2026.6.1 and aren't read (the preview says so); a leftover `cron/jobs.json` is | docs.openclaw.ai agent-workspace, multi-agent; repo `docs/cli/cron.md`, `packages/gateway-protocol/src/schema/cron.ts` |
    | Hermes | `~/.hermes` or `profiles/<name>` or a profile export `.tar.gz`: `SOUL.md`, `memories/MEMORY.md` (entries split by `§`), `memories/USER.md`, `skills/<name>/SKILL.md` (names and descriptions), `cron/jobs.json` | hermes-agent `hermes_cli/profiles.py`, `cron/jobs.py` |
@@ -3875,7 +4070,8 @@ a fork's recipes read the same):
   "watches": [{ "when": "a new file appears in [removed: a file path]", "what": "File it" }],
   "apps": ["Gmail", "Linear"],
   "look": { "colorway": "teal", "icon": "inbox", "key": "F" },
-  "independence": "often"
+  "independence": "often",
+  "skills": [{ "name": "Reconcile payouts", "when": "When asked to reconcile", "steps": "1. …" }]
 }
 ```
 
@@ -4110,11 +4306,19 @@ minutes, a working day of the month, two days in one) is said so on staging and
 on the review card, and the interview is told not to ask again for a time that
 was already exact.
 
-The user sees them in a popover on the chat header ("N scheduled", or a clock
-when there are none; Cmd+K → "Schedule a check-in for <agent>…"). Each row
-can be paused (routines) or cancelled. The composer takes one line, `when:
-what`, split at the first colon followed by a space, and reads the time back
-as the backend resolved it before Return adds it.
+The user sees them in a popover on the chat header ("N routines", or
+"Routines" when there are none; Cmd+K → "Schedule a routine for <agent>…").
+Each row can be paused (routines) or cancelled. New routine opens the picker,
+the phone's on the desk: "At a time / When…", then **How often** (chips:
+Every day, Weekdays, Weekly, Monthly, Every few hours, Once; never a second
+"When" under "When…"), At, **What**, "Then…" for steps, and an echo of the
+whole routine ("Every weekday at 8:00 AM — Send me a summary of X") with its
+first run as the backend resolved it. An existing routine's model ("Model",
+not "Runs on", which is the agent's engine and account) sits under What. The
+"When…" composer has the same shape: "When this happens" over the sources,
+Check every, What, and an echo ("When someone mentions you on GitHub —
+Triage it"; a check in the user's own words is quoted: "When Lead Gen finds
+“a new email from Dana” — …"), then what each check costs.
 
 **Run now** (`agents_schedule_run_now`) fires a row immediately as an ordinary
 wake: the same `check_in` line (marked `manual`, shown "· run now") and the
@@ -4133,7 +4337,8 @@ own (`quiet-hours.json`), set from chat with `set_quiet_hours` ("quiet hours
 on days whose own time is inside the window, which the user chose; what
 waited fires once when they end, its wake saying it waited for quiet hours.
 Every notification but an approval (desk banner and phone push) is held and,
-at the end, one notification says who posted. The chat still gets its lines.
+at the end, one notification says who posted, leaving out any agent whose
+chat is on screen then. The chat still gets its lines.
 The user writing to an agent counts as being up: nothing is held for 30
 minutes. A check-in whose agent remembers quiet hours the app doesn't have is
 told to set them. Observed: quiet hours kept only in memory, so a sweep
@@ -4198,7 +4403,9 @@ and its answer post one notification per turn.
 
 The sidebar's Routines row and ⌘K "Routines" open one list of every agent's
 routines: the agent's key, the note, how it runs in words, its next run, its
-last run's outcome, and an on/off switch. **Pause all routines…** and
+last run's outcome, **Change** and an on/off switch. Change opens that agent's
+chat with its routines popover already on the routine's editor
+(`lib/routineHandoff.ts`, a one-slot ask its chat takes as it mounts). **Pause all routines…** and
 **Resume all routines…** (the list's buttons, or ⌘K) ask first. Resume all
 is the exact undo of Pause all: it wakes only routines marked
 `pausedByBulk`, never one paused by hand, by an admin (`pausedByAdmin`) or by
@@ -4284,8 +4491,32 @@ every few minutes:
 | Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; one firing per new mention (thread id + latest comment, or `updated_at`) | free |
 | An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"`, 100 a page, up to 300 | free |
 | A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s; symlinks skipped); folders of at most 2,000 entries | free |
+| An email arrives in Mail (optionally from a sender, with some words) | Mail's own index on this Mac (`~/Library/Mail/V*/MailData/Envelope Index`, the newest `V`), read with `sqlite3 -readonly`: the newest 100 not-deleted messages in any account's inbox; sender matches part of the address or name, words the subject or Mail's preview; each known by sender, subject and time, so Mail rebuilding its index doesn't refire (`watch_mac.rs`) | free |
+| A text arrives in Messages (optionally from one phone number or email) | `~/Library/Messages/chat.db`, read-only as the Messages tools read it: the newest 100 received (not the user's own, not tapbacks), known by Messages' guid; a phone number matches however it's written (last ten digits) | free |
 | A Linear issue is assigned to me | one sealed headless model call through Linear (Claude Code on Haiku, or Codex on a small model: see "Which engine runs a check" below): ours first (connected under Apps or on a login card, given to this agent, reached through the relay with a secret that opens only that connection, for reads only, never a card: `conn_relay::Via::Sealed`), else the Linear server set up in Claude Code | a model call |
 | Something else… (in the user's words, through one named app) | the same sealed call, through that app | a model call |
+
+**Mail and Messages** (`watch_mac.rs`) need no account and nothing reachable
+from outside, only **Full Disk Access** for this app, which no prompt can
+give. `agents_watch_mac_access` (and `WatchOptions.mac` for the phone) says
+whether each can be read, from the folders alone: unlistable is Full Disk
+Access off, missing is "Mail isn't set up" / "Messages hasn't been used".
+The desk composer shows the Mac's own sentence ("Reading Mail needs Full Disk
+Access: System Settings → Privacy & Security → Full Disk Access, then turn on
+…"), opens that pane, and asks again every 3 s until it reads (Add stays off
+until then); the phone shows the same sentence with Check again, since only
+the Mac can switch it on. A text's sender is typed on either (the Mac sends
+no contacts list) and must be a phone number or email (`mac_apps::is_handle`,
+mirrored as `isHandle`). If permission goes away later, the check fails with
+that sentence and backs off and pauses like any failed check. What a message
+says reaches the agent only in the `<external_items>` envelope on a turn
+answering outside text (below): its level is capped at Steady, a Messages
+call in it asks every time (`mac_apps::Step::Once`), and nothing here sends
+or replies. The check itself is plain SQL, no model.
+*Not verified:* against a real Mail index and `chat.db` on this Mac (tests use
+fixture databases shaped like them; no test reads the user's own), and that
+Full Disk Access granted to the app reaches its `sqlite3` child (the
+Messages tools already rely on it).
 
 **The rules.** The first check is a baseline (it notes what's there and
 fires nothing). Nothing fires twice: ids seen are kept per routine; a
@@ -4457,14 +4688,31 @@ line in the chat. At most one model check starts per tick.
 
 They're `CheckIn`s with a `watch` (no `repeat`; `next_at` is the next check),
 so cancel, pause, list and the 12-per-agent cap are shared. The time tick
-ignores them. In the schedule popover, "At a time / When…" switches the
+ignores them. In the routines popover, "At a time / When…" switches the
 composer; a When… row shows what it waits for, what it does, how its last
 check went, its week's cost, Check now (`agents_watch_check_now`), Edit,
 Pause and Cancel. ⌘K: "Start work for <agent> when something happens…".
 Agents set them with the `watch_for` tool. The phone gets them apart from
 timed routines as `agent.watches` (without `seen`/`pending`) and shows them
-read-only when `welcome.features` has `routines.when`; the Mac refuses any
-schedule operation the phone sends for one (`refuse_watch_from_phone`).
+when `welcome.features` has `routines.when`.
+
+**From the phone.** On a Mac that lists `agents.watch.options|create|update|checkNow`
+the phone sets them up and changes them too: its routine sheet has the same
+"At a time / When…" switch and the desk's composer, in the same words, all
+from `packages/companion-protocol/src/whenComposer.ts` (the desk reads them
+there too): When this happens over the sources ("checked from your Mac"),
+Through, Check every, What, the echo and what each check costs. A "When…" row
+on the agent sheet offers Check now, Pause, Edit and Cancel; on an older Mac
+it stays read-only ("Set up and changed on your Mac."). A phone can't type a
+path: `agents.watch.options` (`agents/watch_options.rs`) offers Downloads,
+Desktop and Documents when they exist plus folders a routine already watches,
+and a folder off that list is refused. The apps a check could read through
+come from the Mac as raw lists (our connections, with only this agent's
+grant, and Claude Code's servers) and are read by the shared `whenApps`. The
+user adds them, so no card, as on the desk; the 12-per-agent cap, the line in
+the chat and every rule of the check are the Mac's own. A time routine's Edit
+and Run now are refused for a "When…" one, and Check now for a timed one
+(`refuse_wrong_kind_from_phone`); Pause and Cancel are shared.
 
 Not verified against live accounts: a model check through a real connector,
 and the GitHub search source (pagination included). The notifications
@@ -4486,6 +4734,13 @@ the desk banner and the phone notification say.
   reported reset; an account nobody read is "not reported", never counted
   as having room). `brief::compose` writes it from a template. Nothing is
   inferred: an agent that did nothing isn't named.
+- **Drawn as blocks.** `brief::compose_blocks` builds the same facts as
+  blocks (the gist as the intro; Needs you and Usage as facts, Didn't work
+  as a warning callout, Today and Since… as tables with counts as numbers,
+  the user's checks as facts whose outside text is drawn as plain text),
+  through `blocks::parse` like an agent's. The message's text stays the
+  composed one (notification, search, Copy, older clients); a set `parse`
+  refuses leaves the brief as text alone.
 - **Prepared ahead.** 20 minutes before the time the slow parts (the usage
   inventory and the user's checks) are read into `morning-brief-state.json`;
   at the time the brief is posted at once with fresh local records. Once a
@@ -4507,7 +4762,7 @@ the desk banner and the phone notification say.
   run says why in one line ("Gmail isn't connected. Connect it in Apps.").
 - **Set from chat** with the Chief's `set_morning_brief` ("brief me at
   7:30", "stop the morning brief", `now: true` posts today's at once), from
-  Settings → Agents → Notifications (⌘K "Morning brief…") and from the
+  Settings → Notifications (⌘K "Morning brief…") and from the
   phone's Settings (`agents.morningBrief` / `agents.setMorningBrief`,
   audited; the phone sets on/off and the time). Adding a check is a card
   unless the user's own message asked; never from a turn answering outside
@@ -4522,7 +4777,7 @@ verified against a real connector, or across a real night on a sleeping Mac.
 Answers: **can I start my agents, and get their answer, from the Slack
 thread where the work came up, with no server in between?**
 
-**Connect (Settings → Agents → Slack, ⌘K "Talk to your agents from
+**Connect (Settings → Apps → Slack, ⌘K "Talk to your agents from
 Slack…").** There is no server of ours, so there is no Slack app of ours: an
 OAuth app needs a client secret and an HTTPS redirect, both of which would
 have to live somewhere we run (and Slack's own MCP server has no dynamic
@@ -4705,13 +4960,13 @@ no window and no limit type (no plan on this login). The top-level
 `rateLimitType` of an event without `unifiedWindows` is read only when it is
 a known plan window, never e.g. `overage`.
 
-The sidebar foot, the foot of What's in flight, and the phone's agent list
-and Settings show "Claude usage 85% · resets Sat" for the fullest window,
-amber from 90% (Settings' rows too), and "Claude out of usage until Sat"
+The foot of What's in flight (`AgentsQuota`; the sidebar's usage row and the
+phone's usage glance are the stacked meter in "Usage wallets") shows "Claude
+usage 85% · refills Sat" for the fullest window, amber from 90%, and "Claude out of usage until Sat"
 for a used-up one. A figure stands until its reset even when no turn has run
 since, and use elsewhere isn't in it, so a reading's age is said: the tooltip
 names its day when it isn't today ("reported it Tue at 3:00 PM"), and once it
-is more than 6 hours old the line itself says so ("Claude usage 34% · resets
+is more than 6 hours old the line itself says so ("Claude usage 34% · refills
 Sat · read Tue"; the phone has no tooltip). The figure is kept rather than
 hidden: it is still the latest the engine said, now labelled as such. A
 used-up window needs no age, since it stays used up until the reset it names.
@@ -4721,7 +4976,7 @@ one (`failure::with_reported_reset`). Every reset is said by one rule for the
 day: today a clock time, then "tomorrow", the weekday within the week, the
 date beyond it. The chat's sentence ("Claude Code is out of usage until Sat at 2:00 PM.",
 `failure::clock_phrase`), the button ("Retry Sat 2:00 PM"), the sidebar row
-("Out of usage until Sat 2:00 PM") and the foot ("resets Sat") all name
+("Out of usage until Sat 2:00 PM") and the foot ("refills Sat") all name
 the same day. The wording lives once, in
 `packages/companion-protocol/src/quota.ts`, for the desk and the phone, and
 in `clock_phrase` for the Mac's own sentences.
@@ -4729,9 +4984,9 @@ in `clock_phrase` for the Mac's own sentences.
 ## Usage wallets (`agents/wallet.rs`)
 
 Answers: **when one subscription runs out, can the agents keep going on
-another?** Each engine has an ordered list of accounts (Settings → Agents →
-Accounts; the account row at the foot of the Agents sidebar; ⌘K "Switch
-account…", "Add an account…", "Usage accounts…"). One of them is always
+another?** Each engine has an ordered list of accounts (Settings → Accounts &
+usage; the account row at the foot of the Agents sidebar; ⌘K "Switch
+account…", "Add an account…"). One of them is always
 **this Mac's own sign-in**: the `claude` / `codex` login already on the
 machine (`id: "default"`), which every turn used before wallets and still
 uses while it is the only one. It can be renamed and moved down, not
@@ -4764,22 +5019,28 @@ function.
 **The Usage view** (`AgentsUsageView`, `USAGE_ID`; opened by that row, ⌘K
 "Usage and accounts…", "Switch account…", "Add an account…"). Two levels.
 *The overview*: the total as a hero ("72% left across 2 Max accounts",
-"Next refill in 2d 4h · sam@example.com, Thu 3:15 AM", the bar with each
-account named under its segment and opening it); a calm bar when every
+"Next refill in 2d 4h · sam@example.com, Thu 3:15 AM", the bar, each
+segment opening its account; the rows below name them, so the bar doesn't); a calm bar when every
 account is nearly out (add an account, carry on with the other engine when
 it has room, or "Wait until …"); "Accounts", one row each in the order work
 tries them (`AccountRow`: keycap, name, a small bar, what it adds, In use /
-Next / "Out of usage", refill countdown), with "Add an account" at the
-heading's right; "How agents use your limits" (the mode as a hugging
+Next / "Out of usage", refill countdown; a signed-out row has its own Sign in
+beside it, the same sign-in as its page), with "Add an account" at the
+heading's right. With one account the hero has no eyebrow. The hero's words
+(`totalWords`) are the phone's hero's and the chat header popover's too, so
+those three never word the total or its refill differently; "How agents use your limits" (the mode as a hugging
 control and its one line, then, when a window on the account in use resets
-soon with at least 25% left, a nudge: "62% of Work's week resets in 9 h",
-the first waiting items of the spare-capacity list, and "Give agents
+soon with at least 25% left, a nudge: "62% of Work's week refills in 9 h",
+the first waiting items of the list of ideas for leftover usage, and "Give agents
 something to do", which wakes the Chief with that list now:
 `agents_spare_spend_now` → `usage_tools::spend_now`, the same prompt "Use it
 all" sends, changing no approval; a press while the Chief is still starting
 that window says so instead of queuing it twice,
-`usage_plan::already_starting`); then the crossover choice, the
-spare-capacity list and other compute. *An account's page*
+`usage_plan::already_starting`); then the crossover choice, "Ideas for
+leftover usage" (the spare-capacity list; one plain name in the UI) and other compute.
+The user's word for the moment a limit comes back is **refill**, everywhere
+(hero, chips, mode "Use it all before the refill", lines, the phone); "reset"
+stays only in code and in what agents are told. *An account's page*
 (`AccountDetail`; "Usage › Work" with a back arrow, Esc or ⌘[ to return;
 `requestUsageAccount` opens one from elsewhere, as the chat header's account
 chip does): its keycap, name, state pill, place in the order, plan and who,
@@ -4789,12 +5050,12 @@ account as …", this Mac's sign-in having changed); "Limits" with Limits |
 Tokens at its right: the limit cards (5-hour, weekly, per-model, each with
 its countdown chip, pace marker, the Mac's labelled run-out estimate and the
 pace in words) or "Used by these agents this week" as a table (agent key,
-name, tokens, messages); and "Where did my usage go". Adding is one click
+name, tokens, messages); and "Where it went". Adding is one click
 per engine (a free name, then its sign-in). Onboarding offers adding right
 after the engine's sign-in ("Add another account?", skippable). The phone
 has the same two levels: the Usage sheet (the total, then a row per
 account) and an account's screen (`mobile/src/app/usage-account.tsx`);
-Settings → Accounts leads with the same total
+Settings → Accounts & usage leads with the same total
 (`mobile/src/components/usageStack.tsx`).
 
 **One account signed in twice** (`inventory::same_as`). A Claude account
@@ -4853,7 +5114,7 @@ do and when it refills (`usageGlance` `row`): the total ("72% left", or
 the total bar and "Refills in 2d 4h". Its corner dot shows only when the
 user must act or agents are out; the phone's Agents list says the same.
 
-**Where did my usage go** (`agents/usage_story.rs`). Each turn's tokens are
+**Where it went** (`agents/usage_story.rs`). Each turn's tokens are
 recorded per account with its agent, and its routine when it ran one alone
 (`usage_plan::add_turn`, `tag_routine`; kept 8 days). For each rise of at
 least 2 points in an account's 5-hour or weekly meter (consecutive readings
@@ -5080,9 +5341,9 @@ installed and signed in with room. `runner::run_on_accounts` decides around
 the wallet's own loop (`run_on_engine`):
 
 - **The user's choice, per engine** (`crossover.json` beside the wallet;
-  Settings → Agents → Usage, "When every Claude Code account is out"; the
+  Settings → Accounts & usage, "When every Claude Code account is out"; the
   Chief's `set_engine_fallback`, behind a card): **Ask first** (default),
-  **Carry on with Codex**, or **Wait for the reset**. Ask first puts one card
+  **Carry on with Codex**, or **Wait for the refill**. Ask first puts one card
   in the agent's chat when a turn ends with every account out: "All your
   Claude Code accounts are out until 4:00 PM. Carry on with Codex until
   then?" — **Always** (Allow + always: sets Carry on), **Just this time**
@@ -5092,7 +5353,7 @@ the wallet's own loop (`run_on_engine`):
   runs the turn again on the other engine. The phone shows the same three
   answers and sends them the same way (`ApprovalCard`, the words from
   `companion-protocol` `crossover.ts`); Catch up opens the card rather than
-  answering it; Settings → Accounts there says "Claude Code out · on Codex
+  answering it; Settings → Accounts & usage there says "Claude Code out · on Codex
   until 4:00 PM" while agents are away. Older clients show Allow / Deny.
 - **Never** for an agent set to one account ("Runs on"), never for the app's
   own tidy turn, never silently: the chat gets "Carried on with Codex (Claude
@@ -5124,7 +5385,7 @@ the wallet's own loop (`run_on_engine`):
   under "### Saved on Codex" before it becomes the link. A bound agent's
   project's own `AGENTS.md` is never touched.
 - **Shown:** the account row "Claude out · on Codex" (until when in its
-  tooltip), Settings → Agents → Usage "Claude Code out · on Codex until
+  tooltip), Settings → Accounts & usage "Claude Code out · on Codex until
   4:00 PM", and the Chief's `usage_overview`.
 - **Not verified:** a live turn on Codex carrying a Claude Code conversation
   (Codex isn't signed in on the development Mac), how a real Codex treats
@@ -5158,7 +5419,7 @@ never slow down for limits unless the user chose that.
 - **Every account read without a turn** (`agents/usage_read.rs`): on open
   (20 s after launch), every 10 minutes while the app is open (20 on
   battery, see "Low power"), and when
-  someone looks (the usage popover, Settings → Usage, the phone's
+  someone looks (the usage popover, Settings → Accounts & usage, the phone's
   `agents.usagePlan`, an agent's `usage_overview`, which waits up to 20 s for
   it) unless a check ran in the last 2 minutes; one at a time, never
   doubled. Each account's outcome is kept beside its reading
@@ -5254,12 +5515,13 @@ never slow down for limits unless the user chose that.
   `subscriptionType` does, so a Claude account read without a turn shows
   its plan.
 - **Other compute**, detected, never assumed (`inventory::local_compute`,
-  cached a minute): Opencode's binary; Ollama (binary or app) and LM Studio
+  cached a minute): OpenCode's binary; Ollama (binary or app) and LM Studio
   (`lms` or the app), each asked over loopback for its model list
   (`127.0.0.1:11434/api/tags`, `127.0.0.1:1234/v1/models`, 800 ms, no proxy,
   no redirects, so nothing leaves this Mac) and said
-  "installed, not running" when it doesn't answer. Agents don't run on these;
-  they are listed so the Chief can say what's there.
+  "installed, not running" when it doesn't answer. OpenCode is an engine
+  (agents can run on it, and through it on these local models), but it
+  reports no limits, so it is listed here rather than as an account.
 
 **Readings vs estimates.** The rule "only what the engines report, never
 estimated" is about *readings* and stands unchanged. A forecast is an
@@ -5296,14 +5558,14 @@ never a default.
   with at least 3 readings over at least 30 minutes, a rise of at least 1
   point, and a crossing after now and before the reset; an account that's out
   has none. Said as "At this pace you'll hit the limit this afternoon, before
-  it resets at 4:00 PM" with "Estimate from 6 readings over 2 hours" under it
+  it refills at 4:00 PM" with "Estimate from 6 readings over 2 hours" under it
   (a part of a day, never a minute it can't know), in the chat header's usage
-  popover on the desk (`AgentUsageRing`, ⌘K "Show usage"), Settings → Usage,
+  popover on the desk (`AgentUsageRing`, ⌘K "Show usage"), Settings → Accounts & usage,
   the phone's Usage sheet and `usage_overview`'s ESTIMATES. The words live
   once in `packages/companion-protocol/src/usageSheet.ts`, shared by the desk
   ring and the phone sheet.
 
-**Modes** (`usage_plan::Mode`, `usage-plan.json`; Settings → Agents → Usage,
+**Modes** (`usage_plan::Mode`, `usage-plan.json`; Settings → Accounts & usage,
 or the Chief's `set_usage_mode`, which always asks on a card first):
 
 - **Normal** (default): no throttling. Before something big (a fan-out, a long
@@ -5316,7 +5578,7 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   while every account its agent could run on is past 90% (`HOLD_PERCENT`) of
   a 5-hour or weekly limit waits for the first of them to reset, then runs
   once, late. Said once per hold: a line in the agent's chat and a run row
-  "Waiting for the reset" (`runs::Outcome::Held`, `usage_plan::first_hold`).
+  "Waiting for the refill" (`runs::Outcome::Held`, `usage_plan::first_hold`).
   Run now still runs; "When…" routines aren't held; an account with no
   reading is never held for.
 - **In any mode, an account out until a known reset is waited for, not
@@ -5337,13 +5599,13 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   from the desk) and a line in the Chief's chat, with "Switch to Save my
   limits" outside Save. Recorded before it is said (`usage_plan::first_warning`,
   30 minutes of reset slack): never repeated for that window. Not in "Use it
-  all before reset".
+  all before the refill".
 - **A model per routine** (`CheckIn::model`; the routine editor's "Runs on",
   `agents_schedule_model`; the Chief's `set_routine_model`): like its other
   routines (`Agent::routine_model`, the default), the agent's own (`same`),
   or one of its engine's. The turn finds it through its tickets
   (`runs::routine_model`), only when every routine in that turn agrees.
-- **Use it all before reset**: the user's standing OK to spend capacity that
+- **Use it all before the refill**: the user's standing OK to spend capacity that
   would otherwise expire. **Any account's** expiring room counts: the
   account turns run on next first; with none spare there, the soonest spare
   window on another account, and turns on that engine then start on it until
@@ -5357,8 +5619,8 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   `SPARE_MIN_PERCENT` (25) points unused (and the account's other 5-hour or
   weekly window has as much left and isn't used up: spending a 5-hour window
   spends the week too; only accounts signed in, not out and not a second
-  sign-in count), work waits on the spare-capacity
-  list, and the Chief is free, the check-in tick (at most every 3 minutes)
+  sign-in count), work waits on the ideas for
+  leftover usage, and the Chief is free, the check-in tick (at most every 3 minutes)
   wakes the Chief once per window instance (`usage_plan::should_nudge`,
   `nudged`), with a quiet Note in its chat. The Chief hands items to agents,
   marks them started (`finish_spare_work`), and may bring a routine forward
@@ -5366,7 +5628,7 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   changes no approval: anything that sends, spends, pushes or changes what
   others see still waits for the user's Allow.
 
-**The spare-capacity list**: users add in Settings; any agent adds with
+**The spare-capacity list** ("Ideas for leftover usage" in the UI): users add in Settings; any agent adds with
 `add_spare_work` ("sometime", "when there's spare capacity"). At most 50
 items of 600 characters. A turn answering outside text (a "When…" routine's
 items) can't add to it, take items off it or run a routine; and what such a
@@ -5388,13 +5650,14 @@ turn costs the engine's prompt cache on the whole conversation. Spare
 capacity reaches the Chief through the nudge, and the user through What's
 in flight.
 
-**UI.** Settings → Agents → Usage (⌘K "Usage limits and spare capacity…"):
+**UI.** Settings → Accounts & usage (⌘K "Usage and accounts…"):
 the mode, each account's reading or "No reading yet", tags ("Plus plan",
 "Next turns run here"), each engine's average turn (estimate), other
 compute, and the list. What's in flight ends with one muted line when a
 window on the next account is near its reset with capacity left ("Claude
-5-hour limit resets 3:00 PM · 62% unused"). The phone's Settings shows the
-same, read-only (`agents.usagePlan`, additive: an older phone never asks, an
+5-hour limit refills 3:00 PM · 62% left"). The phone's Settings shows the
+same and sets the mode and the list (`agents.usagePlan`, `agents.usage.setMode`,
+`agents.spare.add`, `agents.spare.spendNow`; additive: an older phone never asks, an
 older Mac doesn't list it in `welcome.methods`). Wording lives once in
 `packages/companion-protocol/src/usage.ts`.
 
@@ -5404,10 +5667,10 @@ older Mac doesn't list it in `welcome.methods`). Wording lives once in
   percentage, and any token→share conversion is learned and labelled.
 - Claude Code reports no plan name; neither engine reports a reading for an
   account no turn has run on. Those accounts say "No reading yet".
-- Opencode and local models aren't agent engines here; they're listed, not
-  used.
-- Choosing *accounts* by reset time is done only for "Use it all before
-  reset" (`spend_first`, until that window resets); otherwise the wallet's
+- OpenCode reports no limits, so it and the local models it can run appear
+  under other compute, never as an account with a reading.
+- Choosing *accounts* by refill time is done only for "Use it all before
+  the refill" (`spend_first`, until that window resets); otherwise the wallet's
   order is the user's, and failover keeps it. Agents choose between *engines*
   (an agent on Codex vs one on Claude Code) by what resets sooner.
 - **"These may be the same account"** (`agents/lockstep.rs`,
@@ -5550,8 +5813,13 @@ that says what happens ("Quitting the app stops them, and sleep pauses
 them.", or with Keep running on, "Closing the
 window keeps them going; quitting stops them, and sleep pauses them.") and one
 line suggesting an always-on Mac, such as a Mac mini or a cloud Mac, for
-round-the-clock agents; and as a "Keep this Mac awake" link at the end of the
-schedule popover's footnote. Elsewhere than macOS none of it shows.
+round-the-clock agents; and as a "Keep this Mac awake" link after the one
+sentence on where routines run (`ROUTINES_NEED_THE_MAC`, shared): the schedule
+popover's footnote, and under the Chief's starters once one that sets up a
+routine is picked (every idea but the one-off research and debate,
+`ideaRepeats`). The phone says the same sentence under its routine sheet's
+buttons and its Chief starters, without the link. Elsewhere than macOS the link
+doesn't show.
 
 ## Menu bar, quit guard and quick entry (`agents/tray.rs`, `agents/quick_entry.rs`)
 
@@ -5570,6 +5838,7 @@ and `agents://registry`:
 - Overflow is counted (`2 more`), not listed. Hidden agents aren't listed; idle ones aren't either.
 - Then Open <name>, New message to Chief… (quick entry), Keep this Mac awake / Keep running when closed (checkmarks, the same `set_stay_on`), Quit <name> (`brand::NAME`).
 - Clicking an agent opens its chat (`notify::open_agent`, the notification click's path), showing a window that a close hid.
+- The Dock icon's menu shows the same "Needs you" rows, then New Agent…, Open *the Chief* and Quick Message… (`dock_menu.rs`; the menu bar and every key: docs/keyboard-shortcuts.md).
 
 Shown by default **once the user has actually used Agents, or while Keep
 running when closed is on** (`AppState.menu_bar_icon`, `None` = that rule).
@@ -5577,8 +5846,8 @@ running when closed is on** (`AppState.menu_bar_icon`, `None` = that rule).
 message sent to any agent (`agents_send`, so quick entry too) or the first
 import (both import paths); an agent that already has a session counts, for
 installs from before the flag. Someone who never touches Agents gets no new
-icon in a crowded menu bar. Settings → General overrides it either way.
-Rows are engine-agnostic: Claude Code and Codex turns report through the
+icon in a crowded menu bar. Settings → Agents ("On this Mac") overrides it either way.
+Rows are engine-agnostic: every engine's turns report through the
 same runner status and approval cards. Quick entry stays opt-in (it follows
 Keep running only). Turning Keep running off *from the icon*
 pins the icon on, so it doesn't vanish under the pointer.
@@ -5600,7 +5869,7 @@ first, since it may be hidden. The updater's restart is untouched: it still
 waits for `agents_busy` to reach 0.
 
 **Quick entry.** A system-wide shortcut (`tauri-plugin-global-shortcut`,
-default ⌥Space, Settings → General) opens a small floating composer over any
+default ⌥Space, Settings → Agents) opens a small floating composer over any
 app: its own window (`quick-entry`), created hidden at launch so the shortcut
 only shows it, on the display under the pointer, a third of the way down.
 
@@ -5619,10 +5888,11 @@ not a non-activating panel), focus returning after send and Esc,
 `screencapture` and its permission prompt, and the quit guard from the icon
 with the window hidden.
 
-## Engines: Claude Code or Codex (`agents/engine.rs`, `agents/codex_app.rs`, `agents/codex.rs`)
+## Engines: Claude Code, Codex or OpenCode (`agents/engine.rs`, `agents/codex_app.rs`, `agents/codex.rs`, `agents/opencode.rs`)
 
-Each agent has `engine: "claude" | "codex"` (default `claude`), so it can run
-on a ChatGPT plan with the same chat, tools, memory and Chief around it. The
+Each agent has `engine: "claude" | "codex" | "opencode"` (default `claude`), so it can run
+on a ChatGPT plan, or on any provider OpenCode is set up with (a model on this
+Mac included), with the same chat, tools, memory and Chief around it. The
 editor's **Runs on** (`AgentEngine.tsx`) appears only once two engines are
 installed; with one there is nothing to choose, and the dialog's foot has a
 quiet "Also use Codex" that opens the same set-up terminal as the chat's. An
@@ -5640,8 +5910,9 @@ composer and the phone's agent sheet says so under "Runs on"
 cached, so a slow moment doesn't stick as "can't ask". An
 agent on an engine other than Claude Code wears a small badge in the sidebar
 and the team view. Model offers
-that engine's own list: Claude Code's aliases, or Codex's own
-`models_cache.json` (`visibility: list`, its order). The Chief can set it on
+that engine's own list: Claude Code's aliases, Codex's own
+`models_cache.json` (`visibility: list`, its order), or OpenCode's
+`opencode models` (see "OpenCode"). The Chief can set it on
 `create_agent` / `update_agent`; both refuse an engine that isn't ready.
 Switching clears the session and the model, leaves a note ("Runs on Codex
 from its next message"), and the next turn gets the recent conversation
@@ -5651,17 +5922,19 @@ from its next message"), and the next turn gets the recent conversation
 
 Settings → Agents → What agents run on (`AgentDefaultsSettings.tsx`) sets what
 a new agent starts on when nobody picked, saved in the app's settings
-(`AppState::agent_defaults`: `engine`, `claudeModel`, `codexModel`):
+(`AppState::agent_defaults`: `engine`, `claudeModel`, `codexModel`,
+`opencodeModel`):
 
-- **New agents start on** — Claude Code | Codex, only the engines
+- **New agents start on** — Claude Code | Codex | OpenCode, only the engines
   `agents::engine` runs. One that isn't installed and signed in is greyed out,
   and `agents_set_defaults` refuses it. Never chosen, the rule decides:
   Claude Code when ready, else the first engine that is
   (`engine::default_for`).
-- **Model on Claude Code / Model on Codex** — one row per installed engine:
+- **Model on Claude Code / Codex / OpenCode** — one row per installed engine:
   "Default" (no `--model`) and only the models that engine itself
   reports or accepts: Claude Code's aliases (said by what they're for, the
-  alias beside it), Codex's `models_cache.json`. An engine that lists none
+  alias beside it), Codex's `models_cache.json`, OpenCode's `opencode
+  models`. An engine that lists none
   has no menu, just "Codex hasn't listed its models, so new agents use its
   default."
 
@@ -5682,7 +5955,7 @@ Settings on it. The phone reads it from the overview and sets it with
 `agents.setDefaults` (docs/mobile.md, "Settings").
 
 **The boundary.** `engine::Engine` is what an agent is on; `driver::Driver`
-is how one turn runs it (`ClaudePrint`, `CodexApp`, `CodexExec`), picked once
+is how one turn runs it (`ClaudePrint`, `CodexApp`, `CodexExec`, `OpenCodeAcp`), picked once
 per turn. It answers everything engine-specific about starting a turn (the
 sign-in check, who names a new session, the command line, whether stdin stays
 open, the leftover-process mark, capabilities read before the turn), and the
@@ -5811,6 +6084,136 @@ Not verified against a signed-in ChatGPT account (none on the build machine):
 real model behaviour on these prompts, the real usage-limit response (its
 wording was produced by Codex itself from a scripted 429), and a real reset
 time. The e2e Codex scenarios run on the account when one is signed in.
+
+### OpenCode (`agents/opencode.rs`)
+
+An agent can run on **OpenCode** (`engine: "opencode"`), on whichever
+providers the user set up in OpenCode itself: an API key, a subscription it
+supports, OpenCode's own free models, or a model served on this Mac (Ollama,
+LM Studio, llama.cpp). It is "ready" once `opencode models` lists a model it
+can run; there is no one sign-in to check, and "Sign in" opens `opencode auth
+login` to add a provider. The model picker lists `opencode models --verbose`
+(a minute's cache), each by its own name and provider; a model whose address
+(its catalogue `api.url`, or its provider's `baseURL` in `opencode debug
+config`) is a loopback one says "· on this Mac". Nothing else is called local.
+
+A turn is one `opencode acp` (the Agent Client Protocol: JSON-RPC on
+stdin/stdout), like Codex's app-server:
+
+```
+OPENCODE_CONFIG_CONTENT={model, instructions:[<0600 prompt file>, <cwd>/AGENTS.md|CLAUDE.md],
+                         permission:{…}, agent:{build:{permission:{…}}}, default_agent:"build",
+                         share:"disabled", autoupdate:false, experimental:{mcp_timeout}}
+OPENCODE_DISABLE_PROJECT_CONFIG=1  OPENCODE_DISABLE_AUTOUPDATE=1  OPENCODE_DISABLE_SHARE=1
+opencode acp
+→ initialize
+→ session/new {cwd, mcpServers:[{type:"http", name:"app", url:…/mcp/agent,
+                                  headers:[{Authorization: Bearer <turn secret>}]}, <its apps>]}
+  (or session/load {sessionId, …}, which replays the conversation first)
+→ session/prompt {sessionId, prompt:[text]}
+← session/update … ; session/request_permission … ; the prompt's answer {stopReason, usage}
+```
+
+- **No secret on argv or in a file.** The bridge secret is only in the
+  `session/new` headers, over stdin. The inline config carries no secret.
+- **Project config is off.** Checked on 1.18.29: a project's
+  `.opencode/agent/build.md` saying `bash: allow` let commands run without
+  asking. With `OPENCODE_DISABLE_PROJECT_CONFIG` a project can't loosen
+  anything; since that also stops OpenCode reading the folder's `AGENTS.md`,
+  the turn hands it over itself (then `CLAUDE.md`: an unbound agent's home,
+  its instructions and memory). The system prompt goes in a 0600 file of the
+  turn's, as an instruction file, removed when the turn ends.
+- **Permissions** (`opencode::permissions`): `"*": "ask"`; reading,
+  searching, LSP, todos and skills `allow`; `edit`, `bash`, `webfetch`,
+  `websearch`, `codesearch`, `external_directory` `ask`; `**/.git`,
+  `**/.git/**`, `**/.shipstudio`, `**/.shipstudio/**` edits `deny` (checked:
+  refused without an ask); `task` (a sub-agent, whose asks would run in a
+  session of its own), `question` and `doom_loop` `deny`. The app's own
+  server and the turn's given servers (its granted apps through the relay,
+  the browsers) are `<name>_*: allow`, as for the other engines, since each
+  decides its own calls. The same rules go on the `build` agent and on
+  `mode.build` (OpenCode folds a user's `mode.build` into the agent after
+  every config file, the inline one included: checked, it turned `bash:
+  ask` into `allow`), and `build` is made the default, so the user's own
+  agent files can't loosen them either. The inline config outranks the
+  user's global `opencode.json`; `OPENCODE_PERMISSION`, which OpenCode
+  merges over everything, is taken out of the turn's environment.
+- **No language servers or formatters** (`lsp: false`, `formatter:
+  false`), whatever the user's config turns on: both run the project's own
+  code (an ESLint config, a Prettier plugin) on a read or an approved edit,
+  with no card for running it. Claude Code and Codex run neither.
+- **Edits are judged by where they land.** An edit's path is checked as
+  written and with every symlink followed; both must be in the turn's
+  folders to go through without a card, so a repo's `notes.md -> ~/.zshrc`
+  or `hooks -> .git/hooks` asks (or is refused), and a dangling link, which a
+  write would create at its target, always asks.
+- **Every ask is ours.** `session/request_permission` is answered `once` or
+  `reject`, never `always`. Classified from what it carries
+  (`Conversation::classify`): a command → `Bash {command}`; an edit inside
+  the turn's folders → through, as `acceptEdits` (inside `.git` /
+  `.shipstudio` or a folder its settings keep read-only → refused); an edit
+  elsewhere → `Edit`/`Write {file_path}`; a folder outside its own → `Read
+  {file_path}` (its own folders pass); a URL → `WebFetch`; a query →
+  `WebSearch`; a tool of a user's own MCP server → `mcp__<server>__<tool>`;
+  anything it can't name → refused. Each goes through `mcp::decide`, so the
+  levels, "Always allow", plans, grants, outside-text caps and the broker's
+  live-turn check are exactly Claude Code's and Codex's.
+- **A no.** ACP's answer has no room for a message, and a reject ends
+  OpenCode's loop with nothing said, so what the agent is told ("the user
+  said no, and told you: …", "hasn't answered yet") goes as the next
+  `session/prompt` once the round ends, and its answer is the reply (at most
+  four follow-ups a turn). A reject also makes OpenCode refuse every other
+  ask still open in the session: asks are answered one at a time, and those
+  are answered without a card (`opencode::Gate`).
+- **Stream.** `agent_message_chunk` → a draft, the reply when the next tool
+  call or the round's end comes; `tool_call` names the tool,
+  `tool_call_update` with input → a "What it did" step (named as the matching
+  Claude Code tool: `bash` → Bash, `write` → Write, `webfetch` → WebFetch…),
+  its growing output → "Show output", `completed` / `failed` (a rejected one
+  → declined, a non-zero exit → failed) → its result. `usage_update`
+  `used`/`size` → the context meter. The prompt's `usage` → tokens (input,
+  output plus thinking, cache read/write), summed over follow-ups; OpenCode's
+  `cost` is its own estimate from list prices and is not kept.
+- **Sessions.** The session id is parked per conversation like any engine's;
+  `session/load` replays the history as updates before it answers, and none
+  of that is read as this turn's. A session it can't load ("Internal error:
+  OpenCode service failure") is said as "Session not found", so the runner
+  replaces it once with the recap, as for a lost Claude session.
+- **Stop** sends `session/cancel`; the round ends `cancelled`.
+- **Requests it makes of a client** (`fs/write_text_file`, which 1.18.29
+  sends after an edit is allowed even to a client that said it can't,
+  terminals) are refused: its own tools do the work.
+- **No plan, no crossover.** OpenCode reports no plan limits, so no usage
+  readings are ever shown for it, the wallet has only this Mac's OpenCode,
+  and carrying on with the other engine is only between Claude Code and
+  Codex. A model on this Mac has no limit of ours; nothing else is called
+  unlimited.
+- **Compaction.** ACP has no compact request: OpenCode's own automatic
+  compaction runs by its settings, and the app's tidy starts fresh (with
+  memory) instead, as for `codex exec`.
+
+What still differs, verified against OpenCode 1.18.29 with its free Zen
+models (the real output is `testdata/opencode-acp.jsonl`):
+
+- **What runs unasked.** Reading and searching files anywhere in its folders,
+  and the user's own OpenCode **plugins** (code in their global config,
+  which could answer an ask itself, as Claude Code hooks could). Project
+  plugins are off with project config.
+- **Effort** isn't passed (ACP has no field for it).
+- **Capabilities** list our tools, the given servers and OpenCode's shell,
+  edits, fetch and search; the user's own OpenCode MCP servers aren't listed
+  (their tools still ask, as `mcp__<server>__<tool>`).
+- **Take over** isn't offered for an OpenCode agent yet.
+- Not verified with a paid provider, a local model server, or a real
+  provider error or rate limit (its wording reaches the chat as OpenCode says
+  it).
+
+**What may be said about it** (for the site and README): agents can run on
+OpenCode with any provider it supports, including models on your own Mac;
+every command, web fetch and edit outside its folders asks through the same
+approvals; usage shows tokens only. Not: that OpenCode is sandboxed (it
+isn't; the approvals are the wall), that local models are free or unlimited
+unless they really are served from this Mac, or any usage limits for it.
 
 ## Search, model and usage
 
@@ -5993,16 +6396,21 @@ are `agents/settings_tools.rs`. Tests: `agents/settings_chat_tests.rs`,
 | Morning brief | `set_morning_brief` (Chief only); also Settings → Notifications and the phone (`agents.morningBrief` / `agents.setMorningBrief`) | no for its time, on/off and quiet days; adding a read-only check is a card unless the user's own message asked; never from outside text |
 | Slack: who answers, where it listens, trigger, let others, on/off | `slack_settings` (Chief) | another agent, a new conversation, letting others in or turning on yes; the rest no. Connecting is `connect: true`, which opens the masked token field on the Mac; a token never goes through chat |
 | Theme; Slow down on battery | `change_app_setting` (Chief) | no, except Slow down on battery off, which is a card unless the user's own message asked; the desk follows (`app-theme-changed`, `app-settings-changed`) |
+| New agents' engine and model (Settings → Agents → What agents run on) | `change_app_setting` `new_agents_engine` / `new_agents_model` (Chief), checked as Settings checks them (`defaults::set`) | no: what new agents run on, not what they may do |
+| Agents in the menu bar; Quick message on/off | `change_app_setting` `menu_bar_icon` / `quick_message` (Chief), written by the same command as Settings (`agents_set_desktop_settings`) | no |
+| Projects', Appearance's and Advanced's switches: compact toolbar, element breadcrumb, terminal GPU, keep dev servers running, project thumbnails, Spotify controls, commit message, credit in commits, usage analytics | `change_app_setting` (Chief; keys in `settings_tools::SWITCHES`) | turning commit message, credit in commits or analytics on writes outside this Mac: a card unless the user's own message asked; everything else, and any of them off, no. Emits `app-settings-changed` with what changed: Settings reads again and each window follows (`followAppSettings`) |
+| Accent colour | `update_agent` colour on the Chief (the accent is the Chief's colour) | no |
 | Free disk space in agents' folders | `free_up_space` (Chief) | no: regenerable folders only (`disk::free_up`) |
 | Open a page of Settings ("open my phone settings") | `open_settings` (Chief): `page` is one of the window's pages (`settings_tools::SETTINGS_PAGES`, the desk's `lib/settingsPages.ts`); emits `agents-open-settings` `{ section: "page", page }` | no: it only opens the page, changes nothing |
 | Which account turns start on ("use my personal plan") | `use_account` (Chief): puts that signed-in account first in the order (`wallet::reorder`), failover unchanged | no when the user's own message asked; a card when another agent or a routine did; never for outside text |
 | Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
 | Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
+| Save new skills (skills) | `update_agent` `learn_skills` (Chief) | Ask me and Off no; Automatically no on the user's own message alone, a card otherwise |
 | Name, role, look; unbinding from a project | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
 | Binding an agent to a project (more reach), changing its instructions | `update_agent` `project` / `instructions` (Chief) | no on the user's own message alone; a card otherwise ("Works in: shippy", "New instructions: …", with Runs on on the same card when it changes too; `mcp::update_widens`) |
 | Admin switch | `propose_settings_change` `admin` (admins) | yes |
 | Logins and secrets | `request_login`, `request_secret` | their own cards; never a value in chat |
-| Not from chat | the phone pairing and revoking, Remote Access on/off and its push PIN, removing an account and its sign-in, quick-entry shortcut and menu-bar icon, new agents' default engine/model, the agents' browser switch, the phone's own appearance and text size | each is either a security wall that must be confirmed on the desk (pairing, Remote Access, PIN) or rarely asked for; the desk is the way in |
+| Not from chat | the phone pairing and revoking, Remote Access on/off and its push PIN, removing an account and its sign-in, the quick-message shortcut's keys, the projects folder, the agents' browser switch, the phone's own appearance and text size | each is either a security wall that must be confirmed on the desk (pairing, Remote Access, PIN), a key or folder the user picks with their own hands (a shortcut is recorded from a key press, a folder from the picker), or rarely asked for; `open_settings` opens the page |
 
 **An app already connected** (`policy_card::GrantChange`). No sign-in and no
 token: the tool finds the one connection for that app (service id or title,
@@ -6072,6 +6480,12 @@ cards.
   (removable; more ⌘L presses add more) and is sent as a Markdown blockquote
   ahead of what you typed. User bubbles show those blockquotes as quote bars
   (`splitQuotes`); nothing else in a user's text is read as Markdown.
+- ↑ in an empty composer (nothing staged, quoted or being revised) brings back
+  the last thing you sent in that conversation, to change and send again; it
+  goes as a new message. Typing while the history has focus (a clicked
+  message, the scroll area) moves focus to the composer on that key, so the
+  character lands there; Space, arrows, shortcuts and fields inside cards keep
+  their own keys.
 
 ## @mentions and What's in flight
 
@@ -6118,10 +6532,26 @@ cards.
   1.8s per step, "Thinking" only after 2.5s) and its time sits in a fixed
   column of tabular figures. Other lists
   (switcher, Quick Entry) still use `sortAgents` (pinned, then recency).
-- **Sections** (user-made groups in the list) are not built: they need a
-  persisted field, a naming flow, collapse state, and a story for how they
-  sit with the recency sort. Worth doing as its own slice once the list is
-  long enough to want them.
+- **Groups** (`lib/agentGroups.ts`, `AgentGroupParts.tsx`), off by default:
+  ⌘K → Group agents by project, Group agents into your own groups, New
+  agent group…, Stop grouping agents. The Chief stays first, outside any;
+  each group is a folding header (chevron, name, count) with its rows in the
+  attention order above. Your own groups take a dragged row (or the row's
+  menu: Move to …, Remove from group); an empty one says "Drag agents here";
+  right-click its header to remove it (its agents go back to Ungrouped). A
+  per-window convenience in localStorage (`shipstudio.agents.groups`), never
+  the registry or the phone. The **Rooms** section uses the same header and
+  folds the same way (its fold is kept with the groups'); folded, the open
+  room and any that is unread or waiting on you still show.
+- **One column.** Every label in the list (names, the Hidden and group
+  headers, an empty group's line, a room's name) starts on the names'
+  column: the row's inset, the md key (`--agent-key-size-md`), the gap. Room
+  badges are the key's size. The New agent / New room actions under the list
+  share the footer rows' column instead, since they sit with Routines and
+  Usage.
+- **Keyboard.** The list is one Tab stop: the open agent or room, else the
+  first agent. ↑ ↓ Home End move through agents and rooms alike; Shift+F10
+  or the context-menu key opens a row's menu.
 ## Rooms (`src-tauri/src/agents/rooms.rs`)
 
 A room is one visible thread shared by you and two to six agents. It is a
@@ -6237,14 +6667,18 @@ of their own is open.
   section (`prompts::CHIEF`, built every turn), so Chiefs made by older
   builds have it without touching their CLAUDE.md.
 - **Managing.** "New room" at the foot of the agent list (once there are two
-  agents), ⌘K → New room…, Open <room>, <room>: members and name…,
+  agents; its tooltip and the editor's lead start with what a room is, "Talk
+  to several agents at once, in one conversation.", `ROOM_WHAT`), ⌘K → New room…, Open <room>, <room>: members and name…,
   Mute/Unmute, Delete…. Rooms sit in a "Rooms" section right after the
-  agents (above Hidden, as on the phone). A room's badge is its own: its
+  agents (above Hidden, as on the phone), under a folding header with their
+  count, like a group's. A room's badge is its own: its
   initials on an outlined neutral tile, so rooms with the same members still
   look different and none passes for an agent; member faces (three, then
   "+N") are in the room's header and empty state. A quiet room's row is one
   line; its newest words show (one line) while unread or while someone is
-  replying or waiting on you there. An unnamed room of four or more is
+  replying or waiting on you there. Waiting reads as an agent row does, the
+  pill then who ("Needs your OK  Acme Site"), desk and phone; unread takes
+  the rows' unread ink. An unnamed room of four or more is
   "Chief of Staff & 3 others" (`rooms::room_name`). Mute stops the unread count. Deleting a room removes its
   thread and never an agent; deleting an agent takes it out of its rooms
   (and as lead); a room left with fewer than two says so above the composer
@@ -6367,8 +6801,11 @@ blocks and 96 KB a message, 8 series, 120 points or 40 bars, 200 rows × 8
 columns, 4 images), finite numbers, labels that line up with values, http(s)
 links with no credentials, and **no HTML anywhere** (a block's strings are
 drawn as text; `code` is shown verbatim). A form that asks for a password, key,
-token, card number or the like is refused with "use request_secret": secrets
-keep their masked card. An image is only a file in the agent's own folder,
+token, card number, a one-time or verification code, or the like (in a
+field, its title or its button; read through zero-width characters and
+Cyrillic or Greek lookalikes, `as_read`) is refused with "use
+request_secret": secrets keep their masked card, and a code for a site is
+the user's to type there. An image is only a file in the agent's own folder,
 copied in and checked to be an image, as `share_file` does.
 
 **Fallback.** Every block has a plain-text `summary` (the agent's, or made
@@ -6381,13 +6818,28 @@ know the version or a kind draws the text instead (`readBlocks`).
 **Answers are the user's words.** A choice, Pick this or a form sends the
 user's own message through the ordinary send (`formReply` is one "Label:
 value" line each), so independence, approvals and plan grants are exactly as
-for anything typed. Once the user has said anything after the blocks
+for anything typed. One exception: a button whose `reply` isn't what it
+shows (a choice labelled "Not now" that sends "Yes, approve it"; a Pick
+this whose reply isn't "Let's go with <name>.") still sends those words,
+but they don't count as typed (`blocks::unseen_answer`,
+`commands::agents::unseen_block_answer`): they answer no open card
+(`typed_answer`), grant no plan and make no rule (`remember_permission`).
+Once the user has said anything after the blocks
 (`answerAfter`), they show the answer and send nothing again. Blocks posted in
 a turn answering outside text carry `fromOutside`: a tap only puts the words
 in the composer, with a line saying why, and nothing sends until the user
 does. The agent is told to stop and wait after asking.
 
-**Look.** Charts follow the dataviz rules: one categorical palette of eight,
+**Look.** Records and notes in a row (two or more of facts, table,
+checklist, steps and callout, `blockRuns`) share **one card**, a section
+each split by a hairline, so the morning brief reads as one page rather
+than a pile of boxes; charts, tiles, links, code and anything answerable
+stand alone. A table's short columns (times, names, numbers:
+`shortColumns`) never break a cell over two lines and a number's header
+sits over its digits; on the phone a table fits its card first (headers
+wrap at their words, long text wraps down to a floor) and scrolls sideways
+only when that still can't fit, and a facts block whose labels or values
+are long stacks each label over its value. Charts follow the dataviz rules: one categorical palette of eight,
 drawn from the agent key colourways (blue, orange, teal, mustard, pink, green,
 violet, brick), stepped per theme and validated as a set (lightness band,
 chroma, adjacent colour-blind separation; `--chart-series-1…8`, the phone's
@@ -6400,11 +6852,125 @@ view. Comparison, choices and form answers are neutral (`strong` /
 
 **Teaching the agents.** The tool description carries each kind's fields and
 an example; the system prompt has one line ("Show, don't describe…"), which
-took the prompt budgets to 13,500 / 14,100 / 17,500.
+took the prompt budgets to 13,500 / 14,100 / 17,500. Where a built-in flow
+has numbers, it asks for them as blocks: `usage_overview`'s description
+(each account's used share as metrics, a bar chart to compare), and a
+routine's wake prompt ("numbers, records or progress as `show` blocks").
+The morning brief is blocks without a model ("Morning brief").
+
+End to end: the fake-engine scenario `blocks` (`examples/agents_fake`) runs
+a turn whose `show` carries metrics, a chart, a table and a choice, checks
+the kept message, its text fallback and the receipt, answers the choice as
+the user's message, and compares both messages with
+`packages/companion-protocol/src/blocks-turn.json`
+(`AGENTS_FAKE_WRITE_FIXTURES=1` rewrites it), which the desk's and the
+phone's tests draw and answer. `real-blocks` runs the same ask on the real
+Claude Code (`AGENTS_REAL_CLAUDE=<path>`; never in the default run): the
+app's state stays in the throwaway HOME, Claude Code runs on the real one
+for its sign-in, and the run's transcript folder is removed once read. On
+its first live run (Claude Code 2.1.322, 2026-11-10) the model called `show`
+first try with a valid table and choices, then added a bubble repeating the
+question ("Tap a fruit above"), and again ("I put up a table with…") with
+the receipt saying to end the turn with no more text. So once a live turn's
+`show` asks (`blocks::asks`, `runner::note_blocks_asked`), the turn's
+further words go in "What it did" as notes and the question stays the
+chat's last word; the scenario `blocks` holds this.
 
 Harness: `agents-blocks-*` (numbers, a chart's tooltip, a sorted table, more
 charts, deciding, a form left empty, progress, answered, outside text).
-Phone: the qa:web shots `blocks-chat-*` and `blocks-tooltip-*` (a hidden "Blocks" agent in the mock Mac, `mobile/dev/mock-blocks.ts`). One question per message: a `show` with two of choices, comparison or form is refused, since the next message answers it.
+`agents-blocks-brief*` (the morning brief) and `agents-blocks-in-chat*` (blocks among bubbles, a result card and “What it did”), each at 1280 and 760.
+Phone: the qa:web shots `blocks-chat-*`, `blocks-brief-*` (a hidden “Brief” agent) and `blocks-tooltip-*` (a hidden "Blocks" agent in the mock Mac, `mobile/dev/mock-blocks.ts`). One question per message: a `show` with two of choices, comparison or form is refused, since the next message answers it.
+
+## A living page per conversation (`src-tauri/src/agents/page.rs`)
+
+Answers: **where do I look for work that goes on?** A job search, a project's
+status, a reading list, a running budget: the conversation gets one page,
+pinned above its chat on desk and phone, that the agent and the routines
+running in that conversation keep current, instead of a trail of
+point-in-time messages and result cards.
+
+- **Blocks, nothing new to draw.** The `page` tool takes blocks exactly as
+  `show` does, each through `blocks::parse` (so the same limits, no HTML,
+  http(s) links with no credentials), plus an `id` the agent picks
+  (`applications`, `next-steps`). Nothing on a page answers: choices,
+  comparison and form are `show`'s, images `share_result`'s. A page holds
+  at most 12 blocks and 96 KB.
+- **Patched by id.** A call sets the blocks it gives (an id already there is
+  replaced in place, a new one goes at the end), removes the ids in `remove`,
+  and `replace: true` makes the given blocks the whole page. A new page needs
+  a `title`. A call with nothing in it reads the page back (its blocks and
+  ids). Leaving the page empty is refused: unpinning is the user's.
+- **Every version kept.** A change is the next version, with what changed
+  (`Changes`: blocks added, changed, removed, renamed), the agent's
+  one-line `note`, and whether a routine's turn made it (`by_routine`, from
+  the run's ticket) and which (`routine`, its name, when the turn ran exactly
+  one routine: `runner::routine_running`). The history line reads "by Log the
+  day's card spend", or "by a routine" when it isn't known which
+  (`pageByLine`). An update that changes nothing makes no version. The
+  last 30 versions are kept, oldest dropped first; the numbers keep counting.
+- **Beside the log, never in it.** `<home>/pages/<conversation>.json`, one
+  file per conversation; `messages.jsonl` is untouched. The trace in the chat
+  is the step in "What it did" ("Updated the page"). `agents://page`
+  (`{ agentId, conversation }`) tells the desk to read it again.
+- **Which conversation.** The one the turn runs in (`conversations::loaded`),
+  so a routine set up in a conversation updates that conversation's page.
+  A turn in a conversation with a page opens with one line naming it, its
+  version and its block ids (`page::turn_note`, only when there is one): the
+  rule is taught in the tool's description, and the system prompt is
+  unchanged, so the budgets in `prompt_budget_tests.rs` stand.
+- **Safety.** On top of blocks' checks, nothing that looks like a key, a
+  token or a password (`connector::looks_like_secret`) or a value the user
+  stored as a secret (`secrets::redact`) goes on a page, title and note
+  included. A turn answering outside text changes the page only after a
+  card ("Update this conversation's page?" / "Pin a page to this
+  conversation?", saying what would change); refused, nothing changes. The
+  whole update is checked before the card, so a card never asks about a
+  change that can't be made.
+- **Rewind and fork.** A page isn't part of the chat a rewind folds: a
+  rewind leaves it as it is, and both its confirm (`rewindPageClause`) and
+  its line say so ("The page “Budget” stays as it is (v4); it isn't
+  rewound."). A fork starts with the page as it was before the message it
+  forks from (`page::as_of`: the kept versions made before then, the newest
+  current, in a file of its own), or with no page if there wasn't one then
+  or those versions are no longer kept; its line names the version.
+- **Pinned, or not.** A new page is pinned. The user can unpin it (desk or
+  phone, `agents_page_pin` / `agents.pagePin`); updates carry on and it stays
+  unpinned until they pin it back, and the agent is told so in its receipt.
+- **Desk** (`components/agents/ConversationPage.tsx`, `lib/agentPage.ts`):
+  under the chat header, in the conversation's column: a bar (fold, title,
+  "Updated 3 min ago · v4", unpin) over the page's blocks, which scroll inside
+  a band capped at the smaller of 40% of the window and 320px, so the chat
+  keeps the window. It is furniture, not a reply: the band is a tint off the
+  chat and its tiles lie flat (a hairline, no lift), so a metric on the page
+  never looks like one in a reply (`agents-page.css`). Pressing the "Updated"
+  line opens a popover listing every kept version, newest first, with what
+  changed in words (`pageChangeLine`, block titles where they have one) and
+  the note, so the page itself doesn't move; pressing one shows it as it was,
+  read-only, with "Back to v4". Folding is remembered per conversation on
+  this Mac; until the user picks, a window 820px tall or less starts it
+  folded (`SHORT_WINDOW`). Unpinned, the header has a pin button to bring it back; ⌘K has
+  "Pin / Unpin this conversation's page".
+- **Phone** (`components/ConversationPage.tsx`, `lib/page.ts`): the same band
+  above the messages, on a Mac that lists `agents.page`; read again when the
+  conversation on screen changes and as the agent's turn moves on. Fold
+  (for as long as the app runs), versions, an older one, Unpin. The same
+  tinted band and flat tiles (`FlatBlocks`), capped at 40% of the screen and
+  320pt; on a phone-height screen it starts folded to its bar until opened.
+- **Wire**: `agents.page` and `agents.pageVersion` (read-only, not audited)
+  and `agents.pagePin` (audited "pinned/unpinned the page of …"); types and
+  the pure rules (`readPage`, `pageUpdatedLine`, `pageChangeLine`) in
+  `packages/companion-protocol/src/page.ts`.
+
+Tests: `page_tests.rs` (validation, patches by id, history and its cap,
+storage beside the log, pinning, the card's words), the fake-engine scenario
+`page` (a turn pins one, a routine updates it as v2 and is told it's there,
+unpinning stands, outside text waits on a card and a no changes nothing),
+vitest (`ConversationPage.test.tsx`, `page.test.ts` against the Mac's
+fixtures), jest (`conversationPage.test.tsx`). Harness `agents-page`,
+`-history`, `-older`, `-folded`, `-unpinned`; qa:web `page-chat`,
+`page-history`, `page-folded` (the mock Mac's hidden "Budget" agent).
+Not built: a library of every page across agents, and re-pinning from the
+phone (the desk's header button and ⌘K do it).
 
 ## Result cards (`src-tauri/src/agents/results.rs`)
 
@@ -6858,8 +7424,8 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
 
 ## Known limits / next
 
-- Claude Code and Codex (see "Engines"). Opencode would slot in the same
-  way: a command line and a mapping onto `stream::Step`.
+- Three engines: Claude Code, Codex and OpenCode (see "Engines"). Another
+  would slot in the same way: a command line and a mapping onto `stream::Step`.
 - Search scans files on every query. Fine at one person's scale (tens of
   agents, thousands of lines); an index would be needed well past that.
 - Turns at once are scaled to RAM (3–16, `agents::capacity`); the rest wait,
@@ -6905,8 +7471,24 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
   `src-tauri/examples/agents_fake/main.rs` drives the real runner, store,
   agent bridge, approval broker, wallet and MCP tools through the same
   Tauri commands the UI calls, with `scripts/fake-engine/fake_claude.py`
-  first on PATH as `claude` (and, linked as `codex`, as Codex's `exec`
-  driver: `SHIPSTUDIO_AGENTS_CODEX_EXEC`). The fake speaks Claude Code's
+  first on PATH as `claude` (and, linked as `codex`, as Codex's
+  app-server, or its `exec` driver under `SHIPSTUDIO_AGENTS_CODEX_EXEC`,
+  which every scenario but `codex-app` sets; linked as `opencode`, as
+  `opencode acp`). The `codex-app` scenario runs a Codex agent on the
+  app-server: the schema check passing, a command that asks and runs on
+  Allow, a bridge tool, the reply streamed, the thread resumed, a declined
+  command that never runs with the steer telling the agent why, Stop on a
+  hung turn, a failed turn and a crash each ending in a line, and a lost
+  thread replaced. The `opencode` scenario runs an OpenCode agent through
+  it: a command that asks and runs on Allow, a bridge tool, the reply
+  streamed, the session resumed, a denied command that never runs and the
+  note after it, a crash and an error each ending in a line, a lost session
+  replaced, and the bridge secret only in `session/new` (never argv, config
+  or environment). `AGENTS_FAKE_REAL_OPENCODE=1 scripts/agents-fake-e2e.sh
+  opencode-real` (not in the default run; network) does a turn on the real
+  `opencode` on PATH, under the run's throwaway HOME, on OpenCode's free
+  models: verified on 1.18.29, one card, the command ran, the reply came
+  back and the next turn resumed the session. The fake speaks Claude Code's
   stream-json as observed on 2.1.318 (init with its permission mode,
   streamed text, tool_use / tool_result, `rate_limit_event`, `result` with
   usage), calls the bridge's tools for real with the turn's bearer secret
@@ -6942,8 +7524,10 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
   output, deleting an agent mid-turn, routines (one firing, one in steps
   waiting on "OK to go on?", one failing into a retry), Codex `exec` turns,
   and the morning brief composed from all of it. `AGENTS_FAKE_KEEP=1` keeps
-  the HOME. Not covered: Codex's app-server (the fake has none), the user's
-  Chrome, and anything a model decides.
+  the HOME. A run ends with a summary by engine (claude, codex app-server,
+  codex exec, opencode) and the opt-in scenarios it skipped, also appended
+  as a Markdown table to `$GITHUB_STEP_SUMMARY` or `$AGENTS_FAKE_SUMMARY`
+  when set. Not covered: the user's Chrome, and anything a model decides.
 - `scripts/agents-e2e.sh [scenario…]` (opt-in, real turns, on Haiku): `src-tauri/examples/agents_e2e/main.rs` drives the real
   runner, store, bridge and MCP tools through the same Tauri commands the UI
   calls, on `claude --model haiku`, in a throwaway HOME (only the keychain is

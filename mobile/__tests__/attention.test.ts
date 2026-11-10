@@ -67,14 +67,15 @@ describe('notifications', () => {
     expect(notificationId({ ...alert, messageId: undefined })).toBeUndefined();
   });
 
-  it('counts the badge as the desk does: unread plus approvals, hidden agents left out', () => {
+  it('badges the icon with who needs you, as the Dock does: not unread replies', () => {
     expect(
       badgeCount([
-        named('a', { unread: 2, pendingApprovals: 1 }),
-        named('b', { unread: 3, hidden: true }),
+        named('a', { unread: 2, pendingApprovals: 2 }),
+        named('b', { pendingApprovals: 1, hidden: true }),
         named('c', { unread: 1, muted: true }),
+        named('d', { pendingApprovals: 1, muted: true }),
       ])
-    ).toBe(4);
+    ).toBe(2);
   });
 });
 
@@ -280,9 +281,7 @@ describe('engines, slots and decision cards', () => {
     expect(engineLine(agent({ engine: 'codex', model: 'gpt-5-codex' }), engines)).toBe(
       'Codex · GPT-5 Codex'
     );
-    expect(engineLine(agent({ engine: 'codex', model: null }), engines)).toBe(
-      'Codex · Default'
-    );
+    expect(engineLine(agent({ engine: 'codex', model: null }), engines)).toBe('Codex · Default');
     // A model the Mac doesn't list is shown as its id, not guessed.
     expect(engineLine(agent({ engine: 'claude', model: 'claude-x' }), engines)).toBe(
       'Claude · claude-x'

@@ -126,6 +126,8 @@ impl H {
         a.model = match a.engine {
             Engine::Claude => Some("haiku".into()),
             Engine::Codex => std::env::var("AGENTS_E2E_CODEX_MODEL").ok(),
+            // OpenCode's own default (its free models need no account).
+            Engine::OpenCode => None,
         };
     }
 

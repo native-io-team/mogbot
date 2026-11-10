@@ -73,6 +73,7 @@ import { getAgentsSnapshot, useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 import { AdminSwitch } from './AgentAdmin';
+import { AgentSkills } from './AgentSkills';
 import {
   findTemplate,
   needsLine,
@@ -214,6 +215,8 @@ interface AgentEditorModalProps {
   onOpenApps?: () => void;
   /** Editing: open on its memory rather than its settings. */
   initialTab?: EditorTab;
+  /** Editing: bring this section into view on opening ("Skills"). */
+  initialFocus?: 'skills';
   /** Install or sign in to an engine that isn't ready, over the editor. */
   onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;
   /** Creating: close and draft the request in the Chief of Staff's chat instead. */
@@ -240,6 +243,7 @@ export function AgentEditorModal({
   takenColors,
   onOpenApps,
   initialTab = 'agent',
+  initialFocus,
   onSetUpEngine,
   onAskChief,
   onAskInChat,
@@ -316,6 +320,10 @@ export function AgentEditorModal({
       setColor(d.color);
     }
     setKept(d.routines.map((r) => !r.problem));
+    // The review is what matters now: its key folds to the avatar beside
+    // the name (one click opens it), so the briefing and routines aren't
+    // pushed below a picker of two thousand icons.
+    setShowLook(false);
   };
   const startOver = () => {
     setDraft(null);
@@ -746,6 +754,7 @@ export function AgentEditorModal({
           <Permissions agent={agent} />
           <AgentPolicy agent={agent} onAskInChat={onAskInChat} />
           <AgentReach agent={agent} />
+          <AgentSkills agent={agent} focus={initialFocus === 'skills'} />
         </div>
       )}
       {/* With one engine there's no "Runs on": what protects it, and the way to add another, live down here. */}

@@ -50,7 +50,7 @@ describe('the demo', () => {
       expect(welcomes[0].methods).not.toContain(m);
     expect(events.map((e) => e.type)).toEqual(['sync.snapshot', 'sync.caughtUp']);
     const snap = events[0] as Extract<CompanionEvent, { type: 'sync.snapshot' }>;
-    expect(snap.overview.agents.map((a) => a.name)).toContain('Chief of Staff');
+    expect(snap.overview?.agents.map((a) => a.name)).toContain('Chief of Staff');
     expect(snap.status.name).toBe(DEMO_MAC_NAME);
     expect(t.identityVerified).toBe(false);
   });

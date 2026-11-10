@@ -17,6 +17,11 @@
   scrollbar-width: none;
 }
 
+.team-people:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
 .team-people::-webkit-scrollbar {
   display: none;
 }
@@ -148,7 +153,7 @@
   padding: var(--spacing-2xs) var(--spacing-xs);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--status-info) 12%, transparent);
-  color: var(--status-info);
+  color: var(--text-info);
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-compact);
   font-variant-numeric: tabular-nums;

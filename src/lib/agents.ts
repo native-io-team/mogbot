@@ -16,6 +16,7 @@ import type {
   WatchSource,
 } from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
+import type { LearnSkills, SkillCard } from '../../packages/companion-protocol/src/skills';
 import type { CrossoverAsk, CrossoverAway } from '../../packages/companion-protocol/src/crossover';
 import type {
   AgentDraft,
@@ -231,6 +232,8 @@ export interface Agent {
   starters?: AgentStarter[];
   /** No OS notifications; unread and the Dock badge still count it. */
   muted: boolean;
+  /** "Save new skills" (`agents/skills_learn.rs`); absent is `ask`. */
+  learnSkills?: LearnSkills;
   /** Omitted by the backend when there are none. */
   checkIns?: CheckIn[];
   /** "Always allow" rules; omitted when there are none. */
@@ -413,18 +416,19 @@ export interface SchedulePreview {
   repeat: Repeat | null;
 }
 
-export type AgentEngine = 'claude' | 'codex';
+export type AgentEngine = 'claude' | 'codex' | 'opencode';
 
 /** Mirrors `store::EFFORTS`: the levels both engines take. */
 export type AgentEffort = 'low' | 'medium' | 'high';
 
 /**
  * How hard an agent thinks, said plainly: Claude Code's `--effort`, Codex's
- * reasoning effort. '' passes nothing (the engine's default). Applies to its
+ * reasoning effort. '' passes nothing: "Its own pick", the engine decides (the menu's
+ * one "Default" is the model's, round 4). Applies to its
  * conversation, not its routines. Must match `EFFORTS` in store.rs.
  */
 export const EFFORT_CHOICES: readonly { value: AgentEffort | ''; label: string }[] = [
-  { value: '', label: MODEL_DEFAULT },
+  { value: '', label: 'Its own pick' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -467,7 +471,7 @@ export interface NewAgentDefaults {
   /** The engine the user chose; null when they never have (the rule decides). */
   engine: AgentEngine | null;
   /** Each engine's chosen model while it still offers it; null is the engine's own default. */
-  models: { claude: string | null; codex: string | null };
+  models: { claude: string | null; codex: string | null; opencode: string | null };
   /** Where a new agent starts now: the chosen engine when it's ready, else the first that is. */
   startsOn: AgentEngine;
   /** The model it starts on there; null is that engine's default. */
@@ -479,7 +483,16 @@ export interface NewAgentDefaultsChange {
   engine?: AgentEngine;
   claudeModel?: string;
   codexModel?: string;
+  opencodeModel?: string;
 }
+
+/** The change field for one engine's default model. Mirrors the protocol's. */
+export const MODEL_CHANGE_KEY: Record<AgentEngine, 'claudeModel' | 'codexModel' | 'opencodeModel'> =
+  {
+    claude: 'claudeModel',
+    codex: 'codexModel',
+    opencode: 'opencodeModel',
+  };
 
 export interface AgentsOverview {
   agents: Agent[];
@@ -631,6 +644,8 @@ export interface Approval {
   accountSwitch?: { engine: 'claude' | 'codex'; id: string; name: string };
   /** "Reply in Slack?": the exact words and where; Allow posts them as you (`lib/slack`). Nothing waits on it. */
   slackReply?: { channel: string; threadTs: string; place: string; text: string };
+  /** "Save “…” as a skill?": Allow is Save, Deny is Not now (`lib/agentSkills`). Nothing waits on it. */
+  skill?: SkillCard;
   /**
    * How risky Allow is, decided on the Mac (`mcp::risk_of`, Bold's floor):
    * `high` is shown with the warning icon. Absent: unclassified.
@@ -1013,6 +1028,8 @@ export interface UpdateAgentInput {
   workDirectly?: boolean;
   /** "Runs on": one of its engine's accounts, or '' for any account. */
   account?: string;
+  /** "Save new skills": Automatically, Ask me or Off. */
+  learnSkills?: LearnSkills;
 }
 
 /** The model choice that passes no model: whatever the engine itself defaults to. */
@@ -1030,7 +1047,11 @@ export const AGENT_MODELS: readonly ModelChoice[] = [
   { value: 'haiku', label: MODEL_PURPOSE.haiku, detail: 'Haiku' },
 ];
 
-export const ENGINE_LABEL: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
+export const ENGINE_LABEL: Record<AgentEngine, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
 
 /** Engine's default first, then the engine's own models (Claude Code's aliases until the overview says). */
 export function modelChoices(engine: AgentEngine, engines: EngineInfo[]): readonly ModelChoice[] {
@@ -1140,6 +1161,9 @@ export function engineProtections(engine: AgentEngine, info?: EngineInfo): strin
   if (engine === 'claude') {
     return 'Claude Code enforces: file edits go ahead in its project and its own folder; everything else is decided by its independence.';
   }
+  if (engine === 'opencode') {
+    return "OpenCode enforces: file edits go ahead in its project and its own folder, never in git's or the app's folders; commands, web access and everything else are decided by its independence. Plugins you've added to OpenCode aren't limited by this.";
+  }
   const limits =
     "Codex enforces: its commands can only change files in your projects and its own folder, and can't reach the internet.";
   const apps = "Apps you've connected to Codex aren't limited by this.";
@@ -1177,7 +1201,7 @@ export function routineModelChoices(
   choices: readonly ModelChoice[]
 ): RoutineModelChoice[] {
   const models = choices.filter((m) => m.value).map((m) => ({ ...m, hint: null }));
-  if (engine === 'codex') {
+  if (engine !== 'claude') {
     return [{ value: '', label: 'Same as its chats', hint: null }, ...models];
   }
   return [
@@ -1192,7 +1216,7 @@ export function routineModelOf(
   agent: Pick<Agent, 'engine' | 'model' | 'routineModel'>
 ): string | null {
   const setting = agent.routineModel ?? '';
-  if (setting === '' && agent.engine !== 'codex') return agent.model ?? 'haiku';
+  if (setting === '' && agent.engine === 'claude') return agent.model ?? 'haiku';
   if (setting === '' || setting === 'same') return agent.model;
   return setting;
 }
@@ -1701,6 +1725,8 @@ export interface ImportProposal {
   foreignTools?: { name: string; here?: string }[];
   /** A recipe's key look and the independence it suggests (applied only when stricter). */
   look?: { colorway?: string; icon?: string; key?: string; independence?: AgentIndependence };
+  /** Skills it comes with (a recipe's), cleaned on the Mac; saved into its home on Import. */
+  skills?: { slug: string; name: string; when: string; steps: string }[];
 }
 
 /** The agent here a proposal's name is taken by, with everything Replace would change. */
@@ -2085,6 +2111,7 @@ export {
   routineInPast,
   routineWhenOf,
   routineWhenPhrase,
+  ROUTINES_NEED_THE_MAC,
   scheduleWhenPhrase,
   sortCheckIns,
   splitScheduleInput,
@@ -2112,29 +2139,15 @@ export {
   type PickerState,
 } from '../../packages/companion-protocol/src/routinePicker';
 
-/** What Check now came to; mirrors `watch::CheckOutcome`. */
-export interface WatchCheckOutcome {
-  found: number;
-  baseline: boolean;
-  /** A model check found nothing before its baseline; the next check confirms it. */
-  unconfirmed?: boolean;
-  error?: string;
-  paused?: string;
-  /** A model check: what it ran on ("Claude Code", "Codex"). */
-  engine?: string;
-}
-
-/** What Check now came to, in a line; a model check says what it ran on. */
-export function describeWatchCheck(o: WatchCheckOutcome): string {
-  if (o.paused) return o.paused;
-  if (o.error) return `Check failed: ${o.error}`;
-  const on = o.engine ? ` Checked on ${o.engine}.` : '';
-  if (o.baseline) return `Noted what’s there now; anything new from here starts work.${on}`;
-  if (o.unconfirmed)
-    return `Found nothing. The next check confirms that before anything starts work.${on}`;
-  if (o.found > 0) return `Found ${o.found} new; it’s on it.${on}`;
-  return `Nothing new.${on}`;
-}
+// What Check now came to, in the phone's words too.
+import type {
+  MacAccess,
+  WatchCheckOutcome,
+} from '../../packages/companion-protocol/src/whenComposer';
+export {
+  describeWatchCheck,
+  type WatchCheckOutcome,
+} from '../../packages/companion-protocol/src/whenComposer';
 
 export const createWatch = (
   agentId: string,
@@ -2151,6 +2164,8 @@ export const updateWatch = (
 ) => invoke<CheckIn>('agents_watch_update', { agentId, id, source, everyMinutes, note });
 export const checkWatchNow = (agentId: string, id: string) =>
   invoke<WatchCheckOutcome>('agents_watch_check_now', { agentId, id });
+/** Whether this Mac's Mail and Messages can be read, for an email or text routine. */
+export const getWatchMacAccess = () => invoke<MacAccess>('agents_watch_mac_access');
 
 export const searchAgents = (query: string) => invoke<SearchHit[]>('agents_search', { query });
 export const getAgentUsage = (agentId: string) => invoke<UsageSummary>('agents_usage', { agentId });
@@ -2867,7 +2882,7 @@ const RETRY_NOTE_MAX = 560;
  */
 export function retryNote(text: string, files: string[] = []): string {
   const ask = text.trim();
-  const head = 'Claude Code’s usage limit has reset. Carry on with what I asked';
+  const head = 'Claude Code’s usage limit has refilled. Carry on with what I asked';
   // At most half the note: as many paths as fit, then how many more.
   let attached = '';
   for (let n = files.length; n > 0 && !attached; n--) {
@@ -2978,7 +2993,7 @@ export interface TeamSummary {
   working: Agent[];
   /** Cards to answer, or the failed turn's line (newest in its chat) to act on. */
   needsYou: { agent: Agent; approvals: AgentMessage[]; failure: AgentMessage | null }[];
-  /** Stopped by a usage limit, with the line that says when it resets. */
+  /** Stopped by a usage limit, with the line that says when it refills. */
   paused: { agent: Agent; failure: AgentMessage | null }[];
   scheduled: { agent: Agent; checkIn: CheckIn }[];
   replies: { agent: Agent; message: AgentMessage }[];

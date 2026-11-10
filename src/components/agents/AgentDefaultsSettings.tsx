@@ -28,6 +28,7 @@ import { SegmentedControl } from '../primitives/SegmentedControl';
 import { useAgentsSelector, refreshAgents } from '../../lib/agentsStore';
 import {
   ENGINE_LABEL,
+  MODEL_CHANGE_KEY,
   engineUnavailable,
   modelChoices,
   newAgentModel,
@@ -214,9 +215,7 @@ export function AgentDefaultsSettings() {
           engine={e.id}
           engines={engines}
           value={newAgentModel(defaults, e.id, modelChoices(e.id, engines))}
-          onChange={(model) =>
-            void change(e.id === 'claude' ? { claudeModel: model } : { codexModel: model })
-          }
+          onChange={(model) => void change({ [MODEL_CHANGE_KEY[e.id]]: model })}
         />
       ))}
       {problem && (

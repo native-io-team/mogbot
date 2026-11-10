@@ -302,6 +302,12 @@ backend answer. An invented value is not. That is the line.
 
 Register it in `src/harness/scenarios/index.ts`.
 
+Every capture starts with the Chief's phone offer answered ("later"), since on
+a fresh install it shows under any Chief reply; a scenario about the offer sets
+`phoneOffer: true`. Copying always succeeds at once (the clipboard is stubbed:
+in a shared browser only the focused tab may write) and "Copied" holds for the
+capture instead of resetting after 2s.
+
 Fixture shapes must be copied from the `invoke<...>` type at the real call site,
 **including its snake_case/camelCase inconsistency** — the backend is not
 uniform about casing, and a fixture that tidies it up tests a response the app
@@ -373,6 +379,18 @@ Long chats: `--lines 5000` serves a chat that long (the scenario reads
 ```bash
 node scripts/perf-agents.mjs --build --lines 5000 cold,scroll,typing,arrive,open
 ```
+
+Two more, also not in `all`, cover moving around the view:
+
+| Phase | What it does |
+| --- | --- |
+| `switch` | Opens 18 agents in turn from the sidebar, twice: ms from click to the chat on screen, first visit (its pages read) and again |
+| `usage` | Opens the Usage view from the sidebar's usage row four times, then sits on it for 15 s |
+
+`--ipc-ms <n>` makes every command answer `n` ms late (the harness's
+`?ipcMs=`), standing in for the Mac's round trip. With instant answers, reads
+made one after another that could have overlapped cost nothing; with a round
+trip they show up in `switch` and `cold` (`--ipc-ms 15 switch,cold`).
 
 Scrolling, here and in `open`'s set-up, dispatches a `wheel` before moving the
 scroll: the chat follows the bottom unless the reader moved it. The phone's

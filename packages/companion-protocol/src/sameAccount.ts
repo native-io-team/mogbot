@@ -21,12 +21,14 @@ import { ACCOUNT_ENGINE_LABEL } from './accountSwitcher';
 export const ACCOUNT_KIND: Record<AgentEngine, string> = {
   claude: 'Claude',
   codex: 'ChatGPT',
+  opencode: 'OpenCode',
 };
 
 /** Where the browser is signed in. */
 const SITE: Record<AgentEngine, string> = {
   claude: 'claude.ai',
   codex: 'chatgpt.com',
+  opencode: 'opencode.ai',
 };
 
 export const SIGN_IN_DIFFERENT = 'Sign in with a different account';
@@ -51,7 +53,7 @@ export function sameAccountNote(engine: AgentEngine, name: string, other: string
  * failover still treat them as two until the engine's own records say so.
  */
 export function maybeSameAccountNote(engine: AgentEngine, name: string, other: string): string {
-  return `${name} and ${other} may be the same ${ACCOUNT_KIND[engine]} account: their weekly limits have moved together and reset at the same moment. If they are, sign one in with a different account.`;
+  return `${name} and ${other} may be the same ${ACCOUNT_KIND[engine]} account: their weekly limits have moved together and refill at the same moment. If they are, sign one in with a different account.`;
 }
 
 /** Before the sign-in opens the browser. */
@@ -92,10 +94,10 @@ export function signInChangedText(change: SignInChange, macName: string): string
   const was = change.beforeWeeklyReset ? weeklySchedule(change.beforeWeeklyReset) : null;
   if (change.byReset && was) {
     const is = change.nowWeeklyReset
-      ? `, whose week resets ${weeklySchedule(change.nowWeeklyReset)}`
+      ? `, whose week refills ${weeklySchedule(change.nowWeeklyReset)}`
       : '';
-    return `This Mac’s ${engine} is now signed in as ${now}${is}. It used to reset ${was}, so that was another ${kind} account, and it isn’t connected anymore — add it to keep stacking.`;
+    return `This Mac’s ${engine} is now signed in as ${now}${is}. It used to refill ${was}, so that was another ${kind} account, and it isn’t connected anymore — add it to keep stacking.`;
   }
-  const about = [before, was ? `resets ${was}` : null].filter(Boolean).join(', ');
+  const about = [before, was ? `refills ${was}` : null].filter(Boolean).join(', ');
   return `This Mac’s ${engine} is now signed in as ${now}. Your previous account${about ? ` (${about})` : ''} isn’t connected anymore — add it to keep stacking.`;
 }

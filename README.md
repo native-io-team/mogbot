@@ -9,8 +9,8 @@ already pay for.**
 
 You talk to a **Chief of Staff**. It creates named agents for the work you hand
 it, briefs them, delegates, and comes back with results. Each agent remembers
-you, keeps its own instructions and routines, and runs on **Claude Code or
-Codex** (your pick, per agent) on your own machine. Anything that spends money,
+you, keeps its own instructions and routines, and runs on **Claude Code,
+Codex or OpenCode** (your pick, per agent) on your own machine. Anything that spends money,
 sends something as you, or changes what other people see waits for your
 **Allow**. Follow along and answer from your phone.
 
@@ -47,10 +47,11 @@ Discard.
   <img src="docs/images/readme/usage-view.webp" alt="The Usage view: Plenty of room, the 5-hour and weekly limits with when they reset, what each agent used this week, and Where did my usage go" width="900">
 </p>
 
-The app shows your plan's limits only as Claude Code or Codex report them, and
-what each agent and routine used this week. Nothing is guessed; an estimate is
+The app shows your plan's limits only as the engine reports them, and what
+each agent and routine used this week. Nothing is guessed; an estimate is
 labelled as one. Add more than one account and agents carry on with the next
-when one runs out. Pick Normal, Save my limits, or Use it all before reset.
+when one runs out, or with the other engine if you say so. Pick Normal, Save
+my limits, or Use it all before the refill.
 
 ### You decide how much they do alone
 
@@ -67,24 +68,41 @@ chat. Logins use the provider's own sign-in; agents never ask for a password.
 </p>
 
 The companion app pairs by QR code and reaches your Mac over your own
-Tailscale. Chat, answer cards, review results, start agents and routines,
-dictate. The phone won't send a secret until the Mac proves it's yours.
-Nothing passes through our servers.
+Tailscale. Chat, answer cards (from the Lock Screen too), review results, start
+agents and routines, send voice messages, step into an agent's browser when it
+hits a sign-in only you can pass. It notifies you while it's connected to the
+Mac; there's no push service yet, so a phone that's been in the background a
+while hears nothing until you open it. The phone won't send a secret until the
+Mac proves it's yours. Nothing passes through our servers.
 
 ### And
 
 - **Routines** on a schedule, in steps with your OK in the middle, or
-  "When…" something happens (a GitHub mention, a new file in a folder, a check
-  through one of your apps). Checks run sealed and read-only, from your Mac.
+  "When…" something happens (a GitHub mention, a new file in a folder, an
+  email in Mail or a text in Messages on this Mac, a check through one of your
+  apps). Checks run sealed and read-only, from your Mac. A morning brief from
+  the Chief says what happened and what's waiting.
+- **Conversations that keep up:** several per agent, sharing its memory; edit
+  and resend, fork or rewind from any of your messages; a page pinned above
+  the chat that the agent keeps current; charts, tables and quick choices in
+  the reply when they say it better.
+- **Agents that learn:** after a hard task an agent can save how it did it as
+  a skill, so next time it's one sentence (you choose Automatically, Ask me or
+  Off).
 - **Agents find their own way in:** a connected app, the tools and files on
-  your Mac, their own browser, or your signed-in Chrome when you allow it.
+  your Mac, Calendar, Reminders, Contacts, Notes and Messages (one Allow per
+  app), their own browser, or your signed-in Chrome when you allow it.
 - **Slack:** start an agent from a Slack message and get the answer in the
   thread; every reply waits for your OK unless you've said otherwise.
 - **Bring your agents** from Grok Bot or any assistant that speaks MCP, through
-  a short interview that ends on one card where you pick what to import.
+  a short interview, or from an export file (Grok Bot, OpenBot, OpenClaw,
+  Hermes) or a pasted reply; it ends on one card where you pick what to
+  import. Share an agent as a recipe file, without its memory or logins.
 - **Projects underneath:** when work becomes a site or an app, it lives in a
-  full workspace with agent terminals, live preview, visual editing, git and
+  full workspace with agent sessions, live preview, visual editing, git and
   hosting status.
+- A menu bar and Dock menu that follow where you are, and keyboard shortcuts
+  ([docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)).
 - Light and dark, on desktop and phone.
 
 ## Quick start
@@ -97,7 +115,8 @@ check for every step, is **[docs/INSTALL.md](docs/INSTALL.md)**.
 - A Mac on a recent macOS (14 or later expected; tested on 26), Apple Silicon
   or Intel, with **15 GB free** (about 25 GB to build the phone app with Xcode)
 - A paid **Claude plan (Pro or Max)** for Claude Code, or a paid **ChatGPT
-  plan** for Codex, or both
+  plan** for Codex, or both. Or **OpenCode**, with any provider you set up in
+  it (an API key, or a model served on this Mac)
 - For the phone: an iPhone (or Android phone) and a free **Tailscale** account,
   signed in on the Mac **and** the phone with the same account before you scan
   the pairing code
@@ -127,9 +146,10 @@ CI=true pnpm tauri build --bundles app
 osascript -e 'quit app "Mogbot"' 2>/dev/null; rm -rf /Applications/Mogbot.app && cp -R src-tauri/target/release/bundle/macos/Mogbot.app /Applications/ && codesign --force --deep --sign - /Applications/Mogbot.app && codesign --verify --deep --strict /Applications/Mogbot.app && echo SIGNATURE_OK && open /Applications/Mogbot.app
 ```
 
-The app then walks you through it one screen at a time: pick Claude Code or
-Codex, install and sign in, choose how independent agents are, optionally set
-up your phone, and you land in a conversation with your Chief of Staff.
+The app then asks one thing: pick Claude Code, Codex or OpenCode. It installs
+and signs it in like any Mac installer, and you land in a conversation with
+your Chief of Staff. Importing agents, the phone and how independent agents
+are come up later, when they matter.
 
 **The phone app** comes two ways until it's on the App Store: **Expo Go**
 (minutes; a terminal on the Mac stays open; no dictation or share sheet) or
@@ -144,7 +164,7 @@ The app tells you what will and won't keep running.
 
 - **The experience is modelled on Grok Bot:** named agents you just talk to,
   approvals as a tap, a chat that feels like a team. The difference is what's
-  underneath: Claude Code and Codex, on your machine and your own accounts,
+  underneath: Claude Code, Codex or OpenCode, on your machine and your own accounts,
   with no usage ceiling of ours on top.
 - **Next to Claude Code or Codex in a terminal:** the same engines, plus a
   team with memory, approval cards, result cards, routines, usage across
@@ -172,7 +192,8 @@ pinned identity, and every pairing is confirmed on the desk. Details:
 Early, and moving fast. macOS only for now. There is no signed download, no
 App Store or TestFlight build, no push notifications, no update feed and no
 telemetry: those stay off until `brand.json` names an endpoint for them, and
-it names none. What's next: [docs/ROADMAP.md](docs/ROADMAP.md).
+it names none. Several features landed recently and say in the docs where
+they haven't yet been tried on a real phone or a live account. What's next: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 **Works with Ship Studio.** This is the evolution of
 [Ship Studio](https://github.com/ship-studio/ship-studio) and opens its

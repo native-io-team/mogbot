@@ -71,6 +71,29 @@ export function whenIpcQuiet(quietMs = 500, timeoutMs = 15_000): Promise<void> {
   });
 }
 
+/**
+ * `?ipcMs=<n>`: every command answers `n` ms late, standing in for the
+ * Mac's round trip (IPC, the file reads behind it). Instant answers hide
+ * requests made one after another that could have overlapped
+ * (`scripts/perf-agents.mjs --ipc-ms`).
+ */
+const IPC_MS =
+  typeof window === 'undefined'
+    ? 0
+    : Number(new URLSearchParams(window.location.search).get('ipcMs')) || 0;
+const late = <T>(value: T): T | Promise<T> =>
+  IPC_MS > 0 ? new Promise((resolve) => setTimeout(() => resolve(value), IPC_MS)) : value;
+
+interface HarnessCall {
+  cmd: string;
+  args: Record<string, unknown>;
+  at: number;
+}
+function harnessCalls(): HarnessCall[] {
+  const w = window as unknown as { __harnessCalls?: HarnessCall[] };
+  return (w.__harnessCalls ??= []);
+}
+
 export function installFakeBackend(scenario: Scenario): void {
   mockWindows('main');
 
@@ -83,11 +106,15 @@ export function installFakeBackend(scenario: Scenario): void {
       const payload = (args ?? {}) as Record<string, unknown>;
       // Tauri's own event plumbing polls constantly; counting it would mean IPC
       // never falls quiet.
-      if (!cmd.startsWith('plugin:')) lastCallAt = Date.now();
+      if (!cmd.startsWith('plugin:')) {
+        lastCallAt = Date.now();
+        // Every call, in order, for tools that count requests (`window.__harnessCalls`).
+        harnessCalls().push({ cmd, args: payload, at: performance.now() });
+      }
 
       if (cmd in commands) {
         const value = commands[cmd];
-        return isHandler(value) ? value(payload) : value;
+        return late(isHandler(value) ? value(payload) : value);
       }
 
       if (cmd in PLUGIN_DEFAULTS) return PLUGIN_DEFAULTS[cmd];

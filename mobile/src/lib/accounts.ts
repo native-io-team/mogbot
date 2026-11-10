@@ -26,7 +26,7 @@ import {
 } from '@shipstudio/companion-protocol';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { haptic } from './haptics';
-import { call, canCall, describeError } from './session';
+import { call, callFresh, canCall, describeError, lastRead, READ_FRESH_MS } from './session';
 import { useApp } from './store';
 import { usePolling } from './usePolling';
 import { idsOf, reordered } from './accountsView';
@@ -57,8 +57,13 @@ export function useAccounts({ room = true }: { room?: boolean } = {}): AccountsS
   const servesPlan = room && canCall('agents.usagePlan', welcome);
   const canSwap = live && canCall('agents.accounts.use', welcome);
   const canReorder = live && canCall('agents.accounts.reorder', welcome);
-  const [accounts, setAccounts] = useState<UsageAccount[] | null>(null);
-  const [inventory, setInventory] = useState<UsageInventory | null>(null);
+  // What was last read, from any screen, until this one's own read lands.
+  const [accounts, setAccounts] = useState<UsageAccount[] | null>(
+    () => (serves && lastRead('agents.accounts', {})) || null
+  );
+  const [inventory, setInventory] = useState<UsageInventory | null>(
+    () => (servesPlan && lastRead('agents.usagePlan', {})) || null
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // A read that lands mid-swap would put the old order back for a moment.
@@ -71,14 +76,14 @@ export function useAccounts({ room = true }: { room?: boolean } = {}): AccountsS
     if (!serves) return;
     try {
       const asked = changes.current;
-      const next = await call('agents.accounts', {});
+      const next = await callFresh('agents.accounts', {}, READ_FRESH_MS);
       if (swapping.current === 0 && asked === changes.current) setAccounts(next);
     } catch {
       // Unanswered: keep what was last read.
     }
     if (!servesPlan) return;
     try {
-      setInventory(await call('agents.usagePlan', {}));
+      setInventory(await callFresh('agents.usagePlan', {}, READ_FRESH_MS));
     } catch {
       // No room figures rather than old ones guessed at.
     }

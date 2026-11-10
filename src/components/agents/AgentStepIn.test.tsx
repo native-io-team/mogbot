@@ -62,6 +62,7 @@ describe('Step in card', () => {
     await arm();
     await act(async () => {
       fireEvent.click(step, { detail: 1 });
+      await Promise.resolve();
     });
     expect(calls('agents_step_in')).toEqual([
       ['agents_step_in', { agentId: 'res', requestId: 'req-1' }],
@@ -75,6 +76,7 @@ describe('Step in card', () => {
     render(<StepInCard message={card()} onAnswer={onAnswer} />);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      await Promise.resolve();
     });
     expect(onAnswer).toHaveBeenCalledWith('req-1', false);
   });
@@ -90,14 +92,29 @@ describe('Step in card', () => {
     expect(screen.getByText(/You’re in its browser now/)).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Hand back' }));
+      await Promise.resolve();
     });
     expect(calls('agents_step_in_hand_back')).toEqual([
       ['agents_step_in_hand_back', { agentId: 'res', requestId: 'req-1' }],
     ]);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Show window' }));
+      await Promise.resolve();
     });
     expect(calls('agents_step_in_show')).toHaveLength(1);
+  });
+
+  it('in its own chat, leaves Show window and Hand back to the bar', () => {
+    render(
+      <StepInCard
+        message={card({}, { inSince: 1_000, until: 1_000 + 15 * 60_000 })}
+        onAnswer={vi.fn()}
+        barShown
+      />
+    );
+    expect(screen.getByText(/Hand back from the bar below/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hand back' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show window' })).toBeNull();
   });
 
   it('closes to one line', () => {
@@ -127,6 +144,25 @@ describe('Step in bar', () => {
     expect(bar).toHaveTextContent('idp.example · hands back by itself in 11 min');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Hand back' }));
+      await Promise.resolve();
+    });
+    expect(calls('agents_step_in_hand_back')).toHaveLength(1);
+  });
+
+  it('names the phone that stepped in, with Hand back and no Show window', async () => {
+    const live = { inSince: 1_000, until: 1_000 + 15 * 60_000 };
+    const fromPhone = card({}, live);
+    fromPhone.approval!.stepIn!.onPhone = 'Sam’s iPhone';
+    render(<StepInBar agent={agent} now={2_000} messages={[fromPhone]} />);
+    const bar = screen.getByTestId('agent-step-in-bar');
+    expect(bar).toHaveTextContent('Sam’s iPhone is in Research’s browser');
+    expect(screen.queryByRole('button', { name: 'Show window' })).toBeNull();
+    render(<StepInCard message={fromPhone} onAnswer={vi.fn()} />);
+    expect(screen.getByText(/Sam’s iPhone is in its browser now/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show window' })).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Hand back' })[1]);
+      await Promise.resolve();
     });
     expect(calls('agents_step_in_hand_back')).toHaveLength(1);
   });

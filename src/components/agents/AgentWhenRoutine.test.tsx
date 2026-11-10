@@ -4,6 +4,14 @@ import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { WhenComposer } from './AgentWhenRoutine';
 import type { Agent, CheckIn } from '../../lib/agents';
 
+const opened = vi.hoisted(() => [] as string[]);
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  openUrl: (url: string) => {
+    opened.push(url);
+    return Promise.resolve();
+  },
+}));
+
 vi.mock('../../lib/agentsStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agentsStore')>()),
   refreshAgents: () => Promise.resolve(),
@@ -36,12 +44,18 @@ function mount(
     connections?: ReturnType<typeof ours>[];
     editing?: CheckIn | null;
     reject?: string;
+    /** What `agents_watch_mac_access` answers, in order; the last one repeats. */
+    mac?: unknown[];
   } = {}
 ) {
   const calls: { cmd: string; args: Record<string, unknown> }[] = [];
   mockIPC((cmd, args) => {
     calls.push({ cmd, args: args as Record<string, unknown> });
     if (cmd === 'agents_connections') return opts.connections ?? [];
+    if (cmd === 'agents_watch_mac_access') {
+      const answers = opts.mac ?? [{ mail: { state: 'ok' }, messages: { state: 'ok' } }];
+      return answers.length > 1 ? answers.shift() : answers[0];
+    }
     if (cmd === 'agents_apps_list') {
       return {
         connected: [
@@ -81,6 +95,9 @@ const radio = (name: string) => screen.getByRole('radio', { name: new RegExp(nam
 describe('WhenComposer', () => {
   it('offers the free sources, says what each costs, and adds a GitHub one', async () => {
     const { calls, onDone } = mount();
+    // Everyday sources first, and it starts on the first: mail.
+    expect(radio('An email arrives in Mail')).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(radio('Someone mentions you on GitHub'));
     // The choice and the readback speak in one person.
     expect(radio('Someone mentions you on GitHub')).toHaveAttribute('aria-checked', 'true');
     expect(radio('Someone mentions you on GitHub')).toHaveTextContent(
@@ -94,9 +111,8 @@ describe('WhenComposer', () => {
     fireEvent.change(screen.getByLabelText('What to do when it happens'), {
       target: { value: 'Triage it' },
     });
-    expect(
-      screen.getByText('When someone mentions you on GitHub, Finance starts on it.')
-    ).toBeInTheDocument();
+    // Read back as the time picker's echo: what it waits for — what it does.
+    expect(screen.getByText('When someone mentions you on GitHub — Triage it')).toBeInTheDocument();
     await act(() => {
       fireEvent.click(add);
       return Promise.resolve();
@@ -164,6 +180,10 @@ describe('WhenComposer', () => {
     fireEvent.change(screen.getByLabelText('What to do when it happens'), {
       target: { value: 'Summarise it' },
     });
+    // The user's own words are quoted, so the echo reads whatever they typed.
+    expect(
+      screen.getByText('When Finance finds “a new page in the roadmap” — Summarise it')
+    ).toBeInTheDocument();
     await act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Add' }));
       return Promise.resolve();
@@ -190,6 +210,81 @@ describe('WhenComposer', () => {
       screen.getByText(/Apps connected on claude\.ai\s+can’t be used here/)
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /claude\.ai/ })).toBeNull();
+  });
+
+  it('names Full Disk Access when Mail can’t be read, opens its pane, and goes on once it’s on', async () => {
+    const fda = {
+      state: 'full_disk_access',
+      words:
+        'Reading Mail needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot.',
+      settings: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+    };
+    const ok = { mail: { state: 'ok' }, messages: { state: 'ok' } };
+    const { calls } = mount({
+      mac: [{ mail: fda, messages: fda }, { mail: fda, messages: fda }, ok],
+    });
+    fireEvent.click(radio('An email arrives in Mail'));
+    expect(radio('An email arrives in Mail')).toHaveTextContent('Free · reads Mail on this Mac');
+    fireEvent.change(screen.getByLabelText('What to do when it happens'), {
+      target: { value: 'File the invoice' },
+    });
+    await waitFor(() => expect(screen.getByText(fda.words)).toBeInTheDocument());
+    // Said once, beside its buttons, with the setting first: not under the form.
+    expect(screen.getAllByText(fda.words)).toHaveLength(1);
+    const access = screen.getByText(fda.words).parentElement as HTMLElement;
+    const buttons = Array.from(access.querySelectorAll('button')).map((b) => b.textContent);
+    expect(buttons).toEqual(['Open Full Disk Access', 'Check again']);
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Full Disk Access' }));
+    expect(opened).toContain(fda.settings);
+    // Check again asks the Mac; the answer after that says it's on.
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(screen.queryByText(fda.words)).toBeNull());
+    fireEvent.change(screen.getByLabelText('Only from'), {
+      target: { value: ' billing@northwind.com ' },
+    });
+    fireEvent.change(screen.getByLabelText('Only with these words'), {
+      target: { value: 'invoice' },
+    });
+    expect(
+      screen.getByText(
+        'When an email arrives in Mail from billing@northwind.com mentioning “invoice” — File the invoice'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/only information to Finance, and it asks you before replying/)
+    ).toBeInTheDocument();
+    await act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      return Promise.resolve();
+    });
+    expect(calls.find((c) => c.cmd === 'agents_watch_create')?.args.source).toEqual({
+      kind: 'new_mail',
+      from: 'billing@northwind.com',
+      words: 'invoice',
+    });
+  });
+
+  it('asks for a phone number or email for a text, and checks every minute', async () => {
+    const { calls } = mount();
+    fireEvent.click(radio('A text arrives in Messages'));
+    expect(screen.getByRole('button', { name: 'every minute' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('What to do when it happens'), {
+      target: { value: 'Tell me' },
+    });
+    fireEvent.change(screen.getByLabelText('Only from'), { target: { value: 'my landlord' } });
+    expect(screen.getByText(/Give their phone number or email/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Only from'), { target: { value: '+1 555 123 4567' } });
+    await act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      return Promise.resolve();
+    });
+    expect(calls.find((c) => c.cmd === 'agents_watch_create')?.args.source).toEqual({
+      kind: 'new_text',
+      from: '+1 555 123 4567',
+    });
   });
 
   it('asks for the folder, and shows the Mac’s reason when it refuses one', async () => {

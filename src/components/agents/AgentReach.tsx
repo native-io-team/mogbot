@@ -55,8 +55,14 @@ export function AgentReach({ agent }: { agent: Agent }) {
     !reach.browser;
 
   return (
-    <div className="agent-editor__label" role="group" aria-label="What it can reach">
-      What it can reach
+    // No heading of its own: it sits right under AgentPolicy's "What it can
+    // reach" and continues it (its sections carry their own headings), so the
+    // editor doesn't show the same title twice in a row.
+    <div
+      className="agent-editor__label agent-reach"
+      role="group"
+      aria-label="What it can reach: sign-ins, browser and keys"
+    >
       {loadError && !reach && (
         <p className="agent-editor__error" role="alert">
           <ErrorIcon size={12} className="inline-error-icon" />

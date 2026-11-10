@@ -1,5 +1,6 @@
 //! Tauri commands for the Agents view. The logic lives in `crate::agents`.
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
@@ -56,7 +57,7 @@ pub(crate) fn ran_on(agent: &store::Agent, counts: &[(Engine, usize)]) -> Option
 /// How many accounts each engine has.
 pub(crate) fn account_counts() -> Vec<(Engine, usize)> {
     let all = agents::wallet::list();
-    Engine::ALL
+    Engine::PLANS
         .iter()
         .map(|e| (*e, all.iter().filter(|a| a.engine == *e).count()))
         .collect()
@@ -101,18 +102,62 @@ fn emit_registry(app: &AppHandle) {
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandError> {
-    agents::ensure_main()?;
-    attachments::grant_asset_scope(&app);
-    let engines = engine::overview().await;
+    // The engines are asked about (their CLIs, their sign-ins) while the
+    // registry is read on a blocking thread: neither waits on the other.
+    // On a launch the engines' answer is the slow one, and the store work
+    // stays off the async workers every other command shares.
+    let store_app = app.clone();
+    let (engines, views) = tokio::join!(
+        engine::overview(),
+        blocking(move || {
+            agents::ensure_main()?;
+            attachments::grant_asset_scope(&store_app);
+            agent_views()
+        })
+    );
+    let mut agents = views?;
     let engine_ready = engines
         .iter()
         .any(|e| e.id == Engine::Claude && e.installed);
-    if let Err(e) = put_chief_on_a_ready_engine(&engines) {
-        tracing::warn!(error = %e, "couldn't move the Chief of Staff onto a ready engine");
+    let ready = engines.clone();
+    let (moved, rest) = blocking(move || {
+        let moved = match put_chief_on_a_ready_engine(&ready) {
+            Ok(moved) => moved,
+            Err(e) => {
+                tracing::warn!(error = %e, "couldn't move the Chief of Staff onto a ready engine");
+                false
+            }
+        };
+        let rest = (
+            agents::defaults::view_of(&agents::defaults::saved(), &ready),
+            agents::independence::level(),
+            agents::import_choice::choice(),
+            agents::clock::hour24(),
+        );
+        Ok((moved, rest))
+    })
+    .await?;
+    // The Chief just went onto another engine: the list says so.
+    if moved {
+        agents = blocking(agent_views).await?;
     }
+    let (defaults, independence, import_choice, hour24) = rest;
+    Ok(AgentsOverview {
+        agents,
+        engine_ready,
+        engines,
+        defaults,
+        independence,
+        import_choice,
+        hour24,
+    })
+}
+
+/// Every agent as the overview shows it.
+fn agent_views() -> Result<Vec<AgentView>, CommandError> {
     let policy = agents::policy::load();
     let counts = account_counts();
-    let agents = store::list()?
+    store::list()?
         .into_iter()
         .map(|agent| {
             Ok(AgentView {
@@ -125,39 +170,29 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
                 agent,
             })
         })
-        .collect::<Result<_, CommandError>>()?;
-    let defaults = agents::defaults::view_of(&agents::defaults::saved(), &engines);
-    Ok(AgentsOverview {
-        agents,
-        engine_ready,
-        engines,
-        defaults,
-        independence: agents::independence::level(),
-        import_choice: agents::import_choice::choice(),
-        hour24: agents::clock::hour24(),
-    })
+        .collect()
 }
 
 /// A Chief of Staff that has never run, on an engine that isn't here, goes
 /// onto one that is: someone with only Codex would otherwise meet a Chief that
 /// can't answer. One that has run keeps its engine (and its conversation); its
 /// chat offers to set that engine up instead.
-fn put_chief_on_a_ready_engine(engines: &[engine::EngineInfo]) -> Result<(), CommandError> {
+fn put_chief_on_a_ready_engine(engines: &[engine::EngineInfo]) -> Result<bool, CommandError> {
     let Some(chief) = store::list()?.into_iter().find(|a| a.is_main) else {
-        return Ok(());
+        return Ok(false);
     };
     let has_run = chief.session_id.is_some() || chief.new_engine;
     let ready = |id: Engine| engines.iter().any(|e| e.id == id && e.ready());
     let target = engine::default_for(engines);
     if has_run || ready(chief.engine) || !ready(target) || target == chief.engine {
-        return Ok(());
+        return Ok(false);
     }
     store::update(&chief.id, |a| {
         a.switch_engine(target);
         // Nothing to carry over: it has never had a conversation.
         a.new_engine = false;
     })?;
-    Ok(())
+    Ok(true)
 }
 
 /// The agents that work in a project, read straight from the registry: no
@@ -420,6 +455,20 @@ pub(crate) async fn send_in(
     .filter(|part| !part.is_empty())
     .collect::<Vec<_>>()
     .join("\n\n");
+    // A block's answer whose words the user never saw (a button labelled
+    // one thing that sends another) goes to the agent, but isn't their
+    // typed words: it answers no card, grants no plan and makes no rule
+    // (`blocks::unseen_answer`).
+    let typed = typed && {
+        let (of, in_conversation, said) = (agent_id.clone(), conversation.clone(), said.clone());
+        !tokio::task::spawn_blocking(move || {
+            store::conversation_page(&of, &in_conversation, 40, None, None)
+                .map(|log| unseen_block_answer(&log, &said))
+                .unwrap_or(false)
+        })
+        .await
+        .unwrap_or(false)
+    };
     let typed_yes =
         typed && says_yes && message.attachments.is_empty() && message.revises.is_none();
     let message = runner::record(&app, message)?;
@@ -482,6 +531,25 @@ pub(crate) async fn send_in(
     Ok(message)
 }
 
+/// Whether `text` answers a block posted since the user last spoke with
+/// words the button didn't show (`blocks::unseen_answer`).
+pub(crate) fn unseen_block_answer(log: &[store::AgentMessage], text: &str) -> bool {
+    for m in log.iter().rev() {
+        match m.kind {
+            store::MessageKind::User => return false,
+            store::MessageKind::Agent => {
+                if let Some(blocks) = &m.blocks {
+                    if agents::blocks::unseen_answer(blocks, text) {
+                        return true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 /// The cards waiting on the user in one of the agent's conversations.
 fn cards_in(agent_id: &str, conversation: &str) -> Vec<store::Approval> {
     store::pending_card_messages(agent_id)
@@ -516,7 +584,7 @@ pub async fn agents_inspect_files(
     paths: Vec<String>,
 ) -> Result<Vec<attachments::FileInfo>, CommandError> {
     use tauri::Manager;
-    let files = attachments::inspect(&paths)?;
+    let files = blocking(move || attachments::inspect(&paths)).await?;
     for file in files.iter().filter(|f| f.mime.starts_with("image/")) {
         let _ = app.asset_protocol_scope().allow_file(&file.path);
     }
@@ -534,16 +602,19 @@ pub async fn agents_open_attachment(
     path: String,
     reveal: Option<bool>,
 ) -> Result<files::PathAction, CommandError> {
-    let home = store::agent_home(&agent_id)?;
-    let full = attachments::resolve(&home, &path)?;
-    let (full, action) = files::local_path(
-        &full.display().to_string(),
-        &home,
-        std::slice::from_ref(&home),
-        reveal.unwrap_or(false),
-    )?;
-    files::perform(&full, action)?;
-    Ok(action)
+    blocking(move || {
+        let home = store::agent_home(&agent_id)?;
+        let full = attachments::resolve(&home, &path)?;
+        let (full, action) = files::local_path(
+            &full.display().to_string(),
+            &home,
+            std::slice::from_ref(&home),
+            reveal.unwrap_or(false),
+        )?;
+        files::perform(&full, action)?;
+        Ok(action)
+    })
+    .await
 }
 
 /// Everything shared in one conversation, both ways, newest first.
@@ -576,12 +647,16 @@ pub async fn agents_open_path(
                 .map(|p| std::path::PathBuf::from(p.path)),
         );
     }
-    if let Some(copy) = store::get(&agent_id).ok().and_then(|a| a.copy) {
-        roots.push(std::path::PathBuf::from(copy.path));
-    }
-    let (full, action) = files::local_path(&path, &home, &roots, reveal.unwrap_or(false))?;
-    files::perform(&full, action)?;
-    Ok(action)
+    // The registry, canonical paths and `open`: off the async workers.
+    blocking(move || {
+        if let Some(copy) = store::get(&agent_id).ok().and_then(|a| a.copy) {
+            roots.push(std::path::PathBuf::from(copy.path));
+        }
+        let (full, action) = files::local_path(&path, &home, &roots, reveal.unwrap_or(false))?;
+        files::perform(&full, action)?;
+        Ok(action)
+    })
+    .await
 }
 
 #[derive(Debug, Deserialize)]
@@ -674,41 +749,47 @@ pub async fn agents_create(
                 .clone(),
         ),
     };
-    let agent = store::create(store::NewAgent {
-        name: input.name,
-        role: input.role,
-        instructions: input.instructions,
-        shape: input.shape,
-        color: input.color,
-        is_main: false,
-    })?;
-    // The key chosen in the dialog; the defaults `create` gave stand otherwise.
-    let agent = set_key(
-        &agent,
-        input.colorway.as_deref(),
-        input.icon.as_deref(),
-        input.bound_key.as_deref(),
-    )?
-    .unwrap_or(agent);
-    let agent = if model.is_some()
-        || project.is_some()
-        || template.is_some()
-        || engine != Engine::default()
-    {
-        store::update(&agent.id, |a| {
-            a.engine = engine;
-            a.model = model;
-            a.project = project;
-            a.template = template;
-        })?
-    } else {
-        agent
-    };
-    if !input.routines.is_empty() {
-        agents::draft::add_routines(&app, &agent.id, &input.routines);
-    }
-    agents::starters::open(&app, &agent.id, &input.opening, true).await;
-    let agent = store::get(&agent.id).unwrap_or(agent);
+    // Its folder, CLAUDE.md, registry entry and routines: off the async workers.
+    let opening = input.opening;
+    let (agent, added) = blocking(move || {
+        let agent = store::create(store::NewAgent {
+            name: input.name,
+            role: input.role,
+            instructions: input.instructions,
+            shape: input.shape,
+            color: input.color,
+            is_main: false,
+        })?;
+        // The key chosen in the dialog; the defaults `create` gave stand otherwise.
+        let agent = set_key(
+            &agent,
+            input.colorway.as_deref(),
+            input.icon.as_deref(),
+            input.bound_key.as_deref(),
+        )?
+        .unwrap_or(agent);
+        let agent = if model.is_some()
+            || project.is_some()
+            || template.is_some()
+            || engine != Engine::default()
+        {
+            store::update(&agent.id, |a| {
+                a.engine = engine;
+                a.model = model;
+                a.project = project;
+                a.template = template;
+            })?
+        } else {
+            agent
+        };
+        let added = agents::draft::add_routines(&agent.id, &input.routines);
+        Ok((agent, added))
+    })
+    .await?;
+    // Its welcome first, then what it will do on its own.
+    agents::starters::open(&app, &agent.id, &opening, true).await;
+    added.post(&app);
+    let agent = blocking(move || Ok(store::get(&agent.id).unwrap_or(agent))).await?;
     emit_registry(&app);
     Ok(agent)
 }
@@ -753,6 +834,9 @@ pub struct UpdateAgentInput {
     /// string for any account.
     #[serde(default)]
     pub account: Option<String>,
+    /// "Save new skills": `auto`, `ask` or `off` (`agents::skills_learn`).
+    #[serde(default)]
+    pub learn_skills: Option<agents::skills_learn::Learning>,
 }
 
 #[tauri::command]
@@ -878,6 +962,9 @@ pub async fn agents_update(
         }
         if let Some(m) = input.muted {
             a.muted = m;
+        }
+        if let Some(l) = input.learn_skills {
+            a.learn_skills = l;
         }
         if let Some(engine) = engine {
             a.switch_engine(engine);
@@ -1033,7 +1120,7 @@ fn model_label(engine: Engine, model: &str) -> String {
                 .map(|f| f.to_uppercase().chain(c).collect())
                 .unwrap_or_default()
         }
-        Engine::Codex => agents::codex::models()
+        Engine::Codex | Engine::OpenCode => agents::engine::models(engine)
             .into_iter()
             .find(|m| m.value == model)
             .map(|m| m.label)
@@ -1104,7 +1191,7 @@ pub async fn agents_copy_discard(
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_instructions(agent_id: String) -> Result<String, CommandError> {
-    store::read_instructions(&agent_id)
+    blocking(move || store::read_instructions(&agent_id)).await
 }
 
 /// The agent's `## Memory`, as entries (`agents/memory.rs`).
@@ -1157,11 +1244,16 @@ pub async fn agents_busy() -> Result<usize, CommandError> {
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_stop(app: AppHandle, agent_id: String) -> Result<bool, CommandError> {
-    let stopped = runner::stop(&app, &agent_id);
-    // The Chief's Stop (here and on the phone) also stops an import it's
-    // running; only the import's own messages go, never the user's.
-    let import = store::get(&agent_id).is_ok_and(|a| a.is_main) && agents::connector::stop(&app);
-    Ok(stopped || import)
+    // Its lines and the registry: off the async workers.
+    blocking(move || {
+        let stopped = runner::stop(&app, &agent_id);
+        // The Chief's Stop (here and on the phone) also stops an import it's
+        // running; only the import's own messages go, never the user's.
+        let import =
+            store::get(&agent_id).is_ok_and(|a| a.is_main) && agents::connector::stop(&app);
+        Ok(stopped || import)
+    })
+    .await
 }
 
 /// Step into the agent's own session in a terminal: the agent pauses (no
@@ -1274,6 +1366,41 @@ pub async fn agents_conversation_rename(
     let list = blocking(move || conversations::rename(&id, &conversation_id, &title)).await?;
     let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
     Ok(list)
+}
+
+/// "Rewind to here" (and Edit and resend, before its send): the
+/// conversation carries on from just before the user's message; what came
+/// after is folded, not deleted. Refused while a turn runs.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_conversation_rewind(
+    app: AppHandle,
+    agent_id: String,
+    conversation_id: String,
+    message_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let done = blocking(move || agents::rewind::rewind(&id, &conversation_id, &message_id)).await?;
+    let _ = runner::record(&app, done.line);
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(done.conversations)
+}
+
+/// "Fork from here": a new conversation with everything before the user's
+/// message, which the user is now in; the original stays as it is.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_conversation_fork(
+    app: AppHandle,
+    agent_id: String,
+    conversation_id: String,
+    message_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let done = blocking(move || agents::rewind::fork(&id, &conversation_id, &message_id)).await?;
+    let _ = runner::record(&app, done.line);
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(done.conversations)
 }
 
 /// Move a routine to another of the agent's conversations: it fires there
@@ -1834,6 +1961,10 @@ pub(crate) fn answer_card(
     if approval.slack_reply.is_some() {
         return agents::slack::answer_card(app, agent_id, &approval, allow);
     }
+    // "Save “…” as a skill?": Save writes it, Not now saves nothing.
+    if approval.skill.is_some() {
+        return agents::skills_learn::answer_card(app, agent_id, &approval, allow);
+    }
     if let Some(request) = &approval.secret {
         if allow {
             return Err(CommandError::expected(
@@ -2052,7 +2183,8 @@ pub async fn agents_focus(
     window: tauri::WebviewWindow,
     agent_id: Option<String>,
 ) -> Result<(), CommandError> {
-    focus_as(&app, window.label(), agent_id)
+    let label = window.label().to_string();
+    blocking(move || focus_as(&app, &label, agent_id)).await
 }
 
 /// [`agents_focus`] for any surface with a label: a window, or a phone's
@@ -2077,9 +2209,12 @@ pub(crate) fn focus_as(
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_mark_unread(app: AppHandle, agent_id: String) -> Result<(), CommandError> {
-    store::update(&agent_id, |a| a.unread = a.unread.max(1))?;
-    notify::refresh_badge(&app);
-    Ok(())
+    blocking(move || {
+        store::update(&agent_id, |a| a.unread = a.unread.max(1))?;
+        notify::refresh_badge(&app);
+        Ok(())
+    })
+    .await
 }
 
 /// Every agent's conversation, searched: all words must match, newest first.
@@ -2095,7 +2230,7 @@ pub async fn agents_search(query: String) -> Result<Vec<search::SearchHit>, Comm
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_usage(agent_id: String) -> Result<usage::UsageSummary, CommandError> {
-    Ok(usage::summarize(&store::get(&agent_id)?, usage::today()))
+    blocking(move || Ok(usage::summarize(&store::get(&agent_id)?, usage::today()))).await
 }
 
 /// How much of each engine's plan is used, as the engine last reported it.
@@ -2113,12 +2248,15 @@ pub async fn agents_quota() -> Result<Vec<agents::quota::Quota>, CommandError> {
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_import_prompt() -> Result<String, CommandError> {
-    let chief = store::list()?
-        .into_iter()
-        .find(|a| a.is_main)
-        .map(|a| a.name)
-        .unwrap_or_else(|| "Chief of Staff".into());
-    Ok(import::import_prompt(&chief))
+    blocking(|| {
+        let chief = store::list()?
+            .into_iter()
+            .find(|a| a.is_main)
+            .map(|a| a.name)
+            .unwrap_or_else(|| "Chief of Staff".into());
+        Ok(import::import_prompt(&chief))
+    })
+    .await
 }
 
 /// Whether an import over the connector may begin, and the one in progress
@@ -2144,7 +2282,8 @@ pub async fn agents_import_talk_arm(
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_import_talk_stop(app: AppHandle) -> Result<bool, CommandError> {
-    Ok(agents::connector::stop(&app))
+    // Expires its cards in the Chief's chat: off the async workers.
+    blocking(move || Ok(agents::connector::stop(&app))).await
 }
 
 /// Import what the user kept on a review card (`agents::review`).
@@ -2295,6 +2434,39 @@ pub async fn agents_recipe_save(
     blocking(move || agents::recipe::save(&agent_id, std::path::Path::new(&path), &shown)).await
 }
 
+/// "Skills": its "Save new skills" setting and the
+/// skills it saved (`agents::skills_learn`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_skills(agent_id: String) -> Result<agents::skills_learn::View, CommandError> {
+    blocking(move || agents::skills_learn::view(&agent_id)).await
+}
+
+/// The user's edit of one skill, cleaned as a new one is.
+#[tauri::command]
+#[tracing::instrument(skip(app, name, when, steps))]
+pub async fn agents_skill_edit(
+    app: AppHandle,
+    agent_id: String,
+    slug: String,
+    name: String,
+    when: String,
+    steps: String,
+) -> Result<agents::skills_learn::Skill, CommandError> {
+    blocking(move || agents::skills_learn::edit(&app, &agent_id, &slug, &name, &when, &steps)).await
+}
+
+/// Remove one of its skills.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_skill_remove(
+    app: AppHandle,
+    agent_id: String,
+    slug: String,
+) -> Result<(), CommandError> {
+    blocking(move || agents::skills_learn::remove_one(&app, &agent_id, &slug)).await
+}
+
 /// The other app's agents on this Mac, and what importing them would do;
 /// `None` when it isn't here or has none. Reads only.
 #[tauri::command]
@@ -2383,11 +2555,14 @@ pub async fn agents_schedule_create(
     note: String,
     then: Option<Vec<agents::routine_steps::Step>>,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let created =
-        schedule::create_with_steps(&agent_id, &when, &note, then.as_deref().unwrap_or(&[]))?;
-    agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
-    emit_registry(&app);
-    Ok(created.check_in)
+    blocking(move || {
+        let created =
+            schedule::create_with_steps(&agent_id, &when, &note, then.as_deref().unwrap_or(&[]))?;
+        agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
+        emit_registry(&app);
+        Ok(created.check_in)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -2397,9 +2572,12 @@ pub async fn agents_schedule_cancel(
     agent_id: String,
     id: String,
 ) -> Result<(), CommandError> {
-    schedule::cancel(&agent_id, &id)?;
-    emit_registry(&app);
-    Ok(())
+    blocking(move || {
+        schedule::cancel(&agent_id, &id)?;
+        emit_registry(&app);
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -2410,9 +2588,12 @@ pub async fn agents_schedule_pause(
     id: String,
     paused: bool,
 ) -> Result<(), CommandError> {
-    schedule::set_paused(&agent_id, &id, paused)?;
-    emit_registry(&app);
-    Ok(())
+    blocking(move || {
+        schedule::set_paused(&agent_id, &id, paused)?;
+        emit_registry(&app);
+        Ok(())
+    })
+    .await
 }
 
 /// What one routine wakes its agent on: `""` like its other routines,
@@ -2425,9 +2606,12 @@ pub async fn agents_schedule_model(
     id: String,
     model: String,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let changed = schedule::set_model(&agent_id, &id, &model)?;
-    emit_registry(&app);
-    Ok(changed)
+    blocking(move || {
+        let changed = schedule::set_model(&agent_id, &id, &model)?;
+        emit_registry(&app);
+        Ok(changed)
+    })
+    .await
 }
 
 /// Change a check-in's when and what in place (same id, same paused state).
@@ -2441,9 +2625,12 @@ pub async fn agents_schedule_update(
     note: String,
     then: Option<Vec<agents::routine_steps::Step>>,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let edited = schedule::edit_with_steps(&agent_id, &id, &when, &note, then.as_deref())?;
-    emit_registry(&app);
-    Ok(edited)
+    blocking(move || {
+        let edited = schedule::edit_with_steps(&agent_id, &id, &when, &note, then.as_deref())?;
+        emit_registry(&app);
+        Ok(edited)
+    })
+    .await
 }
 
 /// Fire a check-in now as a normal wake; its next time doesn't move.
@@ -2454,7 +2641,7 @@ pub async fn agents_schedule_run_now(
     agent_id: String,
     id: String,
 ) -> Result<(), CommandError> {
-    schedule::run_now(&app, &agent_id, &id)
+    blocking(move || schedule::run_now(&app, &agent_id, &id)).await
 }
 
 /// Add a "When…" routine: `source` is `watch::Source` (`{ kind, folder?, check?, app? }`).
@@ -2467,10 +2654,14 @@ pub async fn agents_watch_create(
     every_minutes: u32,
     note: String,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let created = agents::watch::create(&agent_id, source, every_minutes, &note)?;
-    agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
-    emit_registry(&app);
-    Ok(created.check_in)
+    // The registry and its line: off the async workers.
+    blocking(move || {
+        let created = agents::watch::create(&agent_id, source, every_minutes, &note)?;
+        agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
+        emit_registry(&app);
+        Ok(created.check_in)
+    })
+    .await
 }
 
 /// Change what a "When…" routine waits for, how often it checks, and what it does.
@@ -2484,9 +2675,18 @@ pub async fn agents_watch_update(
     every_minutes: u32,
     note: String,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let edited = agents::watch::edit(&agent_id, &id, source, every_minutes, &note)?;
+    let edited =
+        blocking(move || agents::watch::edit(&agent_id, &id, source, every_minutes, &note)).await?;
     emit_registry(&app);
     Ok(edited)
+}
+
+/// Whether this Mac's Mail and Messages can be read for an email or text
+/// routine, naming the permission when not (`watch_mac`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_watch_mac_access() -> Result<agents::watch_mac::MacAccess, CommandError> {
+    blocking(|| Ok(agents::watch_mac::mac_access())).await
 }
 
 /// Check a "When…" routine now; the agent is woken only if something's new.
@@ -2614,11 +2814,11 @@ pub async fn agents_set_admin(
         } else {
             "Admin turned off: it no longer manages or answers for other agents"
         };
-        let _ = store::append_message(&runner::new_message(
+        store::append_message(&runner::new_message(
             &agent.id,
             store::MessageKind::Note,
             line,
-        ));
+        )).or_log("the admin switch's chat line");
         Ok(agent)
     })
     .await?;
@@ -2626,7 +2826,7 @@ pub async fn agents_set_admin(
     Ok(agent)
 }
 
-/// Settings → Agents → Admin activity: what admins did, newest first.
+/// Settings → Independence → Admin activity: what admins did, newest first.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_admin_activity(
@@ -2635,7 +2835,7 @@ pub async fn agents_admin_activity(
     blocking(move || Ok(agents::admin::activity(limit.unwrap_or(100).min(500)))).await
 }
 
-/// Settings → Agents → Recently deleted: agents an admin deleted, restorable
+/// Settings → Independence → Recently deleted: agents an admin deleted, restorable
 /// for 30 days. Ones past that are purged here.
 #[tauri::command]
 #[tracing::instrument]
@@ -2658,11 +2858,12 @@ pub async fn agents_restore(
         let agent = store::restore(&agent_id)?;
         runner::undelete(&agent.id);
         store::refresh_pending(&agent.id);
-        let _ = store::append_message(&runner::new_message(
+        store::append_message(&runner::new_message(
             &agent.id,
             store::MessageKind::Note,
             "Restored from Recently deleted",
-        ));
+        ))
+        .or_log("the restored agent's chat line");
         Ok(agent)
     })
     .await?;
@@ -2784,7 +2985,8 @@ pub async fn quick_entry_sent(app: AppHandle) -> Result<(), CommandError> {
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn quick_entry_open_chat(app: AppHandle, agent_id: String) -> Result<(), CommandError> {
-    store::get(&agent_id)?;
+    let id = agent_id.clone();
+    blocking(move || store::get(&id)).await?;
     if let Some(w) = tauri::Manager::get_webview_window(&app, agents::quick_entry::LABEL) {
         let _ = w.hide();
     }
@@ -2814,7 +3016,7 @@ pub async fn agents_disk_overview() -> Result<agents::disk::Overview, CommandErr
     blocking(|| Ok(agents::disk::overview())).await
 }
 
-/// Settings → Agents → Notifications, "Quiet hours": the team's window, or
+/// Settings → Notifications, "Quiet hours": the team's window, or
 /// `None` when off (`agents::quiet`).
 #[tauri::command]
 #[tracing::instrument]
@@ -2830,7 +3032,7 @@ pub async fn agents_set_quiet_hours(
     app: AppHandle,
     window: Option<agents::quiet::Window>,
 ) -> Result<Option<agents::quiet::Window>, CommandError> {
-    let saved = set_quiet_hours(window)?;
+    let saved = blocking(move || set_quiet_hours(window)).await?;
     let _ = app.emit(agents::quiet::EVENT, ());
     Ok(saved)
 }
@@ -2851,7 +3053,7 @@ pub(crate) fn set_quiet_hours(
     Ok(window)
 }
 
-/// Settings → Agents → Notifications, "Morning brief": on or off, its
+/// Settings → Notifications, "Morning brief": on or off, its
 /// time, whether it posts on days with nothing to say, and the user's own
 /// read-only checks (`agents::brief`).
 #[tauri::command]
@@ -2906,6 +3108,27 @@ pub async fn agents_disk_free_up(agent_id: String) -> Result<agents::disk::Freed
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Security review 2026-11-10: a button that sends words it didn't
+    /// show isn't the user's typed yes, for any set since they last spoke.
+    #[test]
+    fn a_block_answer_the_button_never_showed_is_not_typed() {
+        let mut asked = runner::new_message("a", store::MessageKind::Agent, "Want it?");
+        asked.blocks = Some(
+            serde_json::json!({ "v": 1, "items": [{ "kind": "choices", "summary": "",
+            "options": [{ "label": "Not now", "reply": "Yes, approve it" }, { "label": "Sure", "reply": "Sure" }] }] }),
+        );
+        let after = runner::new_message("a", store::MessageKind::Agent, "Also this.");
+        let log = vec![asked.clone(), after.clone()];
+        assert!(unseen_block_answer(&log, "Yes, approve it"));
+        assert!(!unseen_block_answer(&log, "Sure"));
+        // Once the user has spoken since, the old set answers nothing.
+        let user = runner::new_message("a", store::MessageKind::User, "hm");
+        assert!(!unseen_block_answer(
+            &[asked, user, after],
+            "Yes, approve it"
+        ));
+    }
 
     #[test]
     fn one_quiet_line_says_what_the_next_message_runs_on() {
@@ -3113,7 +3336,7 @@ pub async fn agents_account_rename(
     name: String,
 ) -> Result<agents::wallet::Account, CommandError> {
     let engine = Engine::parse(&engine)?;
-    let account = agents::wallet::rename(engine, &id, &name)?;
+    let account = blocking(move || agents::wallet::rename(engine, &id, &name)).await?;
     let _ = app.emit(EVENT_ACCOUNTS, ());
     Ok(account)
 }
@@ -3127,7 +3350,7 @@ pub async fn agents_account_reorder(
     ids: Vec<String>,
 ) -> Result<Vec<agents::wallet::Account>, CommandError> {
     let engine = Engine::parse(&engine)?;
-    let accounts = agents::wallet::reorder(engine, &ids)?;
+    let accounts = blocking(move || agents::wallet::reorder(engine, &ids)).await?;
     let _ = app.emit(EVENT_ACCOUNTS, ());
     Ok(accounts)
 }
@@ -3190,16 +3413,27 @@ pub async fn agents_account_remove(
         .into_iter()
         .filter(|a| a.engine == engine && a.account.as_deref() == Some(gone.as_str()))
     {
-        let _ = store::update(&agent.id, |a| a.account = None);
-        let _ = runner::record(
-            &app,
-            runner::new_message(
+        // Said as it is: a line saying it moved when it didn't would leave
+        // the user wondering why its turns still fail.
+        let line = match store::update(&agent.id, |a| a.account = None) {
+            Ok(_) => runner::new_message(
                 &agent.id,
                 store::MessageKind::Note,
-                "Runs on any account from its next message: the one it was set to was removed"
-                    .to_string(),
+                "Runs on any account from its next message: the one it was set to was removed",
             ),
-        );
+            Err(e) => {
+                tracing::warn!(
+                    "[Agents] {} is still set to a removed account: {e}",
+                    agent.id
+                );
+                runner::new_message(
+                    &agent.id,
+                    store::MessageKind::Error,
+                    "It's still set to the account you removed, and that couldn't be changed. Pick another account in its settings",
+                )
+            }
+        };
+        let _ = runner::record(&app, line);
     }
     emit_registry(&app);
     let _ = app.emit(EVENT_ACCOUNTS, ());
@@ -3306,22 +3540,29 @@ pub async fn agents_team_setup_hello(
     app: AppHandle,
     agent_id: String,
 ) -> Result<store::AgentMessage, CommandError> {
-    let agent = store::get(&agent_id)?;
-    let setup = agents::team_setup::load()
-        .filter(|s| s.agents.contains(&agent_id))
-        .ok_or_else(|| CommandError::expected("That agent isn't part of this setup."))?;
-    if let Some(busy) = setup
-        .agents
-        .iter()
-        .filter(|id| **id != agent_id && setup.greeted.contains(id))
-        .filter(|id| runner::is_working(id))
-        .find_map(|id| store::get(id).ok())
-    {
-        return Err(CommandError::expected(format!(
-            "{} is still replying. Say hi to {} once it's done.",
-            busy.name, agent.name
-        )));
-    }
+    // The registry and the setup file: off the async workers.
+    let id = agent_id.clone();
+    let agent = blocking(move || {
+        let agent_id = id;
+        let agent = store::get(&agent_id)?;
+        let setup = agents::team_setup::load()
+            .filter(|s| s.agents.contains(&agent_id))
+            .ok_or_else(|| CommandError::expected("That agent isn't part of this setup."))?;
+        if let Some(busy) = setup
+            .agents
+            .iter()
+            .filter(|id| **id != agent_id && setup.greeted.contains(id))
+            .filter(|id| runner::is_working(id))
+            .find_map(|id| store::get(id).ok())
+        {
+            return Err(CommandError::expected(format!(
+                "{} is still replying. Say hi to {} once it's done.",
+                busy.name, agent.name
+            )));
+        }
+        Ok(agent)
+    })
+    .await?;
     let text = agents::team_setup::hello_text(&agent.name);
     let sent = send_as(app.clone(), agent_id, text, None, None, None, None, false).await?;
     agents::team_setup::emit(&app);

@@ -20,6 +20,7 @@
 //! the project), or an unbound agent's own home. Saved beside the agents
 //! (`installs.json`).
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -290,7 +291,7 @@ fn remember_in(file: &Path, key: &Path, entries: &[String]) {
         }
     }
     if let Ok(json) = serde_json::to_vec_pretty(&saved) {
-        let _ = super::store::write_atomic(file, &json);
+        super::store::write_atomic(file, &json).or_log("the packages allowed for this project");
     }
 }
 

@@ -1,6 +1,6 @@
 /**
  * Persona review 2026-11-09 (the Maximizer): the phone's Usage sheet changes
- * the usage mode, adds to the spare-capacity list and presses "Give agents
+ * the usage mode, adds to the list of ideas for leftover usage and presses "Give agents
  * something to do" (`agents.usage.setMode`, `agents.spare.add`,
  * `agents.spare.spendNow`), and an older Mac's phone shows none of it.
  */
@@ -20,7 +20,7 @@ const inventory = (over: Partial<UsageInventory> = {}): UsageInventory => ({
 const mockCall = jest.fn((method: string, params?: Record<string, unknown>) =>
   Promise.resolve(
     method === 'agents.spare.spendNow'
-      ? { line: 'Chief of Staff is starting your spare-capacity list (2 waiting).' }
+      ? { line: 'Chief of Staff is starting your ideas for leftover usage (2 waiting).' }
       : inventory(method === 'agents.usage.setMode' ? { mode: params?.mode as never } : {})
   )
 );
@@ -45,7 +45,11 @@ jest.mock('../src/components/ui', () => {
       onPress: () => void;
       disabled?: boolean;
     }) => (
-      <Pressable accessibilityRole="button" accessibilityState={{ disabled }} onPress={disabled ? undefined : onPress}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        onPress={disabled ? undefined : onPress}
+      >
         <Text>{title}</Text>
       </Pressable>
     ),
@@ -84,20 +88,23 @@ it('changes the mode, adds to the list and starts it from the phone', async () =
   expect(onChanged).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'use_it_all' }));
 
   await act(async () => {
-    fireEvent.changeText(screen.getByLabelText('Add to the spare-capacity list'), '  Tidy the docs ');
+    fireEvent.changeText(
+      screen.getByLabelText('Add to your ideas for leftover usage'),
+      '  Tidy the docs '
+    );
   });
   await act(async () => {
     fireEvent.press(screen.getByText('Add'));
   });
   expect(mockCall).toHaveBeenCalledWith('agents.spare.add', { text: 'Tidy the docs' });
-  expect(screen.getByText('Added to the spare-capacity list.')).toBeTruthy();
+  expect(screen.getByText('Added to your ideas for leftover usage.')).toBeTruthy();
 
   await act(async () => {
     fireEvent.press(screen.getByText('Give agents something to do'));
   });
   expect(mockCall).toHaveBeenCalledWith('agents.spare.spendNow', {});
   expect(
-    screen.getByText('Chief of Staff is starting your spare-capacity list (2 waiting).')
+    screen.getByText('Chief of Staff is starting your ideas for leftover usage (2 waiting).')
   ).toBeTruthy();
 });
 

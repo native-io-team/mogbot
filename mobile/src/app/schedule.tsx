@@ -15,6 +15,11 @@
  * On a Mac that runs routines in steps (`MAC_FEATURES.steps`), "Then…" under
  * What adds steps after it (`StepsEditor`), each optionally waiting for your
  * OK on a card first; the echo says how many steps and where it asks.
+ *
+ * On a Mac that sets up "When…" routines from the phone (it lists
+ * `agents.watch.create`), "At a time / When…" switches a new routine to the
+ * desk's "When…" composer (`components/whenComposer.tsx`), and a "When…"
+ * routine opens in it to edit.
  */
 
 import DateTimePicker, {
@@ -28,12 +33,15 @@ import {
   MAC_FEATURES,
   stepsLine,
   type RoutineStep,
-  formatWhenIn,
+  formatWhenInlineIn,
   routineEcho,
   routineInPast,
   routineWhenOf,
   routineWhenPhrase,
+  ROUTINE_MODES,
+  ROUTINES_NEED_THE_MAC,
   zoneDiffers,
+  type RoutineMode,
   type CheckInRun,
   type MonthDay,
   type SchedulePreview,
@@ -45,10 +53,11 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useNow } from '../components/ConnectionPill';
 import { Chip, ChipRow } from '../components/pickers';
 import { StepsEditor } from '../components/stepsEditor';
+import { WhenComposer } from '../components/whenComposer';
 import { choose } from '../components/menu';
-import { Button, T, SheetPage, groupSurface } from '../components/ui';
+import { Button, Segmented, T, SheetPage, groupSurface } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
-import { describeError, schedule } from '../lib/session';
+import { canCall, describeError, schedule } from '../lib/session';
 import { useApp } from '../lib/store';
 import { WireFailure } from '../lib/transport';
 import { useAccent } from '../lib/accent';
@@ -81,11 +90,9 @@ type Reading =
   | { kind: 'ok'; preview: SchedulePreview }
   | { kind: 'bad'; reason: string };
 
-/** The Mac's reading: "First run tomorrow 9:00 AM", on the clock the echo uses. */
+/** The Mac's reading: "First run tomorrow at 9:00 AM" (the desk's words), on the clock the echo uses. */
 function firstRun(p: SchedulePreview, now = Date.now(), timeZone?: string): string {
-  const when = formatWhenIn(p.nextAt, now, timeZone).replace(/^(Today|Tomorrow)/, (w) =>
-    w.toLowerCase()
-  );
+  const when = formatWhenInlineIn(p.nextAt, now, timeZone);
   const zone = zoneDiffers(timeZone, now) ? ' Mac time' : '';
   return p.repeat ? `First run ${when}${zone}` : `Runs ${when}${zone}`;
 }
@@ -99,9 +106,15 @@ function Schedule() {
   const accent = useAccent();
   const router = useRouter();
   const now = useNow(30_000);
-  const { agentId, id } = useLocalSearchParams<{ agentId: string; id?: string }>();
+  const params = useLocalSearchParams<{ agentId: string; id?: string; mode?: string }>();
+  const { agentId, id } = params;
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === agentId));
   const editing = agent?.checkIns?.find((c) => c.id === id);
+  // A "When…" routine to edit, and whether this Mac sets them up from here.
+  const editingWatch = agent?.watches?.find((c) => c.id === id);
+  const whenOn = useApp((s) => canCall('agents.watch.create', s.welcome ?? undefined));
+  const [newMode, setNewMode] = useState<RoutineMode>(params.mode === 'when' ? 'when' : 'time');
+  const mode: RoutineMode = editingWatch ? 'when' : editing ? 'time' : whenOn ? newMode : 'time';
   // The Mac's zone, and whether it keeps a schedule when an edit sends no `when`.
   const timeZone = useApp((s) => s.welcome?.timeZone);
   const [picker, setPicker] = useState<PickerState>(() =>
@@ -211,7 +224,19 @@ function Schedule() {
   const ready = reading.kind === 'ok' && note.trim().length > 0 && !saving;
   const timed = picker.cadence !== 'hours';
   // A routine, whether it runs once or repeats: one word for one thing.
-  const title = editing ? 'Edit routine' : agent ? `New routine for ${agent.name}` : 'New routine';
+  const title =
+    editing || editingWatch
+      ? 'Edit routine'
+      : agent
+        ? `New routine for ${agent.name}`
+        : 'New routine';
+
+  // Both kinds of routine run only while the app is open on an awake Mac.
+  const needsTheMac = (
+    <T variant="caption" color={colors.textMuted}>
+      {ROUTINES_NEED_THE_MAC}
+    </T>
+  );
 
   return (
     <SheetPage>
@@ -222,163 +247,183 @@ function Schedule() {
       >
         <SheetTitle>{title}</SheetTitle>
 
-        <View style={styles.group}>
-          <T variant="caption" color={colors.textMuted} style={styles.label}>
-            WHEN
-          </T>
-          <ChipRow label="How often">
-            {CADENCES.map((c) => (
-              <Chip
-                key={c.value}
-                label={c.label}
-                selected={picker.cadence === c.value}
-                onPress={() => change({ cadence: c.value })}
-              />
-            ))}
-          </ChipRow>
-          {picker.cadence === 'weekly' && (
-            <Animated.View entering={FadeIn.duration(150)}>
-              <ChipRow label="On these days" multiple>
-                {WEEK.map((d) => (
-                  <Chip
-                    key={d.day}
-                    role="checkbox"
-                    label={d.short}
-                    accessibilityLabel={d.name}
-                    selected={picker.days.includes(d.day)}
-                    onPress={() => change({ days: toggleDay(picker.days, d.day) })}
-                  />
-                ))}
-              </ChipRow>
-            </Animated.View>
-          )}
-          {picker.cadence === 'monthly' && (
-            <Animated.View entering={FadeIn.duration(150)} style={styles.group}>
-              <ChipRow label="How many months">
-                {monthIntervals.map((m) => (
-                  <Chip
-                    key={m}
-                    label={monthsLabel(m)}
-                    selected={picker.months === m}
-                    onPress={() => change({ months: m })}
-                  />
-                ))}
-              </ChipRow>
-              <MonthDayRow on={picker.monthDay} onChange={(monthDay) => change({ monthDay })} />
-            </Animated.View>
-          )}
-          {picker.cadence === 'hours' && (
-            <Animated.View entering={FadeIn.duration(150)}>
-              <ChipRow label="Every">
-                {intervals.map((m) => (
-                  <Chip
-                    key={m}
-                    label={intervalLabel(m)}
-                    selected={picker.minutes === m}
-                    onPress={() => change({ minutes: m })}
-                  />
-                ))}
-              </ChipRow>
-            </Animated.View>
-          )}
-          {picker.cadence === 'once' && (
-            <Animated.View entering={FadeIn.duration(150)}>
-              <ChipRow label="On">
-                {days.map((d) => (
-                  <Chip
-                    key={d.date}
-                    label={d.label}
-                    selected={picker.date === d.date}
-                    onPress={() => change({ date: d.date })}
-                  />
-                ))}
-              </ChipRow>
-            </Animated.View>
-          )}
-          {timed && (
-            <TimeRow
-              hour={picker.hour}
-              minute={picker.minute}
-              onChange={(hour, minute) => change({ hour, minute })}
-              macClock={macClock}
-              themeVariant={appearance}
-              tint={accent.accent}
-            />
-          )}
-        </View>
-
-        <View style={styles.group}>
-          <T variant="caption" color={colors.textMuted} style={styles.label} nativeID="what-label">
-            WHAT
-          </T>
-          <TextInput
-            value={note}
-            onChangeText={(t) => setNote(t.replace(/\n/g, ' '))}
-            placeholder="Draft my day"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-            selectionColor={accent.accent}
-            keyboardAppearance={appearance}
-            returnKeyType="done"
-            multiline
-            submitBehavior="blurAndSubmit"
-            onSubmitEditing={() => ready && void save()}
-            accessibilityLabel={`What ${agent?.name ?? 'the agent'} should do`}
-            accessibilityLabelledBy="what-label"
-          />
-          {servesSteps && <StepsEditor steps={then} onChange={setThen} />}
-        </View>
-
-        <View style={styles.echo} accessibilityLiveRegion="polite">
-          {when && (
-            <T variant="subhead" color={colors.textStrong} maxFontSizeMultiplier={2}>
-              {routineEcho(when, note, now, timeZone)}
-            </T>
-          )}
-          {steps.length > 0 && (
-            <T variant="caption" color={colors.textSecondary}>
-              {stepsLine({ note, then: steps })}
-            </T>
-          )}
-          {reading.kind === 'ok' ? (
-            <Animated.View entering={FadeIn.duration(150)}>
-              <T variant="caption" color={colors.textSecondary}>
-                {firstRun(reading.preview, now, timeZone)}
-                {!note.trim() && ` · now say what ${agent?.name ?? 'it'} should do`}
-              </T>
-            </Animated.View>
-          ) : reading.kind === 'bad' ? (
-            <T variant="small" color={colors.accentErrorLight}>
-              {reading.reason}
-            </T>
-          ) : (
-            <T variant="caption" color={colors.textMuted}>
-              Checking with the Mac…
-            </T>
-          )}
-        </View>
-        {error && (
-          <T variant="small" color={colors.accentErrorLight}>
-            {error}
-          </T>
+        {whenOn && !editing && !editingWatch && (
+          <Segmented value={newMode} options={ROUTINE_MODES} onChange={setNewMode} />
         )}
-        <View style={styles.actions}>
-          <Button
-            title="Cancel"
-            variant="ghost"
-            onPress={() => router.back()}
-            style={{ flex: 1 }}
-          />
-          <Button
-            title={editing ? 'Save' : 'Schedule'}
-            variant="primary"
-            disabled={!ready}
-            busy={saving}
-            onPress={() => void save()}
-            style={{ flex: 1 }}
-          />
-        </View>
-        {!!editing?.runs?.length && <RunHistory runs={editing.runs} />}
+
+        {mode === 'when' && agent ? (
+          <>
+            <WhenComposer
+              agent={agent}
+              editing={editingWatch ?? null}
+              onDone={() => router.back()}
+              onCancel={() => router.back()}
+            />
+            {needsTheMac}
+          </>
+        ) : (
+          <>
+            <View style={styles.group}>
+              <T variant="caption" color={colors.textMuted}>
+                How often
+              </T>
+              <ChipRow label="How often">
+                {CADENCES.map((c) => (
+                  <Chip
+                    key={c.value}
+                    label={c.label}
+                    selected={picker.cadence === c.value}
+                    onPress={() => change({ cadence: c.value })}
+                  />
+                ))}
+              </ChipRow>
+              {picker.cadence === 'weekly' && (
+                <Animated.View entering={FadeIn.duration(150)}>
+                  <ChipRow label="On these days" multiple>
+                    {WEEK.map((d) => (
+                      <Chip
+                        key={d.day}
+                        role="checkbox"
+                        label={d.short}
+                        accessibilityLabel={d.name}
+                        selected={picker.days.includes(d.day)}
+                        onPress={() => change({ days: toggleDay(picker.days, d.day) })}
+                      />
+                    ))}
+                  </ChipRow>
+                </Animated.View>
+              )}
+              {picker.cadence === 'monthly' && (
+                <Animated.View entering={FadeIn.duration(150)} style={styles.group}>
+                  <ChipRow label="How many months">
+                    {monthIntervals.map((m) => (
+                      <Chip
+                        key={m}
+                        label={monthsLabel(m)}
+                        selected={picker.months === m}
+                        onPress={() => change({ months: m })}
+                      />
+                    ))}
+                  </ChipRow>
+                  <MonthDayRow on={picker.monthDay} onChange={(monthDay) => change({ monthDay })} />
+                </Animated.View>
+              )}
+              {picker.cadence === 'hours' && (
+                <Animated.View entering={FadeIn.duration(150)}>
+                  <ChipRow label="Every">
+                    {intervals.map((m) => (
+                      <Chip
+                        key={m}
+                        label={intervalLabel(m)}
+                        selected={picker.minutes === m}
+                        onPress={() => change({ minutes: m })}
+                      />
+                    ))}
+                  </ChipRow>
+                </Animated.View>
+              )}
+              {picker.cadence === 'once' && (
+                <Animated.View entering={FadeIn.duration(150)}>
+                  <ChipRow label="On">
+                    {days.map((d) => (
+                      <Chip
+                        key={d.date}
+                        label={d.label}
+                        selected={picker.date === d.date}
+                        onPress={() => change({ date: d.date })}
+                      />
+                    ))}
+                  </ChipRow>
+                </Animated.View>
+              )}
+              {timed && (
+                <TimeRow
+                  hour={picker.hour}
+                  minute={picker.minute}
+                  onChange={(hour, minute) => change({ hour, minute })}
+                  macClock={macClock}
+                  themeVariant={appearance}
+                  tint={accent.accent}
+                />
+              )}
+            </View>
+
+            <View style={styles.group}>
+              <T variant="caption" color={colors.textMuted} nativeID="what-label">
+                What
+              </T>
+              <TextInput
+                value={note}
+                onChangeText={(t) => setNote(t.replace(/\n/g, ' '))}
+                placeholder="Draft my day"
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+                selectionColor={accent.accent}
+                keyboardAppearance={appearance}
+                returnKeyType="done"
+                multiline
+                submitBehavior="blurAndSubmit"
+                onSubmitEditing={() => ready && void save()}
+                accessibilityLabel={`What ${agent?.name ?? 'the agent'} should do`}
+                accessibilityLabelledBy="what-label"
+              />
+              {servesSteps && <StepsEditor steps={then} onChange={setThen} />}
+            </View>
+
+            <View style={styles.echo} accessibilityLiveRegion="polite">
+              {when && (
+                <T variant="subhead" color={colors.textStrong} maxFontSizeMultiplier={2}>
+                  {routineEcho(when, note, now, timeZone)}
+                </T>
+              )}
+              {steps.length > 0 && (
+                <T variant="caption" color={colors.textSecondary}>
+                  {stepsLine({ note, then: steps })}
+                </T>
+              )}
+              {reading.kind === 'ok' ? (
+                <Animated.View entering={FadeIn.duration(150)}>
+                  <T variant="caption" color={colors.textSecondary}>
+                    {firstRun(reading.preview, now, timeZone)}
+                    {!note.trim() && ` · now say what ${agent?.name ?? 'it'} should do`}
+                  </T>
+                </Animated.View>
+              ) : reading.kind === 'bad' ? (
+                <T variant="small" color={colors.accentErrorLight}>
+                  {reading.reason}
+                </T>
+              ) : (
+                <T variant="caption" color={colors.textMuted}>
+                  Checking with the Mac…
+                </T>
+              )}
+            </View>
+            {error && (
+              <T variant="small" color={colors.accentErrorLight}>
+                {error}
+              </T>
+            )}
+            <View style={styles.actions}>
+              <Button
+                title="Cancel"
+                variant="ghost"
+                onPress={() => router.back()}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={editing ? 'Save' : 'Schedule'}
+                variant="primary"
+                disabled={!ready}
+                busy={saving}
+                onPress={() => void save()}
+                style={{ flex: 1 }}
+              />
+            </View>
+            {needsTheMac}
+            {!!editing?.runs?.length && <RunHistory runs={editing.runs} />}
+          </>
+        )}
+        {!!editingWatch?.runs?.length && <RunHistory runs={editingWatch.runs} />}
       </ScrollView>
     </SheetPage>
   );
@@ -499,7 +544,7 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
   return (
     <View style={{ gap: space.xs, marginTop: space.sm }}>
       <T variant="caption" color={colors.textMuted} style={styles.heading}>
-        PAST RUNS
+        Past runs
       </T>
       <View style={styles.list} accessibilityLabel="Past runs">
         {[...runs].reverse().map((run, i) => {
@@ -542,7 +587,7 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
 const useStyles = makeStyles((colors) => ({
   root: { padding: space.lg, paddingTop: space.xl, gap: space.lg, paddingBottom: space['2xl'] },
   group: { gap: space.sm },
-  label: { letterSpacing: 0.4 },
+
   input: {
     fontFamily: fonts.regular,
     fontSize: type.body,
@@ -576,7 +621,7 @@ const useStyles = makeStyles((colors) => ({
     overflow: 'hidden',
   },
   actions: { flexDirection: 'row', gap: space.sm },
-  heading: { marginLeft: space.lg, letterSpacing: 0.4 },
+  heading: { marginLeft: space.lg },
   list: groupSurface(colors),
   run: { paddingHorizontal: space.lg, paddingVertical: space.sm + 2, gap: space['2xs'] },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },

@@ -187,7 +187,7 @@ describe('contextual actions', () => {
     expect(toggleFor('markUnread')).toBeNull();
   });
 
-  it('offers Copy, Quote and Select Text on words, never on cards', () => {
+  it('offers Copy, Quote and Select text on words, never on cards', () => {
     expect(messageActions(msg('m', 1, { text: '**Done.** See `a.ts`' })).map((a) => a.id)).toEqual([
       'copy',
       'copyMarkdown',
@@ -203,7 +203,7 @@ describe('contextual actions', () => {
     expect(messageActions(msg('m', 1, { text: '  ' }))).toEqual([]);
   });
 
-  it('offers Remember This only where the Mac serves memory', () => {
+  it('offers Remember this only where the Mac serves memory', () => {
     const ids = (remember: boolean) =>
       messageActions(msg('m', 1, { kind: 'user', text: 'hi' }), remember).map((a) => a.id);
     expect(ids(true)).toContain('remember');
@@ -292,6 +292,24 @@ describe('timeline', () => {
     const days = items.filter((i) => i.kind === 'day');
     expect(days.map((d) => d.key)).toEqual(firsts.map((m) => `day:${m.id}`).reverse());
     expect(days[0].kind === 'day' && days[0].label).toMatch(/^Today /);
+  });
+
+  it('hands the list the same message rows while only the draft or the status changes', () => {
+    const list = [msg('a', now - 120_000, { kind: 'user' }), msg('b', now - 60_000)];
+    const first = chatItems(agent(), list, [], { id: 'd', text: 'Dep' }, now);
+    const working = agent({ status: { state: 'working', activity: 'Reading', since: now } });
+    const next = chatItems(working, list, [], { id: 'd', text: 'Deploying' }, now + 1_000);
+    // The draft row is new; every message row and time line is the very same object.
+    expect(next[0]).toMatchObject({ kind: 'draft', text: 'Deploying' });
+    expect(next.slice(1)).toHaveLength(first.length - 1);
+    next.slice(1).forEach((item, i) => expect(item).toBe(first[i + 1]));
+    // New messages, or another day: worked out again.
+    const more = [...list, msg('c', now)];
+    expect(chatItems(agent(), more, [], undefined, now)[0]).toMatchObject({ key: 'c' });
+    const tomorrow = chatItems(agent(), list, [], undefined, now + day);
+    expect(tomorrow.find((i) => i.key === 'day:a')).toMatchObject({
+      label: expect.stringMatching(/^Yesterday /),
+    });
   });
 
   it('keeps the draft’s key when it becomes its message, so the row never remounts', () => {

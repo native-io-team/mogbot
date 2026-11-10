@@ -4,6 +4,9 @@ import { AgentBlocks } from './AgentBlocks';
 import { BlockReplyContext, type BlockReply } from './blockReply';
 import type { Agent } from '../../../lib/agents';
 import type { Block, BlockSet } from '../../../../packages/companion-protocol/src/blocks';
+import { answerAfter, readBlocks } from '../../../../packages/companion-protocol/src/blocks';
+import type { AgentMessage } from '../../../../packages/companion-protocol/src/model';
+import turn from '../../../../packages/companion-protocol/src/blocks-turn.json';
 
 const agent = { id: 'finance', name: 'Finance' } as Agent;
 
@@ -34,6 +37,32 @@ const choices: Block = {
 };
 
 describe('AgentBlocks', () => {
+  it('draws records and notes in a row as one page, a section each', () => {
+    const { container } = draw([
+      {
+        kind: 'facts',
+        title: 'Needs you',
+        summary: '',
+        items: [{ label: 'Lead Gen', value: 'Send' }],
+      },
+      { kind: 'callout', tone: 'warning', title: 'Didn’t work', summary: '', text: 'Gmail.' },
+      {
+        kind: 'table',
+        title: 'Today',
+        summary: '',
+        columns: [{ label: 'Time' }, { label: 'Runs', numeric: true }],
+        rows: [['10:30 AM', 2]],
+      },
+    ]);
+    const pages = container.querySelectorAll('.agent-blocks__page');
+    expect(pages).toHaveLength(1);
+    expect(within(pages[0] as HTMLElement).getByRole('heading', { name: 'Today' })).toBeTruthy();
+    // No card of its own inside the page.
+    expect(pages[0].querySelectorAll('.agent-card')).toHaveLength(0);
+    // A time never breaks over two lines.
+    expect(screen.getByText('10:30 AM').closest('[data-short]')).toBeTruthy();
+  });
+
   it('draws the intro and a chart as an image with a name, its numbers a click away', () => {
     draw([
       {
@@ -47,7 +76,9 @@ describe('AgentBlocks', () => {
       },
     ]);
     expect(screen.getByText('Here it is.')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Revenue (line chart, Jan to Mar)' })).toBeTruthy();
+    const img = screen.getByRole('img', { name: /^Revenue \(line chart, Jan to Mar\)\. / });
+    // The numbers in words too, not only the title (the phone says the same).
+    expect(img.getAttribute('aria-label')).toContain('$1,000');
     // One series: no legend box.
     expect(screen.queryByLabelText('Legend')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show the numbers' }));
@@ -187,5 +218,57 @@ describe('AgentBlocks', () => {
   it('without a chat to answer in, interactive blocks are off', () => {
     render(<AgentBlocks messageId="m1" agent={agent} set={{ v: 1, items: [choices] }} />);
     expect(screen.getByRole('button', { name: 'Yes' })).toHaveProperty('disabled', true);
+  });
+});
+
+/*
+ * A real turn's blocks: `blocks-turn.json` is what the fake-engine suite's
+ * `blocks` scenario kept after an agent's `show` (metrics, a chart, a table
+ * and a choice) and the user's answer, as `agents_messages` returns them.
+ * That scenario fails if the Mac stops producing exactly this.
+ */
+describe('a turn’s blocks, as the Mac kept them', () => {
+  const messages = turn.messages as unknown as AgentMessage[];
+  const [shown, answer] = messages;
+
+  function drawKept(answerOf: (id: string) => string | null) {
+    const set = readBlocks(shown)!;
+    const reply: BlockReply = { send: vi.fn(), stage: vi.fn(), answerOf };
+    render(
+      <BlockReplyContext.Provider value={reply}>
+        <AgentBlocks messageId={shown.id} agent={agent} set={set} />
+      </BlockReplyContext.Provider>
+    );
+    return reply;
+  }
+
+  it('reads every block and draws it', () => {
+    expect(readBlocks(shown)!.items.map((b) => b.kind)).toEqual([
+      'metrics',
+      'chart',
+      'table',
+      'choices',
+    ]);
+    drawKept(() => null);
+    expect(screen.getByText("Here's the fruit stand this week.")).toBeTruthy();
+    expect(screen.getByText('412')).toBeTruthy();
+    expect(screen.getByRole('img', { name: /Sold per day/ })).toBeTruthy();
+    expect(screen.getByText('$2.75')).toBeTruthy();
+    expect(screen.getByText('Which one do you want?')).toBeTruthy();
+  });
+
+  it('a tap sends exactly the words the Mac then kept as the user’s answer', () => {
+    const reply = drawKept(() => null);
+    fireEvent.click(screen.getByRole('button', { name: 'Mango' }));
+    expect(reply.send).toHaveBeenCalledWith(answer.text);
+  });
+
+  it('once answered, shows the pick and offers nothing', () => {
+    const reply = drawKept((id) => answerAfter(messages, id));
+    expect(screen.queryByRole('button', { name: 'Apple' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mango' })).toBeNull();
+    const picked = document.querySelectorAll('.agent-block-choices__picked');
+    expect([...picked].map((p) => p.textContent)).toEqual(['Mango']);
+    expect(reply.send).not.toHaveBeenCalled();
   });
 });

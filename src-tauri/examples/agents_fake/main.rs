@@ -31,6 +31,9 @@ use app_lib::commands::agents as cmd;
 use store::{AgentMessage, MessageKind};
 use tauri::{AppHandle, Listener};
 
+mod page;
+mod real_chief;
+
 type Check = Result<(), String>;
 
 fn ensure(cond: bool, what: impl Into<String>) -> Check {
@@ -453,6 +456,109 @@ async fn plan(h: &H) -> Check {
     )
 }
 
+/// Saving how a hard task was done (`agents/skills_learn.rs`): a quick
+/// turn's `save_skill` is refused by what the app saw, a hard one's raises
+/// the card (Ask me, the default), Save writes `.claude/skills/<slug>/SKILL.md`
+/// with the email scrubbed; at Automatically it saves with no card; Off
+/// saves nothing.
+async fn skills(h: &H) -> Check {
+    let a = h.agent("Learner");
+    let skill = json!({"tool": "save_skill", "args": {
+        "name": "Tally the receipts",
+        "when": "When the user asks for this month's receipts total",
+        "steps": ["Read each receipt file", "Add the totals", "Email ops@acme.example the sum"]}});
+    let hard = |extra: Value| {
+        let mut steps: Vec<Value> = (0..8)
+            .map(|i| json!({"write": format!("r{i}.txt"), "text": format!("{i}")}))
+            .collect();
+        // Straight after the steps, no pause: the call can reach the app
+        // before its stream reader has recorded them, and must still see
+        // all eight (`work::caught_up`).
+        steps.push(extra);
+        steps.push(json!({"say": "done"}));
+        fake(Value::Array(steps))
+    };
+    // Quick: one step, then save_skill. Refused, no card.
+    h.send(
+        &a.id,
+        &fake(json!([{"write": "one.txt", "text": "1"}, skill, {"say": "ok"}])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    ensure(
+        approvals(&a.id).is_empty(),
+        "a quick turn raised a skill card",
+    )?;
+    let refused = h
+        .fake_log()
+        .into_iter()
+        .any(|e| e["tool"] == "save_skill" && e["reply"].to_string().contains("quick"));
+    ensure(
+        refused,
+        "the quick turn's save_skill wasn't refused as quick",
+    )?;
+
+    // Hard, Ask me: one card; Save writes the file, scrubbed.
+    h.send(&a.id, &hard(skill.clone())).await?;
+    let c = card(h, &a.id, 0).await?;
+    h.turn(&a.id).await?;
+    ensure(c.skill.is_some(), format!("not a skill card: {}", c.title))?;
+    answer(h, &a.id, &c, true).await?;
+    let home = store::agent_home(&a.id).unwrap();
+    let file = home.join(".claude/skills/tally-the-receipts/SKILL.md");
+    let text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    ensure(
+        text.contains("name: tally-the-receipts"),
+        format!("front matter: {text}"),
+    )?;
+    ensure(
+        !text.contains("ops@acme.example"),
+        "the email reached the skill",
+    )?;
+    ensure(
+        notes(&a.id)
+            .iter()
+            .any(|n| n.starts_with("Learned a skill: Tally the receipts")),
+        format!("no saved line: {:?}", notes(&a.id)),
+    )?;
+
+    // Automatically: saved with no card.
+    store::update(&a.id, |x| {
+        x.learn_skills = agents::skills_learn::Learning::Auto
+    })
+    .map_err(|e| e.to_string())?;
+    let auto = json!({"tool": "save_skill", "args": {
+        "name": "File the receipts", "when": "When receipts arrive",
+        "steps": "1. Move each receipt into receipts/<month>\n2. Note it in the log"}});
+    let cards = approvals(&a.id).len();
+    h.send(&a.id, &hard(auto)).await?;
+    h.turn(&a.id).await?;
+    ensure(
+        approvals(&a.id).len() == cards,
+        "Automatically still raised a card",
+    )?;
+    ensure(
+        home.join(".claude/skills/file-the-receipts/SKILL.md")
+            .is_file(),
+        "Automatically didn't save it",
+    )?;
+
+    // Off: nothing saved.
+    store::update(&a.id, |x| {
+        x.learn_skills = agents::skills_learn::Learning::Off
+    })
+    .map_err(|e| e.to_string())?;
+    let off = json!({"tool": "save_skill", "args": {
+        "name": "Never kept", "when": "Never", "steps": "1. This should not be saved at all"}});
+    h.send(&a.id, &hard(off)).await?;
+    h.turn(&a.id).await?;
+    ensure(
+        !home.join(".claude/skills/never-kept").exists(),
+        "Off saved a skill",
+    )?;
+    no_errors(&a.id)
+}
+
 /// A finished piece of work comes back as one result card.
 async fn result_card(h: &H) -> Check {
     let a = h.agent("Maker");
@@ -802,6 +908,151 @@ async fn conversations(h: &H) -> Check {
     )
 }
 
+/// Rewind to here and Fork from here (`agents/rewind.rs`): the engine picks
+/// up exactly where the conversation stood before the message, as a new
+/// session forked at that entry; the original transcript and the log keep
+/// everything.
+async fn rewind(h: &H) -> Check {
+    let first = agents::conversations::FIRST;
+    let a = h.agent("Rewinder");
+    h.send(&a.id, &fake(json!([{"say": "a {turn}"}]))).await?;
+    h.turn(&a.id).await?;
+    let m2 = h.send(&a.id, &fake(json!([{"say": "b {turn}"}]))).await?;
+    h.turn(&a.id).await?;
+    let s1 = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    ensure(
+        last_reply(&a.id) == "b 2",
+        format!("before: {:?}", last_reply(&a.id)),
+    )?;
+    let lines_before = log(&a.id).len();
+
+    let list =
+        cmd::agents_conversation_rewind(h.app.clone(), a.id.clone(), first.into(), m2.id.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+    ensure(
+        list.items
+            .iter()
+            .any(|c| c.rewinds.iter().any(|r| r.at == m2.id)),
+        "no rewind in the list",
+    )?;
+    let line = notes(&a.id).last().cloned().unwrap_or_default();
+    ensure(
+        line.starts_with("Went back to before") && !line.contains("recap"),
+        format!("the line: {line:?}"),
+    )?;
+    ensure(
+        log(&a.id).len() == lines_before + 1,
+        "the log lost or gained lines",
+    )?;
+
+    let m3 = h
+        .send(&a.id, &fake(json!([{"say": "c {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let s2 = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    ensure(s2 != s1, "the rewound conversation kept its old session")?;
+    // Turn 2 of the new session: "a" and this one, not "b".
+    ensure(
+        last_reply(&a.id) == format!("c {s2} 2"),
+        format!("after the rewind: {:?}", last_reply(&a.id)),
+    )?;
+    let forked = h
+        .turns_with("\"c {session}")
+        .last()
+        .map(|t| t["fork"] == json!(true));
+    ensure(
+        forked == Some(true),
+        format!("not a fork of the old session: {forked:?}"),
+    )?;
+
+    // A fork before "c": a new conversation, from "a" alone; the original stays.
+    let list =
+        cmd::agents_conversation_fork(h.app.clone(), a.id.clone(), first.into(), m3.id.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+    let fork_id = list.current.clone();
+    ensure(fork_id != first, "no fork")?;
+    h.send_in(
+        &a.id,
+        &fake(json!([{"say": "d {session} {turn}"}])),
+        Some(&fork_id),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let s3 = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    ensure(s3 != s2 && s3 != s1, "the fork reused a session")?;
+    ensure(
+        last_reply(&a.id) == format!("d {s3} 2"),
+        format!("in the fork: {:?}", last_reply(&a.id)),
+    )?;
+    // Back in the original: its own session, where it was.
+    h.send_in(
+        &a.id,
+        &fake(json!([{"say": "e {session} {turn}"}])),
+        Some(first),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == format!("e {s2} 3"),
+        format!("the original after the fork: {:?}", last_reply(&a.id)),
+    )
+}
+
+/// A Claude Code that refuses `--resume-session-at` (an update dropped the
+/// hidden flag): the turn runs again from a recap, says so in one quiet
+/// line, and nothing fails.
+async fn rewind_fallback(h: &H) -> Check {
+    let first = agents::conversations::FIRST;
+    let a = h.agent("Rewinder2");
+    h.send(&a.id, &fake(json!([{"say": "a {turn}"}]))).await?;
+    h.turn(&a.id).await?;
+    let m2 = h.send(&a.id, &fake(json!([{"say": "b {turn}"}]))).await?;
+    h.turn(&a.id).await?;
+    cmd::agents_conversation_rewind(h.app.clone(), a.id.clone(), first.into(), m2.id.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+    std::env::set_var("FAKE_CLAUDE_NO_RESUME_AT", "1");
+    let sent = h
+        .send(&a.id, &fake(json!([{"say": "c {session} {turn}"}])))
+        .await;
+    let ran = h.turn(&a.id).await;
+    std::env::remove_var("FAKE_CLAUDE_NO_RESUME_AT");
+    sent?;
+    ran?;
+    no_errors(&a.id)?;
+    let s = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    ensure(
+        last_reply(&a.id) == format!("c {s} 1"),
+        format!("after the fallback: {:?}", last_reply(&a.id)),
+    )?;
+    ensure(
+        notes(&a.id)
+            .iter()
+            .any(|n| n == agents::rewind::RECAP_CLAUSE),
+        format!("no line saying so: {:?}", notes(&a.id)),
+    )?;
+    let recapped = h.turns_with("\"c {session}").last().and_then(|t| {
+        t["prompt"]
+            .as_str()
+            .map(|p| p.contains("went back to an earlier point"))
+    });
+    ensure(recapped == Some(true), "the retry wasn't handed a recap")?;
+    // The next turn resumes the recap's session as any other.
+    h.send(&a.id, &fake(json!([{"say": "d {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == format!("d {s} 2"),
+        format!("next turn: {:?}", last_reply(&a.id)),
+    )
+}
+
 /// The engine's copy of the conversation goes missing: the app puts its own
 /// back and the turn resumes it.
 async fn lost_transcript(h: &H) -> Check {
@@ -1060,7 +1311,7 @@ async fn interrupt(h: &H) -> Check {
     )
 }
 
-/// The same on Codex (`exec`, the fake as `codex`): a reply, a command, a
+/// The same on Codex's `exec` fallback (the fake as `codex`): a reply, a command, a
 /// tool of the bridge, the thread resumed, a failure said.
 async fn codex(h: &H) -> Check {
     let a = h.agent("Codexer");
@@ -1106,6 +1357,401 @@ async fn codex(h: &H) -> Check {
         !errors(&a.id).is_empty(),
         "a failed Codex turn said nothing",
     )
+}
+
+/// Codex on its app-server, the driver the app prefers (the fake as `codex`,
+/// `SHIPSTUDIO_AGENTS_CODEX_EXEC` lifted for this scenario): the schema
+/// check passes, a command asks and runs on Allow, a tool of the bridge, the
+/// reply streamed, the thread resumed; a denied command never runs and the
+/// agent is told why with a steer; Stop interrupts a hung turn; a failed
+/// turn and a lost thread each end in a line; the bridge secret never on
+/// its command line.
+async fn codex_app(h: &H) -> Check {
+    std::env::remove_var("SHIPSTUDIO_AGENTS_CODEX_EXEC");
+    let result = codex_app_inner(h).await;
+    std::env::set_var("SHIPSTUDIO_AGENTS_CODEX_EXEC", "1");
+    result
+}
+
+async fn codex_app_inner(h: &H) -> Check {
+    let a = h.agent("Appy");
+    store::update(&a.id, |a| a.engine = Engine::Codex).unwrap();
+    let home = store::agent_home(&a.id).unwrap();
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "echo from-app > app.txt"},
+            {"tool": "list_agents"},
+            {"slow": "codex app {session} {turn}", "every": 0.05}
+        ])),
+    )
+    .await?;
+    let c = card(h, &a.id, 0).await?;
+    ensure(
+        c.tool.as_deref() == Some("Bash"),
+        format!("card for {:?}", c.tool),
+    )?;
+    answer(h, &a.id, &c, true).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let opened: Vec<Value> = h
+        .fake_log()
+        .into_iter()
+        .filter(|e| e["engine"] == "codex-app" && e.get("method").is_some())
+        .collect();
+    ensure(
+        !opened.is_empty(),
+        "the turn didn't run on the app-server (the schema check failed?)",
+    )?;
+    ensure(
+        std::fs::read_to_string(home.join("app.txt"))
+            .unwrap_or_default()
+            .trim()
+            == "from-app",
+        "the allowed command didn't run",
+    )?;
+    let thread = store::get(&a.id)
+        .unwrap()
+        .session_id
+        .ok_or("no thread kept")?;
+    ensure(
+        last_reply(&a.id) == format!("codex app {thread} 1"),
+        format!("{:?}", last_reply(&a.id)),
+    )?;
+    ensure(h.drafting(&a.id, 5), "the reply never streamed as a draft")?;
+    ensure(
+        timeline(&a.id).len() >= 2,
+        format!("timeline {:?}", timeline(&a.id)),
+    )?;
+    for e in &opened {
+        ensure(
+            !e["argv"].to_string().contains("Bearer"),
+            "the secret is on its command line",
+        )?;
+        ensure(
+            e["params"]["approvalPolicy"] == "on-request",
+            format!("approvals not asked: {}", e["params"]),
+        )?;
+    }
+
+    // Resumed: the same thread, the second turn in it.
+    h.send(&a.id, &fake(json!([{"say": "again {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == format!("again {thread} 2"),
+        format!("not resumed: {:?}", last_reply(&a.id)),
+    )?;
+
+    // Denied: nothing runs, and the agent is told why in a steer.
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "echo no > denied.txt"},
+            {"say": "carried on"}
+        ])),
+    )
+    .await?;
+    let c = card(h, &a.id, 1).await?;
+    answer(h, &a.id, &c, false).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(!home.join("denied.txt").exists(), "a denied command ran")?;
+    let steers: Vec<Value> = h
+        .fake_log()
+        .into_iter()
+        .filter(|e| e["engine"] == "codex-app" && e.get("steer").is_some())
+        .collect();
+    ensure(
+        steers.iter().any(|s| {
+            s["expected"] == true
+                && s["steer"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains("Note from the app")
+        }),
+        format!("the agent wasn't told: {steers:?}"),
+    )?;
+    ensure(
+        last_reply(&a.id) == "carried on",
+        format!("{:?}", last_reply(&a.id)),
+    )?;
+
+    // Stop: a hung turn is interrupted and ends.
+    h.send(
+        &a.id,
+        &fake(json!([{"say": "about to hang"}, {"hang": true}])),
+    )
+    .await?;
+    h.until("the hang", Duration::from_secs(20), || {
+        !h.turns_with("about to hang").is_empty()
+    })
+    .await?;
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    ensure(runner::in_turn(&a.id), "the hung turn ended on its own")?;
+    ensure(
+        cmd::agents_stop(h.app.clone(), a.id.clone())
+            .await
+            .unwrap_or(false),
+        "stop found nothing to stop",
+    )?;
+    h.turn(&a.id).await?;
+
+    // A failed turn and a crash each end in a line.
+    for (name, script) in [
+        ("error", json!([{"error": "stream error: something broke"}])),
+        ("crash", json!([{"crash": true}])),
+    ] {
+        let before = log(&a.id).len();
+        h.send(&a.id, &fake(script)).await?;
+        h.turn(&a.id).await.map_err(|e| format!("{name}: {e}"))?;
+        let new: Vec<AgentMessage> = log(&a.id).into_iter().skip(before).collect();
+        ensure(
+            new.iter().any(|m| {
+                matches!(m.kind, MessageKind::Error | MessageKind::Note)
+                    && !m.text.trim().is_empty()
+            }),
+            format!(
+                "{name}: the turn ended without a line: {:?}",
+                new.iter()
+                    .map(|m| (m.kind, m.text.clone()))
+                    .collect::<Vec<_>>()
+            ),
+        )?;
+    }
+
+    // A thread Codex can't resume is replaced.
+    store::update(&a.id, |a| {
+        a.session_id = Some("00000000-0000-0000-0000-000000000000".into())
+    })
+    .unwrap();
+    h.send(&a.id, &fake(json!([{"say": "fresh {session}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    let now = store::get(&a.id).unwrap().session_id.unwrap_or_default();
+    ensure(
+        now != "00000000-0000-0000-0000-000000000000"
+            && last_reply(&a.id) == format!("fresh {now}"),
+        format!(
+            "lost thread not replaced: {:?} / {:?} / errors {:?}",
+            now,
+            last_reply(&a.id),
+            errors(&a.id)
+        ),
+    )
+}
+
+/// The same on OpenCode (`opencode acp`, the fake as `opencode`): a command
+/// that asks and runs on Allow, a tool of the bridge, the reply streamed,
+/// the session resumed; a denied command never runs, its step is declined
+/// and the agent is told why in the round after; a crash and an error each
+/// end in a line; a lost session is replaced; the bridge secret never on its
+/// command line, in its config or its environment.
+async fn opencode(h: &H) -> Check {
+    let a = h.agent("Opener");
+    store::update(&a.id, |a| a.engine = Engine::OpenCode).unwrap();
+    let home = store::agent_home(&a.id).unwrap();
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "python3 -c 'print(6*7)' > oc.txt"},
+            {"tool": "list_agents"},
+            {"slow": "opencode {session} {turn}", "every": 0.05}
+        ])),
+    )
+    .await?;
+    let c = card(h, &a.id, 0).await?;
+    ensure(
+        c.tool.as_deref() == Some("Bash"),
+        format!("card for {:?}", c.tool),
+    )?;
+    answer(h, &a.id, &c, true).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        std::fs::read_to_string(home.join("oc.txt"))
+            .unwrap_or_default()
+            .trim()
+            == "42",
+        "the allowed command didn't run",
+    )?;
+    let session = store::get(&a.id)
+        .unwrap()
+        .session_id
+        .ok_or("no session kept")?;
+    ensure(
+        last_reply(&a.id) == format!("opencode {session} 1"),
+        format!("{:?}", last_reply(&a.id)),
+    )?;
+    ensure(h.drafting(&a.id, 5), "the reply never streamed as a draft")?;
+    ensure(
+        timeline(&a.id).len() >= 2,
+        format!("timeline {:?}", timeline(&a.id)),
+    )?;
+    // The secret went over stdin only.
+    let opened: Vec<Value> = h
+        .fake_log()
+        .into_iter()
+        .filter(|e| e["engine"] == "opencode" && e.get("method").is_some())
+        .collect();
+    ensure(!opened.is_empty(), "the fake never opened a session")?;
+    for e in &opened {
+        ensure(
+            e["header"] == true,
+            "no Authorization header in session/new",
+        )?;
+        ensure(
+            e["env_has_bearer"] == false,
+            "the secret is in its environment",
+        )?;
+        ensure(
+            !e["argv"].to_string().contains("Bearer")
+                && !e["config"].to_string().contains("Bearer"),
+            "the secret is on its command line or in its config",
+        )?;
+        ensure(
+            e["config"]["permission"]["bash"] == "ask",
+            format!("bash isn't asked: {}", e["config"]["permission"]),
+        )?;
+    }
+
+    // Resumed: the same session, the second turn in it.
+    h.send(&a.id, &fake(json!([{"say": "again {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == format!("again {session} 2"),
+        format!("not resumed: {:?}", last_reply(&a.id)),
+    )?;
+
+    // Denied: nothing runs, and the agent hears why in the next round.
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "python3 -c 'print(6*9)' > denied.txt"},
+            {"say": "never said"}
+        ])),
+    )
+    .await?;
+    let c = card(h, &a.id, 1).await?;
+    answer(h, &a.id, &c, false).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(!home.join("denied.txt").exists(), "a denied command ran")?;
+    ensure(
+        last_reply(&a.id).starts_with("Noted:") && last_reply(&a.id).contains("said no"),
+        format!("the agent wasn't told: {:?}", last_reply(&a.id)),
+    )?;
+    ensure(
+        !replies(&a.id).iter().any(|r| r == "never said"),
+        "the round carried on past a reject",
+    )?;
+
+    // A crash and an error each end in a line.
+    for (name, script) in [
+        ("crash", json!([{"crash": true}])),
+        ("error", json!([{"error": "Provider returned 500"}])),
+    ] {
+        let before = log(&a.id).len();
+        h.send(&a.id, &fake(script)).await?;
+        h.turn(&a.id).await.map_err(|e| format!("{name}: {e}"))?;
+        let new: Vec<AgentMessage> = log(&a.id).into_iter().skip(before).collect();
+        ensure(
+            new.iter().any(|m| {
+                matches!(m.kind, MessageKind::Error | MessageKind::Note)
+                    && !m.text.trim().is_empty()
+            }),
+            format!(
+                "{name}: the turn ended without a line: {:?}",
+                new.iter()
+                    .map(|m| (m.kind, m.text.clone()))
+                    .collect::<Vec<_>>()
+            ),
+        )?;
+    }
+
+    // A session OpenCode can't load is replaced, once, with the recap.
+    store::update(&a.id, |a| {
+        a.session_id = Some("ses_gone0000000000000000".into())
+    })
+    .unwrap();
+    h.send(&a.id, &fake(json!([{"say": "fresh {session}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    let now = store::get(&a.id).unwrap().session_id.unwrap_or_default();
+    ensure(
+        now != "ses_gone0000000000000000" && last_reply(&a.id) == format!("fresh {now}"),
+        format!(
+            "lost session not replaced: {:?} / {:?} / errors {:?}",
+            now,
+            last_reply(&a.id),
+            errors(&a.id)
+        ),
+    )
+}
+
+/// Not in the default run: the real `opencode` on PATH (with
+/// `AGENTS_FAKE_REAL_OPENCODE=1`, so the fake isn't installed as it), under
+/// this run's throwaway HOME, on OpenCode's free models: a real model asks to
+/// run a command, the card is allowed, and its reply comes back in a session
+/// the next turn resumes. Needs the network.
+async fn opencode_real(h: &H) -> Check {
+    let a = h.agent("RealOpen");
+    store::update(&a.id, |a| a.engine = Engine::OpenCode).unwrap();
+    h.send(
+        &a.id,
+        "Run the shell command `echo opencode-real > real.txt` with your bash tool, then reply with just the word done.",
+    )
+    .await?;
+    // A real model may or may not ask first; any card that comes is allowed.
+    let start = Instant::now();
+    let mut answered = 0;
+    while runner::in_turn(&a.id) || start.elapsed() < Duration::from_secs(2) {
+        if start.elapsed() > Duration::from_secs(240) {
+            return Err("the real turn took over 4 minutes".into());
+        }
+        let cards = approvals(&a.id);
+        if cards.len() > answered {
+            let c = cards[answered].clone();
+            answer(h, &a.id, &c, true).await?;
+            answered += 1;
+        }
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let home = store::agent_home(&a.id).unwrap();
+    ensure(
+        std::fs::read_to_string(home.join("real.txt"))
+            .unwrap_or_default()
+            .contains("opencode-real"),
+        format!(
+            "the command didn't run (cards answered: {answered}); replies {:?}",
+            replies(&a.id)
+        ),
+    )?;
+    println!("      cards answered: {answered}");
+    let session = store::get(&a.id)
+        .unwrap()
+        .session_id
+        .ok_or("no session kept")?;
+    ensure(!last_reply(&a.id).is_empty(), "no reply")?;
+    h.send(&a.id, "What word did you reply with last time? One word.")
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        store::get(&a.id).unwrap().session_id.as_deref() == Some(session.as_str()),
+        "the session wasn't resumed",
+    )?;
+    println!(
+        "      real replies: {:?}; timeline: {:?}",
+        replies(&a.id),
+        timeline(&a.id)
+    );
+    Ok(())
 }
 
 /// Claude Code's `result` is in but the process stays alive (a background
@@ -1642,7 +2288,7 @@ async fn routines(h: &H) -> Check {
         "the routine isn't scheduled again",
     )?;
     ensure(
-        of_kind(&a.id, MessageKind::CheckIn).len() >= 1,
+        !of_kind(&a.id, MessageKind::CheckIn).is_empty(),
         "no line saying the routine fired",
     )
 }
@@ -1855,17 +2501,268 @@ async fn untrusted_init(h: &H) -> Check {
     )
 }
 
+/// The fixture both clients draw: this scenario's two messages, as the desk
+/// (`agents_messages`) and the phone (the companion's `messages`) receive
+/// them, made stable. `AGENTS_FAKE_WRITE_FIXTURES=1` rewrites it from a run.
+fn blocks_fixture_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../packages/companion-protocol/src/blocks-turn.json")
+}
+
+/// What the fake's turn calls: a `show` with metrics, a chart, a table and
+/// a choice, then nothing more (the receipt says stop and wait).
+fn blocks_show() -> Value {
+    json!({
+        "text": "Here's the fruit stand this week.",
+        "blocks": [
+            {"kind": "metrics", "items": [
+                {"label": "Sold", "value": 412, "delta": 9, "vs": "vs last week", "good": "up"},
+                {"label": "Waste", "value": 3.5, "suffix": "%", "delta": "+0.5%", "good": "down"}
+            ]},
+            {"kind": "chart", "chart": "bar", "title": "Sold per day",
+             "labels": ["Mon", "Tue", "Wed"],
+             "series": [{"name": "Apples", "values": [40, 52, 61]},
+                        {"name": "Mangoes", "values": [22, 30, null]}]},
+            {"kind": "table", "title": "Prices",
+             "columns": ["Fruit", {"label": "Price", "prefix": "$"}],
+             "rows": [["Apple", 1.2], ["Banana", 0.5], ["Mango", 2.75]]},
+            {"kind": "choices", "question": "Which one do you want?",
+             "options": ["Apple", {"label": "Mango", "reply": "Mangoes, please."}]}
+        ]
+    })
+}
+
+/// Blocks end to end: the agent's `show` is checked and kept as one message
+/// (its blocks, and a text fallback of the intro plus a summary each), the
+/// agent is told to stop and wait, and answering the choice is the user's
+/// own words through the ordinary send, reaching the next turn. The kept
+/// messages must equal `blocks-turn.json`, which the desk's
+/// (`AgentBlocks.test.tsx`) and the phone's (`blocks.test.tsx`) tests draw
+/// and answer.
+async fn blocks(h: &H) -> Check {
+    let a = h.agent("Grocer");
+    // Then a line repeating the question, as the real model wrote (twice)
+    // even when told to stop: it goes in "What it did", not the chat.
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"tool": "show", "args": blocks_show()},
+            {"say": "I put up a table of prices. Which one do you want? Tap a fruit above."}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let said = replies(&a.id);
+    ensure(
+        !said.iter().any(|r| r.contains("Tap a fruit above")),
+        format!("the repeat reached the chat: {said:?}"),
+    )?;
+    let in_timeline = log(&a.id).iter().any(|m| {
+        let work = m.work.clone().or_else(|| agents::work::load(&a.id, &m.id));
+        format!("{work:?}").contains("Tap a fruit above")
+    });
+    ensure(in_timeline, "the repeat isn't in \"What it did\"")?;
+    let shown: Vec<AgentMessage> = log(&a.id)
+        .into_iter()
+        .filter(|m| m.blocks.is_some())
+        .collect();
+    ensure(
+        shown.len() == 1,
+        format!("{} messages with blocks", shown.len()),
+    )?;
+    let m = &shown[0];
+    let set = m.blocks.clone().unwrap();
+    ensure(set["v"] == 1, format!("version: {}", set["v"]))?;
+    let items = set["items"].as_array().cloned().unwrap_or_default();
+    let kinds: Vec<&str> = items.iter().filter_map(|b| b["kind"].as_str()).collect();
+    ensure(
+        kinds == ["metrics", "chart", "table", "choices"],
+        format!("kinds: {kinds:?}"),
+    )?;
+    ensure(
+        items
+            .iter()
+            .all(|b| !b["summary"].as_str().unwrap_or("").is_empty()),
+        format!("a block without a summary: {set}"),
+    )?;
+    ensure(
+        m.text.starts_with("Here's the fruit stand this week.") && m.text.contains("Mango"),
+        format!("text fallback: {:?}", m.text),
+    )?;
+    // The agent was told it's shown, and to wait for the answer.
+    let told = h
+        .fake_log()
+        .iter()
+        .any(|e| e.to_string().contains("stop here and wait for it"));
+    ensure(told, "the show receipt never reached the engine")?;
+
+    // Tapping "Mango" is the user's message, sent as anything typed is.
+    h.send(&a.id, "Mangoes, please.").await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    // (The first turn's prompt holds the words too, inside its script.)
+    let turns: Vec<Value> = h
+        .turns_with("Mangoes, please.")
+        .into_iter()
+        .filter(|t| !t["prompt"].as_str().unwrap_or("").contains("#fake"))
+        .collect();
+    ensure(
+        turns.len() == 1,
+        format!("{} turns got the answer", turns.len()),
+    )?;
+    let after: Vec<AgentMessage> = log(&a.id)
+        .into_iter()
+        .skip_while(|x| x.id != m.id)
+        .collect();
+    let user = after
+        .iter()
+        .find(|x| x.kind == MessageKind::User)
+        .ok_or("no user message after the blocks")?;
+    ensure(
+        user.text == "Mangoes, please.",
+        format!("answer: {:?}", user.text),
+    )?;
+
+    // What the clients receive, made stable, against the shared fixture.
+    let wire = |x: &AgentMessage, id: &str, ts: i64| -> Value {
+        let mut v = serde_json::to_value(x).unwrap();
+        let o = v.as_object_mut().unwrap();
+        o.retain(|k, _| ["kind", "text", "blocks"].contains(&k.as_str()));
+        o.insert("id".into(), json!(id));
+        o.insert("agentId".into(), json!("grocer"));
+        o.insert("ts".into(), json!(ts));
+        v
+    };
+    let got = json!({ "messages": [wire(m, "m-blocks", 1), wire(user, "m-answer", 2)] });
+    let path = blocks_fixture_path();
+    if std::env::var("AGENTS_FAKE_WRITE_FIXTURES").is_ok() {
+        std::fs::write(&path, serde_json::to_string_pretty(&got).unwrap() + "\n").unwrap();
+    }
+    let want: Value = serde_json::from_str(
+        &std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?,
+    )
+    .map_err(|e| e.to_string())?;
+    ensure(
+        got == want,
+        format!(
+            "the kept messages differ from blocks-turn.json (AGENTS_FAKE_WRITE_FIXTURES=1 rewrites it):\n{}",
+            serde_json::to_string_pretty(&got).unwrap()
+        ),
+    )
+}
+
+/// One real Claude Code turn (`AGENTS_REAL_CLAUDE`, never in `ALL`): asked
+/// for a table and a question, does the model call `show` with valid blocks
+/// first try? Prints every `show` call and what the app answered.
+async fn real_blocks(h: &H) -> Check {
+    ensure(
+        std::env::var("AGENTS_REAL_CLAUDE").is_ok(),
+        "set AGENTS_REAL_CLAUDE to the claude binary",
+    )?;
+    let a = h.agent("Grocer");
+    let ask = std::env::var("AGENTS_REAL_PROMPT").unwrap_or_else(|_| {
+        "show me a small table of 3 fruits and their prices and ask me which one I want".into()
+    });
+    h.send(&a.id, &ask).await?;
+    h.idle(
+        &[&a.id],
+        Duration::from_millis(800),
+        Duration::from_secs(240),
+    )
+    .await?;
+    for m in log(&a.id) {
+        println!(
+            "--- {:?}: {}\n{}",
+            m.kind,
+            m.text,
+            m.blocks
+                .as_ref()
+                .map(|b| serde_json::to_string_pretty(b).unwrap())
+                .unwrap_or_default()
+        );
+    }
+    // Every `show` call and its answer, from the engine's own transcript.
+    // Under the real HOME, in the folders named after this run's (temp) agent
+    // homes; removed once read, so nothing of the run stays behind.
+    let mut calls = 0;
+    let mut failed = 0;
+    let projects = PathBuf::from(std::env::var("AGENTS_FAKE_REAL_HOME").unwrap_or_default())
+        .join(".claude/projects");
+    let tag = format!("agents-fake-{}", std::process::id());
+    let ours: Vec<PathBuf> = std::fs::read_dir(&projects)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .is_some_and(|n| n.to_string_lossy().contains(&tag))
+        })
+        .collect();
+    let files: Vec<PathBuf> = ours.iter().flat_map(|d| walk(d)).collect();
+    for entry in files {
+        let text = std::fs::read_to_string(&entry).unwrap_or_default();
+        for line in text.lines() {
+            let Ok(v) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            for part in v["message"]["content"].as_array().into_iter().flatten() {
+                if part["type"] == "tool_use"
+                    && part["name"].as_str().unwrap_or("").ends_with("__show")
+                {
+                    calls += 1;
+                    println!("show call: {}", part["input"]);
+                }
+                if (part["type"] == "tool_result" && line.contains("Shown in the chat"))
+                    || part["is_error"] == true
+                {
+                    if part["is_error"] == true {
+                        failed += 1;
+                    }
+                    println!("tool result: {}", part["content"]);
+                }
+            }
+        }
+    }
+    for d in &ours {
+        let _ = std::fs::remove_dir_all(d);
+    }
+    ensure(calls > 0, "the model never called show")?;
+    ensure(failed == 0, format!("{failed} tool calls failed"))?;
+    ensure(
+        log(&a.id).iter().any(|m| m.blocks.is_some()),
+        "no message with blocks",
+    )
+}
+
+fn walk(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            out.extend(walk(&p));
+        } else if p.extension().is_some_and(|x| x == "jsonl") {
+            out.push(p);
+        }
+    }
+    out
+}
+
 const ALL: &[&str] = &[
     "normal",
     "approvals",
     "plan",
     "result",
+    "skills",
     "delegation",
     "failover",
     "crash",
     "stop",
     "queue",
     "conversations",
+    "rewind",
+    "rewind-fallback",
     "lost-transcript",
     "failover-acted",
     "crash-twice",
@@ -1873,6 +2770,8 @@ const ALL: &[&str] = &[
     "queue-card",
     "interrupt",
     "codex",
+    "codex-app",
+    "opencode",
     "lingering",
     "rounds",
     "garbage",
@@ -1891,11 +2790,88 @@ const ALL: &[&str] = &[
     "login",
     "untrusted-init",
     "brief",
+    "blocks",
+    "page",
 ];
 
 /* --------------------------------------------------------------------- main */
 
 /// The fake on PATH as `claude` (and a `gh` that only prints), first.
+/// Not in the default run: real engines and real usage (`real-*`), or the
+/// network (`opencode-real`).
+const OPT_IN: &[&str] = &["opencode-real", "real-blocks", "real-chief"];
+
+/// The engine a scenario runs its agents on.
+fn engine_of(scenario: &str) -> &'static str {
+    match scenario {
+        "codex" => "codex (exec)",
+        "codex-app" => "codex (app-server)",
+        "opencode" | "opencode-real" => "opencode",
+        _ => "claude",
+    }
+}
+
+/// What ran, by engine, for a CI log: a line per engine on stdout, and the
+/// same as a Markdown table appended to `$GITHUB_STEP_SUMMARY` (GitHub
+/// Actions) and/or `$AGENTS_FAKE_SUMMARY`.
+fn summarize(ran: &[(String, bool)]) {
+    let mut engines: Vec<&str> = Vec::new();
+    for (name, _) in ran {
+        if !engines.contains(&engine_of(name)) {
+            engines.push(engine_of(name));
+        }
+    }
+    let skipped: Vec<&str> = OPT_IN
+        .iter()
+        .copied()
+        .filter(|s| !ran.iter().any(|(n, _)| n == s))
+        .collect();
+    let passed = ran.iter().filter(|(_, ok)| *ok).count();
+    println!("Summary: {passed}/{} scenarios passed", ran.len());
+    let mut md = format!(
+        "### Agents fake-engine e2e\n\n{passed}/{} scenarios passed.\n\n| Engine | Passed | Failed |\n|---|---|---|\n",
+        ran.len()
+    );
+    let list = |names: &[&str]| {
+        if names.is_empty() {
+            "-".to_string()
+        } else {
+            names.join(", ")
+        }
+    };
+    for engine in &engines {
+        let of: Vec<_> = ran
+            .iter()
+            .filter(|(n, _)| engine_of(n) == *engine)
+            .collect();
+        let ok: Vec<&str> = of.iter().filter(|r| r.1).map(|r| r.0.as_str()).collect();
+        let bad: Vec<&str> = of.iter().filter(|r| !r.1).map(|r| r.0.as_str()).collect();
+        let failed = if bad.is_empty() {
+            String::new()
+        } else {
+            format!(", failed: {}", bad.join(", "))
+        };
+        println!("  {engine:<20} {}/{} passed{failed}", ok.len(), of.len());
+        md.push_str(&format!("| {engine} | {} | {} |\n", list(&ok), list(&bad)));
+    }
+    if !skipped.is_empty() {
+        println!("  skipped (opt-in): {}", skipped.join(", "));
+        md.push_str(&format!("\nSkipped (opt-in): {}\n", skipped.join(", ")));
+    }
+    for var in ["GITHUB_STEP_SUMMARY", "AGENTS_FAKE_SUMMARY"] {
+        if let Some(path) = std::env::var_os(var) {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+            {
+                let _ = f.write_all(md.as_bytes());
+            }
+        }
+    }
+}
+
 fn install_fake(home: &Path) {
     let bin = home.join("fakebin");
     std::fs::create_dir_all(&bin).unwrap();
@@ -1909,6 +2885,13 @@ fn install_fake(home: &Path) {
     let codex = bin.join("codex");
     let _ = std::fs::remove_file(&codex);
     std::os::unix::fs::symlink(&script, &codex).unwrap();
+    // OpenCode over `opencode acp`, the fake speaking ACP (unless the real
+    // one is wanted: `opencode-real`).
+    if std::env::var_os("AGENTS_FAKE_REAL_OPENCODE").is_none() {
+        let opencode = bin.join("opencode");
+        let _ = std::fs::remove_file(&opencode);
+        std::os::unix::fs::symlink(&script, &opencode).unwrap();
+    }
     // Codex on `exec`, the driver the fake speaks (debug builds read this).
     std::env::set_var("SHIPSTUDIO_AGENTS_CODEX_EXEC", "1");
     std::env::set_var("CODEX_HOME", home.join(".codex"));
@@ -1925,6 +2908,10 @@ fn main() {
     let home = std::env::temp_dir().join(format!("agents-fake-{}", std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
     let home = home.canonicalize().unwrap();
+    let real_home = std::env::var_os("HOME").map(PathBuf::from);
+    if let Some(r) = &real_home {
+        std::env::set_var("AGENTS_FAKE_REAL_HOME", r);
+    }
     std::env::set_var("HOME", &home);
     std::env::set_var("SHIPSTUDIO_AGENTS_SILENT", "1");
     for (key, _) in std::env::vars_os() {
@@ -1936,6 +2923,25 @@ fn main() {
     std::fs::create_dir_all(home.join("ShipStudio")).unwrap();
     app_lib::keychain::use_memory_for_e2e();
     install_fake(&home);
+    // `AGENTS_REAL_CLAUDE=<path to claude>`: the real engine instead of the
+    // fake, for the `real-*` scenarios only (a real model, real usage).
+    // It runs with the real HOME (Claude Code's sign-in is found from it);
+    // the app's own state, agents and Keychain stay in the throwaway one.
+    if let Ok(real) = std::env::var("AGENTS_REAL_CLAUDE") {
+        use std::os::unix::fs::PermissionsExt;
+        let claude = home.join("fakebin/claude");
+        let _ = std::fs::remove_file(&claude);
+        let real_home = real_home.clone().expect("HOME");
+        std::fs::write(
+            &claude,
+            format!(
+                "#!/bin/sh\nHOME='{}' exec '{real}' \"$@\"\n",
+                real_home.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
 
     #[allow(unused_mut)]
     let mut app = tauri::Builder::default()
@@ -1955,6 +2961,7 @@ fn main() {
     println!("HOME for this run: {}", home.display());
     let started = Instant::now();
     let mut failed = 0;
+    let mut ran: Vec<(String, bool)> = Vec::new();
     tauri::async_runtime::block_on(async {
         for name in wanted {
             let t = Instant::now();
@@ -1963,12 +2970,15 @@ fn main() {
                 "approvals" => approvals_scenario(&h).await,
                 "plan" => plan(&h).await,
                 "result" => result_card(&h).await,
+                "skills" => skills(&h).await,
                 "delegation" => delegation(&h).await,
                 "failover" => failover(&h).await,
                 "crash" => crash(&h).await,
                 "stop" => stop(&h).await,
                 "queue" => queueing(&h).await,
                 "conversations" => conversations(&h).await,
+                "rewind" => rewind(&h).await,
+                "rewind-fallback" => rewind_fallback(&h).await,
                 "lost-transcript" => lost_transcript(&h).await,
                 "brief" => brief(&h).await,
                 "failover-acted" => failover_after_acting(&h).await,
@@ -1977,6 +2987,9 @@ fn main() {
                 "queue-card" => queue_on_card(&h).await,
                 "interrupt" => interrupt(&h).await,
                 "codex" => codex(&h).await,
+                "codex-app" => codex_app(&h).await,
+                "opencode" => opencode(&h).await,
+                "opencode-real" => opencode_real(&h).await,
                 "lingering" => lingering(&h).await,
                 "rounds" => rounds(&h).await,
                 "garbage" => garbage(&h).await,
@@ -1994,9 +3007,14 @@ fn main() {
                 "two-cards" => two_cards(&h).await,
                 "login" => login(&h).await,
                 "untrusted-init" => untrusted_init(&h).await,
+                "blocks" => blocks(&h).await,
+                "page" => page::page_scenario(&h).await,
+                "real-blocks" => real_blocks(&h).await,
+                "real-chief" => real_chief::real_chief(&h).await,
                 other => Err(format!("unknown scenario {other}")),
             };
             let took = t.elapsed().as_secs_f32();
+            ran.push((name.to_string(), result.is_ok()));
             match result {
                 Ok(()) => println!("PASS  {name:<16} {took:>5.1}s"),
                 Err(e) => {
@@ -2007,6 +3025,7 @@ fn main() {
         }
     });
     println!("{failed} failed · {}s", started.elapsed().as_secs());
+    summarize(&ran);
     if std::env::var("AGENTS_FAKE_KEEP").is_err() {
         let _ = std::fs::remove_dir_all(&home);
     }

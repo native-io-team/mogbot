@@ -17,7 +17,8 @@
  * @module components/agents/AgentKey
  */
 
-import { useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { watchOffscreen } from '../../lib/offscreen';
 import {
   KEY_ICON_GRID,
   KEY_PIP_COUNT,
@@ -45,16 +46,27 @@ const BIG: ReadonlySet<AgentKeySize> = new Set(['xl']);
  */
 const teamKeys = () => {
   const s = getAgentsSnapshot();
-  return (
+  // Every key on screen asks on every store change (a streamed word is one):
+  // worked out again only when the agents or the team's level changed.
+  if (s.agents === teamCache.agents && s.independence === teamCache.independence) {
+    return teamCache.keys;
+  }
+  const keys =
     `${s.independence ?? ''}\n` +
     s.agents
       .map((a) => {
         const k = keyLookFor(a);
         return `${a.id}\t${k.colorway}\t${k.icon}\t${k.boundKey ?? ''}\t${a.independence ?? ''}`;
       })
-      .join('\n')
-  );
+      .join('\n');
+  teamCache = { agents: s.agents, independence: s.independence, keys };
+  return keys;
 };
+let teamCache: {
+  agents: unknown;
+  independence: unknown;
+  keys: string;
+} = { agents: null, independence: undefined, keys: '' };
 
 function keyFromTeam(
   team: string,
@@ -128,8 +140,22 @@ export function AgentKey({
   // then the face is blank, and the version bump re-draws it.
   useSyncExternalStore(subscribePackDrawings, packDrawingsVersion);
   const drawing = legendDrawing(look.icon);
+  // A key that breathes or pulses holds still while it is scrolled out of
+  // sight (a working agent far down the sidebar): its loops cost a frame each.
+  const ref = useRef<HTMLSpanElement>(null);
+  const loops = state === 'working' || state === 'needsOk';
+  useEffect(() => {
+    const el = ref.current;
+    if (!loops || !el) return;
+    const unwatch = watchOffscreen(el);
+    return () => {
+      unwatch();
+      el.removeAttribute('data-offscreen');
+    };
+  }, [loops]);
   return (
     <span
+      ref={ref}
       className={`agent-key agent-key--${size}${className ? ` ${className}` : ''}`}
       data-colorway={way.id}
       data-icon={look.icon}
@@ -146,21 +172,15 @@ export function AgentKey({
       ) : (
         <span className="agent-key__cap">
           <span className="agent-key__face">
-            <svg
-              data-dynamic-svg="agent-key"
-              className="agent-key__legend"
-              data-round={drawing?.round || undefined}
-              data-fill={drawing?.fill || undefined}
-              viewBox={`0 0 ${KEY_ICON_GRID} ${KEY_ICON_GRID}`}
-              focusable="false"
-            >
-              {drawing?.paths.map((d, i) => (
-                <path key={`${i}:${d}`} d={d} fillRule={drawing.fill ? 'evenodd' : undefined} />
-              ))}
-              {drawing?.circles?.map(([cx, cy, r], i) => (
-                <circle key={`${i}:${cx},${cy}`} cx={cx} cy={cy} r={r} />
-              ))}
-            </svg>
+            {/* Working: the glow breathes as two lit copies of the legend
+                under it, fading into each other (agent-key.css, "Working"). */}
+            {state === 'working' && (
+              <>
+                {legend(drawing, 'low')}
+                {legend(drawing, 'high')}
+              </>
+            )}
+            {legend(drawing)}
             {big && look.boundKey && <span className="agent-key__sub">{look.boundKey}</span>}
           </span>
           {big && pips > 0 && (
@@ -173,5 +193,27 @@ export function AgentKey({
         </span>
       )}
     </span>
+  );
+}
+
+/** The icon on the face; with `glow`, one of a working key's lit copies under it. */
+function legend(drawing: ReturnType<typeof legendDrawing>, glow?: 'low' | 'high') {
+  return (
+    <svg
+      data-dynamic-svg="agent-key"
+      className={glow ? 'agent-key__legend agent-key__glow' : 'agent-key__legend'}
+      data-glow={glow}
+      data-round={drawing?.round || undefined}
+      data-fill={drawing?.fill || undefined}
+      viewBox={`0 0 ${KEY_ICON_GRID} ${KEY_ICON_GRID}`}
+      focusable="false"
+    >
+      {drawing?.paths.map((d, i) => (
+        <path key={`${i}:${d}`} d={d} fillRule={drawing.fill ? 'evenodd' : undefined} />
+      ))}
+      {drawing?.circles?.map(([cx, cy, r], i) => (
+        <circle key={`${i}:${cx},${cy}`} cx={cx} cy={cy} r={r} />
+      ))}
+    </svg>
   );
 }

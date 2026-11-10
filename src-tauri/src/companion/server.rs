@@ -524,6 +524,238 @@ pub(crate) async fn dispatch_caught(
     caught(method, router::dispatch(c, caller, method, params)).await
 }
 
+/// The longest a phone request is worked on before it is answered as busy.
+/// Under the phone's own 30 s (`transport.ts`), so it hears why rather than
+/// timing out on a silent socket.
+pub(crate) const REQUEST_DEADLINE: Duration = Duration::from_secs(20);
+
+/// What the phone shows when its Mac couldn't answer in time.
+pub(crate) const BUSY: &str =
+    "Your Mac is busy and couldn't answer that in time. Try again in a moment.";
+
+/// A request's answer within [`REQUEST_DEADLINE`], or an error saying the
+/// Mac is busy. Handlers call the agents store and the disk synchronously,
+/// so the work runs on the blocking pool: one stuck on a lock or a slow
+/// disk holds a thread of its own, never one of the few async workers every
+/// socket (and every other request) needs to be answered at all.
+pub(crate) async fn dispatch_bounded(
+    c: Arc<Companion>,
+    caller: Caller,
+    method: String,
+    params: Value,
+) -> Result<Value, WireError> {
+    let name = method.clone();
+    bounded(&name, REQUEST_DEADLINE, async move {
+        dispatch_caught(&c, &caller, &method, params).await
+    })
+    .await
+}
+
+/// Run `answer` off the async workers and give up waiting on it after
+/// `deadline`. Past the deadline it carries on (a send the phone retries by
+/// clientId is better done once than cut in half) and its answer is
+/// dropped; if the caller itself is dropped (a revoke aborts the socket's
+/// requests) it stops at its next await, as it did on the async workers.
+pub(crate) async fn bounded<T>(
+    method: &str,
+    deadline: Duration,
+    answer: impl std::future::Future<Output = Result<T, WireError>> + Send + 'static,
+) -> Result<T, WireError>
+where
+    T: Send + 'static,
+{
+    bounded_in(&IN_FLIGHT, method, deadline, answer).await
+}
+
+/// How many phone requests may hold a blocking thread at once, across
+/// every socket, counting ones past their deadline that are still running.
+/// Past it a request is answered as busy at once: a paired device sending
+/// request after request that sticks (on a lock, a slow disk) would
+/// otherwise take every thread of the blocking pool the whole app shares,
+/// one per request, and keep them past its deadline.
+pub(crate) const MAX_IN_FLIGHT: usize = 48;
+
+static IN_FLIGHT: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| Arc::new(tokio::sync::Semaphore::new(MAX_IN_FLIGHT)));
+
+/// [`bounded`], against `slots`: a slot is held until the work itself ends.
+pub(crate) async fn bounded_in<T>(
+    slots: &Arc<tokio::sync::Semaphore>,
+    method: &str,
+    deadline: Duration,
+    answer: impl std::future::Future<Output = Result<T, WireError>> + Send + 'static,
+) -> Result<T, WireError>
+where
+    T: Send + 'static,
+{
+    let Ok(slot) = slots.clone().try_acquire_owned() else {
+        tracing::warn!("[Companion] {method} refused: {MAX_IN_FLIGHT} requests already running");
+        return Err(WireError::Command(crate::errors::CommandError::expected(
+            BUSY,
+        )));
+    };
+    /// Sends "stop" when dropped while armed.
+    struct Abort(Option<oneshot::Sender<()>>);
+    impl Drop for Abort {
+        fn drop(&mut self) {
+            if let Some(stop) = self.0.take() {
+                let _ = stop.send(());
+            }
+        }
+    }
+    let (stop_tx, stop_rx) = oneshot::channel::<()>();
+    let mut abort = Abort(Some(stop_tx));
+    let handle = tokio::runtime::Handle::current();
+    let work = tokio::task::spawn_blocking(move || {
+        // Given back when this thread is done, deadline or not.
+        let _slot = slot;
+        handle.block_on(async move {
+            tokio::pin!(answer);
+            tokio::select! {
+                done = &mut answer => Some(done),
+                stop = stop_rx => match stop {
+                    Ok(()) => None,
+                    // No one is waiting any more: finish anyway.
+                    Err(_) => Some(answer.await),
+                },
+            }
+        })
+    });
+    let waited = tokio::time::timeout(deadline, work).await;
+    // Answered or timed out: never "stop" it from here.
+    drop(abort.0.take());
+    match waited {
+        Ok(Ok(Some(answer))) => answer,
+        // Stopped only when this was dropped, so never seen here.
+        Ok(Ok(None)) => Err(WireError::Command(crate::errors::CommandError::expected(
+            "This Mac stopped answering that.",
+        ))),
+        Ok(Err(e)) => {
+            tracing::error!("[Companion] {method} didn't finish: {e}");
+            Err(WireError::Command(crate::errors::CommandError::expected(
+                "This Mac hit a fault answering that. Try again.",
+            )))
+        }
+        Err(_) => {
+            tracing::error!(
+                "[Companion] {method} took longer than {:?}; answered as busy",
+                deadline
+            );
+            Err(WireError::Command(crate::errors::CommandError::expected(
+                BUSY,
+            )))
+        }
+    }
+}
+
+/// The longest each part of a connect-time snapshot (overview, Mac status,
+/// projects) is waited on. The parts run side by side, so the snapshot is
+/// sent within this; the phone answers no ping meanwhile, and a socket that
+/// says nothing past its probe is taken as gone.
+pub(crate) const SNAPSHOT_DEADLINE: Duration = Duration::from_secs(6);
+
+/// The state a phone that can't replay starts from, each part within
+/// `deadline`. A part that's slow (the agents list busy, a probe that hangs)
+/// degrades the snapshot rather than silencing the socket: the overview and
+/// projects go as `null`, which the phone reads as "keep what you have", and
+/// the status as the last one this Mac sent, else one that says only what
+/// is known without asking. A status worked out late is still published as
+/// `system.status`, so the phone is told when it's ready.
+pub(crate) async fn snapshot(
+    c: &Arc<Companion>,
+    cursor: wire::Cursor,
+    deadline: Duration,
+) -> Event {
+    let overview = {
+        let c = c.clone();
+        bounded("sync.snapshot overview", deadline, async move {
+            c.backend.overview().await.map_err(WireError::Command)
+        })
+    };
+    let projects = {
+        let c = c.clone();
+        bounded("sync.snapshot projects", deadline, async move {
+            c.backend.projects().await.map_err(WireError::Command)
+        })
+    };
+    let status = snapshot_status(c, deadline);
+    let (overview, status, projects) = tokio::join!(overview, status, projects);
+    let overview = overview.unwrap_or_else(|e| {
+        tracing::warn!(
+            "[Companion] snapshot sent without the overview: {}",
+            e.summary()
+        );
+        Value::Null
+    });
+    let projects = match projects {
+        Ok(list @ Value::Array(_)) => list,
+        Ok(_) => Value::Null,
+        Err(e) => {
+            tracing::warn!(
+                "[Companion] snapshot sent without projects: {}",
+                e.summary()
+            );
+            Value::Null
+        }
+    };
+    Event::Snapshot {
+        cursor,
+        overview,
+        status,
+        projects,
+    }
+}
+
+/// The Mac status for a snapshot within `deadline`. Past it the work goes
+/// on, and when it ends it is remembered and published like any change.
+async fn snapshot_status(c: &Arc<Companion>, deadline: Duration) -> wire::MacStatus {
+    let (tx, rx) = oneshot::channel::<wire::MacStatus>();
+    let worker = c.clone();
+    let handle = tokio::runtime::Handle::current();
+    // On the blocking pool, as requests are: a probe that blocks its thread
+    // holds one of its own, never an async worker.
+    tokio::task::spawn_blocking(move || {
+        handle.block_on(async move {
+            let status = worker.backend.mac_status().await;
+            if let Err(status) = tx.send(status) {
+                // The snapshot went without it: tell the phones now.
+                tracing::info!("[Companion] the late Mac status arrived; publishing it");
+                if worker.remember_status(&status) {
+                    worker.hub.publish(Event::System { status });
+                }
+            }
+        })
+    });
+    match tokio::time::timeout(deadline, rx).await {
+        Ok(Ok(status)) => {
+            c.remember_status(&status);
+            status
+        }
+        _ => {
+            tracing::warn!(
+                "[Companion] the Mac status took longer than {:?}; the snapshot carries the last one known",
+                deadline
+            );
+            c.last_status().unwrap_or_else(|| wire::MacStatus {
+                name: c.backend.server_name(),
+                app_version: c.backend.app_version(),
+                power: wire::PowerInfo {
+                    keep_awake: false,
+                    lid_closed_mode: wire::Known::Unknown,
+                    on_battery: wire::Known::Unknown,
+                    battery_percent: None,
+                },
+                claude: wire::ClaudeInfo {
+                    installed: false,
+                    signed_in: wire::Known::Unknown,
+                    version: None,
+                },
+                routes: Vec::new(),
+            })
+        }
+    }
+}
+
 /// A request's answer, or an error answer if working it out panicked.
 pub(crate) async fn caught(
     method: &str,
@@ -854,19 +1086,7 @@ where
             cursor
         }
         Resume::Snapshot { cursor } => {
-            let overview = c.backend.overview().await.unwrap_or(Value::Null);
-            let status = c.backend.mac_status().await;
-            c.remember_status(&status);
-            let projects = match c.backend.projects().await {
-                Ok(Value::Array(list)) => list,
-                _ => Vec::new(),
-            };
-            let snapshot = Event::Snapshot {
-                cursor: cursor.clone(),
-                overview,
-                status,
-                projects,
-            };
+            let snapshot = snapshot(c, cursor.clone(), SNAPSHOT_DEADLINE).await;
             if !send(
                 ws,
                 &ServerFrame::Evt {
@@ -968,7 +1188,7 @@ where
                     ClientFrame::Req { id, method, params } if method == "devices.unpairSelf" => {
                         // Answered before the socket closes, so the phone
                         // hears "done" rather than "removed".
-                        let result = router::dispatch(c, caller, &method, params).await;
+                        let result = dispatch_bounded(c.clone(), caller.clone(), method, params).await;
                         let _ = send(ws, &ServerFrame::response(id, result)).await;
                         let _ = ws.send(Message::Close(None)).await;
                         c.hub.signal(HubItem::Revoked { device_id: caller.device_id.clone() });
@@ -977,7 +1197,7 @@ where
                     ClientFrame::Req { id, method, params } => {
                         let (c, caller, done) = (c.clone(), caller.clone(), done_tx.clone());
                         work.spawn(async move {
-                            let result = dispatch_caught(&c, &caller, &method, params).await;
+                            let result = dispatch_bounded(c, caller, method, params).await;
                             let _ = done.send((id, result));
                         });
                     }

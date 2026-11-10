@@ -155,6 +155,7 @@ export function sweepOrphans(tool, legacy = []) {
 export async function launchChrome({
   tool,
   basePort,
+  attempt = 0,
   args = [],
   scale = 1,
   disableGpu = true,
@@ -233,18 +234,69 @@ export async function launchChrome({
     close();
     throw err;
   });
+  let ceiling;
   if (maxMs) {
-    setTimeout(() => {
+    ceiling = setTimeout(() => {
       console.error(
         `[${tool}] still running after ${Math.round(maxMs / 1000)}s; closing Chrome and stopping.`
       );
       close();
       process.exit(124);
-    }, maxMs).unref?.();
+    }, maxMs);
+    ceiling.unref?.();
   }
 
   await waitForCdp(port);
+  // Two runs started at the same moment both find the same port free, and one
+  // Chrome gets 127.0.0.1 while the other settles for [::1]. Both then answer
+  // on "the port", and both runs drive the first browser: two captures in one
+  // browser share localStorage, so a `--theme dark` run came back half light.
+  // Only a browser in our own process group may be the one we talk to.
+  if (!listensInGroup(port, chrome.pid)) {
+    clearTimeout(ceiling);
+    close();
+    if (attempt >= 4) {
+      throw new Error(`Another browser took debugging port ${port} as ours started; giving up.`);
+    }
+    return launchChrome({
+      tool,
+      basePort: port + 1,
+      attempt: attempt + 1,
+      args,
+      scale,
+      disableGpu,
+      maxMs,
+      legacy,
+    });
+  }
   return { port, close, swept, profile };
+}
+
+/**
+ * Is the process listening on 127.0.0.1:port one of ours (process group
+ * `group`)? Best effort: without lsof, or when it cannot tell, says yes.
+ */
+function listensInGroup(port, group) {
+  let pids;
+  try {
+    pids = execFileSync('lsof', ['-t', '-nP', `-iTCP@127.0.0.1:${port}`, '-sTCP:LISTEN'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .split(/\s+/)
+      .filter(Boolean);
+  } catch {
+    return true;
+  }
+  if (pids.length === 0) return true;
+  return pids.some((pid) => {
+    try {
+      const pgid = execFileSync('ps', ['-o', 'pgid=', '-p', pid], { encoding: 'utf8' }).trim();
+      return Number(pgid) === group;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** Wait for the browser we just started to answer on its own port. */

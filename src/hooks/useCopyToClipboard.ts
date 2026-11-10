@@ -30,6 +30,18 @@ export function describeClipboardError(error: Error): string {
   return error.message;
 }
 
+/** How long "Copied" shows. A capture holds it (`holdCopiedFlag`). */
+let copiedResetMs = 2000;
+
+/**
+ * Keep "Copied" up for `ms` from now on. The UI harness only: a capture taken
+ * on a loaded machine could land after the 2s reset and photograph the
+ * button it was meant to show copied.
+ */
+export function holdCopiedFlag(ms: number): void {
+  copiedResetMs = ms;
+}
+
 /** How long to wait for the window to regain focus before retrying. */
 const FOCUS_RETRY_MS = 1000;
 /** Further pauses before each extra retry while the write is still denied. */
@@ -96,7 +108,7 @@ function waitForFocus(timeoutMs: number): Promise<void> {
  * directly — it centralizes error handling, tracking, and the "copied!" flag.
  */
 export function useCopyToClipboard({
-  resetMs = 2000,
+  resetMs = copiedResetMs,
   onCopy,
   onError,
 }: Options = {}): UseCopyToClipboardReturn {

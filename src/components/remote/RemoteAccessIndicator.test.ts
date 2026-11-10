@@ -30,7 +30,7 @@ describe('indicatorState', () => {
         }),
         now
       )?.line
-    ).toBe('Remote on · grok 2 min ago');
+    ).toBe('Remote on · Grok 2 min ago');
   });
 
   it('turns amber on battery, with the level', () => {

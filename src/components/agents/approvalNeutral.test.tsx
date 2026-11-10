@@ -147,7 +147,7 @@ describe('an action inside a status is neutral, never the accent', () => {
     [
       'the phone link in Remote access’s intro',
       remoteSource,
-      'For your phone, use the phone app.\n',
+      'On your phone, the phone app is simpler.\n',
     ],
   ];
   for (const [name, source, label] of cases) {

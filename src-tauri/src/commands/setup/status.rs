@@ -98,7 +98,7 @@ async fn run_gh_with_timeout(args: &[&str], timeout_secs: u64) -> Option<std::pr
 
 /// Get full setup status for all items
 /// The setup agent ids whose CLIs Agents can run on (`agents::engine`).
-const AGENTS_ENGINE_IDS: &[&str] = &["claude-code", "codex"];
+const AGENTS_ENGINE_IDS: &[&str] = &["claude-code", "codex", "opencode"];
 
 /// Setup is complete once one engine that can run Agents is ready.
 fn has_agents_engine(detected_agents: &[String]) -> bool {
@@ -108,7 +108,7 @@ fn has_agents_engine(detected_agents: &[String]) -> bool {
 }
 
 /// Set up before Agents existed, on an agent Agents can't run: the "Other"
-/// opt-in, or a finished setup with Opencode or Cursor ready. They keep
+/// opt-in, or a finished setup with Cursor ready. They keep
 /// getting into their projects; Agents explains what it needs.
 fn brought_own_agent(state: &crate::types::AppState, detected_agents: &[String]) -> bool {
     state.external_agent.unwrap_or(false) || (state.setup_complete && !detected_agents.is_empty())
@@ -741,7 +741,8 @@ mod tests {
             "opencode".into(),
             "claude-code".into()
         ]));
-        assert!(!has_agents_engine(&["opencode".into(), "cursor".into()]));
+        assert!(has_agents_engine(&["opencode".into()]));
+        assert!(!has_agents_engine(&["cursor".into()]));
         assert!(!has_agents_engine(&[]));
     }
 

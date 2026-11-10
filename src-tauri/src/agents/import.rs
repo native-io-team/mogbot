@@ -171,12 +171,31 @@ pub(crate) fn add_routines(
         match schedule::create_in(&tz, &agent.id, &r.when, &r.what, store::now_ms()) {
             Ok(made) if pause => {
                 let id = made.check_in.id.clone();
-                let _ = store::update(&agent.id, |a| {
+                let paused = store::update(&agent.id, |a| {
                     if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == id) {
                         c.paused = true;
                         c.paused_on_import = true;
                     }
                 });
+                if let Err(e) = paused {
+                    // Imported routines wait for the user's review: one that
+                    // couldn't be paused doesn't stay, running unreviewed.
+                    tracing::warn!(
+                        "[Agents] an imported routine couldn't be paused, so it was taken off again: {e}"
+                    );
+                    let undone = schedule::cancel(&agent.id, &id);
+                    summary.routines_refused.push(outcome(
+                        &agent.name,
+                        r,
+                        if undone.is_ok() {
+                            "not set: it couldn't be paused for your review. Import again".into()
+                        } else {
+                            "set, but it couldn't be paused for your review: check its routines"
+                                .into()
+                        },
+                    ));
+                    continue;
+                }
                 summary.routines_set.push(outcome(
                     &agent.name,
                     r,

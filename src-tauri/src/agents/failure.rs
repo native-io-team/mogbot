@@ -122,13 +122,13 @@ where
             ),
             (None, Some((words, zone))) => match zone {
                 Some(_) => format!(
-                    "{who} is out of usage. {who} says it resets {}.",
+                    "{who} is out of usage. {who} says it refills {}.",
                     original_case(detail, words)
                 ),
-                None => format!("{who} is out of usage. {who} says it resets at {words}."),
+                None => format!("{who} is out of usage. {who} says it refills at {words}."),
             },
             (None, None) => {
-                format!("{who} is out of usage. It resets on its own; try again later.")
+                format!("{who} is out of usage. It refills on its own; try again later.")
             }
         };
         return (
@@ -190,6 +190,8 @@ fn provider(engine: Engine) -> &'static str {
     match engine {
         Engine::Claude => "Anthropic",
         Engine::Codex => "OpenAI",
+        // Whichever provider it is set up with.
+        Engine::OpenCode => "its model provider",
     }
 }
 
@@ -814,7 +816,7 @@ mod tests {
         assert_eq!(failure.kind, FailureKind::UsageLimit);
         assert_eq!(failure.resets_at, None, "never invented");
         assert!(
-            text.contains("Claude Code says it resets 4:40pm (Asia/Dubai)."),
+            text.contains("Claude Code says it refills 4:40pm (Asia/Dubai)."),
             "{text}"
         );
     }
@@ -841,7 +843,7 @@ mod tests {
             NOW,
         );
         assert_eq!(failure.resets_at, None);
-        assert!(text.ends_with("It resets on its own; try again later."));
+        assert!(text.ends_with("It refills on its own; try again later."));
         // Nor does a bare number pass for a time.
         assert_eq!(
             describe(Engine::Claude, "usage limit · resets 5", &Utc, None, NOW)

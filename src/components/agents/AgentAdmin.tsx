@@ -1,7 +1,7 @@
 /**
  * Admins on the desk (`lib/agentAdmin`, `agents/admin.rs`):
  *
- * - **Settings → Agents → Admins**: one switch per agent ("Admin — can
+ * - **Settings → Independence → Admins**: one switch per agent ("Admin — can
  *   manage and approve for other agents"), on for the Chief of Staff by
  *   default; what admins did (Admin activity); and Recently deleted, where
  *   an agent an admin removed waits 30 days with Restore.

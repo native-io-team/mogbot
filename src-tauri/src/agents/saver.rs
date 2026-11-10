@@ -11,7 +11,7 @@
 //!   instead of spending a refused try per due routine, unless the agent
 //!   would carry on with the other engine (`crossover`). Each hold is said
 //!   once, as a line in the agent's chat and a row in the routine's runs
-//!   ("Waiting for the reset"). Run now still runs; "When…" routines aren't
+//!   ("Waiting for the refill"). Run now still runs; "When…" routines aren't
 //!   held (their checks are sealed calls the watch decides).
 //! - **One warning per window.** The first time the account turns run on
 //!   next is past [`HOLD_PERCENT`] of a limit, or its pace (an estimate,
@@ -24,6 +24,7 @@
 //! Only readings decide: an account with no reading has room as far as this
 //! knows (never held), and a limit with no known reset isn't waited for.
 
+use crate::agents::store::OrLog;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
@@ -192,7 +193,7 @@ where
             window_minutes,
             used,
         } => format!(
-            "Holding “{}” until {}, when {account}’s {} limit resets: it has {} left, and Save my limits keeps routines for after the reset. Run now still runs it.",
+            "Holding “{}” until {}, when {account}’s {} limit refills: it has {} left, and Save my limits keeps routines for after the refill. Run now still runs it.",
             what(note),
             until_phrase(&when),
             window_name(kind, *window_minutes),
@@ -208,13 +209,13 @@ where
 {
     let when = super::failure::clock_phrase(tz, hold.until, now);
     match &hold.why {
-        Why::Out => format!("Waiting for the usage limit to reset {when}."),
+        Why::Out => format!("Waiting for the usage limit to refill {when}."),
         Why::Near {
             kind,
             window_minutes,
             used,
         } => format!(
-            "Waiting for the {} limit to reset {when}: {} left, Save my limits.",
+            "Waiting for the {} limit to refill {when}: {} left, Save my limits.",
             window_name(kind, *window_minutes),
             left(*used)
         ),
@@ -311,14 +312,14 @@ where
     let who = format!("{} “{}”", engine.label(), wallet::line_name(account));
     let said = match &w.warn {
         Warn::Near { used } => format!(
-            "{who} has {} of its {limit} limit left; it resets {reset}.",
+            "{who} has {} of its {limit} limit left; it refills {reset}.",
             left(*used)
         ),
         Warn::Pace {
             reaches_at,
             readings,
         } => format!(
-            "At the recent pace, {who} runs out of its {limit} limit {}, before it resets {reset} (an estimate from {readings} readings).",
+            "At the recent pace, {who} runs out of its {limit} limit {}, before it refills {reset} (an estimate from {readings} readings).",
             super::failure::clock_phrase(tz, *reaches_at, now)
                 .replacen("at ", "around ", 1)
         ),
@@ -455,7 +456,7 @@ pub fn say_held(
     }
     let tz = chrono::Local;
     let detail = held_detail(h, &tz, now);
-    let _ = store::update(&agent.id, |a| {
+    store::update(&agent.id, |a| {
         if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == check_in.id) {
             super::runs::record(
                 &mut c.runs,
@@ -471,7 +472,8 @@ pub fn say_held(
                 },
             );
         }
-    });
+    })
+    .or_log("a routine run's record");
     let mut line = super::runner::new_message(
         &agent.id,
         MessageKind::Note,

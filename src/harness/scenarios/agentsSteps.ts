@@ -12,6 +12,15 @@ import { AGENTS_TAB, messagesFor, msg, overview, TEAM } from './agents';
 const now = Date.now();
 const HOUR = 3_600_000;
 
+/** The next Friday at 4:00 PM, local: what "every Friday at 4:00 PM" says next. */
+const NEXT_FRIDAY_4PM = (() => {
+  const d = new Date(now);
+  d.setHours(16, 0, 0, 0);
+  d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));
+  if (d.getTime() <= now) d.setDate(d.getDate() + 7);
+  return d.getTime();
+})();
+
 /** What `agents_draft` returns for the one prompt below. */
 const DRAFT = {
   name: 'Weekly Report',
@@ -43,7 +52,7 @@ const WEEKLY = {
   id: 'ci-weekly',
   note: 'Draft this week’s report from the notes folder and my calendar',
   repeat: { kind: 'days', days: [5], hour: 16, minute: 0 },
-  nextAt: now + 3 * 24 * HOUR,
+  nextAt: NEXT_FRIDAY_4PM,
   createdAt: now - 30 * 24 * HOUR,
   paused: false,
   then: [{ text: 'Post it to #team on Slack', askFirst: true }],
@@ -98,7 +107,7 @@ const withWeekly = overview(
 );
 
 const schedulePreview = (args: Record<string, unknown>) => ({
-  nextAt: now + 3 * 24 * HOUR,
+  nextAt: NEXT_FRIDAY_4PM,
   repeat: String(args.when).includes('every')
     ? { kind: 'days', days: [5], hour: 16, minute: 0 }
     : null,
@@ -152,7 +161,7 @@ export const agentsStepsScenarios: Scenario[] = [
     id: 'agents-steps-editor',
     title: 'Agents — editing a routine’s steps',
     looksRightWhen:
-      'The routine picker with When set to Weekly · Fri at 4:00 PM, What filled, and under it step 2 as a row: a muted “2”, the step’s words, a “Your OK first” checkbox ticked and a quiet ✕; then “Add a step”. The echo says “2 steps · your OK before step 2”.',
+      'The routine picker with How often set to Weekly · Fri at 4:00 PM, What filled, and under it step 2 as a row: a muted “2”, the step’s words, a “Your OK first” checkbox ticked and a quiet ✕; then “Add a step”. The echo says “2 steps · your OK before step 2”.',
     openSelector: AGENTS_TAB,
     requires: '.agent-steps__row',
     clipSelector: '.agent-schedule',

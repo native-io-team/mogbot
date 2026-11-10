@@ -21,7 +21,7 @@ import {
   type StepStatus,
   type StepsBlock,
 } from '@shipstudio/companion-protocol';
-import { useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 import Svg from 'react-native-svg';
 import { makeStyles, useColors } from '../../lib/appearance';
@@ -45,6 +45,13 @@ import { SideScroll } from '../SideScroll';
 import { Icon, T } from '../ui';
 import { SparkPath } from './BlockChart';
 
+/**
+ * Blocks drawn on a conversation's page, not in a reply: tiles lie flat (no
+ * lift, a faint hairline) so a metric on the page never looks like one in a
+ * reply. The desk does the same in agents-page.css.
+ */
+export const FlatBlocks = createContext(false);
+
 /* ---- Metrics ------------------------------------------------------------------- */
 
 export function BlockMetrics({ block }: { block: MetricsBlock }) {
@@ -62,6 +69,7 @@ export function BlockMetrics({ block }: { block: MetricsBlock }) {
 function MetricTile({ metric, half }: { metric: Metric; half: boolean }) {
   const colors = useColors();
   const styles = useStyles();
+  const flat = useContext(FlatBlocks);
   const delta = metricDelta(metric);
   const value = metricValue(metric);
   const tone =
@@ -94,7 +102,7 @@ function MetricTile({ metric, half }: { metric: Metric; half: boolean }) {
     .join(', ');
   return (
     <View
-      style={[styles.tile, half && styles.tileHalf]}
+      style={[styles.tile, flat && styles.tileFlat, half && styles.tileHalf]}
       accessible
       accessibilityLabel={said}
       testID="metric-tile"
@@ -134,22 +142,41 @@ function MetricTile({ metric, half }: { metric: Metric; half: boolean }) {
 
 /* ---- Facts --------------------------------------------------------------------- */
 
+/** Past these, a label beside its value leaves a ragged column: the block stacks them. */
+const FACT_LABEL_SIDE = 18;
+const FACT_VALUE_SIDE = 24;
+
 export function BlockFacts({ block }: { block: FactsBlock }) {
   const colors = useColors();
   const styles = useStyles();
+  const stacked = block.items.some(
+    (f) => f.label.length > FACT_LABEL_SIDE || f.value.length > FACT_VALUE_SIDE
+  );
   return (
-    <View>
+    <View testID={stacked ? 'facts-stacked' : 'facts'}>
       {block.items.map((f, i) => (
         <View
           key={f.label + i}
-          style={[styles.fact, i < block.items.length - 1 && styles.divided]}
+          style={[
+            stacked ? styles.factStacked : styles.fact,
+            i < block.items.length - 1 && styles.divided,
+          ]}
           accessible
           accessibilityLabel={`${f.label}: ${f.value}`}
         >
-          <T variant="small" color={colors.textMuted} style={styles.factLabel}>
+          <T
+            variant={stacked ? 'caption' : 'small'}
+            color={colors.textMuted}
+            style={stacked ? undefined : styles.factLabel}
+          >
             {f.label}
           </T>
-          <T variant="small" color={colors.textStrong} selectable style={styles.factValue}>
+          <T
+            variant="small"
+            color={colors.textStrong}
+            selectable
+            style={stacked ? styles.factValueStacked : styles.factValue}
+          >
             {f.value}
           </T>
         </View>
@@ -417,12 +444,19 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.cardBorder,
     boxShadow: depthOf(colors).card,
   },
+  tileFlat: {
+    backgroundColor: colors.surfaceApp,
+    borderColor: colors.borderSubtle,
+    boxShadow: 'none',
+  },
   tileHalf: { flexBasis: '40%' },
   delta: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   fact: { flexDirection: 'row', gap: space.md, paddingVertical: space.sm },
   divided: { borderBottomWidth: 1, borderBottomColor: colors.borderDefault },
   factLabel: { width: '38%' },
   factValue: { flex: 1, textAlign: 'right', fontFamily: fonts.medium },
+  factStacked: { gap: space['2xs'], paddingVertical: space.sm },
+  factValueStacked: { fontFamily: fonts.medium },
   list: { gap: space.sm },
   check: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
   checkIcon: { height: lineHeight(type.body, 1.5), justifyContent: 'center' },

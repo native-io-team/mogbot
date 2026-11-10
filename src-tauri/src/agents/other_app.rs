@@ -49,6 +49,7 @@
 //! removed and the agent brought over again. One import runs at a time.
 //! One agent failing doesn't stop the others; it is reported by name.
 
+use crate::agents::store::OrLog;
 use serde::Serialize;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -748,7 +749,8 @@ fn expire_cards(agent_id: &str, from: &[String]) {
             .into_iter()
             .filter(|c| c.secret.is_none() && from.contains(&c.request_id))
         {
-            let _ = store::set_approval_status(agent_id, &card.request_id, ApprovalStatus::Expired);
+            store::set_approval_status(agent_id, &card.request_id, ApprovalStatus::Expired)
+                .or_log("an imported card as expired");
         }
     }
     store::refresh_pending(agent_id);
@@ -1175,7 +1177,7 @@ pub fn migrate_names() -> usize {
             continue;
         }
         let line = super::runner::new_message(&a.id, store::MessageKind::Note, renamed_line());
-        let _ = store::append_message(&line);
+        store::append_message(&line).or_log("an imported chat line");
         changed += 1;
     }
     if !deferred {

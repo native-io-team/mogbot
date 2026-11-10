@@ -22,6 +22,10 @@
 //! scripted demo session driven by `mock_mark_setup_item_ready`.
 //! Scenarios: `fresh`, `auth-only`, `almost-done`, `both-agents`, `codex-only`,
 //! or comma-separated item IDs (e.g. `homebrew,node,git,gh,gh_auth`).
+//! Onboarding's installs play a scripted run (steps, the Homebrew password
+//! prompt, a sign-in link) instead of a real process. Add
+//! `SHIPSTUDIO_FORCE_INSTALL_FAILURE=<network|disk|permission|admin|homebrew|signin>`
+//! to make the first run of each item that can fail that way fail once.
 //!
 //! ## Submodules
 //!
@@ -414,13 +418,30 @@ pub struct OnboardingTestMode {
     pub mock: bool,
     /// `SHIPSTUDIO_FORCE_ONBOARDING` is set — real checks, wizard forced open.
     pub force_onboarding: bool,
+    /// `SHIPSTUDIO_FORCE_INSTALL_FAILURE`, under mock mode only: the first
+    /// scripted run of each onboarding item that can fail this way does
+    /// (`network`, `disk`, `permission`, `admin`, `homebrew`, `signin`), so
+    /// every failure screen and its Try again can be clicked through.
+    pub mock_failure: Option<String>,
+}
+
+/// The mock failure to play, only ever under mock mode.
+fn mock_failure(mock: bool, value: Option<String>) -> Option<String> {
+    if !mock {
+        return None;
+    }
+    value
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| !v.is_empty())
 }
 
 #[tauri::command]
 #[tracing::instrument]
 pub async fn get_onboarding_test_mode() -> Result<OnboardingTestMode, CommandError> {
+    let mock = is_mock_mode();
     Ok(OnboardingTestMode {
-        mock: is_mock_mode(),
+        mock,
+        mock_failure: mock_failure(mock, std::env::var("SHIPSTUDIO_FORCE_INSTALL_FAILURE").ok()),
         // Raw env-var check on purpose: is_force_onboarding_mode() flips off
         // after completion, but the frontend cares about how we were launched.
         force_onboarding: std::env::var("SHIPSTUDIO_FORCE_ONBOARDING").is_ok(),
@@ -474,6 +495,17 @@ pub(super) fn is_mock_installed(item_id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_mock_failure_is_only_ever_played_in_mock_mode() {
+        assert_eq!(mock_failure(false, Some("network".into())), None);
+        assert_eq!(
+            mock_failure(true, Some(" Disk ".into())),
+            Some("disk".into())
+        );
+        assert_eq!(mock_failure(true, Some("  ".into())), None);
+        assert_eq!(mock_failure(true, None), None);
+    }
 
     // ============ write_state_file ============
 

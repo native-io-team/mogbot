@@ -94,13 +94,22 @@ describe('the connection bar', () => {
       { kind: 'reconnecting', lastSeenAt: now - 3000, nextTryAt: now + 1000, since: now - 3000 },
       now
     );
-    expect(b).toMatchObject({ kind: 'connecting', tone: 'busy', title: 'Reconnecting to your Mac…' });
+    expect(b).toMatchObject({
+      kind: 'connecting',
+      tone: 'busy',
+      title: 'Reconnecting to your Mac…',
+    });
     expect(b?.detail).toMatch(/^Last heard from it .* · showing what was saved$/);
   });
 
   it('still reconnecting a minute in: calm words, with when it last heard', () => {
     const b = bar(
-      { kind: 'reconnecting', lastSeenAt: now - 60_000, nextTryAt: now + 1000, since: now - 60_000 },
+      {
+        kind: 'reconnecting',
+        lastSeenAt: now - 60_000,
+        nextTryAt: now + 1000,
+        since: now - 60_000,
+      },
       now
     );
     expect(b).toMatchObject({ kind: 'connecting', title: 'Reconnecting to your Mac…' });
@@ -117,7 +126,11 @@ describe('the connection bar', () => {
       },
       now
     );
-    expect(b).toMatchObject({ kind: 'unreachable', tone: 'problem', title: 'Can’t reach your Mac' });
+    expect(b).toMatchObject({
+      kind: 'unreachable',
+      tone: 'problem',
+      title: 'Can’t reach your Mac',
+    });
     expect(b?.checks.join(' ')).toMatch(/asleep or shut/);
     expect(b?.checks.join(' ')).toMatch(/Tailscale may be off/);
     expect(b?.checks.join(' ')).not.toMatch(/you (forgot|didn’t|did not)/i);
@@ -140,7 +153,12 @@ describe('the connection bar', () => {
   });
 
   it('connected with a request unanswered: stuck, and the pill agrees', () => {
-    const link: LinkState = { kind: 'connected', route: 'tailscale', since: 0, stuck: now - 40_000 };
+    const link: LinkState = {
+      kind: 'connected',
+      route: 'tailscale',
+      since: 0,
+      stuck: now - 40_000,
+    };
     expect(bar(link, now)).toMatchObject({ kind: 'stuck', tone: 'problem' });
     expect(pill({ link, phoneOnline: true } as never, now)).toEqual({
       tone: 'problem',

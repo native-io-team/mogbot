@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { flushSync } from 'react-dom';
 import { HomeSidebar } from '../workspace/HomeSidebar';
-import { AgentsSidebar, InFlightBell } from './AgentsSidebar';
+import { AgentsSidebar, AgentsSidebarActions, InFlightBell, RoutinesRow } from './AgentsSidebar';
 import { AgentsSearchPopover, AgentsTopSearch } from './AgentsSearchBox';
 import { EngineSignInModal, type EngineSetup } from './EngineSignInModal';
 import { AgentChat } from './AgentChat';
@@ -31,6 +31,7 @@ import { AgentsTeamView } from './AgentsTeamView';
 import { AgentBriefingModal } from './AgentWorkDetail';
 import { AgentsRoutinesView, type BulkAsk } from './AgentsRoutinesView';
 import { ROUTINES_ID } from '../../lib/agentDesk';
+import { menuOwnsShortcuts, onMenuAction, reportMenuContext } from '../../lib/nativeMenu';
 import { AgentEditorModal, type EditorTab } from './AgentEditorModal';
 import { AgentProjectsProvider } from './AgentProject';
 import { TakeoverProvider, useTakeover } from './AgentTakeover';
@@ -71,6 +72,7 @@ import {
   loadMessages,
   loadRoomMessages,
   openConversation,
+  readChat,
   refreshAgents,
   refreshRooms,
   startConversation,
@@ -95,6 +97,7 @@ import {
   CollaboratorsIcon,
   CommentIcon,
   EditFieldIcon,
+  GraduationCapIcon,
   EditIcon,
   EyeIcon,
   EyeOffIcon,
@@ -192,6 +195,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     open: boolean;
     agent: Agent | null;
     tab?: EditorTab;
+    /** Scrolled to one section on opening (⌘K "<agent>’s skills"). */
+    focus?: 'skills';
     /** Creating: the ready-made agent it opens on. */
     template?: string;
   }>({
@@ -288,8 +293,14 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     }
     writeSelected(selected.id);
     void focusAgent(selected.id);
-    if (!getAgentsSnapshot().messages[selected.id]) void loadMessages(selected.id);
+    readChat(selected.id);
   }, [selected?.id, teamOpen, usageOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // On launch the chat Agents reopens on is known before the list of agents
+  // is: its reads start now, beside the list's, rather than after it.
+  useEffect(() => {
+    const id = readSelected();
+    if (id && roomIdOf(id) === null) readChat(id);
+  }, []);
 
   // Leaving Agents mode: nothing is on screen any more, so new replies count as unread.
   useEffect(() => () => void focusAgent(null), []);
@@ -406,6 +417,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
       }
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f')
         return;
+      // The macOS menu bar owns ⌘F (Edit → Search Conversations…).
+      if (menuOwnsShortcuts()) return;
       e.preventDefault();
       focusSearch();
     };
@@ -477,40 +490,76 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     keys.current = { order, selected, openNew, nextNeedingYou, showToast };
   });
 
+  // ⌘J, and ⌘[ / ⌘] (or ⌥↑ / ⌥↓) through the sidebar's order.
+  const goNextNeedingYou = useCallback(() => {
+    const next = keys.current.nextNeedingYou();
+    // Said, so the key never seems broken.
+    if (next) openAgent(next.id);
+    else keys.current.showToast('No other agent needs you right now', 'info');
+  }, [openAgent]);
+  const stepAgent = useCallback((step: -1 | 1) => {
+    const { order, selected } = keys.current;
+    if (order.length === 0) return;
+    const index = order.findIndex((a) => a.id === selected?.id);
+    setSelectedId(order[(index + step + order.length) % order.length].id);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!event.metaKey && !event.ctrlKey) return;
       // Leave every key alone while a dialog owns the keyboard.
       if (document.querySelector('[aria-modal="true"]')) return;
-      const { order, selected, openNew, nextNeedingYou, showToast } = keys.current;
-      if (event.key.toLowerCase() === 'n' && !event.shiftKey && !event.altKey) {
+      // On macOS ⌘N, ⌘J, ⌘[ and ⌘] are the menu bar's (File, Go): it
+      // answers them even with the preview focused, and only once.
+      const menu = menuOwnsShortcuts();
+      if (!menu && event.key.toLowerCase() === 'n' && !event.shiftKey && !event.altKey) {
         event.preventDefault();
-        openNew();
+        keys.current.openNew();
         return;
       }
-      if (event.key.toLowerCase() === 'j' && !event.shiftKey && !event.altKey) {
+      if (!menu && event.key.toLowerCase() === 'j' && !event.shiftKey && !event.altKey) {
         event.preventDefault();
-        const next = nextNeedingYou();
-        // Said, so the key never seems broken.
-        if (next) openAgent(next.id);
-        else showToast('No other agent needs you right now', 'info');
+        goNextNeedingYou();
         return;
       }
       const step =
-        (event.altKey && event.key === 'ArrowUp') || event.key === '['
+        (event.altKey && event.key === 'ArrowUp') || (!menu && event.key === '[')
           ? -1
-          : (event.altKey && event.key === 'ArrowDown') || event.key === ']'
+          : (event.altKey && event.key === 'ArrowDown') || (!menu && event.key === ']')
             ? 1
             : 0;
-      if (step === 0 || order.length === 0) return;
+      if (step === 0) return;
       event.preventDefault();
-      const index = order.findIndex((a) => a.id === selected?.id);
-      const next = order[(index + step + order.length) % order.length];
-      setSelectedId(next.id);
+      stepAgent(step);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openAgent]);
+  }, [goNextNeedingYou, stepAgent]);
+
+  // The menu bar's Agents items (macOS). New Agent… is app-wide
+  // (`useAgentsNavCommands`); these act on what's open here.
+  const conversationOpen = Boolean(selected);
+  useEffect(() => {
+    reportMenuContext({ conversation: conversationOpen });
+  }, [conversationOpen]);
+  useEffect(() => () => reportMenuContext({ conversation: false }), []);
+  const newConversationRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    newConversationRef.current =
+      conversationOpen && selected ? () => void run(() => startConversation(selected.id)) : null;
+  });
+  useEffect(
+    () =>
+      onMenuAction((action) => {
+        if (document.querySelector('[aria-modal="true"]')) return;
+        if (action === 'next_needing_you') goNextNeedingYou();
+        else if (action === 'prev_agent') stepAgent(-1);
+        else if (action === 'next_agent') stepAgent(1);
+        else if (action === 'find') searchKeys.current.focusSearch();
+        else if (action === 'new_conversation') newConversationRef.current?.();
+      }),
+    [goNextNeedingYou, stepAgent]
+  );
 
   // Logins "Setting up your team" holds live in its one card, not as an
   // amber row per imported agent (What's in flight leaves them out too).
@@ -654,6 +703,28 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
           if (next) openAgent(next.id);
         },
       },
+      ...(order.length > 1
+        ? [
+            {
+              id: 'agents.previous',
+              title: 'Previous agent',
+              icon: <AgentsModeIcon size={14} />,
+              category: 'navigation' as const,
+              shortcut: kbd('mod', '['),
+              keywords: ['agents', 'up', 'back', 'sidebar'],
+              run: () => stepAgent(-1),
+            },
+            {
+              id: 'agents.next',
+              title: 'Next agent',
+              icon: <AgentsModeIcon size={14} />,
+              category: 'navigation' as const,
+              shortcut: kbd('mod', ']'),
+              keywords: ['agents', 'down', 'forward', 'sidebar'],
+              run: () => stepAgent(1),
+            },
+          ]
+        : []),
       ...(waitingOn && topCard?.approval
         ? [
             {
@@ -683,6 +754,23 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
               category: 'action' as const,
               keywords: ['agents', 'memory', 'remember', 'forget', 'claude.md', 'facts'],
               run: () => setEditor({ open: true, agent: selected, tab: 'memory' }),
+            },
+            {
+              // At the foot of a long editor: found by name here, as on the phone's agent sheet.
+              id: 'agents.skills',
+              title: `${selected.name}’s skills…`,
+              icon: <GraduationCapIcon size={14} />,
+              category: 'action' as const,
+              keywords: [
+                'agents',
+                'skills',
+                'learned',
+                'save new skills',
+                'what it knows how to do',
+                'how to',
+                'steps',
+              ],
+              run: () => setEditor({ open: true, agent: selected, focus: 'skills' }),
             },
           ]
         : []),
@@ -797,6 +885,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
               title: `New conversation with ${selected.name}`,
               icon: <PlusIcon size={14} />,
               category: 'action' as const,
+              shortcut: kbd('mod', 'shift', 'N'),
               keywords: [
                 'agents',
                 'start fresh',
@@ -872,6 +961,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
       room,
       roomActions,
       openNewRoom,
+      order.length,
+      stepAgent,
     ]
   );
 
@@ -985,8 +1076,23 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onOpen={focusSearch}
               />
             }
+            listActions={
+              query.trim().length === 0 || popoverSearch ? (
+                <AgentsSidebarActions
+                  agentCount={listed.length}
+                  onNew={() => openNew()}
+                  onNewRoom={openNewRoom}
+                />
+              ) : undefined
+            }
             footerContent={
               <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
+                {/* Pages together: Routines beside Usage, actions above the list's end. */}
+                <RoutinesRow
+                  open={routinesOpen}
+                  collapsed={sidebarProps.isSidebarHidden ?? false}
+                  onOpen={() => openRoutines()}
+                />
                 <AccountSwitcher
                   collapsed={sidebarProps.isSidebarHidden ?? false}
                   open={usageOpen}
@@ -1002,12 +1108,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   showHidden={showHidden}
                   onToggleShowHidden={toggleShowHidden}
                   onSelect={setSelectedId}
-                  onNew={() => openNew()}
                   rooms={roomRows}
                   roomActions={roomActions}
-                  onNewRoom={openNewRoom}
-                  onOpenRoutines={() => openRoutines()}
-                  routinesOpen={routinesOpen}
                   actions={actions}
                   query={popoverSearch ? '' : query}
                   searchRef={searchRef}
@@ -1110,12 +1212,13 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
       <AgentEditorModal
         key={
           editor.open
-            ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.template ?? ''}`
+            ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.focus ?? ''}-${editor.template ?? ''}`
             : 'closed'
         }
         isOpen={editor.open}
         agent={editor.agent}
         initialTab={editor.tab}
+        initialFocus={editor.focus}
         initialTemplate={editor.template}
         takenColors={agents.map((a) => a.color)}
         onClose={() => setEditor({ open: false, agent: null })}
@@ -1269,10 +1372,10 @@ function NoEngine({
   return (
     <div className="agents-main__state">
       <div className="agents-no-engine">
-        <h2 className="agents-no-engine__title">Agents run on Claude Code or Codex</h2>
+        <h2 className="agents-no-engine__title">Agents run on Claude Code, Codex or OpenCode</h2>
         <p className="agents-no-engine__body">
-          Each agent runs on Claude Code or Codex on this Mac, with your own account. Set one up and
-          your Chief of Staff is ready to talk.
+          Each agent runs on Claude Code, Codex or OpenCode on this Mac, with your own account or
+          models. Set one up and your Chief of Staff is ready to talk.
         </p>
         <div className="agents-no-engine__actions">
           <Button variant="primary" onClick={() => onSetUp('claude')}>
@@ -1280,6 +1383,9 @@ function NoEngine({
           </Button>
           <Button variant="secondary" onClick={() => onSetUp('codex')}>
             Set up Codex
+          </Button>
+          <Button variant="secondary" onClick={() => onSetUp('opencode')}>
+            Set up OpenCode
           </Button>
         </div>
         <TextButton onClick={onGoProjects}>Open projects</TextButton>

@@ -36,6 +36,7 @@
 //! instead ([`fold_into_user_turn`]). With "Save my limits" nothing runs on
 //! its own: the agent's next turn is told instead, and a quiet line says so.
 
+use crate::agents::store::OrLog;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 use tauri::{AppHandle, Emitter};
@@ -589,7 +590,7 @@ fn record(agent_id: &str, note: &str, now: i64) -> Result<(), crate::errors::Com
 /// hidden note instead of running on its own afterwards. Returns the note.
 pub fn fold_into_user_turn(agent_id: &str) -> Option<String> {
     let mut notes = Vec::new();
-    let _ = store::update(agent_id, |a| {
+    store::update(agent_id, |a| {
         a.check_ins.retain(|c| {
             if c.follow_up && c.runs.is_empty() && c.retry.is_none() {
                 notes.push(c.note.clone());
@@ -598,7 +599,8 @@ pub fn fold_into_user_turn(agent_id: &str) -> Option<String> {
                 true
             }
         });
-    });
+    })
+    .or_log("the follow-ups taken off an agent");
     (!notes.is_empty()).then(|| notes.iter().map(|n| nudge(n)).collect())
 }
 

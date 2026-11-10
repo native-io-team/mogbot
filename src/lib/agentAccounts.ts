@@ -6,7 +6,7 @@
  * priority order; the first is this Mac's own sign-in. A turn that ends on
  * the usage limit marks its account out and continues on the next. Nothing
  * here is estimated: a limit and its reset are shown only when a turn hit
- * one and the engine said when it resets.
+ * one and the engine said when it refills.
  *
  * @module lib/agentAccounts
  */

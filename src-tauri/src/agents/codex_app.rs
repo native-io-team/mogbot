@@ -168,6 +168,8 @@ pub enum Out {
     DraftDelta(String),
     /// Codex wants the user's OK: answered off the read loop ([`answer`]).
     Ask(Box<Ask>),
+    /// OpenCode wants the user's OK (`opencode::answer`).
+    AskOpenCode(Box<super::opencode::Ask>),
     /// The turn is over: close stdin, and the app-server exits.
     Close,
 }
@@ -280,6 +282,23 @@ impl Conversation {
             compact: false,
         };
         (conversation, first)
+    }
+
+    /// Start as a fork of `thread` through its turn `last_turn` (`rewind`):
+    /// `thread/fork` with `lastTurnId` (inclusive) and the same settings a
+    /// new thread gets, in place of `thread/start`. Schema of 0.166: the
+    /// response carries `thread` and `model` as `thread/start`'s does.
+    pub fn forking(mut self, thread: &str, last_turn: &str) -> Self {
+        let mut params = self.start["params"].clone();
+        params["threadId"] = json!(thread);
+        params["lastTurnId"] = json!(last_turn);
+        self.start = request(START, "thread/fork", params);
+        self
+    }
+
+    /// The id of this conversation's turn, once `turn/start` said it.
+    pub fn turn_id(&self) -> Option<&str> {
+        self.turn.as_deref()
     }
 
     /// This conversation compacts its thread rather than taking a turn: it
@@ -622,7 +641,13 @@ impl Conversation {
                     .map(String::as_str)
                     .or_else(|| str_at(params, "/grantRoot"))
                     .unwrap_or("");
-                let call = ("Edit".to_string(), json!({ "file_path": path }));
+                // A patch can touch several files: each is judged on its own
+                // (`file_paths`), never only the first.
+                let mut input = json!({ "file_path": path });
+                if paths.len() > 1 {
+                    input["file_paths"] = json!(paths);
+                }
+                let call = ("Edit".to_string(), input);
                 vec![ask(
                     Some(call),
                     None,
@@ -825,10 +850,14 @@ pub async fn answer(app: &AppHandle, agent_id: &str, turn: u64, ask: Ask) -> Vec
         return vec![reply(&ask.deny)];
     };
     if let Some((tool, input)) = &ask.call {
-        return match mcp::decide(app, &agent, tool, input, ask.why.as_deref()).await {
-            Decision::Allow => vec![reply(&ask.allow)],
-            Decision::Deny(message) => refused(message),
-        };
+        for (tool, input) in each_file(tool, input) {
+            if let Decision::Deny(message) =
+                mcp::decide(app, &agent, &tool, &input, ask.why.as_deref()).await
+            {
+                return refused(message);
+            }
+        }
+        return vec![reply(&ask.allow)];
     }
     let (title, mut detail) = ask.card.clone().unwrap_or_default();
     if let Some(why) = ask.why.as_deref().map(str::trim).filter(|w| !w.is_empty()) {
@@ -840,6 +869,27 @@ pub async fn answer(app: &AppHandle, agent_id: &str, turn: u64, ask: Ask) -> Vec
         // Unanswered: the card expired (`agents/expiry.rs`).
         mcp::Answer::NotYet => refused(super::expiry::TOLD.to_string()),
     }
+}
+
+/// A call as the broker judges it: a patch touching several files is one
+/// `Edit` per file, so a level, plan or rule that would answer for the first
+/// one doesn't answer for the rest (`~/.zshrc` beside a project file).
+fn each_file(tool: &str, input: &Value) -> Vec<(String, Value)> {
+    let many: Vec<&str> = input
+        .get("file_paths")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    if tool != "Edit" || many.len() < 2 {
+        return vec![(tool.to_string(), input.clone())];
+    }
+    let mut seen = std::collections::HashSet::new();
+    many.into_iter()
+        .filter(|p| seen.insert(*p))
+        .map(|p| ("Edit".to_string(), json!({ "file_path": p })))
+        .collect()
 }
 
 /// Stand-in Codex binaries for tests that need [`available`] to answer.
@@ -934,6 +984,27 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|w| w == ["-c", "sandbox_workspace_write.network_access=false"]));
+    }
+
+    #[test]
+    fn a_fork_starts_as_the_thread_through_a_turn_and_names_its_new_thread() {
+        let (c, _) = Conversation::new(None, Path::new("/h/a"), Some("gpt-5"), "dev", "hi", false);
+        let mut c = c.forking("t-old", "turn-7");
+        assert_eq!(c.start["method"], "thread/fork");
+        assert_eq!(c.start["params"]["threadId"], "t-old");
+        assert_eq!(c.start["params"]["lastTurnId"], "turn-7");
+        // The settings a new thread gets come along.
+        assert_eq!(c.start["params"]["developerInstructions"], "dev");
+        assert_eq!(c.start["params"]["model"], "gpt-5");
+        let out = c.on_message(
+            &json!({ "id": START, "result": { "thread": { "id": "t-new" }, "model": "gpt-5" } }),
+        );
+        assert!(out
+            .iter()
+            .any(|o| matches!(o, Out::Step(Step::Session(t)) if t == "t-new")));
+        assert_eq!(c.turn_id(), None);
+        c.on_message(&json!({ "id": TURN, "result": { "turn": { "id": "turn-8" } } }));
+        assert_eq!(c.turn_id(), Some("turn-8"));
     }
 
     #[test]
@@ -1275,6 +1346,34 @@ mod tests {
         assert_eq!(
             ask.call,
             Some(("Edit".into(), json!({ "file_path": "/etc/hosts" })))
+        );
+        // A patch over several files: every one is judged, not just the first.
+        c.on_message(
+            &json!({ "method": "item/started", "params": { "threadId": "t1", "item": {
+            "type": "fileChange", "id": "f2", "changes": [
+                { "path": "/h/a/notes.md", "kind": "update", "diff": "" },
+                { "path": "/Users/fictional/.zshrc", "kind": "update", "diff": "" }
+            ], "status": "inProgress" } } }),
+        );
+        let out = c.on_message(
+            &json!({ "method": "item/fileChange/requestApproval", "id": 7, "params": {
+            "threadId": "t1", "turnId": "u1", "itemId": "f2", "startedAtMs": 0 } }),
+        );
+        let Out::Ask(ask) = &out[0] else { panic!() };
+        let (tool, input) = ask.call.clone().unwrap();
+        assert_eq!(
+            super::each_file(&tool, &input),
+            vec![
+                ("Edit".to_string(), json!({ "file_path": "/h/a/notes.md" })),
+                (
+                    "Edit".to_string(),
+                    json!({ "file_path": "/Users/fictional/.zshrc" })
+                ),
+            ]
+        );
+        assert_eq!(
+            super::each_file("Edit", &json!({ "file_path": "/etc/hosts" })),
+            vec![("Edit".to_string(), json!({ "file_path": "/etc/hosts" }))]
         );
         let out = c.on_message(&json!({ "method": "item/permissions/requestApproval", "id": 6, "params": {
             "threadId": "t1", "turnId": "u1", "itemId": "x", "environmentId": null, "startedAtMs": 0, "cwd": "/h/a",

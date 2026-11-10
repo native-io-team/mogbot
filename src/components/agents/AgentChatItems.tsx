@@ -25,6 +25,7 @@ import {
   CopyIcon,
   DownloadIcon,
   GlobeIcon,
+  GraduationCapIcon,
   ErrorIcon,
   FolderIcon,
   HistoryIcon,
@@ -46,6 +47,7 @@ import { ComposerAttachments, MessageAttachments } from './AgentAttachments';
 import { LocalLinks } from './AgentLocalLinks';
 import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
+import { GoBackContextMenu, GoBackMenu, type GoBackAction, type GoBackState } from './AgentGoBack';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
@@ -54,6 +56,13 @@ import { CrossoverCard } from './AgentCrossoverCard';
 import { checkInHead } from '../../../packages/companion-protocol/src/cardWords';
 import { viaLabel } from '../../../packages/companion-protocol/src/model';
 import { AgentSettingsChange } from './AgentSettingsChange';
+import { AgentSkillCardBody } from './AgentSkills';
+import {
+  SKILL_NOT_NOW,
+  SKILL_OFFER_NOTE,
+  SKILL_SAVE,
+  skillOutcome,
+} from '../../../packages/companion-protocol/src/skills';
 import { readPlan } from '../../lib/cardShapes';
 import { AgentPlanList } from './AgentPlanList';
 import { AgentGateBody } from './AgentRoutineSteps';
@@ -156,11 +165,14 @@ function MessageActions({
   text,
   ts,
   onRemember,
+  more,
 }: {
   text: string;
   ts: number;
   /** "Remember this": offered on messages with words in them. */
   onRemember?: () => void;
+  /** Your own message's Edit, Fork and Rewind (`AgentGoBack`). */
+  more?: ReactNode;
 }) {
   const { copy, isCopied } = useCopyToClipboard();
   return (
@@ -187,6 +199,7 @@ function MessageActions({
           title="Remember this"
         />
       )}
+      {more}
       <time
         className="agent-message__time"
         dateTime={new Date(ts).toISOString()}
@@ -327,6 +340,9 @@ interface UserBubbleProps extends Arrival {
   sending?: DraftAttachment[];
   /** "Remember this", with this message. */
   onRemember?: (message: AgentMessage) => void;
+  /** Edit and resend, Fork from here, Rewind to here: what blocks them, and the pick. */
+  goBack?: GoBackState;
+  onGoBack?: (action: GoBackAction, message: AgentMessage) => void;
 }
 
 /** Attachments sit above the words, both against the right edge, as one message. */
@@ -342,6 +358,8 @@ export const UserBubble = memo(function UserBubble({
   driven,
   sending,
   onRemember,
+  goBack,
+  onGoBack,
 }: UserBubbleProps) {
   const attachments = message.attachments ?? [];
   const actions = !failed && !sending && (
@@ -349,9 +367,29 @@ export const UserBubble = memo(function UserBubble({
       text={message.text}
       ts={message.ts}
       onRemember={onRemember && (() => onRemember(message))}
+      more={
+        goBack &&
+        onGoBack && <GoBackMenu state={goBack} onPick={(action) => onGoBack(action, message)} />
+      }
     />
   );
   const onKeyDown = useCopyOnKey(message.text);
+  const bubble = (
+    <div className="agent-bubble agent-bubble--user">
+      {message.revises && <RevisesBar revises={message.revises} />}
+      {splitQuotes(message.text).map((part, i) =>
+        part.kind === 'quote' ? (
+          <blockquote key={i} className="agent-bubble__quote">
+            {part.text}
+          </blockquote>
+        ) : (
+          <p key={i} className="agent-bubble__text">
+            <MentionText text={part.text} mentions={message.mentions} colorOf={colorOf} />
+          </p>
+        )
+      )}
+    </div>
+  );
   // Written in Slack, not here: "From Slack · #launch".
   const via = viaLabel(message.via);
   return (
@@ -380,20 +418,18 @@ export const UserBubble = memo(function UserBubble({
       {message.text && (
         <div className="agent-chat__line">
           {actions}
-          <div className="agent-bubble agent-bubble--user">
-            {message.revises && <RevisesBar revises={message.revises} />}
-            {splitQuotes(message.text).map((part, i) =>
-              part.kind === 'quote' ? (
-                <blockquote key={i} className="agent-bubble__quote">
-                  {part.text}
-                </blockquote>
-              ) : (
-                <p key={i} className="agent-bubble__text">
-                  <MentionText text={part.text} mentions={message.mentions} colorOf={colorOf} />
-                </p>
-              )
-            )}
-          </div>
+          {goBack && onGoBack && !failed && !sending ? (
+            <GoBackContextMenu
+              state={goBack}
+              text={message.text}
+              onPick={(action) => onGoBack(action, message)}
+              onRemember={onRemember && (() => onRemember(message))}
+            >
+              {bubble}
+            </GoBackContextMenu>
+          ) : (
+            bubble
+          )}
         </div>
       )}
       {via && <div className="agent-chat__queued">{via}</div>}
@@ -991,6 +1027,11 @@ interface ApprovalCardProps extends Arrival {
    * from how many the agent might still send.
    */
   series?: { index: number; total: number };
+  /**
+   * Drawn in its own agent's chat, where the Step in bar above the composer
+   * holds Show window and Hand back: a step-in card under way leaves them to it.
+   */
+  ownChat?: boolean;
 }
 
 /** "subject" → "Subject", "cc_list" → "Cc list". */
@@ -1053,6 +1094,10 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
   if (approval.handoff && approval.status === 'denied') {
     return 'Ignored · nothing was saved';
   }
+  if (approval.skill) {
+    const said = skillOutcome(approval.status);
+    if (said) return said;
+  }
   if (approval.gate && approval.status === 'allowed') {
     return `Going ahead · step ${approval.gate.done + 1} of ${approval.gate.total} is running`;
   }
@@ -1099,6 +1144,7 @@ const ApprovalCardBody = memo(function ApprovalCard({
   arrived,
   compact = false,
   series,
+  ownChat = false,
 }: ApprovalCardProps) {
   const approval = message.approval;
   const [busy, setBusy] = useState(false);
@@ -1145,6 +1191,7 @@ const ApprovalCardBody = memo(function ApprovalCard({
         message={message}
         onAnswer={(id, allow) => onAnswer(id, allow)}
         arrived={arrived}
+        barShown={ownChat}
       />
     );
   }
@@ -1201,7 +1248,9 @@ const ApprovalCardBody = memo(function ApprovalCard({
   const handoff = !!approval.handoff;
   // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
   const gate = approval.gate;
-  const plainDeny = approval.connector?.kind === 'consent' || front || handoff || !!gate;
+  // "Save “…” as a skill?": Not now / Save, nothing broader.
+  const skill = approval.skill;
+  const plainDeny = approval.connector?.kind === 'consent' || front || handoff || !!gate || !!skill;
   // A plan is read field by field; one with no readable action has nothing
   // to allow, so it offers Deny only.
   const plan = approval.plan ? readPlan(approval.plan) : null;
@@ -1218,7 +1267,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
   };
   const long = compact && fields?.some(([, v]) => v.length > 120 || v.includes('\n'));
   // A and D while this card has focus, never anywhere else (`approvalKeys`).
-  const keys = pending && !noting && !compact;
+  // Not on a skill offer: nothing waits on it, so it doesn't claim the keys.
+  const keys = pending && !noting && !compact && !skill;
   const onCardKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const which = approvalKey(event);
     if (!which || busy) return;
@@ -1242,6 +1292,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
           status: approval.status,
           clamped: (long && !showAll) || undefined,
           risk: approval.risk,
+          // An offer, not a gate: drawn quieter (agents-skills.css).
+          offer: (pending && !!skill) || undefined,
         }}
         // The Mac marked Allow risky (Bold's floor): told apart by the icon as well as hue.
         tone={approval.risk === 'high' ? 'warning' : undefined}
@@ -1254,6 +1306,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
             <DownloadIcon size={14} />
           ) : gate ? (
             <RoutineIcon size={14} />
+          ) : skill ? (
+            <GraduationCapIcon size={14} />
           ) : plainDeny ? (
             <DownloadIcon size={14} />
           ) : approval.settings ? (
@@ -1273,11 +1327,13 @@ const ApprovalCardBody = memo(function ApprovalCard({
         note={
           pending && gate
             ? 'It waits for you, and closes if the routine runs again first.'
-            : pending && paused && !plainDeny && !approval.settings && !approval.slackReply
-              ? 'It paused here for you. Allow it and it picks up where it left off.'
-              : approval.status === 'expired'
-                ? approval.setAside
-                : undefined
+            : pending && skill
+              ? SKILL_OFFER_NOTE
+              : pending && paused && !plainDeny && !approval.settings && !approval.slackReply
+                ? 'It paused here for you. Allow it and it picks up where it left off.'
+                : approval.status === 'expired'
+                  ? approval.setAside
+                  : undefined
         }
         actions={
           pending && !noting ? (
@@ -1327,26 +1383,43 @@ const ApprovalCardBody = memo(function ApprovalCard({
               <Button
                 ref={denyRef}
                 tabIndex={0}
-                variant="secondary"
+                variant={skill ? 'ghost' : 'secondary'}
                 className="agent-approval__deny"
                 disabled={busy}
                 onClick={() => void answer(false)}
                 aria-keyshortcuts={keys ? 'D' : undefined}
               >
-                {front ? 'Not now' : handoff ? 'Ignore' : gate ? GATE_DENY : 'Deny'}
+                {front
+                  ? 'Not now'
+                  : handoff
+                    ? 'Ignore'
+                    : gate
+                      ? GATE_DENY
+                      : skill
+                        ? SKILL_NOT_NOW
+                        : 'Deny'}
                 {keys && <KeyHint letter="D" />}
               </Button>
               {!nothingToAllow && (
                 <Button
                   tabIndex={0}
-                  variant="strong"
+                  // An offer's yes is a choice, not a release: outlined, not solid.
+                  variant={skill ? 'secondary' : 'strong'}
                   data-allow
                   disabled={busy}
                   {...keyProps}
                   onClick={guard(() => void answer(true))}
                   aria-keyshortcuts={keys ? 'A' : undefined}
                 >
-                  {front ? 'Check again' : handoff ? 'Save to memory' : gate ? GATE_ALLOW : 'Allow'}
+                  {front
+                    ? 'Check again'
+                    : handoff
+                      ? 'Save to memory'
+                      : gate
+                        ? GATE_ALLOW
+                        : skill
+                          ? SKILL_SAVE
+                          : 'Allow'}
                   {keys && <KeyHint letter="A" />}
                 </Button>
               )}
@@ -1359,6 +1432,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
       >
         {approval.settings ? (
           <AgentSettingsChange proposal={approval.settings} />
+        ) : skill ? (
+          <AgentSkillCardBody card={skill} />
         ) : gate ? (
           <AgentGateBody gate={gate} produced={approval.detail} />
         ) : plan ? (

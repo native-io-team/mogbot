@@ -14,6 +14,7 @@ import {
   chartHasData,
   chartLabel,
   chartModel,
+  chartSummary,
   formatValue,
   indexAt,
   legendEntries,
@@ -164,11 +165,12 @@ function Cartesian({
   return (
     <div className="agent-block-chart__canvas">
       <svg
+        data-dynamic-svg="agent-block-chart"
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label={chartLabel(block)}
+        aria-label={`${chartLabel(block)}. ${chartSummary(block)}`}
         tabIndex={spark ? undefined : 0}
         onPointerMove={spark ? undefined : move}
         onPointerLeave={() => setAt(null)}
@@ -365,11 +367,12 @@ function PieChart({ block, model }: { block: ChartBlock; model: PieModel }) {
   return (
     <div className="agent-block-chart__canvas" data-pie>
       <svg
+        data-dynamic-svg="agent-block-chart"
         width={size}
         height={model.cy * 2}
         viewBox={`0 0 ${size} ${model.cy * 2}`}
         role="img"
-        aria-label={chartLabel(block)}
+        aria-label={`${chartLabel(block)}. ${chartSummary(block)}`}
         onPointerLeave={() => setAt(null)}
       >
         {model.slices.map((s) => (

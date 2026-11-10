@@ -12,7 +12,19 @@ const dictation = {
   onComposerKeyDown: () => false,
 };
 
-function Chat({ id, onSend, renders }: { id: string; onSend: () => void; renders: () => void }) {
+function Chat({
+  id,
+  onSend,
+  renders,
+  unfilled,
+  lastSent,
+}: {
+  id: string;
+  onSend: () => void;
+  renders: () => void;
+  unfilled?: string;
+  lastSent?: () => string | null;
+}) {
   renders();
   return (
     <>
@@ -36,6 +48,8 @@ function Chat({ id, onSend, renders }: { id: string; onSend: () => void; renders
         onStop={() => {}}
         onSend={onSend}
         onPickFiles={() => {}}
+        unfilled={unfilled}
+        lastSent={lastSent}
       />
     </>
   );
@@ -45,6 +59,34 @@ afterEach(() => {
   setComposerDraft('a1', '');
   setComposerDraft('a2', '');
   resetChatRestoreForTests();
+});
+
+describe('↑ brings back what you last sent', () => {
+  it('fills an empty field with it, and leaves ↑ alone once anything is typed', () => {
+    render(
+      <Chat id="a1" onSend={() => {}} renders={() => {}} lastSent={() => 'Run the tests again'} />
+    );
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    fireEvent.keyDown(box, { key: 'ArrowUp' });
+    expect(box).toHaveValue('Run the tests again');
+    fireEvent.change(box, { target: { value: 'Something else' } });
+    fireEvent.keyDown(box, { key: 'ArrowUp' });
+    expect(box).toHaveValue('Something else');
+  });
+
+  it('does nothing with nothing sent yet, or with a modifier held', () => {
+    const { unmount } = render(
+      <Chat id="a1" onSend={() => {}} renders={() => {}} lastSent={() => null} />
+    );
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    fireEvent.keyDown(box, { key: 'ArrowUp' });
+    expect(box).toHaveValue('');
+    unmount();
+    render(<Chat id="a1" onSend={() => {}} renders={() => {}} lastSent={() => 'Hi'} />);
+    const again = screen.getByRole('textbox', { name: 'Message Ops' });
+    fireEvent.keyDown(again, { key: 'ArrowUp', metaKey: true });
+    expect(again).toHaveValue('');
+  });
 });
 
 describe('the composer owns what is typed', () => {
@@ -79,5 +121,25 @@ describe('the composer owns what is typed', () => {
       target: { value: 'use sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH' },
     });
     expect(screen.getByRole('button', { name: 'Store it securely' })).toBeInTheDocument();
+  });
+});
+
+describe('a starter’s brief with its blank still empty', () => {
+  const brief = 'Every weekday at 8am, brief me. My topics: ';
+
+  it('can’t be sent until something is written in the blank', () => {
+    const onSend = vi.fn();
+    setComposerDraft('a1', brief);
+    render(<Chat id="a1" onSend={onSend} renders={() => {}} unfilled={brief} />);
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(screen.getByText('Fill in the end, then send')).toBeInTheDocument();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.change(box, { target: { value: `${brief}AI chips` } });
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+    expect(screen.queryByText('Fill in the end, then send')).toBeNull();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledWith(false);
   });
 });

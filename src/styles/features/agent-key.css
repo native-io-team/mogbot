@@ -563,8 +563,36 @@
   background: radial-gradient(60% 60% at 50% 50%, var(--agent-key-breath), transparent 70%);
   animation: agent-key-breathe var(--agent-key-breathe) ease-in-out infinite;
 }
-.agent-key[data-state='working'] .agent-key__legend {
-  animation: agent-key-glow var(--agent-key-breathe) ease-in-out infinite;
+/* Its legend's glow breathes, low to high and back. Animating the filter
+   itself repainted the key on the main thread every frame (most of an idle
+   window's CPU with a few agents working), so two copies of the legend sit
+   under it, one lit low and one lit high, and fade into each other: opacity,
+   which the compositor runs. The legend on top draws only the strokes, so
+   they never dim mid-fade. With Reduce Motion the copies are gone and the
+   legend keeps its still glow (above). */
+.agent-key__glow {
+  display: none;
+}
+.agent-key__face > .agent-key__legend {
+  grid-area: 1 / 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .agent-key[data-state='working'] .agent-key__glow {
+    display: block;
+  }
+  .agent-key[data-state='working'] .agent-key__legend:not(.agent-key__glow) {
+    filter: none;
+  }
+  .agent-key[data-state='working'] .agent-key__glow[data-glow='low'] {
+    filter: drop-shadow(0 0 1px var(--agent-key-lit-core))
+      drop-shadow(0 0 var(--agent-key-glow-low) var(--agent-key-lit-halo-low));
+    animation: agent-key-glow-out var(--agent-key-breathe) ease-in-out infinite;
+  }
+  .agent-key[data-state='working'] .agent-key__glow[data-glow='high'] {
+    filter: drop-shadow(0 0 1px var(--agent-key-lit-core-bright))
+      drop-shadow(0 0 var(--agent-key-glow-high) var(--agent-key-lit-halo-high));
+    animation: agent-key-glow-in var(--agent-key-breathe) ease-in-out infinite;
+  }
 }
 
 /* Needs your OK, the loudest: proud, the face deeper still, the legend
@@ -607,6 +635,14 @@
   opacity: 0.55;
 }
 
+/* Scrolled out of sight (AgentKey marks itself, lib/offscreen): hold still. */
+.agent-key[data-offscreen],
+.agent-key[data-offscreen]::before,
+.agent-key[data-offscreen] *,
+.agent-key[data-offscreen] *::after {
+  animation-play-state: paused;
+}
+
 @keyframes agent-key-pulse {
   0%,
   100% {
@@ -625,15 +661,23 @@
     opacity: 1;
   }
 }
-@keyframes agent-key-glow {
+/* The working legend's two lit copies, crossfading (low out as high comes in). */
+@keyframes agent-key-glow-out {
   0%,
   100% {
-    filter: drop-shadow(0 0 1px var(--agent-key-lit-core))
-      drop-shadow(0 0 var(--agent-key-glow-low) var(--agent-key-lit-halo-low));
+    opacity: 1;
   }
   50% {
-    filter: drop-shadow(0 0 1px var(--agent-key-lit-core-bright))
-      drop-shadow(0 0 var(--agent-key-glow-high) var(--agent-key-lit-halo-high));
+    opacity: 0;
+  }
+}
+@keyframes agent-key-glow-in {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
   }
 }
 

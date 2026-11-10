@@ -29,6 +29,7 @@ import {
   setDefaultAgentId,
 } from '../../../lib/setup';
 import { getOnboardingTestMode, OnboardingTestMode } from '../../../lib/agentOnboarding';
+import { isMockFailure } from '../../../lib/installProgress';
 import {
   nextStep,
   prevStep,
@@ -165,6 +166,9 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
         fetchStatus={fetchStatus}
         updateItemStatus={updateItemStatus}
         mock={testMode.mock}
+        mockFailure={
+          testMode.mock && isMockFailure(testMode.mockFailure) ? testMode.mockFailure : null
+        }
         forcePick={testMode.forceOnboarding}
         onEngineReady={engineReady}
         onBack={() => go(prevStep(step))}

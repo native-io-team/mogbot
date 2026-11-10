@@ -1,0 +1,10 @@
+%% `codex login` (TERMINAL_COMMANDS.codex_auth), 0.166, on stderr: a local
+%% callback server on localhost (http, not the sign-in page), the sign-in link
+%% on a line of its own, and nothing to type. It exits on "Successfully logged in".
+Starting local login server on http://localhost:1455.
+If your browser did not open, navigate to this URL to authenticate:
+
+https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_demo&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid%20profile%20email%20offline_access&state=demo&originator=codex_cli_rs
+
+On a remote or headless machine? Use `codex login --device-auth` instead.
+⏸Successfully logged in

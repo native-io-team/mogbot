@@ -17,9 +17,20 @@ import {
   CROSSOVER_WAIT,
   GATE_ALLOW,
   GATE_DENY,
+  MAC_FEATURES,
+  SKILL_NOT_NOW,
+  SKILL_SAVE,
+  skillCardNote,
+  SKILL_OFFER_NOTE,
   stepInSource,
 } from '@shipstudio/companion-protocol';
-import { STEP_IN_AT_MAC, STEP_IN_ON_YOUR_MAC } from '../lib/agents';
+import { router } from 'expo-router';
+import {
+  STEP_IN_AT_MAC,
+  STEP_IN_FROM_HERE,
+  STEP_IN_ON_YOUR_MAC,
+  stepInOnPhone,
+} from '../lib/agents';
 import { highRisk } from '../lib/needsYou';
 import {
   Children,
@@ -51,13 +62,14 @@ import {
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { answerApproval, call, describeError } from '../lib/session';
-import { useApp } from '../lib/store';
+import { useApp, useServed } from '../lib/store';
 import { fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
 import { SettingsChange } from './settingsChange';
 import { PlanList } from './planList';
 import { GateBody } from './gateBody';
+import { SkillCardBody } from './skills';
 import { ShowAll } from './ShowAll';
 import { SideScroll } from './SideScroll';
 import { Card, Line, OFFLINE_NOTE, TextAction, useActionShare } from './surfaces';
@@ -280,11 +292,19 @@ export function ApprovalCard({
 
   // "<source> sent what it knows": Ignore / Save to memory, nothing else.
   const handoff = !!approval.handoff;
-  // "Needs you in its browser": only Not now here; Step in is at the Mac
-  // (no remote control of the tab from the phone yet).
+  // "Needs you in its browser": Not now, and Step in here where the Mac lets
+  // the phone into the tab (`agents.stepInBegin`); else Step in is at the Mac.
   const stepIn = approval.stepIn;
+  const stepInHere = useServed('agents.stepInBegin', MAC_FEATURES.stepInPhone);
+  const stepInFromHere = () =>
+    router.push({
+      pathname: '/signin',
+      params: { agentId: message.agentId, requestId: approval.requestId, stepIn: '1' },
+    });
+  // "Save … as a skill?": Not now / Save, nothing behind ⋯.
+  const skill = approval.skill;
   const consentCard =
-    approval.connector?.kind === 'consent' || !!approval.front || handoff || !!stepIn;
+    approval.connector?.kind === 'consent' || !!approval.front || handoff || !!stepIn || !!skill;
   // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
   const gate = approval.gate;
   // "Carry on with Codex until then?": Wait, Just this time, Always; nothing behind ⋯.
@@ -295,12 +315,14 @@ export function ApprovalCard({
   const [denyWord, allowWord] = approval.front
     ? ['Not now', 'Check again']
     : stepIn
-      ? ['Not now', '']
+      ? ['Not now', stepInHere ? 'Step in' : '']
       : handoff
         ? ['Ignore', 'Save to memory']
         : gate
           ? [GATE_DENY, GATE_ALLOW]
-          : ['Deny', 'Allow'];
+          : skill
+            ? [SKILL_NOT_NOW, SKILL_SAVE]
+            : ['Deny', 'Allow'];
   // Deny and Allow share the row beside ⋯ while both say their word whole.
   const share = useActionShare(
     crossover ? [CROSSOVER_WAIT, CROSSOVER_ONCE, CROSSOVER_ALWAYS] : [denyWord, allowWord],
@@ -358,7 +380,8 @@ export function ApprovalCard({
       )}
       <Button
         title={crossover ? CROSSOVER_WAIT : denyWord}
-        variant="outline"
+        // An offer's no is quiet: nothing waits on it.
+        variant={skill ? 'ghost' : 'outline'}
         busy={busy === 'deny'}
         disabled={off}
         focusable={armed}
@@ -383,15 +406,31 @@ export function ApprovalCard({
             disabled={off}
             focusable={armed}
             onPress={() => void answer(true, true)}
-            accessibilityHint="Carry on with the other AI app (Claude Code or Codex) whenever this happens. Change it on your Mac in Settings → Agents → Usage."
+            accessibilityHint="Carry on with the other AI app (Claude Code or Codex) whenever this happens. Change it on your Mac in Settings → Accounts & usage."
             style={share}
           />
         </>
       )}
+      {stepIn && stepInHere && (
+        <Button
+          title={allowWord}
+          variant="answer"
+          disabled={off}
+          focusable={armed}
+          onPress={() => {
+            haptic.select();
+            stepInFromHere();
+          }}
+          accessibilityHint="Its tab on your Mac shows here, and you do it by touch."
+          testID="step-in-here"
+          style={share}
+        />
+      )}
       {!stepIn && !crossover && (
         <Button
           title={allowWord}
-          variant={risky ? 'danger' : 'answer'}
+          // An offer's yes is a choice, not a release: outlined, not solid.
+          variant={risky && !skill ? 'danger' : skill ? 'outline' : 'answer'}
           busy={busy === 'allow'}
           disabled={off}
           focusable={armed}
@@ -406,12 +445,15 @@ export function ApprovalCard({
   return (
     <Card
       tone={risky ? 'warning' : undefined}
+      quiet={!!skill}
       icon={
         risky
           ? 'exclamationmark.triangle'
           : stepIn
             ? 'globe'
-            : crossover
+            : skill
+              ? 'graduationcap'
+              : crossover
               ? 'arrow.left.arrow.right'
               : consent
                 ? 'square.and.arrow.down'
@@ -442,11 +484,17 @@ export function ApprovalCard({
           ? OFFLINE_NOTE
           : stepIn
             ? stepIn.inSince
-              ? STEP_IN_AT_MAC
-              : STEP_IN_ON_YOUR_MAC
+              ? stepIn.onPhone
+                ? stepInOnPhone(stepIn.onPhone)
+                : STEP_IN_AT_MAC
+              : stepInHere
+                ? STEP_IN_FROM_HERE
+                : STEP_IN_ON_YOUR_MAC
             : gate
               ? 'It waits for you, and closes if the routine runs again first.'
-              : paused &&
+              : skill
+                ? [skillCardNote(skill), SKILL_OFFER_NOTE].filter(Boolean).join(' ')
+                : paused &&
                   !fit.pinned &&
                   !consent &&
                   !approval.settings &&
@@ -459,7 +507,11 @@ export function ApprovalCard({
     >
       {/* A step-in card's reason is its title, and its detail is the desk's
           ("opens on this Mac"): the note says where to step in instead. */}
-      {!!(crossover ? approval.summary : !stepIn && approval.detail) && (
+      {skill ? (
+        // When to use it, then the steps as they'd be saved: never in the
+        // fitted scroll area, which cut the steps off on a short pane.
+        <SkillCardBody skill={skill} />
+      ) : !!(crossover ? approval.summary : !stepIn && approval.detail) && (
         <FittedDetail fit={fit}>
           {crossover ? (
             <T color={colors.textBody}>{approval.summary}</T>
@@ -1148,8 +1200,12 @@ export const useCardStyles = makeStyles((colors) => ({
   showAll: { paddingHorizontal: space.md, paddingBottom: space.sm },
   /** "Details" under a summary: on the text's edge, not a field's inset. */
   detailsToggle: { alignSelf: 'flex-start' as const },
-  /** ⋯ · Deny · Allow: one row, the affirmative last. */
-  answers: { flexDirection: 'row', flexWrap: 'wrap', flexGrow: 1, gap: space.sm },
+  /**
+   * ⋯ · Deny · Allow: one row, the affirmative last. The card's whole width:
+   * sized to its content, three answers a row each (Wait · Just this time ·
+   * Always) measured wider than the card and hung off its left edge.
+   */
+  answers: { flexDirection: 'row', flexWrap: 'wrap', flexGrow: 1, width: '100%', gap: space.sm },
   /** A task's own menu: each option a full row, then the pair. */
   choices: { flexGrow: 1, flexBasis: '100%', gap: space.sm },
   more: {

@@ -17,12 +17,13 @@ import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import { CheckIcon, ChevronIcon } from '@/components/icons';
 import { AgentKey } from './AgentKey';
-import { sortAgents, type Agent } from '../../lib/agents';
+import { roleWithoutPath, sortAgents, type Agent } from '../../lib/agents';
 import {
   createRoom,
   defaultRoomName,
   MAX_ROOM_MEMBERS,
   MIN_ROOM_MEMBERS,
+  ROOM_WHAT,
   updateRoom,
   type Room,
 } from '../../lib/agentRooms';
@@ -38,6 +39,16 @@ interface RoomEditorModalProps {
 }
 
 const NOBODY = '';
+
+/** "2 of 6"; under two, how many more it needs; at six, that it's full. */
+export function countLine(n: number): string {
+  if (n < MIN_ROOM_MEMBERS) {
+    const more = MIN_ROOM_MEMBERS - n;
+    return `${n} of ${MAX_ROOM_MEMBERS} · pick ${more === 1 ? 'one more' : 'two'}`;
+  }
+  if (n >= MAX_ROOM_MEMBERS) return `${n} of ${MAX_ROOM_MEMBERS} · full`;
+  return `${n} of ${MAX_ROOM_MEMBERS}`;
+}
 /** Choices (Ask me and the members) a segmented row holds before it becomes a menu. */
 const LEAD_SEGMENTS = 3;
 
@@ -108,8 +119,8 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
         }}
       >
         <p className="agent-room-editor__lead">
-          A group conversation with two to six agents. Each keeps its own memory; you @ who should
-          answer, or @everyone.
+          {ROOM_WHAT} Two to six agents, each with its own memory; you @ who should answer, or
+          @everyone.
         </p>
         <label className="agent-room-editor__label" htmlFor="room-name">
           Name
@@ -122,27 +133,36 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
           onChange={(e) => setName(e.target.value)}
         />
         <div className="agent-room-editor__label" id="room-members">
-          Members{' '}
-          <span className="agent-room-editor__count">
-            {picked.length} of {MAX_ROOM_MEMBERS}
+          Members {/* The count says what's next: one more to go, or full. */}
+          <span className="agent-room-editor__count" aria-live="polite">
+            {countLine(picked.length)}
           </span>
         </div>
         <ul className="agent-room-editor__members" aria-labelledby="room-members">
           {team.map((agent) => {
             const on = picked.includes(agent.id);
+            const closed = !on && full;
             return (
               <li key={agent.id}>
-                <label className="agent-room-editor__member" data-on={on || undefined}>
+                <label
+                  className="agent-room-editor__member"
+                  data-on={on || undefined}
+                  data-closed={closed || undefined}
+                  title={closed ? `A room holds ${MAX_ROOM_MEMBERS} at most` : undefined}
+                >
                   <Checkbox
                     checked={on}
-                    disabled={!on && full}
+                    disabled={closed}
                     label={`${agent.name} in this room`}
                     onChange={(checked) => toggle(agent.id, checked)}
                   />
                   <AgentKey id={agent.id} name={agent.name} color={agent.color} size="sm" />
                   <span className="agent-room-editor__member-name">{agent.name}</span>
-                  {agent.role && (
-                    <span className="agent-room-editor__member-role">{agent.role}</span>
+                  {/* Its role in words; a folder path in it was noise here, as in the list. */}
+                  {roleWithoutPath(agent.role ?? '') && (
+                    <span className="agent-room-editor__member-role">
+                      {roleWithoutPath(agent.role ?? '')}
+                    </span>
                   )}
                 </label>
               </li>

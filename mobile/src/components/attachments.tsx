@@ -140,6 +140,9 @@ function Thumb({
         style={StyleSheet.absoluteFill}
         contentFit="cover"
         transition={180}
+        // A chat opened again (or scrolled back to) draws its pictures from
+        // memory, already decoded, instead of reading and decoding them again.
+        cachePolicy="memory-disk"
         recyclingKey={file.path || file.localUri}
         onError={() => setFailed(true)}
         onLoad={(e) => {

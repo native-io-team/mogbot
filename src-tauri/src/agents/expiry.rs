@@ -188,6 +188,10 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
     if a.slack_reply.is_some() {
         return None;
     }
+    // "Save … as a skill?": nothing waits on it; it stays until answered.
+    if a.skill.is_some() {
+        return None;
+    }
     if stays_open(a) {
         return None;
     }

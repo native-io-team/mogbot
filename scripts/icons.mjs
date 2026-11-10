@@ -214,28 +214,40 @@ function validateDeclarations(
 }
 
 /**
- * The marked dynamic SVG exceptions: SVG assembled from data at runtime, one
- * root each, carrying its marker. The branch graph draws a repository's
- * history; the agent key draws its legend from the icon registry it shares
- * with the phone (packages/companion-protocol/src/agentKeyIcons.ts).
+ * The marked dynamic SVG exceptions: SVG assembled from data at runtime, each
+ * root carrying its marker. The branch graph draws a repository's history; the
+ * agent key draws its legend from the icon registry it shares with the phone
+ * (packages/companion-protocol/src/agentKeyIcons.ts); an agent's chart block
+ * plots the numbers it sent (a cartesian chart and a pie in BlockChart, the
+ * metric tile's sparkline in BlockParts). Tests are not feature components.
  */
 function validateDynamicSvg({
   sourceDirectory = sourceRoot,
   branchFile = path.join(sourceRoot, 'components', 'branches', 'BranchGraph.tsx'),
   keyFile = path.join(sourceRoot, 'components', 'agents', 'AgentKey.tsx'),
+  blockChartFile = path.join(sourceRoot, 'components', 'agents', 'blocks', 'BlockChart.tsx'),
+  blockPartsFile = path.join(sourceRoot, 'components', 'agents', 'blocks', 'BlockParts.tsx'),
 } = {}) {
   const errors = [];
   const marked = new Map([
-    [branchFile, 'branch-graph'],
-    [keyFile, 'agent-key'],
+    [branchFile, ['branch-graph', 1]],
+    [keyFile, ['agent-key', 1]],
+    [blockChartFile, ['agent-block-chart', 2]],
+    [blockPartsFile, ['agent-block-spark', 1]],
   ]);
-  const tsxFiles = walkFiles(sourceDirectory).filter((file) => file.endsWith('.tsx'));
+  const tsxFiles = walkFiles(sourceDirectory).filter(
+    (file) => file.endsWith('.tsx') && !file.endsWith('.test.tsx')
+  );
   for (const file of tsxFiles) {
     const source = fs.readFileSync(file, 'utf8');
     const count = [...source.matchAll(/<svg\b/g)].length;
     if (marked.has(file)) {
-      if (count !== 1 || !source.includes(`data-dynamic-svg="${marked.get(file)}"`)) {
-        errors.push(`${relative(file)}: the marked dynamic SVG exception must contain exactly one SVG and its marker`);
+      const [marker, roots] = marked.get(file);
+      const markers = source.split(`data-dynamic-svg="${marker}"`).length - 1;
+      if (count !== roots || markers < roots) {
+        errors.push(
+          `${relative(file)}: the marked dynamic SVG exception must contain exactly ${roots} SVG root${roots === 1 ? '' : 's'}, each with its marker`
+        );
       }
     } else if (count > 0) {
       errors.push(`${relative(file)}: static inline SVG is not allowed`);

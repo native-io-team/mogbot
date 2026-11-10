@@ -35,7 +35,9 @@ export function ProjectBulkActionConfirm<T extends DashboardProject>({
 
   return (
     <ProjectActionConfirmModal
-      title={isDelete ? 'Delete Selected Files From Computer?' : 'Remove Selected Projects?'}
+      title={
+        isDelete ? 'Delete the selected files from this Mac?' : 'Remove the selected projects?'
+      }
       body={
         isDelete ? (
           <>
@@ -50,12 +52,12 @@ export function ProjectBulkActionConfirm<T extends DashboardProject>({
       hint={
         isDelete
           ? `${selection} will be removed from disk. This cannot be undone.`
-          : `${selection} will stay on this Mac and can be added again later with Import project, Local folder.`
+          : `${selection} will stay on this Mac. To bring ${confirm.projects.length === 1 ? 'it' : 'them'} back: Import, then Local folder.`
       }
       loading={loading}
       confirmLabel={isDelete ? 'Delete files' : 'Remove from projects'}
       loadingLabel={isDelete ? 'Deleting…' : 'Removing…'}
-      confirmVariant={isDelete ? 'danger' : 'primary'}
+      confirmVariant={isDelete ? 'danger' : 'strong'}
       onCancel={onCancel}
       onConfirm={onConfirm}
     />

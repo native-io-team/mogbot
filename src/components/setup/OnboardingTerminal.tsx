@@ -6,7 +6,7 @@
  * Reuses xterm.js setup from Terminal.tsx but without drag-drop handling.
  */
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, type MutableRefObject } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { createWebLinksAddon } from '../../lib/terminalLinks';
 import { FitAddon } from '@xterm/addon-fit';
@@ -51,9 +51,31 @@ interface OnboardingTerminalProps {
    * surface the actual error on failure (see lib/terminalDiagnostics).
    */
   onExit: (exitCode: number | null, outputTail: string) => void;
+  /**
+   * Each chunk of output as text, as it arrives. Onboarding reads its steps
+   * off this ("Downloading…", "Installing…") while the terminal itself stays
+   * folded under "Show details".
+   */
+  onOutput?: (text: string) => void;
+  /** Take keyboard focus once the command starts. Off while the terminal is folded away. */
+  autoFocus?: boolean;
+  /**
+   * Set to a function that types into the running command (a password field
+   * or a Continue button outside the terminal answering its prompt), and
+   * cleared when it stops.
+   */
+  inputRef?: MutableRefObject<((data: string) => void) | null>;
 }
 
-export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTerminalProps) {
+export function OnboardingTerminal({
+  command,
+  args,
+  cwd,
+  onExit,
+  onOutput,
+  autoFocus = true,
+  inputRef,
+}: OnboardingTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -64,9 +86,22 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
 
   // Use ref for onExit to prevent effect re-runs when callback reference changes
   const onExitRef = useRef(onExit);
+  const onOutputRef = useRef(onOutput);
+  const autoFocusRef = useRef(autoFocus);
   useEffect(() => {
     onExitRef.current = onExit;
-  }, [onExit]);
+    onOutputRef.current = onOutput;
+    autoFocusRef.current = autoFocus;
+  }, [onExit, onOutput, autoFocus]);
+
+  // Typing from outside the terminal goes to whichever PTY is running now.
+  useEffect(() => {
+    if (!inputRef) return;
+    inputRef.current = (data: string) => ptyRef.current?.write(data);
+    return () => {
+      inputRef.current = null;
+    };
+  }, [inputRef]);
 
   const cleanup = useCallback(() => {
     if (ptyRef.current) {
@@ -391,7 +426,9 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
           try {
             const chunk = typeof data === 'string' ? data : toPtyBytes(data);
             terminalRef.current?.write(chunk);
-            const combined = outputTailRef.current + decodeChunk(data);
+            const text = decodeChunk(data);
+            onOutputRef.current?.(text);
+            const combined = outputTailRef.current + text;
             outputTailRef.current =
               combined.length > OUTPUT_TAIL_MAX_CHARS
                 ? combined.slice(-OUTPUT_TAIL_MAX_CHARS)
@@ -487,8 +524,8 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
           onExitRef.current(1, failure);
         }, STARTUP_TIMEOUT_MS);
 
-        // Focus the terminal
-        term.focus();
+        // Focus the terminal, unless it is folded away out of sight.
+        if (autoFocusRef.current) term.focus();
       } catch (err) {
         logger.warn(`Failed to spawn ${command}`);
         const message = `Error starting command: ${formatCommandError(asCommandError(err))}`;

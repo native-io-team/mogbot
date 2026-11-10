@@ -2,8 +2,8 @@
    the account rows and an account's page (UsageStack), and the view
    (AgentsUsageView).
 
-   The total is drawn in ink, not hue: one segment per account, most room
-   first, each filled to what it adds. A status hue only for an account that
+   The total is drawn in ink, not hue: one segment per account, in the work
+   order, each filled to what it adds. A status hue only for an account that
    is low (amber); out of usage is neutral, since it resets by itself. Never
    the accent. The position keycap is the site's key (the segmented tabs'
    key); the hero and the account's page are sheets. */
@@ -19,7 +19,7 @@
   --usage-cap-size-large: var(--spacing-2xl);
   --usage-row-bar-width: 6em;
   --usage-row-left-width: 7.5em;
-  --usage-row-state-width: 8.5em;
+  --usage-row-state-width: 9.5em;
   --usage-row-refill-width: 5.5em;
   --usage-hero-headline: var(--font-size-display);
 }
@@ -501,7 +501,7 @@
   list-style: none;
 }
 
-/* Where did my usage go. */
+/* Where it went. */
 .usage-key__story {
   display: flex;
   flex-direction: column;
@@ -605,12 +605,11 @@
   min-width: 0;
 }
 
-/* A segment and its label, one target: opens that account. */
+/* A segment, one target: opens that account. */
 .usage-total__part {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--spacing-xs);
   min-width: 0;
   margin: calc(var(--spacing-xs) * -1);
   padding: var(--spacing-xs);
@@ -646,7 +645,6 @@
 .usage-total__part .usage-total__seg {
   flex: none;
   height: var(--usage-total-height-large);
-  margin-bottom: var(--spacing-2xs);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-input-inset);
 }
@@ -670,29 +668,6 @@
   box-shadow: none;
   outline: var(--border-width-default) dashed var(--border-strong);
   outline-offset: calc(var(--border-width-default) * -1);
-}
-
-.usage-total__name {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: var(--font-size-body-lg);
-  font-weight: var(--font-weight-label);
-  letter-spacing: var(--tracking-name);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-total__room {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-xs) var(--spacing-sm);
-}
-
-.usage-total__left {
-  color: var(--text-secondary);
-  font-size: var(--font-size-body-md);
-  font-variant-numeric: tabular-nums;
 }
 
 /* A countdown to a refill: one chip, everywhere. */
@@ -913,6 +888,19 @@
   color: var(--text-muted);
 }
 
+/* A signed-out row's Sign in, over its empty refill column (outside the row's
+   button, so it is its own control). */
+.usage-row__item {
+  position: relative;
+}
+
+.usage-row__sign-in {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--spacing-lg) + var(--spacing-md) + 14px); /* css-ok: past the 14px chevron */
+  transform: translateY(-50%);
+}
+
 /* Narrow: the bar and refill give way; name, room and state stay. */
 @container usage-panel (max-width: 34rem) {
   .usage-row {
@@ -921,7 +909,8 @@
 
   .usage-row__bar,
   .usage-row__refill,
-  .usage-row__chevron {
+  .usage-row__chevron,
+  .usage-row__sign-in {
     display: none;
   }
 }
@@ -1093,4 +1082,52 @@
   max-width: none;
   font-family: var(--font-ui);
   font-size: var(--font-size-body-md);
+}
+
+/* Nothing read yet (a first run): the row is the word alone, in the
+   sidebar footer's own ink, like Settings beside it. */
+.usage-glance[data-quiet] .usage-glance__label {
+  color: inherit;
+}
+
+/* An account's page: the page header is the breadcrumb ("Usage › Work"), in
+   the header's own type, the page name quieter and a way back. */
+.agent-chat__crumbs .breadcrumb__list {
+  overflow: hidden;
+}
+
+.agent-chat__crumbs .breadcrumb__link.button,
+.agent-chat__crumbs .breadcrumb__page {
+  max-width: none;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
+.agent-chat__crumbs .breadcrumb__link.button {
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.agent-chat__crumbs .breadcrumb__link.button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.agent-chat__crumbs .breadcrumb__separator {
+  padding-inline: var(--spacing-xs);
+}
+
+/* Read at 0%: nothing left, so no solid track (in dark the track is a dark
+   slab that read as full beside the dashed unread ones); an empty slot with
+   a solid hairline, told apart from "not read" by the dash. */
+.usage-total__seg[data-empty] {
+  background: transparent;
+  box-shadow: none;
+  outline: var(--border-width-default) solid var(--border-strong);
+  outline-offset: calc(var(--border-width-default) * -1);
 }

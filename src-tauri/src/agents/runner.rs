@@ -12,6 +12,7 @@
 //! a chat message under the same id when it completes; tool calls only ever
 //! update the "working" line under the agent's name.
 
+use crate::agents::store::OrLog;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
@@ -23,7 +24,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 
 use super::codex_app::Out;
-use super::driver::{Driver, TurnSpec};
+use super::driver::{Conversation, Driver, TurnSpec};
 use super::engine::Engine;
 use super::notify;
 use super::procs;
@@ -42,7 +43,7 @@ pub const EVENT_CONVERSATIONS: &str = "agents://conversations";
 pub const EVENT_DRAFT: &str = "agents://draft";
 /// An engine reported how much of the plan is left (`super::quota`).
 pub const EVENT_QUOTA: &str = "agents://quota";
-/// The usage mode or the spare-capacity list changed (`agents::usage_plan`).
+/// The usage mode or the list of ideas for leftover usage changed (`agents::usage_plan`).
 pub const EVENT_USAGE_PLAN: &str = "agents://usage-plan";
 
 /// How often a growing draft is sent to the UI: smooth to the eye, and a
@@ -440,7 +441,8 @@ fn nothing_new(app: &AppHandle, agent_id: &str) {
     notify::replace_held(agent_id, None);
     // Off screen, the firing line counted as unread (`announce`).
     if !notify::on_screen(app, agent_id) {
-        let _ = store::update(agent_id, |a| a.unread = a.unread.saturating_sub(1));
+        store::update(agent_id, |a| a.unread = a.unread.saturating_sub(1))
+            .or_log("an agent's unread count");
     }
     let _ = record_in_turn(
         app,
@@ -1410,11 +1412,12 @@ fn plan_recovery_for(
     if let (Pickup::Resume, Some(sid)) = (&pickup, session) {
         // Claude Code's first turn may have gone before it said its session.
         let sid = sid.to_string();
-        let _ = store::update(agent_id, |a| {
+        store::update(agent_id, |a| {
             if super::crossover::session_on(a, engine).is_none() {
                 super::crossover::save_session(a, engine, sid);
             }
-        });
+        })
+        .or_log("an agent's engine session");
         let resume = next_pickup(mark.resumes).unwrap_or(MAX_RESUMES);
         requeue_first(
             agent_id,
@@ -1531,10 +1534,13 @@ pub fn set_status(app: &AppHandle, agent_id: &str, mut status: Status) {
         *activity = super::secrets::redact(activity).into_owned();
     }
     status.work = None;
-    {
+    let moved = {
         let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
-        runtimes.entry(agent_id.to_string()).or_default().status = Some(status.clone());
-    }
+        let runtime = runtimes.entry(agent_id.to_string()).or_default();
+        let before = runtime.status.as_ref().map_or("idle", |s| s.state);
+        runtime.status = Some(status.clone());
+        before != status.state
+    };
     with_work(agent_id, &mut status);
     #[derive(Serialize, Clone)]
     #[serde(rename_all = "camelCase")]
@@ -1550,6 +1556,11 @@ pub fn set_status(app: &AppHandle, agent_id: &str, mut status: Status) {
             status: &status,
         },
     );
+    // The Dock badge reads the state too: a failed turn needs you only once
+    // it's idle, which is after its error line was recorded.
+    if moved {
+        notify::refresh_badge(app);
+    }
 }
 
 /// Which room a line recorded without one belongs to.
@@ -2186,6 +2197,25 @@ pub fn from_outside(agent_id: &str) -> bool {
         .is_some_and(|r| r.running && r.outside)
 }
 
+/// Whether the agent's turn in progress is a routine's run (it holds a
+/// scheduled run's ticket): a page it updates says "by a routine".
+pub fn in_routine(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.running && !r.tickets.is_empty())
+}
+
+/// The name of the routine the agent's turn in progress runs, when it runs
+/// exactly one: a page it updates names it ("by Weekly report").
+pub fn routine_running(agent_id: &str) -> Option<String> {
+    if !in_routine(agent_id) {
+        return None;
+    }
+    super::runs::routine_named(agent_id, &turn_tickets(agent_id))
+}
+
 /// What a turn answering outside text is told about itself, so it doesn't
 /// report the browser it wasn't given as broken (`prompts::OUTSIDE_TURN`).
 pub fn outside_note(outside: bool) -> Option<&'static str> {
@@ -2464,7 +2494,8 @@ fn conversation_for(agent_id: &str, inbound: &Inbound) -> String {
 /// waits there (`interrupted_in` is per place).
 fn load_conversation(app: &AppHandle, agent_id: &str, to: &str) {
     let mut swapped = false;
-    let _ = store::update(agent_id, |a| swapped = super::conversations::swap(a, to));
+    store::update(agent_id, |a| swapped = super::conversations::swap(a, to))
+        .or_log("the conversation an agent's turn runs in");
     if swapped {
         tracing::info!(agent = %agent_id, conversation = %to, "[Agents] loaded a conversation for its turn");
         let _ = app.emit(EVENT_REGISTRY, ());
@@ -3339,7 +3370,18 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     let conversation = runtime.conversation.clone();
     // Disk low: every turn opens with it, wherever it answers (`disk`).
     let disk = super::disk::turn_note();
-    let prompt = format!("{nudge}{disk}{preamble}{prompt}");
+    // A conversation with a page: one line, so the turn keeps it current (`page`).
+    let page = if room.is_none() {
+        super::page::turn_note(
+            agent_id,
+            conversation
+                .as_deref()
+                .unwrap_or(super::conversations::FIRST),
+        )
+    } else {
+        String::new()
+    };
+    let prompt = format!("{nudge}{disk}{page}{preamble}{prompt}");
     Some(Batch {
         prompt,
         routine,
@@ -3892,7 +3934,19 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         // Outside text it was asked to answer (a "When…" routine's items,
         // someone else's Slack message) is read just as surely as a web page,
         // and stays in this conversation after the capped turn ends.
-        super::exposure::begin_turn(&agent_id, resumes, batch_outside(&agent_id));
+        // A fork of a session that read outside content carries it (`rewind`).
+        let forked_outside = current.as_ref().is_some_and(|a| {
+            super::rewind::carries_outside(
+                &agent_id,
+                super::conversations::loaded(a),
+                resumes.is_some(),
+            )
+        });
+        super::exposure::begin_turn(
+            &agent_id,
+            resumes,
+            batch_outside(&agent_id) || forked_outside,
+        );
         super::full_send::begin(&agent_id);
         super::results::discard(&agent_id);
         super::dev_servers::begin(&agent_id);
@@ -4140,8 +4194,9 @@ async fn tidy(app: &AppHandle, agent_id: &str, agent: &store::Agent) {
         let quiet = QuietTurn::begin(agent_id, true);
         let prompt = match agent.engine {
             Engine::Claude => super::tidy::claude_compact_prompt(),
-            // Codex is asked with `thread/compact/start`, not a prompt.
-            Engine::Codex => String::new(),
+            // Codex is asked with `thread/compact/start`, not a prompt;
+            // OpenCode tidies by starting fresh (`tidy::way`).
+            Engine::Codex | Engine::OpenCode => String::new(),
         };
         let result = run_on_accounts(app, agent_id, &prompt, false, 0).await;
         let compacted = quiet.compacted();
@@ -4167,7 +4222,7 @@ async fn tidy(app: &AppHandle, agent_id: &str, agent: &store::Agent) {
         return;
     }
     // The reading was the conversation before it was summarised.
-    let _ = store::update(agent_id, |a| a.context = None);
+    store::update(agent_id, |a| a.context = None).or_log("an agent's cleared context reading");
     let _ = app.emit(EVENT_REGISTRY, ());
     let _ = record(
         app,
@@ -4525,7 +4580,11 @@ fn recap_log(agent_id: &str) -> Result<Vec<store::AgentMessage>, CommandError> {
     let conversation = store::get(agent_id)
         .map(|a| super::conversations::loaded(&a).to_string())
         .unwrap_or_else(|_| super::conversations::FIRST.to_string());
-    store::conversation_page(agent_id, &conversation, RECAP_SCAN, None, None)
+    // What a rewind folded didn't happen, as far as this conversation goes.
+    let rewound = super::conversations::page_spec(agent_id, &conversation).rewound;
+    let mut page = store::conversation_page(agent_id, &conversation, RECAP_SCAN, None, None)?;
+    page.retain(|m| !rewound.contains(&m.id));
+    Ok(page)
 }
 
 const LOST_HEADER: &str = "[Your previous working session was lost. This is the recent conversation from your own chat, newest last: what \"You\" said, you said, and you know it. Pick up from here without mentioning the loss unless asked; never ask the user to repeat or paste anything in it. search_my_chat finds anything older.]";
@@ -4756,6 +4815,12 @@ pub(super) fn system_prompt_for(
     if super::admin::admin_now(agent) {
         prompt.push_str("\n\n");
         prompt.push_str(super::admin::PROMPT_SECTION);
+    }
+    // Skills it saved, named with their files where its engine doesn't read
+    // them itself (Codex, OpenCode, a turn in a project): `skills_learn`.
+    if let Some(skills) = super::skills_learn::prompt_for(agent, home, layout.project.is_some()) {
+        prompt.push_str("\n\n");
+        prompt.push_str(&skills);
     }
     // Apps the user chose not to connect: don't ask, work around them.
     if let Some(declined) = super::declined::prompt_section() {
@@ -5169,7 +5234,7 @@ fn go_back(app: &AppHandle, agent_id: &str, prompt: &str) -> String {
     let Some(away) = agent.away.clone() else {
         return prompt.to_string();
     };
-    let _ = store::update(agent_id, |a| a.away = None);
+    store::update(agent_id, |a| a.away = None).or_log("an agent's return from away");
     if let Ok(home_dir) = store::agent_home(agent_id) {
         crossover::sync_instructions(&home_dir);
     }
@@ -5541,6 +5606,36 @@ fn took_action(agent_id: &str) -> bool {
         .contains(agent_id)
 }
 
+/// Agents whose live turn has asked the user with blocks (`show` with a
+/// choice, comparison or form). Observed live (Claude Code, 2026-11-10):
+/// told to stop, the model still wrote "Tap a fruit above" or "I put up a
+/// table with…" under the question, a second bubble saying it again. Once
+/// asked, the turn's further words go in "What it did" and the question
+/// stays the chat's last word.
+static BLOCKS_ASKED: LazyLock<Mutex<std::collections::HashSet<String>>> =
+    LazyLock::new(Default::default);
+
+pub fn note_blocks_asked(agent_id: &str) {
+    BLOCKS_ASKED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(agent_id.to_string());
+}
+
+fn blocks_asked(agent_id: &str) -> bool {
+    BLOCKS_ASKED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(agent_id)
+}
+
+fn clear_blocks_asked(agent_id: &str) {
+    BLOCKS_ASKED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id);
+}
+
 fn clear_acted(agent_id: &str) {
     ACTED
         .lock()
@@ -5589,8 +5684,11 @@ async fn run_turn(
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
     driver.ready_as(account).await?;
-    // Only the app server streams what a command prints as it runs.
-    super::work::set_streams(agent_id, driver == Driver::CodexApp);
+    // Only the app server and OpenCode stream what a command prints as it runs.
+    super::work::set_streams(
+        agent_id,
+        matches!(driver, Driver::CodexApp | Driver::OpenCodeAcp),
+    );
     super::wallet::prepare(account);
     let (port, _) = crate::agent_bridge::start_global_agent_bridge(app.clone())
         .await
@@ -5636,16 +5734,56 @@ async fn run_turn(
         Engine::Claude => Some(super::reach::write_config(
             &super::reach::claude_config_with(&url, turn.secret(), claude_servers),
         )?),
-        Engine::Codex => None,
+        Engine::Codex | Engine::OpenCode => None,
     };
 
     let (session_id, resuming) = match &agent.session_id {
         Some(id) => (id.clone(), true),
         None => (driver.new_session(), false),
     };
+    // What was asked, before any recap: a fork that falls back asks again.
+    let asked = prompt;
+    // Gone back to an earlier point (`rewind`): where this conversation's
+    // new session starts. Claude Code resumes at an entry, Codex's
+    // app-server forks a thread through a turn, each only from a session
+    // still on this Mac; anything else picks up from a recap.
+    let loaded_conversation = super::conversations::loaded(&agent).to_string();
+    let branch = if crossed || quiet {
+        None
+    } else {
+        super::rewind::pending(agent_id, &loaded_conversation, agent.session_id.is_some()).map(
+            |p| match p.branch {
+                super::rewind::Branch::Fork { session, at }
+                    if engine == Engine::Claude
+                        && super::wallet::valid_session(&session)
+                        && super::wallet::valid_session(&at)
+                        && super::transcript::resumable(agent_id, engine, &session) =>
+                {
+                    super::rewind::Branch::Fork { session, at }
+                }
+                super::rewind::Branch::CodexFork { thread, turn }
+                    if engine == Engine::Codex
+                        && driver == Driver::CodexApp
+                        && super::wallet::valid_session(&thread)
+                        && !turn.is_empty()
+                        && super::transcript::resumable(agent_id, engine, &thread) =>
+                {
+                    super::rewind::Branch::CodexFork { thread, turn }
+                }
+                super::rewind::Branch::Fork { .. } | super::rewind::Branch::CodexFork { .. } => {
+                    super::rewind::Branch::Recap
+                }
+                b => b,
+            },
+        )
+    };
+    let recapped = !resuming
+        && (agent.new_engine || !retry_fresh || branch == Some(super::rewind::Branch::Recap));
     // First turn on a new engine: it starts blank, so it gets the conversation.
     let prompt = if agent.new_engine && !resuming {
         with_recap(agent_id, prompt)
+    } else if branch == Some(super::rewind::Branch::Recap) && !resuming {
+        with_recap_as(agent_id, super::rewind::RECAP_HEADER, None, prompt)
     } else {
         prompt.to_string()
     };
@@ -5685,12 +5823,33 @@ async fn run_turn(
     if resuming && super::transcript::ensure(account, &layout.cwd, &home, &session_id) {
         tracing::info!("[Agents] put {agent_id}'s conversation back where its engine looks for it");
     }
+    // A fork's source, likewise.
+    match &branch {
+        Some(super::rewind::Branch::Fork { session, .. })
+        | Some(super::rewind::Branch::CodexFork {
+            thread: session, ..
+        }) => {
+            super::transcript::ensure(account, &layout.cwd, &home, session);
+        }
+        _ => {}
+    }
+    // Where this conversation stands before the turn, for going back to
+    // before what it answers (`rewind`).
+    let resumed_at = if !resuming || crossed || quiet {
+        None
+    } else if engine == Engine::Claude {
+        super::transcript::claude_leaf(&home, &session_id)
+    } else if engine == Engine::Codex && driver == Driver::CodexApp {
+        super::rewind::codex_last_turn(agent_id, &session_id)
+    } else {
+        None
+    };
     if let Some(caps) = driver
         .capabilities_before(&agent, &binary, store::now_ms(), &access)
         .await
     {
         agent.capabilities = Some(caps.clone());
-        let _ = store::update(agent_id, |a| a.capabilities = Some(caps));
+        store::update(agent_id, |a| a.capabilities = Some(caps)).or_log("an agent's capabilities");
     }
     // This agent's secrets, as variables of this process only (see `secrets`).
     let secret_env = super::secrets::env_for(&agent);
@@ -5791,6 +5950,17 @@ async fn run_turn(
         access: Some(&access),
         window: agent.context.as_ref().map(|c| c.window),
     }));
+    // A new session that starts as `session` did at entry `at`: Claude
+    // Code's own fork, leaving that transcript as it was.
+    if let Some(super::rewind::Branch::Fork { session, at }) = &branch {
+        cmd.args([
+            "--resume",
+            session.as_str(),
+            "--resume-session-at",
+            at.as_str(),
+            "--fork-session",
+        ]);
+    }
     // A "When…" routine's items came from outside: this turn can't write its
     // own instructions or memory (Claude Code refuses the edit; for Codex,
     // and for anything that gets past that, it's put back when the turn ends).
@@ -5813,6 +5983,25 @@ async fn run_turn(
         // policy leaves any `*TOKEN*` variable out of the commands it runs.
         cmd.env(super::reach::TOKEN_ENV, turn.secret());
     }
+    // OpenCode: what it is told as instruction files (the prompt in a 0600
+    // file of the turn's), its permissions and model in its inline config,
+    // project config off (`opencode`). The secret goes over stdin only.
+    let _opencode_prompt = if engine == Engine::OpenCode {
+        let file = super::reach::write_instructions(&system_prompt)?;
+        let instructions = super::opencode::instruction_files(file.path(), &layout.cwd);
+        let given: Vec<String> = access.servers.iter().map(|s| s.key.clone()).collect();
+        for key in super::opencode::ENV_REMOVED {
+            cmd.env_remove(key);
+        }
+        cmd.envs(super::opencode::env(super::opencode::config(
+            model,
+            &instructions,
+            &given,
+        )));
+        Some(file)
+    } else {
+        None
+    };
     cmd.env("PATH", crate::utils::get_extended_path())
         // Claude Code gives an MCP tool call ~60s by default, and the approval
         // tool waits for a person. Verified: with the default, a card left for
@@ -5867,24 +6056,87 @@ async fn run_turn(
     if !session_id.is_empty() {
         mark.session_id = Some(session_id.clone());
     }
+    let answered = mark.batch.clone();
     write_mark(agent_id, mark);
+    if !crossed && !quiet {
+        super::rewind::note_turn(
+            agent_id,
+            &answered,
+            super::rewind::start_point(
+                engine,
+                resuming,
+                &session_id,
+                resumed_at,
+                branch.as_ref(),
+                recapped,
+            ),
+        );
+    }
 
     // An app-server conversation: stdin stays open for the turn, written by
     // one task (approval answers come from tasks of their own); `None` closes it.
     let (writer, mut conversation) = if driver.converses() {
-        let (conversation, first) = super::codex_app::Conversation::new(
-            resuming.then_some(session_id.as_str()),
-            &layout.cwd,
-            model,
-            &system_prompt,
-            &prompt,
-            profiles,
-        );
-        let conversation = conversation.with_effort(effort);
-        let conversation = if super::tidy::is_compacting(agent_id) {
-            conversation.compacting()
+        let (conversation, first) = if driver == Driver::OpenCodeAcp {
+            let mut servers = vec![super::opencode::McpServer {
+                name: super::prompts::SERVER_KEY.to_string(),
+                url: url.clone(),
+            }];
+            servers.extend(
+                access
+                    .servers
+                    .iter()
+                    .filter(|s| s.key != super::prompts::SERVER_KEY)
+                    .map(|s| super::opencode::McpServer {
+                        name: s.key.clone(),
+                        url: s.url.clone(),
+                    }),
+            );
+            let mut writable: Vec<std::path::PathBuf> = layout
+                .add_dirs
+                .iter()
+                .map(std::path::PathBuf::from)
+                .collect();
+            writable.push(layout.cwd.clone());
+            let mut read_only = dirs.read_only.clone();
+            // A turn answering outside text can't write its own instructions.
+            if outside {
+                read_only.extend(["CLAUDE.md", "AGENTS.md"].map(|f| home.join(f)));
+            }
+            let (conversation, first) = super::opencode::Conversation::new(
+                resuming.then_some(session_id.as_str()),
+                &layout.cwd,
+                &prompt,
+                &servers,
+                turn.secret(),
+                super::opencode::Scope {
+                    writable,
+                    read_only,
+                },
+            );
+            (Conversation::OpenCode(conversation), first)
         } else {
-            conversation
+            let (conversation, first) = super::codex_app::Conversation::new(
+                resuming.then_some(session_id.as_str()),
+                &layout.cwd,
+                model,
+                &system_prompt,
+                &prompt,
+                profiles,
+            );
+            let conversation = conversation.with_effort(effort);
+            // Gone back to an earlier point: a fork of the thread (`rewind`).
+            let conversation = match &branch {
+                Some(super::rewind::Branch::CodexFork { thread, turn }) => {
+                    conversation.forking(thread, turn)
+                }
+                _ => conversation,
+            };
+            let conversation = if super::tidy::is_compacting(agent_id) {
+                conversation.compacting()
+            } else {
+                conversation
+            };
+            (Conversation::Codex(conversation), first)
         };
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Option<String>>();
         let mut stdin = child.stdin.take();
@@ -5989,6 +6241,7 @@ async fn run_turn(
     draft_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     // Short lines written mid-turn go to the timeline (`narration`).
     let mut narration = super::narration::Narration::default();
+    clear_blocks_asked(agent_id);
     // When the engine's process tree was last looked at (`dev_servers`).
     let mut tree_seen_at = 0_i64;
     // `claude` exited. Its output normally closes with it, but a child that
@@ -6066,7 +6319,7 @@ async fn run_turn(
                         super::exposure::observe_codex(agent_id, &value);
                         super::codex::steps(&value)
                     }
-                    Driver::CodexApp => match conversation.as_mut() {
+                    Driver::CodexApp | Driver::OpenCodeAcp => match conversation.as_mut() {
                         Some(conversation) => {
                             let mut steps = Vec::new();
                             for out in conversation.on_message(&value) {
@@ -6084,6 +6337,16 @@ async fn run_turn(
                                             }
                                         });
                                     }
+                                    Out::AskOpenCode(ask) => {
+                                        let (app, id, tx, turn) = (app.clone(), agent_id.to_string(), writer.clone(), turn.id());
+                                        if let Some((gate, round)) = conversation.opencode_gate() {
+                                            tokio::spawn(async move {
+                                                for msg in super::opencode::answer(&app, &id, turn, round, *ask, gate).await {
+                                                    send(&tx, Some(msg));
+                                                }
+                                            });
+                                        }
+                                    }
                                 }
                             }
                             steps
@@ -6093,6 +6356,12 @@ async fn run_turn(
                 };
                 if driver == Driver::CodexApp {
                     super::exposure::observe_codex(agent_id, &value);
+                }
+                // Outside content it reads: the rest of the turn asks.
+                if let Some(conversation) = conversation.as_mut() {
+                    for (tool, input) in conversation.take_calls() {
+                        super::exposure::note(agent_id, &tool, &input);
+                    }
                 }
                 progress_dirty |= !steps.is_empty();
                 for step in steps {
@@ -6113,7 +6382,7 @@ async fn run_turn(
                         Step::Session(_) => {}
                         Step::Capabilities(caps) => {
                             compare_after_switch(app, agent_id, &caps);
-                            let _ = store::update(agent_id, |a| a.capabilities = Some(caps));
+                            store::update(agent_id, |a| a.capabilities = Some(caps)).or_log("an agent's capabilities");
                         }
                         Step::Reply(text) => {
                             // Recorded under the draft's id, so it takes the draft's place.
@@ -6137,6 +6406,16 @@ async fn run_turn(
                                     app,
                                     new_message(agent_id, MessageKind::Note, ANSWER_READ_LINE),
                                 );
+                                continue;
+                            }
+                            // Asked with blocks: the question is the last word.
+                            if !text.is_empty() && !quiet && blocks_asked(agent_id) {
+                                said_anything = true;
+                                let fold = super::narration::Fate::Fold(super::narration::Held {
+                                    draft_id,
+                                    text,
+                                });
+                                settle_narration(app, agent_id, Some(fold), &mut said_anything).await;
                                 continue;
                             }
                             if !text.is_empty() && !quiet {
@@ -6224,9 +6503,9 @@ async fn run_turn(
                             let turn_model = model.map(str::to_string);
                             let kept = tokio::task::spawn_blocking(move || {
                                 let mut kept = false;
-                                let _ = store::update(&id, |a| {
+                                store::update(&id, |a| {
                                     kept = keep_reading(a, on.as_deref(), turn_model.as_deref(), fill);
-                                });
+                                }).or_log("an agent's context reading");
                                 kept
                             })
                             .await
@@ -6246,7 +6525,7 @@ async fn run_turn(
                             turn_end.on_done();
                             timing.mark_result();
                             // The turn's last word, if it was held back.
-                            settle_narration(app, agent_id, narration.end(said_anything), &mut said_anything).await;
+                            settle_narration(app, agent_id, narration.end(said_anything || blocks_asked(agent_id)), &mut said_anything).await;
                             // The engine is still up: what it started is still under it.
                             if let Some(pid) = pid {
                                 note_engine_tree(agent_id, pid).await;
@@ -6381,10 +6660,12 @@ async fn run_turn(
     settle_narration(
         app,
         agent_id,
-        narration.end(said_anything),
+        narration.end(said_anything || blocks_asked(agent_id)),
         &mut said_anything,
     )
     .await;
+    // Its question is in the chat: not a silent turn.
+    said_anything |= blocks_asked(agent_id);
     let (status, settled) = match exited {
         Some(status) => (status, false),
         None => finish(&mut child, pid, saw_result, agent_id, stopped.is_none()).await,
@@ -6397,6 +6678,14 @@ async fn run_turn(
     timing.log(agent_id);
     // The app's own copy of the conversation, so a deleted transcript never
     // costs the agent its memory of this chat (`transcript`).
+    // A Codex app-server turn's id, for forking its thread through it later.
+    if engine == Engine::Codex && !crossed && !quiet {
+        if let (Some(Conversation::Codex(c)), Some(thread)) = (&conversation, &this_session) {
+            if let Some(turn) = c.turn_id() {
+                super::rewind::note_codex_turn(agent_id, thread, turn);
+            }
+        }
+    }
     let kept = this_session
         .clone()
         .or_else(|| (!session_id.is_empty()).then(|| session_id.clone()));
@@ -6463,6 +6752,28 @@ async fn run_turn(
         return Ok(Ended::Stopped(note));
     }
 
+    // Going back to the exact point failed before the engine started a
+    // session (a Claude Code that no longer takes `--resume-session-at`, a
+    // Codex that won't fork the thread): nothing ran, so this turn runs
+    // again from a recap, and the chat says so. An engine update never
+    // breaks going back.
+    let forked = matches!(
+        branch,
+        Some(super::rewind::Branch::Fork { .. }) | Some(super::rewind::Branch::CodexFork { .. })
+    );
+    if forked && !session_confirmed && !saw_result && !said_anything && !quiet {
+        tracing::warn!(
+            "[Agents] {agent_id}'s engine couldn't go back to the exact point; picking up from a recap: {}",
+            stderr_text.lines().last().unwrap_or("")
+        );
+        super::rewind::fell_back(agent_id, &loaded_conversation);
+        let _ = record_in_turn(
+            app,
+            new_message(agent_id, MessageKind::Note, super::rewind::RECAP_CLAUSE),
+        );
+        return Box::pin(run_turn(app, agent_id, asked, routine, false, account)).await;
+    }
+
     let missing_session =
         is_missing_session(&stderr_text) || result_error.as_deref().is_some_and(is_missing_session);
     // A conversation the engine started is there, whatever its errors say
@@ -6471,7 +6782,8 @@ async fn run_turn(
         tracing::warn!("[Agents] Session {session_id} for {agent_id} is gone; starting a new one");
         // The reading was the lost session's; the retry takes its own.
         reading.armed = false;
-        let _ = store::update(agent_id, |a| super::crossover::drop_session(a, engine));
+        store::update(agent_id, |a| super::crossover::drop_session(a, engine))
+            .or_log("an agent's dropped engine session");
         // The new session starts blank. Hand it the conversation the user
         // can see, so the agent doesn't greet them like a stranger, and say so.
         let _ = record_in_turn(
@@ -6553,7 +6865,8 @@ impl Drop for ReadingWatch {
     fn drop(&mut self) {
         if self.armed && !self.read {
             let mut had = false;
-            let _ = store::update(&self.agent_id, |a| had = a.context.take().is_some());
+            store::update(&self.agent_id, |a| had = a.context.take().is_some())
+                .or_log("an agent's cleared context reading");
             if had {
                 let _ = self.app.emit(EVENT_REGISTRY, ());
             }
@@ -6884,7 +7197,7 @@ mod tests {
 
         assert!(agent_prompt.contains(&prompts::usage_section(mode, false)));
         assert!(agent_prompt.contains("## Usage limits"));
-        assert!(agent_prompt.contains("Use it all before reset"));
+        assert!(agent_prompt.contains("Use it all before the refill"));
         assert!(!agent_prompt.contains("set_usage_mode"));
         assert!(chief_prompt.contains("set_usage_mode"));
         assert_eq!(std::fs::read_to_string(&claude_md).unwrap(), before);
@@ -7321,6 +7634,7 @@ mod tests {
                 step_in: None,
                 crossover: None,
                 account_switch: None,
+                skill: None,
                 slack_reply: None,
                 risk: None,
             });

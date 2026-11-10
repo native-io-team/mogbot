@@ -23,9 +23,15 @@ vi.mock('@tauri-apps/api/event', () => ({
 import { AgentQuietHoursSetting, DEFAULT_QUIET } from './AgentQuietHoursSetting';
 import { AgentLowPowerSetting } from './AgentLowPowerSetting';
 import { openSettingsFor } from '../../hooks/useOpenSettingsFromChat';
-import { takeSettingsSectionRequest, peekSettingsTabOnOpen } from '../../lib/settings';
+import {
+  COMPACT_WORKSPACE_TOOLBAR_CHANGED_EVENT,
+  ELEMENT_BREADCRUMB_ENABLED_CHANGED_EVENT,
+  SPOTIFY_WIDGET_ENABLED_CHANGED_EVENT,
+  takeSettingsSectionRequest,
+  peekSettingsTabOnOpen,
+} from '../../lib/settings';
 import { takeAccountsRequest } from '../../lib/agentAccounts';
-import { takeAccountSignIn } from '../../lib/settingsFromChat';
+import { followAppSettings, takeAccountSignIn } from '../../lib/settingsFromChat';
 
 const flush = () => act(() => new Promise((r) => setTimeout(r, 0)));
 
@@ -130,5 +136,25 @@ describe('the Chief opening Settings on the Mac', () => {
     expect(open).toHaveBeenCalledOnce();
     expect(takeAccountsRequest()).toBe('show');
     expect(takeAccountSignIn()).toBe('acc-9');
+  });
+});
+
+describe('a switch changed from chat', () => {
+  it('reaches this window as Settings’ own switch would, and nothing else', () => {
+    const seen: Array<[string, unknown]> = [];
+    const names = [
+      COMPACT_WORKSPACE_TOOLBAR_CHANGED_EVENT,
+      ELEMENT_BREADCRUMB_ENABLED_CHANGED_EVENT,
+      SPOTIFY_WIDGET_ENABLED_CHANGED_EVENT,
+    ];
+    const record = (e: Event) => seen.push([e.type, (e as CustomEvent).detail]);
+    names.forEach((n) => window.addEventListener(n, record));
+    followAppSettings({ compact_toolbar: true, element_breadcrumb: false, analytics: false });
+    followAppSettings(null);
+    names.forEach((n) => window.removeEventListener(n, record));
+    expect(seen).toEqual([
+      [COMPACT_WORKSPACE_TOOLBAR_CHANGED_EVENT, true],
+      [ELEMENT_BREADCRUMB_ENABLED_CHANGED_EVENT, false],
+    ]);
   });
 });

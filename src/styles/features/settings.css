@@ -178,7 +178,7 @@
   line-height: 1.4;
 }
 
-/* More than one action beside a row (Settings → Agents → Your Chrome). */
+/* More than one action beside a row (Settings → Chrome). */
 .settings-row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -193,7 +193,9 @@
   flex-wrap: wrap;
 }
 
-.settings-row:has(> .settings-row-actions) > .settings-row-info {
+/* Not in a stacked row: it is a column, where this basis is a height, and it
+   left 280px of empty card between the words and their buttons. */
+.settings-row:not(.settings-row--stacked):has(> .settings-row-actions) > .settings-row-info {
   flex-basis: var(--settings-row-info-min);
 }
 
@@ -556,7 +558,7 @@
   outline-offset: var(--spacing-xs);
 }
 
-/* Settings → Agents → Notifications, "Quiet hours": the two times beside
+/* Settings → Notifications, "Quiet hours": the two times beside
    the switch, on one line. */
 .agents-quiet {
   display: flex;
@@ -579,7 +581,7 @@
   font-size: var(--font-size-body-md);
 }
 
-/* Settings → Agents → Notifications, "Morning brief": its time beside the
+/* Settings → Notifications, "Morning brief": its time beside the
    switch. */
 .agents-brief {
   display: flex;
@@ -591,7 +593,7 @@
   width: calc(var(--spacing-xl) * 4);
 }
 
-/* Settings → Agents → Slack: the trigger word's short field, and the
+/* Settings → Apps → Slack: the trigger word's short field, and the
    conversations to listen in, one tickable line each. */
 .agents-slack-trigger {
   width: calc(var(--spacing-xl) * 6);

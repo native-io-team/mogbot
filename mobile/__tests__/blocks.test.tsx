@@ -4,9 +4,12 @@
  * and an answered block holds still.
  */
 import type { AgentMessage, Block, BlockSet } from '@shipstudio/companion-protocol';
+import { readBlocks } from '@shipstudio/companion-protocol';
+import turn from '../../packages/companion-protocol/src/blocks-turn.json';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Blocks, STAGED_NOTE } from '../src/components/blocks/Blocks';
+import { fitColumns } from '../src/components/blocks/BlockTable';
 import { BlockRepliesContext, blockAnswers, type BlockReplies } from '../src/lib/blocks';
 import { asMessage } from '../src/lib/wellFormed';
 
@@ -174,6 +177,18 @@ describe('every kind', () => {
     expect(screen.getByTestId('callout-warning')).toBeTruthy();
   });
 
+  it('tells VoiceOver what a chart shows, not only its title', async () => {
+    await draw(message(ALL.slice(0, 2)), null);
+    expect(
+      screen.getByRole('image', {
+        name: 'Signups (line chart, Mon to Wed). Signups: Mon 1, Tue 2, Wed 3. Trials: Mon 2, Wed 1.',
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('image', { name: /Ads 3, 30%; Search 7, 70%\. Total 10\./ })
+    ).toBeTruthy();
+  });
+
   it('says a chart with nothing in it has nothing to chart', async () => {
     await draw(
       message([
@@ -235,6 +250,85 @@ describe('a table', () => {
     expect(screen.getAllByTestId('table-row')).toHaveLength(8);
     await fireEvent.press(screen.getByText('Show all 12 rows'));
     expect(screen.getAllByTestId('table-row')).toHaveLength(12);
+  });
+});
+
+describe('fitting a table to the phone', () => {
+  const brief = {
+    columns: [{ label: 'Time' }, { label: 'Agent' }, { label: 'What' }],
+    rows: [
+      ['10:30 AM', 'Acme Site', 'Read what’s new on AI agents and write up the three that matter'],
+      ['9:00 AM', 'Finance', 'Sweep the invoices inbox (every 2 hours)'],
+    ],
+  };
+
+  it('wraps the long column, never the short ones, and fills the card without scrolling', () => {
+    const w = fitColumns(brief, 330);
+    expect(w.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(330);
+    // A time and a name keep the width their words need.
+    expect(w[0]).toBeGreaterThanOrEqual(8 * 14 * 0.57);
+    expect(w[1]).toBeGreaterThanOrEqual(9 * 14 * 0.57);
+  });
+
+  it('wraps number headers at their words before it scrolls', () => {
+    const counts = {
+      columns: [
+        { label: 'Agent' },
+        { label: 'Results', numeric: true },
+        { label: 'Routines run', numeric: true },
+        { label: 'Replies', numeric: true },
+      ],
+      rows: [['Acme Site', 1, 0, 6]],
+    };
+    expect(fitColumns(counts, 300).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(300);
+  });
+
+  it('measures at Dynamic Type: at AX sizes words stay whole and the table scrolls', () => {
+    const counts = {
+      columns: [{ label: 'Agent' }, { label: 'Results', numeric: true }],
+      rows: [['Research', 1]],
+    };
+    const big = fitColumns(counts, 300, 3.1);
+    // "Research" and "Results" at the reading clamp (×2), not at ×1.
+    expect(big[0]).toBeGreaterThanOrEqual(8 * 14 * 0.57 * 2);
+    expect(big[1]).toBeGreaterThanOrEqual(7 * 12 * 0.57 * 2);
+  });
+
+  it('scrolls only when even wrapped it cannot fit', () => {
+    const wide = {
+      columns: Array.from({ length: 8 }, (_, i) => ({ label: `Column ${i}` })),
+      rows: [Array.from({ length: 8 }, () => 'a value')],
+    };
+    expect(fitColumns(wide, 300).reduce((a, b) => a + b, 0)).toBeGreaterThan(300);
+  });
+});
+
+describe('a page', () => {
+  it('puts records and notes in a row on one card, a section each', async () => {
+    await draw(
+      message([
+        S({
+          kind: 'facts',
+          title: 'Needs you',
+          items: [{ label: 'Lead Gen', value: 'Send the first of 12 lead emails' }],
+        } as Partial<Block> & { kind: 'facts' }),
+        S({ kind: 'callout', tone: 'warning', text: 'Gmail.' } as Partial<Block> & {
+          kind: 'callout';
+        }),
+        S({
+          kind: 'table',
+          title: 'Today',
+          columns: [{ label: 'Time' }],
+          rows: [['9:00 AM']],
+        } as Partial<Block> & { kind: 'table' }),
+      ]),
+      null
+    );
+    expect(screen.getAllByTestId('block-page')).toHaveLength(1);
+    expect(screen.getAllByTestId('block-section')).toHaveLength(3);
+    expect(screen.queryAllByTestId('block-card')).toHaveLength(0);
+    // A value too long to sit beside its label goes under it.
+    expect(screen.getByTestId('facts-stacked')).toBeTruthy();
   });
 });
 
@@ -382,5 +476,56 @@ describe('the chat’s answers', () => {
   it('keeps blocks on a message from the Mac, and drops a set of the wrong shape', async () => {
     expect(asMessage({ id: 'x', blocks: { v: 1, items: [] } })?.blocks).toBeTruthy();
     expect(asMessage({ id: 'x', blocks: 'nope' })?.blocks).toBeUndefined();
+  });
+});
+
+/*
+ * A real turn's blocks: `blocks-turn.json` is what the fake-engine suite's
+ * `blocks` scenario kept after an agent's `show` and the user's answer, as
+ * the companion's `messages` sends them. That scenario fails if the Mac
+ * stops producing exactly this.
+ */
+describe('a turn’s blocks, as the Mac sent them', () => {
+  const list = turn.messages.map((m) => asMessage(m)!);
+  const shown = list[0]!;
+  const answer = list[1]!;
+
+  it('draws every block', async () => {
+    expect(readBlocks(shown)!.items.map((b) => b.kind)).toEqual([
+      'metrics',
+      'chart',
+      'table',
+      'choices',
+    ]);
+    await draw(shown, replies().value);
+    for (const words of [
+      '412',
+      'Sold per day',
+      'Apples',
+      'Mangoes',
+      '$2.75',
+      'Which one do you want?',
+    ]) {
+      expect(screen.getAllByText(words, { exact: false }).length).toBeGreaterThan(0);
+    }
+    expect(screen.getAllByTestId('metric-tile')).toHaveLength(2);
+  });
+
+  it('a tap sends exactly the words the Mac then kept as the answer', async () => {
+    const r = replies();
+    await draw(shown, r.value);
+    await fireEvent.press(screen.getAllByTestId('block-choice')[1]!);
+    expect(r.reply).toHaveBeenCalledWith(shown.agentId, answer.text, false);
+  });
+
+  it('once answered, marks the pick and sends nothing', async () => {
+    const answers = blockAnswers(list);
+    expect(answers.get(shown.id)).toBe(answer.text);
+    const r = { reply: jest.fn(), answerOf: (id: string) => answers.get(id) ?? null };
+    await draw(shown, r);
+    const buttons = screen.getAllByTestId('block-choice');
+    expect(buttons[1]!.props.accessibilityState).toMatchObject({ selected: true });
+    await fireEvent.press(buttons[0]!);
+    expect(r.reply).not.toHaveBeenCalled();
   });
 });

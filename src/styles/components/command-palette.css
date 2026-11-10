@@ -42,7 +42,7 @@
   background: transparent;
   border: none;
   outline: none;
-  font-size: 15px;
+  font-size: var(--font-size-subhead-lg);
   color: var(--text-primary);
   font-family: inherit;
   min-width: 0;
@@ -115,11 +115,22 @@
   min-height: 0;
 }
 
+/* One quiet line (and, on a tab with results elsewhere, the way to them).
+   Left-aligned with the rows, not a centred banner: when the Chief is
+   offered below it, the line reads as the header of that one row. */
 .command-palette-empty {
-  padding: var(--spacing-2xl) var(--spacing-lg);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-sm);
   color: var(--text-muted);
-  text-align: center;
   font-size: var(--font-size-body-lg);
+  overflow-wrap: anywhere;
+}
+
+.command-palette-empty:only-child {
+  padding-bottom: var(--spacing-lg);
 }
 
 .command-palette-group + .command-palette-group {
@@ -141,7 +152,7 @@
   align-items: center;
   gap: var(--spacing-md);
   width: 100%;
-  padding: 10px var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-lg);
   background: transparent;
   border: none;
   border-radius: 0;
@@ -151,7 +162,7 @@
   font-family: inherit;
   font-size: var(--font-size-subhead);
   transition: background-color var(--transition-fast);
-  min-height: 40px;
+  min-height: var(--size-control-large);
 }
 
 .command-palette-row.is-selected {

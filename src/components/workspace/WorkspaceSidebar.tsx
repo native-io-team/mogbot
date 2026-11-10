@@ -178,6 +178,8 @@ interface Props {
   listContent?: ReactNode;
   /** Agents mode's quiet line at the foot (the plan's usage), above the phone row. */
   footerContent?: ReactNode;
+  /** Agents mode's create actions: pinned under the list, outside its scroller. */
+  listActions?: ReactNode;
   /**
    * Switch to Agents mode. Shows the Projects | Agents toggle above Search;
    * without it there is no toggle.
@@ -427,6 +429,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   navContent,
   listContent,
   footerContent,
+  listActions,
   onGoHome,
   onOpenProjectPicker,
   isSidebarHidden,
@@ -1401,7 +1404,21 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                   total={projectAgents.length}
                   collapsed={collapsed.team}
                   onToggle={() => toggleSection('team')}
-                  items={projectAgents.filter((i) => matchesFilter(i.label))}
+                  items={projectAgents
+                    .filter((i) => matchesFilter(i.label))
+                    .map((i) => ({
+                      ...i,
+                      // The agent's own key, as at work and everywhere in Agents; never a grey dot.
+                      leading: (
+                        <AgentKey
+                          id={i.agentId}
+                          name={i.label}
+                          color={i.color}
+                          state={i.working && i.dotState !== 'waiting' ? 'working' : 'idle'}
+                          size="xs"
+                        />
+                      ),
+                    }))}
                   emptyHint="No matches"
                 />
               )}
@@ -1852,6 +1869,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
             projectGroups
           )}
         </div>
+
+        {listActions && <div className="workspace-sidebar-pinned-actions">{listActions}</div>}
 
         <div className="workspace-sidebar-footer">
           <UpdateBanner />

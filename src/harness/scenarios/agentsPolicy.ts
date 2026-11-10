@@ -2,7 +2,7 @@
  * What each agent can do (`agents/policy.rs`): the "Change Hiring's
  * settings?" card the Chief raises from chat (`propose_settings_change`),
  * the same card once allowed, Edit agent's "What it can do" for an agent
- * with settings of its own, and Settings → Agents → What agents can do.
+ * with settings of its own, and Settings → Independence → What agents can reach.
  * Shapes copied from the Rust serde output, as `fixtures.gen.ts` has them.
  */
 
@@ -275,7 +275,7 @@ export const agentsPolicyScenarios: Scenario[] = [
       'Editing Hiring: “What it can reach” with a quiet “Use the team’s” text button (no presets menu), then one line each: Projects (only client-site and marketing-site, its own copy in client-site), Folders on this Mac (~/Documents/Candidates, read), Apps, Your browser “No”, Admin “No” (no Independence line: the slider above it is the one control), Rules with “Never email candidates directly” and a Remove. Lines it has of its own say “Its own”; the rest “Team default”. Under them a muted line that the app enforces these except independence and rules, and a “Change in chat” text button.',
     openSelector: AGENTS_TAB,
     requires: '.agent-policy__line',
-    clipSelector: '.agent-editor [role="group"][aria-label="What it can reach"]',
+    clipSelector: '.agent-editor .agent-policy',
     steps: [
       { click: '[data-agent-id="hiring"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
@@ -292,7 +292,7 @@ export const agentsPolicyScenarios: Scenario[] = [
     id: 'settings-agents-policy',
     title: 'Settings — What agents can reach',
     looksRightWhen:
-      'Opened from ⌘K “What agents can reach…” on the Independence page: a lead that every agent starts from these and that the Chief of Staff can change them in chat; no presets and no second scale; the team’s lines without an Independence line; the note on what’s enforced; “1 agent has settings of its own: Hiring.” and a secondary “Reset everyone to the team’s settings”.',
+      'Opened from ⌘K “What agents can reach…” on the Independence page: a lead that every agent starts from these and that the Chief of Staff can change them in chat; no presets and no second scale; the team’s lines without an Independence line; the note on what’s enforced; “1 agent has its own: Hiring.” and a secondary “Reset everyone to the team’s settings”.',
     command: 'agents.policyDefaults',
     requires: '.agent-team-policy__reset button',
     clipSelector: 'section[aria-labelledby="agents-settings-policy"]',

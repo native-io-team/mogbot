@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 import type { DashboardProject } from '../../lib/project';
 import { BranchIcon } from '@/components/icons';
 import { ProjectCardMenu } from './ProjectCardMenu';
+import { ProjectTeam, type ProjectTeamSummary } from './ProjectTeam';
 
 interface ProjectTableViewProps<TProject extends DashboardProject> {
   projects: TProject[];
@@ -30,6 +31,10 @@ interface ProjectTableViewProps<TProject extends DashboardProject> {
 
   pinnedSet?: ReadonlySet<string>;
   onTogglePin?: (projectPath: string, pinned: boolean) => void | Promise<void>;
+  /** The agents that work in a project (`projectTeam`), by its path. */
+  teamFor?: (projectPath: string) => ProjectTeamSummary | null;
+  /** Opens an agent's chat from a team line. */
+  onOpenAgent?: (agentId: string) => void;
 }
 
 function formatLastOpened(timestamp: number | null): string {
@@ -44,8 +49,9 @@ function formatLastOpened(timestamp: number | null): string {
 
 function formatChanges(count: number | null): string {
   if (count === null) return 'Unknown';
-  if (count === 0) return 'Clean';
-  return `${count} uncommitted`;
+  // The same words as the card: "3 changes", never a second name for them.
+  if (count === 0) return 'No changes';
+  return `${count} ${count === 1 ? 'change' : 'changes'}`;
 }
 
 /**
@@ -71,6 +77,8 @@ export function ProjectTableView<TProject extends DashboardProject>({
   onRemoveProject,
   pinnedSet,
   onTogglePin,
+  teamFor,
+  onOpenAgent,
 }: ProjectTableViewProps<TProject>) {
   const selectAllRef = useRef<HTMLInputElement>(null);
 
@@ -123,6 +131,7 @@ export function ProjectTableView<TProject extends DashboardProject>({
       {projects.map((project) => {
         const isSelected = selectedProjectPaths.has(project.path);
         const hideMainBranchWarning = project.hide_main_branch_warning === true;
+        const team = teamFor?.(project.path) ?? null;
 
         return (
           <div
@@ -158,6 +167,7 @@ export function ProjectTableView<TProject extends DashboardProject>({
                   </span>
                 </span>
               </button>
+              {team && <ProjectTeam team={team} onOpenAgent={onOpenAgent} />}
             </div>
 
             <span
@@ -175,14 +185,7 @@ export function ProjectTableView<TProject extends DashboardProject>({
               )}
             </span>
 
-            <span
-              role="cell"
-              className={
-                project.uncommitted_count && project.uncommitted_count > 0
-                  ? 'project-table-changes project-table-changes-cell has-changes'
-                  : 'project-table-changes project-table-changes-cell'
-              }
-            >
+            <span role="cell" className="project-table-changes project-table-changes-cell">
               {formatChanges(project.uncommitted_count)}
             </span>
 

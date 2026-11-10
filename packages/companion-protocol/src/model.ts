@@ -17,6 +17,7 @@
 import type { ResultCard, ResultRef } from './results';
 import type { BlockSet } from './blocks';
 import type { SettingsProposal } from './policy';
+import type { LearnSkills, SkillCard } from './skills';
 import type { CrossoverAsk, CrossoverAway } from './crossover';
 
 /** What a planned action is (`agents/plan_grant.rs`, `Kind`). */
@@ -246,6 +247,8 @@ export interface Agent {
    */
   starters?: AgentStarter[];
   muted: boolean;
+  /** "Save new skills" (`agents/skills_learn.rs`); absent is `ask`. */
+  learnSkills?: LearnSkills;
   checkIns?: CheckIn[];
   /**
    * Its "When…" routines (each a `CheckIn` with `watch`), apart from the
@@ -470,6 +473,10 @@ export type WatchSource =
   | { kind: 'github_assigned' }
   | { kind: 'linear_assigned' }
   | { kind: 'new_file'; folder: string }
+  /** An email in an inbox in Mail on the Mac; `from`/`words` absent when not narrowed. */
+  | { kind: 'new_mail'; from?: string; words?: string }
+  /** An iMessage or SMS in Messages on the Mac; `from` a phone number or email. */
+  | { kind: 'new_text'; from?: string }
   /** `app`: the Claude Code app it checks through. Absent on older Macs' routines. */
   | { kind: 'custom'; check: string; app?: string }
   /** Written by a newer Mac. */
@@ -559,7 +566,7 @@ export interface SchedulePreview {
   repeat: Repeat | null;
 }
 
-export type AgentEngine = 'claude' | 'codex';
+export type AgentEngine = 'claude' | 'codex' | 'opencode';
 
 /** Mirrors `store::EFFORTS`: the levels both engines take. */
 export type AgentEffort = 'low' | 'medium' | 'high';
@@ -593,7 +600,7 @@ export interface NewAgentDefaults {
   /** The engine the user chose; null when they never have (the rule decides). */
   engine: AgentEngine | null;
   /** Each engine's chosen model while it still offers it; null is the engine's own default. */
-  models: { claude: string | null; codex: string | null };
+  models: { claude: string | null; codex: string | null; opencode: string | null };
   /** Where a new agent starts now: the chosen engine when it's ready, else the first that is. */
   startsOn: AgentEngine;
   /** The model it starts on there; null is that engine's default. */
@@ -605,7 +612,16 @@ export interface NewAgentDefaultsChange {
   engine?: AgentEngine;
   claudeModel?: string;
   codexModel?: string;
+  opencodeModel?: string;
 }
+
+/** The change field for one engine's default model. */
+export const MODEL_CHANGE_KEY: Record<AgentEngine, 'claudeModel' | 'codexModel' | 'opencodeModel'> =
+  {
+    claude: 'claudeModel',
+    codex: 'codexModel',
+    opencode: 'opencodeModel',
+  };
 
 export interface AgentsOverview {
   agents: Agent[];
@@ -695,6 +711,8 @@ export interface StepInCard {
   inSince?: number;
   /** When it is handed back by itself (ms). */
   until?: number;
+  /** The user is in it from a phone (its name), not at the Mac. Laid over, never stored. */
+  onPhone?: string;
 }
 
 export interface Approval {
@@ -747,6 +765,8 @@ export interface Approval {
    * Macs never send it.
    */
   slackReply?: { channel: string; threadTs: string; place: string; text: string };
+  /** "Save “…” as a skill?": the skill as it would be saved; Allow is Save, Deny is Not now. Nothing waits on it. */
+  skill?: SkillCard;
   /**
    * How risky Allow is, decided on the Mac from the classifiers the levels
    * use (`mcp::risk_of`: Bold's floor for a tool call). Only `low` is
@@ -871,6 +891,8 @@ export interface SigninBegun {
   via?: SigninVia;
   /** How long to wait between pictures. */
   frameGapMs?: number;
+  /** `agents.stepInBegin`: the agent's own tab; Done is Hand back. */
+  stepIn?: boolean;
 }
 
 /**
@@ -928,7 +950,7 @@ export type SigninInput =
   | { kind: 'reload' };
 
 /** `agents.signinDone`: signed in (the card answered itself), not yet, or can't tell. */
-export type SigninOutcome = 'signed_in' | 'signed_out' | 'unknown';
+export type SigninOutcome = 'signed_in' | 'signed_out' | 'unknown' | 'handed_back';
 
 /** `agents.loginPhoneBegin`: what the phone opens. No secret: the PKCE verifier stays on the Mac. */
 export interface LoginPhoneBegin {
@@ -1357,6 +1379,8 @@ export interface ImportProposal {
   foreignTools?: { name: string; here?: string }[];
   /** A recipe's key look and the independence it suggests (applied only when stricter). */
   look?: { colorway?: string; icon?: string; key?: string; independence?: AgentIndependence };
+  /** Skills it comes with (a recipe's), cleaned on the Mac; saved into its home on Import. */
+  skills?: { slug: string; name: string; when: string; steps: string }[];
 }
 
 export interface ImportClash {
@@ -1473,7 +1497,7 @@ export interface AgentMessage {
   via?: MessageVia;
   /**
    * On a note: the one fix it names (`agents/chrome_health.rs`):
-   * `user_chrome` is Settings → Agents → Your Chrome on the Mac. The phone
+   * `user_chrome` is Settings → Chrome on the Mac. The phone
    * shows the note's text, which names where. Older Macs never send it.
    */
   fix?: 'user_chrome' | 'user_chrome_check' | 'disk';
@@ -1727,6 +1751,8 @@ export interface UpdateAgentInput {
   workDirectly?: boolean;
   /** "Runs on": an account id of its engine, or '' for any account. */
   account?: string;
+  /** "Save new skills", from a Mac that serves `agents.skills`. */
+  learnSkills?: LearnSkills;
 }
 
 /** What `agents.create` / `agents.update` return: the stored agent, no live state. */
@@ -1912,7 +1938,7 @@ export interface UsageAccountLine {
   /** Who used it in the last 7 days, from the turns this app ran on it. */
   spent?: UsageRun[];
   /**
-   * "Where did my usage go": each recent rise in its 5-hour and weekly
+   * "Where it went": each recent rise in its 5-hour and weekly
    * meters, newest first, with the turns this app ran on it in that time.
    */
   changes?: UsageChange[];

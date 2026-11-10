@@ -16,6 +16,7 @@
 import { memo, type ReactNode } from 'react';
 import type { Agent } from '../../../lib/agents';
 import {
+  blockRuns,
   isInteractive,
   type Block,
   type BlockSet,
@@ -61,9 +62,17 @@ export const AgentBlocks = memo(function AgentBlocks({ messageId, agent, set }: 
           <FinishedProse id={messageId} text={set.intro} />
         </div>
       )}
-      {set.items.map((block, i) => (
-        <BlockView key={i} block={block} agent={agent} answering={answering} />
-      ))}
+      {blockRuns(set.items).map((run, i) =>
+        run.length > 1 ? (
+          <div key={i} className="agent-card agent-blocks__page" data-blocks={run.length}>
+            {run.map((block, j) => (
+              <BlockView key={j} block={block} agent={agent} answering={answering} section />
+            ))}
+          </div>
+        ) : (
+          <BlockView key={i} block={run[0]} agent={agent} answering={answering} />
+        )
+      )}
       {asks && staged && answer == null && (
         <p className="agent-blocks__staged">
           This came from something it read outside the app, so your answer goes into your message
@@ -79,13 +88,28 @@ function Panel({
   block,
   children,
   bare,
+  section,
 }: {
   block: Block;
   children: ReactNode;
   /** Its own surface (tiles, chips, a note): only the title above it. */
   bare?: boolean;
+  /** One section of a page card: its title and contents, the card around them all. */
+  section?: boolean;
 }) {
   const title = block.title?.trim();
+  if (section) {
+    return (
+      <section
+        className="agent-block agent-block--section"
+        data-kind={block.kind}
+        aria-label={title || undefined}
+      >
+        {title && <h3 className="agent-block__section-title">{title}</h3>}
+        {children}
+      </section>
+    );
+  }
   if (bare) {
     return (
       <section
@@ -115,10 +139,13 @@ function BlockView({
   block,
   agent,
   answering,
+  section,
 }: {
   block: Block;
   agent: Agent;
   answering: Answering;
+  /** Drawn as a section of a page card (`blockRuns`). */
+  section?: boolean;
 }) {
   switch (block.kind) {
     case 'chart':
@@ -129,7 +156,7 @@ function BlockView({
       );
     case 'table':
       return (
-        <Panel block={block}>
+        <Panel block={block} section={section}>
           <BlockTable block={block} />
         </Panel>
       );
@@ -141,19 +168,19 @@ function BlockView({
       );
     case 'facts':
       return (
-        <Panel block={block}>
+        <Panel block={block} section={section}>
           <BlockFacts block={block} />
         </Panel>
       );
     case 'checklist':
       return (
-        <Panel block={block}>
+        <Panel block={block} section={section}>
           <BlockChecklist block={block} />
         </Panel>
       );
     case 'steps':
       return (
-        <Panel block={block}>
+        <Panel block={block} section={section}>
           <BlockSteps block={block} />
         </Panel>
       );

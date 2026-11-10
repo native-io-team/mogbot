@@ -244,7 +244,7 @@
     var(--color-orange-600) 10%,
     var(--surface-control-hover)
   );
-  --button-warning-text: var(--accent-warning);
+  --button-warning-text: var(--text-warning);
   --button-warning-text-hover: var(--color-orange-500);
   --button-group-spacing: var(--space-04);
 
@@ -588,7 +588,7 @@
    so they take deep shades instead of the dark theme's pale mixes. */
 :root[data-theme='light'] {
   --media-text: var(--color-pink-800);
-  --button-warning-text-hover: var(--color-orange-900);
+  --button-warning-text-hover: var(--text-warning);
   /* On paper the drop is lighter, and the near-black answer key sits on a
      black side with only a faint lit edge. */
   --button-key-lit: var(--color-white-o15);

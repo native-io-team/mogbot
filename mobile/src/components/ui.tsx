@@ -46,6 +46,7 @@ import type { Tone } from '../lib/connection';
 import { useAccent, useAnswerAccent } from '../lib/accent';
 import { haptic } from '../lib/haptics';
 import { MATERIAL, type SFName } from '../lib/icons';
+import { qaScaled, QA_FONT_SCALE } from '../lib/qaFontScale';
 import { useApp } from '../lib/store';
 
 /** Ripple for Android presses; iOS uses its pressed tints. */
@@ -136,12 +137,17 @@ export function T({
   const variants = useVariants();
   const high = useApp((s) => s.highContrast);
   const ink = color ?? colors.textPrimary;
+  const own = [variants[variant], { color: (high && strongerOf(colors)[ink]) || ink }, style];
   return (
     <Text
       // Words reflow with Dynamic Type, up to the reading clamp; chrome passes its own, lower.
       maxFontSizeMultiplier={READ_MAX_SCALE}
       {...rest}
-      style={[variants[variant], { color: (high && strongerOf(colors)[ink]) || ink }, style]}
+      style={
+        QA_FONT_SCALE
+          ? [own, qaScaled(StyleSheet.flatten(own), rest.maxFontSizeMultiplier ?? READ_MAX_SCALE)]
+          : own
+      }
     />
   );
 }

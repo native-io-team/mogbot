@@ -10,6 +10,10 @@ import type { SigninBegun, SigninFrame } from '@shipstudio/companion-protocol';
 import {
   canAct,
   canFallBack,
+  canHandBack,
+  doneLabel,
+  handedBackLine,
+  isStepIn,
   ENDED_WORDS,
   frameGap,
   FRAME_GAP_MS,
@@ -157,6 +161,46 @@ describe('the sign-in screen', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('step in from the phone', () => {
+  const stepBegun: SigninBegun = {
+    sessionId: 'signin_2',
+    domain: 'okta.com',
+    title: 'approve the Okta sign-in',
+    idleSeconds: 300,
+    via: 'agents_browser',
+    stepIn: true,
+  };
+  const live = (frame: SigninFrame) =>
+    reduce(reduce(initialView, { t: 'begun', begun: stepBegun }), { t: 'frame', frame });
+
+  it('Done is Hand back, and it can hand back even outside the step', () => {
+    expect(doneLabel(true)).toBe('Hand back');
+    expect(doneLabel(false)).toBe('Done');
+    const outside = live({ state: 'outside', host: 'app.example', width: 0, height: 0 });
+    expect(isStepIn(outside)).toBe(true);
+    expect(canAct(outside)).toBe(false);
+    expect(canHandBack(outside)).toBe(true);
+    expect(statusLine(outside)).toMatch(/outside this step \(app\.example\).*Hand back/);
+  });
+
+  it('hands back and ends with what the agent saw', () => {
+    let v = live(page);
+    v = reduce(v, { t: 'checking' });
+    expect(statusLine(v)).toBe('Handing it back…');
+    expect(canHandBack(v)).toBe(false);
+    v = reduce(v, { t: 'outcome', outcome: 'handed_back' });
+    expect(v).toMatchObject({ phase: 'ended', reason: 'handed_back', domain: 'okta.com' });
+    expect(statusLine(v)).toBe(handedBackLine('okta.com'));
+    expect(handedBackLine('okta.com')).toMatch(/never saw what you typed/);
+  });
+
+  it('a failed start offers only Try again: it is always the agent’s own tab', () => {
+    const failed = reduce(initialView, { t: 'end', reason: 'failed', message: 'Busy.' });
+    expect(retryWays(failed, true)).toEqual([{ label: 'Try again' }]);
+    expect(retryWays(failed).length).toBe(2);
   });
 });
 

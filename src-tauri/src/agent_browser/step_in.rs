@@ -247,6 +247,61 @@ pub fn begin_on(
     url: &str,
     now_ms: i64,
 ) -> Result<(Tab, Landed), String> {
+    hold_on(svc, agent, request_id, tab, url, now_ms, true)
+}
+
+/// Step in from the phone: hold `agent`'s tab `tab` as [`begin`] does, but
+/// leave its window parked (the phone sees it through the screencast).
+/// Refused while it's held already (the desk is in it). Blocks.
+pub fn begin_for_phone(
+    agent: &str,
+    request_id: &str,
+    tab: u32,
+    url: &str,
+    now_ms: i64,
+) -> Result<(Arc<Service>, Tab, Landed), String> {
+    if held(agent).is_some() {
+        return Err(AT_THE_MAC.into());
+    }
+    let svc = service::ensure()?;
+    let (t, before) = begin_for_phone_on(&svc, agent, request_id, tab, url, now_ms)?;
+    Ok((svc, t, before))
+}
+
+/// [`begin_for_phone`] against a given Chrome (tests use a fake one).
+pub fn begin_for_phone_on(
+    svc: &Arc<Service>,
+    agent: &str,
+    request_id: &str,
+    tab: u32,
+    url: &str,
+    now_ms: i64,
+) -> Result<(Tab, Landed), String> {
+    if held(agent).is_some() {
+        return Err(AT_THE_MAC.into());
+    }
+    hold_on(svc, agent, request_id, tab, url, now_ms, false)
+}
+
+/// The phone asked while the person is in the tab at the Mac.
+pub const AT_THE_MAC: &str = "You're in its browser on your Mac. Hand it back there first.";
+
+/// Someone is in the tab with Chrome target `target_id`: its screencast
+/// belongs to them (the chat's live picture lets it be).
+pub fn holds_target(target_id: &str) -> bool {
+    with(|m| m.values().any(|h| h.target_id == target_id))
+}
+
+/// Hold the tab; `show`: bring its window on screen (the desk).
+fn hold_on(
+    svc: &Arc<Service>,
+    agent: &str,
+    request_id: &str,
+    tab: u32,
+    url: &str,
+    now_ms: i64,
+    show: bool,
+) -> Result<(Tab, Landed), String> {
     // Held already for this card (a second click): show it again.
     if let Some(h) = held(agent).filter(|h| h.request_id == request_id) {
         let t = svc
@@ -280,9 +335,11 @@ pub fn begin_on(
             before: before.clone(),
         },
     )?;
-    if let Err(e) = svc.show(&t) {
-        release(agent, request_id);
-        return Err(format!("Its window didn't come forward: {e}"));
+    if show {
+        if let Err(e) = svc.show(&t) {
+            release(agent, request_id);
+            return Err(format!("Its window didn't come forward: {e}"));
+        }
     }
     svc.touch();
     Ok((t, before))

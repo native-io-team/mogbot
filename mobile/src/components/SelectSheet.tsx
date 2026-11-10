@@ -1,5 +1,5 @@
 /**
- * Select Text: a message in a sheet where any part of it can be selected,
+ * Select text: a message in a sheet where any part of it can be selected,
  * then quoted into the reply or copied. Message bodies themselves aren't
  * selectable in place, so a long-press there is always the menu.
  */
@@ -44,7 +44,7 @@ export function SelectSheet({
       <View style={[styles.page, { paddingBottom: insets.bottom + space.md }]}>
         <View style={styles.head}>
           <T variant="subhead" color={colors.textStrong}>
-            Select Text
+            Select text
           </T>
           <Button title="Done" variant="ghost" size="compact" onPress={onClose} />
         </View>

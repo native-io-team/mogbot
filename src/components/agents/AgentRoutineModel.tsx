@@ -54,7 +54,8 @@ export function AgentRoutineModel({ agent, routine }: { agent: Agent; routine: C
   };
   return (
     <div className="agent-schedule__model">
-      <span className="agent-schedule__model-label">Runs on</span>
+      {/* "Model", not "Runs on": that's the agent's engine and account, elsewhere. */}
+      <span className="agent-schedule__model-label">Model</span>
       <Dropdown
         align="left"
         portal

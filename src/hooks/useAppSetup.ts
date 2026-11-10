@@ -7,6 +7,7 @@
  * @module hooks/useAppSetup
  */
 
+import { menuOwnsShortcuts, onMenuAction } from '../lib/nativeMenu';
 import { isOnboardingInProgress } from '../lib/onboardingFlow';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Project } from '../lib/project';
@@ -369,18 +370,25 @@ export function useAppSetup({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- handleSelectProject is stable, don't re-run on change
   }, [initialProjectPath, view]);
 
-  // Keyboard shortcut for help modal (Cmd+/ or F1)
+  // Keyboard shortcut for help modal (Cmd+/ or F1). On macOS ⌘/ is the
+  // menu bar's (Help → Keyboard Shortcuts), so the page keeps only F1 there.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+/ (Mac) or Ctrl+/ (Windows) or F1
-      if (((e.metaKey || e.ctrlKey) && e.key === '/') || e.key === 'F1') {
+      const slash = (e.metaKey || e.ctrlKey) && e.key === '/' && !menuOwnsShortcuts();
+      if (slash || e.key === 'F1') {
         e.preventDefault();
         openHelpModal();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const offMenu = onMenuAction((action) => {
+      if (action === 'help') openHelpModal();
+    });
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      offMenu();
+    };
   }, [openHelpModal]);
 
   // Onboarding hands off to the Chief of Staff, on the engine just set up.

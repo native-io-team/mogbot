@@ -1,6 +1,7 @@
-//! Which CLI an agent's turns run on: Claude Code (the default) or Codex,
-//! so an agent can run on a Claude or a ChatGPT subscription with the same
-//! chat, tools and approvals around it. The turn itself is in `runner` (and
+//! Which CLI an agent's turns run on: Claude Code (the default), Codex or
+//! OpenCode, so an agent can run on a Claude or a ChatGPT subscription, or on
+//! any provider OpenCode is set up with (local models included), with the
+//! same chat, tools and approvals around it. The turn itself is in `runner` (and
 //! `codex` for Codex's command line and stream); this is what the editor and
 //! the Chief need to choose: which engines are here, signed in, and which
 //! models each offers.
@@ -19,15 +20,38 @@ pub enum Engine {
     #[default]
     Claude,
     Codex,
+    #[serde(rename = "opencode")]
+    OpenCode,
 }
 
 impl Engine {
-    pub const ALL: [Engine; 2] = [Engine::Claude, Engine::Codex];
+    pub const ALL: [Engine; 3] = [Engine::Claude, Engine::Codex, Engine::OpenCode];
+
+    /// The engines that run on a subscription plan with limits the engine
+    /// reports (Claude Code, Codex): the wallet's added accounts, usage
+    /// readings and carrying on with the other one are about these. OpenCode
+    /// runs on whatever providers it is set up with and reports no plan.
+    pub const PLANS: [Engine; 2] = [Engine::Claude, Engine::Codex];
+
+    /// Whether the engine runs on a plan with reported limits ([`Self::PLANS`]).
+    pub fn has_plan(self) -> bool {
+        Self::PLANS.contains(&self)
+    }
 
     pub fn label(self) -> &'static str {
         match self {
             Engine::Claude => "Claude Code",
             Engine::Codex => "Codex",
+            Engine::OpenCode => "OpenCode",
+        }
+    }
+
+    /// How it is stored and named on a command line or in a file.
+    pub fn word(self) -> &'static str {
+        match self {
+            Engine::Claude => "claude",
+            Engine::Codex => "codex",
+            Engine::OpenCode => "opencode",
         }
     }
 
@@ -35,6 +59,7 @@ impl Engine {
         match self {
             Engine::Claude => "claude",
             Engine::Codex => "codex",
+            Engine::OpenCode => "opencode",
         }
     }
 
@@ -43,9 +68,10 @@ impl Engine {
         match value.trim().to_ascii_lowercase().as_str() {
             "claude" | "claude code" | "claude-code" => Ok(Engine::Claude),
             "codex" | "chatgpt" => Ok(Engine::Codex),
+            "opencode" | "open code" | "open-code" => Ok(Engine::OpenCode),
             _ => Err(super::err_invalid(
                 "engine",
-                "Pick Claude Code (`claude`) or Codex (`codex`).",
+                "Pick Claude Code (`claude`), Codex (`codex`) or OpenCode (`opencode`).",
             )),
         }
     }
@@ -67,6 +93,8 @@ pub struct EngineInfo {
     pub installed: bool,
     /// Codex: `codex login status` says so. Claude Code: `claude auth
     /// status` (setup's own check), so a lapsed sign-in shows before a turn.
+    /// OpenCode has no one sign-in: it counts once it lists a model it can
+    /// run (its providers are set up in OpenCode itself).
     pub signed_in: bool,
     /// Whether its turns can stop and ask the user (an Allow / Deny card)
     /// before going past what it may do alone. Claude Code always can
@@ -142,6 +170,11 @@ pub async fn signed_in_here(engine: Engine) -> bool {
     if super::codex::scripted() {
         return true;
     }
+    // One probe per engine at a time: an asker that arrives mid-probe (the
+    // Usage view's accounts beside the engines' overview) waits for its answer.
+    static PROBING: LazyLock<[tokio::sync::Mutex<()>; Engine::ALL.len()]> =
+        LazyLock::new(Default::default);
+    let _probing = PROBING[engine as usize].lock().await;
     if let Some((yes, _, at)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(&engine) {
         let keep = if *yes { 60 } else { 5 };
         if at.elapsed() < Duration::from_secs(keep) {
@@ -157,13 +190,22 @@ pub async fn signed_in_here(engine: Engine) -> bool {
             crate::commands::setup::claude_auth_truth(&account).await
         }
         Engine::Codex => {
-            let mut cmd = tokio::process::Command::new(binary);
-            cmd.args(["login", "status"])
-                .env("PATH", crate::utils::get_extended_path());
-            crate::external_command::run_with_timeout(cmd, "codex login status", 15)
+            // Callers asking while one is running share it (`joined`).
+            static PROBE: crate::joined::Joined<bool> = crate::joined::Joined::new();
+            PROBE
+                .run(|| async move {
+                    let mut cmd = tokio::process::Command::new(binary);
+                    cmd.args(["login", "status"])
+                        .env("PATH", crate::utils::get_extended_path());
+                    crate::external_command::run_with_timeout(cmd, "codex login status", 15)
+                        .await
+                        .is_ok_and(|out| out.status.success())
+                })
                 .await
-                .is_ok_and(|out| out.status.success())
         }
+        // Ready once it lists a model it can run (OpenCode's own free models
+        // need no account; a provider set up in OpenCode adds its own).
+        Engine::OpenCode => !super::opencode::refresh(&binary).await.is_empty(),
     };
     CACHE
         .lock()
@@ -175,6 +217,10 @@ pub async fn signed_in_here(engine: Engine) -> bool {
 pub async fn info(engine: Engine) -> EngineInfo {
     let found = binary(engine).await;
     let installed = found.is_some();
+    // Its models are what makes it ready: looked at (a minute's cache) first.
+    if let (Engine::OpenCode, Some(binary)) = (engine, found.as_deref()) {
+        super::opencode::refresh(binary).await;
+    }
     let asks = asks(engine, found.as_deref()).await;
     EngineInfo {
         id: engine,
@@ -191,14 +237,34 @@ async fn asks(engine: Engine, binary: Option<&std::path::Path>) -> bool {
     match (binary, engine) {
         (_, Engine::Claude) => true,
         (Some(binary), Engine::Codex) => super::codex_app::available(binary).await,
+        // `opencode acp` sends every permission it asks for to us.
+        (Some(_), Engine::OpenCode) => true,
         // Not installed: unknown, so not claimed.
-        (None, Engine::Codex) => false,
+        (None, Engine::Codex | Engine::OpenCode) => false,
     }
 }
 
 pub async fn overview() -> Vec<EngineInfo> {
-    let (claude, codex) = tokio::join!(info(Engine::Claude), info(Engine::Codex));
-    vec![claude, codex]
+    // One look at a time: a second asker (the launch's early look, then the
+    // Agents view's; the view and the Usage view) waits for the first and
+    // answers from what it just cached, instead of starting every CLI again.
+    static ONE_AT_A_TIME: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(Default::default);
+    let _turn = ONE_AT_A_TIME.lock().await;
+    let (claude, codex, opencode) = tokio::join!(
+        info(Engine::Claude),
+        info(Engine::Codex),
+        info(Engine::OpenCode)
+    );
+    vec![claude, codex, opencode]
+}
+
+/// Look at the engines once at launch, while the window loads: the Agents
+/// view's first overview then reads the binaries and sign-ins from cache
+/// rather than waiting on each CLI.
+pub fn look_early() {
+    tauri::async_runtime::spawn(async {
+        let _ = overview().await;
+    });
 }
 
 /// The engine a new agent goes on when nobody picked one: Claude Code when
@@ -234,7 +300,8 @@ pub async fn require_ready(engine: Engine) -> Result<(), CommandError> {
 }
 
 /// Claude Code's own aliases, which always mean the current model of that
-/// family; Codex's, as Codex itself lists them (see [`super::codex::models`]).
+/// family; Codex's, as Codex itself lists them (see [`super::codex::models`]);
+/// OpenCode's, as `opencode models` last listed them (`opencode::refresh`).
 pub fn models(engine: Engine) -> Vec<ModelChoice> {
     match engine {
         Engine::Claude => super::store::MODELS
@@ -245,6 +312,7 @@ pub fn models(engine: Engine) -> Vec<ModelChoice> {
             })
             .collect(),
         Engine::Codex => super::codex::models(),
+        Engine::OpenCode => super::opencode::models(),
     }
 }
 

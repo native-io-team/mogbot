@@ -21,6 +21,7 @@
 //! change itself still goes through the card (raising) or applies with a
 //! line (lowering), as `policy_card` decides.
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
@@ -267,7 +268,7 @@ fn claim(agent_id: &str, now: i64) -> bool {
         .retain(|_, at| now.saturating_sub(*at) < QUIET_MS);
     saved.offers.insert(agent_id.to_string(), now);
     if let Ok(json) = serde_json::to_vec_pretty(&saved) {
-        let _ = store::write_atomic(&p, &json);
+        store::write_atomic(&p, &json).or_log("when an independence change was last offered");
     }
     true
 }

@@ -32,6 +32,7 @@ fn card(request_id: &str) -> store::Approval {
         tab: 2,
         in_since: None,
         until: None,
+        on_phone: None,
     });
     a
 }

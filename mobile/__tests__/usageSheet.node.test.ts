@@ -46,7 +46,7 @@ const claude: Quota = {
 describe('context', () => {
   it('says the share and the tokens, as the engine reported them', () => {
     expect(contextMeter({ used: 319_900, window: 1_000_000, at: NOW })).toMatchObject({
-      label: '31% used',
+      label: '31% full',
       detail: '319.9K of 1M tokens',
       percent: 31,
     });
@@ -66,9 +66,9 @@ describe('the plan', () => {
   it('splits the session from the weekly limits, All models first', () => {
     const plan = planUsage([claude], 'claude', NOW)!;
     expect(plan.session).toMatchObject({ label: '5-hour limit', percent: 38 });
-    expect(plan.session!.detail).toMatch(/^Resets at /);
+    expect(plan.session!.detail).toMatch(/^Refills at /);
     expect(plan.weekly.map((m) => m.label)).toEqual(['All models', 'Opus']);
-    expect(plan.weekly[0].detail).toMatch(/^Resets /);
+    expect(plan.weekly[0].detail).toMatch(/^Refills /);
   });
 
   it('draws the ring from the 5-hour window, and nothing without one', () => {

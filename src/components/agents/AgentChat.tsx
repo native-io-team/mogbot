@@ -14,6 +14,7 @@
  * @module components/agents/AgentChat
  */
 
+import { takeRoutineAsk } from '../../lib/routineHandoff';
 import { ChatAnnouncer } from './ChatAnnouncer';
 import {
   memo,
@@ -24,6 +25,7 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -44,7 +46,7 @@ import { AgentComposer, LiveSecretHint } from './AgentComposer';
 import { AgentModelMenu } from './AgentModelMenu';
 import { AgentRequestsBar } from './AgentRequests';
 import { AgentKey } from './AgentKey';
-import { AgentActionItems, type AgentActions } from './AgentActions';
+import { AgentActionItems, GO_BACK_MENU, type AgentActions } from './AgentActions';
 import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
 import { StepInBar } from './AgentStepIn';
 import { AgentLine, ConversationBar, ConversationBars } from './AgentCard';
@@ -55,7 +57,8 @@ import {
   type RoleTemplate,
   type TemplateStarter,
 } from '../../lib/agentTemplates';
-import { CHIEF_CHIPS, type ChiefIdea } from '../../lib/chiefIdeas';
+import { CHIEF_CHIPS, ideaRepeats, type ChiefIdea } from '../../lib/chiefIdeas';
+import { KeepAwakeLink } from './AgentsStayOn';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentUsageRing } from './AgentUsageRing';
 import { AgentAccountChip } from './AccountSwitcher';
@@ -74,7 +77,29 @@ import {
 } from './useComposerAttachments';
 import { AgentSwitcher } from './AgentSwitcher';
 import { ConversationSwitcher } from './ConversationSwitcher';
-import { conversationKey, loadedConversation } from '../../lib/agentConversations';
+import { ConversationPage, ConversationPagePin } from './ConversationPage';
+import { useConversationPage } from '../../lib/agentPage';
+import {
+  FIRST_CONVERSATION,
+  conversationKey,
+  loadedConversation,
+} from '../../lib/agentConversations';
+import {
+  GO_BACK_ICONS,
+  GO_BACK_ORDER,
+  GoBackConfirm,
+  foldRows,
+  GO_BACK_PICK_MAX,
+  GoBackPicker,
+  openOneFold,
+  type GoBackAction,
+  type GoBackAsk,
+} from './AgentGoBack';
+import {
+  GO_BACK_LABELS,
+  goBackBlocked,
+  rewoundIds,
+} from '../../../packages/companion-protocol/src/rewind';
 import { useQuoteSelection } from './useQuoteSelection';
 import { useCommands } from '../../commands/useCommands';
 import {
@@ -136,6 +161,7 @@ import {
   roleWithoutPath,
   showsStarters,
   agentKeyState,
+  ROUTINES_NEED_THE_MAC,
 } from '../../lib/agents';
 import { AgentStarters } from './AgentStarters';
 import { BlockReplyContext, type BlockReply } from './blocks/blockReply';
@@ -143,11 +169,13 @@ import { answerAfter } from '../../../packages/companion-protocol/src/blocks';
 import {
   agentIn,
   ensureViewing,
+  forkConversation,
   getAgentsSnapshot,
   loadMessages,
   loadOlderMessages,
   markSent,
   refreshAgents,
+  rewindConversation,
   upsertMessage,
   useAgentsList,
   useAgentsSelector,
@@ -190,9 +218,12 @@ import { scrollMotion } from '../../lib/motion';
 function ChiefStarters({
   onIdea,
   onMore,
+  picked,
 }: {
   onIdea: (idea: ChiefIdea) => void;
   onMore?: () => void;
+  /** The idea last typed in: one that sets up a routine says where routines run. */
+  picked?: ChiefIdea | null;
 }) {
   return (
     <div className="agent-chat__starters">
@@ -211,6 +242,12 @@ function ChiefStarters({
         <Button tabIndex={0} variant="ghost" data-idea="more" onClick={onMore}>
           More ideas…
         </Button>
+      )}
+      {picked && ideaRepeats(picked) && (
+        <p className="agent-chat__starters-note">
+          {ROUTINES_NEED_THE_MAC}
+          <KeepAwakeLink />
+        </p>
       )}
     </div>
   );
@@ -331,6 +368,13 @@ function newestFrom(items: ChatItem[], count: number): string | null {
  * A function whose identity never changes but always runs the latest render's
  * version, so the memoised rows below can take it without re-rendering.
  */
+/** The message ids a chat item stands for (a divider, none). */
+function chatItemIds(item: ChatItem): string[] {
+  if (item.type === 'message') return [item.message.id];
+  if (item.type === 'day') return [];
+  return item.messages.map((m) => m.id);
+}
+
 function useStableEvent<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
   const ref = useRef(fn);
   useLayoutEffect(() => {
@@ -454,6 +498,8 @@ export const AgentChat = memo(function AgentChat({
     void ensureViewing(agent.id);
   }, [agent.id]);
   const chatKey = viewing ? conversationKey(agent.id, viewing) : null;
+  // This conversation's living page: a rewind's confirm says it stays as it is.
+  const livingPage = useConversationPage(agent.id, viewing);
   const chatLoaded = useAgentsSelector((s) => (chatKey ? Boolean(s.messages[chatKey]) : true));
   useEffect(() => {
     if (chatKey && !chatLoaded) void loadMessages(chatKey);
@@ -499,6 +545,17 @@ export const AgentChat = memo(function AgentChat({
   const getDraft = useCallback(() => composerDraft(agent.id), [agent.id]);
   const setDraft = useCallback((text: string) => setComposerDraft(agent.id, text), [agent.id]);
   const [pending, setPending] = useState<Pending[]>([]);
+  // ↑ in an empty composer: the last thing you said here, back in the field
+  // to change and send again (it goes as a new message; the old one stays).
+  const lastSent = useStableEvent((): string | null => {
+    for (let i = pending.length - 1; i >= 0; i--)
+      if (pending[i].text.trim()) return pending[i].text;
+    const said = messages ?? [];
+    for (let i = said.length - 1; i >= 0; i--) {
+      if (said[i].kind === 'user' && said[i].text.trim()) return said[i].text;
+    }
+    return null;
+  });
   const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
@@ -539,10 +596,21 @@ export const AgentChat = memo(function AgentChat({
   const [scheduleOpen, setScheduleOpen] = useState(false);
   // Opened from ⌘K's "Start work when something happens…": on the When… composer.
   const [scheduleWhen, setScheduleWhen] = useState(false);
+  // Opened from the Routines page's Change: on that routine's editor.
+  const [scheduleRoutine, setScheduleRoutine] = useState<string | null>(null);
   const openSchedule = useCallback((open: boolean) => {
     setScheduleOpen(open);
-    if (!open) setScheduleWhen(false);
+    if (!open) {
+      setScheduleWhen(false);
+      setScheduleRoutine(null);
+    }
   }, []);
+  useEffect(() => {
+    const routine = takeRoutineAsk(agent.id);
+    if (!routine) return;
+    setScheduleRoutine(routine);
+    setScheduleOpen(true);
+  }, [agent.id]);
   const [filesOpen, setFilesOpen] = useState(false);
   const [renamingConversation, setRenamingConversation] = useState(false);
   // Which of its conversations is on screen, beside its name.
@@ -555,6 +623,10 @@ export const AgentChat = memo(function AgentChat({
     />
   ) : null;
   const [usageOpen, setUsageOpen] = useState(false);
+  /** A starter's brief typed in with its blank still empty: not sendable as it is. */
+  const [unfilled, setUnfilled] = useState<string | null>(null);
+  /** The Chief's starter last typed in, for the line on where routines run. */
+  const [pickedIdea, setPickedIdea] = useState<ChiefIdea | null>(null);
   // While you drive an agent with no project to open, its session is shown
   // here in place of the conversation, until you ask for the chat.
   const takeover = agent.takeover;
@@ -694,6 +766,23 @@ export const AgentChat = memo(function AgentChat({
     ],
     [agent.name, engineReady, pickFiles]
   );
+
+  // Typing with the history focused (a clicked message, the scroll area)
+  // writes in the composer, as in a messaging app: focus moves on the key
+  // down, so the character itself lands in the field. Space, arrows and
+  // shortcuts keep scrolling and acting where they are; a field inside a card
+  // (a secret, a note) keeps its own keys.
+  const typeIntoComposer = useCallback((event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key.length !== 1 || event.key === ' ' || event.nativeEvent.isComposing) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable="true"], [role="menu"]')) return;
+    const input = inputRef.current;
+    if (!input || input.readOnly || input.disabled) return;
+    input.focus({ preventScroll: true });
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  }, []);
 
   // Focus the composer on open (mounted once per agent, keyed by id, so the
   // draft starts empty) and again when dictation ends, wherever it started.
@@ -900,6 +989,108 @@ export const AgentChat = memo(function AgentChat({
   // Mid-turn, what you send waits for the next turn. The newest waiting
   // message says so and offers to interrupt instead.
   const busy = agent.status.state !== 'idle';
+  // Edit and resend, Fork from here, Rewind to here (`AgentGoBack`).
+  const goBack = useMemo(
+    () => ({ agentName: agent.name, working: busy, driven }),
+    [agent.name, busy, driven]
+  );
+  /** The sent message being edited: sending goes back to just before it. */
+  const [editing, setEditing] = useState<AgentMessage | null>(null);
+  const [goBackAsk, setGoBackAsk] = useState<GoBackAsk | null>(null);
+  const [goingBack, setGoingBack] = useState(false);
+  // Another conversation on screen: an edit or a confirm was about this one's message.
+  useEffect(() => {
+    setEditing(null);
+    setGoBackAsk(null);
+  }, [viewing]);
+  const onGoBack = useStableEvent((action: GoBackAction, message: AgentMessage) => {
+    if (action === 'edit') {
+      setEditing(message);
+      typeStarter(message.text);
+      return;
+    }
+    setGoBackAsk({ action, messageId: message.id, text: message.text });
+  });
+  const confirmGoBack = async () => {
+    if (!goBackAsk) return;
+    setGoingBack(true);
+    try {
+      const where = viewing ?? FIRST_CONVERSATION;
+      if (goBackAsk.action === 'fork') await forkConversation(agent.id, where, goBackAsk.messageId);
+      else await rewindConversation(agent.id, where, goBackAsk.messageId);
+      setGoBackAsk(null);
+    } catch (error) {
+      showToast(formatCommandError(asCommandError(error)), 'error');
+    } finally {
+      setGoingBack(false);
+    }
+  };
+  // What a rewind passed over in the conversation on screen, folded.
+  const conversationList = useAgentsSelector((s) => s.conversations[agent.id]);
+  const rewinds = conversationList?.items.find((c) => c.id === viewing)?.rewinds;
+  const rewound = useMemo(() => rewoundIds(rewinds), [rewinds]);
+  const [openFolds, setOpenFolds] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleFold = useCallback((id: string) => setOpenFolds((open) => openOneFold(open, id)), []);
+  // Lines still on their way have no place in the log to go back to yet.
+  const localIds = useMemo(() => new Set(pending.map((p) => p.key)), [pending]);
+  // Your messages that can be gone back to, newest first: ⌘K's picker.
+  const ownRecent = useMemo(() => {
+    const out: AgentMessage[] = [];
+    for (let i = shown.length - 1; i >= 0 && out.length < GO_BACK_PICK_MAX; i--) {
+      const m = shown[i];
+      if (m.kind === 'user' && !localIds.has(m.id) && !rewound.has(m.id)) out.push(m);
+    }
+    return out;
+  }, [shown, localIds, rewound]);
+  const lastOwn = ownRecent[0] ?? null;
+  const [picking, setPicking] = useState(false);
+  useEffect(() => setPicking(false), [viewing]);
+  const pickGoBack = (action: GoBackAction, id: string) => {
+    const m = ownRecent.find((x) => x.id === id);
+    setPicking(false);
+    if (m) onGoBack(action, m);
+  };
+  useCommands(
+    () =>
+      ownRecent.length > 0
+        ? [
+            {
+              id: 'agents.goBack.pick',
+              title: GO_BACK_MENU,
+              subtitle: `Edit, fork or rewind, in your chat with ${agent.name}`,
+              icon: GO_BACK_ICONS.rewind,
+              category: 'action' as const,
+              keywords: [
+                'rewind',
+                'fork',
+                'edit',
+                'resend',
+                'undo',
+                'branch',
+                'go back',
+                'earlier',
+              ],
+              run: () => setPicking(true),
+            },
+          ]
+        : [],
+    [ownRecent.length, agent.name]
+  );
+  useCommands(
+    () =>
+      lastOwn
+        ? GO_BACK_ORDER.map((action) => ({
+            id: `agents.goBack.${action}`,
+            title: `${GO_BACK_LABELS[action]}: your last message to ${agent.name}`,
+            icon: GO_BACK_ICONS[action],
+            category: 'action' as const,
+            keywords: ['rewind', 'fork', 'edit', 'resend', 'undo', 'branch', 'go back', 'retry'],
+            when: () => goBackBlocked(action, goBack) === null,
+            run: () => onGoBack(action, lastOwn),
+          }))
+        : [],
+    [lastOwn, agent.name, goBack, onGoBack]
+  );
   const queuedId = useMemo(() => {
     const waiting = shown.filter((m) => !failed.has(m.id) && isQueued(m, turn));
     return waiting[waiting.length - 1]?.id ?? null;
@@ -1303,8 +1494,16 @@ export const AgentChat = memo(function AgentChat({
   );
 
   /** An idea for the Chief: its brief typed out for the user to finish, nothing sent. */
-  const startIdea = (idea: ChiefIdea) => typeStarter(idea.text);
-  const chiefStarters = <ChiefStarters onIdea={startIdea} onMore={onMoreIdeas} />;
+  // The brief goes in with its blank at the end and the caret on it; until
+  // something is written there, it can't be sent (`unfilled`).
+  const startIdea = (idea: ChiefIdea) => {
+    setUnfilled(idea.text);
+    setPickedIdea(idea);
+    typeStarter(idea.text);
+  };
+  const chiefStarters = (
+    <ChiefStarters onIdea={startIdea} onMore={onMoreIdeas} picked={pickedIdea} />
+  );
   const template = agent.isMain ? null : templateOf(agent);
   const templateStarters = template && (
     <TemplateStarters
@@ -1342,6 +1541,30 @@ export const AgentChat = memo(function AgentChat({
     const canSend = draft.trim().length > 0 || staged.length > 0 || quotes.length > 0;
     if (!canSend || dictating) return;
     const typed = draft.trim();
+    // Edit and resend: back to just before the message, then this goes there.
+    if (editing) {
+      const target = editing;
+      const files = staged;
+      const quoted = quotes;
+      setEditing(null);
+      setDraft('');
+      setQuotes([]);
+      if (files.length) attachments.setItems([]);
+      void rewindConversation(agent.id, viewing ?? FIRST_CONVERSATION, target.id).then(
+        () => {
+          if (files.length) void sendWithFiles(typed, quoted, files, false);
+          else sendText(withQuotes(quoted, typed));
+        },
+        (error: unknown) => {
+          setEditing(target);
+          setDraft(typed);
+          setQuotes(quoted);
+          if (files.length) attachments.setItems(files);
+          showToast(formatCommandError(asCommandError(error)), 'error');
+        }
+      );
+      return;
+    }
     // A recipe pasted into the Chief's chat is never a message to it: the
     // app reads it (no turn, no model) and puts its review card up here.
     if (agent.isMain && staged.length === 0 && quotes.length === 0 && looksLikeRecipe(typed)) {
@@ -1373,6 +1596,10 @@ export const AgentChat = memo(function AgentChat({
     void deliver(entry);
   });
   const interruptNow = useStableEvent(() => void interrupt());
+  const cancelEditing = useCallback(() => {
+    setEditing(null);
+    setDraft('');
+  }, [setDraft]);
   const askForChanges = useStableEvent((ref: ResultRef) => {
     setRevising(ref);
     inputRef.current?.focus();
@@ -1487,6 +1714,8 @@ export const AgentChat = memo(function AgentChat({
                 driven={driven}
                 colorOf={colorOf}
                 onRemember={setRemembering}
+                goBack={localIds.has(m.id) ? undefined : goBack}
+                onGoBack={onGoBack}
               />
             );
           case 'agent':
@@ -1540,6 +1769,7 @@ export const AgentChat = memo(function AgentChat({
                 onAnswer={onAnswer}
                 arrived={arrived}
                 series={similar.get(m.id)}
+                ownChat
               />
             );
           case 'error':
@@ -1629,7 +1859,14 @@ export const AgentChat = memo(function AgentChat({
       copyAgent,
       newestResult,
       askForChanges,
+      goBack,
+      onGoBack,
+      localIds,
     ]
+  );
+  const folded = useMemo(
+    () => foldRows(history, items.slice(startIndex), rewound, chatItemIds, openFolds, toggleFold),
+    [history, items, startIndex, rewound, openFolds, toggleFold]
   );
   // The working line goes in after: what it's doing changes every step, and
   // must not rebuild the history around it.
@@ -1647,7 +1884,7 @@ export const AgentChat = memo(function AgentChat({
       null
   );
   // One line that fails to draw is one muted line, not a blank window.
-  const guarded = useGuardedRows(history);
+  const guarded = useGuardedRows(folded);
   const withSetup = withIndicatorAt(setupAt - startIndex, guarded, setupRow);
   const workingAt = Math.max(0, queuedFrom - startIndex);
   const rows = withIndicatorAt(
@@ -1720,6 +1957,7 @@ export const AgentChat = memo(function AgentChat({
                 <div className="agent-chat__actions">
                   {/* Compact: the title is the agent menu, so it sits with the actions. */}
                   {compact && conversationSwitcher}
+                  <ConversationPagePin agent={agent} conversation={viewing} />
                   {/* Nothing to schedule or pick a model for until Claude Code is here. */}
                   {engineReady && (
                     <>
@@ -1729,6 +1967,7 @@ export const AgentChat = memo(function AgentChat({
                         open={scheduleOpen}
                         onOpenChange={openSchedule}
                         startWhen={scheduleWhen}
+                        startEditing={scheduleRoutine}
                       />
                       <AgentModelMenu agent={agent} />
                     </>
@@ -1754,6 +1993,7 @@ export const AgentChat = memo(function AgentChat({
                       kind="dropdown"
                       onSchedule={engineReady ? () => setScheduleOpen(true) : undefined}
                       onFiles={() => setFilesOpen(true)}
+                      onGoBack={ownRecent.length > 0 ? () => setPicking(true) : undefined}
                       {...actions}
                     />
                   </Dropdown>
@@ -1771,6 +2011,9 @@ export const AgentChat = memo(function AgentChat({
                 </div>
               </header>
 
+              {/* This conversation's living page, kept current by the agent. */}
+              <ConversationPage agent={agent} conversation={viewing} />
+
               {/* Unmounted while the chat shows (a hidden xterm would fit itself to
             nothing); showing it again replays the session's scrollback. */}
               {takeover && terminalShown && (
@@ -1784,6 +2027,7 @@ export const AgentChat = memo(function AgentChat({
                 className="agent-chat__scroll"
                 ref={scrollRef}
                 onScroll={onScroll}
+                onKeyDown={typeIntoComposer}
                 tabIndex={0}
                 role="region"
                 aria-label="Messages"
@@ -1880,7 +2124,6 @@ export const AgentChat = memo(function AgentChat({
                 {jump.mounted && (
                   <IconButton
                     tabIndex={0}
-                    size="compact"
                     className="agent-chat__jump"
                     data-leaving={jump.leaving || undefined}
                     onAnimationEnd={jump.leaving ? jump.onExited : undefined}
@@ -2011,12 +2254,16 @@ export const AgentChat = memo(function AgentChat({
                     onRemoveQuote={removeQuote}
                     revising={revising}
                     onClearRevising={clearRevising}
+                    editing={editing?.text ?? null}
+                    onCancelEditing={cancelEditing}
                     busy={busy}
                     working={working}
                     onEscape={onEscape}
                     onStop={stopNow}
                     onSend={send}
                     onPickFiles={pickFiles}
+                    unfilled={unfilled}
+                    lastSent={lastSent}
                   />
                 ) : (
                   <div className="agent-composer agent-composer--blocked" role="status">
@@ -2045,6 +2292,23 @@ export const AgentChat = memo(function AgentChat({
                   Quote <kbd className="agent-chat__kbd">⌘L</kbd>
                 </Button>
               )}
+
+              <GoBackPicker
+                open={picking}
+                messages={ownRecent}
+                state={goBack}
+                onPick={pickGoBack}
+                onClose={() => setPicking(false)}
+              />
+              <GoBackConfirm
+                ask={goBackAsk}
+                agentName={agent.name}
+                project={agent.project ? agent.project.split('/').filter(Boolean).pop() : null}
+                page={livingPage?.title}
+                busy={goingBack}
+                onCancel={() => setGoBackAsk(null)}
+                onConfirm={() => void confirmGoBack()}
+              />
 
               <div className="agent-chat__drop" aria-hidden={!dropping}>
                 <div className="agent-chat__drop-label">

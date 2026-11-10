@@ -1,0 +1,9 @@
+%% Codex, installed by TERMINAL_COMMANDS.codex (lib/setup.ts):
+%%   echo "Installing Codex via npm…" && npm install -g @openai/codex --force --fetch-timeout=…
+%% npm 11 prints its --force warning, then only a spinner (a frame, cleared
+%% with ESC[1G ESC[0K before the next), then a blank line and the summary.
+%% No http/reify lines: those need --loglevel, and npm 10+ dropped the gauge.
+Installing Codex via npm…
+\e[33mnpm\e[39m \e[43mwarn\e[49m \e[35musing --force\e[39m Recommended protections disabled.
+⠋\e[1G\e[0K⠙\e[1G\e[0K⠹\e[1G\e[0K⠸\e[1G\e[0K⠼\e[1G\e[0K⠴\e[1G\e[0K
+added 2 packages in 9s

@@ -15,14 +15,15 @@ const VIEWPORT = { width: 1280, height: 860 };
 
 const WHAT_EACH_SHOWS: Record<SettingsPage, string> = {
   agents:
-    'On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, stopped previews, battery), What agents run on, Disk space when it shows, and Bring agents in with Import….',
+    'What agents run on first (New agents start on, a model per engine, the Routines line), then On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, stopped previews, battery), Disk space when it shows, and Bring agents in with Import….',
   independence:
     'Your team: one line, then the four-stop slider (no title of its own, the page says Independence) on Steady with a neutral thumb, its line and the always-asks line. Then What agents can reach: the lead, the team’s lines with no Independence line, the enforced note, and no presets anywhere. Then Each agent’s independence with no level box (the slider above is it), then Admins.',
   accounts:
     'The usage and accounts groups exactly as they are elsewhere: this page only places them.',
   phone:
     'Your phone: the phone panel itself (get the app, or turn on phone access, pair and the paired phones) right on the page; then Other assistants: Remote access’s own setup or live view. No Open buttons and no dialog on top.',
-  notifications: 'From your agents: Replies and requests, Quiet hours, and Mute an agent.',
+  notifications:
+    'Quiet hours and the morning brief first (Quiet hours, Morning brief, Post even when there’s nothing new: the switches and times), a hairline, then What notifies you as lines with no controls: Replies, Requests for your OK, Your phone, Dock badge and Mute an agent.',
   chrome: 'The agents’ own browser, then Your Chrome with its switch.',
   apps: 'Slack, then apps you said no to when there are any.',
   projects:

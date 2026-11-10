@@ -375,6 +375,11 @@ pub const MAC_FEATURE_AGENT_KEYS: &str = "agents.keys";
 /// phone, the tab shown live there (`agents.signin*`; `agents/phone_signin.rs`).
 pub const MAC_FEATURE_SIGNIN_PHONE: &str = "signin.phone";
 
+/// `welcome.features`: stepping into an agent's own tab for its step-in
+/// card from the phone (`agents.stepInBegin`, then the `agents.signin*`
+/// frames and input; `agents/phone_signin.rs`, `agents/step_in.rs`).
+pub const MAC_FEATURE_STEP_IN_PHONE: &str = "stepIn.phone";
+
 /// `welcome.features`: `agents.watchLive` takes `link`, one of a message's
 /// `localLinks` (`agents/local_links.rs`).
 pub const MAC_FEATURE_WATCH_LINKS: &str = "watch.links";
@@ -409,6 +414,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_KEYCAPS,
     MAC_FEATURE_AGENT_KEYS,
     MAC_FEATURE_SIGNIN_PHONE,
+    MAC_FEATURE_STEP_IN_PHONE,
     MAC_FEATURE_WATCH_LINKS,
     MAC_FEATURE_ENGINE,
     MAC_FEATURE_EFFORT,
@@ -653,7 +659,9 @@ pub enum Event {
         cursor: Cursor,
         overview: Value,
         status: MacStatus,
-        projects: Vec<Value>,
+        /// The project list, or `null` when it couldn't be read in time
+        /// (the phone keeps the list it has).
+        projects: Value,
     },
     #[serde(rename = "sync.caughtUp")]
     CaughtUp { cursor: Cursor },

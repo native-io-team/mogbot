@@ -147,7 +147,7 @@ describe('the menu', () => {
       widths: {},
     });
 
-    expect(within(row('Agent')).getByText('Left')).toBeInTheDocument();
+    expect(within(row('Session')).getByText('Left')).toBeInTheDocument();
     expect(within(row('Edit')).getByText('Right')).toBeInTheDocument();
     expect(within(row('Team')).getByText('Floating')).toBeInTheDocument();
   });
@@ -155,8 +155,8 @@ describe('the menu', () => {
   it('keeps the drag handle as the leading row control', async () => {
     await openMenu();
 
-    const agentRow = row('Agent');
-    const handle = within(agentRow).getByRole('button', { name: 'Move Agent panel' });
+    const agentRow = row('Session');
+    const handle = within(agentRow).getByRole('button', { name: 'Move Session panel' });
     expect(agentRow.firstElementChild).toBe(handle);
     expect(handle.parentElement).toBe(agentRow);
 
@@ -189,9 +189,9 @@ describe('the menu', () => {
       widths: {},
     });
 
-    await user.click(within(row('Agent')).getByRole('button', { name: 'Move Agent right' }));
+    await user.click(within(row('Session')).getByRole('button', { name: 'Move Session right' }));
 
-    expect(within(row('Agent')).getByText('Right')).toBeInTheDocument();
+    expect(within(row('Session')).getByText('Right')).toBeInTheDocument();
     const saved = readOrder(readProjectLayout(PROJECT));
     expect(saved.indexOf('agent')).toBeGreaterThan(saved.indexOf(PREVIEW));
   });
@@ -202,7 +202,9 @@ describe('the menu', () => {
       floating: [],
       widths: {},
     });
-    expect(within(row('Agent')).getByRole('button', { name: 'Move Agent left' })).toBeDisabled();
+    expect(
+      within(row('Session')).getByRole('button', { name: 'Move Session left' })
+    ).toBeDisabled();
     expect(
       within(row('Variables')).getByRole('button', { name: 'Move Variables right' })
     ).toBeDisabled();
@@ -248,7 +250,7 @@ describe('the menu', () => {
     vi.useFakeTimers();
     try {
       mockMenuRects();
-      const handle = within(row('Agent')).getByRole('button', { name: 'Move Agent panel' });
+      const handle = within(row('Session')).getByRole('button', { name: 'Move Session panel' });
       fireEvent(handle, pointer('pointerdown', 10, 40));
       fireEvent(window, pointer('pointermove', 10, 140));
       fireEvent(window, pointer('pointerup', 10, 140));
@@ -275,15 +277,15 @@ describe('the menu', () => {
     vi.useFakeTimers();
     try {
       mockMenuRects();
-      const agentRow = row('Agent');
-      const handle = within(agentRow).getByRole('button', { name: 'Move Agent panel' });
+      const agentRow = row('Session');
+      const handle = within(agentRow).getByRole('button', { name: 'Move Session panel' });
       fireEvent(handle, pointer('pointerdown', 10, 40));
       fireEvent(window, pointer('pointermove', 20, 140));
 
       const overlay = document.querySelector('[data-drag-sort-overlay="true"]') as HTMLElement;
       expect(overlay).toBeInTheDocument();
       expect(overlay.querySelector('[data-drag-sort-overlay-content="true"]')).toBeInTheDocument();
-      expect(within(overlay).getByText('Agent')).toBeInTheDocument();
+      expect(within(overlay).getByText('Session')).toBeInTheDocument();
       expect(overlay.querySelectorAll('button')).toHaveLength(0);
       expect(overlay.style.getPropertyValue('--drag-sort-overlay-width')).toBe('280px');
       expect(overlay.style.getPropertyValue('--drag-sort-overlay-height')).toBe('20px');
@@ -310,7 +312,7 @@ describe('the menu', () => {
   it('does not persist a cancelled or no-op drag', async () => {
     await openMenu();
     mockMenuRects();
-    const handle = within(row('Agent')).getByRole('button', { name: 'Move Agent panel' });
+    const handle = within(row('Session')).getByRole('button', { name: 'Move Session panel' });
     const before = readOrder(readProjectLayout(PROJECT));
     fireEvent(handle, pointer('pointerdown', 10, 40));
     fireEvent(window, pointer('pointermove', 10, 140));
@@ -334,7 +336,7 @@ describe('the default', () => {
 
     // The move controls are not menu items — the menu stays open, so you can
     // arrange several panels and then save, which is the actual workflow.
-    await user.click(within(row('Agent')).getByRole('button', { name: 'Move Agent right' }));
+    await user.click(within(row('Session')).getByRole('button', { name: 'Move Session right' }));
     expect(screen.getByRole('menuitem', { name: /Save as my default/ })).toBeEnabled();
     await user.click(screen.getByRole('menuitem', { name: /Save as my default/ }));
 
@@ -474,7 +476,7 @@ describe('the spatial implementation switch', () => {
       ].map((label) => label.textContent)
     ).toEqual(['Column 1']);
     expect(
-      screen.getByText('Agent').closest('[data-drag-sort-id="workspace-layout-panel-agent"]')
+      screen.getByText('Session').closest('[data-drag-sort-id="workspace-layout-panel-agent"]')
     ).toHaveClass('workspace-layout-menu__tile--floating');
   });
 
@@ -751,7 +753,7 @@ describe('the spatial implementation switch', () => {
     await openMenu(reorderableColumns());
     mockMenuRects();
 
-    const source = screen.getByRole('menuitem', { name: 'Move Agent panel' });
+    const source = screen.getByRole('menuitem', { name: 'Move Session panel' });
     const target = document.querySelector(
       '[data-drag-sort-id="workspace-layout-panel-navigator"]'
     ) as HTMLElement;
@@ -777,7 +779,7 @@ describe('the spatial implementation switch', () => {
     await openMenu(stacked());
     mockMenuRects();
 
-    const source = screen.getByRole('menuitem', { name: 'Move Agent panel' });
+    const source = screen.getByRole('menuitem', { name: 'Move Session panel' });
     const sourceItem = source.closest('[data-drag-sort-item]') as HTMLElement;
     const targetItem = document.querySelector(
       '[data-drag-sort-id="workspace-layout-panel-editor"]'
@@ -808,7 +810,7 @@ describe('the spatial implementation switch', () => {
     await openMenu(reorderableColumns());
     mockMenuRects();
 
-    const source = screen.getByRole('menuitem', { name: 'Move Agent panel' });
+    const source = screen.getByRole('menuitem', { name: 'Move Session panel' });
     const target = document.querySelector(
       '[data-drag-sort-id="workspace-layout-panel-navigator"]'
     ) as HTMLElement;
@@ -879,7 +881,7 @@ describe('the spatial implementation switch', () => {
 
     vi.useFakeTimers();
     try {
-      const source = screen.getByRole('menuitem', { name: 'Move Agent panel' });
+      const source = screen.getByRole('menuitem', { name: 'Move Session panel' });
       activateDrag(source);
       const target = document.querySelector(
         '[data-drag-sort-id="workspace-layout-new-column-left"]'
@@ -924,7 +926,7 @@ describe('the spatial implementation switch', () => {
 
     vi.useFakeTimers();
     try {
-      const source = screen.getByRole('menuitem', { name: 'Move Agent panel' });
+      const source = screen.getByRole('menuitem', { name: 'Move Session panel' });
       activateDrag(source);
       const target = document.querySelector(
         '[data-drag-sort-id="workspace-layout-new-column-right"]'
@@ -961,7 +963,7 @@ describe('the spatial implementation switch', () => {
 
     vi.useFakeTimers();
     try {
-      const source = screen.getByRole('menuitem', { name: 'Move Agent panel' });
+      const source = screen.getByRole('menuitem', { name: 'Move Session panel' });
       const target = document.querySelector(
         '[data-drag-sort-id="workspace-layout-panel-navigator"]'
       ) as HTMLElement;
@@ -1001,7 +1003,7 @@ describe('the spatial implementation switch', () => {
     hitTargets.forEach((target) => {
       expect(target).toHaveClass('workspace-layout-menu__hit-target');
     });
-    expect(screen.getByRole('menuitem', { name: 'Move Agent panel' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: 'Move Session panel' })).toHaveAttribute(
       'data-layout-hit-target',
       'true'
     );
@@ -1033,7 +1035,7 @@ describe('the spatial implementation switch', () => {
 
     vi.useFakeTimers();
     try {
-      const handle = screen.getByRole('menuitem', { name: 'Move Agent panel' });
+      const handle = screen.getByRole('menuitem', { name: 'Move Session panel' });
       const target = screen.getByRole('menuitem', { name: 'Move Team panel' });
       const sourceRect = handle.closest('[data-drag-sort-item]')!.getBoundingClientRect();
       const targetRect = target.closest('[data-drag-sort-item]')!.getBoundingClientRect();
@@ -1067,11 +1069,11 @@ describe('the spatial implementation switch', () => {
     const user = await openMenu(stacked());
 
     expect(
-      screen.queryByRole('menuitem', { name: 'Move Agent to its own column left' })
+      screen.queryByRole('menuitem', { name: 'Move Session to its own column left' })
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole('menuitem', { name: 'More options for Agent' }));
+    await user.click(screen.getByRole('menuitem', { name: 'More options for Session' }));
     expect(
-      screen.getByRole('menuitem', { name: 'Move Agent to its own column left' })
+      screen.getByRole('menuitem', { name: 'Move Session to its own column left' })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('menuitem', { name: 'Move Elements to its own column left' })
@@ -1079,7 +1081,7 @@ describe('the spatial implementation switch', () => {
 
     await user.click(screen.getByRole('menuitem', { name: 'More options for Elements' }));
     expect(
-      screen.queryByRole('menuitem', { name: 'Move Agent to its own column left' })
+      screen.queryByRole('menuitem', { name: 'Move Session to its own column left' })
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole('menuitem', { name: 'Move Elements to its own column left' })
@@ -1109,14 +1111,14 @@ describe('the spatial implementation switch', () => {
     const user = await openMenu(stacked());
 
     expect(screen.getByRole('group', { name: 'Workspace columns' })).toBeInTheDocument();
-    expect(screen.getByText('Agent')).toBeInTheDocument();
+    expect(screen.getByText('Session')).toBeInTheDocument();
     expect(screen.getByText('Elements')).toBeInTheDocument();
     await user.click(screen.getByRole('menuitem', { name: 'More options for Elements' }));
     expect(screen.getByRole('menuitem', { name: 'Move Elements up' })).toBeEnabled();
     await user.click(screen.getByRole('menuitem', { name: 'Move Elements up' }));
-    await user.click(screen.getByRole('menuitem', { name: 'More options for Agent' }));
+    await user.click(screen.getByRole('menuitem', { name: 'More options for Session' }));
     expect(
-      screen.getByRole('menuitem', { name: 'Move Agent to its own column left' })
+      screen.getByRole('menuitem', { name: 'Move Session to its own column left' })
     ).toBeEnabled();
 
     const saved = readProjectLayout(PROJECT);
@@ -1133,7 +1135,7 @@ describe('the spatial implementation switch', () => {
     await openMenu(stacked());
 
     expect(document.querySelectorAll('[data-layout-new-column]')).toHaveLength(0);
-    const source = screen.getByRole('menuitem', { name: 'Move Agent panel' });
+    const source = screen.getByRole('menuitem', { name: 'Move Session panel' });
     activateDrag(source);
     expect(document.querySelectorAll('[data-layout-new-column="left"]')).toHaveLength(1);
     expect(document.querySelectorAll('[data-layout-new-column="right"]')).toHaveLength(1);
@@ -1183,12 +1185,14 @@ describe('the spatial implementation switch', () => {
       floating: [],
     });
 
-    await userEvent.setup().click(screen.getByRole('menuitem', { name: 'More options for Agent' }));
+    await userEvent
+      .setup()
+      .click(screen.getByRole('menuitem', { name: 'More options for Session' }));
     expect(
-      screen.getByRole('menuitem', { name: 'Move Agent to its own column left' })
+      screen.getByRole('menuitem', { name: 'Move Session to its own column left' })
     ).toBeDisabled();
     expect(
-      screen.getByRole('menuitem', { name: 'Move Agent to its own column right' })
+      screen.getByRole('menuitem', { name: 'Move Session to its own column right' })
     ).toBeDisabled();
   });
 
@@ -1199,7 +1203,7 @@ describe('the spatial implementation switch', () => {
 
     vi.useFakeTimers();
     try {
-      const handle = screen.getByRole('menuitem', { name: 'Move Agent panel' });
+      const handle = screen.getByRole('menuitem', { name: 'Move Session panel' });
       expect(handle).not.toBeDisabled();
       const source = handle.closest('[data-drag-sort-item]') as HTMLElement;
       const target = document.querySelector(
@@ -1238,9 +1242,9 @@ describe('the spatial implementation switch', () => {
     await openMenu(before);
     const savedBefore = readProjectLayout(PROJECT);
 
-    const agentRow = row('Agent');
-    expect(within(agentRow).getByRole('button', { name: 'Move Agent panel' })).toBeDisabled();
-    expect(within(agentRow).getByRole('button', { name: 'Move Agent right' })).toBeDisabled();
+    const agentRow = row('Session');
+    expect(within(agentRow).getByRole('button', { name: 'Move Session panel' })).toBeDisabled();
+    expect(within(agentRow).getByRole('button', { name: 'Move Session right' })).toBeDisabled();
     expect(readProjectLayout(PROJECT).columns).toEqual(savedBefore.columns);
 
     act(() => setWorkspaceLayoutMenuImplementation('new'));
@@ -1255,9 +1259,13 @@ describe('the spatial implementation switch', () => {
     localStorage.removeItem(WORKSPACE_LAYOUT_MENU_IMPLEMENTATION_KEY);
     const user = await openMenu(stacked());
 
-    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Float Agent', checked: true }));
+    await user.click(
+      screen.getByRole('menuitemcheckbox', { name: 'Float Session', checked: true })
+    );
     expect(readProjectLayout(PROJECT).floating).toContain('agent');
-    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Dock Agent', checked: false }));
+    await user.click(
+      screen.getByRole('menuitemcheckbox', { name: 'Dock Session', checked: false })
+    );
     expect(readProjectLayout(PROJECT).floating).not.toContain('agent');
   });
 });

@@ -35,6 +35,10 @@ import {
 
 export interface ProjectAgentRow {
   key: string;
+  /** The agent, for its key in the row (as agents at work show theirs). */
+  agentId: string;
+  color: string;
+  working: boolean;
   label: string;
   dotState: 'idle' | 'thinking' | 'waiting';
   meta?: string;
@@ -78,6 +82,9 @@ export function projectAgentRows(
   // Agents at work here are rows among the Sessions, not here (`agentWorkItems`).
   return bound.map((a) => ({
     key: `agent-${a.id}`,
+    agentId: a.id,
+    color: a.color,
+    working: a.status.state === 'working',
     label: a.name,
     dotState: needsYou(a) ? 'waiting' : a.status.state === 'working' ? 'thinking' : 'idle',
     meta: needsYou(a) ? 'needs you' : a.status.state === 'working' ? 'working' : undefined,

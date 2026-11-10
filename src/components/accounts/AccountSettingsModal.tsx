@@ -207,7 +207,7 @@ export function AccountSettingsModal({
                     [
                       { label: 'Claude Code', identity: credStatus?.claudeAuthEmail },
                       { label: 'Codex', identity: credStatus?.codexAuthEmail },
-                      { label: 'Opencode', identity: credStatus?.opencodeAuthEmail },
+                      { label: 'OpenCode', identity: credStatus?.opencodeAuthEmail },
                     ] as const
                   ).map((row) => (
                     <div key={row.label} className="account-cred-row">

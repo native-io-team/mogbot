@@ -6,23 +6,91 @@
 
 import {
   formatCell,
+  shortColumns,
   sortRows,
   TABLE_ROWS_SHOWN,
   type SortDir,
   type TableBlock,
 } from '@shipstudio/companion-protocol';
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import { makeStyles, useColors } from '../../lib/appearance';
-import { fonts, iconSize, PRESSED, radius, space } from '../../lib/theme';
+import {
+  CHIP_H,
+  fonts,
+  READ_MAX_SCALE,
+  iconSize,
+  PRESSED,
+  radius,
+  space,
+  tapSlop,
+  type,
+} from '../../lib/theme';
 import { ShowAll } from '../ShowAll';
 import { SideScroll } from '../SideScroll';
 import { Icon, T } from '../ui';
 
-/** A column's width from what it holds: about a glyph per character, within reason. */
-const GLYPH = 7.5;
-const MIN_COL = 72;
+/**
+ * A glyph's average width in ems, a little over the measured, so a near miss
+ * keeps its line rather than breaking; read at the text's size now, so it
+ * follows Dynamic Type.
+ */
+const GLYPH_EM = 0.57;
+const PAD = space.sm * 2;
+const MIN_COL = 56;
 const MAX_COL = 220;
+/** A column of long text gives up width down to this, wrapping, before the table scrolls. */
+const WRAP_MIN = 112;
+
+/**
+ * Column widths for a table in `available` points: what each holds, then,
+ * if that's too wide, headers wrapped at their words and long text wrapped
+ * down to `WRAP_MIN`; only then does the table scroll sideways. A table
+ * narrower than its card stretches its long columns to fill it, so it never
+ * floats in its well. Short columns (times, names, numbers) keep one line.
+ */
+export function fitColumns(
+  table: Pick<TableBlock, 'columns' | 'rows'>,
+  available: number,
+  /** Dynamic Type now: the words are set at it (to their clamp), so they're measured at it. */
+  fontScale = 1
+): number[] {
+  const scale = Math.min(Math.max(fontScale, 1), READ_MAX_SCALE);
+  const GLYPH = type.small * GLYPH_EM * scale;
+  const HEAD_GLYPH = type.caption * GLYPH_EM * scale;
+  const short = shortColumns(table);
+  const content = table.columns.map(
+    (c, j) =>
+      Math.max(0, ...table.rows.map((r) => formatCell(r[j] ?? null, c).length)) * GLYPH + PAD
+  );
+  const clamp = (w: number, j: number) =>
+    Math.round(Math.max(MIN_COL, short[j] ? w : Math.min(MAX_COL, w)));
+  const natural = table.columns.map((c, j) =>
+    clamp(Math.max(content[j], c.label.length * HEAD_GLYPH + PAD), j)
+  );
+  const sum = (ws: number[]) => ws.reduce((a, b) => a + b, 0);
+  if (!(available > 0)) return natural;
+  const grow = (ws: number[]) => {
+    const extra = available - sum(ws);
+    if (extra <= 0) return ws;
+    const wide = ws.map((_, j) => !short[j]);
+    const n = wide.filter(Boolean).length;
+    // Long text takes the room; a table of short columns spreads it evenly.
+    return ws.map((w, j) => Math.floor(w + (n ? (wide[j] ? extra / n : 0) : extra / ws.length)));
+  };
+  if (sum(natural) <= available) return grow(natural);
+  const word = (label: string) => Math.max(...label.split(/\s+/).map((x) => x.length));
+  const tight = table.columns.map((c, j) =>
+    clamp(Math.max(content[j], word(c.label) * HEAD_GLYPH + PAD), j)
+  );
+  const over = sum(tight) - available;
+  if (over <= 0) return grow(tight);
+  const give = tight.map((w, j) => (short[j] ? 0 : Math.max(0, w - WRAP_MIN)));
+  const room = sum(give);
+  if (room <= 0) return tight;
+  const k = Math.min(1, over / room);
+  return tight.map((w, j) => Math.floor(w - give[j] * k));
+}
 
 export function BlockTable({ block }: { block: TableBlock }) {
   const colors = useColors();
@@ -33,16 +101,13 @@ export function BlockTable({ block }: { block: TableBlock }) {
     () => (sort ? sortRows(block.rows, sort.col, sort.dir) : block.rows),
     [block.rows, sort]
   );
+  const [available, setAvailable] = useState(0);
+  // Measured at Dynamic Type's size: at AX sizes a header broke mid-word ("Res|ults")
+  // to fit the card; now the table keeps whole words and scrolls sideways.
+  const { fontScale } = useWindowDimensions();
   const widths = useMemo(
-    () =>
-      block.columns.map((c, j) => {
-        const longest = Math.max(
-          c.label.length + 2,
-          ...block.rows.map((r) => formatCell(r[j] ?? null, c).length)
-        );
-        return Math.max(MIN_COL, Math.min(MAX_COL, Math.round(longest * GLYPH) + space.md * 2));
-      }),
-    [block]
+    () => fitColumns(block, available, fontScale),
+    [block, available, fontScale]
   );
   const shown = open ? rows : rows.slice(0, TABLE_ROWS_SHOWN);
   const press = (col: number) => {
@@ -54,7 +119,10 @@ export function BlockTable({ block }: { block: TableBlock }) {
     );
   };
   return (
-    <View style={styles.well}>
+    <View
+      style={styles.well}
+      onLayout={(e) => setAvailable(Math.floor(e.nativeEvent.layout.width - space.xs * 2))}
+    >
       <SideScroll fade={colors.surfaceApp} indicator={false}>
         <View>
           <View style={[styles.row, styles.head]}>
@@ -66,6 +134,7 @@ export function BlockTable({ block }: { block: TableBlock }) {
                   accessibilityRole="button"
                   accessibilityLabel={`${c.label}${on ? (sort!.dir === 'asc' ? ', sorted ascending' : ', sorted descending') : ''}. Sort`}
                   onPress={() => press(j)}
+                  hitSlop={tapSlop(CHIP_H)}
                   style={({ pressed }) => [
                     styles.cell,
                     styles.headCell,
@@ -77,8 +146,12 @@ export function BlockTable({ block }: { block: TableBlock }) {
                   <T
                     variant="caption"
                     color={on ? colors.textStrong : colors.textSecondary}
-                    numberOfLines={1}
-                    style={{ fontFamily: fonts.semibold, flexShrink: 1 }}
+                    numberOfLines={2}
+                    style={{
+                      fontFamily: fonts.semibold,
+                      flexShrink: 1,
+                      textAlign: c.numeric ? 'right' : 'left',
+                    }}
                   >
                     {c.label}
                   </T>
@@ -127,11 +200,16 @@ export function BlockTable({ block }: { block: TableBlock }) {
 }
 
 const useStyles = makeStyles((colors) => ({
-  well: { backgroundColor: colors.surfaceApp, borderRadius: radius.inner, overflow: 'hidden' },
+  well: {
+    backgroundColor: colors.surfaceApp,
+    borderRadius: radius.inner,
+    overflow: 'hidden',
+    paddingHorizontal: space.xs,
+  },
   row: { flexDirection: 'row' },
   head: { borderBottomWidth: 1, borderBottomColor: colors.borderDefault },
   divided: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
-  cell: { paddingHorizontal: space.md, paddingVertical: space.sm, justifyContent: 'center' },
-  headCell: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 36 },
+  cell: { paddingHorizontal: space.sm, paddingVertical: space.sm, justifyContent: 'center' },
+  headCell: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: CHIP_H },
   numeric: { textAlign: 'right', fontVariant: ['tabular-nums'] },
 }));

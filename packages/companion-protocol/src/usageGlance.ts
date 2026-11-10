@@ -16,7 +16,7 @@
  * - **Estimates say so.** The one forward-looking line ("Runs out ~Thu") is
  *   the Mac's estimate across accounts (`totals.runOut`), labelled, and
  *   absent with too little history.
- * - **"Where did my usage go"** lists what this app ran while a meter rose
+ * - **"Where it went"** lists what this app ran while a meter rose
  *   and never splits points between runs; when nothing here ran, it says the
  *   account was used elsewhere.
  */
@@ -86,7 +86,7 @@ export interface KeyLimit {
   runOut?: { at: number; along: number; text: string };
 }
 
-/** One rise in a meter, said for "Where did my usage go". */
+/** One rise in a meter, said for "Where it went". */
 export interface ChangeLine {
   key: string;
   /** "Weekly 68% → 33% left": said as what is left, as every figure is. */
@@ -206,7 +206,7 @@ export interface UsageTotal {
   counted: number;
   /** The soonest refill of the limits counted. */
   refill: { in: string; at: string; account: string } | null;
-  /** Most room first, left to right; accounts with no reading last. */
+  /** Every real account, in the work order (as the list under it); no reading is an empty slot. */
   segments: TotalSegment[];
 }
 
@@ -304,6 +304,46 @@ function rowWords(
     refill: total.refill ? `Refills in ${total.refill.in}` : null,
     count: total.counted > 1 ? plural(total.counted, 'account') : null,
     needsYou,
+  };
+}
+
+/**
+ * The total said once, for every place that leads with it (the Usage view's
+ * hero on the desk and the phone, the chat header's popover): the figure,
+ * what it is across, and the next refill with when. Out everywhere, or
+ * nothing read, the figure says that instead, never a number.
+ */
+export interface TotalWords {
+  /** "All accounts" over the figure, with more than one account in the bar. */
+  eyebrow: string | null;
+  /** "72% left", "Out of usage", "Your usage shows here after an agent’s first reply." */
+  figure: string;
+  /** "across 2 Max accounts", "this week": only beside a reading. */
+  across: string | null;
+  /** "Next refill in 2d 3h · Work, Thu 8:56 AM"; out everywhere, "Refills Sat 10:00 AM". */
+  refill: string | null;
+  /** A figure that is a reading (the big type is for readings only). */
+  known: boolean;
+}
+
+export function totalWords(
+  glance: Pick<UsageGlance, 'total' | 'tone' | 'unread' | 'headline' | 'row'>
+): TotalWords {
+  const { total } = glance;
+  const out = glance.tone === 'limited';
+  const known = total.left !== null && !out;
+  const figure = known ? total.figure : glance.unread ? glance.headline : glance.row.figure;
+  const refill = out
+    ? glance.row.refill
+    : total.refill
+      ? `Next refill in ${total.refill.in}${total.counted > 1 ? ` · ${total.refill.account}` : ''}, ${total.refill.at}`
+      : null;
+  return {
+    eyebrow: total.segments.length > 1 ? 'All accounts' : null,
+    figure,
+    across: known && total.across ? total.across : null,
+    refill,
+    known,
   };
 }
 
@@ -658,8 +698,7 @@ function keyOf(
       state === 'out'
         ? ([...general]
             .filter((l) => l.left === 0 && l.resetsAtMs !== undefined)
-            .sort((a, b) => (a.resetsAtMs as number) - (b.resetsAtMs as number))[0] ??
-          shareLimit)
+            .sort((a, b) => (a.resetsAtMs as number) - (b.resetsAtMs as number))[0] ?? shareLimit)
         : shareLimit,
     changes: changeLines(row.engine, line?.changes, now),
     fix,
@@ -693,7 +732,7 @@ function planWord(plan: string | undefined): string | null {
 
 /**
  * The total across every real account: each read account's share, counted
- * equally, most room first; an account with no reading shown but never
+ * equally, in the work order; an account with no reading shown but never
  * counted as room.
  */
 export function totalOf(
@@ -723,15 +762,9 @@ export function totalOf(
       words: `${k.name}: ${room}${refill ? `, refills in ${refill}` : ''}`,
     };
   };
-  const segments = [
-    ...[...read].sort(
-      (a, b) =>
-        (b.share as number) - (a.share as number) ||
-        a.engine.localeCompare(b.engine) ||
-        a.position - b.position
-    ),
-    ...unread,
-  ].map(segment);
+  // In the work order, as the list under it (round 4: the bar sorted by
+  // room and the list by order put the same accounts in two orders).
+  const segments = real.map(segment);
   const left =
     read.length > 0
       ? Math.round(read.reduce((n, k) => n + (k.share as number), 0) / read.length)
@@ -752,8 +785,7 @@ export function totalOf(
     .sort((a, b) => resetAt(a.l, now) - resetAt(b.l, now))[0];
   return {
     left,
-    figure:
-      left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not read yet',
+    figure: left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not read yet',
     across: left === null ? '' : across,
     unread:
       unread.length > 0 && read.length > 0
@@ -795,11 +827,11 @@ function nudgeOf(
   const what = isSession(s) ? '5-hour limit' : isWeek(s) ? 'week' : s.kind.replace(/_/g, ' ');
   const waiting = inv.backlog.filter((i) => i.state === 'waiting');
   return {
-    text: `${unused}% of ${name}’s ${what} resets ${relativeIn(s.resetsAt, now)}`,
+    text: `${unused}% of ${name}’s ${what} refills ${relativeIn(s.resetsAt, now)}`,
     question:
       waiting.length > 0
         ? 'Give agents something to do before it goes?'
-        : 'Add something to your spare-capacity list to use it.',
+        : 'Add something to your ideas for leftover usage to use it.',
     items: waiting.slice(0, 3).map((i) => i.text),
     more: Math.max(0, waiting.length - 3),
     empty: waiting.length === 0,
@@ -949,7 +981,7 @@ export function usageGlance(
     const gap = after ? Math.round((after - r.reachesAt) / DAY_MS) : 0;
     // "~" marks the estimate, unless the phrase says so itself ("in about an hour").
     const when = roughWhen(r.reachesAt, now);
-    headline = `Runs out ${when.startsWith('in about') ? when : `~${when}`}${gap >= 1 ? `, ${plural(gap, 'day')} before reset` : ''}`;
+    headline = `Runs out ${when.startsWith('in about') ? when : `~${when}`}${gap >= 1 ? `, ${plural(gap, 'day')} before the refill` : ''}`;
     estimate = `Estimate from ${r.readings} readings across ${plural(r.accounts, 'account')}`;
     // An estimate is information: in ink, never the colour that says "needs you".
   } else if (read.every((k) => (k.left ?? 0) <= LOW_LEFT)) {
@@ -971,7 +1003,7 @@ export function usageGlance(
   const n = counted.length;
   const summary = [
     n > 0 ? plural(n, 'account') : null,
-    soonest ? `resets ${soonest.resetsAt}` : null,
+    soonest ? `refills ${soonest.resetsAt}` : null,
   ]
     .filter(Boolean)
     .join(' · ');

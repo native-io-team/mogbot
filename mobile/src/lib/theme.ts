@@ -112,7 +112,7 @@ export interface Palette {
    * keys' hues (blue, orange, teal, mustard, pink, green, violet, brick),
    * stepped per appearance and validated as a set (the dataviz method: the
    * lightness band, chroma, colour-blind separation of neighbours, 3:1 on
-   * dark's panel). The desk's `--chart-series-1…8` are the same values.
+   * the app, a panel and a control in both appearances). The desk's `--chart-series-1…8` are the same values.
    * Marks only: words beside them stay in text roles.
    */
   chart1: string;
@@ -262,10 +262,10 @@ const light: Palette = {
   diffDelBg: 'rgba(212, 42, 32, 0.08)',
   scrim: 'rgba(29, 28, 26, 0.24)',
   chart1: '#3f6fd8',
-  chart2: '#ec6a2e',
-  chart3: '#2e9e8f',
-  chart4: '#e0a520',
-  chart5: '#e37b9b',
+  chart2: '#db632b',
+  chart3: '#2c9688',
+  chart4: '#ac7f19',
+  chart5: '#c56b87',
   chart6: '#3e8a3e',
   chart7: '#7357c9',
   chart8: '#c2452c',
@@ -438,6 +438,18 @@ export const agentColorNames: Record<string, string> = {
 };
 
 /** `--spacing-*`. */
+/** The least a finger is given (Apple's 44pt, Android's 48dp sits inside its padding). */
+export const MIN_TAP = 44;
+
+/** A control drawn `height` tall, given a whole tap above and below it. */
+export const tapSlop = (height: number) => {
+  const v = Math.max(0, Math.ceil((MIN_TAP - height) / 2));
+  return { top: v, bottom: v };
+};
+
+/** A chip's drawn height: under `MIN_TAP`, so a chip carries `tapSlop(CHIP_H)`. */
+export const CHIP_H = 36;
+
 export const space = {
   '3xs': 1,
   '2xs': 2,
@@ -799,6 +811,13 @@ export const READ_MAX_SCALE = 2;
  */
 export const CARD_TITLE_SCALE = 1.5;
 
+/**
+ * Dynamic Type from which a row stops sharing its line (accessibility
+ * sizes start at ×1.6 on iOS): words over the full width, the action under
+ * them, rather than both squeezed and the words cut short.
+ */
+export const LARGE_TEXT = 1.6;
+
 export const lineHeight = (size: number, ratio = 1.4) => Math.round(size * ratio);
 
 /**
@@ -876,3 +895,10 @@ export const duration = { fast: 100, standard: 150, slow: 300 } as const;
 
 /** What a pressed text control, pill or icon looks like: the same everywhere, from the first frame of the press. */
 export const PRESSED = { opacity: 0.6 } as const;
+
+/**
+ * What a rewind passed over, opened: muted, behind a rule on its left, so it
+ * reads as past. The desk's `.agent-go-back__summary[data-open] ~ …` is the
+ * same 0.55 and the same 2px rule in its default border.
+ */
+export const PAST = { opacity: 0.55, rule: space['2xs'] } as const;

@@ -30,6 +30,7 @@ import { unhandledCalls } from './unhandled';
 import { listCommands, runCommand, whenRegistryStable } from './commandBridge';
 import { HarnessOverlay } from './HarnessOverlay';
 import { initTheme } from '../lib/theme';
+import { holdCopiedFlag } from '../hooks/useCopyToClipboard';
 
 const params = new URLSearchParams(window.location.search);
 const scenario = findScenario(params.get('scenario'));
@@ -96,6 +97,21 @@ window.__harness = {
 document.title = `Harness — ${scenario.id}`;
 
 if (scenario.root === 'quick-entry') document.documentElement.dataset.window = 'quick-entry';
+
+// Copying is never the subject of a capture; what the page shows after it is.
+// The real clipboard depends on which tab of a shared browser has focus (a
+// denied write retries for over a second, then fails), and "Copied" resets
+// after 2s, which a loaded machine can pass before the screenshot. So a copy
+// here always succeeds at once, and its flag holds for the capture.
+try {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: () => Promise.resolve(), readText: () => Promise.resolve('') },
+  });
+} catch {
+  // A browser that refuses: copies take the real path, as before.
+}
+holdCopiedFlag(10 * 60_000);
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
@@ -213,7 +229,8 @@ async function runSteps(list?: ScenarioStep[]): Promise<void> {
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 50)));
       continue;
     }
-    const selector = step.click ?? step.hover ?? step.fill ?? step.select ?? step.focus;
+    const selector =
+      step.click ?? step.rightClick ?? step.hover ?? step.fill ?? step.select ?? step.focus;
     if (!selector) continue;
     const el = await waitFor(selector, undefined, step.text);
     const named = step.text ? `${selector} “${step.text}”` : selector;
@@ -239,6 +256,21 @@ async function runSteps(list?: ScenarioStep[]): Promise<void> {
         new MouseEvent('click', { bubbles: true, cancelable: true, view: window, detail: 1 })
       );
       stepLog.push(`clicked ${selector}`);
+    } else if (step.rightClick) {
+      // At the element's middle, where a person would right-click it, so the
+      // menu opens beside it rather than at the page's corner.
+      const box = el.getBoundingClientRect();
+      el.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          button: 2,
+          clientX: box.left + box.width / 2,
+          clientY: box.top + box.height / 2,
+        })
+      );
+      stepLog.push(`right-clicked ${selector}`);
     } else if (step.hover) {
       el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }));
       stepLog.push(`hovered ${selector}`);

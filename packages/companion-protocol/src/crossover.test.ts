@@ -18,7 +18,7 @@ describe('carrying on with the other engine', () => {
     expect(crossoverOptions('claude').map((o) => o.label)).toEqual([
       'Ask first',
       'Carry on with Codex',
-      'Wait for the reset',
+      'Wait for the refill',
     ]);
     expect(crossoverOptions('codex')[1].label).toBe('Carry on with Claude Code');
     expect(crossoverDetail('claude', 'carry')).toContain('Never for an agent set to one account');

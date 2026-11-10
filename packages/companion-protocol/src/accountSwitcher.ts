@@ -28,10 +28,15 @@ import { awayRoom, type AwayState } from './crossover';
 export const ACCOUNT_ENGINE_LABEL: Record<AgentEngine, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
+  opencode: 'OpenCode',
 };
 
 /** The short engine name a place is numbered by: "Claude 2", "Codex 1". */
-const PLACE_ENGINE: Record<AgentEngine, string> = { claude: 'Claude', codex: 'Codex' };
+const PLACE_ENGINE: Record<AgentEngine, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
 
 /**
  * An account's place in its engine's order, as a label. Places restart per
@@ -58,7 +63,11 @@ export const ADD_ON_MAC = 'Add or sign in to accounts on your Mac: Agents → Us
 const DEFAULT_ORG = /['’]s Organization$/;
 
 /** Whose plan it is, for a name made from it: "Claude Max", "ChatGPT Plus". */
-const PLAN_OWNER: Record<AgentEngine, string> = { claude: 'Claude', codex: 'ChatGPT' };
+const PLAN_OWNER: Record<AgentEngine, string> = {
+  claude: 'Claude',
+  codex: 'ChatGPT',
+  opencode: 'OpenCode',
+};
 
 const capital = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`;
 
@@ -153,7 +162,7 @@ function limitOf(w: QuotaWindow | undefined, label: string, now: number): RoomLi
     key: label,
     label,
     left,
-    resets: w.resetsAt ? `resets ${resetPhrase(w.resetsAt, now)}` : undefined,
+    resets: w.resetsAt ? `refills ${resetPhrase(w.resetsAt, now)}` : undefined,
     tone: left <= 0 ? 'limited' : used >= QUOTA_WARN_PERCENT ? 'warning' : 'calm',
   };
 }
@@ -184,7 +193,7 @@ function stateOf(
       state:
         a.limit?.resetsAt && a.limit.resetsAt > now
           ? `Out of usage until ${resetPhrase(a.limit.resetsAt, now)}`
-          : 'Out of usage · reset time not reported',
+          : 'Out of usage · refill time not reported',
       tone: 'out',
     };
   }
@@ -302,7 +311,7 @@ export function workingLine(
       // Short: the row is narrow, and the room says where they went.
       name: `${view.engine === 'claude' ? 'Claude' : 'Codex'} out`,
       // "Claude out · on Codex": what fits the sidebar's row; until when
-      // is in its detail (the tooltip) and in Settings → Agents → Usage.
+      // is in its detail (the tooltip) and in Settings → Accounts & usage.
       room: `on ${ACCOUNT_ENGINE_LABEL[away.on]}`,
       tone: 'warning',
       away: true,
@@ -351,7 +360,7 @@ export function workingLine(
     tone: tight && tight.tone !== 'calm' ? (tight.tone === 'limited' ? 'out' : 'warning') : 'ok',
     detail: tight
       ? `${lead} ${tight.left}% of its ${tight.label.toLowerCase()} limit left${tight.resets ? `, ${tight.resets}` : ''}.`
-      : `${lead} No usage reading yet.`,
+      : `${lead} Its usage is not read yet.`,
     several,
   };
 }

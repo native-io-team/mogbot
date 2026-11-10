@@ -104,7 +104,8 @@
           "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|marked|@noble/.*))"
         ],
         "moduleNameMapper": {
-          "^\\./agentKeyPackShards$": "<rootDir>/../packages/companion-protocol/src/agentKeyPackShards.require.ts"
+          "^\\./agentKeyPackShards$": "<rootDir>/../packages/companion-protocol/src/agentKeyPackShards.require.ts",
+          "^@babel/runtime/(.*)$": "<rootDir>/node_modules/@babel/runtime/$1"
         }
       },
       {
@@ -117,7 +118,8 @@
           "node_modules/(?!(@noble/.*))"
         ],
         "moduleNameMapper": {
-          "^\\./agentKeyPackShards$": "<rootDir>/../packages/companion-protocol/src/agentKeyPackShards.require.ts"
+          "^\\./agentKeyPackShards$": "<rootDir>/../packages/companion-protocol/src/agentKeyPackShards.require.ts",
+          "^@babel/runtime/(.*)$": "<rootDir>/node_modules/@babel/runtime/$1"
         }
       }
     ]

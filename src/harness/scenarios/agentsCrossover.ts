@@ -2,7 +2,7 @@
  * Carrying on with the other engine (`agents/crossover.rs`): the card that
  * asks the first time every Claude Code account is out, the quiet line and
  * the account row while Finance carries on with Codex, and the choice in
- * Settings → Agents → Usage. Shapes are serde's (camelCase, absent
+ * Settings → Accounts & usage. Shapes are serde's (camelCase, absent
  * optionals left out). Every name is fictional.
  */
 
@@ -47,7 +47,7 @@ const ASK = {
   title: `Your Claude Code account is out until ${AT}. Carry on with Codex until then?`,
   detail: '',
   summary:
-    "Codex can't open Claude Code's conversation, so Finance starts there from your chat and its memory. When Claude Code has room again, Finance goes back to it and is told what happened meanwhile. Claude in Chrome stays with Claude Code; on Codex it uses your Chrome through the app's own extension. Always: whenever every Claude Code account is out. Change it in Settings → Agents → Usage.",
+    "Codex can't open Claude Code's conversation, so Finance starts there from your chat and its memory. When Claude Code has room again, Finance goes back to it and is told what happened meanwhile. Claude in Chrome stays with Claude Code; on Codex it uses your Chrome through the app's own extension. Always: whenever every Claude Code account is out. Change it in Settings → Accounts & usage.",
   status: 'pending',
   crossover: { from: 'claude', to: 'codex', until: BACK, resume: true },
 };
@@ -134,7 +134,7 @@ export const agentsCrossoverScenarios: Scenario[] = [
     id: 'settings-agents-usage-crossover',
     title: 'Settings — Agents → Usage: when every account of an engine is out',
     looksRightWhen:
-      'Under “How agents use your limits”, two more blocks: “When every Claude Code account is out” with a three-way control (Ask first | Carry on with Codex | Wait for the reset), Carry on pressed, neutral not accent, a muted line that turns move to Codex until Claude Code has room and never for an agent set to one account, then one amber status line “Claude Code out · on Codex until <time>”. Then “When every Codex account is out” with Ask first pressed and its muted line. Readable in both themes.',
+      'Under “How agents use your limits”, two more blocks: “When every Claude Code account is out” with a three-way control (Ask first | Carry on with Codex | Wait for the refill), Carry on pressed, neutral not accent, a muted line that turns move to Codex until Claude Code has room and never for an agent set to one account, then one amber status line “Claude Code out · on Codex until <time>”. Then “When every Codex account is out” with Ask first pressed and its muted line. Readable in both themes.',
     command: 'settings.page.accounts',
     requires: '.usage-panel [data-crossover="claude"] .agents-usage__state',
     clipSelector: '[data-crossover="claude"]',

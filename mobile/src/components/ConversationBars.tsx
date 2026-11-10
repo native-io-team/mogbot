@@ -4,7 +4,7 @@
  * the chat is identity only, so nothing here is repeated up there.
  */
 
-import type { Agent, ResultRef } from '@shipstudio/companion-protocol';
+import { EDITING_LINE, type Agent, type ResultRef } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
 import { engineCantAskBar } from '../lib/agents';
 import { drivenBar, importBar, revisingBar } from '../lib/bars';
@@ -44,11 +44,16 @@ export function ConversationBars({
   agent,
   revising,
   onStopRevising,
+  editing,
+  onStopEditing,
   onOpenSetup,
 }: {
   agent: Agent;
   revising?: ResultRef;
   onStopRevising: () => void;
+  /** Edit and resend: the field holds a sent message being changed. */
+  editing?: boolean;
+  onStopEditing?: () => void;
   /** Go to "Setting up your team" where it sits in the chat. */
   onOpenSetup?: () => void;
 }) {
@@ -111,6 +116,17 @@ export function ConversationBars({
       ...changes,
       icon: 'bubble.left',
       action: { label: "Don't ask for changes", icon: 'xmark', onPress: onStopRevising },
+    });
+  }
+  if (editing) {
+    bars.push({
+      id: 'editing',
+      tone: 'info',
+      title: EDITING_LINE,
+      icon: 'pencil',
+      ...(onStopEditing
+        ? { action: { label: 'Don’t edit', icon: 'xmark', onPress: onStopEditing } }
+        : {}),
     });
   }
   if (cantAsk) bars.push({ id: 'engine', tone: 'info', ...cantAsk });

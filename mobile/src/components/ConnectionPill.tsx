@@ -98,6 +98,21 @@ export function useLinkBar(): { bar: LinkBar | null; back: boolean } {
     };
   }, [down]);
   const shown = bar && (late || bar.tone === 'problem') ? bar : null;
+  // `accessibilityLiveRegion` is Android's only: VoiceOver is told when a
+  // bar appears or its verdict changes (not each "2 min ago" tick), once
+  // across the tabs that show it.
+  const verdict = shown ? `${shown.kind}:${shown.title}` : null;
+  const detail = useRef('');
+  detail.current = shown ? `${shown.title}. ${shown.detail}` : '';
+  useEffect(() => {
+    if (!verdict) {
+      if (state.link.kind === 'connected') lastBarSaid = null;
+      return;
+    }
+    if (verdict === lastBarSaid) return;
+    lastBarSaid = verdict;
+    announce(detail.current, true);
+  }, [verdict, state.link.kind]);
   // "Back in touch": only after a bar was actually on screen, and only on a real return.
   const wasShown = useRef(false);
   const [back, setBack] = useState(false);
@@ -130,6 +145,8 @@ export function useLinkBar(): { bar: LinkBar | null; back: boolean } {
 /** How long "Back in touch" stays. */
 const BACK_MS = 2500;
 let lastBackSaid = 0;
+/** The bar's verdict VoiceOver was last told, until the link is back. */
+let lastBarSaid: string | null = null;
 
 /**
  * The one connection bar at the top of every tab, on the content margin:

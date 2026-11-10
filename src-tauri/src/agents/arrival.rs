@@ -306,7 +306,7 @@ pub fn preamble(a: &Arrival) -> String {
         .map(|p| (p.clone(), p["/workspace/".len()..].to_string()))
         .unwrap_or_else(|| ("/workspace/notes/".into(), "notes/".into()));
     let mut lines = vec![
-        format!("- You run on the user's own Mac now, on Claude Code or Codex (whichever they chose for you), not in {source}'s sandbox."),
+        format!("- You run on the user's own Mac now, on Claude Code, Codex or OpenCode (whichever they chose for you), not in {source}'s sandbox."),
         format!("- Your home folder is `{}`. It is your working directory: keep your files there.", a.home.display()),
         format!(
             "- Paths from {source}, like /workspace/…, don't exist on this Mac: don't look for them or run commands on them. Where your instructions name one, use the same name in your home folder instead ({} is `{}` there), and if you need what was in it, ask the user for it.",

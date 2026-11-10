@@ -107,7 +107,7 @@ export function MessageCard({
         <span className="agents-import-message__hint" aria-live="polite">
           {isCopied
             ? 'Now paste it into a chat with your assistant.'
-            : 'Grok Bot, Muse or any other assistant.'}
+            : 'Grok Bot, ChatGPT, Claude or any other assistant.'}
         </span>
       </div>
     </div>
@@ -338,6 +338,20 @@ export const PASTE_FORMAT_PROBLEM =
   'That reply isn’t in the format we asked for — copy the message again and ask your assistant to reply with just the code block.';
 
 /**
+ * The problem itself, when it is one already said in plain words with its own
+ * fix (a reply cut off: send that part again; no JSON: paste the whole reply;
+ * too long: paste it in parts). "Copy the message again" would be the wrong
+ * fix for those. A parser's line (a line number, a field name) is not.
+ */
+export function pasteProblemInWords(problems: string[]): string | null {
+  if (problems.length !== 1) return null;
+  const [p] = problems;
+  const parserLine = /\bline \d|valid JSON|should be|"[a-z_]+"/.test(p);
+  const saysTheFix = /\b(Ask|Paste|Send)\b/.test(p);
+  return !parserLine && saysTheFix ? p : null;
+}
+
+/**
  * A pasted reply that can't come across as it is. One plain sentence with
  * the way out; the line-by-line reasons (a trailing comma at line 14, a
  * field that should be true or false) are for whoever wants them, behind
@@ -345,20 +359,23 @@ export const PASTE_FORMAT_PROBLEM =
  */
 export function PasteProblems({ problems }: { problems: string[] }) {
   const [open, setOpen] = useState(false);
+  const own = pasteProblemInWords(problems);
   return (
     <div className="agents-import-problems" role="alert">
       <WarningIcon size={14} className="agents-import-problems__icon" />
       <div>
-        <p className="agents-import-problems__title">{PASTE_FORMAT_PROBLEM}</p>
-        <TextButton
-          tabIndex={0}
-          className="agents-import-problems__toggle"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? 'Hide details' : 'Show details'}
-        </TextButton>
-        {open && (
+        <p className="agents-import-problems__title">{own ?? PASTE_FORMAT_PROBLEM}</p>
+        {own === null && (
+          <TextButton
+            tabIndex={0}
+            className="agents-import-problems__toggle"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? 'Hide details' : 'Show details'}
+          </TextButton>
+        )}
+        {own === null && open && (
           <ul className="agents-import-problems__details">
             {problems.map((item, i) => (
               <li key={i}>{item}</li>
@@ -533,10 +550,12 @@ interface ImportDoneProps {
   agents: Pick<PasteImportAgent, 'name' | 'isMain' | 'color'>[];
   /** What this path has to say beyond the shared summary. */
   extra?: ReactNode;
+  /** Opens an agent's chat: each arrived agent becomes a button to it. */
+  onOpen?: (agentId: string) => void;
 }
 
 /** A short celebration, what happened in one line, and what to do next. */
-export function ImportDone({ summary, agents, extra }: ImportDoneProps) {
+export function ImportDone({ summary, agents, extra, onOpen }: ImportDoneProps) {
   const team = useAgentsList();
   const mainName = team.find((a) => a.isMain)?.name ?? 'Chief of Staff';
   const skipped = new Set(summary.skipped.map(([name]) => name));
@@ -562,9 +581,22 @@ export function ImportDone({ summary, agents, extra }: ImportDoneProps) {
         <ul className="agents-import-done__team" aria-label="Imported agents">
           {arrived.map((a) => {
             const name = a.isMain ? mainName : a.name;
-            return (
+            const here = onOpen && team.find((t) => (a.isMain ? t.isMain : t.name === name));
+            const key = <AgentKey name={name} color={a.color ?? 'gray'} size="sm" />;
+            return here ? (
+              <li key={`${a.isMain}-${a.name}`} data-open>
+                <Button
+                  variant="secondary"
+                  leftIcon={key}
+                  aria-label={`Open ${name}`}
+                  onClick={() => onOpen(here.id)}
+                >
+                  {name}
+                </Button>
+              </li>
+            ) : (
               <li key={`${a.isMain}-${a.name}`}>
-                <AgentKey name={name} color={a.color ?? 'gray'} size="sm" />
+                {key}
                 {name}
               </li>
             );
@@ -598,8 +630,9 @@ export function ImportDone({ summary, agents, extra }: ImportDoneProps) {
       )}
       {extra}
       <p className="agents-import-done__next">
-        <strong>Say hi to your team.</strong> They start when you message them; routines run while
-        the app is open.
+        <strong>Say hi to your team.</strong>{' '}
+        {onOpen && arrived.length ? 'Pick one to open its chat. ' : ''}
+        They start when you message them; routines run while the app is open.
       </p>
     </div>
   );

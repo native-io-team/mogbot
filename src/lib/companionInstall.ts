@@ -14,7 +14,8 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { agentPromptArgs } from './agent';
+import { agentPromptArgs, getActiveAgent } from './agent';
+import { failedBuildNote, loggedCommand } from './companionBuildLog';
 import type { TerminalCommand } from './setup';
 import { BRAND, BRAND_LINKS } from './brand';
 
@@ -59,7 +60,15 @@ export interface IosDevice {
 
 export interface Signing {
   teamId: string;
-  identity: string;
+  /** As Xcode lists it ("Sam Doe (Personal Team)"); null when it didn't say. */
+  teamName: string | null;
+  /**
+   * The "Apple Development" certificate; null when an Apple ID is signed in
+   * to Xcode but no certificate exists yet (the first build makes it).
+   */
+  identity: string | null;
+  /** Xcode's word: a free Apple ID's personal team (7-day builds). Null: unknown. */
+  free: boolean | null;
   bundleId: string;
 }
 
@@ -68,6 +77,8 @@ export interface SourceCheck {
   present: boolean;
   installed: boolean;
   desktopVersion: string;
+  /** Where Reinstall writes its build's output. */
+  buildLog: string;
 }
 
 export interface IosInstallStatus {
@@ -204,21 +215,32 @@ export function iosSteps(s: IosInstallStatus, app: InstalledApp | null): Install
     s.node === null && 'Node',
   ].filter(Boolean);
 
-  const phone: InstallStep = device
-    ? device.paired
-      ? { id: 'phone', title: 'Your iPhone, plugged in', detail: device.name, state: 'done' }
+  // devicectl and Xcode's accounts come with Xcode: without it, neither can be asked.
+  const noXcode = s.xcode.state === 'missing' || s.xcode.state === 'cltOnly';
+
+  const phoneTitle = 'Your iPhone, plugged in';
+  const phone: InstallStep = noXcode
+    ? {
+        id: 'phone',
+        title: phoneTitle,
+        detail: 'Checked once Xcode is installed.',
+        state: 'waiting',
+      }
+    : device
+      ? device.paired
+        ? { id: 'phone', title: phoneTitle, detail: device.name, state: 'done' }
+        : {
+            id: 'phone',
+            title: phoneTitle,
+            detail: `Unlock ${device.name} and tap Trust when it asks about this Mac. No prompt? Unplug it and plug it back in.`,
+            state: 'you',
+          }
       : {
           id: 'phone',
-          title: 'Your iPhone, plugged in',
-          detail: `Unlock ${device.name} and tap Trust when it asks about this Mac.`,
+          title: phoneTitle,
+          detail: 'Connect it with a cable and unlock it. Tap Trust if it asks about this Mac.',
           state: 'you',
-        }
-    : {
-        id: 'phone',
-        title: 'Your iPhone, plugged in',
-        detail: 'Connect it with a cable and unlock it. Tap Trust if it asks about this Mac.',
-        state: 'you',
-      };
+        };
 
   const devMode: InstallStep =
     device?.paired && device.developerMode === 'enabled'
@@ -227,26 +249,37 @@ export function iosSteps(s: IosInstallStatus, app: InstalledApp | null): Install
           id: 'devmode',
           title: 'Developer Mode on',
           detail: device?.paired
-            ? 'On the phone: Settings → Privacy & Security → Developer Mode → On. It restarts; tap Turn On after.'
+            ? 'On the phone: Settings → Privacy & Security → Developer Mode → On. It restarts; tap Turn On after. Not in the list? Keep it plugged in and open Xcode once; it appears.'
             : 'Turned on in the phone’s settings once it’s plugged in.',
           state: device?.paired ? 'you' : 'waiting',
         };
 
+  const signingTitle = 'Signed in to Xcode with your Apple ID';
   const signing: InstallStep = s.signing
     ? {
         id: 'signing',
-        title: 'Signed in to Xcode with your Apple ID',
-        detail: `Team ${s.signing.teamId}`,
+        title: signingTitle,
+        detail: [
+          s.signing.teamName ?? `Team ${s.signing.teamId}`,
+          // Signed in, but nothing has signed yet: the first build makes the certificate.
+          s.signing.identity === null && 'its certificate is made by the first build',
+        ]
+          .filter(Boolean)
+          .join(' · '),
         state: 'done',
       }
     : {
         id: 'signing',
-        title: 'Signed in to Xcode with your Apple ID',
-        detail: 'Xcode → Settings → Accounts → + → Apple ID. A free Apple ID works.',
-        state: 'you',
+        title: signingTitle,
+        detail: noXcode
+          ? 'Once Xcode is installed: Xcode → Settings → Accounts → + → Apple ID. A free Apple ID works.'
+          : 'Open Xcode → Settings → Accounts, click +, choose Apple ID and sign in. A free Apple ID works.',
+        state: noXcode ? 'waiting' : 'you',
       };
 
   const installed = app?.installed === true;
+  // Asked, but the phone wouldn't answer: with Developer Mode on, that's a locked phone.
+  const unanswered = app !== null && app.installed === null && device?.developerMode === 'enabled';
   const build: InstallStep = installed
     ? {
         id: 'build',
@@ -254,12 +287,19 @@ export function iosSteps(s: IosInstallStatus, app: InstalledApp | null): Install
         detail: device ? `On ${device.name}` : 'On your phone',
         state: 'done',
       }
-    : {
-        id: 'build',
-        title: 'Built and installed',
-        detail: 'A Release build, so it runs without this Mac’s bundler. Takes a few minutes.',
-        state: xcodeBlocks(s) || !device ? 'waiting' : 'agent',
-      };
+    : unanswered && device
+      ? {
+          id: 'build',
+          title: 'Built and installed',
+          detail: `Unlock ${device.name} so this app can check whether it’s on there.`,
+          state: 'you',
+        }
+      : {
+          id: 'build',
+          title: 'Built and installed',
+          detail: 'A Release build, so it runs without this Mac’s bundler. Takes a few minutes.',
+          state: xcodeBlocks(s) || !device ? 'waiting' : 'agent',
+        };
 
   return [
     xcodeStep(s),
@@ -295,15 +335,22 @@ export function androidSteps(s: AndroidInstallStatus, app: InstalledApp | null):
             detail: 'Tap Allow on the phone’s “Allow USB debugging?” prompt.',
             state: 'you',
           }
-        : {
-            id: 'phone',
-            title: 'Your phone, with USB debugging allowed',
-            detail:
-              s.adb === null
-                ? 'Once adb is installed, plug in your phone.'
-                : 'Settings → About phone → tap Build number 7 times. Then Developer options → USB debugging on, and plug it in.',
-            state: s.adb === null ? 'waiting' : 'you',
-          };
+        : phone?.state === 'offline'
+          ? {
+              id: 'phone',
+              title: 'Your phone, with USB debugging allowed',
+              detail: 'The phone isn’t answering. Unplug it, plug it back in and unlock it.',
+              state: 'you',
+            }
+          : {
+              id: 'phone',
+              title: 'Your phone, with USB debugging allowed',
+              detail:
+                s.adb === null
+                  ? 'Once adb is installed, plug in your phone.'
+                  : 'Settings → About phone → tap Build number 7 times. Then Developer options → USB debugging on, and plug it in.',
+              state: s.adb === null ? 'waiting' : 'you',
+            };
   const installed = app?.installed === true;
   return [
     {
@@ -486,8 +533,26 @@ export function buildAndroidInstallPrompt(s: AndroidInstallStatus): string {
   );
 }
 
-export function claudeInstallSpawn(prompt: string): TerminalCommand {
-  return { command: 'claude', args: agentPromptArgs('claude', prompt) };
+/** The agent that does the install: the user's own engine, Claude Code or Codex. */
+export interface InstallAgent {
+  /** The CLI binary, also its id for `agentPromptArgs`. */
+  binary: 'claude' | 'codex';
+  name: string;
+}
+
+/**
+ * Codex when that's the engine the user chose (onboarding makes it the
+ * default agent), else Claude Code. A Codex-only Mac has no `claude`, and a
+ * "Start Claude Code" there opened a terminal that failed at once.
+ */
+export function installAgent(defaultAgentId: string = getActiveAgent().id): InstallAgent {
+  return defaultAgentId === 'codex'
+    ? { binary: 'codex', name: 'Codex' }
+    : { binary: 'claude', name: 'Claude Code' };
+}
+
+export function agentInstallSpawn(agent: InstallAgent, prompt: string): TerminalCommand {
+  return { command: agent.binary, args: agentPromptArgs(agent.binary, prompt) };
 }
 
 /** Reinstall: the build step alone, in a login shell, with no agent. */
@@ -623,18 +688,23 @@ export function installTarget(s: InstallState): { name: string; id: string } | n
 
 /** Reinstall's command, when there's a phone and (on iOS) a team to build for. */
 export function reinstallCommand(s: InstallState): string | null {
-  if (s.platform === 'ios') {
-    const d = pickIosDevice(s.status);
-    return d?.paired ? iosBuildCommand(s.status, d) : null;
-  }
-  const p = pickAndroidPhone(s.status);
-  return p?.state === 'device' ? androidBuildCommand(s.status, p) : null;
+  const command = (() => {
+    if (s.platform === 'ios') {
+      const d = pickIosDevice(s.status);
+      return d?.paired ? iosBuildCommand(s.status, d) : null;
+    }
+    const p = pickAndroidPhone(s.status);
+    return p?.state === 'device' ? androidBuildCommand(s.status, p) : null;
+  })();
+  // Also into the log, so a failure can be read back and named.
+  return command && loggedCommand(command, s.status.source.buildLog);
 }
 
-export function installPrompt(s: InstallState): string {
-  return s.platform === 'ios'
-    ? buildIosInstallPrompt(s.status)
-    : buildAndroidInstallPrompt(s.status);
+/** The agent's prompt; after a failed Reinstall, it starts from that build's log. */
+export function installPrompt(s: InstallState, afterFailedBuild = false): string {
+  const prompt =
+    s.platform === 'ios' ? buildIosInstallPrompt(s.status) : buildAndroidInstallPrompt(s.status);
+  return afterFailedBuild ? prompt + failedBuildNote(s.status.source.buildLog) : prompt;
 }
 
 /** Only an outdated or missing Xcode stops the agent starting. */

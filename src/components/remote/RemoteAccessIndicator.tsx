@@ -6,7 +6,7 @@
  * PhoneIndicator). Formerly always present; while off, a muted grey
  * "Remote access off" that opens setup. While it's on, the globe (the icon
  * ⌘K uses for Remote access) with a green status dot, and the assistant that
- * last connected, named as its MCP client reported itself (`clientInfo.name`). The row turns amber for the one thing that will end remote
+ * last connected, named from its MCP `clientInfo.name` (`assistantName`). The row turns amber for the one thing that will end remote
  * access on its own — running on battery — and red if the server isn't
  * running at all, because those are exactly what the user needs to see
  * before they walk away.
@@ -23,7 +23,12 @@ import { FooterRowIcon } from '../workspace/FooterRowIcon';
 import { useOpenModal } from '../../contexts/ModalContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';
-import { agoText, getRemoteAccessBrief, type RemoteAccessBrief } from '../../lib/remoteAccess';
+import {
+  agoText,
+  assistantName,
+  getRemoteAccessBrief,
+  type RemoteAccessBrief,
+} from '../../lib/remoteAccess';
 
 type Tone = 'off' | 'ok' | 'warn' | 'down';
 
@@ -35,7 +40,8 @@ export function indicatorState(
     return {
       tone: 'off',
       line: 'Remote access off',
-      detail: 'Keep your agents going from your phone — click to set up remote access.',
+      detail:
+        'Let another assistant drive your agents on this Mac — click to set up remote access.',
     };
   }
   if (!brief.serverRunning) {
@@ -58,7 +64,9 @@ export function indicatorState(
     tone: 'ok',
     line:
       last !== null
-        ? `Remote on · ${brief.activity.lastClient ?? 'used'} ${agoText(last, now)}`
+        ? `Remote on · ${
+            brief.activity.lastClient ? assistantName(brief.activity.lastClient) : 'used'
+          } ${agoText(last, now)}`
         : 'Remote on',
     detail: 'Your assistant can reach this Mac while it stays on, awake and online.',
   };
@@ -66,7 +74,8 @@ export function indicatorState(
 
 export function RemoteAccessIndicator({ isSidebarHidden }: { isSidebarHidden: boolean }) {
   const openModal = useOpenModal();
-  const brief = useAsyncState<RemoteAccessBrief>(getRemoteAccessBrief, { immediate: true });
+  // No `immediate`: the poll below reads on mount, and both made it two reads at once.
+  const brief = useAsyncState<RemoteAccessBrief>(getRemoteAccessBrief);
   const [now, setNow] = useState(() => Date.now());
   const { execute } = brief;
   usePolling(

@@ -37,6 +37,7 @@
 //! "Use good judgement" and also loses the browser, its memory and the team
 //! tools.
 
+use crate::agents::store::OrLog;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -93,7 +94,8 @@ fn save(agent_id: &str, state: &Option<Option<String>>) {
     match state {
         Some(session) => {
             let body = serde_json::json!({ "session": session }).to_string();
-            let _ = super::store::write_private(&path, body.as_bytes());
+            super::store::write_private(&path, body.as_bytes())
+                .or_log("what a conversation has read from outside");
         }
         None => {
             let _ = std::fs::remove_file(path);

@@ -394,14 +394,15 @@ function RowBody({
               )}
               {!stacked && time}
             </View>
-            <View style={styles.nameLine}>
+            <View style={[styles.nameLine, stacked && !!pill && styles.wrapLine]}>
               {pill && <StatusPill tone={pill.tone} label={pill.label} />}
               <T
                 variant="small"
                 numberOfLines={stacked ? 3 : 1}
                 maxFontSizeMultiplier={NAME_SCALE}
                 color={unread ? colors.textStrong : colors.textSecondary}
-                style={{ flex: 1 }}
+                // Stacked, the words go under the pill, across the row, not in what's left beside it.
+                style={stacked && pill ? styles.underPill : { flex: 1 }}
               >
                 {driving && <T color={colors.accentSuccess}>Live · </T>}
                 {/* Working: the steadied step, so step → "Thinking" → step doesn't flicker. */}
@@ -443,6 +444,8 @@ const useStyles = makeStyles((colors) => ({
   selected: { backgroundColor: colors.surfaceControl },
   key: { width: keySize.lg },
   text: { flex: 1, gap: space['2xs'] },
+  wrapLine: { flexWrap: 'wrap', rowGap: space['2xs'] },
+  underPill: { flexBasis: '100%' },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   // The name wins the line: it shrinks last, and the time never takes more than it needs.
   name: { flexShrink: 0, maxWidth: '60%' },

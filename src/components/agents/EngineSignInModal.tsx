@@ -28,6 +28,8 @@ export interface EngineSetup {
 const COMMANDS: Record<AgentEngine, Record<EngineStep, string>> = {
   claude: { install: 'claude', 'sign-in': 'claude_auth' },
   codex: { install: 'codex', 'sign-in': 'codex_auth' },
+  // OpenCode's "sign in" adds a provider to it (`opencode auth login`).
+  opencode: { install: 'opencode', 'sign-in': 'opencode_auth' },
 };
 
 export function EngineSignInModal({

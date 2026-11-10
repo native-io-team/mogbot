@@ -30,6 +30,8 @@ import { iconName, loadAllPackDrawings } from '../../../packages/companion-proto
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { SearchField } from '../primitives/SearchField';
 import { TextButton } from '../primitives/TextButton';
+import { Dropdown, DropdownItem } from '../primitives/Dropdown';
+import { MenuButton } from '../primitives/MenuButton';
 import { ToggleButton } from '../primitives/ToggleButton';
 import { AgentKey } from './AgentKey';
 
@@ -62,6 +64,20 @@ const FEATURED_ONLY: IconCatalog = {
   entries: featuredEntries(),
   categories: [{ id: FEATURED_CATEGORY, title: 'Featured' }],
 };
+
+/**
+ * The categories people pick an agent's icon by lead the row, in this order;
+ * the rest (Lucide's, alphabetical: Accessibility, Arrows…) wait in More, so
+ * the row fits the dialog instead of running off its edge (round 4, #11).
+ */
+const LEADING_CATEGORIES = [FEATURED_CATEGORY, 'people', 'finance', 'mail', 'time'];
+
+/** The row's chips, then what's in More: the leading ones first, in their order. */
+export function splitCategories(categories: IconCatalog['categories']) {
+  const lead = LEADING_CATEGORIES.flatMap((id) => categories.filter((c) => c.id === id));
+  const more = categories.filter((c) => !LEADING_CATEGORIES.includes(c.id));
+  return { lead, more };
+}
 
 async function loadEverything(): Promise<IconCatalog> {
   const [catalog] = await Promise.all([loadIconCatalog(), loadAllPackDrawings()]);
@@ -203,6 +219,8 @@ export function AgentKeyIconPicker({
   // One Tab stop in the grid: the pick if it's shown, else the first tile.
   const stop = shown.some((e) => e.id === icon) ? icon : shown[0]?.id;
   const count = results.length.toLocaleString('en');
+  const { lead, more } = splitCategories(catalog.categories);
+  const inMore = more.find((c) => c.id === category) ?? null;
 
   return (
     <div className="agent-look__row agent-icons">
@@ -229,7 +247,7 @@ export function AgentKeyIconPicker({
           >
             All
           </ToggleButton>
-          {catalog.categories.map((c) => (
+          {lead.map((c) => (
             <ToggleButton
               key={c.id}
               size="compact"
@@ -240,6 +258,35 @@ export function AgentKeyIconPicker({
               {c.title}
             </ToggleButton>
           ))}
+          {more.length > 0 && (
+            <Dropdown
+              portal
+              menuClassName="agent-icons__more-menu"
+              trigger={(p) => (
+                <MenuButton
+                  {...p}
+                  tabIndex={0}
+                  size="compact"
+                  variant="ghost"
+                  expanded={p['aria-expanded']}
+                  className="agent-icons__more-trigger"
+                  data-pressed={inMore ? true : undefined}
+                >
+                  {inMore?.title ?? 'More'}
+                </MenuButton>
+              )}
+            >
+              {more.map((c) => (
+                <DropdownItem
+                  key={c.id}
+                  active={category === c.id}
+                  onSelect={() => changeCategory(category === c.id ? null : c.id)}
+                >
+                  {c.title}
+                </DropdownItem>
+              ))}
+            </Dropdown>
+          )}
         </div>
       )}
       <span className="agent-icons__count" id="agent-icons-count" role="status">

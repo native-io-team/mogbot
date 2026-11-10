@@ -1,7 +1,7 @@
-import { listen } from '@tauri-apps/api/event';
 import { useEffect, type RefObject } from 'react';
 import type { PreviewHandle } from '../components/preview/Preview';
 import { isMac } from '../lib/setup';
+import { menuNumber, onMenuAction } from '../lib/nativeMenu';
 import type { WorkspaceTab } from '../components/workspace/workspaceViewState';
 
 interface Params {
@@ -150,17 +150,16 @@ export function useWorkspaceShortcutControls({
     };
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
-    const unlistenMode = listen<number>('switch-workspace-mode-shortcut', ({ payload }) => {
-      selectMode(payload - 1);
+    const offMenu = onMenuAction((action) => {
+      const mode = menuNumber(action, 'switch_workspace_mode');
+      if (mode !== null) selectMode(mode - 1);
+      else if (action === 'toggle_edit_mode') toggleEditMode();
+      else if (action === 'toggle_inspector') toggleInspector();
     });
-    const unlistenEdit = listen('toggle-edit-mode-shortcut', toggleEditMode);
-    const unlistenInspector = listen('toggle-inspector-shortcut', toggleInspector);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown, { capture: true });
-      void unlistenMode.then((fn) => fn());
-      void unlistenEdit.then((fn) => fn());
-      void unlistenInspector.then((fn) => fn());
+      offMenu();
     };
   }, [
     hasPreview,

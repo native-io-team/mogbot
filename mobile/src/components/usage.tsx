@@ -9,7 +9,7 @@
 
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { makeStyles, useColors } from '../lib/appearance';
+import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usageSheet';
 import { depthOf, iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { T } from './ui';
@@ -110,13 +110,15 @@ export function UsageBar({ percent, tone }: { percent: number; tone: UsageTone }
 /**
  * A limit: "5-hour limit  62% left", its bar filled to what is left, and
  * "Resets at 3:20 PM". With `title`, the conversation's context, said as
- * its own label ("32% used": a conversation fills, a limit runs down).
+ * its own label ("32% full": a conversation fills, a limit runs down).
  */
 export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }) {
   const colors = useColors();
   const styles = useStyles();
   const left = 100 - meter.percent;
   const figure = title ? meter.label : `${left}% left`;
+  // At accessibility sizes the name takes its own line, whole, the figure under it.
+  const large = useLargeText();
   return (
     <View
       style={styles.meter}
@@ -125,8 +127,13 @@ export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }
         meter.pace ? `. ${meter.pace.text}. ${meter.pace.basis}` : ''
       }`}
     >
-      <View style={styles.meterHead}>
-        <T variant="body" color={colors.textStrong} style={styles.grow} numberOfLines={1}>
+      <View style={[styles.meterHead, large && styles.wrapHead]}>
+        <T
+          variant="body"
+          color={colors.textStrong}
+          style={large ? styles.wholeLine : styles.grow}
+          numberOfLines={large ? undefined : 1}
+        >
           {title ?? meter.label}
         </T>
         <T
@@ -283,4 +290,6 @@ const useStyles = makeStyles((colors) => ({
   pace: { gap: space['2xs'] },
   meterHead: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
   grow: { flex: 1 },
+  wrapHead: { flexWrap: 'wrap' },
+  wholeLine: { flexBasis: '100%' },
 }));

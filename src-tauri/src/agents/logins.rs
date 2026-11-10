@@ -790,7 +790,7 @@ their Chrome? `select_browser` / \
 `switch_browser` to another connected one (`list_connected_browsers`), else \
 `ask_bring_browser_to_front` once, never `request_login`; once right, \
 `remember_browser_account`. Chrome not answering? The fix is Settings → \
-Agents → Your Chrome, never the Claude extension.
+Chrome, never the Claude extension.
 3. Only if neither works: `request_login`, once, for that one app (with \
 `signed_out: true` if the browser showed a sign-in page). It may answer \
 that you can reach it already, or that someone already asked: do what it \
@@ -2040,6 +2040,7 @@ fn card_message(agent: &Agent, r: LoginRequest) -> AgentMessage {
         step_in: None,
         crossover: None,
         account_switch: None,
+        skill: None,
         slack_reply: None,
         risk: None,
     });
@@ -2161,6 +2162,7 @@ pub fn migrate_pending(app: Option<&AppHandle>) -> usize {
                 step_in: None,
                 crossover: None,
                 account_switch: None,
+                skill: None,
                 slack_reply: None,
                 risk: None,
             });
@@ -3060,6 +3062,7 @@ mod tests {
             step_in: None,
             crossover: None,
             account_switch: None,
+            skill: None,
             slack_reply: None,
             risk: None,
         });
@@ -3312,6 +3315,7 @@ mod tests {
             step_in: None,
             crossover: None,
             account_switch: None,
+            skill: None,
             slack_reply: None,
             risk: None,
         });

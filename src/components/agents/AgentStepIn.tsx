@@ -5,9 +5,14 @@
  * - **The card**: "<Agent> needs you in its browser: <reason>", the site, a
  *   muted line that its tab opens on this Mac and it never sees what you
  *   type; Not now (outlined) and Step in (neutral strong, never the accent).
- * - **While you're in it**: the card says so with Show window, and one bar
- *   above the composer, "You're in <Agent>'s browser · Hand back", with the
- *   site and when it hands back by itself. ⌘K "Hand <Agent> its browser back".
+ * - **While you're in it**: one bar above the composer, "You're in <Agent>'s
+ *   browser", with the site, when it hands back by itself, Show window and
+ *   Hand back. ⌘K "Hand <Agent> its browser back". In its own chat the card
+ *   only says so and points at the bar (the same two buttons twice, with
+ *   opposite weights, read as two different things); drawn anywhere else
+ *   (the team view, another chat's requests) it keeps them.
+ *   From the phone, both name the phone instead and drop Show window (its
+ *   window stays parked); Hand back here ends it on the phone too.
  * - **Closed**: one line (Handed back, Not now, or why it ended by itself).
  *
  * @module components/agents/AgentStepIn
@@ -28,6 +33,7 @@ import {
   handBackAgentBrowser,
   showStepInWindow,
   STEP_IN_NOTE,
+  stepInNowNote,
   stepInBarDetail,
   stepInBarTitle,
   stepIntoAgentBrowser,
@@ -59,10 +65,13 @@ export function StepInCard({
   message,
   onAnswer,
   arrived,
+  barShown = false,
 }: {
   message: AgentMessage;
   onAnswer: (requestId: string, allow: boolean) => Promise<void>;
   arrived?: boolean;
+  /** The Step in bar is showing (its own agent's chat): Show window and Hand back live there. */
+  barShown?: boolean;
 }) {
   const approval = message.approval;
   const pending = approval?.status === 'pending';
@@ -86,24 +95,20 @@ export function StepInCard({
         icon={<GlobeIcon size={14} />}
         title={approval.title}
         source={stepInSource(card)}
-        note={
-          !pending
-            ? undefined
-            : inNow
-              ? 'You’re in its browser now. Hand back when you’re done.'
-              : STEP_IN_NOTE
-        }
+        note={!pending ? undefined : inNow ? stepInNowNote(card.onPhone, barShown) : STEP_IN_NOTE}
         actions={
-          !pending ? undefined : inNow ? (
+          !pending || (inNow && barShown) ? undefined : inNow ? (
             <>
-              <Button
-                tabIndex={0}
-                variant="secondary"
-                disabled={busy}
-                onClick={() => void run(() => showStepInWindow(agentId))}
-              >
-                Show window
-              </Button>
+              {!card.onPhone && (
+                <Button
+                  tabIndex={0}
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => void run(() => showStepInWindow(agentId))}
+                >
+                  Show window
+                </Button>
+              )}
               <Button
                 tabIndex={0}
                 variant="strong"
@@ -145,6 +150,8 @@ export function StepInCard({
   );
 }
 
+const activeStepInId = (messages: readonly AgentMessage[]) => activeStepIn(messages)?.requestId;
+
 /**
  * The bar above the composer while you're in this agent's browser, and the
  * ⌘K command that hands it back.
@@ -160,9 +167,12 @@ export function StepInBar({
   now?: number;
 }) {
   const active = activeStepIn(messages);
-  const requestId = active?.requestId;
   // Read before any hook, so nothing after them touches `active`.
   const detail = active?.stepIn ? stepInBarDetail(active.stepIn, now) : null;
+  const onPhone = active?.stepIn?.onPhone;
+  // Its own read, not `active`'s field: the compiler counts `active` as
+  // possibly changed by the calls above and would drop `handBack`'s memo.
+  const requestId = activeStepInId(messages);
   const { busy, run } = useStepInAction();
   const handBack = useCallback(() => {
     if (requestId) void run(() => handBackAgentBrowser(agent.id, requestId));
@@ -189,17 +199,19 @@ export function StepInBar({
       state="active"
       icon={<GlobeIcon size={12} />}
       data-testid="agent-step-in-bar"
-      title={stepInBarTitle(agent.name)}
+      title={stepInBarTitle(agent.name, onPhone)}
       detail={detail}
       actions={
         <>
-          <TextButton
-            tabIndex={0}
-            disabled={busy}
-            onClick={() => void run(() => showStepInWindow(agent.id))}
-          >
-            Show window
-          </TextButton>
+          {!onPhone && (
+            <TextButton
+              tabIndex={0}
+              disabled={busy}
+              onClick={() => void run(() => showStepInWindow(agent.id))}
+            >
+              Show window
+            </TextButton>
+          )}
           <Button size="compact" variant="secondary" disabled={busy} onClick={handBack}>
             Hand back
           </Button>

@@ -152,10 +152,7 @@ describe('total compute', () => {
     expect(v).not.toHaveProperty('summary');
     expect(v).not.toHaveProperty('windows');
     // "Used next" only where its engine has a choice of account.
-    expect(v?.rows.find((r) => r.title === 'Claude Max')?.tags).toEqual([
-      'Max plan',
-      'Used next',
-    ]);
+    expect(v?.rows.find((r) => r.title === 'Claude Max')?.tags).toEqual(['Max plan', 'Used next']);
     const solo = computeRows(inventory([{ ...mac }, codexOut]), NOW);
     expect(solo[0].tags).toEqual(['Max plan']);
   });

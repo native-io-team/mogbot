@@ -26,7 +26,7 @@ const DESKTOP_SETTINGS = {
 /** Codex chosen for new agents, on GPT-5.5; Claude Code's on Balanced (Sonnet). */
 const CHOSEN = {
   engine: 'codex' as const,
-  models: { claude: 'sonnet', codex: 'gpt-5.5' },
+  models: { claude: 'sonnet', codex: 'gpt-5.5', opencode: null },
   startsOn: 'codex' as const,
   model: 'gpt-5.5',
 };
@@ -34,14 +34,17 @@ const CHOSEN = {
 /** `agents_set_defaults`, answered as `agents::defaults::set` would. */
 const setDefaults = (args: Record<string, unknown>) => {
   const change = args.change as {
-    engine?: 'claude' | 'codex';
+    engine?: 'claude' | 'codex' | 'opencode';
     claudeModel?: string;
     codexModel?: string;
+    opencodeModel?: string;
   };
   const engine = change.engine ?? CHOSEN.engine;
   const models = {
     claude: change.claudeModel === undefined ? CHOSEN.models.claude : change.claudeModel || null,
     codex: change.codexModel === undefined ? CHOSEN.models.codex : change.codexModel || null,
+    opencode:
+      change.opencodeModel === undefined ? CHOSEN.models.opencode : change.opencodeModel || null,
   };
   return { engine, models, startsOn: engine, model: models[engine] };
 };
@@ -632,11 +635,12 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-page',
     title: 'Settings — Accounts & usage, the whole page',
     looksRightWhen:
-      'Opened on the Accounts & usage page, in one tall shot: exactly the Usage view’s panel (hero, mode control, the keys, adding, crossover, spare-capacity list, estimates, other compute), one rendering, so its figures and names match the Usage view’s. Every limit says “N% left”. Both themes readable; nothing accent-coloured except chosen state.',
+      // Settings is a window capped at 760px tall now, so one tall shot of
+      // the page is gone: this is the window as it opens, the rest scrolls.
+      'Settings opened on Accounts & usage: the section list with Accounts & usage chosen, the page title and lead, then the Usage view’s own panel from the top (hero, the keys), one rendering, so its figures and names match the Usage view’s. Every limit says “N% left”. Both themes readable; nothing accent-coloured except chosen state.',
     command: 'settings.page.accounts',
     requires: '.usage-panel .usage-row',
-    clipSelector: '.agents-settings',
-    viewport: { width: 1280, height: 3000 },
+    clipSelector: '.settings-window',
     commands: {
       agents_overview: {
         ...overview(),

@@ -2,14 +2,17 @@
  * Usage, from the agent chat's header: a small ring (what is left of the
  * current 5-hour window, as the engine reported it) that opens a popover:
  * this agent's context (only when its engine reported it), then the whole
- * stack of accounts as the Usage view says it (`usageGlance`: the headline,
- * the segmented meter with each account named and what it has left, the
- * next reset), and a way into the Usage view. One rendering of usage, so
+ * stack of accounts as the Usage view's hero says it (`totalWords`: the
+ * total left and across what, the segmented bar, the next refill), and a way
+ * into the Usage view. One rendering of usage, so
  * the popover, the sidebar, Settings and the phone never disagree, and
  * every limit is said as what is left.
  *
  * Nothing is filled in: no reading, no section; no 5-hour reading, the
- * control is the word "Usage" rather than a ring that wasn't reported.
+ * control is the word "Usage" rather than a ring that wasn't reported. With
+ * nothing read at all (a first run) there is no control: the sidebar's
+ * Usage row is the one way in, so the first screen doesn't say it twice.
+ * ⌘K still opens the popover (it shows while open).
  *
  * ⌘K "Show usage" opens it.
  *
@@ -21,7 +24,7 @@ import { Dropdown } from '../primitives/Dropdown';
 import { Button } from '../primitives/Button';
 import { ActivityIcon } from '@/components/icons';
 import type { Agent } from '../../lib/agents';
-import { contextMeter, ringPercent, type UsageMeter } from '../../lib/agentsUsage';
+import { contextMeter, ringPercent, totalWords, type UsageMeter } from '../../lib/agentsUsage';
 import { requestSwitcher } from '../../lib/agentAccounts';
 import { useQuotas } from './AgentsQuota';
 import { useUsageGlance } from './AccountSwitcher';
@@ -40,6 +43,9 @@ export function AgentUsageRing({ agent, open, onOpenChange }: AgentUsageRingProp
   const left = ring ? 100 - ring.percent : null;
   const label =
     left !== null ? `Usage: ${left}% of the 5-hour limit left` : 'Usage: no 5-hour reading yet';
+  const anything =
+    ring !== null || contextMeter(agent.context) !== null || (quotas?.length ?? 0) > 0;
+  if (!anything && !open) return null;
   return (
     <Dropdown
       align="right"
@@ -87,6 +93,7 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const { accounts, glance } = useUsageGlance({ look: true });
   const context = contextMeter(agent.context);
   const stacked = accounts !== null && glance.keys.length > 0;
+  const words = totalWords(glance);
 
   return (
     <div className="agent-usage__body">
@@ -98,25 +105,22 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
       )}
       {stacked && (
         <Section title={glance.keys.length === 1 ? 'Your account' : 'Your accounts'}>
+          {/* The Usage view's hero, small: the same figure and the same refill. */}
           <p className="agent-usage__headline" data-tone={glance.tone}>
-            {glance.headline}
+            {words.figure}
+            {words.across && <span className="agent-usage__muted"> {words.across}</span>}
           </p>
-          {glance.estimate && (
-            <span className="agent-usage__muted">{glance.estimate}. An estimate.</span>
-          )}
-          {glance.total.left !== null && (
-            <span className="agent-usage__muted">
-              {glance.total.figure} {glance.total.across}
-            </span>
-          )}
           <TotalBar total={glance.total} />
-          <SameNotes notes={glance.sameNotes} />
-          {glance.soonest && (
+          {words.refill && <span className="agent-usage__muted">{words.refill}</span>}
+          {glance.estimate && (
             <span className="agent-usage__muted">
-              Next reset: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
-              {glance.soonest.resetsIn} ({glance.soonest.resetsAt})
+              {glance.headline}. {glance.estimate}: an estimate, not a reading.
             </span>
           )}
+          {glance.total.unread && (
+            <span className="agent-usage__muted">{glance.total.unread}.</span>
+          )}
+          <SameNotes notes={glance.sameNotes} />
         </Section>
       )}
       {!context && !stacked && (
@@ -148,7 +152,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** The conversation's context: "32% used", its bar, and how many tokens. */
+/** The conversation's context: "32% full", its bar, and how many tokens. */
 function Meter({ meter, title }: { meter: UsageMeter; title: string }) {
   return (
     <div className="agent-usage__meter" data-tone={meter.tone}>

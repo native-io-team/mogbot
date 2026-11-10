@@ -542,7 +542,7 @@ fn sign_in_changes(
     now: i64,
 ) -> Vec<sign_in_change::SignInChange> {
     let mut out = Vec::new();
-    for engine in Engine::ALL {
+    for engine in Engine::PLANS {
         let Some(mac) = inv
             .accounts
             .iter()
@@ -627,7 +627,7 @@ pub async fn local_compute() -> Vec<LocalCompute> {
     let mut found = Vec::new();
     if find("opencode").await {
         found.push(LocalCompute {
-            name: "Opencode",
+            name: "OpenCode",
             running: None,
             models: Vec::new(),
         });
@@ -657,12 +657,17 @@ pub async fn local_compute() -> Vec<LocalCompute> {
 
 /// The inventory now, from disk, the engines and this Mac.
 pub async fn read() -> Inventory {
-    let engines = super::engine::overview().await;
-    let mut candidates = Vec::new();
-    for engine in Engine::ALL {
-        candidates.extend(wallet::candidates(engine).await);
-    }
-    let local = local_compute().await;
+    // The engines, each engine's accounts and this Mac's other compute are
+    // asked about at once: each waits on CLIs or the Keychain, not on the others.
+    // Accounts and limits are the plan engines' (OpenCode reports none; it is
+    // listed with the other compute on this Mac).
+    let (engines, accounts, local) = tokio::join!(
+        super::engine::overview(),
+        futures_util::future::join_all(Engine::PLANS.map(wallet::candidates)),
+        local_compute()
+    );
+    let engines: Vec<_> = engines.into_iter().filter(|e| e.id.has_plan()).collect();
+    let candidates: Vec<_> = accounts.into_iter().flatten().collect();
     let now = super::store::now_ms();
     tokio::task::spawn_blocking(move || {
         let (archived, samples) = usage_plan::readings();
@@ -685,7 +690,7 @@ pub async fn read() -> Inventory {
             engines,
             candidates,
             engine_readings: super::quota::shown(&super::quota::load(), now),
-            reading_from: Engine::ALL
+            reading_from: Engine::PLANS
                 .iter()
                 .map(|e| (*e, wallet::reading_from(*e)))
                 .collect(),
@@ -861,7 +866,7 @@ where
     s.push_str(match inv.mode {
         Mode::Normal => " Don't slow down or skimp for limits; say what something big will likely use before starting it.\n",
         Mode::Save => " Ask before heavy work; send light work to lighter models or engines.\n",
-        Mode::UseItAll => " The user's standing OK to use capacity that would otherwise expire on work from the spare-capacity list.\n",
+        Mode::UseItAll => " The user's standing OK to use capacity that would otherwise expire on work from the list of ideas for leftover usage.\n",
     });
     total_text(&mut s, inv, tz);
     s.push_str("\nREADINGS (only what the engines reported):\n");
@@ -894,7 +899,7 @@ where
                     Some(at) => {
                         line.push_str(&format!(": out of usage until {}", when(tz, at, now)))
                     }
-                    None => line.push_str(": out of usage, reset time not reported"),
+                    None => line.push_str(": out of usage, refill time not reported"),
                 }
             }
             if a.windows.is_empty() {

@@ -43,7 +43,7 @@ const ENGINES: EngineInfo[] = [
 
 const NONE: NewAgentDefaults = {
   engine: null,
-  models: { claude: null, codex: null },
+  models: { claude: null, codex: null, opencode: null },
   startsOn: 'claude',
   model: null,
 };
@@ -71,7 +71,7 @@ describe('new agents’ defaults, as Settings shows them', () => {
     expect(startsOnLine({ ...NONE, engine: 'codex' })).toBe(
       'Codex isn’t ready, so new agents start on Claude Code for now. Tap Claude Code to keep them there. Agents you already have keep theirs.'
     );
-    expect(chosenModel({ ...NONE, models: { claude: 'opus', codex: null } }, 'claude')).toBe(
+    expect(chosenModel({ ...NONE, models: { claude: 'opus', codex: null, opencode: null } }, 'claude')).toBe(
       'opus'
     );
     expect(modelChange('codex', '')).toEqual({ codexModel: '' });

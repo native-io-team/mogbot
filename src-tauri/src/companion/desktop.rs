@@ -327,6 +327,87 @@ impl Backend for DesktopBackend {
         )
     }
 
+    async fn page(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agents_page::agents_page(
+                agent_id.to_string(),
+                conversation.map(str::to_string),
+            )
+            .await?,
+        )
+    }
+
+    async fn page_version(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        version: u32,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agents_page::agents_page_version(
+                agent_id.to_string(),
+                conversation.map(str::to_string),
+                version,
+            )
+            .await?,
+        )
+    }
+
+    async fn page_pin(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        pinned: bool,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agents_page::agents_page_pin(
+                self.app.clone(),
+                agent_id.to_string(),
+                conversation.map(str::to_string),
+                pinned,
+            )
+            .await?,
+        )
+    }
+
+    async fn conversation_rewind(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_rewind(
+                self.app.clone(),
+                agent_id.to_string(),
+                id.to_string(),
+                message_id.to_string(),
+            )
+            .await?,
+        )
+    }
+
+    async fn conversation_fork(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_fork(
+                self.app.clone(),
+                agent_id.to_string(),
+                id.to_string(),
+                message_id.to_string(),
+            )
+            .await?,
+        )
+    }
+
     async fn conversation_routine(
         &self,
         agent_id: &str,
@@ -551,6 +632,7 @@ impl Backend for DesktopBackend {
             project: None,
             work_directly: None,
             account: toggles.account,
+            learn_skills: toggles.learn_skills,
         };
         json(cmd::agents_update(self.app.clone(), agent_id.to_string(), input).await?)
     }
@@ -848,6 +930,32 @@ impl Backend for DesktopBackend {
         json(cmd::agents_policy(agent_id.to_string()).await?)
     }
 
+    async fn skills(&self, agent_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_skills(agent_id.to_string()).await?)
+    }
+
+    async fn skill_edit(
+        &self,
+        agent_id: &str,
+        edit: super::router::SkillEdit,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_skill_edit(
+                self.app.clone(),
+                agent_id.to_string(),
+                edit.slug,
+                edit.name,
+                edit.when,
+                edit.steps,
+            )
+            .await?,
+        )
+    }
+
+    async fn skill_remove(&self, agent_id: &str, slug: &str) -> Result<(), CommandError> {
+        cmd::agents_skill_remove(self.app.clone(), agent_id.to_string(), slug.to_string()).await
+    }
+
     async fn on_its_own(&self, agent_id: &str) -> Result<Value, CommandError> {
         json(cmd::agents_on_its_own(agent_id.to_string()).await?)
     }
@@ -1099,11 +1207,12 @@ impl Backend for DesktopBackend {
 
     async fn schedule(&self, op: ScheduleOp) -> Result<Value, CommandError> {
         let app = self.app.clone();
-        // The phone shows "When…" routines read-only: whatever it sends for
-        // one (Pause, Cancel, Run now, an edit) is refused here, not only
-        // hidden there.
+        // A time routine's Edit and Run now don't fit a "When…" routine
+        // (it has no time; its Run now is Check now), and the "When…"
+        // methods act only on one: each is refused here, not only hidden
+        // there. Pause and Cancel are shared.
         if let Some((agent_id, id)) = op.target() {
-            refuse_watch_from_phone(agent_id, id)?;
+            refuse_wrong_kind_from_phone(&op, agent_id, id)?;
         }
         match op {
             ScheduleOp::Preview { when } => json(cmd::agents_schedule_preview(when).await?),
@@ -1130,6 +1239,41 @@ impl Backend for DesktopBackend {
             }
             ScheduleOp::RunNow { agent_id, id } => {
                 json(cmd::agents_schedule_run_now(app, agent_id, id).await?)
+            }
+            ScheduleOp::WatchOptions { agent_id } => {
+                json(crate::agents::watch_options::options(&agent_id).await?)
+            }
+            ScheduleOp::WatchCreate {
+                agent_id,
+                source,
+                every_minutes,
+                note,
+            } => {
+                // A phone picks a folder from the Mac's list; it can't name one.
+                let offered = tokio::task::spawn_blocking(crate::agents::watch_options::folders)
+                    .await
+                    .map_err(crate::agents::err_other)?;
+                crate::agents::watch_options::refuse_unoffered_folder(&source, &offered)?;
+                json(cmd::agents_watch_create(app, agent_id, source, every_minutes, note).await?)
+            }
+            ScheduleOp::WatchUpdate {
+                agent_id,
+                id,
+                source,
+                every_minutes,
+                note,
+            } => {
+                let offered = tokio::task::spawn_blocking(crate::agents::watch_options::folders)
+                    .await
+                    .map_err(crate::agents::err_other)?;
+                crate::agents::watch_options::refuse_unoffered_folder(&source, &offered)?;
+                json(
+                    cmd::agents_watch_update(app, agent_id, id, source, every_minutes, note)
+                        .await?,
+                )
+            }
+            ScheduleOp::WatchCheckNow { agent_id, id } => {
+                json(cmd::agents_watch_check_now(app, agent_id, id).await?)
             }
         }
     }
@@ -1650,17 +1794,68 @@ pub async fn resume_on_launch(app: AppHandle) {
 }
 
 /// A "When…" routine can't be changed from the phone (see `schedule`).
-pub(crate) fn refuse_watch_from_phone(agent_id: &str, id: &str) -> Result<(), CommandError> {
+pub(crate) fn refuse_wrong_kind_from_phone(
+    op: &ScheduleOp,
+    agent_id: &str,
+    id: &str,
+) -> Result<(), CommandError> {
     let is_watch = crate::agents::store::get(agent_id)
         .ok()
         .and_then(|a| a.check_ins.into_iter().find(|c| c.id == id))
-        .is_some_and(|c| c.watch.is_some());
-    if is_watch {
-        return Err(CommandError::expected(
-            "“When…” routines can be changed on the Mac only.",
-        ));
+        .map(|c| c.watch.is_some());
+    wrong_kind(op, is_watch)
+}
+
+/// The refusal for `op` on a routine that is a "When…" one (`Some(true)`),
+/// a time one (`Some(false)`) or gone (`None`, which the command itself says).
+fn wrong_kind(op: &ScheduleOp, is_watch: Option<bool>) -> Result<(), CommandError> {
+    match (op, is_watch) {
+        (ScheduleOp::Update { .. } | ScheduleOp::RunNow { .. }, Some(true)) => Err(
+            CommandError::expected("That routine starts when something happens, not at a time."),
+        ),
+        (ScheduleOp::WatchUpdate { .. } | ScheduleOp::WatchCheckNow { .. }, Some(false)) => Err(
+            CommandError::expected("That routine runs at a time; it doesn’t check for anything."),
+        ),
+        _ => Ok(()),
     }
-    Ok(())
+}
+
+#[cfg(test)]
+mod wrong_kind_tests {
+    use super::*;
+
+    #[test]
+    fn each_kind_of_routine_takes_only_its_own_edit_and_run() {
+        let update = ScheduleOp::Update {
+            agent_id: "a".into(),
+            id: "c".into(),
+            when: "every day at 9am".into(),
+            note: "x".into(),
+            then: None,
+        };
+        let run_now = ScheduleOp::RunNow {
+            agent_id: "a".into(),
+            id: "c".into(),
+        };
+        let check_now = ScheduleOp::WatchCheckNow {
+            agent_id: "a".into(),
+            id: "c".into(),
+        };
+        let pause = ScheduleOp::Pause {
+            agent_id: "a".into(),
+            id: "c".into(),
+            paused: true,
+        };
+        assert!(wrong_kind(&update, Some(true)).is_err());
+        assert!(wrong_kind(&run_now, Some(true)).is_err());
+        assert!(wrong_kind(&check_now, Some(false)).is_err());
+        assert!(wrong_kind(&check_now, Some(true)).is_ok());
+        assert!(wrong_kind(&update, Some(false)).is_ok());
+        // Pause and Cancel are shared by both kinds.
+        assert!(wrong_kind(&pause, Some(true)).is_ok());
+        assert!(wrong_kind(&pause, Some(false)).is_ok());
+        assert!(wrong_kind(&update, None).is_ok());
+    }
 }
 
 /// A phone-made agent's first line: "Created on your phone on Claude Code —

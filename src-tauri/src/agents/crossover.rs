@@ -7,7 +7,7 @@
 //! in and has room:
 //!
 //! - **The user's choice, per engine** ([`Mode`], `crossover.json` beside the
-//!   wallet): Ask first (the default), Carry on, or Wait for the reset. Ask
+//!   wallet): Ask first (the default), Carry on, or Wait for the refill. Ask
 //!   first puts one card in the agent's chat the first time it would happen
 //!   ("All your Claude Code accounts are out until 4:00 PM. Carry on with
 //!   Codex until then?"): **Always** sets Carry on, **Just this time** covers
@@ -46,7 +46,7 @@ pub enum Mode {
     Ask,
     /// Carry on with the other engine until this one has room again.
     Carry,
-    /// Wait for the reset.
+    /// Wait for the refill.
     Wait,
 }
 
@@ -63,19 +63,18 @@ impl Mode {
     }
 }
 
-/// The other engine.
+/// The other engine. OpenCode has no plan to run out of, so it has none
+/// (itself): carrying on is only between Claude Code and Codex.
 pub fn other(engine: Engine) -> Engine {
     match engine {
         Engine::Claude => Engine::Codex,
         Engine::Codex => Engine::Claude,
+        Engine::OpenCode => Engine::OpenCode,
     }
 }
 
 fn word(engine: Engine) -> &'static str {
-    match engine {
-        Engine::Claude => "claude",
-        Engine::Codex => "codex",
-    }
+    engine.word()
 }
 
 /* -------------------------------------------------------------- the agent */
@@ -428,7 +427,7 @@ pub fn card_detail(ask: &Ask, agent: &str, reach: Option<&str>) -> String {
         ));
     }
     out.push_str(&format!(
-        " Always: whenever every {from} account is out. Change it in Settings → Agents → Usage."
+        " Always: whenever every {from} account is out. Change it in Settings → Accounts & usage."
     ));
     out
 }
@@ -821,7 +820,7 @@ pub fn new_lines(ours: &str, theirs: &str) -> Vec<String> {
 
 /* ------------------------------------------------------------ the views */
 
-/// Settings → Agents → Usage, and the Chief's `usage_overview`.
+/// Settings → Accounts & usage, and the Chief's `usage_overview`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct View {
@@ -873,7 +872,7 @@ pub fn overview_line(v: &View) -> Option<String> {
     let said = |m: Mode, home: Engine| match m {
         Mode::Ask => format!("ask first before carrying on with {}", other(home).label()),
         Mode::Carry => format!("carry on with {}", other(home).label()),
-        Mode::Wait => "wait for the reset".to_string(),
+        Mode::Wait => "wait for the refill".to_string(),
     };
     let mut out = format!(
         "When every Claude Code account is out: {}. When every Codex account is out: {}.",

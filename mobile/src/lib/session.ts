@@ -18,8 +18,9 @@ import type {
   AgentEffort,
   AgentEngine,
   RoutineStep,
+  WatchSource,
 } from '@shipstudio/companion-protocol';
-import { MAC_FEATURES, legacyColorFor, setClockHour24 } from '@shipstudio/companion-protocol';
+import { MAC_FEATURES, legacyColorFor, setClockHour24, type LearnSkills } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -27,7 +28,8 @@ import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import * as Updates from 'expo-updates';
 import { FIRST_CONVERSATION } from '@shipstudio/companion-protocol';
-import { announce } from './a11y';
+import { announce, replyAnnouncement } from './a11y';
+import { speakable } from './readAloud';
 import { conversationOfKey } from './conversations';
 import { needsYou } from './agents';
 import {
@@ -71,6 +73,7 @@ import {
   setPendingFailed,
 } from './sync';
 import { clearCache, http, type PickedFile } from './files';
+import { createReads } from './reads';
 import { roomIdOf, roomKey, roomsOffered } from './rooms';
 import { registerPush } from './push';
 import { sendSecret } from './secrets';
@@ -200,6 +203,8 @@ let caughtUp = false;
 function connect(c: Credentials) {
   transport?.close();
   transport = null;
+  if (readsFor !== c.serverId) reads.forget();
+  readsFor = c.serverId;
   if (!c.fingerprint) return refuseUnpinned();
   // The store is in memory, so a cold start has no cursor and gets a
   // snapshot; within a run, every reconnect resumes where it left off.
@@ -222,8 +227,8 @@ function connect(c: Credentials) {
       refusal: null,
     });
     // Focus is per connection: the Mac forgot it when the last one dropped.
-    const open = getApp().openChat;
-    if (open) void focusChat(open).catch(() => {});
+    focusHeld = null;
+    syncFocus(0);
     // An older Mac (or one without rooms) shows none: forget any kept from before.
     if (!roomsOffered(welcome)) setApp({ rooms: null });
     if (!canCall('agents.teamSetup', welcome)) setApp({ teamSetup: null });
@@ -273,9 +278,49 @@ function learnRoutes(routes: Credentials['routes']) {
 export const canCall = (method: MethodName, welcome = getApp().welcome) =>
   !!welcome?.methods.includes(method);
 
+/** Every request to the Mac: reads shared, queued and remembered (`lib/reads`). */
+const reads = createReads();
+/** The Mac the kept reads are for. */
+let readsFor: string | null = null;
+
 export function call<M extends MethodName>(method: M, params: Params<M>): Promise<Result<M>> {
   if (!transport) return Promise.reject(new Error('Not paired'));
-  return transport.request(method, params);
+  return reads.call(method, params, () => {
+    if (!transport) return Promise.reject(new Error('Not paired'));
+    return transport.request(method, params);
+  });
+}
+
+/**
+ * How long a reading a screen polls (usage, accounts) is good for when
+ * another screen opens wanting it: under its once-a-minute poll, so the
+ * poll still reads, but a tab switched back to doesn't.
+ */
+export const READ_FRESH_MS = 20_000;
+
+/**
+ * What a read last answered, from any screen: a screen opening shows it from
+ * its first frame while it reads again. Undefined when it hasn't been read
+ * for this Mac.
+ */
+export const lastRead = <M extends MethodName>(method: M, params: Params<M>) =>
+  reads.last<Result<M>>(method, params);
+
+/**
+ * A read answered from the last one when that is under `maxAgeMs` old and
+ * nothing has changed since: switching tabs, or opening chats one after
+ * another, doesn't ask the Mac the same thing each time.
+ */
+export function callFresh<M extends MethodName>(
+  method: M,
+  params: Params<M>,
+  maxAgeMs: number
+): Promise<Result<M>> {
+  if (!transport) return Promise.reject(new Error('Not paired'));
+  return reads.fresh(method, params, maxAgeMs, () => {
+    if (!transport) return Promise.reject(new Error('Not paired'));
+    return transport.request(method, params);
+  });
 }
 
 /** Hand the Mac this phone's push token, when it may have one. Never asks. */
@@ -321,10 +366,7 @@ export function watchLifecycle(): () => void {
       void flushDrafts();
     }
     // Focus is per socket and only counts in the foreground: say so both ways.
-    const open = getApp().openChat;
-    if (open && transport?.state.kind === 'connected') {
-      void call('agents.focus', { agentId: fg ? open : null }).catch(() => {});
-    }
+    syncFocus(0, fg);
   });
   let network = '';
   const net = NetInfo.addEventListener((s) => {
@@ -380,6 +422,31 @@ function readPage(key: string, before?: string) {
     : // Timelines as their folded lines: the steps were most of a page, and
       // are read as one opens (`lib/turnSteps`). An older Mac sends them anyway.
       call('agents.messages', { agentId: key, limit: PAGE, work: 'summary', ...at });
+}
+
+/** What the Mac holds as this socket's focus; undefined when unsure (a send failed). */
+let focusHeld: string | null | undefined = null;
+let focusTimer: ReturnType<typeof setTimeout> | null = null;
+/** Chats opened and left within this long say only where they ended up. */
+const FOCUS_SETTLE_MS = 150;
+
+/**
+ * Tell the Mac which chat is on screen (none in the background), once it
+ * has settled: tapping in and out of chats is one focus, not two a chat,
+ * and one it already holds isn't sent again.
+ */
+function syncFocus(delay = FOCUS_SETTLE_MS, foreground = AppState.currentState === 'active') {
+  if (focusTimer) clearTimeout(focusTimer);
+  focusTimer = setTimeout(() => {
+    focusTimer = null;
+    if (transport?.state.kind !== 'connected') return;
+    const want = foreground ? getApp().openChat : null;
+    if (want === focusHeld) return;
+    focusHeld = want;
+    void focusChat(want).catch(() => {
+      if (focusHeld === want) focusHeld = undefined;
+    });
+  }, delay);
 }
 
 /** `agents.focus`, or `rooms.focus` for a room's key. */
@@ -476,7 +543,7 @@ export function setOpenChat(agentId: string | null) {
         ? s.rooms.map((r) => (r.id === roomId ? { ...r, unread: 0 } : r))
         : s.rooms,
   }));
-  if (transport?.state.kind === 'connected') void focusChat(agentId).catch(() => {});
+  syncFocus();
   if (roomId) return;
   if (agentId) {
     const agent = getApp().overview?.agents.find((a) => a.id === agentId);
@@ -697,6 +764,8 @@ export async function setAgentToggles(
     colorway?: string;
     icon?: string;
     boundKey?: string;
+    /** "Save new skills", from a Mac that serves `agents.skills`. */
+    learnSkills?: LearnSkills;
   }
 ) {
   const before = getApp().overview;
@@ -727,6 +796,7 @@ export async function setAgentToggles(
                       colorway: was.colorway,
                       icon: was.icon,
                       boundKey: was.boundKey,
+                      learnSkills: was.learnSkills,
                     }
                   : a;
               }),
@@ -869,6 +939,52 @@ export async function moveRoutine(agentId: string, routineId: string, conversati
   );
 }
 
+/**
+ * "Rewind to here": the conversation carries on from just before the user's
+ * message; what came after stays in the chat, folded. The chat is read again
+ * so the Mac's line saying so is in it.
+ */
+export async function rewindConversation(
+  agentId: string,
+  conversation: string,
+  messageId: string
+) {
+  setConversations(
+    await call('agents.conversationRewind', { agentId, conversationId: conversation, messageId })
+  );
+}
+
+/** "Fork from here": a new conversation with everything before the message, opened at once. */
+export async function forkConversation(agentId: string, conversation: string, messageId: string) {
+  const list = await call('agents.conversationFork', {
+    agentId,
+    conversationId: conversation,
+    messageId,
+  });
+  setConversations(list);
+  setApp((s) => ({ viewing: { ...s.viewing, [agentId]: list.current } }));
+}
+
+/** Whether this Mac can go back (rewind, fork, edit and resend). */
+export const canGoBack = () =>
+  canCall('agents.conversationRewind') && canCall('agents.conversationFork');
+
+/**
+ * Edit and resend: back to just before `messageId` in `conversation`, then
+ * the new words sent there. A refused rewind sends nothing (it throws).
+ */
+export async function sendEdited(
+  agentId: string,
+  conversation: string,
+  messageId: string,
+  text: string,
+  mentions: string[] = [],
+  attachments: PendingAttachment[] = []
+) {
+  await rewindConversation(agentId, conversation, messageId);
+  await send(agentId, text, false, undefined, attachments, mentions);
+}
+
 /** Name one; empty gives it back to its first message. */
 export async function renameConversation(agentId: string, conversation: string, title: string) {
   setConversations(
@@ -982,6 +1098,19 @@ export const schedule = {
     call('agents.schedule.pause', { agentId, id, paused }),
   cancel: (agentId: string, id: string) => call('agents.schedule.cancel', { agentId, id }),
   runNow: (agentId: string, id: string) => call('agents.schedule.runNow', { agentId, id }),
+};
+
+/**
+ * "When…" routines, on a Mac that lists these methods (`canCall`). Pause and
+ * Cancel are `schedule.pause|cancel`, shared with timed routines.
+ */
+export const watch = {
+  options: (agentId: string) => call('agents.watch.options', { agentId }),
+  create: (agentId: string, source: WatchSource, everyMinutes: number, note: string) =>
+    call('agents.watch.create', { agentId, source, everyMinutes, note }),
+  update: (agentId: string, id: string, source: WatchSource, everyMinutes: number, note: string) =>
+    call('agents.watch.update', { agentId, id, source, everyMinutes, note }),
+  checkNow: (agentId: string, id: string) => call('agents.watch.checkNow', { agentId, id }),
 };
 
 // ---- Projects and sessions -----------------------------------------------------------
@@ -1264,7 +1393,9 @@ function noticeMessage(m: AgentMessage) {
   if (m.kind === 'approval' && m.approval?.status === 'pending') {
     announce(`${name} needs your OK: ${m.approval.title}`, true);
   } else if (m.kind === 'agent') {
-    announce(`${name} replied`);
+    // In its open chat the reply is read; a streamed one was a moving target until now.
+    const here = getApp().openChat === m.agentId && AppState.currentState === 'active';
+    announce(replyAnnouncement(name, here ? speakable(m.text ?? '') : '', here), here);
   } else if (m.kind === 'error') {
     announce(`${name} didn’t finish`);
   }
@@ -1281,13 +1412,14 @@ function watchAttention() {
   if (watchingAttention) return;
   watchingAttention = true;
   useApp.subscribe((s, prev) => {
-    if (s.overview === prev.overview && s.link === prev.link) return;
+    if (s.overview === prev.overview && s.link === prev.link && s.teamSetup === prev.teamSetup)
+      return;
     // Times read the Mac's way (it writes routine times into sentences itself).
     setClockHour24(s.overview?.hour24);
     const refused = s.link.kind === 'refused';
     // The demo's count is samples; the icon outlives it, so it never shows one.
     const demo = isDemo(s.credentials);
-    void setBadge(refused || demo || !s.overview ? 0 : badgeCount(s.overview.agents));
+    void setBadge(refused || demo || !s.overview ? 0 : badgeCount(s.overview.agents, s.teamSetup));
     if (!s.overview || !prev.overview) return;
     for (const a of s.overview.agents) {
       const was = prev.overview.agents.find((b) => b.id === a.id);

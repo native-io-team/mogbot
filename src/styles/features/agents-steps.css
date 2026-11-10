@@ -45,6 +45,10 @@
   display: flex;
   align-items: baseline;
   gap: var(--spacing-sm);
+}
+
+/* Under steps it lines up with their fields; alone, with What above it. */
+.agent-steps__row ~ .agent-steps__add {
   padding-left: calc(var(--spacing-lg) + var(--spacing-xs));
 }
 

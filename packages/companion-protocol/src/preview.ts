@@ -25,7 +25,12 @@ export function plainLine(line: string): string {
   s = s.replace(/(^|[^\w])_(?=\S)([^_]*?\S)_(?!\w)/g, '$1$2'); // _italic_
   s = s.replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1'); // strikethrough
   s = s.replace(/\*\*|__/g, ''); // an unclosed pair the cut left behind
-  if (/^\|.*\|$/.test(s)) s = s.slice(1, -1).split('|').map((c) => c.trim()).join(' · ');
+  if (/^\|.*\|$/.test(s))
+    s = s
+      .slice(1, -1)
+      .split('|')
+      .map((c) => c.trim())
+      .join(' · ');
   return s.replace(/\s+/g, ' ').trim();
 }
 

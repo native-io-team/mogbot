@@ -125,7 +125,17 @@ pub fn write_config(contents: &str) -> Result<ConfigFile, CommandError> {
     write_config_in(&config_dir(), contents)
 }
 
+/// [`write_config`] for a Markdown file: what an OpenCode turn is told,
+/// read as one of its instruction files (`opencode::instruction_files`).
+pub fn write_instructions(contents: &str) -> Result<ConfigFile, CommandError> {
+    write_file_in(&config_dir(), contents, "md")
+}
+
 fn write_config_in(dir: &Path, contents: &str) -> Result<ConfigFile, CommandError> {
+    write_file_in(dir, contents, "json")
+}
+
+fn write_file_in(dir: &Path, contents: &str, ext: &str) -> Result<ConfigFile, CommandError> {
     use std::io::Write;
     std::fs::create_dir_all(dir).map_err(super::err_io)?;
     #[cfg(unix)]
@@ -134,7 +144,7 @@ fn write_config_in(dir: &Path, contents: &str) -> Result<ConfigFile, CommandErro
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
             .map_err(super::err_io)?;
     }
-    let path = dir.join(format!("mcp-{}.json", uuid::Uuid::new_v4().simple()));
+    let path = dir.join(format!("mcp-{}.{ext}", uuid::Uuid::new_v4().simple()));
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -154,7 +164,7 @@ pub fn sweep() {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name = name.to_string_lossy();
-            if name.starts_with("mcp-") && name.ends_with(".json") {
+            if name.starts_with("mcp-") && (name.ends_with(".json") || name.ends_with(".md")) {
                 let _ = std::fs::remove_file(entry.path());
             }
         }

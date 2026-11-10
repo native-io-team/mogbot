@@ -2,7 +2,8 @@
  * An agent's schedule, anchored to the chat header: the check-ins it set for
  * itself and the routines you gave it, and a picker to add another.
  *
- * The trigger reads "N scheduled", or is a quiet clock when there's nothing.
+ * The trigger reads "N scheduled", or "Schedule" when there's nothing: never
+ * "Routines", which names the page with every agent's routines (round 4).
  * Adding or editing is the phone's picker, not a grammar: When is a few
  * chips (Every day / Weekdays / Weekly + days / Monthly + "On the [15th]
  * [day]" / Every few hours / Once with a date) and a time, What is one
@@ -33,7 +34,7 @@
  * @module components/agents/AgentSchedulePopover
  */
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
   ArrowLeftIcon,
   ChevronIcon,
@@ -105,8 +106,14 @@ import {
   type UsageSummary,
   type WatchCheckOutcome,
   describeWatchCheck,
+  ROUTINES_NEED_THE_MAC,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
+// "At a time / When…", in the phone's words too.
+import {
+  ROUTINE_MODES,
+  type RoutineMode,
+} from '../../../packages/companion-protocol/src/whenComposer';
 import { AgentRoutineModel } from './AgentRoutineModel';
 import { useQuotaLines } from './AgentsQuota';
 import {
@@ -140,6 +147,8 @@ interface AgentSchedulePopoverProps {
   onOpenChange: (open: boolean) => void;
   /** Open on the "When…" composer (⌘K → "Start work when something happens…"). */
   startWhen?: boolean;
+  /** Open on this routine's editor (the Routines page's Change). */
+  startEditing?: string | null;
 }
 
 export function AgentSchedulePopover({
@@ -147,6 +156,7 @@ export function AgentSchedulePopover({
   open,
   onOpenChange,
   startWhen = false,
+  startEditing = null,
 }: AgentSchedulePopoverProps) {
   const count = agent.checkIns?.length ?? 0;
   return (
@@ -166,13 +176,17 @@ export function AgentSchedulePopover({
             variant="ghost"
             className="agent-chat__action agent-chat__scheduled"
             leftIcon={<RoutineIcon size={14} />}
-            title={`${count} scheduled ${count === 1 ? 'routine' : 'routines'}`}
-            // Narrow, the word is hidden; the name keeps it.
-            aria-label={`${count} scheduled`}
+            title={`${count} ${count === 1 ? 'routine' : 'routines'}`}
+            // Narrow, the word is hidden; the name keeps it. "Routines", the
+            // sidebar's word and the popover's ("New routine"): one idea, one
+            // word (it said "3 scheduled", and "Schedule" with none).
+            aria-label={`${count} ${count === 1 ? 'routine' : 'routines'}`}
           >
             <span>
               {count}
-              <span className="agent-chat__scheduled-word agent-chat__action-word"> scheduled</span>
+              <span className="agent-chat__scheduled-word agent-chat__action-word">
+                {count === 1 ? ' routine' : ' routines'}
+              </span>
             </span>
           </Button>
         ) : (
@@ -191,7 +205,12 @@ export function AgentSchedulePopover({
         )
       }
     >
-      <ScheduleBody agent={agent} startWhen={startWhen} onRan={() => onOpenChange(false)} />
+      <ScheduleBody
+        agent={agent}
+        startWhen={startWhen}
+        startEditing={startEditing}
+        onRan={() => onOpenChange(false)}
+      />
     </Dropdown>
   );
 }
@@ -200,16 +219,19 @@ export function AgentSchedulePopover({
 function ScheduleBody({
   agent,
   startWhen,
+  startEditing,
   onRan,
 }: {
   agent: Agent;
   startWhen: boolean;
+  startEditing: string | null;
   onRan: () => void;
 }) {
   const items = sortCheckIns(agent.checkIns ?? []);
   /** The composer: open for a new routine (`'new'`) or for a row's edit. */
-  const [composing, setComposing] = useState<CheckIn | 'new' | null>(() =>
-    items.length === 0 || startWhen ? 'new' : null
+  const [composing, setComposing] = useState<CheckIn | 'new' | null>(
+    () =>
+      items.find((c) => c.id === startEditing) ?? (items.length === 0 || startWhen ? 'new' : null)
   );
   const editing = composing && composing !== 'new' ? composing : null;
   // Which conversation each routine runs in, read once per opening.
@@ -218,7 +240,7 @@ function ScheduleBody({
     void refreshConversations(agent.id);
   }, [agent.id]);
   /** A new routine's kind; an edit keeps the kind of the row. */
-  const [newMode, setNewMode] = useState<'time' | 'when'>(startWhen ? 'when' : 'time');
+  const [newMode, setNewMode] = useState<RoutineMode>(startWhen ? 'when' : 'time');
   const mode = editing ? (editing.watch ? 'when' : 'time') : newMode;
   const close = () => {
     setError(null);
@@ -268,13 +290,6 @@ function ScheduleBody({
             Runs {routineConversationLine(conversations, editing.id)}
           </p>
         )}
-        {editing && editing.repeat && !editing.watch && (
-          <AgentRoutineModel
-            agent={agent}
-            // The live row: the editor opened on a copy.
-            routine={items.find((c) => c.id === editing.id) ?? editing}
-          />
-        )}
         {!editing && (
           <div className="agent-schedule__mode">
             <SegmentedControl
@@ -284,10 +299,7 @@ function ScheduleBody({
                 setError(null);
                 setNewMode(m);
               }}
-              options={[
-                { value: 'time', label: 'At a time' },
-                { value: 'when', label: 'When…' },
-              ]}
+              options={ROUTINE_MODES}
             />
           </div>
         )}
@@ -310,6 +322,16 @@ function ScheduleBody({
             editing={editing}
             busy={busy}
             error={error}
+            // Its model is a fine-tuning, not the first question: under What, not over When.
+            model={
+              editing?.repeat ? (
+                <AgentRoutineModel
+                  agent={agent}
+                  // The live row: the editor opened on a copy.
+                  routine={items.find((c) => c.id === editing.id) ?? editing}
+                />
+              ) : null
+            }
             onCancel={items.length > 0 || editing ? close : undefined}
             onSave={(phrase, note, then) =>
               void run(async () => {
@@ -328,8 +350,7 @@ function ScheduleBody({
             </>
           ) : (
             <>
-              Runs only while the app is open and this Mac is awake; a missed routine runs once when
-              it’s back.
+              {ROUTINES_NEED_THE_MAC}
               <KeepAwakeLink />
             </>
           )}
@@ -400,8 +421,7 @@ function ScheduleBody({
       </div>
 
       <p className="agent-schedule__foot">
-        Runs only while the app is open and this Mac is awake; a missed routine runs once when it’s
-        back.
+        {ROUTINES_NEED_THE_MAC}
         <KeepAwakeLink />
       </p>
     </div>
@@ -422,6 +442,7 @@ function RoutinePicker({
   editing,
   busy,
   error,
+  model,
   onCancel,
   onSave,
 }: {
@@ -429,6 +450,8 @@ function RoutinePicker({
   editing: CheckIn | null;
   busy: boolean;
   error: string | null;
+  /** An existing repeating routine's model picker, shown under What. */
+  model?: ReactNode;
   /** Absent when there's nothing else to show (no routines yet). */
   onCancel?: () => void;
   /** `phrase` is empty for an edit that left When as it was; `then` is every step after What. */
@@ -512,8 +535,9 @@ function RoutinePicker({
       aria-label={editing ? 'Edit routine' : 'New routine'}
     >
       <div className="agent-schedule__field">
+        {/* "How often", not "When": "When…" is the other kind of routine, right above. */}
         <span className="agent-schedule__label" id="agent-schedule-when">
-          When
+          How often
         </span>
         <div className="agent-schedule__chips" role="group" aria-labelledby="agent-schedule-when">
           {CADENCES.map((c) => (
@@ -632,8 +656,10 @@ function RoutinePicker({
         <AgentStepsEditor steps={then} onChange={setThen} onKeyDown={onKeyDown} />
       </div>
 
+      {model}
+
       <div className="agent-schedule__echo" aria-live="polite">
-        {when && <p className="agent-schedule__echo-line">{routineEcho(when, note || '…')}</p>}
+        {when && <p className="agent-schedule__echo-line">{routineEcho(when, note)}</p>}
         {steps.length > 0 && (
           <p className="agent-schedule__readback">{stepsLine({ note, then: steps })}</p>
         )}

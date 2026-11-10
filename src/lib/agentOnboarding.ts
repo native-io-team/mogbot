@@ -29,7 +29,7 @@ import { logger } from './logger';
  * offers only these: an agent CLI that can't run Agents would finish setup
  * into a product that can't start.
  */
-export const AGENTS_ENGINE_BINARY_IDS = ['claude', 'codex'] as const;
+export const AGENTS_ENGINE_BINARY_IDS = ['claude', 'codex', 'opencode'] as const;
 export type AgentsEngineBinaryId = (typeof AGENTS_ENGINE_BINARY_IDS)[number];
 
 /** Installed and signed in, by the app's own checks. */
@@ -48,19 +48,21 @@ export function readyAgentsEngine(items: SetupItem[]): AgentsEngineBinaryId | nu
 /**
  * Put a Chief of Staff that has never run onto the engine onboarding just
  * set up. The Chief defaults to Claude Code; someone who set up only Codex
- * would otherwise land on a Chief that can't answer. A Chief that has run
- * keeps its engine. Failure is logged: the chat offers the engine switch too.
+ * (or OpenCode) would otherwise land on a Chief that can't answer. A Chief
+ * that has run keeps its engine. Failure is logged: the chat offers the
+ * engine switch too.
  */
 export async function putChiefOnEngine(defaultAgentId: string | null): Promise<void> {
-  if (defaultAgentId !== 'codex') return;
+  if (defaultAgentId !== 'codex' && defaultAgentId !== 'opencode') return;
+  const engine = defaultAgentId;
   try {
     const { agents } = await getAgentsOverview();
     const chief = agents.find((a) => a.isMain);
-    if (chief && chief.engine !== 'codex' && !chief.sessionId) {
-      await updateAgent(chief.id, { engine: 'codex' });
+    if (chief && chief.engine !== engine && !chief.sessionId) {
+      await updateAgent(chief.id, { engine });
     }
   } catch (err) {
-    logger.warn('Could not move the Chief of Staff onto Codex', { error: String(err) });
+    logger.warn(`Could not move the Chief of Staff onto ${engine}`, { error: String(err) });
   }
 }
 
@@ -72,6 +74,12 @@ export interface OnboardingTestMode {
   mock: boolean;
   /** `SHIPSTUDIO_FORCE_ONBOARDING` is set — real checks, wizard forced open. */
   forceOnboarding: boolean;
+  /**
+   * `SHIPSTUDIO_FORCE_INSTALL_FAILURE` (mock mode only): the first mock run
+   * of each item that can fail this way does (`network`, `disk`,
+   * `permission`, `admin`, `homebrew`, `signin`; `lib/installProgress`).
+   */
+  mockFailure?: string | null;
 }
 
 export async function getOnboardingTestMode(): Promise<OnboardingTestMode> {

@@ -760,7 +760,7 @@ where
             }
             if let Some(r) = &u.soonest_reset {
                 lines.push(format!(
-                    "- Soonest reset: {} ({}), {} limit, {}.",
+                    "- Soonest refill: {} ({}), {} limit, {}.",
                     r.account,
                     r.engine,
                     r.window,
@@ -802,6 +802,165 @@ where
         }
     }
     Some(out.join("\n"))
+}
+
+/// The same brief as blocks (`agents/blocks.rs`), from the same facts: what
+/// the desk and the phone draw. The message's text stays [`compose`]'s (the
+/// notification, search, Copy, older clients, the Chief's next turn). The
+/// set goes through `blocks::parse` like an agent's; anything it refuses
+/// (an error detail that looks like markup) leaves the brief as text alone.
+pub fn compose_blocks<Tz: TimeZone>(
+    facts: &Facts,
+    text: &str,
+    tz: &Tz,
+    now: i64,
+) -> Option<serde_json::Value>
+where
+    Tz::Offset: std::fmt::Display,
+{
+    use serde_json::json;
+    const ROWS: usize = 40;
+    let line = |s: &str| one_line(s, 110);
+    let mut items = Vec::new();
+    if !facts.waiting.is_empty() {
+        items.push(json!({
+            "kind": "facts", "title": "Needs you",
+            "items": facts.waiting.iter().take(ROWS)
+                .map(|w| json!({"label": line(&w.agent), "value": one_line(&w.title, 300)}))
+                .collect::<Vec<_>>(),
+        }));
+    }
+    if !facts.failed.is_empty() {
+        let lines: Vec<String> = facts
+            .failed
+            .iter()
+            .take(ROWS)
+            .map(|f| {
+                let what = match (&f.routine, f.count) {
+                    (Some(r), _) => format!("{}’s routine “{r}” failed", f.agent),
+                    (None, 1) => format!("{}’s reply ended in an error", f.agent),
+                    (None, n) => format!("{n} replies from {} ended in an error", f.agent),
+                };
+                let when = super::failure::clock_phrase(tz, f.at, now);
+                match &f.detail {
+                    Some(d) if !d.is_empty() => format!("{what} {when}: {}", one_line(d, 200)),
+                    _ => format!("{what} {when}"),
+                }
+            })
+            .collect();
+        items.push(json!({
+            "kind": "callout", "tone": "warning", "title": "Didn’t work",
+            "text": one_line_each(&lines, 1_900),
+        }));
+    }
+    if !facts.today.is_empty() {
+        items.push(json!({
+            "kind": "table", "title": "Today",
+            "columns": ["Time", "Agent", "What"],
+            "rows": facts.today.iter().take(ROWS).map(|t| {
+                let what = match &t.repeat {
+                    Some(r) => format!("{} ({r})", t.what),
+                    None => t.what.clone(),
+                };
+                json!([hm(tz, t.at), line(&t.agent), one_line(&what, 280)])
+            }).collect::<Vec<_>>(),
+        }));
+    }
+    if !facts.did.is_empty() {
+        let since_title = if now - facts.since <= 30 * HOUR_MS {
+            "Since yesterday".to_string()
+        } else {
+            tz.timestamp_millis_opt(facts.since)
+                .single()
+                .map(|t| format!("Since {}", t.format("%A")))
+                .unwrap_or_else(|| "Since the last brief".into())
+        };
+        items.push(json!({
+            "kind": "table", "title": since_title,
+            "columns": ["Agent", "Results", "Routines run", "Replies"],
+            "rows": facts.did.iter().take(ROWS).map(|d| json!([
+                line(&d.name), d.results.len(), d.routines_ran, d.replies
+            ])).collect::<Vec<_>>(),
+        }));
+    }
+    if let Some(u) = facts.usage.as_ref().filter(|u| u.signed_in > 0) {
+        let mut rows = Vec::new();
+        if u.read == 0 {
+            rows.push(json!({"label": "Room", "value": "No account has reported its limits yet."}));
+        } else {
+            let unread = u.signed_in.saturating_sub(u.read);
+            let unread = if unread > 0 {
+                format!(" ({unread} not reported)")
+            } else {
+                String::new()
+            };
+            rows.push(json!({"label": "Room", "value": format!(
+                "{} of {} accounts{unread}, by their own readings", u.room, u.signed_in
+            )}));
+        }
+        if u.is_out() {
+            if let Some(r) = &u.next_room {
+                rows.push(json!({"label": "Room again", "value": format!(
+                    "{} ({}), {}", r.account, r.engine, super::failure::clock_phrase(tz, r.at, now)
+                )}));
+            }
+        }
+        if let Some(r) = &u.soonest_reset {
+            rows.push(json!({"label": "Soonest refill", "value": format!(
+                "{} ({}), {} limit, {}", r.account, r.engine, r.window,
+                super::failure::clock_phrase(tz, r.at, now)
+            )}));
+        }
+        items.push(json!({"kind": "facts", "title": "Usage", "items": rows}));
+    }
+    if !facts.checks.is_empty() {
+        items.push(json!({
+            "kind": "facts", "title": "Your checks",
+            "items": facts.checks.iter().map(|c| {
+                let value = match &c.error {
+                    Some(why) => format!("Couldn’t check. {}", one_line(why, 300)),
+                    None if c.items.is_empty() => "Nothing.".to_string(),
+                    None => {
+                        let shown: Vec<String> =
+                            c.items.iter().take(LIST_CAP).map(|i| one_line(i, 200)).collect();
+                        let more = c.items.len().saturating_sub(LIST_CAP);
+                        let mut v = shown.join("; ");
+                        if more > 0 {
+                            v.push_str(&format!("; and {more} more"));
+                        }
+                        v
+                    }
+                };
+                let through = match &c.engine {
+                    Some(e) => format!("{}, on {e}", c.app),
+                    None => c.app.clone(),
+                };
+                json!({"label": line(&format!("{} ({through})", c.what)), "value": value})
+            }).collect::<Vec<_>>(),
+        }));
+    }
+    if items.is_empty() {
+        return None;
+    }
+    let intro = text.lines().next().unwrap_or_default();
+    let set = super::blocks::parse(&json!({ "text": intro, "blocks": items })).ok()?;
+    serde_json::to_value(set).ok()
+}
+
+/// Lines joined, the whole kept under `max` characters.
+fn one_line_each(lines: &[String], max: usize) -> String {
+    let mut out = String::new();
+    for (i, l) in lines.iter().enumerate() {
+        if out.chars().count() + l.chars().count() + 1 > max {
+            out.push_str(&format!("\nand {} more", lines.len() - i));
+            break;
+        }
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(l);
+    }
+    out
 }
 
 /* ------------------------------------------------------ the chat tool */
@@ -1092,7 +1251,9 @@ async fn post(app: &tauri::AppHandle, day: &str, asked: bool) -> Result<bool, Co
     let chief = chief()?;
     let posted = text.is_some();
     if let Some(text) = text {
-        let message = super::runner::new_message(&chief.id, MessageKind::Agent, text);
+        let blocks = compose_blocks(&facts, &text, &chrono::Local, now);
+        let mut message = super::runner::new_message(&chief.id, MessageKind::Agent, text);
+        message.blocks = blocks;
         super::runner::record(app, message)?;
     }
     let day = day.to_string();

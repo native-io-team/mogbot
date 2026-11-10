@@ -25,8 +25,9 @@ import { ensureAgentWorkdir } from '../../lib/agentOnboarding';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   agentBlocked,
+  agentInstallSpawn,
   ANDROID_APK_URL,
-  claudeInstallSpawn,
+  installAgent,
   installPrompt,
   installSteps,
   installTarget,
@@ -40,7 +41,8 @@ import {
   type InstallPlatform,
   type InstallState,
 } from '../../lib/companionInstall';
-import { InstallChecklist, InstallDone } from './PhoneInstallSteps';
+import { diagnoseBuildLog, getBuildLog, type BuildDiagnosis } from '../../lib/companionBuildLog';
+import { BuildEnded, InstallChecklist, InstallDone } from './PhoneInstallSteps';
 import { TailscaleStoreLinks } from './PhoneTailscale';
 import { phoneTailscaleText, type TailscaleState } from '../../lib/companion';
 
@@ -99,9 +101,55 @@ interface ChoiceProps {
 
 function RouteChoice({ platform, tailscale, onPlatform, onBuild, onBack }: ChoiceProps) {
   const official = platform === 'ios' ? TESTFLIGHT_URL : ANDROID_APK_URL;
-  // Building it yourself is the advanced route: folded away while there is an
-  // official build to get, open when it is the only way.
-  const [advanced, setAdvanced] = useState(!official);
+  // Building it yourself is the advanced route while there is an official
+  // build to get: folded away under it. With no official build it is the only
+  // way, so it leads, unfolded and not called advanced, and the official card
+  // that isn't there yet goes last (it led, a dead end, with the real route
+  // below it labelled "advanced").
+  const [advanced, setAdvanced] = useState(false);
+  const officialRoute = (
+    <div className="phone-route" data-unavailable={official ? undefined : ''}>
+      <div className="phone-route__body">
+        <span className="phone-route__title">
+          {platform === 'ios' ? 'TestFlight' : 'Download the app'}
+        </span>
+        <span className="phone-route__detail">
+          {platform === 'ios'
+            ? 'The official build, through Apple’s TestFlight app. Two taps, nothing to build, and updates arrive on their own.'
+            : 'The official APK: scan, download, and allow installing from your browser. Updates arrive on their own.'}
+        </span>
+      </div>
+      {official ? (
+        <Button
+          variant="secondary"
+          rightIcon={<ExternalLinkIcon size={12} />}
+          onClick={() => void openUrl(official)}
+        >
+          {platform === 'ios' ? 'Open TestFlight' : 'Get the APK'}
+        </Button>
+      ) : (
+        <span className="phone-route__badge">Not available yet</span>
+      )}
+    </div>
+  );
+  const buildRoute = (
+    <div className="phone-route">
+      <div className="phone-route__body">
+        <span className="phone-route__title">Build it on this Mac</span>
+        <span className="phone-route__detail">
+          Your agent builds the app and installs it over a cable, and this app checks each step.
+        </span>
+        <span className="phone-route__detail">
+          {platform === 'ios'
+            ? 'Needs Xcode and an Apple ID. With a free Apple ID the app stops opening after 7 days; Reinstall here fixes that in one click.'
+            : 'Needs USB debugging turned on on the phone. It doesn’t expire.'}
+        </span>
+      </div>
+      <Button variant="primary" data-install-route="build" onClick={onBuild}>
+        Set up
+      </Button>
+    </div>
+  );
   return (
     <div className="settings-modal-body phone-install">
       <div className="phone-install__bar">
@@ -116,57 +164,26 @@ function RouteChoice({ platform, tailscale, onPlatform, onBuild, onBack }: Choic
         />
       </div>
 
-      <div className="phone-route" data-unavailable={official ? undefined : ''}>
-        <div className="phone-route__body">
-          <span className="phone-route__title">
-            {platform === 'ios' ? 'TestFlight' : 'Download the app'}
-          </span>
-          <span className="phone-route__detail">
-            {platform === 'ios'
-              ? 'The official build, through Apple’s TestFlight app. Two taps, nothing to build, and updates arrive on their own.'
-              : 'The official APK: scan, download, and allow installing from your browser. Updates arrive on their own.'}
-          </span>
-        </div>
-        {official ? (
-          <Button
-            variant="secondary"
-            rightIcon={<ExternalLinkIcon size={12} />}
-            onClick={() => void openUrl(official)}
+      {official ? (
+        <>
+          {officialRoute}
+          <PhoneTailscaleRoute platform={platform} tailscale={tailscale} />
+          <TextButton
+            className="phone-route__advanced"
+            aria-expanded={advanced}
+            rightIcon={<ChevronRightIcon size={10} className="phone-route__chevron" />}
+            onClick={() => setAdvanced((v) => !v)}
           >
-            {platform === 'ios' ? 'Open TestFlight' : 'Get the APK'}
-          </Button>
-        ) : (
-          <span className="phone-route__badge">Not available yet</span>
-        )}
-      </div>
-
-      <PhoneTailscaleRoute platform={platform} tailscale={tailscale} />
-
-      <TextButton
-        className="phone-route__advanced"
-        aria-expanded={advanced}
-        rightIcon={<ChevronRightIcon size={10} className="phone-route__chevron" />}
-        onClick={() => setAdvanced((v) => !v)}
-      >
-        Install it yourself (advanced)
-      </TextButton>
-      {advanced && (
-        <div className="phone-route">
-          <div className="phone-route__body">
-            <span className="phone-route__title">Build it on this Mac</span>
-            <span className="phone-route__detail">
-              Your agent builds the app and installs it over a cable, and this app checks each step.
-            </span>
-            <span className="phone-route__detail">
-              {platform === 'ios'
-                ? 'Needs Xcode and an Apple ID. With a free Apple ID the app stops opening after 7 days; Reinstall here fixes that in one click.'
-                : 'Needs USB debugging turned on on the phone. It doesn’t expire.'}
-            </span>
-          </div>
-          <Button variant="primary" data-install-route="build" onClick={onBuild}>
-            Set up
-          </Button>
-        </div>
+            Install it yourself (advanced)
+          </TextButton>
+          {advanced && buildRoute}
+        </>
+      ) : (
+        <>
+          {buildRoute}
+          <PhoneTailscaleRoute platform={platform} tailscale={tailscale} />
+          {officialRoute}
+        </>
       )}
     </div>
   );
@@ -199,7 +216,8 @@ function PhoneTailscaleRoute({
 
 // ---- Build on this Mac ---------------------------------------------------------
 
-type Run = { kind: 'agent' | 'reinstall'; key: number } | null;
+/** `afterFailedBuild`: the agent was handed a Reinstall that failed, and starts from its log. */
+type Run = { kind: 'agent' | 'reinstall'; key: number; afterFailedBuild?: boolean } | null;
 
 interface BuildProps {
   platform: InstallPlatform;
@@ -218,6 +236,9 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [workdir, setWorkdir] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  // Read from the build's log once a Reinstall fails: the one fix, when it's one we know.
+  const [diagnosis, setDiagnosis] = useState<BuildDiagnosis | null>(null);
+  const agent = useMemo(() => installAgent(), []);
   const now = Date.now();
 
   usePolling(state.execute, { intervalMs: 4000, name: 'phone-install-checks' });
@@ -250,12 +271,22 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
     });
   }, [done, target, expiresAt, platform, s]);
 
-  const start = async (kind: 'agent' | 'reinstall') => {
+  const start = async (kind: 'agent' | 'reinstall', afterFailedBuild = false) => {
     let dir = s?.status.source.present ? s.status.source.path : null;
     dir ??= await ensureAgentWorkdir().catch(() => null);
     setWorkdir(dir);
     setExitCode(null);
-    setRun((r) => ({ kind, key: (r?.key ?? 0) + 1 }));
+    setDiagnosis(null);
+    setRun((r) => ({ kind, key: (r?.key ?? 0) + 1, afterFailedBuild }));
+  };
+
+  const ended = (code: number, outputTail: string) => {
+    setExitCode(code);
+    if (run?.kind !== 'reinstall' || code === 0) return;
+    // The log has the whole build; the terminal's own tail stands in if it can't be read.
+    void getBuildLog()
+      .catch(() => null)
+      .then((log) => setDiagnosis(diagnoseBuildLog(log) ?? diagnoseBuildLog(outputTail)));
   };
 
   // Reinstall from the panel: the build starts once there's a phone to build for.
@@ -271,7 +302,7 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
   const spawn = useMemo(() => {
     if (!run || !s) return null;
     if (run.kind === 'reinstall') return command ? shellSpawn(command) : null;
-    return claudeInstallSpawn(installPrompt(s));
+    return agentInstallSpawn(agent, installPrompt(s, run.afterFailedBuild));
     // The command is fixed per run: a poll mustn't respawn the terminal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run]);
@@ -309,7 +340,7 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
         </div>
       ) : (
         <div className="phone-install__grid">
-          <InstallChecklist steps={steps} />
+          <InstallChecklist steps={steps} agentName={agent.name} />
 
           <div className="phone-install__work">
             {done && target ? (
@@ -330,27 +361,18 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
                   command={spawn.command}
                   args={spawn.args}
                   cwd={workdir}
-                  onExit={(code) => setExitCode(code ?? 0)}
+                  onExit={(code, tail) => ended(code ?? 0, tail)}
                 />
                 {exitCode !== null && !done && (
-                  <div className="phone-install__ended">
-                    <span>
-                      {run.kind === 'agent'
-                        ? 'Claude Code stopped before the app was installed.'
-                        : exitCode === 0
-                          ? 'The build finished. Checking the phone…'
-                          : 'The build failed. Claude Code can read the error and fix it.'}
-                    </span>
-                    {(run.kind === 'agent' || exitCode !== 0) && (
-                      <Button
-                        variant="secondary"
-                        size="compact"
-                        onClick={() => void start('agent')}
-                      >
-                        {run.kind === 'agent' ? 'Restart Claude Code' : 'Hand it to Claude Code'}
-                      </Button>
-                    )}
-                  </div>
+                  <BuildEnded
+                    kind={run.kind}
+                    exitCode={exitCode}
+                    agentName={agent.name}
+                    diagnosis={diagnosis}
+                    canRetry={command !== null}
+                    onRetry={() => void start('reinstall')}
+                    onAgent={() => void start('agent', run.kind === 'reinstall' && exitCode !== 0)}
+                  />
                 )}
               </div>
             ) : (
@@ -358,7 +380,7 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
                 <h3 className="phone-install-start__title">
                   {reinstall && !command
                     ? `Plug in ${record?.deviceName ?? 'your phone'} to reinstall`
-                    : 'Claude Code does the work'}
+                    : `${agent.name} does the work`}
                 </h3>
                 <p className="phone-install-start__text">
                   It checks what’s missing, installs it, and builds the app, stopping to tell you
@@ -366,9 +388,11 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
                   checklist turns green only when this app’s own checks pass.
                 </p>
                 <p className="phone-install-start__note">
-                  {platform === 'ios'
-                    ? 'With a free Apple ID, the app stops opening after 7 days. Reinstalling takes one click here and no agent, and you’re reminded the day before. A paid developer account lasts a year.'
-                    : 'Android builds don’t expire. Reinstall only when you want a newer version.'}
+                  {platform !== 'ios'
+                    ? 'Android builds don’t expire. Reinstall only when you want a newer version.'
+                    : s.platform === 'ios' && s.status.signing?.free === false
+                      ? 'Your Apple developer account’s builds keep working for a year. Reinstall here whenever you want a newer version.'
+                      : 'With a free Apple ID, the app stops opening after 7 days. Reinstalling takes one click here and no agent, and you’re reminded the day before. A paid developer account lasts a year.'}
                 </p>
                 <div className="phone-install-start__actions">
                   <Button
@@ -377,7 +401,7 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
                     data-install-start
                     onClick={() => void start('agent')}
                   >
-                    Start Claude Code
+                    Start {agent.name}
                   </Button>
                   {canReinstall && (
                     <Button variant="secondary" onClick={() => void start('reinstall')}>

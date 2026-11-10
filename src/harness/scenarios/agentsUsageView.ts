@@ -136,7 +136,7 @@ function commands(
     agents_account_remove: null,
     agents_account_add: null,
     agents_set_usage_mode: null,
-    agents_spare_spend_now: 'Chief of Staff is starting your spare-capacity list (2 waiting).',
+    agents_spare_spend_now: 'Chief of Staff is starting your ideas for leftover usage (2 waiting).',
     agents_spare_add: null,
     agents_spare_remove: null,
     agents_crossover: crossover,
@@ -498,6 +498,12 @@ const TWO = {
 
 const OPEN = [{ click: '[data-testid="account-switcher"]' }];
 
+/** The Usage view's commands with three accounts, for the perf fixture (`agents-stress`). */
+export function usagePerfCommands() {
+  const { agents_overview: _o, agents_messages: _m, ...rest } = commands(THREE.accounts, THREE.inv);
+  return rest;
+}
+
 /** The overview, an account's page, and the sidebar row, for one state. */
 function trio(
   id: string,
@@ -544,7 +550,7 @@ function trio(
 }
 
 const PAGE =
-  'A breadcrumb with a back arrow, “Usage › <name>”. A sheet with a large keycap, the name, a status pill and “1st in the order · Max plan · …”, with “Use this one now” (when it isn’t in use) and ⋯ at the right. Then “Limits” with Limits | Tokens at its right, the limit cards (5-hour, Weekly, per-model) with countdown chips, a big “% left”, the pace-marked bar and the pace sentence, then “Where did my usage go” when there is something to say.';
+  'The page header is the breadcrumb, “Usage › <name>” (Usage a quieter link back), with no second breadcrumb line under it. A sheet with a large keycap holding its place in the order, the name, a status pill and “Max plan · …” (the place not said again), with “Use this one now” (when it isn’t in use) and ⋯ at the right. Then “Limits” with Limits | Tokens at its right, the limit cards (5-hour, Weekly, per-model) with countdown chips, a big “% left”, the pace-marked bar and the pace sentence, then “Where it went” when there is something to say.';
 
 export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
@@ -589,7 +595,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'reset-soon',
     'a reset soon with lots left',
-    'Under “How agents use your limits” (on “Use it all before reset”) a sheet: “62% of sam@example.com’s week resets in 9 h”, the first three waiting items and “and 1 more”, and a neutral “Give agents something to do”.',
+    'Under “How agents use your limits” (on “Use it all before the refill”) a sheet: “62% of sam@example.com’s week resets in 9 h”, the first three waiting items and “and 1 more”, and a neutral “Give agents something to do”.',
     RESET_SOON,
     null
   ),

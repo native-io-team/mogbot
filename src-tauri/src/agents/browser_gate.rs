@@ -1475,7 +1475,7 @@ pub fn gate_user_chrome_with(
 ) -> Gate {
     if !enabled {
         return Gate::Refuse(
-            "Your Chrome isn't connected for agents (Settings → Agents → Your Chrome). If the task needs a signed-in site, ask with request_login for it.".into(),
+            "Your Chrome isn't connected for agents (Settings → Chrome). If the task needs a signed-in site, ask with request_login for it.".into(),
         );
     }
     if outside {

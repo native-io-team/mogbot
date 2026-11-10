@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { projectShortcutOrder } from '../hooks/useProjectNumberShortcuts';
 import { useCommands } from './useCommands';
 import { useMigrationCommands } from './useMigrationCommands';
 import { useIssueReportCommands } from './useIssueReportCommands';
@@ -199,9 +200,10 @@ export function useAppCommands({
 
   // ── Project switch commands — visible in both Home and Project contexts.
   // Order:
-  //   1. Pinned (sidebar order) → ⌘1..⌘N shortcuts
-  //   2. The rest of ~/ShipStudio, sorted by last_opened (desc) — no shortcut
-  //   3. Any live external session not seen above — no shortcut
+  //   1. Pinned (sidebar order)
+  //   2. The rest of ~/ShipStudio, sorted by last_opened (desc)
+  //   3. Any live external session not seen above
+  // Each carries the ⌘1…⌘9 key it is on, if any (`projectShortcutOrder`).
   useCommands(() => {
     const pinSet = new Set(pinnedPaths);
     const seen = new Set(pinnedPaths);
@@ -224,20 +226,27 @@ export function useAppCommands({
 
     const currentPath = currentProject?.path ?? null;
 
-    const pinnedEntries = pinnedPaths.map((path, i) => ({
+    // The key each project is on: the same order ⌘1…⌘9 use (pinned, then
+    // active sessions), so the palette never names a key that opens another.
+    const keyed = projectShortcutOrder(pinnedPaths).slice(0, 9);
+    const shortcutFor = (path: string) => {
+      const i = keyed.indexOf(path);
+      return i >= 0 ? kbd('mod', String(i + 1)) : undefined;
+    };
+    const pinnedEntries = pinnedPaths.map((path) => ({
       path,
       name: basename(path),
-      shortcut: i < 9 ? kbd('mod', String(i + 1)) : undefined,
+      shortcut: shortcutFor(path),
     }));
     const recentEntries = recent.map((p) => ({
       path: p.path,
       name: p.name,
-      shortcut: undefined,
+      shortcut: shortcutFor(p.path),
     }));
     const externalEntries = externalActive.map((path) => ({
       path,
       name: basename(path),
-      shortcut: undefined,
+      shortcut: shortcutFor(path),
     }));
 
     return [...pinnedEntries, ...recentEntries, ...externalEntries]
@@ -316,7 +325,7 @@ export function useAppCommands({
       },
       {
         id: 'settings.changelog',
-        title: "What's new",
+        title: 'What’s new',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: ['changelog', 'release'],
@@ -579,29 +588,8 @@ export function useAppCommands({
           openModal('settings');
         },
       },
-      {
-        id: 'agents.accounts',
-        title: 'Usage accounts…',
-        icon: <SettingsIcon size={14} />,
-        category: 'settings',
-        keywords: [
-          'accounts',
-          'usage limit',
-          'subscription',
-          'switch account',
-          'claude',
-          'codex',
-          'chatgpt',
-        ],
-        // The one home for usage and accounts: the Usage view when Agents
-        // shows it; else Settings → Accounts & usage, which is the same panel.
-        run: () => {
-          if (requestSwitcher('open')) return;
-          requestAccountsOnOpen('show');
-          requestSettingsTabOnOpen('agents');
-          openModal('settings');
-        },
-      },
+      // (A third row, "Usage accounts…", ran exactly what "Switch account…"
+      // runs; one idea, one row: its words are that row's keywords now.)
       {
         id: 'agents.usage',
         title: 'Usage and accounts…',
@@ -622,7 +610,7 @@ export function useAppCommands({
           'where did my usage go',
           'stacking',
         ],
-        // The Usage view when Agents shows it; else Settings → Agents → Usage.
+        // The Usage view when Agents shows it; else Settings → Accounts & usage.
         run: () => {
           if (requestSwitcher('open')) return;
           requestSettingsTabOnOpen('agents');
@@ -650,6 +638,8 @@ export function useAppCommands({
         keywords: [
           'account',
           'use this account',
+          'accounts',
+          'usage accounts',
           'swap',
           'change account',
           'usage limit',
@@ -784,7 +774,8 @@ export function useAppCommands({
     const cmds = [
       {
         id: 'nav.home',
-        title: 'Go to Home',
+        title: 'All projects',
+        keywords: ['home', 'dashboard', 'back', 'projects'],
         icon: <HomeIcon size={14} />,
         category: 'navigation' as const,
         when: 'project' as const,

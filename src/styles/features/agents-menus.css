@@ -206,6 +206,14 @@
   color: var(--text-muted);
 }
 
+/* On the hovered, focused or current row's raised fill, muted was 3.6:1 and
+   secondary 4.3:1 (dark): the row's own ink. */
+.agent-model-menu
+  .ss-dropdown__item:is(:hover, :focus-visible, .ss-dropdown__item--active)
+  .agent-model-menu__detail {
+  color: var(--text-primary);
+}
+
 .agent-editor__usage {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -309,6 +317,28 @@
   min-width: 0;
   gap: var(--spacing-xs);
   color: var(--text-secondary);
+}
+
+/* Another conversation needs your OK: a badge on the bubble icon. */
+.agent-conversations__icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.agent-conversations__badge {
+  position: absolute;
+  top: calc(var(--spacing-3xs) * -1);
+  right: calc(var(--spacing-3xs) * -1);
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--status-pill-waiting);
+  box-shadow: 0 0 0 var(--border-width-default) var(--surface-app);
+}
+
+.agent-conversations__pill {
+  flex: 0 0 auto;
+  margin-left: var(--spacing-sm);
 }
 
 .agent-conversations__title {

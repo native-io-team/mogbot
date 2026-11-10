@@ -26,6 +26,7 @@
 //! would make every check-in queued behind it arrive "late" for a reason that
 //! has nothing to do with the user.
 
+use crate::agents::store::OrLog;
 use chrono::{
     DateTime, Datelike, Duration as Span, LocalResult, NaiveDate, NaiveDateTime, NaiveTime,
     TimeZone,
@@ -1134,7 +1135,7 @@ pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
 }
 
 /// [`plan`], leaving out the due check-ins `waits` holds back (inside quiet
-/// hours, `quiet::fires_anyway` says which don't; a usage limit to reset
+/// hours, `quiet::fires_anyway` says which don't; a usage limit to refill
 /// first, `saver`): they stay due, and fire once when it lets them. Asked
 /// only of check-ins that are due.
 pub fn plan_with<Tz: TimeZone>(
@@ -1341,7 +1342,7 @@ where
         );
     }
     format!(
-        "[Scheduled check-in you set: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says. {SWEEP} Then tell the user in a few lines what you did and what's left. If nothing changed since your last check-in and nothing needs them, reply with exactly {NOTHING_NEW} and nothing else: no post goes in their chat.]",
+        "[Scheduled check-in you set: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says. {SWEEP} Then tell the user in a few lines what you did and what's left (numbers, records or progress as `show` blocks: metrics, a table, a checklist). If nothing changed since your last check-in and nothing needs them, reply with exactly {NOTHING_NEW} and nothing else: no post goes in their chat.]",
         c.note,
         format_time(tz, now)
     )
@@ -1834,25 +1835,37 @@ pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandE
 
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let now = store::now_ms();
-        for agent in store::list().unwrap_or_default() {
-            if agent
-                .check_ins
-                .iter()
-                .any(|c| !c.runs.is_empty() || c.retry.is_some())
-            {
-                let _ = store::update(&agent.id, |a| {
-                    runs::after_restart(&mut a.check_ins, now);
-                });
+        // The registry's reads and writes (and a tick's turns starting) run
+        // on a blocking thread: a slow disk or a held store lock then holds
+        // only that thread, never an async worker the bridge, the phone and
+        // every command share.
+        let _ = tokio::task::spawn_blocking(|| {
+            let now = store::now_ms();
+            for agent in store::list().unwrap_or_default() {
+                if agent
+                    .check_ins
+                    .iter()
+                    .any(|c| !c.runs.is_empty() || c.retry.is_some())
+                {
+                    store::update(&agent.id, |a| {
+                        runs::after_restart(&mut a.check_ins, now);
+                    })
+                    .or_log("routine runs settled after a restart");
+                }
             }
-        }
+        })
+        .await;
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {
-            // A panic in one tick is caught: routines keep firing.
-            if let Some(Err(err)) = super::survive::tick_blocking("schedule", || tick(&app)) {
-                tracing::warn!(error = %err, "agent check-in tick failed");
-            }
-            super::survive::flush(&app);
+            let a = app.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                // A panic in one tick is caught: routines keep firing.
+                if let Some(Err(err)) = super::survive::tick_blocking("schedule", || tick(&a)) {
+                    tracing::warn!(error = %err, "agent check-in tick failed");
+                }
+                super::survive::flush(&a);
+            })
+            .await;
             // On the minute, with the other minute loops (one wake-up).
             crate::power::sleep_aligned(TICK).await;
         }
@@ -1874,7 +1887,7 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     // set its time inside them (`quiet`). What they held is released here.
     let quiet = super::quiet::get();
     let holding = super::quiet::holding_now();
-    // A usage limit to reset first (`saver`): every account the agent runs
+    // A usage limit to refill first (`saver`): every account the agent runs
     // on is out until a known reset, or nearly out in "Save my limits".
     // Held routines stay due, said once each, and fire when it lifts. Run
     // now isn't planned here, so it still runs.
@@ -1925,7 +1938,7 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     if changed {
         let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     }
-    // "Use it all before reset": capacity about to expire wakes the Chief.
+    // "Use it all before the refill": capacity about to expire wakes the Chief.
     super::usage_tools::maybe_nudge(app);
     // Sign-ins looked at again, and one warning per window when nearly out.
     super::saver::tick(app);
@@ -2547,6 +2560,7 @@ mod tests {
             away: None,
             context: None,
             routine_model: None,
+            learn_skills: Default::default(),
             account: None,
             template: None,
             reach: Default::default(),

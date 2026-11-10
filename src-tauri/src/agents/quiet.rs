@@ -251,12 +251,14 @@ pub fn summary(held: &[Held]) -> Option<Held> {
 }
 
 /// Quiet hours are over (or the user is up): what was held, as one
-/// notification, once. `None` while they still hold, or nothing was held.
-pub fn take_release() -> Option<Held> {
+/// notification, once, leaving out the agents `seen_now` says the user is
+/// already looking at. `None` while they still hold, or nothing is left.
+pub fn take_release(seen_now: impl Fn(&str) -> bool) -> Option<Held> {
     if holding_now() {
         return None;
     }
-    let held = std::mem::take(&mut *HELD.lock().unwrap_or_else(|e| e.into_inner()));
+    let mut held = std::mem::take(&mut *HELD.lock().unwrap_or_else(|e| e.into_inner()));
+    held.retain(|h| !seen_now(&h.agent_id));
     summary(&held)
 }
 

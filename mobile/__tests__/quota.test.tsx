@@ -12,7 +12,7 @@ describe('usage before the wall, on the phone', () => {
       ['claude', 'calm'],
       ['codex', 'limited'],
     ]);
-    expect(lines[0].text).toMatch(/^Claude usage 85% · resets /);
+    expect(lines[0].text).toMatch(/^Claude usage 85% · refills /);
     expect(lines[1].text).toMatch(/^Codex out of usage until /);
     // After every reset, nothing is left to say.
     expect(quotaLines(real.agentsQuota, 1_762_500_000_000)).toEqual([]);

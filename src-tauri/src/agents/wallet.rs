@@ -163,7 +163,7 @@ struct WalletFile {
     /// and sign-in go when it ends, or at the next launch.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     removing: Vec<String>,
-    /// "Use it all before reset" is spending an account's room before it
+    /// "Use it all before the refill" is spending an account's room before it
     /// expires: turns on its engine start on it until then (`spend_first`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     spend_first: Vec<SpendFirst>,
@@ -268,10 +268,7 @@ fn key(engine: Engine, id: &str) -> String {
 }
 
 fn engine_word(engine: Engine) -> &'static str {
-    match engine {
-        Engine::Claude => "claude",
-        Engine::Codex => "codex",
-    }
+    engine.word()
 }
 
 /* --------------------------------------------------------------- disk */
@@ -330,6 +327,14 @@ fn clean_name(name: &str) -> Result<String, CommandError> {
 /// Add an account for an engine, last in its order. It isn't signed in yet:
 /// the caller runs the sign-in into its folder next.
 pub fn add(engine: Engine, name: &str) -> Result<Account, CommandError> {
+    // OpenCode's providers are set up in OpenCode itself: no accounts to add.
+    if !engine.has_plan() {
+        return Err(CommandError::expected(format!(
+            "{} has no accounts to add here: set up its providers in {} itself.",
+            engine.label(),
+            engine.label()
+        )));
+    }
     let name = clean_name(name)?;
     change(|file| {
         if file.of(engine).any(|a| a.name.eq_ignore_ascii_case(&name)) {
@@ -426,7 +431,7 @@ pub fn use_first(engine: Engine, id: &str) -> Result<Vec<Account>, CommandError>
     })
 }
 
-/// "Use it all before reset" found room about to expire on `id`, not the
+/// "Use it all before the refill" found room about to expire on `id`, not the
 /// account turns run on next: turns on `engine` start on it until `until`
 /// (the window's reset), then the user's order holds again. An agent set to
 /// one account stays on it; failover still moves on when it runs out.
@@ -445,7 +450,7 @@ pub fn spend_first(engine: Engine, id: &str, until: i64) -> Result<(), CommandEr
     })
 }
 
-/// The user left "Use it all before reset": their own order holds again.
+/// The user left "Use it all before the refill": their own order holds again.
 pub fn clear_spend_first() {
     let has = {
         let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -629,7 +634,7 @@ pub fn finish_pending_removals() {
 /// `engine:id` back into its parts.
 fn split_key(k: &str) -> Option<(Engine, &str)> {
     let (word, id) = k.split_once(':')?;
-    [Engine::Claude, Engine::Codex]
+    Engine::ALL
         .into_iter()
         .find(|e| engine_word(*e) == word)
         .map(|e| (e, id))
@@ -725,6 +730,8 @@ pub fn keep_sessions(engine: Engine, from: &Path, into: &Path) -> usize {
     let roots = [from.to_path_buf(), into.to_path_buf()];
     let mut ids: Vec<String> = Vec::new();
     match engine {
+        // One store, in OpenCode's own database: nothing to carry.
+        Engine::OpenCode => return 0,
         Engine::Claude => {
             for dir in std::fs::read_dir(from.join("projects"))
                 .into_iter()
@@ -768,6 +775,7 @@ pub fn keep_sessions(engine: Engine, from: &Path, into: &Path) -> usize {
             match engine {
                 Engine::Claude => carry_claude(&roots, into, id),
                 Engine::Codex => carry_codex(&roots, into, id),
+                Engine::OpenCode => Ok(false),
             }
             .unwrap_or(false)
         })
@@ -1058,6 +1066,8 @@ pub async fn signed_in(account: &Account) -> bool {
         Engine::Codex => accounts::codex_home_dir(&account.id)
             .join("auth.json")
             .is_file(),
+        // Only this Mac's own OpenCode exists (see [`add`]).
+        Engine::OpenCode => false,
     }
 }
 
@@ -1103,6 +1113,7 @@ pub fn env_for(account: &Account) -> Vec<(String, String)> {
                 .to_string_lossy()
                 .into_owned(),
         )],
+        Engine::OpenCode => Vec::new(),
     }
 }
 
@@ -1111,6 +1122,8 @@ pub fn folder(account: &Account) -> PathBuf {
     match account.engine {
         Engine::Claude => accounts::claude_config_dir(&account.id),
         Engine::Codex => accounts::codex_home_dir(&account.id),
+        // Where OpenCode keeps its data (its sessions' database).
+        Engine::OpenCode => accounts::opencode_data_home_dir(&account.id).join("opencode"),
     }
 }
 
@@ -1214,6 +1227,7 @@ pub fn carry_session(account: &Account, session: &str) -> bool {
     match account.engine {
         Engine::Claude => carry_claude(&roots, &target, session),
         Engine::Codex => carry_codex(&roots, &target, session),
+        Engine::OpenCode => Ok(false),
     }
     .unwrap_or_else(|e| {
         tracing::warn!("[Agents] couldn't carry a session to another account: {e}");
@@ -1235,6 +1249,17 @@ pub fn session_in(roots: &[PathBuf], engine: Engine, session: &str) -> bool {
         return false;
     }
     match engine {
+        // Its sessions live in its database (`opencode.db` and its
+        // write-ahead log): there when the database names the id.
+        Engine::OpenCode => roots.iter().any(|root| {
+            ["opencode.db", "opencode.db-wal"].iter().any(|f| {
+                std::fs::read(root.join(f)).is_ok_and(|bytes| {
+                    bytes
+                        .windows(session.len())
+                        .any(|w| w == session.as_bytes())
+                })
+            })
+        }),
         Engine::Claude => {
             let name = format!("{session}.jsonl");
             roots.iter().any(|root| {
@@ -1484,7 +1509,7 @@ where
             "{all} reached their usage limit. The first is back {}.",
             super::failure::clock_phrase(tz, at, now)
         ),
-        None => format!("{all} reached their usage limit, and none said when it resets."),
+        None => format!("{all} reached their usage limit, and none said when it refills."),
     }
 }
 
@@ -1605,13 +1630,16 @@ pub fn identity_of(account: &Account) -> super::identity::Identity {
             Some(&accounts::codex_home_dir(&account.id).join("auth.json")),
             identity::codex,
         ),
+        // No one account: it runs on the providers set up in it.
+        Engine::OpenCode => identity::Identity::default(),
     }
 }
 
 pub async fn views() -> Vec<AccountView> {
     let now = super::store::now_ms();
     let mut out = Vec::new();
-    for account in list() {
+    // Accounts are shown for the plan engines; OpenCode's one is internal.
+    for account in list().into_iter().filter(|a| a.engine.has_plan()) {
         let signed_in = signed_in(&account).await;
         // Only for a sign-in that is there: a file can outlive a sign-out.
         let who = if signed_in {
@@ -1897,7 +1925,7 @@ mod tests {
         );
         assert_eq!(
             all_out_line(Engine::Codex, 3, None, &Utc, now()),
-            "All 3 Codex accounts have reached their usage limit, and none said when it resets."
+            "All 3 Codex accounts have reached their usage limit, and none said when it refills."
         );
     }
 

@@ -117,7 +117,7 @@ pub const CODEX: AgentConfig = AgentConfig {
 /// Opencode agent configuration.
 pub const OPENCODE: AgentConfig = AgentConfig {
     id: "opencode",
-    display_name: "Opencode",
+    display_name: "OpenCode",
     binary_name: "opencode",
     process_name: "opencode",
     version_flag: "--version",
@@ -132,14 +132,14 @@ pub const OPENCODE: AgentConfig = AgentConfig {
     skills_dir_name: None,
     install_command_unix: Some("curl -fsSL https://opencode.ai/install | bash"),
     install_message_windows: Some(
-        "Please download Opencode from https://opencode.ai and run the installer.",
+        "Please download OpenCode from https://opencode.ai and run the installer.",
     ),
     uninstall_command_unix: Some(
         "rm -rf \"$HOME/.opencode\" \"$HOME/.local/share/opencode\" 2>/dev/null; rm -f \"$HOME/.local/bin/opencode\" 2>/dev/null; npm uninstall -g opencode-ai 2>/dev/null; echo Uninstalled.",
     ),
     uninstall_command_windows: Some("npm uninstall -g opencode-ai"),
     setup_item_ids: ("opencode", "opencode_auth"),
-    setup_display_names: ("Opencode", "Opencode Account"),
+    setup_display_names: ("OpenCode", "OpenCode Account"),
     auth_status_args: None,
     auth_status_ready_substr: None,
     logout_args: None,
@@ -265,7 +265,7 @@ mod tests {
     fn get_agent_by_id_opencode() {
         let agent = get_agent_by_id("opencode");
         assert_eq!(agent.id, "opencode");
-        assert_eq!(agent.display_name, "Opencode");
+        assert_eq!(agent.display_name, "OpenCode");
     }
 
     #[test]

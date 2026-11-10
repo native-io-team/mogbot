@@ -42,7 +42,7 @@ import {
   type RoleTemplateSummary,
 } from '@shipstudio/companion-protocol';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AgentKey } from '../components/AgentKey';
 import { DraftReview } from '../components/draftReview';
 import { Chip, ChipRow, ColorSwatches, KeyChoices } from '../components/pickers';
@@ -130,6 +130,9 @@ export default function NewAgent() {
   // ready-made agent picked, or "fill it in yourself" (as on the desk).
   const [description, setDescription] = useState('');
   const [manual, setManual] = useState(false);
+  // How it looks (colour, icon, key): open while filling it in by hand,
+  // folded into the key beside the name once there's a draft to review.
+  const [showLook, setShowLook] = useState(true);
   const describing = canDraft && canCreate && !draft && !manual;
 
   const draftIt = () => {
@@ -149,6 +152,7 @@ export default function NewAgent() {
         setInstructions(d.instructions);
         setKept(d.routines.map((r) => !r.problem));
         setTemplate(null);
+        setShowLook(false);
       })
       .catch((e: unknown) => {
         haptic.error();
@@ -166,6 +170,7 @@ export default function NewAgent() {
     setInstructions('');
     setKept([]);
     setManual(false);
+    setShowLook(true);
     haptic.select();
   };
 
@@ -295,12 +300,22 @@ export default function NewAgent() {
             )}
           </View>
         )}
+        {draft && (
+          // Where it came from and the way back, first, as on the desk.
+          <View style={styles.draftRow}>
+            <T variant="caption" color={colors.textMuted} style={styles.draftHint}>
+              Drafted from your description. Check it, then Create.
+            </T>
+            <Button title="Start over" variant="ghost" size="compact" onPress={startOver} />
+          </View>
+        )}
         <View style={styles.field}>
           <T variant="subhead" color={colors.textPrimary} nativeID="role-label">
             What should it do?
           </T>
           <TextInput
-            autoFocus
+            // A draft is for reading first: no keyboard over the review.
+            autoFocus={!draft}
             multiline
             value={role}
             onChangeText={(t) => setRole(t.replace(/\n/g, ' '))}
@@ -329,28 +344,32 @@ export default function NewAgent() {
               />
             </View>
           )}
-          {draft && (
-            <View style={styles.draftRow}>
-              <T variant="caption" color={colors.textMuted} style={styles.draftHint}>
-                Drafted from your description. Check it, then Create.
-              </T>
-              <Button title="Start over" variant="ghost" size="compact" onPress={startOver} />
-            </View>
-          )}
         </View>
 
         {canCreate && (
           <>
             <View style={styles.identity}>
-              <AccentProvider color={color}>
-                <AgentKey
-                  name={finalName}
-                  role={role}
-                  color={color}
-                  {...(keys ? { colorway, icon } : {})}
-                  size={keySize.lg}
-                />
-              </AccentProvider>
+              {/* The key opens how it looks (colour, icon, key), as the desk's avatar does. */}
+              <Pressable
+                onPress={() => {
+                  haptic.select();
+                  setShowLook((open) => !open);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={showLook ? 'Done changing how it looks' : 'Change how it looks'}
+                accessibilityState={{ expanded: showLook }}
+                hitSlop={space.xs}
+              >
+                <AccentProvider color={color}>
+                  <AgentKey
+                    name={finalName}
+                    role={role}
+                    color={color}
+                    {...(keys ? { colorway, icon } : {})}
+                    size={keySize.lg}
+                  />
+                </AccentProvider>
+              </Pressable>
               <TextInput
                 value={name}
                 onChangeText={setName}
@@ -367,7 +386,7 @@ export default function NewAgent() {
                 accessibilityHint={suggested ? `Leave empty to call it ${suggested}` : undefined}
               />
             </View>
-            {keys ? (
+            {!showLook ? null : keys ? (
               <KeyChoices
                 name={finalName}
                 colorway={colorway}

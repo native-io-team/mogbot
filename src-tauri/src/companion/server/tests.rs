@@ -1881,3 +1881,154 @@ async fn a_panicking_request_is_answered_with_an_error() {
     let fine = super::caught("agents.overview", async { Ok(json!({"ok": true})) }).await;
     assert_eq!(fine.unwrap(), json!({"ok": true}));
 }
+
+/// A request stuck on something synchronous (the agents store's lock, a
+/// slow disk) used to sit on an async worker with no answer: enough of
+/// them and the server answered nothing, its sockets accepted and silent.
+/// It's answered as busy within its deadline now, and never holds the
+/// runtime: with one worker, another request still answers meanwhile.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn a_stuck_request_is_answered_as_busy_and_never_starves_the_rest() {
+    let started = std::time::Instant::now();
+    let stuck = tokio::spawn(super::bounded(
+        "agents.overview",
+        Duration::from_millis(300),
+        async {
+            // Blocks its thread, as a std mutex wait does.
+            std::thread::sleep(Duration::from_secs(3));
+            Ok(json!(null))
+        },
+    ));
+    tokio::task::yield_now().await;
+    let quick = tokio::time::timeout(
+        Duration::from_secs(1),
+        super::bounded("agents.overview", Duration::from_secs(1), async {
+            Ok(json!({"ok": true}))
+        }),
+    )
+    .await
+    .expect("a stuck request starved the runtime");
+    assert_eq!(quick.unwrap(), json!({"ok": true}));
+    let err = tokio::time::timeout(Duration::from_secs(2), stuck)
+        .await
+        .expect("the stuck request was never answered")
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(err.summary(), super::BUSY);
+    assert!(started.elapsed() < Duration::from_secs(2));
+    // The phone shows an `Other` error's message as it is (`describeError`).
+    let wire = serde_json::to_value(&err).unwrap();
+    assert_eq!(wire["type"], "Other");
+    assert_eq!(wire["message"], super::BUSY);
+}
+
+/// A connect-time snapshot whose parts hang (the agents list busy, a probe
+/// stuck) used to hold the socket silent after its welcome. It's sent within
+/// its deadline now, degraded: no overview or projects (the phone keeps what
+/// it has) and the last status known; the late status is published when it
+/// arrives.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn a_stuck_snapshot_is_sent_partial_within_its_deadline() {
+    let (c, stub) = Stub::companion();
+    let mut known = crate::companion::testkit::mac_status();
+    known.name = "Last known".into();
+    c.remember_status(&known);
+    stub.stall_ms
+        .store(1500, std::sync::atomic::Ordering::SeqCst);
+    let cursor = crate::companion::wire::Cursor {
+        epoch: "e".into(),
+        seq: 0,
+    };
+    let started = std::time::Instant::now();
+    let event = tokio::time::timeout(
+        Duration::from_secs(1),
+        super::snapshot(&c, cursor, Duration::from_millis(200)),
+    )
+    .await
+    .expect("the snapshot waited on its stuck parts");
+    assert!(started.elapsed() < Duration::from_secs(1));
+    let v = serde_json::to_value(&event).unwrap();
+    assert_eq!(v["type"], "sync.snapshot");
+    assert_eq!(v["overview"], Value::Null);
+    assert_eq!(v["projects"], Value::Null);
+    assert_eq!(v["status"]["name"], "Last known");
+    // The real status follows once it's worked out, journaled for phones.
+    let before = c.hub.cursor().seq;
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while c.hub.cursor().seq == before {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the late status was never published");
+    assert_eq!(
+        c.last_status().unwrap(),
+        crate::companion::testkit::mac_status()
+    );
+}
+
+/// With nothing slow the snapshot is whole, as before.
+#[tokio::test]
+async fn a_quick_snapshot_is_whole() {
+    let (c, _) = Stub::companion();
+    let cursor = crate::companion::wire::Cursor {
+        epoch: "e".into(),
+        seq: 0,
+    };
+    let v =
+        serde_json::to_value(super::snapshot(&c, cursor, Duration::from_secs(5)).await).unwrap();
+    assert!(v["overview"].is_object(), "{v}");
+    assert!(v["projects"].is_array(), "{v}");
+    assert_eq!(c.last_status().unwrap().name, v["status"]["name"]);
+}
+
+/// Security review 2026-11-10: each request holds a thread of the blocking
+/// pool the whole app shares, and keeps it past its deadline. A device
+/// sending request after request that sticks used to take as many threads
+/// as it sent; past the cap the rest are answered as busy at once, and a
+/// slot comes back only when its work really ends.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn requests_past_the_cap_are_busy_at_once_and_slots_come_back_when_work_ends() {
+    let slots = Arc::new(tokio::sync::Semaphore::new(2));
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let release_rx = Arc::new(std::sync::Mutex::new(release_rx));
+    for _ in 0..2 {
+        let rx = release_rx.clone();
+        let err = super::bounded_in(
+            &slots,
+            "agents.overview",
+            Duration::from_millis(100),
+            async move {
+                // Blocks its thread until released, as a lock wait does.
+                let _ = rx.lock().unwrap().recv();
+                Ok(json!(null))
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.summary(), super::BUSY);
+    }
+    // Both past their deadline and still running: the third is refused
+    // without waiting.
+    let started = std::time::Instant::now();
+    let err = super::bounded_in(&slots, "agents.overview", Duration::from_secs(5), async {
+        Ok(json!({"ok": true}))
+    })
+    .await
+    .unwrap_err();
+    assert_eq!(err.summary(), super::BUSY);
+    assert!(started.elapsed() < Duration::from_secs(1));
+    // Their work ends: the slots come back.
+    release_tx.send(()).unwrap();
+    release_tx.send(()).unwrap();
+    let until = std::time::Instant::now() + Duration::from_secs(5);
+    while slots.available_permits() < 2 && std::time::Instant::now() < until {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let ok = super::bounded_in(&slots, "agents.overview", Duration::from_secs(5), async {
+        Ok(json!({"ok": true}))
+    })
+    .await
+    .unwrap();
+    assert_eq!(ok, json!({"ok": true}));
+}

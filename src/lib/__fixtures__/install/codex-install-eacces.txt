@@ -1,0 +1,9 @@
+%% Codex where npm's global prefix is /usr/local and not the user's.
+Installing Codex via npm…
+\e[33mnpm\e[39m \e[43mwarn\e[49m \e[35musing --force\e[39m Recommended protections disabled.
+⠋\e[1G\e[0K⠙\e[1G\e[0K\e[31mnpm\e[39m \e[41merror\e[49m \e[35mcode\e[39m EACCES
+\e[31mnpm\e[39m \e[41merror\e[49m \e[35msyscall\e[39m mkdir
+\e[31mnpm\e[39m \e[41merror\e[49m \e[35mpath\e[39m /usr/local/lib/node_modules/@openai
+\e[31mnpm\e[39m \e[41merror\e[49m \e[35merrno\e[39m -13
+\e[31mnpm\e[39m \e[41merror\e[49m Error: EACCES: permission denied, mkdir '/usr/local/lib/node_modules/@openai'
+\e[31mnpm\e[39m \e[41merror\e[49m A complete log of this run can be found in: /Users/you/.npm/_logs/2026-11-10T09_00_00_000Z-debug-0.log

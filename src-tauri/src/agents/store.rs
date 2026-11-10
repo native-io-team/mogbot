@@ -25,6 +25,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
+// Lock order: see `store_lock.rs`. The registry lock is innermost.
+
 use crate::errors::CommandError;
 
 /// The avatar palette. Keys, not colours: the frontend maps each to a token,
@@ -121,6 +123,13 @@ pub struct Agent {
     /// No OS notifications for this agent. Unread and the Dock badge still count it.
     #[serde(default)]
     pub muted: bool,
+    /// "Save new skills": Automatically / Ask me (the default) / Off
+    /// (`agents/skills_learn.rs`). Absent in registries from before it.
+    #[serde(
+        default,
+        skip_serializing_if = "super::skills_learn::Learning::is_default"
+    )]
+    pub learn_skills: super::skills_learn::Learning,
     /// Check-ins and routines this agent is woken by (see `schedule`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub check_ins: Vec<super::schedule::CheckIn>,
@@ -439,6 +448,12 @@ pub struct Approval {
     /// Older clients show a plain Allow / Deny over the same summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slack_reply: Option<super::slack::ReplyCard>,
+    /// "Save “Export invoices” as a skill?" (`save_skill`,
+    /// `agents/skills_learn.rs`): the skill exactly as it would be saved.
+    /// Nothing waits on it; Save (Allow) writes it, Not now (Deny) doesn't.
+    /// Older clients show a plain Allow / Deny over the same summary and detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill: Option<super::skills_learn::SkillCard>,
     /// How risky Allow is, decided here from the classifiers the levels use
     /// (`mcp::risk_of`: `go_hard::floor` for a tool call). Only `Low` may be
     /// answered in place on the phone's list or from a Lock Screen
@@ -576,9 +591,9 @@ pub struct AgentMessage {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum NoteFix {
-    /// Settings → Agents → Your Chrome: set it up.
+    /// Settings → Chrome: set it up.
     UserChrome,
-    /// Settings → Agents → Your Chrome, when it's on but not connected:
+    /// Settings → Chrome, when it's on but not connected:
     /// the button says to check it, not to set it up again.
     UserChromeCheck,
     /// Settings → Agents → Disk space, with Free up space.
@@ -644,9 +659,15 @@ impl Registry {
     }
 }
 
-/// One lock around every registry read-modify-write. The registry is small
-/// and written rarely; serialising access is simpler than being clever.
-static REGISTRY_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+/// One lock around every registry read-modify-write; reads don't take it.
+/// Its rules (innermost, no re-entry, nobody waits forever) are in
+/// `store_lock.rs`.
+#[path = "store_lock.rs"]
+pub(crate) mod lock;
+
+#[cfg(test)]
+#[path = "store_lock_tests.rs"]
+mod lock_tests;
 
 /// Test hook: point the store somewhere disposable.
 static ROOT_OVERRIDE: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
@@ -746,28 +767,17 @@ impl FileStamp {
 static REGISTRY_CACHE: LazyLock<Mutex<Option<(PathBuf, FileStamp, Registry)>>> =
     LazyLock::new(|| Mutex::new(None));
 
+/// The registry, recovering a damaged file. Call with [`lock`] held.
 fn read_registry() -> Result<Registry, CommandError> {
-    let path = registry_path()?;
-    // Stamped *before* reading: a write that lands in between leaves the
-    // cached copy with an older stamp, so the next read parses again.
-    let stamp = FileStamp::of(&path);
-    if let Some(stamp) = &stamp {
-        let cache = REGISTRY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((cached_path, cached_stamp, registry)) = cache.as_ref() {
-            if *cached_path == path && cached_stamp == stamp {
-                return Ok(registry.clone());
-            }
-        }
+    debug_assert!(
+        lock::held_here(),
+        "recovery rewrites agents.json: hold the lock"
+    );
+    if let Some(registry) = read_registry_unlocked()? {
+        return Ok(registry);
     }
-    let registry = parse_registry(&path)?;
-    if let Some(stamp) = stamp {
-        // Recovery rewrote the file: that read is not cached.
-        if FileStamp::of(&path).as_ref() == Some(&stamp) {
-            *REGISTRY_CACHE.lock().unwrap_or_else(|e| e.into_inner()) =
-                Some((path, stamp, registry.clone()));
-        }
-    }
-    Ok(registry)
+    // Damaged: recovery rewrites the file, so this read is not cached.
+    parse_registry(&registry_path()?)
 }
 
 fn parse_registry(path: &Path) -> Result<Registry, CommandError> {
@@ -978,9 +988,50 @@ pub fn color_for(requested: Option<&str>, index: usize) -> String {
     }
 }
 
+/// Every agent. Never waits on a writer: the file is only ever replaced
+/// whole, so the cache or one read of it is a consistent version. Only a
+/// file that needs recovering (which rewrites it) goes through the lock.
 pub fn list() -> Result<Vec<Agent>, CommandError> {
-    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(registry) = read_registry_unlocked()? {
+        return Ok(registry.agents);
+    }
+    let _guard = lock::take()?;
     Ok(read_registry()?.agents)
+}
+
+/// [`read_registry`] without writing anything: `None` when the file is
+/// damaged and needs [`recover_registry`], which only a lock holder may run.
+fn read_registry_unlocked() -> Result<Option<Registry>, CommandError> {
+    let path = registry_path()?;
+    // Stamped *before* reading: a write that lands in between leaves the
+    // cached copy with an older stamp, so the next read parses again.
+    let stamp = FileStamp::of(&path);
+    if let Some(stamp) = &stamp {
+        let cache = REGISTRY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((cached_path, cached_stamp, registry)) = cache.as_ref() {
+            if *cached_path == path && cached_stamp == stamp {
+                return Ok(Some(registry.clone()));
+            }
+        }
+    }
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Some(Registry::default())),
+        Err(e) => return Err(super::err_io(e.to_string())),
+    };
+    let Some(registry) = serde_json::from_str(&raw)
+        .ok()
+        .and_then(Registry::from_value)
+    else {
+        return Ok(None);
+    };
+    if let Some(stamp) = stamp {
+        if FileStamp::of(&path).as_ref() == Some(&stamp) {
+            *REGISTRY_CACHE.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some((path, stamp, registry.clone()));
+        }
+    }
+    Ok(Some(registry))
 }
 
 pub fn get(id: &str) -> Result<Agent, CommandError> {
@@ -1032,17 +1083,45 @@ fn chief_alias(name: &str) -> bool {
 
 /// Read-modify-write one agent under the registry lock.
 pub fn update<F: FnOnce(&mut Agent)>(id: &str, change: F) -> Result<Agent, CommandError> {
-    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = lock::take()?;
     let mut registry = read_registry()?;
     let agent = registry
         .agents
         .iter_mut()
         .find(|a| a.id == id)
         .ok_or_else(|| CommandError::expected("That agent no longer exists."))?;
+    let before = agent.clone();
     change(agent);
     let updated = agent.clone();
-    write_registry(&registry)?;
+    // A change that changed nothing (a When… check reserving a free source,
+    // a count already right) leaves the file alone: each write is the whole
+    // registry, twice (it and its backup).
+    if updated != before {
+        write_registry(&registry)?;
+    }
     Ok(updated)
+}
+
+/// A best-effort write (the caller carries on whether it landed or not),
+/// with a trace when it didn't: `store::update(..).or_log("its unread
+/// count")`. The log names what the write was for and where it was made,
+/// never what it held; the error is the store's own (a path, "busy").
+pub trait OrLog<T> {
+    fn or_log(self, what: &str) -> Option<T>;
+}
+
+impl<T, E: std::fmt::Display> OrLog<T> for Result<T, E> {
+    #[track_caller]
+    fn or_log(self, what: &str) -> Option<T> {
+        match self {
+            Ok(v) => Some(v),
+            Err(e) => {
+                let at = std::panic::Location::caller();
+                tracing::warn!("[Agents] couldn't save {what} ({at}): {e}");
+                None
+            }
+        }
+    }
 }
 
 pub struct NewAgent {
@@ -1163,9 +1242,39 @@ pub fn normalize_model(model: &str) -> Result<Option<String>, CommandError> {
     Ok(Some(model.to_string()))
 }
 
+/// Add an agent. Its home and CLAUDE.md are made first, outside the
+/// registry lock (`store_lock`: folder I/O never runs under it): its id is
+/// new, so nothing reaches that folder until the registry names it. If the
+/// agent can't be added after all (a name taken meanwhile), the folder goes.
 pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
     let name = validate_name(&new.name)?;
-    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let role = new.role.trim().to_string();
+    // Refused before any folder is made when it's already clear.
+    if list()?.iter().any(|a| a.name.eq_ignore_ascii_case(&name)) {
+        return Err(super::err_invalid(
+            "name",
+            format!("There's already an agent called {name}."),
+        ));
+    }
+    let id = new_id();
+    let home = agents_root()?.join(&id);
+    let made = ensure_private_dir(&home)
+        .map_err(|e| super::err_io(e.to_string()))
+        .and_then(|()| write_instructions_for(&home, &name, &role, &new.instructions))
+        .and_then(|()| register_new(id, name, new));
+    if made.is_err() {
+        if let Err(e) = crate::utils::remove_dir_all_robust(&home) {
+            tracing::warn!(
+                "[Agents] couldn't tidy away a new agent's folder that wasn't used: {e}"
+            );
+        }
+    }
+    made
+}
+
+/// [`create`]'s registry half, under the lock: nothing but the registry.
+fn register_new(id: String, name: String, new: NewAgent) -> Result<Agent, CommandError> {
+    let _guard = lock::take()?;
     let mut registry = read_registry()?;
     if registry
         .agents
@@ -1207,7 +1316,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         .unwrap_or(((index * 5 + 1) % SHAPE_COUNT as usize) as u8);
     let now = now_ms();
     let agent = Agent {
-        id: new_id(),
+        id,
         name,
         role: new.role.trim().to_string(),
         shape,
@@ -1232,6 +1341,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         away: None,
         context: None,
         routine_model: None,
+        learn_skills: Default::default(),
         account: None,
         template: None,
         reach: Default::default(),
@@ -1248,9 +1358,6 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         secrets: Vec::new(),
         extra: Default::default(),
     };
-    let home = agents_root()?.join(&agent.id);
-    ensure_private_dir(&home).map_err(|e| super::err_io(e.to_string()))?;
-    write_instructions(&home, &agent, &new.instructions)?;
     registry.agents.push(agent);
     // Its icon and key, or a free key when its own is taken by now.
     super::keys::fill(&mut registry.agents);
@@ -1293,6 +1400,16 @@ pub fn write_instructions(
     agent: &Agent,
     instructions: &str,
 ) -> Result<(), CommandError> {
+    write_instructions_for(home, &agent.name, &agent.role, instructions)
+}
+
+/// [`write_instructions`] by the two things it says about the agent.
+fn write_instructions_for(
+    home: &Path,
+    name: &str,
+    role: &str,
+    instructions: &str,
+) -> Result<(), CommandError> {
     let path = home.join("CLAUDE.md");
     let existing = std::fs::read_to_string(&path).ok();
     let memory = existing
@@ -1307,10 +1424,10 @@ pub fn write_instructions(
         .as_deref()
         .and_then(super::arrival::section_text)
         .unwrap_or_default();
-    let role = if agent.role.is_empty() {
+    let role = if role.is_empty() {
         String::new()
     } else {
-        format!("{}\n\n", agent.role)
+        format!("{role}\n\n")
     };
     let body = instructions.trim();
     let instructions = if body.is_empty() {
@@ -1318,7 +1435,7 @@ pub fn write_instructions(
     } else {
         format!("## Instructions\n\n{body}\n\n")
     };
-    let content = format!("# {}\n\n{role}{arrival}{instructions}{memory}", agent.name);
+    let content = format!("# {name}\n\n{role}{arrival}{instructions}{memory}");
     note_claude_md_write(&path);
     write_atomic(&path, content.as_bytes())
 }
@@ -1350,7 +1467,7 @@ pub fn instructions_of(raw: &str) -> String {
 pub fn insert_imported(mut agent: Agent) -> Result<Agent, CommandError> {
     validate_id(&agent.id)?;
     agent.name = validate_name(&agent.name)?;
-    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = lock::take()?;
     let mut registry = read_registry()?;
     if registry.agents.iter().any(|a| a.id == agent.id) {
         return Err(CommandError::expected("That agent is already here."));
@@ -1382,20 +1499,27 @@ pub(crate) fn write_beside(name: &str, bytes: &[u8]) -> Result<(), CommandError>
 }
 
 pub fn delete(id: &str) -> Result<Agent, CommandError> {
-    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let mut registry = read_registry()?;
-    let index = registry
-        .agents
-        .iter()
-        .position(|a| a.id == id)
-        .ok_or_else(|| CommandError::expected("That agent no longer exists."))?;
-    if registry.agents[index].is_main {
-        return Err(CommandError::expected(
-            "The Chief of Staff can't be deleted.",
-        ));
-    }
-    let removed = registry.agents.remove(index);
-    write_registry(&registry)?;
+    let removed = {
+        let _guard = lock::take()?;
+        let mut registry = read_registry()?;
+        let index = registry
+            .agents
+            .iter()
+            .position(|a| a.id == id)
+            .ok_or_else(|| CommandError::expected("That agent no longer exists."))?;
+        if registry.agents[index].is_main {
+            return Err(CommandError::expected(
+                "The Chief of Staff can't be deleted.",
+            ));
+        }
+        let removed = registry.agents.remove(index);
+        write_registry(&registry)?;
+        removed
+    };
+    // Everything below takes other locks, the Keychain and the disk: never
+    // under the registry lock (`store_lock.rs`). Policy's lock is taken
+    // before the registry's when it writes a fresh file, so forgetting a
+    // policy under the registry lock could wait on each other for ever.
     // It leaves its rooms; the rooms stay, with what it said in them.
     super::rooms::forget_agent(&removed.id);
     super::secrets::forget_all(&removed);
@@ -1444,8 +1568,8 @@ impl Deleted {
     }
 }
 
+/// Read without the lock: the file is only ever replaced whole.
 pub fn trashed() -> Vec<Deleted> {
-    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     read_trash()
 }
 
@@ -1466,8 +1590,56 @@ fn write_trash(items: &[Deleted]) -> Result<(), CommandError> {
 /// its home (memory, chat, timelines) are kept for [`restore`]. Its secrets,
 /// connections and copy stay where they are until it's purged. The Chief of
 /// Staff can't be deleted.
+///
+/// Its folder moves to the trash before the registry lock is taken, and
+/// back if the registry can't be changed after all (`store_lock`: folder
+/// I/O never runs under it). Nothing can restore it meanwhile: it isn't in
+/// the trash list until the lock is held.
 pub fn soft_delete(id: &str, by: Option<AgentRef>) -> Result<Agent, CommandError> {
-    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    validate_id(id)?;
+    // Refused before anything moves when it's already clear.
+    if get(id)?.is_main {
+        return Err(CommandError::expected(
+            "The Chief of Staff can't be deleted.",
+        ));
+    }
+    let root = agents_root()?;
+    let trash = root.join(TRASH_DIR);
+    std::fs::create_dir_all(&trash).map_err(|e| super::err_io(e.to_string()))?;
+    let home = root.join(id);
+    let kept = trash.join(id);
+    let moved = if home.exists() {
+        if kept.exists() {
+            if let Err(e) = crate::utils::remove_dir_all_robust(&kept) {
+                tracing::warn!(
+                    "[Agents] couldn't clear an old trash folder before deleting {id}: {e}"
+                );
+            }
+        }
+        std::fs::rename(&home, &kept).map_err(|e| super::err_io(e.to_string()))?;
+        true
+    } else {
+        false
+    };
+    let removed = soft_delete_entry(id, by);
+    if removed.is_err() && moved {
+        // Never lose it: the registry still names it, so its home goes back.
+        if let Err(e) = std::fs::rename(&kept, &home) {
+            tracing::error!(
+                "[Agents] deleting {id} failed and its folder couldn't be put back from the trash: {e}"
+            );
+        }
+    }
+    let removed = removed?;
+    if let Ok(log) = log_path(id) {
+        forget_pending(&log);
+    }
+    Ok(removed)
+}
+
+/// [`soft_delete`]'s list half, under the lock: the trash list, then the registry.
+fn soft_delete_entry(id: &str, by: Option<AgentRef>) -> Result<Agent, CommandError> {
+    let _guard = lock::take()?;
     let mut registry = read_registry()?;
     let index = registry
         .agents
@@ -1479,43 +1651,68 @@ pub fn soft_delete(id: &str, by: Option<AgentRef>) -> Result<Agent, CommandError
             "The Chief of Staff can't be deleted.",
         ));
     }
-    let root = agents_root()?;
-    let trash = root.join(TRASH_DIR);
-    std::fs::create_dir_all(&trash).map_err(|e| super::err_io(e.to_string()))?;
-    let home = root.join(id);
-    let kept = trash.join(id);
-    if kept.exists() {
-        let _ = crate::utils::remove_dir_all_robust(&kept);
-    }
-    if home.exists() {
-        std::fs::rename(&home, &kept).map_err(|e| super::err_io(e.to_string()))?;
-    }
     let removed = registry.agents.remove(index);
     let entry = serde_json::to_value(&removed).map_err(super::err_other)?;
-    let mut items = read_trash();
+    let before = read_trash();
+    let mut items = before.clone();
     items.retain(|d| d.id() != id);
     items.push(Deleted {
         agent: entry,
         deleted_at: now_ms(),
         deleted_by: by,
     });
-    if let Err(e) = write_trash(&items) {
-        // Never lose it: put the home back and leave the registry alone.
-        let _ = std::fs::rename(&kept, &home);
+    write_trash(&items)?;
+    if let Err(e) = write_registry(&registry) {
+        // Still on the team: it mustn't be in Recently deleted too.
+        if let Err(undo) = write_trash(&before) {
+            tracing::error!(
+                "[Agents] deleting {id} failed and Recently deleted couldn't be put back: {undo}"
+            );
+        }
         return Err(e);
-    }
-    write_registry(&registry)?;
-    if let Ok(log) = log_path(id) {
-        forget_pending(&log);
     }
     Ok(removed)
 }
 
 /// Bring a soft-deleted agent back as it was. Its name is kept unless another
 /// agent took it meanwhile, in which case " (restored)" is added.
+///
+/// Its folder comes back from the trash before the registry lock is taken,
+/// and goes back there if the registry can't be changed after all.
 pub fn restore(id: &str) -> Result<Agent, CommandError> {
     validate_id(id)?;
-    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    // Refused before anything moves when it's already clear.
+    if !read_trash().iter().any(|d| d.id() == id) {
+        return Err(CommandError::expected(
+            "That agent isn't in Recently deleted any more.",
+        ));
+    }
+    if list()?.iter().any(|a| a.id == id) {
+        return Err(CommandError::expected("That agent is already on the team."));
+    }
+    let root = agents_root()?;
+    let kept = root.join(TRASH_DIR).join(id);
+    let home = root.join(id);
+    let moved = if kept.exists() && !home.exists() {
+        std::fs::rename(&kept, &home).map_err(|e| super::err_io(e.to_string()))?;
+        true
+    } else {
+        false
+    };
+    let restored = restore_entry(id);
+    if restored.is_err() && moved {
+        if let Err(e) = std::fs::rename(&home, &kept) {
+            tracing::error!(
+                "[Agents] restoring {id} failed and its folder couldn't go back to the trash: {e}"
+            );
+        }
+    }
+    restored
+}
+
+/// [`restore`]'s list half, under the lock: the registry, then the trash list.
+fn restore_entry(id: &str) -> Result<Agent, CommandError> {
+    let _guard = lock::take()?;
     let mut items = read_trash();
     let index = items
         .iter()
@@ -1534,19 +1731,17 @@ pub fn restore(id: &str) -> Result<Agent, CommandError> {
     {
         agent.name = format!("{} (restored)", agent.name);
     }
-    let root = agents_root()?;
-    let kept = root.join(TRASH_DIR).join(id);
-    let home = root.join(id);
-    if kept.exists() && !home.exists() {
-        std::fs::rename(&kept, &home).map_err(|e| super::err_io(e.to_string()))?;
-    }
     registry.agents.push(agent);
     // Its icon and key, or a free key when its own is taken by now.
     super::keys::fill(&mut registry.agents);
     let agent = registry.agents.last().cloned().expect("just pushed");
     write_registry(&registry)?;
     items.remove(index);
-    write_trash(&items)?;
+    if let Err(e) = write_trash(&items) {
+        // Back on the team; Recently deleted still lists it, and restoring
+        // it again says it's already here. Logged rather than undone.
+        tracing::warn!("[Agents] restored {id}, but Recently deleted couldn't be updated: {e}");
+    }
     Ok(agent)
 }
 
@@ -1556,13 +1751,38 @@ pub const TRASH_DAYS: i64 = 30;
 /// The trash entries older than [`TRASH_DAYS`], taken out of the list (their
 /// folders are removed); the caller forgets what else they held.
 pub fn take_expired(now: i64) -> Vec<Agent> {
-    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let items = read_trash();
-    let cutoff = now - TRASH_DAYS * 24 * 60 * 60 * 1000;
-    let (old, keep): (Vec<_>, Vec<_>) = items.into_iter().partition(|d| d.deleted_at < cutoff);
-    if old.is_empty() || write_trash(&keep).is_err() {
-        return Vec::new();
-    }
+    let old = {
+        // Busy: the next sweep takes them.
+        let Ok(_guard) = lock::take() else {
+            return Vec::new();
+        };
+        let items = read_trash();
+        let cutoff = now - TRASH_DAYS * 24 * 60 * 60 * 1000;
+        // An entry for an agent that is on the team (a restore whose list
+        // update failed) is only dropped: purging it would forget a live
+        // agent's secrets and remove nothing of its own.
+        let on_team: Vec<String> = match read_registry() {
+            Ok(r) => r.agents.into_iter().map(|a| a.id).collect(),
+            Err(e) => {
+                tracing::warn!(
+                    "[Agents] trash sweep skipped: the agents list couldn't be read: {e}"
+                );
+                return Vec::new();
+            }
+        };
+        let (old, keep): (Vec<_>, Vec<_>) = items.into_iter().partition(|d| d.deleted_at < cutoff);
+        if old.is_empty() {
+            return Vec::new();
+        }
+        if let Err(e) = write_trash(&keep) {
+            tracing::warn!("[Agents] trash sweep couldn't update Recently deleted: {e}");
+            return Vec::new();
+        }
+        old.into_iter()
+            .filter(|d| !on_team.iter().any(|id| id == d.id()))
+            .collect::<Vec<_>>()
+    };
+    // Out of the list, so no one restores them: their folders go unlocked.
     let root = agents_root().ok();
     old.into_iter()
         .filter_map(|d| {
@@ -2211,7 +2431,9 @@ pub fn messages_page(
 }
 
 /// [`messages_page`] for one of the agent's conversations
-/// (`conversations::of`): only its lines, paged the same way.
+/// (`conversations::of`): only its lines, paged the same way. A fork's
+/// history (lines of the conversation it came from) comes before its own,
+/// by id; lines it rewound past are in it too (the chat folds them).
 pub fn conversation_page(
     agent_id: &str,
     conversation: &str,
@@ -2219,7 +2441,10 @@ pub fn conversation_page(
     before: Option<&str>,
     through: Option<(&str, usize)>,
 ) -> Result<Vec<AgentMessage>, CommandError> {
-    let keep = |m: &AgentMessage| super::conversations::of(m) == conversation;
+    // Read before the log's lock: the list's is never held across it.
+    let inherited = super::conversations::page_spec(agent_id, conversation).inherited;
+    let keep =
+        |m: &AgentMessage| super::conversations::of(m) == conversation || inherited.contains(&m.id);
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     let path = log_path(agent_id)?;
@@ -2420,12 +2645,15 @@ fn resolve_approval_as(
     Ok(changed)
 }
 
+/// Cards that wait on the user. A "Save … as a skill?" card is an offer that
+/// says "Nothing waits on it", so it never makes an agent "Needs your OK",
+/// the Dock badge or the phone's Catch up count (`skills_learn`).
 fn count_pending(log: &[AgentMessage]) -> u32 {
     log.iter()
         .filter(|m| {
             m.approval
                 .as_ref()
-                .is_some_and(|a| a.status == ApprovalStatus::Pending)
+                .is_some_and(|a| a.status == ApprovalStatus::Pending && a.skill.is_none())
         })
         .count() as u32
 }
@@ -2573,6 +2801,35 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn a_skill_offer_never_counts_as_waiting_on_the_user() {
+        use crate::agents::skills_learn::{card, Skill, SkillCard};
+        let line = |approval: Approval| {
+            let mut m = crate::agents::runner::new_message("a1", MessageKind::Approval, "");
+            m.approval = Some(approval);
+            m
+        };
+        let skill = line(card(SkillCard {
+            skill: Skill {
+                slug: "export-invoices".into(),
+                name: "Export invoices".into(),
+                when: "When asked for invoices".into(),
+                steps: "1. Export them.".into(),
+            },
+            removed: 0,
+            outside: false,
+            replaces: false,
+        }));
+        let ask = line(crate::agents::mcp::new_card(
+            new_id(),
+            "Run a command".into(),
+            "rm -rf build".into(),
+            None,
+        ));
+        assert_eq!(count_pending(std::slice::from_ref(&skill)), 0);
+        assert_eq!(count_pending(&[skill, ask]), 1);
+    }
 
     #[test]
     fn routines_run_on_haiku_only_while_the_agent_is_on_the_default_model() {
@@ -2757,6 +3014,7 @@ mod tests {
                         step_in: None,
                         crossover: None,
                         account_switch: None,
+                        skill: None,
                         slack_reply: None,
                         risk: None,
                     });
@@ -2973,6 +3231,7 @@ mod tests {
                     step_in: None,
                     crossover: None,
                     account_switch: None,
+                    skill: None,
                     slack_reply: None,
                     risk: None,
                 }),
@@ -3108,6 +3367,7 @@ mod tests {
                 step_in: None,
                 crossover: None,
                 account_switch: None,
+                skill: None,
                 slack_reply: None,
                 risk: None,
             });

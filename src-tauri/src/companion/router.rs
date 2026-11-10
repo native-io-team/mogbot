@@ -39,6 +39,9 @@ pub const METHODS: &[&str] = &[
     "agents.loginSaveKey",
     "agents.reach",
     "agents.policy",
+    "agents.skills",
+    "agents.skillEdit",
+    "agents.skillRemove",
     "agents.onItsOwn",
     "agents.onItsOwnTeam",
     "agents.onItsOwnNarrow",
@@ -63,6 +66,7 @@ pub const METHODS: &[&str] = &[
     "agents.signinDone",
     "agents.signinStop",
     "agents.signinFallback",
+    "agents.stepInBegin",
     "agents.focus",
     "agents.markUnread",
     "agents.startFresh",
@@ -70,7 +74,12 @@ pub const METHODS: &[&str] = &[
     "agents.conversationNew",
     "agents.conversationSelect",
     "agents.conversationRename",
+    "agents.conversationRewind",
+    "agents.conversationFork",
     "agents.conversationRoutine",
+    "agents.page",
+    "agents.pageVersion",
+    "agents.pagePin",
     "agents.create",
     "agents.draft",
     "agents.templates",
@@ -111,6 +120,10 @@ pub const METHODS: &[&str] = &[
     "agents.schedule.pause",
     "agents.schedule.cancel",
     "agents.schedule.runNow",
+    "agents.watch.options",
+    "agents.watch.create",
+    "agents.watch.update",
+    "agents.watch.checkNow",
     "rooms.list",
     "rooms.messages",
     "rooms.send",
@@ -145,11 +158,14 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.overview",
     "agents.messages",
     "agents.conversations",
+    "agents.page",
+    "agents.pageVersion",
     "agents.workSteps",
     "agents.instructions",
     "agents.memory",
     "agents.reach",
     "agents.policy",
+    "agents.skills",
     "agents.onItsOwn",
     "agents.onItsOwnTeam",
     "agents.loginsTeam",
@@ -169,6 +185,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.files",
     "agents.search",
     "agents.schedule.preview",
+    "agents.watch.options",
     "rooms.list",
     "rooms.messages",
     "projects.list",
@@ -180,6 +197,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
 /// typed is a password); the session writes its own line, the domain and
 /// how it ended.
 pub const SELF_AUDITED_METHODS: &[&str] = &[
+    "agents.stepInBegin",
     "agents.signinBegin",
     "agents.signinFrame",
     "agents.signinInput",
@@ -259,6 +277,30 @@ pub enum ScheduleOp {
         agent_id: String,
         id: String,
     },
+    /// What the "When…" composer may offer for this agent (`watch_options`).
+    WatchOptions {
+        agent_id: String,
+    },
+    /// Add a "When…" routine (`agents_watch_create`).
+    WatchCreate {
+        agent_id: String,
+        source: crate::agents::watch::Source,
+        every_minutes: u32,
+        note: String,
+    },
+    /// Change one (`agents_watch_update`).
+    WatchUpdate {
+        agent_id: String,
+        id: String,
+        source: crate::agents::watch::Source,
+        every_minutes: u32,
+        note: String,
+    },
+    /// Check one now (`agents_watch_check_now`).
+    WatchCheckNow {
+        agent_id: String,
+        id: String,
+    },
 }
 
 impl ScheduleOp {
@@ -268,8 +310,13 @@ impl ScheduleOp {
             ScheduleOp::Update { agent_id, id, .. }
             | ScheduleOp::Pause { agent_id, id, .. }
             | ScheduleOp::Cancel { agent_id, id }
-            | ScheduleOp::RunNow { agent_id, id } => Some((agent_id, id)),
-            ScheduleOp::Preview { .. } | ScheduleOp::Create { .. } => None,
+            | ScheduleOp::RunNow { agent_id, id }
+            | ScheduleOp::WatchUpdate { agent_id, id, .. }
+            | ScheduleOp::WatchCheckNow { agent_id, id } => Some((agent_id, id)),
+            ScheduleOp::Preview { .. }
+            | ScheduleOp::Create { .. }
+            | ScheduleOp::WatchOptions { .. }
+            | ScheduleOp::WatchCreate { .. } => None,
         }
     }
 }
@@ -317,6 +364,10 @@ pub struct AgentToggles {
     /// From a Mac that serves `agents.accounts.use`.
     #[serde(default)]
     pub account: Option<String>,
+    /// "Save new skills": `auto`, `ask` or `off`. From a Mac that
+    /// serves `agents.skills`.
+    #[serde(default, rename = "learnSkills")]
+    pub learn_skills: Option<crate::agents::skills_learn::Learning>,
 }
 
 /// Instructions are a brief, not a document: the phone's editor stops here.
@@ -602,6 +653,20 @@ pub trait Backend: Send + Sync + 'static {
         id: &str,
         title: String,
     ) -> Result<Value, CommandError>;
+    /// `agents_conversation_rewind` / `_fork`: gone back to just before the
+    /// user's message, in place or as a new conversation; the list after.
+    async fn conversation_rewind(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError>;
+    async fn conversation_fork(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError>;
     /// `agents_conversation_routine`: a routine moved to another
     /// conversation; the list after.
     async fn conversation_routine(
@@ -609,6 +674,24 @@ pub trait Backend: Send + Sync + 'static {
         agent_id: &str,
         routine_id: &str,
         id: &str,
+    ) -> Result<Value, CommandError>;
+    /// `agents_page`: the conversation's living page (`agents/page.rs`),
+    /// or null. `None` is the conversation the user is in.
+    async fn page(&self, agent_id: &str, conversation: Option<&str>)
+        -> Result<Value, CommandError>;
+    /// `agents_page_version`: one kept version, or null.
+    async fn page_version(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        version: u32,
+    ) -> Result<Value, CommandError>;
+    /// `agents_page_pin`: pinned above the chat, or not; the page after.
+    async fn page_pin(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        pinned: bool,
     ) -> Result<Value, CommandError>;
     async fn send(
         &self,
@@ -705,7 +788,7 @@ pub trait Backend: Send + Sync + 'static {
     /// `agents_set_usage_mode`: the user chose a usage mode (no card: their
     /// own choice, as in Settings). Answers the inventory.
     async fn usage_set_mode(&self, mode: &str) -> Result<Value, CommandError>;
-    /// `agents_spare_add`: something for the spare-capacity list, by "you".
+    /// `agents_spare_add`: something for the list of ideas for leftover usage, by "you".
     /// Answers the inventory.
     async fn spare_add(&self, text: &str, agent_id: Option<&str>) -> Result<Value, CommandError>;
     /// `agents_spare_spend_now`: "Give agents something to do". Answers `{ line }`.
@@ -816,6 +899,12 @@ pub trait Backend: Send + Sync + 'static {
     async fn reach(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_policy`: "What it can do". Read-only on the phone; changed in chat.
     async fn policy(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_skills`: "Skills" and its setting.
+    async fn skills(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_skill_edit`: the user's edit of one skill.
+    async fn skill_edit(&self, agent_id: &str, edit: SkillEdit) -> Result<Value, CommandError>;
+    /// `agents_skill_remove`: one skill removed.
+    async fn skill_remove(&self, agent_id: &str, slug: &str) -> Result<(), CommandError>;
     /// `agents_on_its_own`: what it may do without asking, in plain words.
     async fn on_its_own(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_on_its_own_team`: the same for the team.
@@ -1082,6 +1171,31 @@ struct AgentParam {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SkillParams {
+    agent_id: String,
+    slug: String,
+}
+
+/// One skill as the phone's editor sends it back.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SkillEdit {
+    pub slug: String,
+    pub name: String,
+    pub when: String,
+    pub steps: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillEditParams {
+    agent_id: String,
+    #[serde(flatten)]
+    edit: SkillEdit,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct NarrowParams {
     agent_id: String,
     narrow: Value,
@@ -1168,6 +1282,41 @@ struct ConversationRenameParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct PageParams {
+    agent_id: String,
+    /// Absent: the conversation the user is in.
+    #[serde(default)]
+    conversation_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PageVersionParams {
+    agent_id: String,
+    #[serde(default)]
+    conversation_id: Option<String>,
+    version: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PagePinParams {
+    agent_id: String,
+    #[serde(default)]
+    conversation_id: Option<String>,
+    pinned: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationMessageParams {
+    agent_id: String,
+    conversation_id: String,
+    message_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ConversationRoutineParams {
     agent_id: String,
     routine_id: String,
@@ -1224,6 +1373,18 @@ struct ScheduleParams {
     paused: bool,
     #[serde(default)]
     then: Option<Vec<crate::agents::routine_steps::Step>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WatchRoutineParams {
+    agent_id: String,
+    #[serde(default)]
+    id: String,
+    source: crate::agents::watch::Source,
+    every_minutes: u32,
+    #[serde(default)]
+    note: String,
 }
 
 #[derive(Deserialize)]
@@ -1294,6 +1455,13 @@ struct SigninBeginParams {
     /// "agents_browser" / "chrome": the phone asked for that way.
     #[serde(default)]
     way: Option<crate::agents::phone_signin::Via>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StepInBeginParams {
+    agent_id: String,
+    request_id: String,
 }
 
 #[derive(Deserialize)]
@@ -1742,6 +1910,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         },
         "agents.fetchPath" => preview(field("path")),
         "agents.revokePermission" => format!("revoke {} {}", field("ruleId"), field("agentId")),
+        "agents.skillEdit" => format!("edit skill {} of {}", field("slug"), field("agentId")),
+        "agents.skillRemove" => format!("remove skill {} of {}", field("slug"), field("agentId")),
         "agents.onItsOwnNarrow" => format!(
             "take back {} {}",
             params
@@ -1781,8 +1951,28 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             )
         }
         "agents.schedule.cancel" | "agents.schedule.runNow" => field("id").to_string(),
+        "agents.watch.create" | "agents.watch.update" => {
+            let kind = params
+                .get("source")
+                .and_then(|s| s.get("kind"))
+                .and_then(Value::as_str)
+                .unwrap_or("?");
+            preview(&format!("when {kind} — {}", field("note")))
+        }
+        "agents.watch.checkNow" => format!("check now {}", field("id")),
         "agents.conversationRoutine" => {
             format!("move {} to {}", field("routineId"), field("conversationId"))
+        }
+        "agents.pagePin" => {
+            let pinned = params.get("pinned").and_then(Value::as_bool) == Some(true);
+            format!(
+                "{} the page of {}",
+                if pinned { "pinned" } else { "unpinned" },
+                match field("conversationId") {
+                    "" => "the current conversation",
+                    c => c,
+                }
+            )
         }
         "agents.setDefaults" => {
             let said: Vec<String> = [
@@ -1835,8 +2025,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             preview(field("id"))
         ),
         "agents.usage.setMode" => format!("usage mode: {}", preview(field("mode"))),
-        "agents.spare.add" => format!("spare-capacity list: add {}", preview(field("text"))),
-        "agents.spare.spendNow" => "spare-capacity list: start now".to_string(),
+        "agents.spare.add" => format!("ideas for leftover usage: add {}", preview(field("text"))),
+        "agents.spare.spendNow" => "ideas for leftover usage: start now".to_string(),
         "agents.accounts.reorder" => format!(
             "{} accounts in order: {}",
             preview(field("engine")),
@@ -1885,6 +2075,15 @@ fn signin_op(method: &str, params: Value) -> Result<crate::agents::phone_signin:
                 agent_id: p.agent_id,
                 request_id: p.request_id,
                 way: p.way,
+            }
+        }
+        "agents.stepInBegin" => {
+            let p: StepInBeginParams = parse(params)?;
+            id(&p.agent_id)?;
+            id(&p.request_id)?;
+            Op::StepIn {
+                agent_id: p.agent_id,
+                request_id: p.request_id,
             }
         }
         "agents.signinInput" => {
@@ -2199,6 +2398,38 @@ async fn run(
                     .await?,
             )
         }
+        "agents.page" => {
+            let p: PageParams = parse(params)?;
+            Ok(b.page(&p.agent_id, p.conversation_id.as_deref()).await?)
+        }
+        "agents.pageVersion" => {
+            let p: PageVersionParams = parse(params)?;
+            Ok(
+                b.page_version(&p.agent_id, p.conversation_id.as_deref(), p.version)
+                    .await?,
+            )
+        }
+        "agents.pagePin" => {
+            let p: PagePinParams = parse(params)?;
+            Ok(
+                b.page_pin(&p.agent_id, p.conversation_id.as_deref(), p.pinned)
+                    .await?,
+            )
+        }
+        "agents.conversationRewind" => {
+            let p: ConversationMessageParams = parse(params)?;
+            Ok(
+                b.conversation_rewind(&p.agent_id, &p.conversation_id, &p.message_id)
+                    .await?,
+            )
+        }
+        "agents.conversationFork" => {
+            let p: ConversationMessageParams = parse(params)?;
+            Ok(
+                b.conversation_fork(&p.agent_id, &p.conversation_id, &p.message_id)
+                    .await?,
+            )
+        }
         "agents.conversationRoutine" => {
             let p: ConversationRoutineParams = parse(params)?;
             Ok(
@@ -2396,7 +2627,7 @@ async fn run(
             let mode = params.get("mode").and_then(Value::as_str).unwrap_or("");
             if !matches!(mode, "normal" | "save" | "use_it_all") {
                 return Err(bad_params(
-                    "The usage mode is normal, save (Save my limits) or use_it_all (Use it all before reset).",
+                    "The usage mode is normal, save (Save my limits) or use_it_all (Use it all before the refill).",
                 ));
             }
             Ok(b.usage_set_mode(mode).await?)
@@ -2414,7 +2645,7 @@ async fn run(
             if text.is_empty() || text.chars().count() > 600 || agent.is_some_and(|a| a.len() > 64)
             {
                 return Err(bad_params(
-                    "Adding to the spare-capacity list takes the text (at most 600 characters) and optionally an agentId.",
+                    "Adding to the list of ideas for leftover usage takes the text (at most 600 characters) and optionally an agentId.",
                 ));
             }
             Ok(b.spare_add(text, agent).await?)
@@ -2655,6 +2886,27 @@ async fn run(
             let p: AgentParam = parse(params)?;
             Ok(b.policy(&p.agent_id).await?)
         }
+        "agents.skills" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.skills(&p.agent_id).await?)
+        }
+        "agents.skillEdit" => {
+            let p: SkillEditParams = parse(params)?;
+            if !crate::agents::skills_learn::valid_slug(&p.edit.slug)
+                || p.edit.steps.chars().count() > crate::agents::skills_learn::STEPS_CHARS * 2
+            {
+                return Err(bad_params("Which skill?"));
+            }
+            Ok(b.skill_edit(&p.agent_id, p.edit).await?)
+        }
+        "agents.skillRemove" => {
+            let p: SkillParams = parse(params)?;
+            if !crate::agents::skills_learn::valid_slug(&p.slug) {
+                return Err(bad_params("Which skill?"));
+            }
+            b.skill_remove(&p.agent_id, &p.slug).await?;
+            Ok(Value::Null)
+        }
         "agents.onItsOwn" => {
             let p: AgentParam = parse(params)?;
             Ok(b.on_its_own(&p.agent_id).await?)
@@ -2824,6 +3076,55 @@ async fn run(
                 },
             };
             Ok(b.schedule(op).await?)
+        }
+        "agents.watch.options" => {
+            let p: ScheduleParams = parse(params)?;
+            Ok(b.schedule(ScheduleOp::WatchOptions {
+                agent_id: p.agent_id,
+            })
+            .await?)
+        }
+        "agents.watch.create" | "agents.watch.update" => {
+            let p: WatchRoutineParams = parse(params)?;
+            let update = method == "agents.watch.update";
+            if update && p.id.trim().is_empty() {
+                return Err(bad_params("id is required."));
+            }
+            // What to do, and a check in the user's own words, are prompts
+            // the routine sends later with nobody watching: the same rules as
+            // a message typed now.
+            refuse_unsafe_text(&p.note, "A routine's note")?;
+            if let crate::agents::watch::Source::Custom { check, .. } = &p.source {
+                refuse_unsafe_text(check.as_str(), "What a routine looks out for")?;
+            }
+            let op = if update {
+                ScheduleOp::WatchUpdate {
+                    agent_id: p.agent_id,
+                    id: p.id,
+                    source: p.source,
+                    every_minutes: p.every_minutes,
+                    note: p.note,
+                }
+            } else {
+                ScheduleOp::WatchCreate {
+                    agent_id: p.agent_id,
+                    source: p.source,
+                    every_minutes: p.every_minutes,
+                    note: p.note,
+                }
+            };
+            Ok(b.schedule(op).await?)
+        }
+        "agents.watch.checkNow" => {
+            let p: ScheduleParams = parse(params)?;
+            if p.id.trim().is_empty() {
+                return Err(bad_params("id is required."));
+            }
+            Ok(b.schedule(ScheduleOp::WatchCheckNow {
+                agent_id: p.agent_id,
+                id: p.id,
+            })
+            .await?)
         }
         "projects.list" => Ok(b.projects().await?),
         "sessions.read" => {
@@ -3321,6 +3622,51 @@ mod tests {
         let record = stub.logins.lock().unwrap().join("\n");
         assert!(record.contains("way: Some(AgentsBrowser)"), "{record}");
         assert!(record.contains("way: None"), "{record}");
+    }
+
+    /// Step in from the phone: the caller's own device begins it, the same
+    /// frames and input drive it, Done is Hand back, and the router audits
+    /// none of it (the session writes its own line).
+    #[tokio::test]
+    async fn a_phone_step_in_begins_for_the_caller_and_hands_back() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let begun = dispatch(
+            &c,
+            &me,
+            "agents.stepInBegin",
+            json!({ "agentId": AGENT, "requestId": "q_step" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(begun["stepIn"], true);
+        let id = begun["sessionId"].as_str().unwrap().to_string();
+        dispatch(&c, &me, "agents.signinFrame", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        let done = dispatch(&c, &me, "agents.signinDone", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        assert_eq!(done["outcome"], "handed_back");
+        // Malformed: refused at the parse.
+        for bad in [
+            json!({ "agentId": "", "requestId": "q_step" }),
+            json!({ "agentId": AGENT }),
+        ] {
+            assert!(dispatch(&c, &me, "agents.stepInBegin", bad).await.is_err());
+        }
+        let record = stub.logins.lock().unwrap().join("\n");
+        assert!(
+            record.contains("StepIn { agent_id: \"") && record.contains("q_step"),
+            "{record}"
+        );
+        assert!(record.lines().all(|l| l.ends_with("by dev_a")), "{record}");
+        assert!(stub
+            .audited()
+            .iter()
+            .all(|(_, m, _, _)| m != "agents.stepInBegin"));
+        assert!(super::super::wire::MAC_FEATURES.contains(&"stepIn.phone"));
     }
 
     /// Signing in on the phone itself: the sheet is begun for the caller's
@@ -3955,7 +4301,7 @@ mod tests {
     }
 
     /// Persona review 2026-11-09 (the Maximizer): the phone changes the
-    /// mode, adds to the spare-capacity list and starts it, audited.
+    /// mode, adds to the list of ideas for leftover usage and starts it, audited.
     #[tokio::test]
     async fn a_phone_changes_the_usage_mode_and_the_spare_list_audited() {
         use crate::companion::testkit::Stub;
@@ -3986,7 +4332,7 @@ mod tests {
         assert!(said["line"]
             .as_str()
             .unwrap()
-            .contains("spare-capacity list"));
+            .contains("ideas for leftover usage"));
         assert_eq!(
             *stub.usage_changes.lock().unwrap(),
             vec!["mode use_it_all", "add Tidy the docs for a1", "spend"]

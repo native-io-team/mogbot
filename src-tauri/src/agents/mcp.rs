@@ -196,7 +196,7 @@ const TOOLS: &[Tool] = &[
                 "icon": { "type": "string", "description": format!("Optional: the legend on its key. Left out, one read from its name and role. {}", super::keys::icon_hint()) },
                 "key": { "type": "string", "description": "Optional: the keyboard key (one letter or digit) that jumps to it. Left out, the first free letter of its name." },
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
-                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
+                "engine": { "type": "string", "enum": ["claude", "codex", "opencode"], "description": "Optional: what it runs on. `claude` (Claude Code), `codex` (Codex, on the user's ChatGPT plan) or `opencode` (OpenCode, on the providers the user set up in it, local models included). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
                 "first_task": { "type": "string", "description": "Optional message to start it on right away." },
                 "welcome": { "type": "string", "description": "Optional: what it says first in its chat, one or two short sentences in its own voice (\"I'm Inbox. I go through your mail and tell you what needs you.\"). No model turn runs for it." },
                 "starters": {
@@ -207,7 +207,7 @@ const TOOLS: &[Tool] = &[
                 "apps": { "type": "array", "items": { "type": "string" }, "description": "Optional: outside apps its job needs (\"Gmail\", \"GitHub\")." },
                 "routines": {
                     "type": "array",
-                    "description": "Optional: its routines, set up with it (at most 4). Each `when` uses schedule_check_in's shapes; `note` is the first step; `then` holds later steps, each `{text, ask_first}`: put an outward step (posting, sending) after a draft with `ask_first: true`, so the user OKs the draft on a card first.",
+                    "description": "Optional: its routines, set up with it (at most 4). Each `when` uses schedule_check_in's shapes; `note` is the first step (under 600 characters); `then` holds later steps, each `{text, ask_first}`: put an outward step (posting, sending) after a draft with `ask_first: true`, so the user OKs the draft on a card first.",
                     "items": {
                         "type": "object",
                         "properties": {
@@ -224,7 +224,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku, which the app calls Smartest, Balanced and Fastest and which you may pass by those words; Codex: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on the smartest model\", \"have Finance think harder\". Tell the user in the app's words, the model's name second: \"Research now uses Smartest (Opus)\", never just \"opus\"; \"model\" alone means little to most people, so say \"the AI it thinks with\" when they seem unsure. `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `account` is its Runs on: one of its engine's accounts by the name usage_overview lists (\"run Finance only on Work\"), or \"any\" to run on whichever has room; no card. Its key: `colorway`, `icon` (the legend) and `key` (the keyboard key, one letter or digit, that jumps to it; unique on the team) change how it looks (\"make Hiring teal with the people icon\", \"put Finance on F\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
+        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude`, `codex` or `opencode`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku, which the app calls Smartest, Balanced and Fastest and which you may pass by those words; Codex or OpenCode: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on the smartest model\", \"have Finance think harder\". Tell the user in the app's words, the model's name second: \"Research now uses Smartest (Opus)\", never just \"opus\"; \"model\" alone means little to most people, so say \"the AI it thinks with\" when they seem unsure. `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `learn_skills` (\"automatically\", \"ask me\" or \"off\") is whether it saves how it did a hard task as a skill. `account` is its Runs on: one of its engine's accounts by the name usage_overview lists (\"run Finance only on Work\"), or \"any\" to run on whichever has room; no card. Its key: `colorway`, `icon` (the legend) and `key` (the keyboard key, one letter or digit, that jumps to it; unique on the team) change how it looks (\"make Hiring teal with the people icon\", \"put Finance on F\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -234,11 +234,12 @@ const TOOLS: &[Tool] = &[
                 "role": { "type": "string" },
                 "instructions": { "type": "string" },
                 "project": { "type": "string" },
-                "engine": { "type": "string", "enum": ["claude", "codex"] },
+                "engine": { "type": "string", "enum": ["claude", "codex", "opencode"] },
                 "model": { "type": "string" },
                 "effort": { "type": "string", "enum": ["low", "medium", "high", "default"] },
                 "routine_model": { "type": "string" },
                 "muted": { "type": "boolean" },
+                "learn_skills": { "type": "string", "enum": ["automatically", "ask me", "off"] },
                 "account": { "type": "string", "description": "Runs on: an account's name or id, or \"any\"." },
                 "colorway": { "type": "string", "enum": super::keys::colorways() },
                 "icon": { "type": "string", "description": super::keys::icon_hint() },
@@ -311,6 +312,12 @@ const TOOLS: &[Tool] = &[
         schema: super::blocks::schema,
     },
     Tool {
+        name: super::page::TOOL,
+        description: super::page::DESCRIPTION,
+        main_only: false,
+        schema: super::page::schema,
+    },
+    Tool {
         name: "schedule_check_in",
         description: "Have the app wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"every month on the 1st at 9:00\", \"every month on the last friday at 16:00\", \"every 3 months on the 15th at 9:00\"), in the user's local time. It only fires while the app is open; the answer says exactly when and what happens if it's closed. Tell the user that time. To the user these are routines (a one-time one is \"scheduled\"): never say \"check-in\" or a tool's name.",
         main_only: false,
@@ -318,7 +325,7 @@ const TOOLS: &[Tool] = &[
             "type": "object",
             "properties": {
                 "when": { "type": "string", "description": "When, in plain words. See the description for shapes that work." },
-                "note": { "type": "string", "description": "What to do when it fires, written to your future self: specific enough to act on with no other context. With `then`, this is step 1." },
+                "note": { "type": "string", "description": "What to do when it fires, written to your future self: specific enough to act on with no other context, under 600 characters (put a long brief in a file in your folder and name it). With `then`, this is step 1." },
                 "then": { "type": "array", "description": "Optional, routines only: later steps, each run as its own turn after the one before ends well (at most 4). `ask_first: true` waits for the user's OK on a card before that step, showing them what the step before produced: use it before anything outward (posting, sending, publishing) that follows a draft.", "items": { "type": "object", "properties": { "text": { "type": "string" }, "ask_first": { "type": "boolean" } }, "required": ["text"] } },
                 "agent": { "type": "string", "description": "Chief of Staff only: schedule it for another agent (name or id). Omit to schedule for yourself." }
             },
@@ -375,17 +382,19 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "watch_for",
-        description: "Start work when something happens, instead of at a time: a \"When…\" routine. The app checks every few minutes from this Mac (no webhooks) and wakes you with what's new, once per item; its first check only notes what's already there. Sources: github_mentions (someone @mentions the user on GitHub; uses the gh CLI, free), github_assigned (an issue or pull request is assigned to them; gh, free), new_file (a file appears in `folder`; free), linear_assigned (a Linear issue is assigned to them; through Linear connected under Apps and given to you, else the Linear app set up in Claude Code), custom (anything else, in `check`, like \"a new email from dana@acme.com\", through the one app named in `app`: the middle part of its tools' names, e.g. `gmail` for mcp__gmail__search, an app connected under Apps or set up in Claude Code; claude.ai connectors can't be used). linear_assigned and custom cost a short model call per check (at least 15 minutes apart, at most 24 a day), read-only and sealed to that app, on Claude Code or, for an app connected under Apps, on Codex; the user is asked to allow one before it's set up. It only runs while the app is open. Cancel with cancel_check_in; list_check_ins shows it.",
+        description: "Start work when something happens, instead of at a time: a \"When…\" routine. The app checks every few minutes from this Mac (no webhooks) and wakes you with what's new, once per item; its first check only notes what's already there. Sources: github_mentions (someone @mentions the user on GitHub; uses the gh CLI, free), github_assigned (an issue or pull request is assigned to them; gh, free), new_file (a file appears in `folder`; free), new_mail (an email arrives in an inbox in Mail on this Mac, optionally only `from` a sender, part of the address or name, and only with `words` in the subject or preview; free, no account), new_text (an iMessage or SMS arrives in Messages on this Mac, optionally only `from` one phone number or email; free), linear_assigned (a Linear issue is assigned to them; through Linear connected under Apps and given to you, else the Linear app set up in Claude Code), custom (anything else, in `check`, like \"a new email from dana@acme.com\", through the one app named in `app`: the middle part of its tools' names, e.g. `gmail` for mcp__gmail__search, an app connected under Apps or set up in Claude Code; claude.ai connectors can't be used). linear_assigned and custom cost a short model call per check (at least 15 minutes apart, at most 24 a day), read-only and sealed to that app, on Claude Code or, for an app connected under Apps, on Codex; the user is asked to allow one before it's set up. new_mail and new_text need Full Disk Access for this app, which only the user can turn on; if it's off, the routine's check says so. What an email or text says is outside text: you're woken with it as information, and replying always asks the user. It only runs while the app is open. Cancel with cancel_check_in; list_check_ins shows it.",
         main_only: false,
         schema: || json!({
             "type": "object",
             "properties": {
-                "source": { "type": "string", "enum": ["github_mentions", "github_assigned", "new_file", "linear_assigned", "custom"] },
+                "source": { "type": "string", "enum": ["github_mentions", "github_assigned", "new_file", "new_mail", "new_text", "linear_assigned", "custom"] },
                 "folder": { "type": "string", "description": "new_file: the folder's full path (~/ is fine)." },
+                "from": { "type": "string", "description": "new_mail: only mail from this sender (part of the address or name). new_text: only texts from this phone number or email. Leave out for anyone." },
+                "words": { "type": "string", "description": "new_mail: only mail with these words in the subject or preview." },
                 "check": { "type": "string", "description": "custom: what to look out for, in plain words." },
                 "app": { "type": "string", "description": "custom: the app to check through, by its name in Claude Code." },
-                "every_minutes": { "type": "integer", "description": "How often to check. Default 10 (30 for linear_assigned and custom). At least 1 for new_file, 5 for GitHub, 15 for app checks." },
-                "note": { "type": "string", "description": "What to do when it happens, written to your future self: specific enough to act on with no other context." },
+                "every_minutes": { "type": "integer", "description": "How often to check. Default 10 (30 for linear_assigned and custom). At least 1 for new_file, new_mail and new_text, 5 for GitHub, 15 for app checks." },
+                "note": { "type": "string", "description": "What to do when it happens, written to your future self: specific enough to act on with no other context, under 600 characters." },
                 "agent": { "type": "string", "description": "Chief of Staff only: set it for another agent (name or id)." }
             },
             "required": ["source", "note"]
@@ -440,6 +449,12 @@ const TOOLS: &[Tool] = &[
         description: super::remember::DESCRIPTION,
         main_only: false,
         schema: super::remember::schema,
+    },
+    Tool {
+        name: super::skills_learn::TOOL,
+        description: super::skills_learn::DESCRIPTION,
+        main_only: false,
+        schema: super::skills_learn::schema,
     },
     Tool {
         name: "remember_browser_account",
@@ -515,6 +530,8 @@ fn serves(tool: &Tool, caller: &store::Agent) -> bool {
     match tool.name {
         "delete_agent" => super::admin::admin_now(caller),
         "read_agent" => caller.is_main || super::admin::admin_now(caller),
+        // "Save new skills: Off": not offered at all.
+        super::skills_learn::TOOL => caller.learn_skills != super::skills_learn::Learning::Off,
         _ => !tool.main_only || caller.is_main,
     }
 }
@@ -800,6 +817,7 @@ async fn call(
         "share_file" => share_file(app, caller, args).await,
         "share_result" => share_result(app, caller, turn, args).await,
         super::blocks::TOOL => show(app, caller, turn, args).await,
+        super::page::TOOL => page(app, caller, turn, args).await,
         "create_agent" => create_agent(app, caller, args).await,
         "update_agent" => update_agent(app, caller, args).await,
         "delete_agent" => delete_agent(app, caller, args).await,
@@ -870,6 +888,7 @@ async fn call(
         }
         super::policy_card::TOOL => super::policy_card::propose(app, caller, turn, args).await,
         super::remember::TOOL => super::remember::call(app, caller, turn, args).await,
+        super::skills_learn::TOOL => super::skills_learn::call(app, caller, turn, args).await,
         super::plan_grant::TOOL => super::plan_grant::call(app, caller, args).await,
         _ => error("Unknown tool"),
     }
@@ -1166,8 +1185,28 @@ pub fn routine_line_text(c: &schedule::CheckIn) -> String {
             short_line(&c.note),
             super::watch::cost_words(w)
         ),
-        None => format!("Set up a routine: {}", short_line(&c.note)),
+        None => routine_time_line(c, &chrono::Local, store::now_ms()),
     }
+}
+
+/// A time routine's line: what, when, and its first run, so a new routine
+/// is seen to be set ("Set up a routine: Brief me on Acme · every weekday at
+/// 8:00 AM, first run tomorrow at 8:00 AM").
+pub fn routine_time_line<Tz: chrono::TimeZone>(c: &schedule::CheckIn, tz: &Tz, now: i64) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let at = super::failure::clock_phrase(tz, c.next_at, now);
+    // "at 9:00 AM" alone is today.
+    let at = match at.strip_prefix("at ") {
+        Some(time) => format!("today at {time}"),
+        None => at,
+    };
+    let when = match &c.repeat {
+        Some(r) => format!("{}, first run {at}", schedule::describe(r)),
+        None => format!("once, {at}"),
+    };
+    format!("Set up a routine: {} · {when}", short_line(&c.note))
 }
 
 /// `watch_for`'s source, from its flat arguments.
@@ -1180,13 +1219,20 @@ fn watch_source(args: &Value) -> Result<super::watch::Source, crate::errors::Com
         "new_file" => Ok(Source::NewFile {
             folder: arg(args, "folder").unwrap_or("").to_string(),
         }),
+        "new_mail" => Ok(Source::NewMail {
+            from: arg(args, "from").unwrap_or("").to_string(),
+            words: arg(args, "words").unwrap_or("").to_string(),
+        }),
+        "new_text" => Ok(Source::NewText {
+            from: arg(args, "from").unwrap_or("").to_string(),
+        }),
         "custom" => Ok(Source::Custom {
             check: arg(args, "check").unwrap_or("").to_string(),
             app: arg(args, "app").unwrap_or("").to_string(),
         }),
         other => Err(super::err_invalid(
             "source",
-            format!("There's no source called {other:?}. Use github_mentions, github_assigned, new_file, linear_assigned or custom."),
+            format!("There's no source called {other:?}. Use github_mentions, github_assigned, new_file, new_mail, new_text, linear_assigned or custom."),
         )),
     }
 }
@@ -1611,8 +1657,81 @@ async fn show(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &
         Err(e) => return error(e.to_string()),
     };
     let receipt = super::blocks::receipt(&set);
+    let asks = super::blocks::asks(&set);
     match runner::record(app, message) {
-        Ok(_) => text(receipt),
+        Ok(_) => {
+            // The rest of this turn's words go in "What it did" (`runner`).
+            if asks && super::broker::is_live(&caller.id, turn) {
+                runner::note_blocks_asked(&caller.id);
+            }
+            text(receipt)
+        }
+        Err(e) => error(e.to_string()),
+    }
+}
+
+/// This conversation's living page (`agents/page.rs`): set or patched by
+/// block id, every version kept, beside the chat log. The conversation is
+/// the one the turn runs in (a routine's own, when a routine runs). A turn
+/// answering outside text changes it only after a card.
+async fn page(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &Value) -> Value {
+    use super::page;
+    let mut update = match page::parse(args) {
+        Ok(u) => u,
+        Err(e) => return error(e),
+    };
+    let conversation = super::conversations::loaded(caller).to_string();
+    let (agent_id, at) = (caller.id.clone(), conversation.clone());
+    let before = match tokio::task::spawn_blocking(move || page::read(&agent_id, &at)).await {
+        Ok(Ok(file)) => file,
+        Ok(Err(e)) => return error(e.to_string()),
+        Err(e) => return error(e.to_string()),
+    };
+    if update.is_read() {
+        return text(page::for_agent(before.as_ref()));
+    }
+    let by_routine = runner::in_routine(&caller.id);
+    update.routine = runner::routine_running(&caller.id);
+    // Checked in full first, so a card never asks about a change that can't be made.
+    let preview = match page::apply(
+        before.as_ref(),
+        &conversation,
+        &update,
+        store::now_ms(),
+        by_routine,
+    ) {
+        Ok(Some(next)) => next,
+        Ok(None) => {
+            return text(page::receipt(
+                before.as_ref().expect("no change means a page"),
+                false,
+            ))
+        }
+        Err(e) => return error(e),
+    };
+    if runner::from_outside(&caller.id) && super::broker::is_live(&caller.id, turn) {
+        let (title, detail) = page::card(before.as_ref(), &preview);
+        let answer = ask_user(app, caller, title, detail, None).await;
+        if let Some(refused) = refused_reply(&answer, "change the page") {
+            return error(refused);
+        }
+    }
+    let (agent_id, at) = (caller.id.clone(), conversation.clone());
+    let done =
+        tokio::task::spawn_blocking(move || page::update(&agent_id, &at, &update, by_routine))
+            .await;
+    match done {
+        Ok(Ok((file, changed))) => {
+            if changed {
+                let _ = tauri::Emitter::emit(
+                    app,
+                    page::EVENT,
+                    json!({ "agentId": caller.id, "conversation": conversation }),
+                );
+            }
+            text(page::receipt(&file, changed))
+        }
+        Ok(Err(e)) => error(e),
         Err(e) => error(e.to_string()),
     }
 }
@@ -1930,11 +2049,14 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
             for note in create_notes(caller, &agent, &on) {
                 let _ = runner::record(app, note);
             }
-            let set = super::draft::add_routines(app, &agent.id, &routines);
-            // Its first open: a welcome, and starters unless it's already on a task.
+            let added = super::draft::add_routines(&agent.id, &routines);
+            let set = added.set;
+            // Its first open: a welcome, and starters unless it's already on a
+            // task; then what it will do on its own.
             let opening = super::starters::opening_arg(args);
             super::starters::open(app, &agent.id, &opening, arg(args, "first_task").is_none())
                 .await;
+            added.post(app);
             let routines_said = match (routines.len(), set) {
                 (0, _) => String::new(),
                 (n, s) if s == n => format!(" with {s} routine{}", if s == 1 { "" } else { "s" }),
@@ -2082,6 +2204,13 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
             .unwrap_or_else(|| "any account".to_string());
         widens.insert(0, format!("Runs on: {shown}"));
     }
+    // Saving skills without asking is more room: the user's own message
+    // alone, else a card. Ask me and Off apply at once.
+    if run.learn_skills == Some(super::skills_learn::Learning::Auto)
+        && agent.learn_skills != super::skills_learn::Learning::Auto
+    {
+        widens.push("Save new skills: Automatically, without asking".to_string());
+    }
     if update_asks(&caller.id, &widens) {
         let title = if account_changes && widens.len() == 1 {
             format!("Change which account {} runs on?", agent.name)
@@ -2227,6 +2356,8 @@ pub(super) struct RunSettings {
     pub effort: Option<Option<String>>,
     pub routine_model: Option<Option<String>>,
     pub muted: Option<bool>,
+    /// "Save new skills" (`skills_learn`).
+    pub learn_skills: Option<super::skills_learn::Learning>,
 }
 
 fn is_default_word(raw: &str) -> bool {
@@ -2288,6 +2419,9 @@ pub(super) fn run_settings(engine: Engine, args: &Value) -> Result<RunSettings, 
         effort,
         routine_model,
         muted: args.get("muted").and_then(Value::as_bool),
+        learn_skills: raw("learn_skills")
+            .map(super::skills_learn::Learning::parse)
+            .transpose()?,
     })
 }
 
@@ -2316,6 +2450,9 @@ impl RunSettings {
         if self.muted.is_some_and(|m| m != agent.muted) {
             out.push("notifications");
         }
+        if self.learn_skills.is_some_and(|l| l != agent.learn_skills) {
+            out.push("saving skills");
+        }
         out
     }
 
@@ -2332,6 +2469,9 @@ impl RunSettings {
         if let Some(m) = self.muted {
             a.muted = m;
         }
+        if let Some(l) = self.learn_skills {
+            a.learn_skills = l;
+        }
     }
 
     /// The tool's words for what changed beyond the model and effort (the
@@ -2347,6 +2487,13 @@ impl RunSettings {
                 }
                 .to_string(),
             );
+        }
+        if after.learn_skills != before.learn_skills {
+            out.push(format!(
+                "Save new skills: {} (it {})",
+                after.learn_skills.label(),
+                after.learn_skills.said()
+            ));
         }
         if self.routine_model.is_some() && after.routine_model != before.routine_model {
             out.push(format!(
@@ -2850,6 +2997,7 @@ pub(crate) fn new_card(
         step_in: None,
         crossover: None,
         account_switch: None,
+        skill: None,
         slack_reply: None,
         risk: None,
     }
@@ -3326,6 +3474,33 @@ async fn decide_inner(
     if take_grant(&caller.id, tool, input) {
         return Decision::Allow;
     }
+    // A file call through a link is judged where it really lands (`links`):
+    // every rule below matches paths as text. A write a link carries into
+    // `.git` / `.shipstudio` is refused; one through a dangling link always
+    // gets a card.
+    let judged;
+    let note;
+    let (input, why) = match link_landing(caller, tool, input) {
+        super::links::Landing::Direct => (input, why),
+        super::links::Landing::Protected(why) => return Decision::Deny(why),
+        super::links::Landing::Dangling(n) => {
+            return link_card(app, caller, tool, input, why, &n).await;
+        }
+        super::links::Landing::Redirected {
+            input: real,
+            note: n,
+        } => {
+            if take_grant(&caller.id, tool, &real) {
+                return Decision::Allow;
+            }
+            judged = real;
+            note = match why.map(str::trim).filter(|w| !w.is_empty()) {
+                Some(w) => format!("{n}\n\n{w}"),
+                None => n,
+            };
+            (&judged, Some(note.as_str()))
+        }
+    };
     // What the agent's settings allow (`policy`): a project or folder it
     // may not use, an app or the browser it was kept from, is refused
     // without a card; reading where it may read needs none.
@@ -3473,6 +3648,52 @@ async fn decide_inner(
             Decision::Allow
         }
         Answer::Denied(note) => Decision::Deny(denied(note)),
+        Answer::NotYet => Decision::Deny(NOT_YET.to_string()),
+    }
+}
+
+/// Where a file call lands, from the turn's working folder (`links`).
+fn link_landing(caller: &store::Agent, tool: &str, input: &Value) -> super::links::Landing {
+    let Some(home) = dirs::home_dir() else {
+        return super::links::Landing::Direct;
+    };
+    let cwd = super::autoallow::Ctx::for_agent(caller)
+        .map(|c| c.cwd)
+        .unwrap_or_else(|| home.clone());
+    super::links::landing(tool, input, &cwd, &home)
+}
+
+/// A card for a write through a link that points nowhere: no level, plan or
+/// rule answers it, since nobody can say where it lands.
+async fn link_card(
+    app: &AppHandle,
+    caller: &store::Agent,
+    tool: &str,
+    input: &Value,
+    why: Option<&str>,
+    note: &str,
+) -> Decision {
+    let (title, mut detail) = describe_request(tool, input);
+    let why = why.map(str::trim).filter(|w| !w.is_empty());
+    if let Some(why) = why {
+        detail = format!("{detail}\n\n{why}");
+    }
+    let summary = match super::admin::summary_for(tool, input, why) {
+        Some(s) => format!("{note}\n\n{s}"),
+        None => note.to_string(),
+    };
+    match ask(
+        app,
+        caller,
+        title,
+        Some(summary),
+        detail,
+        Some((tool, input)),
+    )
+    .await
+    {
+        Answer::Allowed => Decision::Allow,
+        Answer::Denied(n) => Decision::Deny(denied(n)),
         Answer::NotYet => Decision::Deny(NOT_YET.to_string()),
     }
 }
@@ -4289,6 +4510,7 @@ mod tests {
             away: None,
             context: None,
             routine_model: None,
+            learn_skills: Default::default(),
             account: None,
             template: None,
             reach: Default::default(),

@@ -21,6 +21,7 @@ import {
   keyStateOf,
   needsYouCount,
   secretTitle,
+  skillOutcome,
   tokenCount,
   workingRowLine,
 } from '@shipstudio/companion-protocol';
@@ -125,9 +126,9 @@ export function workingLine(agent: Agent, brief = false): string {
   return agent.status.activity ?? 'Thinking';
 }
 
-/** "Claude Code" / "Codex": what the agent's turns run on. */
+/** "Claude Code" / "Codex" / "OpenCode": what the agent's turns run on. */
 export const engineName = (agent: Pick<Agent, 'engine'>) =>
-  agent.engine === 'codex' ? 'Codex' : 'Claude Code';
+  agent.engine === 'codex' ? 'Codex' : agent.engine === 'opencode' ? 'OpenCode' : 'Claude Code';
 
 /** Its model as its engine names it ("Opus"), or "Default". */
 export function modelName(agent: Agent, engines: EngineInfo[] | undefined): string {
@@ -142,7 +143,9 @@ export function modelName(agent: Agent, engines: EngineInfo[] | undefined): stri
  */
 export function engineLine(agent: Agent, engines: EngineInfo[] | undefined): string | null {
   if (!agent.engine) return null;
-  return `${agent.engine === 'codex' ? 'Codex' : 'Claude'} · ${modelName(agent, engines)}`;
+  const engine =
+    agent.engine === 'codex' ? 'Codex' : agent.engine === 'opencode' ? 'OpenCode' : 'Claude';
+  return `${engine} · ${modelName(agent, engines)}`;
 }
 
 /**
@@ -392,6 +395,17 @@ export const answerableHere = (approval: Pick<Approval, 'connector'>, reviewHere
 
 const pendingCard = (m: AgentMessage): Approval | null =>
   m.kind === 'approval' && m.approval?.status === 'pending' ? m.approval : null;
+
+/** Every card still waiting that the phone can answer, oldest first (ids). */
+export function pendingApprovalIds(messages: AgentMessage[] | undefined): string[] {
+  if (!messages) return [];
+  return messages
+    .filter((m) => {
+      const card = pendingCard(m);
+      return !!card && answerableHere(card);
+    })
+    .map((m) => m.id);
+}
 
 /**
  * An agent's approval still waiting that the phone can answer, as far as
@@ -700,11 +714,21 @@ const EXPIRY_OUTCOME = {
 
 /** An answered card in a line, as the desk words it (with the option picked on a session's question). */
 /** A step-in card on the phone: Step in happens at the Mac (worded once, with the desk). */
-export { STEP_IN_AT_MAC, STEP_IN_ON_YOUR_MAC } from '@shipstudio/companion-protocol';
+export {
+  STEP_IN_AT_MAC,
+  STEP_IN_FROM_HERE,
+  STEP_IN_ON_YOUR_MAC,
+  stepInOnPhone,
+} from '@shipstudio/companion-protocol';
 
 export function cardOutcome(approval: Approval): string {
   // Nobody answered: what the desk's receipt says.
   if (approval.status === 'expired' && approval.expiry) return EXPIRY_OUTCOME[approval.expiry];
+  // "Save … as a skill?": Saved or Not now, as the desk says it.
+  if (approval.skill) {
+    const said = skillOutcome(approval.status);
+    if (said) return said;
+  }
   // "Needs you in its browser": the desk's words.
   if (approval.stepIn && (approval.status !== 'expired' || approval.setAside)) {
     return stepInOutcome(approval);

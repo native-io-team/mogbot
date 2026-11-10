@@ -16,14 +16,17 @@ pub mod agent_bridge;
 // The agents' browser: docs/internal/agent-browser.md.
 pub mod agent_browser;
 pub mod agents;
+pub mod app_menu;
 pub mod brand;
 pub mod brand_migration;
 pub mod cache;
 pub mod commands;
 pub mod companion;
+pub mod dock_menu;
 pub mod error_reporting;
 pub mod errors;
 pub mod external_command;
+pub mod joined;
 pub mod keychain;
 pub mod logging;
 pub mod navigation_guard;
@@ -38,30 +41,36 @@ pub mod static_server;
 pub mod types;
 pub mod user_chrome;
 pub mod utils;
+pub mod watchdog;
 pub mod webview_scripts;
 
 use tauri::Manager;
 
-#[cfg(target_os = "macos")]
-use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-#[cfg(target_os = "macos")]
-use tauri::Emitter;
-
 #[cfg(unix)]
 use std::process::Command;
 
-// Kill orphaned agent processes spawned by this app
+/// Stop this app's own agent CLIs, and the orphans a crashed run left.
+/// Run when the last window goes.
 fn cleanup_agent_processes() {
     #[cfg(unix)]
     {
         let pid = std::process::id();
-
-        // Iterate ALL agents to kill children and orphans for each
         for ag in agent::ALL_AGENTS {
             let _ = Command::new("pkill")
                 .args(["-P", &pid.to_string(), ag.process_name])
                 .output();
+        }
+    }
+    reap_orphaned_agent_processes();
+}
 
+/// Agent CLIs and `next-server` dev servers whose parent is gone (reparented
+/// to launchd, ppid 1): what a crashed run left behind. Never this app's own
+/// children, so it can run while this run's own agents start.
+fn reap_orphaned_agent_processes() {
+    #[cfg(unix)]
+    {
+        for ag in agent::ALL_AGENTS {
             let kill_script = format!(
                 r#"
                     for pid in $(pgrep -x {} 2>/dev/null); do
@@ -141,17 +150,24 @@ pub fn run() {
         Some(why) => tracing::info!(why, "[AgentBrowser] not available to agents"),
     }
 
-    // Clean up any orphaned agent processes from previous crashed sessions
-    cleanup_agent_processes();
-    tracing::debug!("Orphaned agent processes cleaned up");
-
-    // Reap serve-sim mirror daemons orphaned by a previous hard crash — they pin
-    // the mirror port and would otherwise accumulate one per crash.
-    #[cfg(target_os = "macos")]
-    {
-        commands::mobile::reap_orphaned_serve_sim();
-        tracing::debug!("Orphaned serve-sim mirrors reaped");
-    }
+    // What a previous crashed run left: orphaned agent CLIs and dev servers,
+    // and serve-sim mirror daemons (they pin the mirror port and would
+    // otherwise accumulate one per crash). A dozen `pgrep`/`ps` spawns, about
+    // a third of a second, so on a thread of its own rather than before the
+    // window: only processes whose parent is gone (ppid 1) are touched, never
+    // this run's own children.
+    let _ = std::thread::Builder::new()
+        .name("reap-orphans".into())
+        .spawn(|| {
+            let started = std::time::Instant::now();
+            reap_orphaned_agent_processes();
+            #[cfg(target_os = "macos")]
+            commands::mobile::reap_orphaned_serve_sim();
+            tracing::debug!(
+                ms = started.elapsed().as_millis() as u64,
+                "Orphaned agent processes and serve-sim mirrors reaped"
+            );
+        });
 
     // Hydrate the default agent cache from persisted AppState
     let app_state = commands::setup::read_app_state();
@@ -194,9 +210,8 @@ pub fn run() {
 
             // Install the bundled skills for the user's own agents. Idempotent,
             // and skips agents that aren't installed.
-            tauri::async_runtime::spawn(async move {
-                commands::skills::install_bundled_skills();
-            });
+            // File copies: on a blocking thread, not an async worker.
+            tauri::async_runtime::spawn_blocking(commands::skills::install_bundled_skills);
 
             // Agents: notification clicks open the agent. A card still
             // "pending" from the last run has nobody waiting on it any more;
@@ -293,6 +308,9 @@ pub fn run() {
                 }
                 agents::notify::refresh_badge(&badge_app);
             });
+            // The phone server and the agent bridge, asked every 10 s from a
+            // thread of their own: a hang is logged loudly, never silent.
+            watchdog::spawn();
             // Agents' check-ins and routines: one tick a minute, only while open.
             agents::schedule::spawn(_app.handle().clone());
             // "When…" routines: their checks, on their own minute tick.
@@ -302,6 +320,8 @@ pub fn run() {
             // Every account's limits, read without a turn: on open, then every 10 minutes.
             agents::usage_read::spawn(_app.handle().clone());
             agents::disk::spawn(_app.handle().clone());
+            // The engines' CLIs, asked now rather than when Agents first opens.
+            agents::engine::look_early();
 
             // Start the agent preview bridge (global loopback MCP server) at
             // launch so it's listening before any agent session spawns —
@@ -425,213 +445,12 @@ pub fn run() {
             // never the folder with its instructions and conversation.
             agents::attachments::grant_asset_scope(_app.handle());
 
-            // Build a custom menu on macOS that replaces Cmd+W (Close Window)
-            // with a custom "Close Tab" action that emits an event to the frontend
+            // The menu bar, its keys, and which window hears a choice
+            // (`app_menu`; the map is docs/keyboard-shortcuts.md).
             #[cfg(target_os = "macos")]
             {
-                let app = _app;
-                let close_tab = MenuItemBuilder::with_id("close_tab", "Close Tab")
-                    .accelerator("CmdOrCtrl+W")
-                    .build(app)?;
-
-                let quit_item =
-                    MenuItemBuilder::with_id("confirm_quit", format!("Quit {}", brand::NAME))
-                        .accelerator("CmdOrCtrl+Q")
-                        .build(app)?;
-
-                // Hidden menu items to register native accelerators for screenshot shortcuts.
-                // Native accelerators work even when the preview iframe has keyboard focus.
-                let screenshot_item =
-                    MenuItemBuilder::with_id("capture_screenshot", "Capture Screenshot")
-                        .accelerator("CmdOrCtrl+Shift+S")
-                        .build(app)?;
-                let crop_item = MenuItemBuilder::with_id("toggle_crop", "Crop Screenshot")
-                    .accelerator("CmdOrCtrl+Shift+C")
-                    .build(app)?;
-
-                let new_window = MenuItemBuilder::with_id("new_window", "New Window")
-                    .accelerator("CmdOrCtrl+N")
-                    .build(app)?;
-
-                // Native accelerators keep the project, workspace, mode, and
-                // inspector shortcuts working while the cross-origin preview
-                // iframe has focus.
-                let mut project_shortcuts = Vec::with_capacity(9);
-                for number in 1..=9 {
-                    project_shortcuts.push(
-                        MenuItemBuilder::with_id(
-                            format!("switch_project_{number}"),
-                            format!("Switch Project {number}"),
-                        )
-                        .accelerator(format!("CmdOrCtrl+Digit{number}"))
-                        .build(app)?,
-                    );
-                }
-
-                let mut workspace_shortcuts = Vec::with_capacity(9);
-                for number in 1..=9 {
-                    workspace_shortcuts.push(
-                        MenuItemBuilder::with_id(
-                            format!("switch_workspace_{number}"),
-                            format!("Switch Workspace {number}"),
-                        )
-                        .accelerator(format!("Alt+Digit{number}"))
-                        .build(app)?,
-                    );
-                }
-
-                let mut terminal_shortcuts = Vec::with_capacity(9);
-                for number in 1..=9 {
-                    terminal_shortcuts.push(
-                        MenuItemBuilder::with_id(
-                            format!("switch_terminal_{number}"),
-                            format!("Switch Terminal {number}"),
-                        )
-                        .accelerator(format!("Control+Digit{number}"))
-                        .build(app)?,
-                    );
-                }
-
-                let mut mode_shortcuts = Vec::with_capacity(3);
-                for number in 1..=3 {
-                    mode_shortcuts.push(
-                        MenuItemBuilder::with_id(
-                            format!("switch_workspace_mode_{number}"),
-                            format!("Switch Workspace Mode {number}"),
-                        )
-                        .accelerator(format!("CmdOrCtrl+Control+Digit{number}"))
-                        .build(app)?,
-                    );
-                }
-
-                let toggle_edit_mode =
-                    MenuItemBuilder::with_id("toggle_edit_mode", "Toggle Edit Mode")
-                        .accelerator("CmdOrCtrl+E")
-                        .build(app)?;
-
-                let toggle_inspector =
-                    MenuItemBuilder::with_id("toggle_inspector", "Toggle Inspector")
-                        .accelerator("CmdOrCtrl+I")
-                        .build(app)?;
-
-                let app_menu = SubmenuBuilder::new(app, brand::NAME)
-                    .about(None)
-                    .separator()
-                    .services()
-                    .separator()
-                    .hide()
-                    .hide_others()
-                    .show_all()
-                    .separator()
-                    .item(&quit_item)
-                    .build()?;
-
-                let file_menu = SubmenuBuilder::new(app, "File")
-                    .item(&close_tab)
-                    .separator()
-                    .item(&screenshot_item)
-                    .item(&crop_item)
-                    .build()?;
-
-                let edit_menu = SubmenuBuilder::new(app, "Edit")
-                    .undo()
-                    .redo()
-                    .separator()
-                    .cut()
-                    .copy()
-                    .paste()
-                    .select_all()
-                    .build()?;
-
-                let mut view_menu_builder = SubmenuBuilder::new(app, "View").fullscreen();
-                view_menu_builder = view_menu_builder.separator();
-                for item in &project_shortcuts {
-                    view_menu_builder = view_menu_builder.item(item);
-                }
-                view_menu_builder = view_menu_builder.separator();
-                for item in &workspace_shortcuts {
-                    view_menu_builder = view_menu_builder.item(item);
-                }
-                view_menu_builder = view_menu_builder.separator();
-                for item in &terminal_shortcuts {
-                    view_menu_builder = view_menu_builder.item(item);
-                }
-                view_menu_builder = view_menu_builder.separator();
-                for item in &mode_shortcuts {
-                    view_menu_builder = view_menu_builder.item(item);
-                }
-                view_menu_builder = view_menu_builder
-                    .separator()
-                    .item(&toggle_edit_mode)
-                    .item(&toggle_inspector);
-                let view_menu = view_menu_builder.build()?;
-
-                let window_menu = SubmenuBuilder::new(app, "Window")
-                    .item(&new_window)
-                    .separator()
-                    .minimize()
-                    .maximize()
-                    .build()?;
-
-                let menu = MenuBuilder::new(app)
-                    .item(&app_menu)
-                    .item(&file_menu)
-                    .item(&edit_menu)
-                    .item(&view_menu)
-                    .item(&window_menu)
-                    .build()?;
-
-                app.set_menu(menu)?;
-
-                // Handle custom menu items
-                let app_handle = app.handle().clone();
-                app.on_menu_event(move |_app, event| {
-                    let event_id = event.id().as_ref();
-                    // "New Window" spawns a fresh window directly — handled
-                    // before the per-window event-emit branch since it does
-                    // not require a focused webview to exist.
-                    if event_id == "new_window" {
-                        if let Err(e) = commands::projects::spawn_blank_window(&app_handle) {
-                            tracing::error!("Failed to spawn new window: {}", e);
-                        }
-                        return;
-                    }
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        if let Some(number) = event_id
-                            .strip_prefix("switch_project_")
-                            .and_then(|value| value.parse::<u8>().ok())
-                        {
-                            let _ = window.emit("switch-project-shortcut", number);
-                        } else if let Some(number) = event_id
-                            .strip_prefix("switch_workspace_mode_")
-                            .and_then(|value| value.parse::<u8>().ok())
-                        {
-                            let _ = window.emit("switch-workspace-mode-shortcut", number);
-                        } else if let Some(number) = event_id
-                            .strip_prefix("switch_workspace_")
-                            .and_then(|value| value.parse::<u8>().ok())
-                        {
-                            let _ = window.emit("switch-workspace-shortcut", number);
-                        } else if let Some(number) = event_id
-                            .strip_prefix("switch_terminal_")
-                            .and_then(|value| value.parse::<u8>().ok())
-                        {
-                            let _ = window.emit("switch-terminal-shortcut", number);
-                        } else if event_id == "toggle_edit_mode" {
-                            let _ = window.emit("toggle-edit-mode-shortcut", ());
-                        } else if event_id == "toggle_inspector" {
-                            let _ = window.emit("toggle-inspector-shortcut", ());
-                        } else if event_id == "close_tab" {
-                            let _ = window.emit("close-tab", ());
-                        } else if event_id == "confirm_quit" {
-                            agents::tray::request_quit(&app_handle, false);
-                        } else if event_id == "capture_screenshot" {
-                            let _ = window.emit("capture-screenshot", ());
-                        } else if event_id == "toggle_crop" {
-                            let _ = window.emit("toggle-crop", ());
-                        }
-                    }
-                });
+                app_menu::install(_app.handle())?;
+                dock_menu::install(_app.handle());
             }
 
             Ok(())
@@ -785,6 +604,9 @@ pub fn run() {
             commands::agents_desk::agents_routines_pause_all,
             commands::agents_desk::agents_routines_resume_all,
             commands::agents_desk::agents_open_logs,
+            commands::agents_page::agents_page,
+            commands::agents_page::agents_page_version,
+            commands::agents_page::agents_page_pin,
             commands::agents_slack::agents_slack_status,
             commands::agents_slack::agents_slack_connect,
             commands::agents_slack::agents_slack_conversations,
@@ -869,6 +691,9 @@ pub fn run() {
             commands::agents::agents_on_its_own_team,
             commands::agents::agents_on_its_own_narrow,
             commands::agents::agents_policy,
+            commands::agents::agents_skills,
+            commands::agents::agents_skill_edit,
+            commands::agents::agents_skill_remove,
             commands::agents::agents_policy_team,
             commands::agents::agents_policy_set,
             commands::agents::agents_connections,
@@ -881,6 +706,8 @@ pub fn run() {
             commands::agents::agents_conversation_new,
             commands::agents::agents_conversation_select,
             commands::agents::agents_conversation_rename,
+            commands::agents::agents_conversation_rewind,
+            commands::agents::agents_conversation_fork,
             commands::agents::agents_conversation_routine,
             commands::agents::agents_take_over,
             commands::agents::agents_hand_back,
@@ -913,6 +740,7 @@ pub fn run() {
             commands::agents::agents_watch_create,
             commands::agents::agents_watch_update,
             commands::agents::agents_watch_check_now,
+            commands::agents::agents_watch_mac_access,
             commands::agents::agents_apps_list,
             commands::agents::agents_app_connections,
             commands::agents::agents_app_connect,
@@ -1204,6 +1032,7 @@ pub fn run() {
             commands::companion_install::companion_install_android_status,
             commands::companion_install::companion_install_android_app,
             commands::companion_install::companion_install_remind,
+            commands::companion_install::companion_install_build_log,
             commands::companion::companion_set_enabled,
             commands::companion::companion_set_push,
             commands::companion::companion_retry_tailscale,
@@ -1344,7 +1173,10 @@ pub fn run() {
             // Window / Compact Mode
             commands::window::set_always_on_top,
             commands::window::set_window_title,
+            app_menu::set_menu_context,
             commands::window::close_to_background,
+            commands::window::close_secondary_window,
+            commands::window::open_new_window,
             // Clipboard (Windows terminal paste)
             commands::clipboard::read_clipboard_text,
             commands::clipboard::stage_clipboard_image,

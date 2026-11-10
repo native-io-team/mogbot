@@ -713,6 +713,14 @@ impl Companion {
         true
     }
 
+    /// The Mac status last sent, if any.
+    pub fn last_status(&self) -> Option<wire::MacStatus> {
+        self.last_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     fn conns(&self) -> std::sync::MutexGuard<'_, HashMap<u64, Conn>> {
         self.conns.lock().unwrap_or_else(|e| e.into_inner())
     }

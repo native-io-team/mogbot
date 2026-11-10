@@ -10,7 +10,7 @@ const note = (over: Partial<AgentMessage> = {}): AgentMessage => ({
   agentId: 'a1',
   ts: 0,
   kind: 'note',
-  text: 'Chrome isn’t reachable through Claude’s extension. Set up Your Chrome once (Settings → Agents → Your Chrome) so this can’t happen again.',
+  text: 'Chrome isn’t reachable through Claude’s extension. Set up Your Chrome once (Settings → Chrome) so this can’t happen again.',
   ...over,
 });
 
@@ -20,7 +20,7 @@ function SettingsOpen() {
 }
 
 describe('a note that names its fix', () => {
-  it('offers the fix as a button that opens Settings → Agents → Your Chrome', () => {
+  it('offers the fix as a button that opens Settings → Chrome', () => {
     render(
       <ModalProvider>
         <NoteLine message={note({ fix: 'user_chrome' })} />

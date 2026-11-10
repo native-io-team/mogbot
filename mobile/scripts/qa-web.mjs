@@ -19,9 +19,11 @@
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --phases send            # a send, frame by frame (not in the default run)
  *   pnpm qa:web --phases perf            # a 5,000-line chat: first render and scroll jank (not in the default run)
+ *   pnpm qa:web --phases net             # requests the Mac sees and React renders: cold start, tabs, chats, reconnect, a streaming reply (not in the default run)
  *   pnpm qa:web --phases reconnecting    # the Mac going away under an open app (not in the default run)
  *   pnpm qa:web --phases link-down       # the connection bar: away, back, the Mac's app stuck or closing (not in the default run)
  *   pnpm qa:web --out /tmp/shots
+ *   pnpm qa:web --font-scale 3.1         # Dynamic Type stand-in (AX5 ≈ 3.1): every T at min(scale, its clamp)
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
  *   QA_WEB_PORT=… QA_MOCK_PORT=… QA_CDP_PORT=… pnpm qa:web
  *
@@ -51,6 +53,8 @@ const OUT = path.resolve(opt('--out', 'QA_OUT', path.join(ROOT, 'qa-shots')));
 const ONLY = opt('--only', 'QA_ONLY', '');
 const THEMES = opt('--themes', 'QA_THEMES', 'light,dark').split(',').filter(Boolean);
 const VERBOSE = args.includes('--verbose');
+// The web has no Dynamic Type: the app reads this as its font scale (`lib/qaFontScale`).
+const FONT_SCALE = Number(opt('--font-scale', 'QA_FONT_SCALE', 0)) || 0;
 // A run that outlives this is hung: everything it started is killed and it fails.
 const MAX_MS = Number(opt('--max-ms', 'QA_MAX_MS', 75 * 60 * 1000));
 const PHASES = opt(
@@ -406,6 +410,11 @@ async function openTab() {
   const target = await res.json();
   const page = await Page.attach(target.webSocketDebuggerUrl);
   await page.send('Emulation.setDeviceMetricsOverride', VIEWPORT);
+  if (FONT_SCALE) {
+    await page.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `window.__QA_FONT_SCALE = ${FONT_SCALE};`,
+    });
+  }
   return page;
 }
 
@@ -724,7 +733,9 @@ const scrollToText = (text) => async (page) => {
   await page.eval(FIND_SCROLLER);
   for (let i = 0; i < 16; i++) {
     const seen = await page.eval(`(() => {
-      const el = [...document.querySelectorAll('body *')].filter((e) => e.innerText?.trim() === ${JSON.stringify(text)}).pop();
+      // Any case: section labels went from small capitals to sentence case.
+      const want = ${JSON.stringify(text.toLowerCase())};
+      const el = [...document.querySelectorAll('body *')].filter((e) => e.innerText?.trim().toLowerCase() === want).pop();
       if (!el) return false;
       el.scrollIntoView({ block: 'center' });
       return true;
@@ -737,6 +748,53 @@ const scrollToText = (text) => async (page) => {
   }
   throw new Error(`never found "${text}"`);
 };
+
+/** Long-press the message whose words start with `start`, as a finger held on it. */
+const holdMessage = async (page, start) => {
+  const box = await page.eval(`(() => {
+    const want = ${JSON.stringify(start)};
+    const el = [...document.querySelectorAll('[tabindex="0"]')]
+      .filter((e) => (e.innerText ?? '').trim().startsWith(want) && e.getBoundingClientRect().height > 20)
+      .pop();
+    if (!el) return null;
+    el.scrollIntoView({ block: 'center' });
+    const r = el.getBoundingClientRect();
+    return { x: r.x + Math.min(r.width / 2, 120), y: r.y + Math.min(r.height / 2, 20) };
+  })()`);
+  if (!box) throw new Error(`No message to hold: ${start}`);
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...box });
+  await page.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    ...box,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await sleep(700);
+  await page.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    ...box,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+  await sleep(700);
+};
+
+/** Open one of Acme Site's conversations by its title, from the switcher. */
+const openSiteConversation = (title) => async (page) => {
+  await page.goto(`${WEB}/conversations?id=site`);
+  await page.waitFor(
+    `document.body.innerText.includes(${JSON.stringify(title)})`,
+    20_000,
+    'the list'
+  );
+  await page.clickText(title);
+  await sleep(1800);
+};
+
+const HOURS = 'Update the winter opening hours';
+const HOURS_ASK = 'Update the winter opening hours: closed';
 
 /** Whether Catch up's bottom bar has a button labelled `label`. */
 const CATCHUP_HAS = (label) =>
@@ -793,8 +851,8 @@ const PROBE = [
   },
   {
     name: 'probe-needs-you-failures',
-    route: '/needs',
-    ready: 'Needs you',
+    route: '/catch-up',
+    ready: 'Catch up',
     act: () => sleep(1500),
     pages: 3,
     check:
@@ -831,8 +889,8 @@ const PROBE = [
   ...[
     {
       name: 'probe-needs-you-largest',
-      to: '/needs',
-      ready: 'Needs you',
+      to: '/catch-up',
+      ready: 'Catch up',
       pages: 2,
       check:
         'Needs you at Largest: names, titles and lines wrap with nothing cut through; Deny · Allow and Review whole, never squeezed into one line',
@@ -844,6 +902,37 @@ const PROBE = [
       pages: 2,
       check:
         'The risky request at Largest: the command wraps, the warning icon beside the title, Deny and Allow side by side or stacked, each label whole',
+    },
+    // Tonight's new cards at the largest size.
+    {
+      name: 'probe-crossover-largest',
+      to: '/chat/ledger',
+      ready: 'Carry on with Claude Code',
+      pages: 2,
+      check:
+        'The crossover card at Largest: the question and its paragraph wrap (scrolling inside the card when it can’t fit), Wait · Just this time · Always a row each inside the card’s edges',
+    },
+    {
+      name: 'probe-step-in-largest',
+      to: '/chat/browse',
+      ready: 'needs you in its browser',
+      check: 'The step-in card at Largest: title and lines wrap, Not now · Step in whole',
+    },
+    {
+      name: 'probe-agents-largest',
+      to: '/agents',
+      ready: 'Chief of Staff',
+      pages: 2,
+      check:
+        'Agents at Largest: the usage glance’s figure and refill chip whole (wrapping, never cut through), rows stacked with name over line',
+    },
+    {
+      name: 'probe-usage-largest',
+      to: '/usage',
+      ready: 'Usage',
+      pages: 3,
+      check:
+        'Usage at Largest: the headline, the next refill, each account row’s figure and chip whole; the controls’ labels flush with the choice',
     },
   ].map(({ to, ready, ...shot }) => ({
     ...shot,
@@ -896,7 +985,7 @@ const PROBE = [
     route: '/chat/browse',
     ready: 'needs you in its browser',
     check:
-      'The step-in card as the desk draws it: a globe, the title with the reason, the site · page title under it, “Step in on your Mac: its tab opens there.”, and only Not now (no Allow, no Step in)',
+      'The step-in card as the desk draws it: a globe, the title with the reason, the site · page title under it, “Its tab shows here and you do it by touch…”, Not now (outlined) and Step in (neutral answer, never the accent); no Allow',
   },
   {
     name: 'probe-stale-card',
@@ -921,12 +1010,13 @@ const PROBE = [
     check: 'Builder working (the live line), its header saying “on Work”',
   },
   {
+    // Settings opens Usage on a Mac that serves it: the accounts live there.
     name: 'probe-accounts',
-    route: '/settings',
-    ready: 'Settings',
-    act: scrollToText('CLAUDE CODE ACCOUNTS'),
+    route: '/usage',
+    ready: 'Usage',
+    act: scrollToText('Accounts'),
     check:
-      'Three Claude accounts: sam@example.com in use; Work out of usage (amber name, when it resets, “Builder runs only on this one”), no Use now; Personal “Not signed in”, no Use now; arrows to reorder',
+      'Accounts, one list per engine: the three Claude accounts, sam@example.com in use; Work out of usage with when it refills and Builder running only on it; Personal not signed in; each row opens its own page',
   },
   {
     name: 'probe-runs-on',
@@ -976,11 +1066,11 @@ const PROBE = [
   },
   {
     name: 'probe-carried',
-    route: '/settings',
-    ready: 'Settings',
-    act: scrollToText('CODEX ACCOUNTS'),
+    route: '/usage',
+    ready: 'Usage',
+    act: scrollToText('Codex'),
     check:
-      'Codex accounts: a neutral pill “Codex out · on Claude Code until …” under the heading (never amber), then its account “Out of usage until …”',
+      'Usage → Accounts, under the Codex heading: a neutral pill “Codex out · on Claude Code until …” (never amber), then its account, out of usage',
   },
   {
     name: 'probe-slack',
@@ -1083,10 +1173,10 @@ const LIVE = [
     ready: 'Usage',
     act: async (page) => {
       await sleep(1500);
-      await scrollToText('Spare-capacity list')(page);
+      await scrollToText('Ideas for leftover usage')(page);
     },
     check:
-      'Usage, under the accounts: "How agents use your limits" as a segmented Normal / Save / Use it all (the mode in force raised, neutral), its full name and one line under it; then "Spare-capacity list" with how many wait, a field with Add, and "Give agents something to do"',
+      'Usage, under the accounts: "How agents use your limits" as a segmented Normal / Save / Use it all (the mode in force raised, neutral), its full name and one line under it; then "Ideas for leftover usage" with how many wait, a field with Add, and "Give agents something to do"',
   },
   {
     name: 'catchup-done',
@@ -1170,6 +1260,14 @@ const LIVE = [
       'Every block kind: metric tiles with deltas and a sparkline, a two-series line chart with a legend, a stacked bar, a donut with its slices listed, a sortable table with Show all, facts, a checklist with its count, steps with done/current/failed marks, two callouts with icon and word, link chips with their domain, a tinted diff, an image; the comparison answered (Picked on Vercel), the choices and form still live with neutral answers',
   },
   {
+    name: 'blocks-brief',
+    route: '/chat/brief',
+    ready: 'Brief',
+    pages: 4,
+    check:
+      'The morning brief as one calm page: the gist, Needs you, an amber Didn’t work note, Today and Since yesterday tables (times and names never broken mid-word, counts under right-aligned headers), Usage, Your checks',
+  },
+  {
     name: 'blocks-tooltip',
     route: '/chat/blocks',
     ready: 'Blocks',
@@ -1183,6 +1281,42 @@ const LIVE = [
     },
     check:
       'Touching a chart: its column stands out (the others dim) and a tooltip names the day with every series’ value',
+  },
+  // A conversation's living page (dev/mock-page.ts): pinned above the messages.
+  {
+    name: 'page-chat',
+    route: '/chat/budget',
+    ready: 'Budget',
+    act: async (page) => {
+      await page.clickWhere(
+        `() => document.querySelector('[data-testid="page-toggle"]')`,
+        'the page’s fold'
+      );
+      await sleep(400);
+    },
+    check:
+      'Opened: above the messages, a band a step off the chat (darker in light, lighter in dark): a down chevron and “November budget”, “Updated 3 min ago · v4” muted at the right and an unpin glyph; under it two flat metric tiles (a faint hairline, no lift, unlike a reply’s), an amber note about eating out, a table and a checklist, scrolling inside the band (at most 320pt); a hairline, then the chat',
+  },
+  {
+    name: 'page-history',
+    route: '/chat/budget',
+    ready: 'Budget',
+    act: async (page) => {
+      await page.clickWhere(
+        `() => document.querySelector('[data-testid="page-when"]')`,
+        'the page’s Updated line'
+      );
+      await sleep(400);
+    },
+    check:
+      'The page’s versions, newest first: “v4 · 3 min ago · by Log the day’s card spend” over what changed and the agent’s note, then v3, v2 and “Made the page — Started the month”; v4 marked as the one shown',
+  },
+  {
+    name: 'page-folded',
+    route: '/chat/budget',
+    ready: 'Budget',
+    check:
+      'As a phone opens it: the page folded to its one line (chevron pointing right) on its tinted band; the chat takes the rest',
   },
   {
     name: 'chat-table',
@@ -1632,6 +1766,96 @@ const LIVE = [
       await sleep(800);
     },
   },
+  // Rewind, fork and edit (lib/goBack.ts), on Acme Site's opening-hours conversation.
+  {
+    name: 'goback-sheet',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await openSiteConversation(HOURS)(page);
+      await holdMessage(page, HOURS_ASK);
+    },
+    check:
+      'Long-press on your own message: the sheet with Copy, Quote, Select text, then Edit and resend, Fork from here, Rewind to here',
+    after: async (page) => {
+      await page.clickText('Cancel').catch(() => {});
+      await sleep(500);
+    },
+  },
+  {
+    name: 'goback-editing',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await holdMessage(page, HOURS_ASK);
+      await page.clickText('Edit and resend');
+      await sleep(1000);
+    },
+    check:
+      'Editing: the message back in the composer, a bar over it saying “Editing your message. Sending goes back to just before it.” with an ✕',
+    after: async (page) => {
+      await page.clickLabel('Don’t edit').catch(() => {});
+      await sleep(600);
+    },
+  },
+  {
+    name: 'goback-fork-confirm',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await holdMessage(page, HOURS_ASK);
+      await page.clickText('Fork from here');
+      await sleep(800);
+    },
+    check:
+      'Fork from here?: a sheet saying a new conversation with Acme Site, everything before the message, this one stays; what isn’t undone; Fork and Cancel',
+  },
+  {
+    name: 'goback-forked',
+    act: async (page) => {
+      await page.clickText('Fork');
+      await sleep(2200);
+    },
+    check:
+      'The fork, opened: its bar says “Fork of Update the winter opening hours”; one line: Forked from “Update the winter opening hours” before …, that one unchanged, what isn’t undone',
+    after: openSiteConversation(HOURS),
+  },
+  {
+    name: 'goback-rewound',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await holdMessage(page, HOURS_ASK);
+      await page.clickText('Rewind to here');
+      await sleep(800);
+      await page.clickText('Rewind');
+      await sleep(1500);
+      // Drawn fresh: on the web build, rows that rise in while the list
+      // reshapes under them keep react-native-reanimated's absolute
+      // position and overlap (a web artifact; a reload draws them right).
+      await page.goto(`${WEB}/chat/site`);
+      await page.waitFor(`document.body.innerText.includes('Rewound')`, 20_000, 'the fold');
+      await sleep(1500);
+    },
+    check:
+      'Rewound: the two opening-hours lines folded into one quiet “Rewound · 2 messages” row with a chevron, then the line “Went back to before …”',
+  },
+  {
+    name: 'goback-rewound-open',
+    act: async (page) => {
+      await page.clickWhere(
+        `() => [...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label').startsWith('Rewound · '))`,
+        'the Rewound row'
+      );
+      await sleep(1000);
+    },
+    check:
+      'The fold open, read as past: the row (rewind glyph, chevron down) heads a band with a rule down its left, the opening-hours lines under it muted (on the second theme, the first theme’s line too), closed by “End of what was rewound”',
+    after: async (page) => {
+      await fetch(`${MOCK}/dev/unrewind`);
+      await openSiteConversation('Rebuild the Acme site')(page);
+    },
+  },
   {
     name: 'diff',
     route: '/chat/site',
@@ -1641,6 +1865,21 @@ const LIVE = [
       await sleep(2000);
     },
     check: 'Diff screen: row tints span the full box width',
+  },
+  {
+    name: 'chat-skill-card',
+    route: '/chat/fin',
+    ready: 'Not now',
+    check:
+      'Finance’s “Save “Reconcile Stripe payouts” as a skill?” card: a graduation-cap icon, when to use it, the numbered steps, drawn as an offer (no raised sheet, a faint hairline, the title a step quieter), a quiet “1 personal detail or secret removed. Nothing waits on it. Saved, it’s listed under Skills.”, and Not now (plain) · Save (outlined, never solid), no ⋯',
+  },
+  {
+    name: 'agent-sheet-skills',
+    route: '/agent/fin',
+    ready: 'Finance',
+    act: scrollToText('SKILLS'),
+    check:
+      'Finance’s sheet: “Skills” with “Save new skills · Ask me” (a menu of Automatically, Ask me, Off), then “Export invoices from Xero” with when to use it, and a muted line saying anything that read outside content asks first',
   },
   {
     name: 'agent-sheet-site',
@@ -1735,23 +1974,13 @@ const LIVE = [
       'The icon sheet over the agent: Icon and Done, the agent’s key at 112pt, the search reading “money”, category chips (All, Featured, Accessibility…), “N for “money””, then a grid of small keys in the agent’s colourway: the Money legend first, then Lucide’s banknote, coins, currency, wallet, dollar sign…',
   },
   {
-    name: 'agent-sheet-level',
-    route: '/agent/fin',
-    ready: 'Finance',
-    act: async (page) => {
-      await page.clickText('How much it does on its own');
-      await sleep(600);
-    },
-    check:
-      'Finance’s sheet with its own level: the choice sheet titled “How much it does on its own”, “Same as team (Steady)” first, then Careful, Steady, Bold, Unleashed, and Cancel',
-  },
-  {
     name: 'agent-sheet-level-row',
     route: '/agent/fin',
     ready: 'Finance',
-    act: scrollToText('How much it does on its own'),
+    // The slider's end label: “Independence” is also a row of What it can do.
+    act: scrollToText('Asks a lot'),
     check:
-      'The row “How much it does on its own”, value “Careful”, with its one line under it, above the Admin switch',
+      'Finance’s own level: the row “Independence” with the four-stop slider on Careful (Careful, Steady, Bold, Unleashed) and “Use the team’s (Steady)”, above the Admin switch',
   },
   {
     name: 'agent-sheet-chief',
@@ -1855,15 +2084,15 @@ const LIVE = [
   {
     name: 'on-its-own',
     route: '/on-its-own?id=fin',
-    ready: 'What can Finance do on its own?',
+    ready: 'Finance’s independence',
     pages: 3,
     check:
-      'What can Finance do on its own?: a quiet box “Unleashed · its own level” and its line; ALWAYS ASKS (money, passwords, deleting; exact words); WITHOUT ASKING, BEYOND ITS LEVEL in sections: Rules (Run npm test, Run pnpm build with the quote, Run ls for every agent) each with Remove; Plans you OK’d with Take back; Apps (Gmail with Remove and Read only); Browser with Turn off; Team and accounts (admin Turn off, Slack Ask first, the Work account with no button). Quiet text buttons, never the accent; the foot line',
+      'Finance’s independence: a quiet box “Unleashed · its own level” and its line; ALWAYS ASKS (money, passwords, deleting; exact words); WITHOUT ASKING, BEYOND ITS LEVEL in sections: Rules (Run npm test, Run pnpm build with the quote, Run ls for every agent) each with Remove; Plans you OK’d with Take back; Apps (Gmail with Remove and Read only); Browser with Turn off; Team and accounts (admin Turn off, Slack Ask first, the Work account with no button). Quiet text buttons, never the accent; the foot line',
   },
   {
     name: 'on-its-own-narrowed',
     route: '/on-its-own?id=site',
-    ready: 'What can Acme Site do on its own?',
+    ready: 'Acme Site’s independence',
     act: async (page) => {
       // The mock keeps what was taken away, so the second theme finds it gone already.
       await page.clickLabel('Read only').catch(() => {});
@@ -1875,7 +2104,7 @@ const LIVE = [
   {
     name: 'on-its-own-team',
     route: '/on-its-own',
-    ready: 'What your agents do on their own',
+    ready: 'Each agent’s independence',
     pages: 2,
     check:
       'The team: Bold in a quiet box with its line and the always-asks line; RULES FOR EVERY AGENT (Run ls, Remove); AGENTS, one row each with its level and how much stands beyond it, each opening its own list',
@@ -1885,7 +2114,7 @@ const LIVE = [
     route: '/agent/fin',
     ready: 'Finance',
     check:
-      'Finance’s sheet: “What it does on its own” with a shield, among Instructions, Memory and Files',
+      'Finance’s sheet: “Without asking, beyond its level” with a shield, among Instructions, Memory and Files',
   },
   {
     name: 'settings-apps',
@@ -1945,6 +2174,79 @@ const LIVE = [
     },
     check:
       'Monthly picked: one more chip in How often, then Every month / Every 3 months and one “On the [1st] [day]” row like the time row; the echo says “Every month on the 1st at 9:00 AM”, and the Mac confirms the first run',
+  },
+  {
+    name: 'schedule-when',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    check:
+      'New routine, “At a time / When…” with When… on, then the desk’s “When…” composer: WHEN THIS HAPPENS over five sources (Linear among them, the Mac has a Linear app), each with how it’s checked (“Free · checked from your Mac”), the first ticked; CHECK EVERY 5/10/30 min/1 hour with 10 min on; WHAT; the echo box says “Which…”-free words: “When someone mentions you on GitHub” and “Checks are free. The first check only notes what’s already there…”; Cancel and a neutral Add (not the agent’s colour), off until What is filled',
+  },
+  {
+    name: 'schedule-when-folder',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('A new file appears in a folder');
+      await sleep(400);
+      await page.clickText('~/Downloads');
+      await sleep(300);
+      await page.type('File the invoice and tell me the total');
+      await sleep(400);
+    },
+    check:
+      'A new file appears in a folder ticked: chips of the Mac’s folders (~/Downloads on, ~/Desktop, ~/Documents) and “Folders your Mac offers. For another, set it up on your Mac.”; no path field; CHECK EVERY 1/5/10/30 min; the echo “When a new file appears in /Users/sam/Downloads — File the invoice and tell me the total” and “Checks are free…”; Add enabled',
+  },
+  {
+    name: 'schedule-when-custom',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('Something else…');
+      await sleep(400);
+      await page.type('a new email from Dana about the launch');
+      await sleep(300);
+      await page.clickText('Gmail');
+      await sleep(400);
+    },
+    check:
+      'Something else… ticked: the “What to look for” field filled, THROUGH with Gmail and Linear chips (Gmail on), CHECK EVERY 15/30 min/1 hour/4 hours with 30 min on; the echo “When Acme Site finds “a new email from Dana about the launch”” and “Each check uses a little of Acme Site’s usage and can only read that app, up to 24 a day. The first check…”',
+  },
+  {
+    name: 'schedule-when-mail',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('An email arrives in Mail');
+      await sleep(400);
+      await page.type('billing@northwind.com', '[aria-label="Only from"]');
+      await page.type('invoice', '[aria-label="Only with these words"]');
+      await page.type('File it and tell me the total', '[aria-label="What to do when it happens"]');
+      await sleep(400);
+    },
+    check:
+      'An email arrives in Mail ticked (“Free · reads Mail on your Mac”): a From field with billing@northwind.com and a words field with invoice, no Check again (the Mac can read Mail); CHECK EVERY 1/5/10/30 min; the echo “When an email arrives in Mail from billing@northwind.com mentioning “invoice” — File it and tell me the total” and “Checks are free. What a message says is only information to Acme Site, and it asks you before replying. The first check…”; Add enabled',
+  },
+  {
+    name: 'schedule-when-text-access',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('A text arrives in Messages');
+      await sleep(400);
+      await page.type('Tell me what they said', '[aria-label="What to do when it happens"]');
+      await sleep(400);
+    },
+    check:
+      'A text arrives in Messages ticked: the From field empty with its placeholder, a ghost Check again under it; no echo; the line under it is the Mac’s own words, “Reading Messages needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot.”; Add off',
+  },
+  {
+    name: 'agent-sheet-when',
+    route: '/agent/site',
+    ready: 'Acme Site',
+    act: scrollToText('When something happens'),
+    check:
+      'WHEN SOMETHING HAPPENS: one row with a bolt, “When someone mentions you on GitHub”, “Triage it and tell me if it’s urgent”, “Checks every 10 min · checked 4 min ago · last found 2 …” and an ellipsis (it can be acted on); no “Set up and changed on your Mac.” line',
   },
   {
     name: 'new-agent',
@@ -2125,26 +2427,26 @@ const LIVE = [
   {
     name: 'settings-accounts',
     route: '/settings',
-    ready: 'Personal',
-    act: scrollToText('CLAUDE CODE ACCOUNTS'),
+    ready: 'Accounts & usage',
+    act: scrollToText('Accounts & usage'),
     check:
-      'CLAUDE CODE ACCOUNTS: sam@example.com with a neutral tick (Max plan · this Mac’s own sign-in; In use · 5-hour …% left), Work (me@work.example · Max plan; Ready · 5-hour 20% left; “QA 2 runs only on this one”) and Personal, each Ready with Use now and up/down arrows (none past the ends); then Codex accounts; the footer saying agents carry on with the next and that accounts are added on the Mac',
+      'ACCOUNTS & USAGE: the same compact card as the Agents list (“Usage” over the total and how many accounts, a refill chip, a chevron, the bar in the work order), opening Usage; no second account list in other words, no read-only Usage rows (the mode and the list are on Usage)',
   },
   {
     name: 'settings-accounts-swapped',
-    route: '/settings',
-    ready: 'Personal',
+    route: '/usage-account?engine=claude&account=w1',
+    ready: 'Limits',
     act: async (page) => {
-      await scrollToText('CLAUDE CODE ACCOUNTS')(page);
       await page.clickLabel('Use Work now');
       await sleep(900);
     },
     after: async (page) => {
-      await page.clickLabel('Use sam@example.com now');
+      await page.goto(`${WEB}/usage-account?engine=claude&account=default`);
+      await sleep(1500);
+      await page.clickLabel('Use sam@example.com now').catch(() => undefined);
       await sleep(600);
     },
-    check:
-      'After Use now on Work: Work first with the tick and In use, sam@example.com second and Ready with Use now',
+    check: 'After Use this one now on Work’s page: its keycap 1 and “In use”, no Use this one now',
   },
   {
     name: 'controls-runs-on',
@@ -2153,14 +2455,6 @@ const LIVE = [
     act: scrollToText('RUNS ON'),
     check:
       'Agent controls: RUNS ON with Any account (“In order, carrying on with the next when one runs out”), sam@example.com, Work ticked (“Only this one, never another”) and Personal',
-  },
-  {
-    name: 'settings-usage',
-    route: '/settings',
-    ready: 'Use it all before reset',
-    act: scrollToText('Spare-capacity list'),
-    check:
-      'Usage: "Use it all before reset" with its line; "Claude 5-hour limit resets … · 62% left"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
   },
   {
     name: 'connection',
@@ -2328,7 +2622,12 @@ async function linkDownShots(page) {
         'One quiet line, “Back in touch with your Mac”, where the bar was'
       );
       await sleep(3500);
-      await shot(`link-back-gone-${tab}`, theme, `${route} (a moment later)`, 'Nothing: the list as usual');
+      await shot(
+        `link-back-gone-${tab}`,
+        theme,
+        `${route} (a moment later)`,
+        'Nothing: the list as usual'
+      );
     }
 
     // The app on the Mac stuck: the socket is taken and nothing is said.
@@ -2346,13 +2645,28 @@ async function linkDownShots(page) {
     );
     await open('/catch-up');
     await sleep(1500);
-    await shot('link-stuck-catch-up', theme, '/catch-up (the Mac’s app hung)', 'The same bar, same words, on Catch up');
+    await shot(
+      'link-stuck-catch-up',
+      theme,
+      '/catch-up (the Mac’s app hung)',
+      'The same bar, same words, on Catch up'
+    );
     await page.clickText('What to check').catch((e) => page.errors.push(e.message));
     await sleep(600);
-    await shot('link-stuck-checks-catch-up', theme, '/catch-up (What to check)', 'Quit it and open it again; it may catch up by itself');
+    await shot(
+      'link-stuck-checks-catch-up',
+      theme,
+      '/catch-up (What to check)',
+      'Quit it and open it again; it may catch up by itself'
+    );
     await open('/chat/chief');
     await sleep(2000);
-    await shot('link-stuck-chat', theme, '/chat/chief (the Mac’s app hung)', 'The chat’s bar over the composer says the same words');
+    await shot(
+      'link-stuck-chat',
+      theme,
+      '/chat/chief (the Mac’s app hung)',
+      'The chat’s bar over the composer says the same words'
+    );
 
     // The app said goodbye as it closed (a quit, an update's restart).
     await startMock();
@@ -2700,6 +3014,16 @@ const scrollChatToEnd = async (page) => {
   await page.eval('window.__qaScroller && (window.__qaScroller.scrollTop = 0)');
   await sleep(500);
 };
+/** Scroll back through an inverted chat until a text is drawn (or 20 screens, then give up). */
+const scrollBackTo = async (page, text) => {
+  await page.eval(FIND_SCROLLER);
+  for (let i = 0; i < 20; i++) {
+    const [n] = await countIn(page, [text]);
+    if (n > 0) return;
+    await page.eval('window.__qaScroller && (window.__qaScroller.scrollTop += 600)');
+    await sleep(350);
+  }
+};
 /** Where on screen a text is drawn (the inverted list's DOM order is newest first). */
 const topOf = (page, text) =>
   page.eval(`(() => {
@@ -2830,7 +3154,9 @@ const TORTURE = [
       const first = await topOf(page, 'Written first');
       const second = await topOf(page, 'Written second');
       if (first == null || second == null || first > second)
-        page.errors.push('failed: an overtaken line is shown below the line written after it');
+        page.errors.push(
+          `failed: an overtaken line is shown below the line written after it (tops ${first} / ${second})`
+        );
     },
     check:
       'After a duplicated event, two lines out of order, a burst of 12, a streamed reply, a late draft, a card answered and a reply edited: each line once, in time order, no leftover draft, the newest line in view',
@@ -2845,7 +3171,13 @@ const TORTURE = [
       await startMock('--torture');
       await sleep(6000);
       await scrollChatToEnd(page);
-      await expectCounts(page, ['Got both.', 'Plan for the week?'], [1, 1]);
+      await expectCounts(page, ['Got both.'], [1]);
+      // Older lines sit further back than the list draws ahead (`windowSize`),
+      // more so after torture-events added a burst and a long reply: a count
+      // taken at the newest end saw 0 of them now and then without anything
+      // missing. Read back to it, then count.
+      await scrollBackTo(page, 'Plan for the week?');
+      await expectCounts(page, ['Plan for the week?'], [1]);
     },
     check:
       'After the Mac restarts mid-chat: reconnected, every line once, nothing stale or doubled',
@@ -3307,6 +3639,227 @@ async function perfLongChat(page) {
   log('perf', JSON.stringify(results));
 }
 
+// ---- Requests and renders (`--phases net`) ------------------------------------------
+
+/**
+ * Before any page script: a stand-in for the React DevTools hook that counts
+ * commits and the components each one rendered (by name), so a run can say
+ * how much of the tree an event or a tap re-renders. React sees a hook and
+ * turns its profiling timers on, which is what dates each fiber's render.
+ */
+const RENDER_PRELUDE = `(() => {
+  const counts = { commits: 0, renders: 0, byName: {}, roots: {} };
+  window.__renders = counts;
+  let since = 0;
+  const nameOf = (f) => {
+    const t = f.type;
+    if (!t) return '?';
+    if (typeof t === 'function') return t.displayName || t.name || 'anon';
+    if (t.render) return t.displayName || t.render.displayName || t.render.name || 'forwardRef';
+    if (t.type) return t.displayName || nameOf({ type: t.type });
+    return '?';
+  };
+  window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+    supportsFiber: true,
+    renderers: new Map(),
+    inject(r) { this.renderers.set(1, r); return 1; },
+    onScheduleFiberRoot() {},
+    onCommitFiberUnmount() {},
+    onPostCommitFiberRoot() {},
+    checkDCE() {},
+    onCommitFiberRoot(_id, root) {
+      counts.commits++;
+      // A render whose parent component didn't render is where it started (a
+      // store subscription, state, context): counted apart as \`roots\`.
+      const stack = [[root.current, false]];
+      while (stack.length) {
+        const [f, parentRendered] = stack.pop();
+        let rendered = parentRendered;
+        if ([0, 1, 11, 14, 15].includes(f.tag)) {
+          // Visited this commit (dated) and not bailed out (PerformedWork).
+          rendered = f.actualStartTime >= since && (f.flags & 1) === 1;
+          if (rendered) {
+            counts.renders++;
+            const n = nameOf(f);
+            counts.byName[n] = (counts.byName[n] || 0) + 1;
+            if (!parentRendered) {
+              // Named with the component that drew it, which is usually the one to look at.
+              const o = f._debugOwner;
+              const k = o && o.type ? n + ' in ' + nameOf(o) : n;
+              counts.roots[k] = (counts.roots[k] || 0) + 1;
+            }
+          }
+        }
+        if (f.sibling) stack.push([f.sibling, parentRendered]);
+        if (f.child) stack.push([f.child, rendered]);
+      }
+      since = performance.now();
+    },
+  };
+})()`;
+
+const resetRenders = (page) =>
+  page.eval(
+    `(() => { const c = window.__renders; c.commits = 0; c.renders = 0; c.byName = {}; c.roots = {}; })()`
+  );
+const readRenders = (page) =>
+  page.eval(`(() => { const c = window.__renders;
+    const top = Object.entries(c.byName).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const roots = Object.entries(c.roots).sort((a, b) => b[1] - a[1]).slice(0, 12);
+    return { commits: c.commits, renders: c.renders, top: Object.fromEntries(top), roots: Object.fromEntries(roots) }; })()`);
+const resetRequests = () => fetch(`${MOCK}/dev/requests?reset=1`).then((r) => r.json());
+async function readRequests() {
+  const all = await (await fetch(`${MOCK}/dev/requests`)).json();
+  const byMethod = {};
+  for (const r of all) byMethod[r.method] = (byMethod[r.method] ?? 0) + 1;
+  // The most requests inside any 250 ms: how hard a burst lands on the Mac.
+  let burst = 0;
+  for (let i = 0, j = 0; i < all.length; i++) {
+    while (all[i].at - all[j].at > 250) j++;
+    burst = Math.max(burst, i - j + 1);
+  }
+  return { total: all.length, burst250ms: burst, byMethod };
+}
+/** Requests and renders over `work`. */
+async function measured(page, label, work) {
+  await resetRequests();
+  await resetRenders(page);
+  const t0 = Date.now();
+  const extra = (await work()) ?? {};
+  const out = {
+    ms: Date.now() - t0,
+    ...extra,
+    requests: await readRequests(),
+    renders: await readRenders(page),
+  };
+  log('net', label, JSON.stringify(out));
+  return out;
+}
+const navigate = (page, to) =>
+  page.eval(
+    `history.pushState(null, '', ${JSON.stringify(to)}); dispatchEvent(new PopStateEvent('popstate'))`
+  );
+const shows = (text) => `document.body.innerText.includes(${JSON.stringify(text)})`;
+
+async function netAndRenders(page) {
+  const results = {};
+  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: RENDER_PRELUDE });
+  await page.goto(`${WEB}/agents`);
+  await page.waitFor(shows('Chief of Staff'), 60_000, 'the agents list');
+  await sleep(4000);
+  // Cold start with a saved copy: the reload reads it, then reconnects.
+  results.cold = await measured(page, 'cold', async () => {
+    await page.send('Page.navigate', { url: `${WEB}/agents` });
+    const t0 = Date.now();
+    let spinner = false;
+    for (;;) {
+      const s = await page
+        .eval(
+          `({ row: ${shows('Chief of Staff')}, spin: !!document.querySelector('[role="progressbar"]') })`
+        )
+        .catch(() => ({}));
+      if (s.spin) spinner = true;
+      if (s.row) break;
+      if (Date.now() - t0 > 60_000) throw new Error('cold start never showed the list');
+      await sleep(20);
+    }
+    const firstRowMs = Date.now() - t0;
+    await sleep(5000);
+    return { firstRowMs, spinnerBeforeRow: spinner };
+  });
+  // Nothing happening: what an idle, connected app costs.
+  results.idle = await measured(page, 'idle', () => sleep(10_000));
+  // Tabs, three times round.
+  results.tabs = await measured(page, 'tabs', async () => {
+    for (let i = 0; i < 3; i++) {
+      for (const [to, text] of [
+        ['/catch-up', 'Catch up'],
+        ['/projects', 'Projects'],
+        ['/search', 'Search'],
+        ['/agents', 'Chief of Staff'],
+      ]) {
+        await navigate(page, to);
+        await page.waitFor(shows(text), 10_000, to);
+        await sleep(400);
+      }
+    }
+  });
+  // A chat, opened and left three times: the first open reads it, the rest show the copy.
+  results.chat = await measured(page, 'chat', async () => {
+    const opens = [];
+    for (let i = 0; i < 3; i++) {
+      const t0 = Date.now();
+      await navigate(page, '/chat/site');
+      await page.waitFor(
+        `location.pathname === '/chat/site' && document.querySelector('textarea')`,
+        15_000,
+        'the chat'
+      );
+      opens.push(Date.now() - t0);
+      await sleep(1500);
+      await page.eval('history.back()');
+      await page.waitFor(`location.pathname === '/agents'`, 10_000, 'back');
+      await sleep(800);
+    }
+    return { openMs: opens };
+  });
+  // Tapping between chats quickly: the burst the Mac sees.
+  results.burst = await measured(page, 'burst', async () => {
+    for (let i = 0; i < 3; i++) {
+      for (const id of ['main', 'site', 'main', 'site']) {
+        await navigate(page, `/chat/${id}`);
+        await sleep(120);
+        await page.eval('history.back()');
+        await sleep(120);
+      }
+    }
+    await sleep(2000);
+  });
+  // The Mac going away and coming back under an open app.
+  results.reconnect = await measured(page, 'reconnect', async () => {
+    await killMock();
+    await sleep(3000);
+    await startMock();
+    const t0 = Date.now();
+    await page.waitFor(
+      `!/Reconnecting|Can.t reach|Reaching|Not connected/.test(document.body.innerText)`,
+      30_000,
+      'reconnected'
+    );
+    const backMs = Date.now() - t0;
+    await sleep(5000);
+    return { backMs };
+  });
+  // A reply streaming into the open chat: what each draft event re-renders.
+  await navigate(page, '/chat/site');
+  await page.waitFor(`document.querySelector('textarea')`, 15_000, 'the chat');
+  await sleep(1500);
+  results.stream = await measured(page, 'stream', async () => {
+    await page.type('Write me a long reply please', 'textarea');
+    await sleep(200);
+    await page.clickWhere(
+      `() => [...document.querySelectorAll('[aria-label]')].find((e) => /^(Send|Queue)/.test(e.getAttribute('aria-label')))`,
+      'Send'
+    );
+    await sleep(10_000);
+  });
+  // The same, watched from the agents list: what one agent's turn costs the rows.
+  await sleep(5000);
+  results.streamList = await measured(page, 'streamList', async () => {
+    await page.type('And another long one', 'textarea');
+    await sleep(200);
+    await page.clickWhere(
+      `() => [...document.querySelectorAll('[aria-label]')].find((e) => /^(Send|Queue)/.test(e.getAttribute('aria-label')))`,
+      'Send'
+    );
+    await sleep(300);
+    await page.eval('history.back()');
+    await sleep(10_000);
+  });
+  await writeFile(path.join(OUT, 'net.json'), JSON.stringify(results, null, 2));
+  log('net', 'written', path.join(OUT, 'net.json'));
+}
+
 async function main() {
   for (const p of [WEB_PORT, MOCK_PORT, CDP_PORT]) {
     if (!(await portFree(p)))
@@ -3413,14 +3966,14 @@ async function main() {
         route: '/agents',
         ready: 'Agents',
         check:
-          'Under the Agents title, one compact card before the first row: "Usage" over "72% left · 2 accounts", a refill chip and a chevron at the right, then a bar of one segment per account, the fullest first, with gaps and rounded ends; air above and below, neutral ink',
+          'Under the Agents title, one compact card before the first row: "Usage" over "72% left · 2 accounts", a refill chip and a chevron at the right, then a bar of one segment per account in the work order, with gaps and rounded ends; air above and below, neutral ink',
       },
       {
         name: 'usage-total',
         route: '/usage',
         ready: 'Usage',
         check:
-          'The total first: "All accounts", a large "72% left", "across 2 accounts", "Next refill in …". One bar of two segments, Personal (full) on the left, then the account in use (44%); under it each account named with its % left and a ⟳ chip. Then "ACCOUNTS": one grouped card with a row each (keycap 1 filled for the one in use, name, % left, a thin bar, the pill and ⟳ countdown, a chevron).',
+          'The total first: "All accounts", a large "72% left", "across 2 accounts", "Next refill in …". One bar, a segment per account in the work order (the one in use first); nothing listed under it in the card. Then "ACCOUNTS": one grouped card with a row each (keycap 1 filled for the one in use, name, % left, a thin bar, the pill and ⟳ countdown, a chevron).',
       },
       {
         name: 'usage-account',
@@ -3460,7 +4013,7 @@ async function main() {
           ready: 'Usage',
           act: scrollToText('Accounts'),
           check:
-            'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) with each account named and its room under it, and the next reset; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
+            'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) and the next refill; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
         },
       ]);
     }
@@ -3491,7 +4044,15 @@ async function main() {
 
   if (phase('first-run')) {
     await startMock('--solo');
+    // A Mac just set up has no history: drop the offline copy earlier phases
+    // saved for this same Mac, or the Chief's chat opens on their lines and
+    // its first-run ideas (shown only on an empty chat) never appear. Before
+    // the app's code runs: the open app writes its copy again as it unloads.
+    const { identifier } = await page.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `Object.keys(localStorage).filter((k) => /cache-.*\\.json$/.test(k)).forEach((k) => localStorage.removeItem(k))`,
+    });
     await page.goto(`${WEB}/agents`);
+    await page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier });
     await sleep(4000);
     await each(FIRST_RUN);
   }
@@ -3547,6 +4108,13 @@ async function main() {
     await page.goto(`${WEB}/agents`);
     await sleep(4000);
     await perfLongChat(page);
+  }
+
+  if (phase('net')) {
+    await startMock();
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await netAndRenders(page);
   }
 
   if (phase('torture')) {

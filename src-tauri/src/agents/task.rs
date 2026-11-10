@@ -59,6 +59,7 @@
 //! agent can't commit in its copy itself; it doesn't need to, since the turn's
 //! end commits for it, and the prompt says so.
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -1455,11 +1456,12 @@ pub async fn record_turn(
     }
     summary.warning = warning;
     // The turn may have sorted out what stopped the last Keep: ask again.
-    let _ = store::update(agent_id, |a| {
+    store::update(agent_id, |a| {
         if let Some(c) = a.copy.as_mut().filter(|c| c.id == copy.id) {
             c.stuck = None;
         }
-    });
+    })
+    .or_log("a copy's cleared Keep problem");
     Some(summary)
 }
 
@@ -1495,11 +1497,12 @@ async fn dropped_if_unused(agent_id: &str, copy: &TaskCopy) -> bool {
     if remove(copy, Branch::Force).await.is_err() {
         return false;
     }
-    let _ = store::update(agent_id, |a| {
+    store::update(agent_id, |a| {
         if a.copy.as_ref().is_some_and(|c| c.id == copy.id) {
             a.copy = None;
         }
-    });
+    })
+    .or_log("an unused copy's removal");
     true
 }
 
@@ -1654,11 +1657,22 @@ pub fn holder_of(path: &str) -> Option<(String, String, String)> {
 /// The workspace removed an agent's copy (confirmed by name): the agent no
 /// longer holds it. Its branch stays, as the workspace's remove promises.
 pub fn forget(agent_id: &str, path: &str) {
-    let _ = store::update(agent_id, |a| {
-        if a.copy.as_ref().is_some_and(|c| same_path(&c.path, path)) {
+    // Paths compared outside the registry lock (canonicalising reads the
+    // disk); the update drops only the copy that was compared.
+    let Some(held) = store::get(agent_id)
+        .ok()
+        .and_then(|a| a.copy)
+        .map(|c| c.path)
+        .filter(|held| same_path(held, path))
+    else {
+        return;
+    };
+    store::update(agent_id, |a| {
+        if a.copy.as_ref().is_some_and(|c| c.path == held) {
             a.copy = None;
         }
-    });
+    })
+    .or_log("a copy the workspace removed");
 }
 
 /// At launch: forget copies whose folder is gone, and tidy copies of ours no
@@ -1671,7 +1685,7 @@ pub async fn sweep() {
     for agent in &agents {
         if let Some(copy) = &agent.copy {
             if !Path::new(&copy.path).is_dir() {
-                let _ = store::update(&agent.id, |a| a.copy = None);
+                store::update(&agent.id, |a| a.copy = None).or_log("a copy whose folder is gone");
                 let _ = git(Path::new(&copy.project), &["worktree", "prune"]).await;
             }
             projects.push(copy.project.clone());

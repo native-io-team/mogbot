@@ -124,12 +124,17 @@ export default function Agents() {
   );
   // A row that needs you says what for ("Needs your OK · Wants to edit
   // Hero.tsx"), which only the chat knows: its newest page is read for any
-  // agent waiting on you whose saved chat doesn't hold the request yet.
+  // agent waiting on you whose saved chat doesn't hold the request yet. One
+  // read since connecting is enough: events keep a read chat current, so a
+  // reconnect doesn't read them all again.
   const unsaid = useApp(
     useShallow((s) =>
       live
         ? (s.overview?.agents ?? [])
-            .filter((a) => needsYou(a) && !pendingApproval(s.chats[a.id]?.messages))
+            .filter(
+              (a) =>
+                needsYou(a) && !s.chats[a.id]?.loaded && !pendingApproval(s.chats[a.id]?.messages)
+            )
             .map((a) => `${a.id}:${a.pendingApprovals}`)
         : []
     )
@@ -144,7 +149,9 @@ export default function Agents() {
     }))
   );
   // Rooms only from a Mac that does them (`welcome.features`): an older one shows none.
-  const rooms = useApp((s) => (roomsOffered(s.welcome) ? s.rooms : null));
+  // While it's away, the saved rooms (kept only from a Mac that did them), as the
+  // agents above them are, rather than the list losing its Rooms until it's back.
+  const rooms = useApp((s) => (s.welcome ? (roomsOffered(s.welcome) ? s.rooms : null) : s.rooms));
   // A room's row says "Needs your OK" for a card left waiting after the turn
   // ended, which only its thread shows: as for agents, its newest page is read
   // for any room with a member waiting on you whose saved thread doesn't hold
@@ -159,8 +166,11 @@ export default function Agents() {
           const owed = agents
             .filter((a) => r.members.includes(a.id) && (a.pendingApprovals ?? 0) > 0)
             .reduce((n, a) => n + (a.pendingApprovals ?? 0), 0);
-          const thread = s.chats[roomKey(r.id)]?.messages;
-          return owed > 0 && !(thread && pendingHere(thread)) ? `${r.id}:${owed}` : '';
+          const chat = s.chats[roomKey(r.id)];
+          const thread = chat?.messages;
+          return owed > 0 && !chat?.loaded && !(thread && pendingHere(thread))
+            ? `${r.id}:${owed}`
+            : '';
         })
         .filter(Boolean);
     })

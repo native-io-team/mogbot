@@ -121,6 +121,8 @@ pub struct Agent {
     pub sent: BTreeSet<&'static str>,
     /// A recipe's key look and suggested independence (`recipe`).
     pub look: Option<review::ProposedLook>,
+    /// A recipe's saved skills: name, when to use it, the steps.
+    pub skills: Vec<(String, String, String)>,
 }
 
 /// Everything read from one file, folder or reply.
@@ -741,6 +743,7 @@ pub fn to_review(e: &Export, chief: &str) -> (Review, Vec<String>, usize) {
             "apps": apps,
             "logins": logins,
             "look": a.look,
+            "skills": a.skills.iter().map(|(n, w, s)| json!({ "name": m(n), "when": m(w), "steps": m(s) })).collect::<Vec<_>>(),
         });
         match review::proposal(format!("x{i}"), &args, chief) {
             Ok(p)

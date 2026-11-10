@@ -460,10 +460,27 @@ export const agentsRoomsScenarios: Scenario[] = [
     id: 'agents-rooms-many',
     title: 'Rooms — a dozen rooms in the sidebar',
     looksRightWhen:
-      'The Rooms section sits right after the agents, above “Hidden”. Each room is its own outlined initials badge (PL, ME, HL, BD, AR, SC, IU…), so Pricing launch and Investor update (same members) still look different. Rooms with nothing unread are one line; those with unread (Board deck, Native release 42, Partnerships) show one line of preview and a dot. Acme relaunch has the muted bell. New room under New agent is the same left-aligned row with its icon in the badge column.',
+      'The Rooms section sits right after the agents, above “Hidden”, under a folding header like a group’s: a chevron turned down, “Rooms”, and the count on the right, its words on the agents’ names column. Each room is its own outlined initials badge (PL, ME, HL, BD, AR, SC, IU…) the size of an agent’s key, its name on the same column as the agents’ names, so Pricing launch and Investor update (same members) still look different. Rooms with nothing unread are one line; those with unread (Board deck, Native release 42, Partnerships) show one line of preview, the name heavier, no dot. Acme relaunch has the muted bell.',
     requires: '.agents-list__row--room',
     openSelector: AGENTS_TAB,
     steps: [openRoom(LAUNCH)],
+    commands: roomCommands(THREAD, team(IDLE), MANY_ROOMS),
+  },
+  {
+    id: 'agents-rooms-folded',
+    title: 'Rooms — the Rooms section folded',
+    looksRightWhen:
+      'The Chief’s chat is open. The Rooms header has its chevron pointing right and the count 12; under it only the rooms with something unread (Board deck, Native release 42, Partnerships) still show, so folding never hides something new. The quiet rooms are gone until it is unfolded.',
+    requires: '.agents-list__group-toggle[aria-expanded="false"]',
+    openSelector: AGENTS_TAB,
+    storage: {
+      'shipstudio.agents.groups': JSON.stringify({
+        mode: 'off',
+        groups: [],
+        assign: {},
+        collapsed: ['rooms'],
+      }),
+    },
     commands: roomCommands(THREAD, team(IDLE), MANY_ROOMS),
   },
   {
@@ -486,7 +503,7 @@ export const agentsRoomsScenarios: Scenario[] = [
     id: 'agents-room-members',
     title: 'Rooms — Members and name, six agents in',
     looksRightWhen:
-      'The “Members and name” dialog over Pricing launch with Lead Gen and Hiring also ticked: “Members · 6 of 6”, the rest of the team disabled. “When nobody is mentioned” is one menu button reading “Chief of Staff” (not a segmented row wrapping onto two lines). The intro line has readable leading. Name field shows “Pricing launch”.',
+      'The “Members and name” dialog over Pricing launch with Lead Gen and Hiring also ticked: “Members” with “6 of 6 · full” on the right, the rest of the team dimmed and unpickable (hovering one says a room holds 6 at most). Roles show no folder path (Acme Site: “Owns the Acme marketing site rebuild.”). “When nobody is mentioned” is one menu button reading “Chief of Staff” (not a segmented row wrapping onto two lines). The intro line has readable leading. Name field shows “Pricing launch”.',
     requires: '.agent-room-editor__lead-select',
     openSelector: AGENTS_TAB,
     steps: [

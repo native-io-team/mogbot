@@ -12,7 +12,7 @@
 //!
 //! - **Temporary failures are retried** (`failure::is_temporary`: the usage
 //!   limit, Anthropic overloaded or erroring, the network): with backoff for
-//!   up to [`RETRY_WINDOW_MS`]; a usage limit that says when it resets is
+//!   up to [`RETRY_WINDOW_MS`]; a usage limit that says when it refills is
 //!   retried just after that instead. A routine's retry never runs into its
 //!   own next run, which supersedes it. A sign-in or anything we can't name
 //!   isn't retried: retrying wouldn't help.
@@ -27,6 +27,7 @@
 //! by quitting is recorded as such at the next launch, and a routine's retry
 //! that came due while closed is dropped rather than run late.
 
+use crate::agents::store::OrLog;
 use serde::{Deserialize, Serialize};
 use std::sync::{LazyLock, Mutex};
 use tauri::AppHandle;
@@ -67,7 +68,7 @@ pub enum Outcome {
     /// A routine in steps the user stopped between two steps, or whose OK
     /// never came before its next run.
     Declined,
-    /// Waiting for a usage limit to reset instead of running: every account
+    /// Waiting for a usage limit to refill instead of running: every account
     /// it runs on is out until a known reset, or "Save my limits" holds it
     /// while the account is nearly out (`saver`). It runs once the limit
     /// is back; the detail says until when.
@@ -301,7 +302,7 @@ pub fn settle(
             run,
             retry: None,
             alert: Some((ticket.attempt == 1).then(|| {
-                format!("{what} “{name}” is waiting for the usage limit to reset: {reason}{sign}")
+                format!("{what} “{name}” is waiting for the usage limit to refill: {reason}{sign}")
             })),
         };
     }
@@ -367,6 +368,22 @@ pub fn routine_model(agent_id: &str, ids: &[String]) -> Option<String> {
         .then_some(first)
 }
 
+/// The name of the routine the tickets `ids` fire ("Weekly report", from its
+/// note), when they are all the one routine. None: several, or none known.
+pub fn routine_named(agent_id: &str, ids: &[String]) -> Option<String> {
+    let tickets = TICKETS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut fired = tickets
+        .iter()
+        .filter(|t| t.agent_id == agent_id && ids.contains(&t.id))
+        .flat_map(|t| t.check_ins.iter());
+    let first = fired.next()?;
+    if !fired.all(|c| c.id == first.id) {
+        return None;
+    }
+    let name = super::routine_steps::routine_name(&first.note);
+    (!name.is_empty()).then_some(name)
+}
+
 fn take(agent_id: &str, ids: &[String]) -> Vec<Ticket> {
     let mut tickets = TICKETS.lock().unwrap_or_else(|e| e.into_inner());
     let (mine, rest): (Vec<Ticket>, Vec<Ticket>) = tickets
@@ -410,11 +427,12 @@ pub fn turn_ended(
         let today = super::usage::today();
         // "Where did my usage go" names the routine, not only the agent.
         super::usage_plan::tag_routine(agent_id, since, store::now_ms(), &id);
-        let _ = store::update(agent_id, |agent| {
+        store::update(agent_id, |agent| {
             if let Some(c) = agent.check_ins.iter_mut().find(|c| c.id == id) {
                 c.usage.record(spent, today);
             }
-        });
+        })
+        .or_log("a routine run's usage");
     }
     let now = store::now_ms();
     let failed = match stopped {
@@ -470,7 +488,7 @@ pub fn turn_ended(
                 }
             }
         }
-        let _ = store::update(agent_id, |agent| {
+        store::update(agent_id, |agent| {
             for snapshot in &ticket.check_ins {
                 match agent.check_ins.iter_mut().find(|c| c.id == snapshot.id) {
                     Some(c) => {
@@ -493,7 +511,8 @@ pub fn turn_ended(
                     None => {}
                 }
             }
-        });
+        })
+        .or_log("routine runs ending");
         if let Some(alert) = settled.alert {
             super::notify::replace_held(agent_id, alert);
         }
@@ -825,10 +844,10 @@ mod tests {
         assert_eq!(s.retry, None);
         let said = s.alert.unwrap().unwrap();
         assert!(
-            said.contains("is waiting for the usage limit to reset"),
+            said.contains("is waiting for the usage limit to refill"),
             "{said}"
         );
-        // A limit that didn't say when it resets still fails as before.
+        // A limit that didn't say when it refills still fails as before.
         let unknown = Failure {
             kind: FailureKind::UsageLimit,
             resets_at: None,
