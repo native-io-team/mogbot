@@ -4245,7 +4245,17 @@ export const watchOptions = {
       "label": "~/Desktop",
       "path": "/Users/sam/Desktop"
     }
-  ]
+  ],
+  "mac": {
+    "mail": {
+      "state": "ok"
+    },
+    "messages": {
+      "settings": "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+      "state": "full_disk_access",
+      "words": "Reading Messages needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot."
+    }
+  }
 } satisfies Result<'agents.watch.options'>;
 export const watchCreate = {
   "createdAt": 1762290000000,
@@ -4811,6 +4821,53 @@ export const agentsPage = {
   "title": "Launch plan",
   "version": 2
 } satisfies Result<'agents.page'>;
+export const agentsConversationRewind = {
+  "agentId": "a1",
+  "current": "c2",
+  "items": [
+    {
+      "createdAt": 1762200001000,
+      "current": true,
+      "id": "c2",
+      "lastActivityAt": 1762290001000,
+      "loaded": true,
+      "named": true,
+      "preview": "On it",
+      "title": "Launch plan",
+      "waiting": 0
+    },
+    {
+      "context": {
+        "at": 1762290000000,
+        "model": "claude-opus-5-5",
+        "used": 64000,
+        "window": 200000
+      },
+      "createdAt": 1762200000000,
+      "current": false,
+      "id": "first",
+      "lastActivityAt": 1762290000000,
+      "loaded": false,
+      "named": false,
+      "rewinds": [
+        {
+          "at": "m-2",
+          "id": "r0",
+          "ids": [
+            "m-2",
+            "m-2-reply"
+          ],
+          "ts": 1762290100000
+        }
+      ],
+      "title": "Fix the login page",
+      "waiting": 1
+    }
+  ],
+  "routines": {
+    "ci_1": "c2"
+  }
+} satisfies Result<'agents.conversationRewind'>;
 export const agentsPageNone = null satisfies Result<'agents.page'>;
 export const agentsPageVersion = {
   "at": 1762280000000,
@@ -4968,16 +5025,32 @@ export const agentsPagePin = {
   "title": "Launch plan",
   "version": 2
 } satisfies Result<'agents.pagePin'>;
-export const agentsConversationRoutine = {
+export const agentsConversationFork = {
   "agentId": "a1",
-  "current": "c2",
+  "current": "c3",
   "items": [
     {
-      "createdAt": 1762200001000,
+      "createdAt": 1762200002000,
       "current": true,
+      "forkedFrom": {
+        "conversation": "first",
+        "message": "m-2",
+        "title": "Fix the login page"
+      },
+      "id": "c3",
+      "lastActivityAt": 1762290002000,
+      "loaded": true,
+      "named": false,
+      "preview": "On it",
+      "title": "Fork of Fix the login page",
+      "waiting": 0
+    },
+    {
+      "createdAt": 1762200001000,
+      "current": false,
       "id": "c2",
       "lastActivityAt": 1762290001000,
-      "loaded": true,
+      "loaded": false,
       "named": true,
       "preview": "On it",
       "title": "Launch plan",
@@ -4996,6 +5069,80 @@ export const agentsConversationRoutine = {
       "lastActivityAt": 1762290000000,
       "loaded": false,
       "named": false,
+      "rewinds": [
+        {
+          "at": "m-2",
+          "id": "r0",
+          "ids": [
+            "m-2",
+            "m-2-reply"
+          ],
+          "ts": 1762290100000
+        }
+      ],
+      "title": "Fix the login page",
+      "waiting": 1
+    }
+  ],
+  "routines": {
+    "ci_1": "c2"
+  }
+} satisfies Result<'agents.conversationFork'>;
+export const agentsConversationRoutine = {
+  "agentId": "a1",
+  "current": "c3",
+  "items": [
+    {
+      "createdAt": 1762200002000,
+      "current": true,
+      "forkedFrom": {
+        "conversation": "first",
+        "message": "m-2",
+        "title": "Fix the login page"
+      },
+      "id": "c3",
+      "lastActivityAt": 1762290002000,
+      "loaded": true,
+      "named": false,
+      "preview": "On it",
+      "title": "Fork of Fix the login page",
+      "waiting": 0
+    },
+    {
+      "createdAt": 1762200001000,
+      "current": false,
+      "id": "c2",
+      "lastActivityAt": 1762290001000,
+      "loaded": false,
+      "named": true,
+      "preview": "On it",
+      "title": "Launch plan",
+      "waiting": 0
+    },
+    {
+      "context": {
+        "at": 1762290000000,
+        "model": "claude-opus-5-5",
+        "used": 64000,
+        "window": 200000
+      },
+      "createdAt": 1762200000000,
+      "current": false,
+      "id": "first",
+      "lastActivityAt": 1762290000000,
+      "loaded": false,
+      "named": false,
+      "rewinds": [
+        {
+          "at": "m-2",
+          "id": "r0",
+          "ids": [
+            "m-2",
+            "m-2-reply"
+          ],
+          "ts": 1762290100000
+        }
+      ],
       "title": "Fix the login page",
       "waiting": 1
     }
@@ -5392,6 +5539,8 @@ export const frames = [
       "agents.conversationNew",
       "agents.conversationSelect",
       "agents.conversationRename",
+      "agents.conversationRewind",
+      "agents.conversationFork",
       "agents.conversationRoutine",
       "agents.page",
       "agents.pageVersion",

@@ -19,6 +19,7 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   'chevron.left.forwardslash.chevron.right': 'code',
   'list.bullet': 'list',
   pencil: 'edit',
+  'arrow.triangle.branch': 'call_split',
   'person.2': 'group',
   puzzlepiece: 'extension',
   'arrow.down': 'arrow_downward',

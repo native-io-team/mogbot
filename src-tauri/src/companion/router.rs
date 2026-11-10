@@ -71,6 +71,8 @@ pub const METHODS: &[&str] = &[
     "agents.conversationNew",
     "agents.conversationSelect",
     "agents.conversationRename",
+    "agents.conversationRewind",
+    "agents.conversationFork",
     "agents.conversationRoutine",
     "agents.page",
     "agents.pageVersion",
@@ -642,6 +644,20 @@ pub trait Backend: Send + Sync + 'static {
         agent_id: &str,
         id: &str,
         title: String,
+    ) -> Result<Value, CommandError>;
+    /// `agents_conversation_rewind` / `_fork`: gone back to just before the
+    /// user's message, in place or as a new conversation; the list after.
+    async fn conversation_rewind(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError>;
+    async fn conversation_fork(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
     ) -> Result<Value, CommandError>;
     /// `agents_conversation_routine`: a routine moved to another
     /// conversation; the list after.
@@ -1250,6 +1266,14 @@ struct PagePinParams {
     #[serde(default)]
     conversation_id: Option<String>,
     pinned: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationMessageParams {
+    agent_id: String,
+    conversation_id: String,
+    message_id: String,
 }
 
 #[derive(Deserialize)]
@@ -2348,6 +2372,20 @@ async fn run(
             let p: PagePinParams = parse(params)?;
             Ok(
                 b.page_pin(&p.agent_id, p.conversation_id.as_deref(), p.pinned)
+                    .await?,
+            )
+        }
+        "agents.conversationRewind" => {
+            let p: ConversationMessageParams = parse(params)?;
+            Ok(
+                b.conversation_rewind(&p.agent_id, &p.conversation_id, &p.message_id)
+                    .await?,
+            )
+        }
+        "agents.conversationFork" => {
+            let p: ConversationMessageParams = parse(params)?;
+            Ok(
+                b.conversation_fork(&p.agent_id, &p.conversation_id, &p.message_id)
                     .await?,
             )
         }

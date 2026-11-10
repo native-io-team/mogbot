@@ -385,3 +385,30 @@ fn the_card_and_the_agents_read_say_what_it_is() {
     assert!(for_agent(Some(&g)).contains("\"id\":\"next\""));
     assert!(for_agent(None).contains("no page yet"));
 }
+
+#[test]
+fn a_fork_gets_the_page_as_it_was_then_or_none() {
+    let mut f = first(json!({ "title": "Budget", "blocks": [checklist("a", false)] }));
+    f.versions[0].at = 1_000;
+    let g = apply(
+        Some(&f),
+        "first",
+        &up(json!({ "blocks": [checklist("a", true)] })),
+        5_000,
+        false,
+    )
+    .unwrap()
+    .unwrap();
+    // Before the page existed: none.
+    assert!(as_of(&g, "c9", 500).is_none());
+    // Between v1 and v2: v1, in the new conversation, its history cut there.
+    let then = as_of(&g, "c9", 3_000).unwrap();
+    assert_eq!(then.conversation, "c9");
+    assert_eq!(then.current().unwrap().version, 1);
+    assert_eq!(then.versions.len(), 1);
+    // After both: the page as it is.
+    assert_eq!(
+        as_of(&g, "c9", 9_000).unwrap().current().unwrap().version,
+        2
+    );
+}

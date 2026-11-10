@@ -46,6 +46,7 @@ import { ComposerAttachments, MessageAttachments } from './AgentAttachments';
 import { LocalLinks } from './AgentLocalLinks';
 import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
+import { GoBackMenu, type GoBackAction, type GoBackState } from './AgentGoBack';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
@@ -156,11 +157,14 @@ function MessageActions({
   text,
   ts,
   onRemember,
+  more,
 }: {
   text: string;
   ts: number;
   /** "Remember this": offered on messages with words in them. */
   onRemember?: () => void;
+  /** Your own message's Edit, Fork and Rewind (`AgentGoBack`). */
+  more?: ReactNode;
 }) {
   const { copy, isCopied } = useCopyToClipboard();
   return (
@@ -187,6 +191,7 @@ function MessageActions({
           title="Remember this"
         />
       )}
+      {more}
       <time
         className="agent-message__time"
         dateTime={new Date(ts).toISOString()}
@@ -327,6 +332,9 @@ interface UserBubbleProps extends Arrival {
   sending?: DraftAttachment[];
   /** "Remember this", with this message. */
   onRemember?: (message: AgentMessage) => void;
+  /** Edit and resend, Fork from here, Rewind to here: what blocks them, and the pick. */
+  goBack?: GoBackState;
+  onGoBack?: (action: GoBackAction, message: AgentMessage) => void;
 }
 
 /** Attachments sit above the words, both against the right edge, as one message. */
@@ -342,6 +350,8 @@ export const UserBubble = memo(function UserBubble({
   driven,
   sending,
   onRemember,
+  goBack,
+  onGoBack,
 }: UserBubbleProps) {
   const attachments = message.attachments ?? [];
   const actions = !failed && !sending && (
@@ -349,6 +359,10 @@ export const UserBubble = memo(function UserBubble({
       text={message.text}
       ts={message.ts}
       onRemember={onRemember && (() => onRemember(message))}
+      more={
+        goBack &&
+        onGoBack && <GoBackMenu state={goBack} onPick={(action) => onGoBack(action, message)} />
+      }
     />
   );
   const onKeyDown = useCopyOnKey(message.text);

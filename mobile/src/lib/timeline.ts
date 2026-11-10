@@ -22,7 +22,9 @@ export type Item =
   /** What the agent said in a room, folded into one line that opens the room. */
   | { kind: 'room'; key: string; fold: RoomFold }
   /** "Setting up your team", where it was posted in the Chief's chat. */
-  | { kind: 'setup'; key: typeof SETUP_KEY };
+  | { kind: 'setup'; key: typeof SETUP_KEY }
+  /** What a rewind passed over, as one row that opens to show it (`lib/goBack`). */
+  | { kind: 'rewound'; key: string; rewindId: string; count: number; open: boolean };
 
 /**
  * A send's row key, the same while it's on its way and once the Mac has it

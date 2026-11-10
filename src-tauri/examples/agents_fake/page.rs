@@ -170,5 +170,53 @@ pub(super) async fn page_scenario(h: &H) -> Check {
     ensure(
         page::get(&a.id, &conv).unwrap().unwrap().current.version == 3,
         "outside text changed the page",
+    )?;
+
+    // Fork from the message that made v3: the fork starts with v2, the page
+    // as it was then; the original keeps v3.
+    let ticked = log(&a.id)
+        .into_iter()
+        .find(|m| {
+            m.kind == MessageKind::User
+                && m.conversation.as_deref() == Some(conv.as_str())
+                && m.text.contains("ticked it")
+        })
+        .ok_or("no message to go back to")?;
+    let forked =
+        cmd::agents_conversation_fork(h.app.clone(), a.id.clone(), conv.clone(), ticked.id.clone())
+            .await
+            .map_err(|e| e.to_string())?
+            .current;
+    let copy = page::get(&a.id, &forked)
+        .unwrap()
+        .ok_or("the fork has no page")?;
+    ensure(
+        copy.current.version == 2 && copy.history.len() == 2,
+        format!("the fork's page is v{}", copy.current.version),
+    )?;
+    ensure(
+        notes(&a.id)
+            .iter()
+            .any(|n| n.contains("as it was then (v2)")),
+        format!("the fork's line doesn't say so: {:?}", notes(&a.id)),
+    )?;
+    ensure(
+        page::get(&a.id, &conv).unwrap().unwrap().current.version == 3,
+        "the fork changed the original's page",
+    )?;
+
+    // Rewind to the same message: the page stays as it is, and the line says so.
+    cmd::agents_conversation_rewind(h.app.clone(), a.id.clone(), conv.clone(), ticked.id.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure(
+        page::get(&a.id, &conv).unwrap().unwrap().current.version == 3,
+        "a rewind changed the page",
+    )?;
+    ensure(
+        notes(&a.id)
+            .iter()
+            .any(|n| n.contains("stays as it is (v3); it isn't rewound")),
+        format!("the rewind's line doesn't say so: {:?}", notes(&a.id)),
     )
 }

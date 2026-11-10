@@ -374,6 +374,40 @@ impl Backend for DesktopBackend {
         )
     }
 
+    async fn conversation_rewind(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_rewind(
+                self.app.clone(),
+                agent_id.to_string(),
+                id.to_string(),
+                message_id.to_string(),
+            )
+            .await?,
+        )
+    }
+
+    async fn conversation_fork(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_fork(
+                self.app.clone(),
+                agent_id.to_string(),
+                id.to_string(),
+                message_id.to_string(),
+            )
+            .await?,
+        )
+    }
+
     async fn conversation_routine(
         &self,
         agent_id: &str,

@@ -48,6 +48,10 @@ export const pageVersion = (agentId: string, conversation: string, version: numb
     version,
   }) as Promise<PageVersion | null>;
 
+/** The page last read for a conversation, or null: what a rewind's confirm names. */
+export const pageOf = (agentId: string, conversation: string) =>
+  pages.get(key(agentId, conversation)) ?? null;
+
 export const isFolded = (agentId: string, conversation: string) =>
   folded.has(key(agentId, conversation));
 

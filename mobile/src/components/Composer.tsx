@@ -138,7 +138,7 @@ import { haptic } from '../lib/haptics';
 import { useRouter } from 'expo-router';
 import { chipLabel } from '../lib/agentControls';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
-import { describeError, send, stop, upload } from '../lib/session';
+import { describeError, send, sendEdited, stop, upload } from '../lib/session';
 import { getApp, useApp, useServed } from '../lib/store';
 import {
   keySize,
@@ -452,6 +452,20 @@ export function Composer({
     clearComposer(agent.id);
     setStaged([]);
     onSent();
+    // Edit and resend, in the conversation it was edited in: back to just
+    // before that message, then this one. Refused (it's working), nothing
+    // is sent and the words go back in the field.
+    const editing = draft.editing;
+    if (editing && getApp().viewing[agent.id] === editing.conversation) {
+      sendEdited(agent.id, editing.conversation, editing.messageId, body, mentions, files).catch(
+        (error: unknown) => {
+          haptic.error();
+          setComposer(agent.id, { text: draft.text, editing });
+          onError(describeError(error));
+        }
+      );
+      return;
+    }
     send(agent.id, body, now && connected, undefined, files, mentions, draft.revising).catch(
       (error: unknown) => {
         haptic.error();
@@ -552,6 +566,8 @@ export function Composer({
         agent={agent}
         revising={draft.revising}
         onStopRevising={() => setComposer(agent.id, { revising: undefined })}
+        editing={!!draft.editing}
+        onStopEditing={() => setComposer(agent.id, { editing: undefined, text: '' })}
         onOpenSetup={onOpenSetup}
       />
       {suggestions.length > 0 && (

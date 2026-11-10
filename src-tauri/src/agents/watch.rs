@@ -8,6 +8,10 @@
 //! - **GitHub** (mentions, assignments): `gh api`, on the user's own `gh`
 //!   login. No model turn, so a check costs nothing.
 //! - **A new file in a folder**: the folder's listing. Free.
+//! - **A new email or text** (`Source::NewMail`, `Source::NewText`): this
+//!   Mac's own Mail and Messages, read-only from their databases
+//!   (`agents::watch_mac`). Free, and no account; needs Full Disk Access,
+//!   which the composer asks for by name.
 //! - **Linear, email, anything else** (`Source::LinearAssigned`,
 //!   `Source::Custom`): there's no CLI we can call, only one of the user's
 //!   connections (ours, from Apps, or one set up in Claude Code), so the
@@ -61,6 +65,7 @@ use super::runs;
 use super::schedule::{self, CheckIn, CheckInMark, Refused};
 use super::store::{self, MessageKind};
 use super::usage::{self, UsageTotals};
+use super::watch_mac;
 use super::watch_seal;
 use super::watch_seal_codex;
 use crate::errors::CommandError;
@@ -118,6 +123,21 @@ pub enum Source {
     LinearAssigned,
     /// A file appears in this folder (absolute path).
     NewFile { folder: String },
+    /// A new message in an inbox in Mail on this Mac (`watch_mac`):
+    /// optionally only from `from` (part of the address or name) and only
+    /// with `words` (in the subject or preview).
+    NewMail {
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        from: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        words: String,
+    },
+    /// A new iMessage or SMS in Messages on this Mac (`watch_mac`),
+    /// optionally only from `from` (a phone number or email).
+    NewText {
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        from: String,
+    },
     /// Anything else, in the user's words, checked through one connector
     /// (`app`: its name in Claude Code's config).
     Custom {
@@ -140,7 +160,7 @@ impl Source {
     /// has rate limits, and a model check spends the user's quota.
     pub fn min_every(&self) -> u32 {
         match self {
-            Source::NewFile { .. } => 1,
+            Source::NewFile { .. } | Source::NewMail { .. } | Source::NewText { .. } => 1,
             Source::GithubMentions | Source::GithubAssigned => 5,
             _ => MODEL_MIN_EVERY,
         }
@@ -278,6 +298,18 @@ pub fn describe(source: &Source) -> String {
         Source::GithubAssigned => "an issue or pull request is assigned to you on GitHub".into(),
         Source::LinearAssigned => "a Linear issue is assigned to you".into(),
         Source::NewFile { folder } => format!("a new file appears in {}", tilde(folder)),
+        Source::NewMail { from, words } => {
+            let mut s = "an email arrives in Mail".to_string();
+            if !from.is_empty() {
+                s.push_str(&format!(" from {from}"));
+            }
+            if !words.is_empty() {
+                s.push_str(&format!(" mentioning “{words}”"));
+            }
+            s
+        }
+        Source::NewText { from } if from.is_empty() => "a text arrives in Messages".into(),
+        Source::NewText { from } => format!("a text arrives in Messages from {from}"),
         Source::Custom { check, .. } => check.trim().trim_end_matches('.').to_string(),
         Source::Unknown => "something this version of the app doesn't know".into(),
     }
@@ -297,6 +329,8 @@ pub fn found_words(source: &Source, n: usize) -> String {
                 .unwrap_or("the folder");
             format!("{n} new file{s} in {name}")
         }
+        Source::NewMail { .. } => format!("{n} new email{s}"),
+        Source::NewText { .. } => format!("{n} new text{s}"),
         _ => format!("{n} new"),
     }
 }
@@ -584,6 +618,31 @@ pub fn validate(source: Source, every_minutes: u32) -> Result<(Source, u32), Ref
             }
             Source::Custom { check, app }
         }
+        Source::NewMail { from, words } => {
+            let (from, words) = (one_line(&from), one_line(&words));
+            if from.chars().count() > watch_mac::MAX_FILTER_CHARS
+                || words.chars().count() > watch_mac::MAX_FILTER_CHARS
+            {
+                return Err(invalid(
+                    "from",
+                    format!(
+                        "Keep the sender and the words under {} characters each.",
+                        watch_mac::MAX_FILTER_CHARS
+                    ),
+                ));
+            }
+            Source::NewMail { from, words }
+        }
+        Source::NewText { from } => {
+            let from = one_line(&from);
+            if !from.is_empty() && !super::mac_apps::is_handle(&from) {
+                return Err(invalid(
+                    "from",
+                    "Give their phone number or email, as Messages shows it, or leave it empty for anyone.".into(),
+                ));
+            }
+            Source::NewText { from }
+        }
         Source::Unknown => {
             return Err(invalid(
                 "source",
@@ -638,6 +697,11 @@ fn expand_home(path: &str) -> PathBuf {
         }
         _ => PathBuf::from(path),
     }
+}
+
+/// Trimmed, with any run of whitespace (a newline too) one space.
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn short(text: &str, max: usize) -> String {
@@ -1061,6 +1125,11 @@ pub async fn check(
             let now = store::now_ms();
             (read_folder(folder, now, FOLDER_TIMEOUT).await, None)
         }
+        Source::NewMail { from, words } => (
+            watch_mac::read_mail(from, words).await.map(Found::window),
+            None,
+        ),
+        Source::NewText { from } => (watch_mac::read_texts(from).await.map(Found::window), None),
         Source::LinearAssigned | Source::Custom { .. } => model_check(app, agent_id, source).await,
         Source::Unknown => (
             Err("This version of the app doesn't know that kind of routine.".into()),

@@ -749,6 +749,53 @@ const scrollToText = (text) => async (page) => {
   throw new Error(`never found "${text}"`);
 };
 
+/** Long-press the message whose words start with `start`, as a finger held on it. */
+const holdMessage = async (page, start) => {
+  const box = await page.eval(`(() => {
+    const want = ${JSON.stringify(start)};
+    const el = [...document.querySelectorAll('[tabindex="0"]')]
+      .filter((e) => (e.innerText ?? '').trim().startsWith(want) && e.getBoundingClientRect().height > 20)
+      .pop();
+    if (!el) return null;
+    el.scrollIntoView({ block: 'center' });
+    const r = el.getBoundingClientRect();
+    return { x: r.x + Math.min(r.width / 2, 120), y: r.y + Math.min(r.height / 2, 20) };
+  })()`);
+  if (!box) throw new Error(`No message to hold: ${start}`);
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...box });
+  await page.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    ...box,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await sleep(700);
+  await page.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    ...box,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+  await sleep(700);
+};
+
+/** Open one of Acme Site's conversations by its title, from the switcher. */
+const openSiteConversation = (title) => async (page) => {
+  await page.goto(`${WEB}/conversations?id=site`);
+  await page.waitFor(
+    `document.body.innerText.includes(${JSON.stringify(title)})`,
+    20_000,
+    'the list'
+  );
+  await page.clickText(title);
+  await sleep(1800);
+};
+
+const HOURS = 'Update the winter opening hours';
+const HOURS_ASK = 'Update the winter opening hours: closed';
+
 /** Whether Catch up's bottom bar has a button labelled `label`. */
 const CATCHUP_HAS = (label) =>
   `!![...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label') === ${JSON.stringify(label)})`;
@@ -1717,6 +1764,96 @@ const LIVE = [
       await sleep(800);
     },
   },
+  // Rewind, fork and edit (lib/goBack.ts), on Acme Site's opening-hours conversation.
+  {
+    name: 'goback-sheet',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await openSiteConversation(HOURS)(page);
+      await holdMessage(page, HOURS_ASK);
+    },
+    check:
+      'Long-press on your own message: the sheet with Copy, Quote, Select Text, then Edit and resend, Fork from here, Rewind to here',
+    after: async (page) => {
+      await page.clickText('Cancel').catch(() => {});
+      await sleep(500);
+    },
+  },
+  {
+    name: 'goback-editing',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await holdMessage(page, HOURS_ASK);
+      await page.clickText('Edit and resend');
+      await sleep(1000);
+    },
+    check:
+      'Editing: the message back in the composer, a bar over it saying “Editing your message. Sending goes back to just before it.” with an ✕',
+    after: async (page) => {
+      await page.clickLabel('Don’t edit').catch(() => {});
+      await sleep(600);
+    },
+  },
+  {
+    name: 'goback-fork-confirm',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await holdMessage(page, HOURS_ASK);
+      await page.clickText('Fork from here');
+      await sleep(800);
+    },
+    check:
+      'Fork from here?: a sheet saying a new conversation with Acme Site, everything before the message, this one stays; what isn’t undone; Fork and Cancel',
+  },
+  {
+    name: 'goback-forked',
+    act: async (page) => {
+      await page.clickText('Fork');
+      await sleep(2200);
+    },
+    check:
+      'The fork, opened: its bar says “Fork of Update the winter opening hours”; one line: Forked from “Update the winter opening hours” before …, that one unchanged, what isn’t undone',
+    after: openSiteConversation(HOURS),
+  },
+  {
+    name: 'goback-rewound',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await holdMessage(page, HOURS_ASK);
+      await page.clickText('Rewind to here');
+      await sleep(800);
+      await page.clickText('Rewind');
+      await sleep(1500);
+      // Drawn fresh: on the web build, rows that rise in while the list
+      // reshapes under them keep react-native-reanimated's absolute
+      // position and overlap (a web artifact; a reload draws them right).
+      await page.goto(`${WEB}/chat/site`);
+      await page.waitFor(`document.body.innerText.includes('Rewound')`, 20_000, 'the fold');
+      await sleep(1500);
+    },
+    check:
+      'Rewound: the two opening-hours lines folded into one quiet “Rewound · 2 messages” row with a chevron, then the line “Went back to before …”',
+  },
+  {
+    name: 'goback-rewound-open',
+    act: async (page) => {
+      await page.clickWhere(
+        `() => [...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label').startsWith('Rewound · '))`,
+        'the Rewound row'
+      );
+      await sleep(1000);
+    },
+    check:
+      'The fold open: the row (chevron up) with the opening-hours lines under it (on the second theme, the first theme’s line too)',
+    after: async (page) => {
+      await fetch(`${MOCK}/dev/unrewind`);
+      await openSiteConversation('Rebuild the Acme site')(page);
+    },
+  },
   {
     name: 'diff',
     route: '/chat/site',
@@ -2057,6 +2194,34 @@ const LIVE = [
     },
     check:
       'Something else… ticked: the “What to look for” field filled, THROUGH with Gmail and Linear chips (Gmail on), CHECK EVERY 15/30 min/1 hour/4 hours with 30 min on; the echo “When Acme Site finds “a new email from Dana about the launch”” and “Each check uses a little of Acme Site’s usage and can only read that app, up to 24 a day. The first check…”',
+  },
+  {
+    name: 'schedule-when-mail',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('An email arrives in Mail');
+      await sleep(400);
+      await page.type('billing@northwind.com', '[aria-label="Only from"]');
+      await page.type('invoice', '[aria-label="Only with these words"]');
+      await page.type('File it and tell me the total', '[aria-label="What to do when it happens"]');
+      await sleep(400);
+    },
+    check:
+      'An email arrives in Mail ticked (“Free · reads Mail on your Mac”): a From field with billing@northwind.com and a words field with invoice, no Check again (the Mac can read Mail); CHECK EVERY 1/5/10/30 min; the echo “When an email arrives in Mail from billing@northwind.com mentioning “invoice” — File it and tell me the total” and “Checks are free. What a message says is only information to Acme Site, and it asks you before replying. The first check…”; Add enabled',
+  },
+  {
+    name: 'schedule-when-text-access',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('A text arrives in Messages');
+      await sleep(400);
+      await page.type('Tell me what they said', '[aria-label="What to do when it happens"]');
+      await sleep(400);
+    },
+    check:
+      'A text arrives in Messages ticked: the From field empty with its placeholder, a ghost Check again under it; no echo; the line under it is the Mac’s own words, “Reading Messages needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot.”; Add off',
   },
   {
     name: 'agent-sheet-when',

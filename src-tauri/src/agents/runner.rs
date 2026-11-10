@@ -3925,7 +3925,19 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         // Outside text it was asked to answer (a "When…" routine's items,
         // someone else's Slack message) is read just as surely as a web page,
         // and stays in this conversation after the capped turn ends.
-        super::exposure::begin_turn(&agent_id, resumes, batch_outside(&agent_id));
+        // A fork of a session that read outside content carries it (`rewind`).
+        let forked_outside = current.as_ref().is_some_and(|a| {
+            super::rewind::carries_outside(
+                &agent_id,
+                super::conversations::loaded(a),
+                resumes.is_some(),
+            )
+        });
+        super::exposure::begin_turn(
+            &agent_id,
+            resumes,
+            batch_outside(&agent_id) || forked_outside,
+        );
         super::full_send::begin(&agent_id);
         super::results::discard(&agent_id);
         super::dev_servers::begin(&agent_id);
@@ -4559,7 +4571,11 @@ fn recap_log(agent_id: &str) -> Result<Vec<store::AgentMessage>, CommandError> {
     let conversation = store::get(agent_id)
         .map(|a| super::conversations::loaded(&a).to_string())
         .unwrap_or_else(|_| super::conversations::FIRST.to_string());
-    store::conversation_page(agent_id, &conversation, RECAP_SCAN, None, None)
+    // What a rewind folded didn't happen, as far as this conversation goes.
+    let rewound = super::conversations::page_spec(agent_id, &conversation).rewound;
+    let mut page = store::conversation_page(agent_id, &conversation, RECAP_SCAN, None, None)?;
+    page.retain(|m| !rewound.contains(&m.id));
+    Ok(page)
 }
 
 const LOST_HEADER: &str = "[Your previous working session was lost. This is the recent conversation from your own chat, newest last: what \"You\" said, you said, and you know it. Pick up from here without mentioning the loss unless asked; never ask the user to repeat or paste anything in it. search_my_chat finds anything older.]";
@@ -5710,9 +5726,35 @@ async fn run_turn(
         Some(id) => (id.clone(), true),
         None => (driver.new_session(), false),
     };
+    // Gone back to an earlier point (`rewind`): where this conversation's
+    // new session starts. Only Claude Code resumes at an entry, and only a
+    // session still on this Mac; anything else picks up from a recap.
+    let branch = if crossed || quiet {
+        None
+    } else {
+        let conversation = super::conversations::loaded(&agent).to_string();
+        super::rewind::pending(agent_id, &conversation, agent.session_id.is_some()).map(|p| match p
+            .branch
+        {
+            super::rewind::Branch::Fork { session, at }
+                if engine == Engine::Claude
+                    && super::wallet::valid_session(&session)
+                    && super::wallet::valid_session(&at)
+                    && super::transcript::resumable(agent_id, engine, &session) =>
+            {
+                super::rewind::Branch::Fork { session, at }
+            }
+            super::rewind::Branch::Fork { .. } => super::rewind::Branch::Recap,
+            b => b,
+        })
+    };
+    let recapped = !resuming
+        && (agent.new_engine || !retry_fresh || branch == Some(super::rewind::Branch::Recap));
     // First turn on a new engine: it starts blank, so it gets the conversation.
     let prompt = if agent.new_engine && !resuming {
         with_recap(agent_id, prompt)
+    } else if branch == Some(super::rewind::Branch::Recap) && !resuming {
+        with_recap_as(agent_id, super::rewind::RECAP_HEADER, None, prompt)
     } else {
         prompt.to_string()
     };
@@ -5752,6 +5794,15 @@ async fn run_turn(
     if resuming && super::transcript::ensure(account, &layout.cwd, &home, &session_id) {
         tracing::info!("[Agents] put {agent_id}'s conversation back where its engine looks for it");
     }
+    // A fork's source, likewise.
+    if let Some(super::rewind::Branch::Fork { session, .. }) = &branch {
+        super::transcript::ensure(account, &layout.cwd, &home, session);
+    }
+    // Where this conversation stands before the turn, for going back to
+    // before what it answers (`rewind`).
+    let resumed_at = (resuming && engine == Engine::Claude && !crossed && !quiet)
+        .then(|| super::transcript::claude_leaf(&home, &session_id))
+        .flatten();
     if let Some(caps) = driver
         .capabilities_before(&agent, &binary, store::now_ms(), &access)
         .await
@@ -5858,6 +5909,17 @@ async fn run_turn(
         access: Some(&access),
         window: agent.context.as_ref().map(|c| c.window),
     }));
+    // A new session that starts as `session` did at entry `at`: Claude
+    // Code's own fork, leaving that transcript as it was.
+    if let Some(super::rewind::Branch::Fork { session, at }) = &branch {
+        cmd.args([
+            "--resume",
+            session.as_str(),
+            "--resume-session-at",
+            at.as_str(),
+            "--fork-session",
+        ]);
+    }
     // A "When…" routine's items came from outside: this turn can't write its
     // own instructions or memory (Claude Code refuses the edit; for Codex,
     // and for anything that gets past that, it's put back when the turn ends).
@@ -5953,7 +6015,22 @@ async fn run_turn(
     if !session_id.is_empty() {
         mark.session_id = Some(session_id.clone());
     }
+    let answered = mark.batch.clone();
     write_mark(agent_id, mark);
+    if !crossed && !quiet {
+        super::rewind::note_turn(
+            agent_id,
+            &answered,
+            super::rewind::start_point(
+                engine,
+                resuming,
+                &session_id,
+                resumed_at,
+                branch.as_ref(),
+                recapped,
+            ),
+        );
+    }
 
     // An app-server conversation: stdin stays open for the turn, written by
     // one task (approval answers come from tasks of their own); `None` closes it.

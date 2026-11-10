@@ -570,6 +570,53 @@ all of them, so whatever it remembers in one it knows in the others.
   (`routineMoveChoices`).
 - **Phone.** See docs/mobile.md, "Conversations".
 
+### Rewind, fork and edit (`src-tauri/src/agents/rewind.rs`)
+
+Answers: **can I get out of a wrong turn without losing the work?** On any
+of the user's own messages (desk: the hover actions' … menu, and ⌘K for the
+last one; phone: long-press): **Edit and resend** puts it back in the
+composer under "Editing your message"; sending goes back to just before it,
+then sends the new words there. **Fork from here** makes a new conversation
+(titled "Fork of …", which the user is then in) whose history is everything
+before that message; the original stays exactly as it was. **Rewind to here**
+carries the same conversation on from just before it.
+
+- **Nothing is deleted.** `messages.jsonl` is never rewritten. A rewind is
+  kept in `conversations.json` (`Conversation::rewinds`: the message it went
+  back before and the ids it folded); the chat shows those lines under one
+  "Rewound · N messages" line that opens them (`foldRewound`, shared by desk
+  and phone), and a recap leaves them out (`runner::recap_log`). A fork lists
+  the ids it was made with (`inherited`): `store::conversation_page` reads
+  them from the one log like its own lines, so nothing is copied and a fork
+  of a fork carries the whole history. Each ends on one quiet line saying
+  what happened and that files it changed and anything it sent since aren't
+  undone.
+- **Where the engine picks up.** At the start of every turn the app notes
+  where its conversation stood (`turn_points.jsonl`, at most 400 kept): on
+  Claude Code the session and its last main-chain entry
+  (`transcript::claude_leaf`), a new session handed nothing (blank), or
+  anything else (a recap, another engine). Going back to before a message is
+  that point exactly: Claude Code starts a new session with `--resume <s>
+  --resume-session-at <entry> --fork-session` (hidden flags, verified on
+  2.1.322: the new session knows only what came before, and the original
+  transcript is untouched), a blank point starts blank, and the rest start a
+  new session handed a recap of what is left of the chat
+  (`rewind::RECAP_HEADER`), which the line says. That covers Codex and
+  OpenCode today, and a message that was batched behind another in one turn.
+  (Codex's app-server has `thread/fork` with `lastTurnId`; not wired yet.)
+  The branch waits in `branches.json` until the conversation has a session
+  again.
+- **Never mid-turn.** Rewind and Edit are refused while the agent has a turn
+  running or the user is driving its session; Fork is allowed (it changes
+  nothing in the running conversation).
+- **Outside text stays marked.** A fork of a session that had read outside
+  content marks the new one too (`rewind::carries_outside`, `exposure`).
+- **What isn't undone** is said in the confirm and the line: files the agent
+  changed and anything it sent. A project-bound agent's copy keeps its
+  changes; the confirm points at its changes card's Discard.
+- Commands: `agents_conversation_rewind`, `agents_conversation_fork`; phone
+  `agents.conversationRewind`, `agents.conversationFork`.
+
 **Context meter.** `agents/context.rs` stores one reading per agent
 (`Agent.context`: `used`, `window`, the engine's `model` id) from the engine's
 own numbers: Claude Code's last `assistant` `message.usage` against the
@@ -4344,8 +4391,32 @@ every few minutes:
 | Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; one firing per new mention (thread id + latest comment, or `updated_at`) | free |
 | An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"`, 100 a page, up to 300 | free |
 | A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s; symlinks skipped); folders of at most 2,000 entries | free |
+| An email arrives in Mail (optionally from a sender, with some words) | Mail's own index on this Mac (`~/Library/Mail/V*/MailData/Envelope Index`, the newest `V`), read with `sqlite3 -readonly`: the newest 100 not-deleted messages in any account's inbox; sender matches part of the address or name, words the subject or Mail's preview; each known by sender, subject and time, so Mail rebuilding its index doesn't refire (`watch_mac.rs`) | free |
+| A text arrives in Messages (optionally from one phone number or email) | `~/Library/Messages/chat.db`, read-only as the Messages tools read it: the newest 100 received (not the user's own, not tapbacks), known by Messages' guid; a phone number matches however it's written (last ten digits) | free |
 | A Linear issue is assigned to me | one sealed headless model call through Linear (Claude Code on Haiku, or Codex on a small model: see "Which engine runs a check" below): ours first (connected under Apps or on a login card, given to this agent, reached through the relay with a secret that opens only that connection, for reads only, never a card: `conn_relay::Via::Sealed`), else the Linear server set up in Claude Code | a model call |
 | Something else… (in the user's words, through one named app) | the same sealed call, through that app | a model call |
+
+**Mail and Messages** (`watch_mac.rs`) need no account and nothing reachable
+from outside, only **Full Disk Access** for this app, which no prompt can
+give. `agents_watch_mac_access` (and `WatchOptions.mac` for the phone) says
+whether each can be read, from the folders alone: unlistable is Full Disk
+Access off, missing is "Mail isn't set up" / "Messages hasn't been used".
+The desk composer shows the Mac's own sentence ("Reading Mail needs Full Disk
+Access: System Settings → Privacy & Security → Full Disk Access, then turn on
+…"), opens that pane, and asks again every 3 s until it reads (Add stays off
+until then); the phone shows the same sentence with Check again, since only
+the Mac can switch it on. A text's sender is typed on either (the Mac sends
+no contacts list) and must be a phone number or email (`mac_apps::is_handle`,
+mirrored as `isHandle`). If permission goes away later, the check fails with
+that sentence and backs off and pauses like any failed check. What a message
+says reaches the agent only in the `<external_items>` envelope on a turn
+answering outside text (below): its level is capped at Steady, a Messages
+call in it asks every time (`mac_apps::Step::Once`), and nothing here sends
+or replies. The check itself is plain SQL, no model.
+*Not verified:* against a real Mail index and `chat.db` on this Mac (tests use
+fixture databases shaped like them; no test reads the user's own), and that
+Full Disk Access granted to the app reaches its `sqlite3` child (the
+Messages tools already rely on it).
 
 **The rules.** The first check is a baseline (it notes what's there and
 fires nothing). Nothing fires twice: ids seen are kept per routine; a
@@ -6742,6 +6813,13 @@ point-in-time messages and result cards.
   conversation?", saying what would change); refused, nothing changes. The
   whole update is checked before the card, so a card never asks about a
   change that can't be made.
+- **Rewind and fork.** A page isn't part of the chat a rewind folds: a
+  rewind leaves it as it is, and both its confirm (`rewindPageClause`) and
+  its line say so ("The page “Budget” stays as it is (v4); it isn't
+  rewound."). A fork starts with the page as it was before the message it
+  forks from (`page::as_of`: the kept versions made before then, the newest
+  current, in a file of its own), or with no page if there wasn't one then
+  or those versions are no longer kept; its line names the version.
 - **Pinned, or not.** A new page is pinned. The user can unpin it (desk or
   phone, `agents_page_pin` / `agents.pagePin`); updates carry on and it stays
   unpinned until they pin it back, and the agent is told so in its receipt.

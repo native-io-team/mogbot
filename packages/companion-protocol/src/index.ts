@@ -48,5 +48,6 @@ export * from './sameAccount';
 export * from './brief';
 export * from './conversations';
 export * from './page';
+export * from './rewind';
 export * from './failures';
 export * from './whenComposer';

@@ -592,6 +592,10 @@ pub struct Stub {
     pub fresh: Mutex<Vec<String>>,
     /// The agent's conversations: (id, title), the first first; and the current one.
     pub conversations: Mutex<(Vec<(String, String)>, String)>,
+    /// Rewinds, as (conversation, the message gone back to before).
+    pub rewinds: Mutex<Vec<(String, String)>>,
+    /// Forks, as (the fork's id, where it came from, before which message).
+    pub forks: Mutex<Vec<(String, String, String)>>,
     /// Routine id → the conversation it runs in, for routines not in the first.
     pub routine_places: Mutex<Vec<(String, String)>>,
     /// The conversation "c2"'s page: whether it is pinned (it has two versions).
@@ -675,6 +679,8 @@ impl Stub {
     fn conversation_list(&self) -> Value {
         use crate::agents::conversations::{ConversationView, Conversations};
         let (items, current) = self.conversations.lock().unwrap().clone();
+        let rewinds = self.rewinds.lock().unwrap().clone();
+        let forks = self.forks.lock().unwrap().clone();
         let n = items.len() as i64;
         let views = items
             .iter()
@@ -695,6 +701,28 @@ impl Stub {
                     window: 200_000,
                     at: 1_762_290_000_000,
                     model: Some("claude-opus-5-5".into()),
+                }),
+                rewinds: rewinds
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (c, _))| c == id)
+                    .map(|(k, (_, at))| crate::agents::conversations::Rewind {
+                        id: format!("r{k}"),
+                        at: at.clone(),
+                        ts: 1_762_290_100_000,
+                        ids: vec![at.clone(), format!("{at}-reply")],
+                    })
+                    .collect(),
+                forked_from: forks.iter().find(|(f, _, _)| f == id).map(|(_, from, m)| {
+                    crate::agents::conversations::ForkedFromView {
+                        conversation: from.clone(),
+                        message: m.clone(),
+                        title: items
+                            .iter()
+                            .find(|(c, _)| c == from)
+                            .map(|(_, t)| t.clone())
+                            .unwrap_or_default(),
+                    }
                 }),
             })
             .collect();
@@ -741,6 +769,8 @@ impl Stub {
             account_orders: Mutex::new(Vec::new()),
             usage_changes: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
+            rewinds: Mutex::new(Vec::new()),
+            forks: Mutex::new(Vec::new()),
             conversations: Mutex::new((
                 vec![
                     ("first".into(), "Fix the login page".into()),
@@ -1309,6 +1339,60 @@ impl Backend for Stub {
             *self.page_pinned.lock().unwrap() = pinned;
         }
         self.page(agent_id, conversation).await
+    }
+
+    async fn conversation_rewind(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError> {
+        self.conversations(agent_id).await?;
+        if !self
+            .conversations
+            .lock()
+            .unwrap()
+            .0
+            .iter()
+            .any(|(c, _)| c == id)
+        {
+            return Err(CommandError::expected(
+                "That conversation isn't there any more.",
+            ));
+        }
+        self.rewinds
+            .lock()
+            .unwrap()
+            .push((id.to_string(), message_id.to_string()));
+        Ok(self.conversation_list())
+    }
+
+    async fn conversation_fork(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError> {
+        self.conversations(agent_id).await?;
+        {
+            let mut list = self.conversations.lock().unwrap();
+            let Some(title) = list.0.iter().find(|(c, _)| c == id).map(|(_, t)| t.clone()) else {
+                return Err(CommandError::expected(
+                    "That conversation isn't there any more.",
+                ));
+            };
+            let fork = format!("c{}", list.0.len() + 1);
+            list.0.push((
+                fork.clone(),
+                crate::agents::conversations::fork_title(&title),
+            ));
+            list.1 = fork.clone();
+            self.forks
+                .lock()
+                .unwrap()
+                .push((fork, id.to_string(), message_id.to_string()));
+        }
+        Ok(self.conversation_list())
     }
 
     async fn conversation_routine(
@@ -2476,6 +2560,14 @@ impl Backend for Stub {
                     { "path": "/Users/sam/Downloads", "label": "~/Downloads" },
                     { "path": "/Users/sam/Desktop", "label": "~/Desktop" },
                 ],
+                "mac": {
+                    "mail": { "state": "ok" },
+                    "messages": {
+                        "state": "full_disk_access",
+                        "words": crate::agents::watch_mac::full_disk_access_words(crate::agents::watch_mac::MacApp::Messages),
+                        "settings": crate::agents::watch_mac::FULL_DISK_ACCESS_PANE,
+                    },
+                },
             }),
             ScheduleOp::WatchCreate {
                 source,

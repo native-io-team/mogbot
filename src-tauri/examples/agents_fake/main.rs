@@ -805,6 +805,101 @@ async fn conversations(h: &H) -> Check {
     )
 }
 
+/// Rewind to here and Fork from here (`agents/rewind.rs`): the engine picks
+/// up exactly where the conversation stood before the message, as a new
+/// session forked at that entry; the original transcript and the log keep
+/// everything.
+async fn rewind(h: &H) -> Check {
+    let first = agents::conversations::FIRST;
+    let a = h.agent("Rewinder");
+    h.send(&a.id, &fake(json!([{"say": "a {turn}"}]))).await?;
+    h.turn(&a.id).await?;
+    let m2 = h.send(&a.id, &fake(json!([{"say": "b {turn}"}]))).await?;
+    h.turn(&a.id).await?;
+    let s1 = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    ensure(
+        last_reply(&a.id) == "b 2",
+        format!("before: {:?}", last_reply(&a.id)),
+    )?;
+    let lines_before = log(&a.id).len();
+
+    let list =
+        cmd::agents_conversation_rewind(h.app.clone(), a.id.clone(), first.into(), m2.id.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+    ensure(
+        list.items
+            .iter()
+            .any(|c| c.rewinds.iter().any(|r| r.at == m2.id)),
+        "no rewind in the list",
+    )?;
+    let line = notes(&a.id).last().cloned().unwrap_or_default();
+    ensure(
+        line.starts_with("Went back to before") && !line.contains("recap"),
+        format!("the line: {line:?}"),
+    )?;
+    ensure(
+        log(&a.id).len() == lines_before + 1,
+        "the log lost or gained lines",
+    )?;
+
+    let m3 = h
+        .send(&a.id, &fake(json!([{"say": "c {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let s2 = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    ensure(s2 != s1, "the rewound conversation kept its old session")?;
+    // Turn 2 of the new session: "a" and this one, not "b".
+    ensure(
+        last_reply(&a.id) == format!("c {s2} 2"),
+        format!("after the rewind: {:?}", last_reply(&a.id)),
+    )?;
+    let forked = h
+        .turns_with("\"c {session}")
+        .last()
+        .map(|t| t["fork"] == json!(true));
+    ensure(
+        forked == Some(true),
+        format!("not a fork of the old session: {forked:?}"),
+    )?;
+
+    // A fork before "c": a new conversation, from "a" alone; the original stays.
+    let list =
+        cmd::agents_conversation_fork(h.app.clone(), a.id.clone(), first.into(), m3.id.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+    let fork_id = list.current.clone();
+    ensure(fork_id != first, "no fork")?;
+    h.send_in(
+        &a.id,
+        &fake(json!([{"say": "d {session} {turn}"}])),
+        Some(&fork_id),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let s3 = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    ensure(s3 != s2 && s3 != s1, "the fork reused a session")?;
+    ensure(
+        last_reply(&a.id) == format!("d {s3} 2"),
+        format!("in the fork: {:?}", last_reply(&a.id)),
+    )?;
+    // Back in the original: its own session, where it was.
+    h.send_in(
+        &a.id,
+        &fake(json!([{"say": "e {session} {turn}"}])),
+        Some(first),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == format!("e {s2} 3"),
+        format!("the original after the fork: {:?}", last_reply(&a.id)),
+    )
+}
+
 /// The engine's copy of the conversation goes missing: the app puts its own
 /// back and the turn resumes it.
 async fn lost_transcript(h: &H) -> Check {
@@ -2329,6 +2424,7 @@ const ALL: &[&str] = &[
     "stop",
     "queue",
     "conversations",
+    "rewind",
     "lost-transcript",
     "failover-acted",
     "crash-twice",
@@ -2465,6 +2561,7 @@ fn main() {
                 "stop" => stop(&h).await,
                 "queue" => queueing(&h).await,
                 "conversations" => conversations(&h).await,
+                "rewind" => rewind(&h).await,
                 "lost-transcript" => lost_transcript(&h).await,
                 "brief" => brief(&h).await,
                 "failover-acted" => failover_after_acting(&h).await,

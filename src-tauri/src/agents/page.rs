@@ -780,6 +780,60 @@ pub fn set_pinned(
     Ok(view(agent_id, &file))
 }
 
+/* --------------------------------------------------------- rewind, fork */
+
+/// A rewind leaves the page as it is: the page isn't part of the chat it
+/// folds. What the rewind's line says about it, or nothing without one.
+pub fn rewind_clause(agent_id: &str, conversation: &str) -> Option<String> {
+    let file = read(agent_id, conversation).ok()??;
+    let current = file.current()?;
+    Some(format!(
+        "The page \u{201c}{}\u{201d} stays as it is (v{}); it isn't rewound.",
+        current.title, current.version
+    ))
+}
+
+/// The page as it was at `at` (ms): the kept versions made before then,
+/// the newest of them current. Pure.
+pub fn as_of(file: &PageFile, to: &str, at: i64) -> Option<PageFile> {
+    // Made before `at`. With none (no page yet, or the versions from then
+    // have dropped out of the kept history), no page rather than a wrong one.
+    let versions: Vec<Version> = file
+        .versions
+        .iter()
+        .filter(|v| v.at < at)
+        .cloned()
+        .collect();
+    if versions.is_empty() {
+        return None;
+    }
+    Some(PageFile {
+        v: FORMAT,
+        conversation: to.to_string(),
+        pinned: file.pinned,
+        versions,
+    })
+}
+
+/// A fork starts with `from`'s page as it was at `at`, or with none if
+/// there wasn't one then. The version it starts on, if any.
+pub fn fork(
+    agent_id: &str,
+    from: &str,
+    to: &str,
+    at: i64,
+) -> Result<Option<(String, u32)>, CommandError> {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(file) = read_unlocked(agent_id, from)? else {
+        return Ok(None);
+    };
+    let Some(copy) = as_of(&file, to, at) else {
+        return Ok(None);
+    };
+    write_unlocked(agent_id, &copy)?;
+    Ok(copy.current().map(|v| (v.title.clone(), v.version)))
+}
+
 /// One line at the top of a turn in a conversation with a page, so the
 /// agent knows it is there to keep current. Empty without one.
 pub fn turn_note(agent_id: &str, conversation: &str) -> String {

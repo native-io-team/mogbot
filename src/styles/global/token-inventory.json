@@ -5267,7 +5267,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 581
+      "consumerCount": 582
     },
     {
       "name": "--text-muted",
@@ -5275,7 +5275,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 931
+      "consumerCount": 932
     },
     {
       "name": "--text-faint",
@@ -5779,7 +5779,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 331
+      "consumerCount": 332
     },
     {
       "name": "--font-size-body-sm",
@@ -5787,7 +5787,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 538
+      "consumerCount": 539
     },
     {
       "name": "--font-size-control",
@@ -5955,7 +5955,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 121
+      "consumerCount": 123
     },
     {
       "name": "--line-height-reading",
@@ -5971,7 +5971,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 62
+      "consumerCount": 63
     },
     {
       "name": "--transition-interaction",
@@ -6115,7 +6115,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 759
+      "consumerCount": 760
     },
     {
       "name": "--spacing-sm",
@@ -6123,7 +6123,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 917
+      "consumerCount": 919
     },
     {
       "name": "--spacing-md",
@@ -6139,7 +6139,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 243
+      "consumerCount": 245
     },
     {
       "name": "--spacing-xl",
@@ -6147,7 +6147,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 159
+      "consumerCount": 162
     },
     {
       "name": "--spacing-2xl",
@@ -6707,7 +6707,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 581
+      "consumerCount": 582
     },
     {
       "name": "--text-quiet",
@@ -6723,7 +6723,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 931
+      "consumerCount": 932
     },
     {
       "name": "--text-faint",
