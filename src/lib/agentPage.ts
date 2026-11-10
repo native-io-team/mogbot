@@ -48,17 +48,35 @@ const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
 
 function put(agentId: string, conversation: string, page: ConversationPage | null) {
-  pages.set(key(agentId, conversation), page);
+  const k = key(agentId, conversation);
+  // The same answer again (most often "no page") changes nothing on screen:
+  // telling every reader would re-render the whole chat for it.
+  if (pages.has(k) && JSON.stringify(pages.get(k)) === JSON.stringify(page)) return;
+  pages.set(k, page);
   notify();
 }
 
+/** Reads on their way, so the chat and its header asking at once is one read. */
+const reading = new Map<string, Promise<void>>();
+
 /** Read the page again from the Mac. A failure leaves what was there. */
-export async function refreshPage(agentId: string, conversation: string): Promise<void> {
-  try {
-    put(agentId, conversation, await getPage(agentId, conversation));
-  } catch (e) {
-    logger.warn('[AgentPage] Could not read the page', { agentId, conversation, error: String(e) });
-  }
+export function refreshPage(agentId: string, conversation: string): Promise<void> {
+  const k = key(agentId, conversation);
+  const already = reading.get(k);
+  if (already) return already;
+  const read = (async () => {
+    try {
+      put(agentId, conversation, await getPage(agentId, conversation));
+    } catch (e) {
+      logger.warn('[AgentPage] Could not read the page', {
+        agentId,
+        conversation,
+        error: String(e),
+      });
+    }
+  })().finally(() => reading.delete(k));
+  reading.set(k, read);
+  return read;
 }
 
 /** Pin or unpin, then show what the Mac kept. */
@@ -76,7 +94,11 @@ function listenOnce() {
   listening = true;
   listen<{ agentId?: string; conversation?: string }>(PAGE_EVENT, (e) => {
     const { agentId, conversation } = e.payload ?? {};
-    if (agentId && conversation) void refreshPage(agentId, conversation);
+    // A read already on its way may have left before this change: read after it.
+    if (agentId && conversation) {
+      const before = reading.get(key(agentId, conversation)) ?? Promise.resolve();
+      void before.then(() => refreshPage(agentId, conversation));
+    }
   }).catch(() => {
     listening = false;
   });
@@ -106,5 +128,6 @@ export function useConversationPage(
 /** For tests: forget every page read. */
 export function resetPageCache() {
   pages.clear();
+  reading.clear();
   notify();
 }

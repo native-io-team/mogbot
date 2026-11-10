@@ -1090,9 +1090,15 @@ pub fn update<F: FnOnce(&mut Agent)>(id: &str, change: F) -> Result<Agent, Comma
         .iter_mut()
         .find(|a| a.id == id)
         .ok_or_else(|| CommandError::expected("That agent no longer exists."))?;
+    let before = agent.clone();
     change(agent);
     let updated = agent.clone();
-    write_registry(&registry)?;
+    // A change that changed nothing (a When… check reserving a free source,
+    // a count already right) leaves the file alone: each write is the whole
+    // registry, twice (it and its backup).
+    if updated != before {
+        write_registry(&registry)?;
+    }
     Ok(updated)
 }
 

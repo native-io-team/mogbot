@@ -111,3 +111,14 @@ export function useNativeMenu({ view, currentProjectName, pinnedPaths }: Params)
     });
   }, [inAgents, agentOrder]);
 }
+
+/**
+ * `useNativeMenu` as a component that draws nothing. App renders this
+ * rather than calling the hook: the agents' order changes whenever one of
+ * them says something, and a hook in App would re-render the whole window
+ * (every open chat's cards with it) each time.
+ */
+export function NativeMenuHost(props: Params): null {
+  useNativeMenu(props);
+  return null;
+}

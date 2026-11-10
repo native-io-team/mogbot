@@ -3,7 +3,7 @@
  * from the Mac only where it serves `agents.page`, drawn with the blocks,
  * versions on a tap, an older one opened, folding, unpinning.
  */
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { pageMock } from '../dev/mock-page';
 
 jest.mock('react-native-reanimated', () => {
@@ -125,5 +125,29 @@ describe('ConversationPage (phone)', () => {
     await act(async () => {});
     expect(mockCall).not.toHaveBeenCalled();
     expect(screen.queryByTestId('conversation-page')).toBeNull();
+  });
+
+  it('reads once per turn: not again on reopening, again when the turn moves on', async () => {
+    const pageReads = () => mockCall.mock.calls.filter(([m]) => m === 'agents.page').length;
+    const view = (turn: string) => (
+      <ConversationPage
+        agentId="budget"
+        conversation="first"
+        turn={turn}
+        side={side}
+        onError={jest.fn()}
+      />
+    );
+    const first = await render(view('working:a'));
+    await screen.findByText('November budget');
+    first.unmount();
+    const again = await render(view('working:a'));
+    await act(async () => {});
+    expect(pageReads()).toBe(1);
+    again.unmount();
+    await render(view('idle:b'));
+    await waitFor(() => expect(pageReads()).toBe(2));
+    await act(async () => {});
+    expect(pageReads()).toBe(2);
   });
 });

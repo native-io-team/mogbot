@@ -157,6 +157,7 @@ describe('ConversationPage', () => {
     expect(screen.queryByRole('button', { name: /Pin the page/ })).toBeNull();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Unpin the page' }));
+      await Promise.resolve();
     });
     expect(invoke).toHaveBeenCalledWith('agents_page_pin', {
       agentId: 'a1',
@@ -169,6 +170,7 @@ describe('ConversationPage', () => {
     expect(registered.commands[0]?.title).toBe('Pin this conversation’s page');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Pin the page “Job search”' }));
+      await Promise.resolve();
     });
     await screen.findByRole('region', { name: 'Page: Job search' });
   });
@@ -181,5 +183,11 @@ describe('ConversationPage', () => {
     );
     expect(screen.queryByRole('region')).toBeNull();
     expect(registered.commands[0]?.when()).toBe(false);
+  });
+
+  it('reads the page once when the band and the header ask at once', async () => {
+    both();
+    await screen.findByRole('region', { name: 'Page: Job search' });
+    expect(invoke.mock.calls.filter(([cmd]) => cmd === 'agents_page')).toHaveLength(1);
   });
 });
