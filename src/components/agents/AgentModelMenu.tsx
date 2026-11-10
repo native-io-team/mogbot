@@ -12,7 +12,7 @@
  * @module components/agents/AgentModelMenu
  */
 
-import { CheckIcon, ChevronIcon } from '@/components/icons';
+import { CheckIcon, SettingsSlidersIcon } from '@/components/icons';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import {
@@ -192,12 +192,12 @@ export function AgentModelMenu({ agent }: { agent: Agent }) {
           tabIndex={0}
           expanded={p['aria-expanded']}
           variant="ghost"
-          size="compact"
+          className="agent-chat__action"
+          leftIcon={<SettingsSlidersIcon size={14} />}
           title={`Model: ${current}`}
           aria-label={`Model for ${agent.name}: ${current}`}
         >
-          Model
-          <ChevronIcon size={10} className={p['aria-expanded'] ? 'chevron-flipped' : undefined} />
+          <span className="agent-chat__action-word">Model</span>
         </MenuButton>
       )}
     >

@@ -1870,6 +1870,40 @@ const WEEKLY_LIMIT_CHAT = [
   }),
 ];
 
+/** The header at its fullest: a project, a long role, the account its last
+ * turn ran on (an email), several conversations and routines. */
+const CROWDED_HEADER = {
+  ...CONVERSATIONS,
+  agents_overview: acmeWith({
+    role: 'Designs and builds the marketing site for Acme (former landing pages, the pricing table and the launch blog)',
+    ranOn: { id: 'default', name: 'sam.rivera.design@example.com' },
+    checkIns: [
+      {
+        id: 'crowd1',
+        note: 'Check the staging deploy every morning.',
+        repeat: { kind: 'days', days: [1, 2, 3, 4, 5], hour: 9, minute: 0 },
+        nextAt: now + 12 * 60 * MIN,
+        createdAt: now - 7 * 24 * 60 * MIN,
+        paused: false,
+      },
+    ],
+    conversations: { loaded: 'c-launch' },
+  }),
+};
+
+const crowdedHeader = (id: string, width?: number): Scenario => ({
+  id,
+  title: `Agents — the chat header at its fullest${width ? `, ${width}px` : ''}`,
+  looksRightWhen:
+    'Acme Site’s header: at the leading edge its key and name, then quiet chips: the folder “acme-marketing”, the Claude mark with “sam.rivera.design” (the whole email on hover), the conversation “Plan the November launch email”. No role sentence (it is the name’s tooltip). At the trailing edge one family of ghost buttons, 4px apart, the same height: the usage gauge “Usage”, the clock “1 scheduled”, the sliders “Model”, then …. Narrow, the account chip goes, then the words (icons stay), then the project chip. Nothing truncates at 1280px.',
+  ...(width ? { viewport: { width, height: 800 } } : {}),
+  openSelector: AGENTS_TAB,
+  requires: '.agent-conversations__title',
+  steps: [{ click: '[data-agent-id="acme"]' }],
+  clipSelector: '.agent-chat__header',
+  commands: CROWDED_HEADER,
+});
+
 export const agentsScenarios: Scenario[] = [
   composerScenario(1),
   composerScenario(3),
@@ -3489,6 +3523,9 @@ export const agentsScenarios: Scenario[] = [
     steps: [{ click: '[data-agent-id="acme"]' }],
     commands: CONVERSATIONS,
   },
+  crowdedHeader('agents-header-crowded'),
+  crowdedHeader('agents-header-crowded-900', 900),
+  crowdedHeader('agents-header-crowded-700', 700),
   {
     id: 'agents-conversations-search',
     title: 'Agents — searching an agent’s conversations',
