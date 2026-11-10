@@ -94,6 +94,10 @@ function tooltipAnchor(target: EventTarget | null): Element | null {
  * icon-only button, an iframe). Taking it away for the shared tooltip left
  * those nameless to VoiceOver, so the words move to `aria-label` first.
  * Anything already named, or with text inside, keeps its own name.
+ *
+ * A plain span or div can't carry a name (ARIA prohibits `aria-label` on the
+ * generic role, and screen readers ignore it there), so its words become its
+ * description instead, which is what the title was to them anyway.
  */
 function dropTitle(anchor: Element, title: string | null) {
   if (title) {
@@ -103,11 +107,29 @@ function dropTitle(anchor: Element, title: string | null) {
       anchor.tagName === 'IFRAME' ||
       (!(anchor.textContent ?? '').trim() && !anchor.querySelector('img[alt]:not([alt=""])'));
     if (ours || (!named && wordless)) {
-      anchor.setAttribute('aria-label', title);
+      anchor.setAttribute(nameable(anchor) ? 'aria-label' : 'aria-description', title);
       anchor.setAttribute('data-tooltip-named', '');
     }
   }
   anchor.removeAttribute('title');
+}
+
+/** Elements that may be named by `aria-label`: anything but the generic role. */
+const NAMEABLE_TAGS = new Set([
+  'A',
+  'BUTTON',
+  'IFRAME',
+  'IMG',
+  'INPUT',
+  'SELECT',
+  'TEXTAREA',
+  'svg',
+]);
+
+function nameable(el: Element): boolean {
+  const role = el.getAttribute('role');
+  if (role) return !['generic', 'presentation', 'none'].includes(role);
+  return NAMEABLE_TAGS.has(el.tagName);
 }
 
 function readTooltipContent(anchor: Element): TooltipContent | null {
