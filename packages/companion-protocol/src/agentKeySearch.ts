@@ -61,14 +61,14 @@ function wordsOf(text: string): string[] {
 
 const unique = (xs: string[]) => [...new Set(xs)];
 
-/** The featured legends as entries: their names and ids, and the words that pick them for a name. */
+/** The featured legends as entries: their names, ids and other names (`aka`), and the words that pick them for a name. */
 export function featuredEntries(): IconEntry[] {
   return KEY_ICONS.map((i) => ({
     id: i.id,
     name: i.name,
     featured: true,
     categories: [FEATURED_CATEGORY],
-    nameWords: unique([...wordsOf(i.name), ...wordsOf(i.id)]),
+    nameWords: unique([...wordsOf(i.name), ...wordsOf(i.id), ...(i.aka ?? []).flatMap(wordsOf)]),
     tagWords: unique(ICON_RULES.filter((r) => r.icon === i.id).flatMap((r) => r.words.map(stem))),
   }));
 }

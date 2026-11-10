@@ -30,6 +30,23 @@ const hidden = { includeHiddenElements: true };
 const style = (id: string) =>
   StyleSheet.flatten(screen.getByTestId(id, hidden).props.style) as Record<string, unknown>;
 
+/** The legend's drawn paths, as react-native-svg hands them to the native side. */
+type Node = { type: string; props: Record<string, unknown>; children?: Node[] | null };
+type Paint = { payload: number } | null;
+const paths = (): { fill: Paint; stroke: Paint; fillRule: unknown }[] => {
+  const out: { fill: Paint; stroke: Paint; fillRule: unknown }[] = [];
+  const walk = (n: Node | Node[] | null) => {
+    if (!n) return;
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (n.type === 'RNSVGPath') out.push(n.props as never);
+    (n.children ?? []).forEach((c) => typeof c === 'object' && walk(c));
+  };
+  walk(screen.toJSON() as Node | Node[] | null);
+  return out;
+};
+// react-native-svg's processed colour: 0xAARRGGBB.
+const argb = (hex: string) => 0xff000000 + parseInt(hex.slice(1), 16);
+
 beforeEach(() => {
   mockRepeat.mockClear();
   mockMoving.mockClear();
@@ -120,6 +137,27 @@ describe('the key', () => {
   it('falls back to the old colour and its name on an older Mac', async () => {
     await render(<AgentKey name="Finance" color="amber" size={keySize.md} />);
     expect(style('agent-key-cap-idle').backgroundColor).toBe(keyColorways.mustard.skirt);
+  });
+
+  it('fills the app’s mark, the Chief’s legend, in its ink', async () => {
+    await render(<AgentKey name="Chief" icon="mogbot" colorway="graphite" size={keySize.xl} />);
+    // One path (the dome, its eyes cut out even-odd), filled, unstroked.
+    const [mark, ...more] = paths();
+    expect(more).toHaveLength(0);
+    expect(mark.fill?.payload).toBe(argb(keyColorways.graphite.legend));
+    expect(mark.fillRule).toBe(0);
+    expect(mark.stroke).toBeNull();
+  });
+
+  it('lit, glow rings outline the app’s mark under its fill', async () => {
+    await render(
+      <AgentKey name="Chief" icon="mogbot" colorway="graphite" state="working" size={keySize.xl} />
+    );
+    const lit = paths();
+    expect(lit).toHaveLength(3);
+    expect(lit.slice(0, 2).every((p) => p.fill === null && p.stroke !== null)).toBe(true);
+    expect(lit[2].fill).not.toBeNull();
+    expect(lit[2].stroke).toBeNull();
   });
 
   it('goes all the way down while a finger is on it', async () => {

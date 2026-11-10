@@ -150,11 +150,12 @@ export function AgentKey({
               data-dynamic-svg="agent-key"
               className="agent-key__legend"
               data-round={drawing?.round || undefined}
+              data-fill={drawing?.fill || undefined}
               viewBox={`0 0 ${KEY_ICON_GRID} ${KEY_ICON_GRID}`}
               focusable="false"
             >
               {drawing?.paths.map((d, i) => (
-                <path key={`${i}:${d}`} d={d} />
+                <path key={`${i}:${d}`} d={d} fillRule={drawing.fill ? 'evenodd' : undefined} />
               ))}
               {drawing?.circles?.map(([cx, cy, r], i) => (
                 <circle key={`${i}:${cx},${cy}`} cx={cx} cy={cy} r={r} />

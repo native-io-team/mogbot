@@ -1,7 +1,8 @@
 {
   "$comment": "Held by agentKeys.test.ts and src-tauri/src/agents/keys_tests.rs: the Mac's migration and the clients' fallback agree.",
   "icons": [
-    { "name": "Chief of Staff", "role": "", "isMain": true, "icon": "star" },
+    { "name": "Chief of Staff", "role": "", "isMain": true, "icon": "mogbot" },
+    { "name": "Brand", "role": "Our logo and marketing", "isMain": false, "icon": "megaphone" },
     { "name": "Finance", "role": "", "isMain": false, "icon": "money" },
     { "name": "Slack Watch", "role": "", "isMain": false, "icon": "chat" },
     { "name": "Site QA", "role": "", "isMain": false, "icon": "check" },
@@ -25,6 +26,10 @@
     { "name": "???", "taken": "", "key": "A" }
   ],
   "find": [
+    { "query": "mogbot", "icon": "mogbot" },
+    { "query": "logo", "icon": "mogbot" },
+    { "query": "mark", "icon": "mogbot" },
+    { "query": "brand", "icon": "mogbot" },
     { "query": "money", "icon": "money" },
     { "query": "invoice", "icon": "lucide:receipt" },
     { "query": "Invoices", "icon": "lucide:receipt" },

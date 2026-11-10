@@ -266,7 +266,10 @@ export const TEAM = [
     // Created pinned: the one agent you're told to talk to doesn't move.
     pinned: true,
     shape: 5,
+    // The app's accent; its key is the app's mark on Graphite (`keys::fill`).
     color: 'white',
+    colorway: 'graphite',
+    icon: 'mogbot',
     minutesAgo: 3,
     role: 'Runs the other agents and keeps track of what’s in flight.',
     preview: 'Acme’s staging deploy is green. Want me to have Acme Site open the PR?',

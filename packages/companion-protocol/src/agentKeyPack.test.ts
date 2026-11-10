@@ -74,6 +74,7 @@ describe('the icon pack', () => {
     // An id the pack doesn't have draws the default legend.
     expect(legendDrawing('lucide:not-an-icon')?.round).toBeUndefined();
     expect(legendDrawing('star')?.round).toBeUndefined();
+    expect(legendDrawing('mogbot')).toMatchObject({ fill: true });
   });
 });
 
@@ -109,7 +110,7 @@ describe('finding an icon', () => {
   it('with no words lists everything, featured first; a category narrows it', () => {
     const all = searchIcons(catalog, '  ');
     expect(all.length).toBe(data.icons.length + pack.icons.length);
-    expect(all[0].id).toBe('star');
+    expect(all[0].id).toBe('mogbot');
     const featured = searchIcons(catalog, '', FEATURED_CATEGORY);
     expect(featured.map((e) => e.id)).toEqual(data.icons.map((i) => i.id));
     const finance = searchIcons(catalog, '', 'finance');

@@ -169,7 +169,7 @@ fn a_team_saved_before_keys_gets_one_each_chief_first() {
         vec![
             ("teal", "globe", "L"),
             ("mustard", "money", "F"),
-            ("putty", "star", "C"),
+            ("graphite", "mogbot", "C"),
             ("plum", "money", "I"),
         ]
     );
@@ -180,6 +180,77 @@ fn a_team_saved_before_keys_gets_one_each_chief_first() {
     assert!(keys::fill(&mut team));
     assert_eq!(team[1].bound_key.as_deref(), Some("F"));
     assert_eq!(team[3].bound_key.as_deref(), Some("I"));
+}
+
+#[test]
+fn a_chief_on_the_old_default_key_moves_to_the_mark_once() {
+    fn chief(colorway: &str, icon: &str) -> Agent {
+        let mut a = agent("chief", "Chief of Staff", "white");
+        a.is_main = true;
+        a.colorway = Some(colorway.into());
+        a.icon = Some(icon.into());
+        a.bound_key = Some("C".into());
+        a
+    }
+    let look = |a: &Agent| {
+        (
+            a.colorway.clone().unwrap(),
+            a.icon.clone().unwrap(),
+            a.color.clone(),
+        )
+    };
+    // Still the old default: the app's mark on Graphite.
+    let mut team = vec![chief("putty", "star")];
+    assert!(keys::fill(&mut team));
+    assert_eq!(
+        look(&team[0]),
+        // Its colour, the app's accent, stays.
+        ("graphite".into(), "mogbot".into(), "white".into())
+    );
+    assert!(team[0].extra.contains_key(keys::CHIEF_KEY_SETTLED));
+    assert!(!keys::fill(&mut team));
+    // Once: a star picked afterwards stays a star.
+    team[0].icon = Some("star".into());
+    team[0].colorway = Some("putty".into());
+    assert!(!keys::fill(&mut team));
+    assert_eq!(team[0].icon.as_deref(), Some("star"));
+    assert_eq!(team[0].colorway.as_deref(), Some("putty"));
+    // What the user chose is theirs: only the part still on the old default moves.
+    let mut team = vec![chief("teal", "star")];
+    keys::fill(&mut team);
+    assert_eq!(look(&team[0]).0, "teal");
+    assert_eq!(look(&team[0]).1, "mogbot");
+    let mut team = vec![chief("putty", "lucide:dog")];
+    keys::fill(&mut team);
+    assert_eq!(look(&team[0]).0, "graphite");
+    assert_eq!(look(&team[0]).1, "lucide:dog");
+    // Only the Chief: another agent on a star and Putty keeps them.
+    let mut other = chief("putty", "star");
+    other.is_main = false;
+    let mut team = vec![other];
+    keys::fill(&mut team);
+    assert_eq!(look(&team[0]).1, "star");
+    assert!(!team[0].extra.contains_key(keys::CHIEF_KEY_SETTLED));
+    // The marker survives a save and a read.
+    let mut team = vec![chief("putty", "star")];
+    keys::fill(&mut team);
+    let back: Agent = serde_json::from_value(serde_json::to_value(&team[0]).unwrap()).unwrap();
+    assert!(back.extra.contains_key(keys::CHIEF_KEY_SETTLED));
+}
+
+#[test]
+fn the_mark_is_featured_first_and_found_by_its_names() {
+    assert_eq!(keys::icons()[0], "mogbot");
+    assert_eq!(keys::icon_for("Chief of Staff", "", true), "mogbot");
+    assert_eq!(keys::chief_colorway(), "graphite");
+    for q in ["mogbot", "logo", "mark", "brand", "Logo"] {
+        assert_eq!(keys::find_icon(q, 1), vec!["mogbot"], "{q}");
+    }
+    // Any agent can wear it.
+    let team = vec![agent("a", "Finance", "amber")];
+    let change = KeyChange::checked(Some(&team[0]), &team, None, Some("logo"), None).unwrap();
+    assert_eq!(change.icon.as_deref(), Some("mogbot"));
+    assert_eq!(change.line().as_deref(), Some("now with the Logo legend"));
 }
 
 #[test]

@@ -52,11 +52,16 @@ export const COLORWAYS: readonly Colorway[] = data.colorways;
 export const COLORWAY_IDS: readonly string[] = COLORWAYS.map((c) => c.id);
 export type ColorwayId = string;
 
-export const KEY_ICONS: readonly { id: string; name: string }[] = data.icons;
+/** The featured legends, in picker order; `aka` are other names a search finds one by. */
+export const KEY_ICONS: readonly { id: string; name: string; aka?: string[] }[] = data.icons;
 export const KEY_ICON_IDS: readonly string[] = KEY_ICONS.map((i) => i.id);
 
-/** The Chief's legend, and the one an agent gets when nothing in its name says otherwise. */
+/**
+ * The Chief's legend (the app's mark) and colourway (Graphite, the app
+ * icon's), and the legend an agent gets when nothing in its name says otherwise.
+ */
 export const CHIEF_ICON: string = data.chiefIcon;
+export const CHIEF_COLORWAY: string = data.chiefColorway;
 export const DEFAULT_ICON: string = data.defaultIcon;
 
 /** Every key an agent can be bound to: letters, then digits. No modifiers. */
@@ -159,7 +164,7 @@ function words(text: string): string[] {
 /**
  * An icon read from what the agent is called and what it's for: the name
  * first, then the role, each against the rules in order. The Chief's is the
- * star. Matches `agents::keys::icon_for` exactly (agentKeys.test.ts and
+ * app's mark. Matches `agents::keys::icon_for` exactly (agentKeys.test.ts and
  * keys_tests.rs hold the same table).
  */
 export function iconFor(name: string, role = '', isMain = false): string {

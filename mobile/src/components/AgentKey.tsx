@@ -389,20 +389,36 @@ function Legend({
   // Ours are square-capped and mitred; a pack icon keeps its round caps.
   const cap = drawing?.round ? 'round' : 'square';
   const join = drawing?.round ? 'round' : 'miter';
-  const strokes = (stroke: string, width: number, opacity = 1) => (
+  // `glowPass`: a ring of glow drawn under the legend, not the legend itself.
+  const strokes = (stroke: string, width: number, opacity = 1, glowPass = false) => (
     <>
-      {drawing?.paths.map((d, i) => (
-        <Path
-          key={`${i}:${d}`}
-          d={d}
-          fill="none"
-          stroke={stroke}
-          strokeWidth={width}
-          strokeOpacity={opacity}
-          strokeLinecap={cap}
-          strokeLinejoin={join}
-        />
-      ))}
+      {drawing?.paths.map((d, i) =>
+        drawing.fill ? (
+          // The app's mark, the one filled legend (agentKeyIcons.ts): the
+          // ink as a fill; a glow pass outlines the shape under it.
+          <Path
+            key={`${i}:${d}`}
+            d={d}
+            fill={glowPass ? 'none' : stroke}
+            fillRule="evenodd"
+            stroke={glowPass ? stroke : 'none'}
+            strokeWidth={width}
+            strokeOpacity={opacity}
+            strokeLinejoin="round"
+          />
+        ) : (
+          <Path
+            key={`${i}:${d}`}
+            d={d}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={width}
+            strokeOpacity={opacity}
+            strokeLinecap={cap}
+            strokeLinejoin={join}
+          />
+        )
+      )}
       {drawing?.circles?.map(([cx, cy, r], i) => (
         <Circle
           key={`${i}:${cx},${cy}`}
@@ -435,8 +451,8 @@ function Legend({
       }
       style={[styles.legend, dim && { opacity: KEY_GEOMETRY.paused.legendOpacity }]}
     >
-      {lit && strokes(glow, g.stroke * wide, light === 'ask' ? 0.2 : 0.16)}
-      {lit && strokes(glow, g.stroke * 1.7, light === 'ask' ? 0.45 : 0.35)}
+      {lit && strokes(glow, g.stroke * wide, light === 'ask' ? 0.2 : 0.16, true)}
+      {lit && strokes(glow, g.stroke * 1.7, light === 'ask' ? 0.45 : 0.35, true)}
       {strokes(ink, g.stroke)}
     </Svg>
   );

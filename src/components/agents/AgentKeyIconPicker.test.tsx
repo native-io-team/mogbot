@@ -25,7 +25,7 @@ function Harness({ autoFocus = true }: { autoFocus?: boolean }) {
 
 const preview = () => screen.getByTestId('preview').querySelector('.agent-key')!;
 const loaded = () =>
-  waitFor(() => expect(screen.getByText('2,051 icons')).toBeTruthy(), { timeout: 10_000 });
+  waitFor(() => expect(screen.getByText('2,052 icons')).toBeTruthy(), { timeout: 10_000 });
 
 beforeEach(() => {
   try {

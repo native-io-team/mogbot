@@ -298,6 +298,8 @@ pub fn ensure_main() -> Result<store::Agent, CommandError> {
         role: prompts::CHIEF_ROLE.to_string(),
         instructions: prompts::CHIEF_INSTRUCTIONS.to_string(),
         shape: Some(5),
+        // The app's accent (`src/lib/accent.ts`). Its key is the app's mark on
+        // Graphite all the same (`keys::fill`).
         color: Some("white".to_string()),
         is_main: true,
     });

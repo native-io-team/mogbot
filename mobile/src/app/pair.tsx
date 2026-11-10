@@ -9,7 +9,7 @@
  * web page or message can open one.
  */
 
-import { CHIEF_ICON, COLORWAYS, type PairingLink } from '@shipstudio/companion-protocol';
+import { CHIEF_COLORWAY, CHIEF_ICON, type PairingLink } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -159,11 +159,11 @@ export default function Pair() {
       bounces={false}
     >
       <View style={styles.hero}>
-        {/* The site's mark: the Chief's key, as the desk's onboarding shows it. */}
+        {/* The app's mark: the Chief's key, as the desk's onboarding shows it. */}
         <View style={styles.logo}>
           <AgentKey
             name="Chief of Staff"
-            colorway={COLORWAYS[0].id}
+            colorway={CHIEF_COLORWAY}
             icon={CHIEF_ICON}
             boundKey="C"
             size={keySize.xl}
