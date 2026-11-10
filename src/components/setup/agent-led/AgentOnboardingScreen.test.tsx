@@ -111,6 +111,12 @@ describe('AgentOnboardingScreen', () => {
     await heading('Which AI should your agents run on?');
     const claude = screen.getByText('Claude Code', { selector: '.agent-pick-card-name' });
     expect(screen.getByText('Codex', { selector: '.agent-pick-card-name' })).toBeInTheDocument();
+    // Said for people who don't code: the name "Code" isn't a requirement,
+    // and each card names the plan it needs.
+    expect(screen.getByText(/You don’t need to know how to code\./)).toBeInTheDocument();
+    expect(screen.getByText('Needs a Claude Pro or Max plan')).toBeInTheDocument();
+    expect(screen.getByText('Needs a ChatGPT Plus or Pro plan')).toBeInTheDocument();
+    expect(screen.getAllByText(/not only code/)).toHaveLength(2);
     fireEvent.click(claude.closest('button') as HTMLElement);
     expect(await heading('Install Claude Code')).toBeInTheDocument();
     expect(screen.getByText('Claude Code · 1 of 2')).toBeInTheDocument();

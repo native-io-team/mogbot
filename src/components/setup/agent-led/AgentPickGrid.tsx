@@ -33,16 +33,16 @@ const CARDS: CardDef[] = [
   {
     key: 'claude',
     name: 'Claude Code',
-    description: 'Claude, by Anthropic',
-    account: 'Uses a Claude Pro or Max plan',
+    description: 'Claude, by Anthropic. Despite the name, it does any job, not only code.',
+    account: 'Needs a Claude Pro or Max plan',
     recommended: true,
     icon: <ClaudeIcon size={28} />,
   },
   {
     key: 'codex',
     name: 'Codex',
-    description: 'GPT, by OpenAI',
-    account: 'Uses a ChatGPT Plus or Pro plan',
+    description: 'ChatGPT’s models, by OpenAI. It also does any job, not only code.',
+    account: 'Needs a ChatGPT Plus or Pro plan',
     icon: <CodexIcon size={28} />,
   },
 ];

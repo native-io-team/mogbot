@@ -114,7 +114,7 @@
   color: var(--text-secondary);
 }
 
-/* "Uses a Claude Pro or Max plan": what you need, before you pick. */
+/* "Needs a Claude Pro or Max plan": what you need, before you pick. */
 .agent-pick-card-account {
   margin-top: var(--spacing-xs);
   font-size: var(--font-size-body-sm);
