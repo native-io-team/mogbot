@@ -173,29 +173,57 @@ impl Store for MacStore {
     }
 }
 
+/// The longest command line [`interactive_put_line`] hands `security -i`, in
+/// bytes with its newline. `security` reads its commands into a fixed buffer
+/// (4096 bytes, measured: a 4097-byte line is still whole, 4098 is not) and
+/// runs whatever is past the end as a *second command*: a value built to
+/// spill over could delete or replace another Keychain item. Kept well under
+/// the measured limit.
+pub(super) const INTERACTIVE_LINE_MAX: usize = 4000;
+
 /// One `security -i` command line that stores `value`: every argument in
 /// double quotes, with `\` and `"` escaped, so the value arrives whole and
-/// unexpanded at any length. A line break can't be carried on one line, so a
-/// value with one is refused rather than stored differently.
+/// unexpanded. Refused rather than stored differently:
+/// - a line break or NUL anywhere (it can't be carried on one line);
+/// - a value that isn't printable ASCII: `find-generic-password -w` prints
+///   any other value as hex, so it could never read back the same;
+/// - a line past [`INTERACTIVE_LINE_MAX`], which `security` would split into
+///   two commands.
 fn interactive_put_line(service: &str, account: &str, value: &str) -> Result<String, String> {
     if [service, account, value]
         .iter()
-        .any(|s| s.contains(['\n', '\r', '\0']))
+        .any(|s| s.chars().any(|c| c.is_control()))
     {
-        return Err("a secret can't contain a line break".into());
+        return Err("a secret can't contain a line break or other control character".into());
+    }
+    if !value.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
+        return Err(
+            "a development build can store only plain-text secrets (letters, digits and \
+             punctuation)"
+                .into(),
+        );
     }
     let q = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
-    Ok(format!(
+    let line = format!(
         "add-generic-password -U -a {} -s {} -w {}\n",
         q(account),
         q(service),
         q(value)
-    ))
+    );
+    if line.len() > INTERACTIVE_LINE_MAX {
+        return Err(format!(
+            "this secret is too long for a development build to store ({} characters; \
+             the limit is about {})",
+            value.len(),
+            INTERACTIVE_LINE_MAX - (line.len() - value.len())
+        ));
+    }
+    Ok(line)
 }
 
 #[cfg(test)]
 mod interactive_put_line_tests {
-    use super::interactive_put_line;
+    use super::{interactive_put_line, INTERACTIVE_LINE_MAX};
 
     #[test]
     fn quotes_and_escapes_every_argument() {
@@ -216,6 +244,47 @@ mod interactive_put_line_tests {
     #[test]
     fn a_line_break_is_refused() {
         assert!(interactive_put_line("svc", "A", "one\ntwo").is_err());
+        for bad in [
+            "a\rb",
+            "a\0b",
+            "a\u{85}b",
+            "a\u{2028}b",
+            "tab\there",
+            "\u{b}",
+        ] {
+            assert!(interactive_put_line("svc", "A", bad).is_err(), "{bad:?}");
+        }
+        assert!(interactive_put_line("svc\n", "A", "x").is_err());
+        assert!(interactive_put_line("svc", "A\r", "x").is_err());
+    }
+
+    #[test]
+    fn a_value_that_wouldnt_read_back_is_refused() {
+        assert!(interactive_put_line("svc", "A", "caf\u{e9}").is_err());
+        assert!(interactive_put_line("svc", "A", "\u{1f642}").is_err());
+    }
+
+    /// The bug this guards: `security -i` runs whatever spills past its line
+    /// buffer as a second command, so a long enough value could carry one.
+    #[test]
+    fn a_line_security_would_split_is_refused() {
+        let spill = format!(
+            "{}delete-generic-password -s someone-elses-item",
+            "a".repeat(4096)
+        );
+        assert!(interactive_put_line("svc", "A", &spill).is_err());
+        assert!(interactive_put_line("svc", "A", &"k".repeat(10_000)).is_err());
+        // Right up to the limit is carried whole; one more byte is refused.
+        let overhead = interactive_put_line("svc", "A", "").unwrap().len();
+        let most = "k".repeat(INTERACTIVE_LINE_MAX - overhead);
+        assert_eq!(
+            interactive_put_line("svc", "A", &most).unwrap().len(),
+            INTERACTIVE_LINE_MAX
+        );
+        assert!(interactive_put_line("svc", "A", &format!("{most}k")).is_err());
+        // Escapes count: a value of quotes doubles in length on the line.
+        let quotes = "\"".repeat((INTERACTIVE_LINE_MAX - overhead) / 2 + 1);
+        assert!(interactive_put_line("svc", "A", &quotes).is_err());
     }
 }
 
@@ -239,9 +308,15 @@ mod keychain_live_tests {
             uuid::Uuid::new_v4().simple()
         );
         let store = MacStore;
+        let overhead = interactive_put_line(&service, "SELFTEST", "")
+            .unwrap()
+            .len();
         for value in [
             "k".repeat(300),
             r#"sk"quote\back slash $HOME 'x'"#.to_string(),
+            // The longest a development build stores, which `security` must
+            // still read as one command.
+            "k".repeat(INTERACTIVE_LINE_MAX - overhead),
         ] {
             store.cli_put(&service, "SELFTEST", &value).unwrap();
             assert_eq!(store.cli_get(&service, "SELFTEST").unwrap(), Some(value));

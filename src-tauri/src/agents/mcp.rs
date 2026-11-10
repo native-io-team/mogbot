@@ -10,7 +10,7 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime};
 use tauri::AppHandle;
 use tokio::sync::oneshot;
 
@@ -45,7 +45,7 @@ pub(super) fn approval_wait() -> Duration {
 }
 
 /// (agent id, tool, input, when granted).
-type LateGrant = (String, String, Value, Instant);
+type LateGrant = (String, String, Value, SystemTime);
 
 /// One-time grants from late Allows: (agent id, tool, input, when). The
 /// next matching `approve` call from that agent is allowed without a card.
@@ -57,11 +57,20 @@ static GRANTS: LazyLock<Mutex<Vec<LateGrant>>> = LazyLock::new(|| Mutex::new(Vec
 /// How long a late Allow's one call stays granted.
 const LATE_GRANT_TTL: Duration = Duration::from_secs(60 * 60);
 
-pub fn grant_once(agent_id: &str, tool: &str, input: &Value) {
-    grant_once_at(agent_id, tool, input, Instant::now());
+/// A late grant made `at` still holds `now`. By the wall clock, not
+/// `Instant`: on macOS `Instant` stops while the Mac sleeps, so an Allow
+/// given before a night's sleep would still be live the next morning. A
+/// clock set back past the grant ends it (an extra card, never an extra
+/// hour).
+fn late_grant_live(at: SystemTime, now: SystemTime) -> bool {
+    now.duration_since(at).is_ok_and(|age| age < LATE_GRANT_TTL)
 }
 
-fn grant_once_at(agent_id: &str, tool: &str, input: &Value, at: Instant) {
+pub fn grant_once(agent_id: &str, tool: &str, input: &Value) {
+    grant_once_at(agent_id, tool, input, SystemTime::now());
+}
+
+fn grant_once_at(agent_id: &str, tool: &str, input: &Value, at: SystemTime) {
     GRANTS.lock().unwrap_or_else(|e| e.into_inner()).push((
         agent_id.to_string(),
         tool.to_string(),
@@ -72,7 +81,8 @@ fn grant_once_at(agent_id: &str, tool: &str, input: &Value, at: Instant) {
 
 fn take_grant(agent_id: &str, tool: &str, input: &Value) -> bool {
     let mut grants = GRANTS.lock().unwrap_or_else(|e| e.into_inner());
-    grants.retain(|(.., at)| at.elapsed() < LATE_GRANT_TTL);
+    let now = SystemTime::now();
+    grants.retain(|(.., at)| late_grant_live(*at, now));
     match grants
         .iter()
         .position(|(a, t, i, _)| a == agent_id && t == tool && i == input)
@@ -4150,12 +4160,24 @@ mod tests {
     }
 
     #[test]
+    fn a_late_grant_lapses_by_the_wall_clock() {
+        let at = SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_000_000);
+        assert!(late_grant_live(at, at));
+        assert!(late_grant_live(
+            at,
+            at + LATE_GRANT_TTL - Duration::from_secs(1)
+        ));
+        // A night asleep counts: the wall clock moves on while uptime doesn't.
+        assert!(!late_grant_live(at, at + Duration::from_secs(8 * 60 * 60)));
+        assert!(!late_grant_live(at, at + LATE_GRANT_TTL));
+        // A clock set back before the grant ends it rather than extending it.
+        assert!(!late_grant_live(at, at - Duration::from_secs(5)));
+    }
+
+    #[test]
     fn a_late_allow_nobody_used_lapses() {
         let input = json!({ "command": "ls lapsed" });
-        let Some(long_ago) = Instant::now().checked_sub(LATE_GRANT_TTL + Duration::from_secs(1))
-        else {
-            return; // A clock this young can't be wound back; nothing to test.
-        };
+        let long_ago = SystemTime::now() - LATE_GRANT_TTL - Duration::from_secs(1);
         grant_once_at("agent-lapse", "Bash", &input, long_ago);
         assert!(!take_grant("agent-lapse", "Bash", &input));
         // And it's gone, not just skipped.

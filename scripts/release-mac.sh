@@ -132,6 +132,18 @@ for e in com.apple.security.automation.apple-events com.apple.security.device.au
   grep -q "$e" <<<"$ENTS" || die "entitlement missing from the signed app: $e"
 done
 grep -q "get-task-allow" <<<"$ENTS" && die "app carries get-task-allow (debug); notarization refuses it"
+# Entitlements that switch parts of the hardened runtime back off: any of
+# these lets another process or a planted library run code as the app (which
+# holds the agents' Keychain items and its Apple Events / Contacts / Calendar
+# grants). Entitlements.plist asks for none; a dependency or a hand edit must
+# not slip one in.
+for e in com.apple.security.cs.disable-library-validation \
+         com.apple.security.cs.allow-dyld-environment-variables \
+         com.apple.security.cs.allow-unsigned-executable-memory \
+         com.apple.security.cs.disable-executable-page-protection \
+         com.apple.security.cs.debugger; do
+  if grep -q "$e" <<<"$ENTS"; then die "app carries $e, which weakens the hardened runtime"; fi
+done
 ok "signed by the identity, hardened runtime, timestamped, entitlements present"
 
 # Every Mach-O inside the bundle must be signed by us too, or notarization fails.

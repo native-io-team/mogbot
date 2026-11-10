@@ -120,6 +120,9 @@ for p in $perms; do
   case " $allowed " in *" $p "*) ;; *) fail "unexpected permission $p (add it to ANDROID_PERMISSIONS on purpose, or block it)." ;; esac
 done
 if grep -q 'android:debuggable="true"' "$manifest"; then fail "the release manifest is debuggable."; fi
+# The store build talks only HTTPS to the paired Mac (*.ts.net), as on iOS
+# (no ATS exceptions): plain HTTP stays a development build's, for the mock Mac.
+if grep -q 'android:usesCleartextTraffic="true"' "$manifest"; then fail "the release manifest allows plain HTTP (usesCleartextTraffic)."; fi
 cert="$(keytool -printcert -jarfile "$aab" 2>/dev/null | sed -n 's/^Owner: //p' | sed -n 1p)"
 echo "signed by    ${cert:-unsigned}"
 case "$cert" in *"Android Debug"*) echo "  (the debug key: fine to check, not to upload)";; esac
