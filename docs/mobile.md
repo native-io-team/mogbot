@@ -676,6 +676,33 @@ request, the diff and the photo viewer push over them. At
   `@shipstudio/companion-protocol`'s `work.ts`, shared with the desk; the
   methods show only on a Mac that lists them.
 
+### Conversations
+
+Several conversations with one agent ([agents.md](agents.md), "Several
+conversations with one agent"), on a Mac that lists `agents.conversations`
+(`conversationsOffered`, `lib/conversations.ts`). An older Mac has one
+conversation per agent and the chat is as it was.
+
+- **Store.** `chats[agentId]` stays every line the agent has, whatever the
+  conversation: the Needs tab, the agent rows, Catch up and the request
+  screens read its cards there. One conversation's chat is kept beside it
+  under `conversationKey(agentId, id)` (`<agent>#conversation:<id>`), read a
+  page at a time with `agents.messages`' `conversation`; every event lands in
+  both (`chatKeysOf`), so paging, upserts and resync work unchanged.
+- **Which one.** The chat opens on the Mac's `current` (where the user last
+  was, on any device; `ensureViewing`). Picking one calls
+  `agents.conversationSelect`; `agents.send` carries the one on screen, so
+  replies land where the user asked. A reply streaming in another conversation
+  isn't drawn in this one.
+- **Screens.** A speech-bubble button beside ⓘ in the chat's header opens
+  Conversations (`app/conversations.tsx`): New conversation, a search, every
+  conversation newest first (a check on the one on screen, "Needs your OK",
+  "Working" or how long ago) and Rename for the one on screen. With more than
+  one, a slim bar under the header names the one on screen, with an amber dot
+  when another waits on you (`ConversationSwitch`). The agent sheet's Start
+  fresh is New conversation on such a Mac: no confirm, nothing waits, and it
+  opens the chat.
+
 ### Rooms
 
 Group conversations of 2–6 agents ([agents.md](agents.md), "Rooms"), on a
