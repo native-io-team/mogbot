@@ -5227,8 +5227,11 @@ never slow down for limits unless the user chose that.
   can't disagree; the old "What you have" sheet and the ↑/↓ account list are
   gone. The chat header's ring fills to what is left of the 5-hour window and
   its popover shows the same stack (`usageGlance`); the phone's Agents list
-  shows the desk sidebar's glance (`GlanceRow`), and its Settings the glance
-  card above the accounts. The rules everywhere:
+  shows the desk sidebar's glance (`GlanceRow`) as one compact card (the
+  total and how many accounts it is of, a refill chip, the total bar fullest
+  first), and its Settings the glance card above the accounts. The count
+  beside the total is the accounts read (`total.counted`): one not read yet
+  isn't in the figure, so it isn't counted beside it. The rules everywhere:
   - **Every limit is said as what is left** ("62% left", "Weekly 68% → 53%
     left"), never a bare used figure; only a conversation's context says
     "used".

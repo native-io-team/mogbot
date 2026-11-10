@@ -377,6 +377,16 @@ describe('the row, in plain words', () => {
     expect(g.row.count).toBe('2 accounts');
   });
 
+  it('counts the accounts the figure is of: one not read yet is not one of them', () => {
+    const g = usageGlance(
+      [acct('default'), acct('work', { name: 'Work' }), acct('new', { name: 'New' })],
+      inv([line('default', { windows: [week(22)] }), line('work', { windows: [week(70)] })]),
+      { now: NOW }
+    );
+    expect(g.total.counted).toBe(2);
+    expect(g.row.count).toBe('2 accounts');
+  });
+
   it('says plainly when nothing has been read, and never a figure', () => {
     const g = usageGlance([acct('default')], inv([line('default')]), { now: NOW });
     expect(g.row).toEqual({

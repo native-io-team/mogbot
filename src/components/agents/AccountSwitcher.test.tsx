@@ -139,11 +139,12 @@ describe('AccountSwitcher (the sidebar’s usage glance)', () => {
     render(<AccountSwitcher collapsed={false} onOpen={onOpen} />);
 
     const row = await screen.findByTestId('account-switcher');
-    // What's left and of what, in plain words; then how many accounts.
+    // What's left and of what, in plain words. The figure is of the one
+    // account read, so no "2 accounts" beside it: Work isn't in it.
     await waitFor(() => expect(row).toHaveTextContent('62% left for now'));
     expect(row).toHaveTextContent(/^Usage/);
     expect(row).toHaveTextContent('Refills');
-    expect(row).toHaveTextContent('2 accounts');
+    expect(row).not.toHaveTextContent('2 accounts');
     // One segment per account: Work has no reading, so its slot is empty, never full.
     const meter = within(row).getByRole('img', { name: /Room left/ });
     expect(meter).toHaveAccessibleName(

@@ -599,7 +599,7 @@ const useStyles = makeStyles((colors) => ({
   },
   sectionLabel: { flex: 1 },
   sectionNext: { paddingTop: space.xl },
-  quota: { paddingHorizontal: space.lg, paddingTop: space.md },
+  quota: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
   hiddenToggle: {
     flexDirection: 'row',

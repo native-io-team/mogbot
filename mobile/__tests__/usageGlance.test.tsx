@@ -104,9 +104,14 @@ describe('usage at a glance, on the phone', () => {
     });
     const onPress = jest.fn();
     await render(<GlanceRow glance={glance} onPress={onPress} />);
-    // The total across both accounts, then when it next refills.
+    // The total across both accounts (never the account in use's 70%), then
+    // when it next refills, as a chip; the button says it in words.
     expect(screen.getByText(/60% left · 2 accounts/)).toBeTruthy();
-    expect(screen.getByText(/^Refills in /)).toBeTruthy();
+    expect(screen.queryByText(/70% left/)).toBeNull();
+    expect(
+      screen.getByText(glance.total.refill!.in, { includeHiddenElements: true })
+    ).toBeTruthy();
+    expect(screen.getByRole('button').props.accessibilityLabel).toMatch(/Refills in /);
     expect(screen.queryByText('Plenty of room')).toBeNull();
     await fireEvent.press(screen.getByRole('button'));
     expect(onPress).toHaveBeenCalled();
