@@ -195,7 +195,7 @@ export default function Agents() {
     // A Mac that removed this phone shows nothing of its agents: only the way back.
     if (!overview || removed) return [];
     // The Chief first, always; pinned; the rest (lib/home). What waits on you is
-    // the Needs you tab's, counted on its badge: no bar for it here too.
+    // the Catch up tab's, counted on its badge: no bar for it here too.
     const home = buildHome(overview.agents, live ? teamSetup : null);
     const out: Row[] = [];
     const add = (a: Agent) =>

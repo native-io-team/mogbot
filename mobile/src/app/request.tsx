@@ -1,6 +1,6 @@
 /**
  * One request, in full: `/request?agent=<id>&id=<message>`. From a tapped
- * notification, a row of the Needs you feed, or Review on a Lock Screen.
+ * notification, a row of Catch up, or Review on a Lock Screen.
  *
  * Everything the card asks is on screen with nothing capped: a long command
  * line by line, a plan's every step, an email's whole body, a settings
@@ -81,7 +81,7 @@ export default function Request() {
 
   const close = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/needs');
+    else router.replace('/catch-up');
   }, [router]);
 
   if (!card && !looked) {

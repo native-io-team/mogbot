@@ -769,13 +769,13 @@ const scrollToIncludes = (text) => async (page) => {
 /** The states the other phases miss (`--probe`, dev/mock-probe.ts). */
 const PROBE = [
   {
-    name: 'probe-needs-you',
-    route: '/needs',
-    ready: 'Needs you',
+    name: 'probe-catch-up',
+    route: '/catch-up',
+    ready: 'Catch up',
     act: () => sleep(1500),
     pages: 2,
     check:
-      'Needs you: risky requests (Temp Helper’s delete, Deploys’ production deploy) wear the warning icon and say Review, never Allow on the row; only short low-risk ones are answered in place; the 19-line script says Review; step-in and crossover open',
+      'Catch up: risky requests (Temp Helper’s delete, Deploys’ production deploy) wear the warning icon and say Review, never Allow on the row; only short low-risk ones are answered in place; the 19-line script says Review; step-in and crossover open',
   },
   {
     name: 'probe-request-risky',
@@ -934,7 +934,7 @@ const LIVE = [
     route: '/agents',
     ready: 'Chief of Staff',
     check:
-      'Chief and pinned, then by activity, what needs you first; no “N agents need your OK” bar (the Needs you tab counts it); each waiting row keeps only its own label. Above them, the usage glance as the desk sidebar says it',
+      'Chief and pinned, then by activity, what needs you first; no “N agents need your OK” bar (the Catch up tab counts it); each waiting row keeps only its own label. Above them, the usage glance as the desk sidebar says it',
   },
   {
     name: 'projects',
@@ -944,23 +944,24 @@ const LIVE = [
   },
   { name: 'search', route: '/search', check: 'Empty search' },
   {
-    name: 'needs-you',
-    route: '/needs',
-    ready: 'Needs you',
+    name: 'catch-up',
+    route: '/catch-up',
+    ready: 'Catch up',
     act: () => sleep(1500),
+    pages: 3,
     check:
-      'Needs you: every waiting card across agents, newest first; the tab badge is the number of rows; short low-risk ones Deny · Allow (neutral), risky or long ones Review, keys/logins their own action',
+      'Catch up: "N things need you", then one card per agent (its key, name, count), its rows one line of what is asked and one of why; the tab badge is the number of rows; short low-risk ones Deny · Allow (neutral, compact), risky or long ones Review, keys/logins their own action, copies Discard · Keep changes; then "Since you last caught up" from real records',
   },
   {
     name: 'catchup-first',
-    route: '/catch-up',
+    route: '/one-at-a-time',
     ready: 'Catch up',
     act: () => sleep(1200),
     check: 'Catch up: "1 of N", the bar, one card; Allow · Deny (neutral) over Chat · Next',
   },
   {
     name: 'catchup-approval',
-    route: '/catch-up',
+    route: '/one-at-a-time',
     ready: 'Catch up',
     act: async (page) => {
       await sleep(1000);
@@ -991,7 +992,7 @@ const LIVE = [
   },
   {
     name: 'catchup-done',
-    route: '/catch-up',
+    route: '/one-at-a-time',
     ready: 'Catch up',
     act: async (page) => {
       await sleep(1000);
@@ -1002,7 +1003,7 @@ const LIVE = [
       }
       await sleep(600);
     },
-    check: 'All caught up: a calm check and Back to agents',
+    check: 'All caught up: a calm check and Done',
   },
   {
     name: 'chat-chief',

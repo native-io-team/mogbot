@@ -1,5 +1,5 @@
 /**
- * The Needs you feed (lib/needsYou.ts): every card across every agent,
+ * The Catch up feed (lib/needsYou.ts): every card across every agent,
  * most urgent first and newest first within, answered ones gone; and which
  * rows are answered in place (only what fits whole).
  */
