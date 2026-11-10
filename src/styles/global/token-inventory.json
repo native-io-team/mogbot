@@ -5507,7 +5507,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 79
+      "consumerCount": 80
     },
     {
       "name": "--accent-error-light",
@@ -6131,7 +6131,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 595
+      "consumerCount": 596
     },
     {
       "name": "--spacing-lg",
@@ -6883,7 +6883,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 79
+      "consumerCount": 80
     },
     {
       "name": "--accent-error-light",
