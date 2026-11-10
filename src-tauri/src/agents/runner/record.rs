@@ -66,7 +66,12 @@ pub fn record(app: &AppHandle, message: AgentMessage) -> Result<AgentMessage, Co
     if message.kind == MessageKind::User && !message.agent_id.is_empty() {
         super::expiry::new_task(&message.agent_id);
         // Its first-open starters go once the user says anything.
-        if super::starters::clear(&message.agent_id) {
+        let cleared = super::starters::clear(&message.agent_id);
+        // Speaking to the Chief with "Already have agents…?" still open goes
+        // past it (`import_choice::Choice::Skipped`).
+        let skipped = super::store::get(&message.agent_id).is_ok_and(|a| a.is_main)
+            && crate::agents::import_choice::skip_if_undecided(super::store::now_ms());
+        if cleared || skipped {
             let _ = tauri::Emitter::emit(app, EVENT_REGISTRY, ());
         }
     }

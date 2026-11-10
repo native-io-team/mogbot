@@ -145,6 +145,17 @@ describe('the working line, live', () => {
     render(<WorkingIndicator activity="Thinking" />);
     expect(screen.queryByRole('button')).toBeNull();
   });
+
+  it('says Thinking the moment a turn starts, before the engine reports a step', () => {
+    // The first second after Send: working, no activity, no steps yet.
+    const { container } = render(<WorkingIndicator activity={null} agent={agent} />);
+    expect(container.querySelector('.agent-working__activity')?.textContent).toBe('Thinking');
+  });
+
+  it('stays wordless when told to (the import bar says what is happening)', () => {
+    const { container } = render(<WorkingIndicator activity={null} agent={agent} bare />);
+    expect(container.querySelector('.agent-working__activity')).toBeNull();
+  });
 });
 
 describe('a timeline its page sent without steps', () => {

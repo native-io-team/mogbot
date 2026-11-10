@@ -56,6 +56,13 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
     group: 'schedule',
   },
   {
+    id: 'make-agent',
+    label: 'Make me an agent',
+    what: 'Say what it should do and your Chief drafts the agent on one card: its name, its job, when it runs and the apps it needs. Nothing is made until you say yes, and its first run starts right away.',
+    text: 'Make me an agent that keeps working on its own. Draft it first (its name, what it does, when it runs and what it needs), make it only when I say yes, then do its first run now. It should: ',
+    group: 'schedule',
+  },
+  {
     id: 'invoices',
     label: 'Chase unpaid invoices',
     what: 'Every Monday an agent finds what’s overdue and another drafts a polite reminder for each. You get one card with the list and the drafts, and nothing is sent without your Allow. Your Chief helps you connect where your invoices live first.',
@@ -165,15 +172,17 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
 ];
 
 /**
- * The chips under the greeting: three everyday jobs that show work running
- * without the user (every morning, on a trigger, a team), one from each
- * group, and that someone who isn't a developer recognises as theirs. The
- * morning brief and the research need nothing set up, so a first result can
- * land in the first minutes. A fixed order: rotating them would make the
- * first screen differ between two people comparing notes, and between a
- * screenshot and the app.
+ * The chips under the greeting: four jobs, each a different way in, that
+ * someone who isn't a developer recognises as theirs: something every
+ * morning, an agent of their own ("Make me an agent", drafted on one card
+ * before anything is made), a piece of work written up, and something
+ * personal. None needs anything set up first (no email app, no folder, no
+ * GitHub), so the first result lands in the first minutes rather than after
+ * a sign-in; the inbox and the rest wait in "More ideas…". A fixed order:
+ * rotating them would make the first screen differ between two people
+ * comparing notes, and between a screenshot and the app.
  */
-export const CHIEF_CHIP_IDS = ['morning-brief', 'inbox', 'research'] as const;
+export const CHIEF_CHIP_IDS = ['morning-brief', 'make-agent', 'research', 'travel'] as const;
 
 /** The idea sets up a routine (a time or a trigger), so it runs only while this Mac does. */
 export function ideaRepeats(idea: ChiefIdea): boolean {

@@ -207,7 +207,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "create_agent",
-        description: "Create a new agent with a standing responsibility. It appears in the user's sidebar immediately. Optionally hand it a first task. When the user describes an agent in one message, draft it first in one short reply (name, one-line role, the briefing in a few lines, each routine with its time, a draft-then-post routine as two steps with the second `ask_first`, the apps it will need), ask \"Make it?\", and on yes create it in one call with `routines`. With `template`, it starts from one of the ready-made agents: its role, briefing and colour, which `role` and `color` override and `instructions` adds to.",
+        description: "Create a new agent with a standing responsibility. It appears in the user's sidebar immediately. Optionally hand it a first task. When the user describes an agent in one message, draft it first in one `show` card (name, one-line role, the briefing in a few lines, each routine with its time, a draft-then-post routine as two steps with the second `ask_first`, the apps it will need), ask \"Make it?\", and on yes create it in one call with `routines`. With `template`, it starts from one of the ready-made agents: its role, briefing and colour, which `role` and `color` override and `instructions` adds to.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -4052,7 +4052,7 @@ mod tests {
         let tool = TOOLS.iter().find(|t| t.name == "create_agent").unwrap();
         assert!(tool
             .description
-            .contains("draft it first in one short reply"));
+            .contains("draft it first in one `show` card"));
         assert!(tool.description.contains("`ask_first`"));
         assert!(tool
             .description

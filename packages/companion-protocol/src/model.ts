@@ -642,7 +642,7 @@ export interface AgentsOverview {
 }
 
 /** Mirrors `agents::import_choice::Choice`. */
-export type ImportChoice = 'undecided' | 'imported' | 'declined';
+export type ImportChoice = 'undecided' | 'imported' | 'declined' | 'skipped';
 
 /**
  * Mirrors `agents::independence::Level`: how much the user's agents do on

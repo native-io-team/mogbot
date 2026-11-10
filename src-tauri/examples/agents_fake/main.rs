@@ -31,6 +31,7 @@ use app_lib::commands::agents as cmd;
 use store::{AgentMessage, MessageKind};
 use tauri::{AppHandle, Listener};
 
+mod first_run;
 mod page;
 mod real_chief;
 
@@ -3116,6 +3117,7 @@ async fn parity(h: &H, on: On) -> Check {
 }
 
 const ALL: &[&str] = &[
+    "first-run",
     "normal",
     "approvals",
     "plan",
@@ -3347,6 +3349,7 @@ fn main() {
         for name in wanted {
             let t = Instant::now();
             let result = match name {
+                "first-run" => first_run::first_run(&h).await,
                 "normal" => normal(&h).await,
                 "approvals" => approvals_scenario(&h).await,
                 "plan" => plan(&h).await,

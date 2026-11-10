@@ -51,17 +51,20 @@ The people this is for already run an assistant; what they can't get there is
 work that keeps going without them. So the Chief's greeting starts on
 pipelines, not one-offs: something starts it (a time, a file, an email, a
 GitHub issue), agents hand the work between them, and it ends on a card the
-user answers, on the desk or the phone. Three starters and **More ideas…**,
+user answers, on the desk or the phone. Four starters and **More ideas…**,
 from one catalogue (`packages/companion-protocol/src/chiefIdeas.ts`, re-exported
 by `lib/chiefIdeas.ts`), so the phone's chips (`ChiefStarters`) type the same
 words. Each types a whole, specific brief with one blank at its end; none sends
 by itself.
 
-The chips are **Brief me every morning…**, **Sort my inbox, draft replies…** and
-**Research it and write it up…**: one per group, everyday jobs someone who
-isn't a developer recognises, and two of them need nothing set up, so the
-first result can land in the first minutes (the morning brief asks for its
-first one now). Ship fixes and client briefs were chips until a
+The chips are **Brief me every morning…**, **Make me an agent…**, **Research
+it and write it up…** and **Plan a trip…**: four ways in (every morning, an
+agent of your own, work written up, something personal), everyday jobs
+someone who isn't a developer recognises, and none needs anything set up, so
+the first result lands in the first minutes (the morning brief and the new
+agent each run their first one now). **Sort my inbox, draft replies…** was a
+chip until 2026-11-10: it needs an email app connected before anything comes
+back, so it waits in the gallery. Ship fixes and client briefs were chips until a
 first-ten-minutes walk-through found them making the first screen read as a
 coding tool that asks for GitHub before showing anything; "Run my launch as
 a team" went for the same reason ("I'm not launching anything").
@@ -72,6 +75,12 @@ a team" went for the same reason ("I'm not launching anything").
 - **Research it and write it up…**: a researcher collects sources and a
   writer turns them into a draft with every source linked, then a weekly
   look for anything new. Needs nothing set up.
+- **Make me an agent…**: the user finishes "It should: " and the Chief
+  drafts the agent on one card (a `show` of its name, job, routines with
+  their times and the apps it needs, with Make it / Change something), makes
+  it only on yes, and runs its first job at once (`first_task`).
+- **Plan a trip…**: a researcher and a planner, prices checked again every
+  few days. Needs nothing set up; nothing is booked without an Allow.
 - **Run a big project as a team…** (gallery): a planner, a writer and a
   doer, the Chief keeping the plan in a file, and a 9am weekday check-in it
   collects and summarises. The Chief puts the three and itself in a room
@@ -3772,7 +3781,11 @@ home, once. The answer is the Mac's
 (`agents::import_choice`, `import-choice.json` beside the agents; carried on
 the overview as `importChoice`, set by `agents_set_import_choice` /
 `agents.setImportChoice`); any import that brings something across sets it
-to `imported`. Afterwards there is no Import row in the sidebar: import is
+to `imported`. Writing to the Chief with the question still open sets it to
+`skipped` (`import_choice::skip_if_undecided`, from `runner::record`): the
+user went past it. Before, a new user who typed a task instead of answering
+left the card pinned above the greeting for good, and the phone offer, which
+waits for this question to be settled, never came. Afterwards there is no Import row in the sidebar: import is
 ⌘K "Import agents…", the Chief, Settings → Agents → Import, and the phone's
 ⋯ menu.
 

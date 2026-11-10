@@ -1,6 +1,6 @@
 /**
  * The Chief's first open, as on the desk (`ChiefStarters` in
- * `AgentChat.tsx`): under its stored greeting, the same three ideas
+ * `AgentChat.tsx`): under its stored greeting, the same four ideas
  * (`CHIEF_CHIPS`, shared in the protocol package). A tap types the idea's
  * whole brief into the composer for you to finish; nothing is sent until you
  * press Send. They go once you've said anything.

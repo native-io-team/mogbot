@@ -1,6 +1,6 @@
 /**
- * The first few minutes: the Chief's three starters (a morning brief, the
- * inbox, research written up) and "More ideas…", the whole
+ * The first few minutes: the Chief's four starters (a morning brief, an
+ * agent of your own, research written up, a trip) and "More ideas…", the whole
  * brief each leaves in the composer, the gallery and what picking from it
  * does, the New agent dialog on a ready-made agent (and the one that needs
  * an email app), a ready-made agent's own first open, and first results
@@ -169,12 +169,73 @@ const SITE_HANDED_BACK = [
   },
 ];
 
+/** The first message, a second after Send: the turn has started, no step yet. */
+const SENT_FIRST = [
+  chiefGreeting('chief', now - 2 * MIN),
+  {
+    id: 'u-first',
+    agentId: 'chief',
+    ts: now - 1_000,
+    kind: 'user',
+    text: 'Research it and write it up. The topic: the best e-bikes for a 10 km commute under $2,000',
+  },
+];
+const CHIEF_STARTING = {
+  ...BASE_OVERVIEW,
+  // Sending with "Already have agents…?" unanswered went past it.
+  importChoice: 'skipped',
+  agents: [{ ...CHIEF, status: { state: 'working', activity: null, since: now - 1_000 } }],
+};
+
+/** "Make me an agent", finished and sent: the Chief's draft, on one card. */
+const MAKE_AGENT_BRIEF =
+  'Make me an agent that keeps working on its own. Draft it first (its name, what it does, when it runs and what it needs), make it only when I say yes, then do its first run now. It should: send me the AI news worth knowing every weekday at 8am';
+const DRAFT_INTRO =
+  'Here’s the agent I’d make. It reads the AI news each weekday morning and sends you the three things worth knowing, with links.';
+const AGENT_DRAFTED = [
+  chiefGreeting('chief', now - 3 * MIN),
+  { id: 'u-make', agentId: 'chief', ts: now - 2 * MIN, kind: 'user', text: MAKE_AGENT_BRIEF },
+  {
+    id: 'a-draft',
+    agentId: 'chief',
+    ts: now - MIN,
+    kind: 'agent',
+    text: `${DRAFT_INTRO}\n\nAI News: the AI news worth knowing; weekdays at 8am; needs nothing to connect.\n\nMake it? Make it / Change something`,
+    blocks: {
+      v: 1,
+      intro: DRAFT_INTRO,
+      items: [
+        {
+          kind: 'facts',
+          title: 'AI News',
+          summary: 'AI News: the AI news worth knowing; weekdays at 8am; needs nothing',
+          items: [
+            { label: 'Job', value: 'The AI news worth knowing, in three points' },
+            { label: 'Runs', value: 'Weekdays at 8am, the first one now' },
+            { label: 'Reads', value: 'News sites and lab blogs, on the web' },
+            { label: 'Needs', value: 'Nothing to connect' },
+          ],
+        },
+        {
+          kind: 'choices',
+          question: 'Make it?',
+          summary: 'Make it? Make it / Change something',
+          options: [
+            { label: 'Make it', reply: 'Make it' },
+            { label: 'Change something', reply: 'Change something' },
+          ],
+        },
+      ],
+    },
+  },
+];
+
 export const agentsFirstWinScenarios: Scenario[] = [
   {
     id: 'agents-first-win-morning-brief',
     title: 'Agents — first run: “Brief me every morning”',
     looksRightWhen:
-      'The greeting with its starters still under it (Brief me every morning, Sort my inbox, draft replies, Research it and write it up, left-aligned under the greeting, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Send is off and a quiet hint says “Fill in the end, then send”: the brief can’t go with its blank empty. Nothing has been sent.',
+      'The greeting with its starters still under it (Brief me every morning, Make me an agent, Research it and write it up, Plan a trip, left-aligned under the greeting, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Send is off and a quiet hint says “Fill in the end, then send”: the brief can’t go with its blank empty. Nothing has been sent.',
     command: 'agents.open',
     steps: [{ click: '.agent-chat__starters > [data-idea="morning-brief"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
@@ -191,12 +252,12 @@ export const agentsFirstWinScenarios: Scenario[] = [
     commands: {},
   },
   {
-    id: 'agents-first-win-inbox',
-    title: 'Agents — first run: “Sort my inbox, draft replies”',
+    id: 'agents-first-win-make-agent',
+    title: 'Agents — first run: “Make me an agent”',
     looksRightWhen:
-      'The composer holds the whole brief, “Through the day, have one agent sort my new email … My email is in: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
+      'The composer holds the whole brief, “Make me an agent that keeps working on its own. Draft it first … It should: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > [data-idea="inbox"]' }],
+    steps: [{ click: '.agent-chat__starters > [data-idea="make-agent"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
   },
@@ -308,7 +369,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-first-run-import-choice',
     title: 'Agents — first run, straight from onboarding: the Chief speaks first',
     looksRightWhen:
-      'The Chief’s greeting, its three starters and More ideas… directly under it, and only then one calm card, “Already have agents in another assistant?”, with “No thanks, start fresh” and a neutral “Bring my agents”. The import question used to be its own onboarding screen; here it waits under the greeting and nothing above the greeting competes with it.',
+      'The Chief’s greeting, its four starters and More ideas… directly under it, and only then one calm card, “Already have agents in another assistant?”, with “No thanks, start fresh” and a neutral “Bring my agents”. The import question used to be its own onboarding screen; here it waits under the greeting and nothing above the greeting competes with it.',
     command: 'agents.open',
     requires: '.agent-chat__starters ~ [data-testid="agent-import-choice"]',
     commands: { agents_overview: { ...BASE_OVERVIEW, importChoice: 'undecided' } },
@@ -323,6 +384,46 @@ export const agentsFirstWinScenarios: Scenario[] = [
     requires: '[data-testid="chief-phone-offer"]',
     commands: {
       agents_overview: { ...BASE_OVERVIEW, importChoice: 'declined' },
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? SITE_HANDED_BACK : [],
+    },
+  },
+  {
+    id: 'agents-first-run-sent',
+    title: 'Agents — first message, a second after Send',
+    looksRightWhen:
+      'The greeting, the user’s first message on the right, and straight under it the Chief’s working line: its key pressed and “Thinking” in calm shimmering text, the moment the turn starts and before the engine has reported a step. No bare key with nothing beside it. The starters have gone, and the import card with them: typing went past it, so it isn’t pinned above the greeting. No phone card.',
+    command: 'agents.open',
+    requires: '.agent-working__activity',
+    commands: {
+      agents_overview: CHIEF_STARTING,
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? SENT_FIRST : [],
+    },
+  },
+  {
+    id: 'agents-first-run-draft',
+    title: 'Agents — “Make me an agent”: the Chief’s draft on one card',
+    looksRightWhen:
+      'The greeting, the user’s finished brief (“…It should: send me the AI news worth knowing every weekday at 8am”), then the Chief’s one-line intro and one tidy card: “AI News” with Job, Runs, Reads and Needs as label/value rows, then “Make it?” with two neutral quick replies, Make it and Change something. No wall of text, nothing made yet, nothing in the accent.',
+    command: 'agents.open',
+    requires: '.agent-chat__messages',
+    commands: {
+      agents_overview: { ...BASE_OVERVIEW, importChoice: 'declined' },
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? AGENT_DRAFTED : [],
+    },
+  },
+  {
+    id: 'agents-first-result-phone-offer-skipped-import',
+    title: 'Agents — the first result is back after skipping the import card',
+    looksRightWhen:
+      'As agents-first-result-phone-offer: the result card, then one calm phone card under it. The user never answered “Already have agents in another assistant?” (they just typed, which the Mac records as skipped), so no import card is pinned above the greeting and the phone card is the only offer on screen.',
+    command: 'agents.open',
+    phoneOffer: true,
+    requires: '[data-testid="chief-phone-offer"]',
+    commands: {
+      agents_overview: { ...BASE_OVERVIEW, importChoice: 'skipped' },
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'chief' ? SITE_HANDED_BACK : [],
     },
