@@ -282,7 +282,8 @@
   position: absolute;
   right: calc(8 * var(--agent-key-u));
   bottom: calc(5 * var(--agent-key-u));
-  font-family: var(--font-code);
+  /* The UI face, as on a real keycap: the code face's O read as a zero. */
+  font-family: var(--font-ui);
   font-size: calc(12 * var(--agent-key-u));
   font-weight: var(--font-weight-heading);
   line-height: 1;
