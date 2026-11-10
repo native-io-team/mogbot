@@ -6902,6 +6902,18 @@ the engine makes it, maybe before the runner has read what the engine wrote
 just before, and that is the chat's. The `parity-*` scenarios hold it on
 every engine.
 
+A `show` that asks nothing (usage tiles) drew the same habit: a closing
+second bubble ("That's everything there is to show for now.") or one saying
+again what the tiles said, and a prompt rule didn't stop it. So a line read
+after any `show` that only restates or closes it also goes in "What it did"
+(`blocks::restates`, against every summary the turn has shown,
+`blocks::note_shown`). The test is conservative: at most 200 characters and
+two lines, no question, link or code, every number in it shown, and every
+word either shown or a closing word ("that's", "all", "here's", "now"…).
+"You've used 62% of your weekly limit; it resets Friday." under tiles saying
+so folds; "I'd switch the Researcher to your second account" stays. The
+`parity-*` scenarios hold both sides on every engine.
+
 Harness: `agents-blocks-*` (numbers, a chart's tooltip, a sorted table, more
 charts, deciding, a form left empty, progress, answered, outside text).
 `agents-blocks-brief*` (the morning brief) and `agents-blocks-in-chat*` (blocks among bubbles, a result card and “What it did”), each at 1280 and 760.

@@ -1717,11 +1717,16 @@ async fn show(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &
     };
     let receipt = super::blocks::receipt(&set);
     let asks = super::blocks::asks(&set);
+    let shown = message.text.clone();
     match runner::record(app, message) {
         Ok(_) => {
-            // The rest of this turn's words go in "What it did" (`runner`).
-            if asks && super::broker::is_live(&caller.id, turn) {
-                runner::note_blocks_asked(&caller.id);
+            // The rest of this turn's words go in "What it did" (`runner`);
+            // after one that asks nothing, a line only restating it does.
+            if super::broker::is_live(&caller.id, turn) {
+                super::blocks::note_shown(&caller.id, &shown);
+                if asks {
+                    runner::note_blocks_asked(&caller.id);
+                }
             }
             text(receipt)
         }

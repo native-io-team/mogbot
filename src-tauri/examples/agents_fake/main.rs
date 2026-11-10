@@ -2905,6 +2905,50 @@ async fn parity(h: &H, on: On) -> Check {
         step("usage", format!("a price it never reported: {usage:?}")),
     )?;
 
+    // 1b. A `show` that asks nothing: a closing line after it only restates
+    // it and goes in "What it did" (`blocks::restates`, as the real model
+    // wrote it); a follow-up with something new stays in the chat.
+    let tiles = json!({
+        "text": "Here's the fruit stand this week.",
+        "blocks": [blocks_show()["blocks"][0].clone()]
+    });
+    for (line, folds) in [
+        ("That's everything there is to show for now.", true),
+        (
+            "Waste is up because Wednesday's mango delivery came in bruised; I'd switch suppliers.",
+            false,
+        ),
+    ] {
+        h.send(
+            &a.id,
+            &fake(json!([
+                {"tool": "show", "args": tiles},
+                {"slow": line, "every": 0.05}
+            ])),
+        )
+        .await?;
+        h.turn(&a.id).await.map_err(|e| step("show tiles", e))?;
+        no_errors(&a.id).map_err(|e| step("show tiles", e))?;
+        let in_chat = replies(&a.id).iter().any(|r| r.contains(line));
+        ensure(
+            in_chat != folds,
+            step(
+                "show tiles",
+                format!("{line:?} in the chat: {in_chat}, expected {}", !folds),
+            ),
+        )?;
+        if folds {
+            let in_timeline = log(&a.id).iter().any(|m| {
+                let work = m.work.clone().or_else(|| agents::work::load(&a.id, &m.id));
+                format!("{work:?}").contains(line)
+            });
+            ensure(
+                in_timeline,
+                step("show tiles", format!("{line:?} isn't in \"What it did\"")),
+            )?;
+        }
+    }
+
     // 2. A command: the same card, or said plainly that it can't ask.
     let info = agents::engine::info(on.engine()).await;
     ensure(
