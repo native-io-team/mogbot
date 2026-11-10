@@ -6115,7 +6115,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 768
+      "consumerCount": 770
     },
     {
       "name": "--spacing-sm",
