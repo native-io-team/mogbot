@@ -2,7 +2,7 @@
  * Words for the live step, shared by the desk and the phone so they never
  * disagree: its timer ("5:32"), the quiet hint a known slow tool gets after
  * a minute, when "Stop this step" is offered, the gentle "No progress for
- * 5 min", the on-demand "Last activity 4s ago · using the CPU", and what a
+ * 5 min", the on-demand "Last activity 4s ago · busy", and what a
  * finished step adds after its label ("6m 12s · 42 passed, 3 failed").
  *
  * Only what the Mac reported (`agents::work`): a part with nothing behind
@@ -81,15 +81,15 @@ export function quietLine(work: TurnWork | undefined, now: number): string | nul
   return `No progress for ${min} min`;
 }
 
-/** On demand: "Last activity 4s ago · using the CPU". */
+/** On demand: "Last activity 4s ago · busy". */
 export function lifeLine(work: TurnWork | undefined, now: number): string | null {
   if (work?.lastSignAt == null) return null;
   const ago = Math.max(0, now - work.lastSignAt);
   const when = ago < 2_000 ? 'just now' : `${formatRowElapsed(ago)} ago`;
   const parts = [`Last activity ${when}`];
   const busy = work.current?.busy;
-  if (busy === true) parts.push('using the CPU');
-  if (busy === false) parts.push('not using the CPU');
+  if (busy === true) parts.push('busy');
+  if (busy === false) parts.push('idle');
   return parts.join(' · ');
 }
 

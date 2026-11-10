@@ -154,7 +154,7 @@ describe('the step it is on right now', () => {
     );
     expect(screen.queryByText(/Last activity/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /^Running the Cypress tests/ }));
-    expect(screen.getByText('Last activity 4s ago · using the CPU')).toBeInTheDocument();
+    expect(screen.getByText('Last activity 4s ago · busy')).toBeInTheDocument();
   });
 
   it('offers to stop just this step after ten minutes', async () => {
@@ -195,8 +195,7 @@ describe('the step it is on right now', () => {
     mockIPC(
       (cmd) => {
         calls.push(cmd);
-        if (cmd === 'agents_check_on')
-          return 'Its command is still running but isn’t using the CPU.';
+        if (cmd === 'agents_check_on') return 'It’s still running but sitting idle.';
         return cmd === 'agents_stop' ? true : null;
       },
       { shouldMockEvents: true }
@@ -217,9 +216,7 @@ describe('the step it is on right now', () => {
       await Promise.resolve();
     });
     expect(calls).toContain('agents_check_on');
-    expect(
-      screen.getByText('Its command is still running but isn’t using the CPU.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('It’s still running but sitting idle.')).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
       await Promise.resolve();

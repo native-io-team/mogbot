@@ -265,7 +265,7 @@ const commands = {
           ? FINANCE_CHAT
           : messagesFor(args),
   agents_check_on: () =>
-    'Its command is still running but isn’t using the CPU, and its last progress was 5 min ago. It may be waiting on something, like a server or the network.',
+    'It’s still running but sitting idle, and its last progress was 5 min ago. It may be waiting on a website or a download.',
   agents_stop_step: () => 'Stopped that step. It carries on from there.',
   agents_show_agent_browser: () => null,
   // The first ask gets a picture; later ones nothing new (the hook then waits).
@@ -335,7 +335,7 @@ export const agentsLiveScenarios: Scenario[] = [
     id: 'agents-live-output',
     title: 'Agents — Show output on the running step',
     looksRightWhen:
-      'As agents-live-step, with the line pressed open: under it, the steps so far, icons under the key cap and words on the line’s edge, times on the right; the last row is “Running the Cypress tests” in full text with its own ticking “5:32”, and under its words “Last activity 3s ago · using the CPU” and “Show output” open (chevron down) on a recessed monospace box with the Cypress lines so far. The hint stays under the list.',
+      'As agents-live-step, with the line pressed open: under it, the steps so far, icons under the key cap and words on the line’s edge, times on the right; the last row is “Running the Cypress tests” in full text with its own ticking “5:32”, and under its words “Last activity 3s ago · busy” and “Show output” open (chevron down) on a recessed monospace box with the Cypress lines so far. The hint stays under the list.',
     requires: '.agent-work__step[data-current] .agent-live__output',
     openSelector: AGENTS_TAB,
     steps: [openAcme, { click: '.agent-working__toggle' }, { click: '.agent-live__toggle' }],
@@ -385,7 +385,7 @@ export const agentsLiveScenarios: Scenario[] = [
     id: 'agents-live-stalled',
     title: 'Agents — no progress for 5 min, checked on',
     looksRightWhen:
-      'Finance’s chat. The working line: Finance’s key cap, still, then “No progress for 5 min · Building the project · 2 steps · 9:00” with no shimmer, and at the line’s right end two neutral text actions “Check on it” and “Stop” (not accent, not red). Under it, on the words’ edge, “Last activity 4s ago · not using the CPU” and — after Check on it — “Its command is still running but isn’t using the CPU, and its last progress was 5 min ago…” in secondary text. The sidebar’s Finance row says “No progress for 5 min”.',
+      'Finance’s chat. The working line: Finance’s key cap, still, then “No progress for 5 min · Building the project · 2 steps · 9:00” with no shimmer, and at the line’s right end two neutral text actions “Check on it” and “Stop” (not accent, not red). Under it, on the words’ edge, “Last activity 4s ago · idle” and — after Check on it — “It’s still running but sitting idle, and its last progress was 5 min ago…” in secondary text. The sidebar’s Finance row says “No progress for 5 min”.',
     requires: '.agent-live__said',
     openSelector: AGENTS_TAB,
     steps: [openFinance, { click: '.agent-working__actions .agent-live__action' }],
