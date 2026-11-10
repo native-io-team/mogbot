@@ -148,6 +148,25 @@ export interface Methods {
     result: Conversations;
   };
   /**
+   * "Rewind to here" (and Edit and resend, before its send): the conversation
+   * carries on from just before the user's message; what came after is
+   * folded (`ConversationView.rewinds`), never deleted. Refused while a turn
+   * runs. Newer Macs only: check `welcome.methods`.
+   */
+  'agents.conversationRewind': {
+    params: { agentId: string; conversationId: string; messageId: string };
+    result: Conversations;
+  };
+  /**
+   * "Fork from here": a new conversation (`current` in the result) whose
+   * history is everything before the user's message; the original stays.
+   * Newer Macs only: check `welcome.methods`.
+   */
+  'agents.conversationFork': {
+    params: { agentId: string; conversationId: string; messageId: string };
+    result: Conversations;
+  };
+  /**
    * Move a routine to another of the agent's conversations: it fires there
    * from its next run. Newer Macs only: check `welcome.methods`.
    */

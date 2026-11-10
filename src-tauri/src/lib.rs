@@ -700,6 +700,8 @@ pub fn run() {
             commands::agents::agents_conversation_new,
             commands::agents::agents_conversation_select,
             commands::agents::agents_conversation_rename,
+            commands::agents::agents_conversation_rewind,
+            commands::agents::agents_conversation_fork,
             commands::agents::agents_conversation_routine,
             commands::agents::agents_take_over,
             commands::agents::agents_hand_back,

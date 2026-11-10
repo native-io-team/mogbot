@@ -2411,7 +2411,9 @@ pub fn messages_page(
 }
 
 /// [`messages_page`] for one of the agent's conversations
-/// (`conversations::of`): only its lines, paged the same way.
+/// (`conversations::of`): only its lines, paged the same way. A fork's
+/// history (lines of the conversation it came from) comes before its own,
+/// by id; lines it rewound past are in it too (the chat folds them).
 pub fn conversation_page(
     agent_id: &str,
     conversation: &str,
@@ -2419,7 +2421,11 @@ pub fn conversation_page(
     before: Option<&str>,
     through: Option<(&str, usize)>,
 ) -> Result<Vec<AgentMessage>, CommandError> {
-    let keep = |m: &AgentMessage| super::conversations::of(m) == conversation;
+    // Read before the log's lock: the list's is never held across it.
+    let inherited = super::conversations::page_spec(agent_id, conversation).inherited;
+    let keep = |m: &AgentMessage| {
+        super::conversations::of(m) == conversation || inherited.contains(&m.id)
+    };
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     let path = log_path(agent_id)?;
