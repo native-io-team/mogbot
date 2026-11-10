@@ -1161,7 +1161,7 @@ thing:
 
 | Surface | Where "needs you" shows | Not also |
 | --- | --- | --- |
-| Sidebar | The bell beside the sidebar toggle counts it (`InFlightBell`, the amber pill wash; it opens What's in flight). Each waiting agent's row says it once, in its **Needs your OK** pill | No "Needs your OK · N" row in the list; no amber dot at the row's right |
+| Sidebar | The bell beside the sidebar toggle counts it (`InFlightBell`, the amber pill wash), named **Needs you** as the phone's tab is ("Needs you · 2"); it opens What's in flight, whose first section is Needs you. Each waiting agent's row says it once, in its **Needs your OK** pill | No "Needs your OK · N" row in the list; no amber dot at the row's right |
 | Open chat | The card itself in its own chat; in any other chat the requests bar above the composer | Not in the header |
 | What's in flight | Its row under Needs you, with the cards answerable in place | |
 
