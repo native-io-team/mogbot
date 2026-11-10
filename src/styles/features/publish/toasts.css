@@ -70,6 +70,14 @@
   overflow-y: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* At the body's line-height of 1, each line's glyph box hangs about 2px
+     below it, which made every toast 2px taller than its box: scrollable.
+     The app's themed scrollbar is always drawn in WKWebView (Chrome's
+     harness hides scrollbars), so a toast showed a scrollbar thumb beside
+     its text. Room for that overhang inside the box, given straight back
+     outside it, so the toast's size is unchanged. */
+  padding-block: var(--spacing-2xs);
+  margin-block: calc(var(--spacing-2xs) * -1);
 }
 
 .toast.toast-info .toast-icon {
