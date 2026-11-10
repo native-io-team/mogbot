@@ -22,6 +22,7 @@ import {
   ADD_ON_MAC,
   LOW_LEFT,
   OUT_OF_USAGE,
+  placeLabel,
   SIGN_IN_DIFFERENT,
   type AgentEngine,
   type StackKey,
@@ -329,7 +330,7 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
           <Pressable
             key={k.key}
             accessibilityRole="button"
-            accessibilityLabel={`${k.position}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
+            accessibilityLabel={`${placeLabel(k, keys)}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
               refill ? `, refills in ${refill}` : ''
             }`}
             onPress={() => onOpen(k)}
@@ -344,7 +345,7 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
                 variant="caption"
                 color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
               >
-                {String(k.position)}
+                {placeLabel(k, keys)}
               </T>
             </View>
             <View style={styles.rowBody}>
@@ -398,10 +399,13 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
 export function KeyCard({
   k,
   titled = true,
+  all = [],
 }: {
   k: StackKey;
   /** Its name is the screen's title already: the card leads with its place and state. */
   titled?: boolean;
+  /** Every account listed, so a place names its engine when both are there. */
+  all?: readonly StackKey[];
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -414,7 +418,7 @@ export function KeyCard({
             variant="caption"
             color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
           >
-            {String(k.position)}
+            {placeLabel(k, all)}
           </T>
         </View>
         <View style={styles.title}>
@@ -677,7 +681,8 @@ const useStyles = makeStyles((colors) => ({
   cardQuiet: { backgroundColor: colors.surfaceApp, boxShadow: 'none', borderStyle: 'dashed' },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   cap: {
-    width: space.xl,
+    minWidth: space.xl,
+    paddingHorizontal: space['2xs'],
     height: space.xl,
     alignItems: 'center',
     justifyContent: 'center',

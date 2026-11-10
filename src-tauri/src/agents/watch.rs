@@ -2143,6 +2143,7 @@ pub(crate) fn create_in(
         follow_up: false,
         then: Vec::new(),
         waiting: None,
+        model: None,
         extra: Default::default(),
     };
     let mut refused: Option<Refused> = None;

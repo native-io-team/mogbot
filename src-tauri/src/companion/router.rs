@@ -91,6 +91,9 @@ pub const METHODS: &[&str] = &[
     "agents.accounts.use",
     "agents.accounts.reorder",
     "agents.usagePlan",
+    "agents.usage.setMode",
+    "agents.spare.add",
+    "agents.spare.spendNow",
     "agents.quietHours",
     "agents.setQuietHours",
     "agents.morningBrief",
@@ -699,6 +702,14 @@ pub trait Backend: Send + Sync + 'static {
     async fn account_reorder(&self, engine: &str, ids: Vec<String>) -> Result<Value, CommandError>;
     /// `agents_usage_overview`: the capacity inventory, read-only.
     async fn usage_plan(&self) -> Result<Value, CommandError>;
+    /// `agents_set_usage_mode`: the user chose a usage mode (no card: their
+    /// own choice, as in Settings). Answers the inventory.
+    async fn usage_set_mode(&self, mode: &str) -> Result<Value, CommandError>;
+    /// `agents_spare_add`: something for the spare-capacity list, by "you".
+    /// Answers the inventory.
+    async fn spare_add(&self, text: &str, agent_id: Option<&str>) -> Result<Value, CommandError>;
+    /// `agents_spare_spend_now`: "Give agents something to do". Answers `{ line }`.
+    async fn spare_spend_now(&self) -> Result<Value, CommandError>;
     /// `agents_quiet_hours`: the team's quiet hours, `{ window }` (null when off).
     async fn quiet_hours(&self) -> Result<Value, CommandError>;
     /// `agents_set_quiet_hours`: set them, or `None` for off. They only
@@ -1823,6 +1834,9 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             preview(field("engine")),
             preview(field("id"))
         ),
+        "agents.usage.setMode" => format!("usage mode: {}", preview(field("mode"))),
+        "agents.spare.add" => format!("spare-capacity list: add {}", preview(field("text"))),
+        "agents.spare.spendNow" => "spare-capacity list: start now".to_string(),
         "agents.accounts.reorder" => format!(
             "{} accounts in order: {}",
             preview(field("engine")),
@@ -2378,6 +2392,34 @@ async fn run(
             Ok(b.account_reorder(engine, ids).await?)
         }
         "agents.usagePlan" => Ok(b.usage_plan().await?),
+        "agents.usage.setMode" => {
+            let mode = params.get("mode").and_then(Value::as_str).unwrap_or("");
+            if !matches!(mode, "normal" | "save" | "use_it_all") {
+                return Err(bad_params(
+                    "The usage mode is normal, save (Save my limits) or use_it_all (Use it all before reset).",
+                ));
+            }
+            Ok(b.usage_set_mode(mode).await?)
+        }
+        "agents.spare.add" => {
+            let text = params
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim();
+            let agent = params
+                .get("agentId")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty());
+            if text.is_empty() || text.chars().count() > 600 || agent.is_some_and(|a| a.len() > 64)
+            {
+                return Err(bad_params(
+                    "Adding to the spare-capacity list takes the text (at most 600 characters) and optionally an agentId.",
+                ));
+            }
+            Ok(b.spare_add(text, agent).await?)
+        }
+        "agents.spare.spendNow" => Ok(b.spare_spend_now().await?),
         "agents.quietHours" => Ok(b.quiet_hours().await?),
         "agents.setQuietHours" => {
             let window = match params.get("window") {
@@ -3910,6 +3952,61 @@ mod tests {
             .any(|(_, m, detail, ok)| m == "agents.setIndependence"
                 && *ok
                 && detail == "independence: often"));
+    }
+
+    /// Persona review 2026-11-09 (the Maximizer): the phone changes the
+    /// mode, adds to the spare-capacity list and starts it, audited.
+    #[tokio::test]
+    async fn a_phone_changes_the_usage_mode_and_the_spare_list_audited() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let call = |m: &'static str, params: Value| dispatch(&c, &me, m, params);
+        assert!(call("agents.usage.setMode", json!({ "mode": "turbo" }))
+            .await
+            .is_err());
+        assert!(call("agents.spare.add", json!({ "text": "  " }))
+            .await
+            .is_err());
+        assert!(call("agents.spare.add", json!({ "text": "x".repeat(601) }))
+            .await
+            .is_err());
+        assert!(stub.usage_changes.lock().unwrap().is_empty());
+        let inv = call("agents.usage.setMode", json!({ "mode": "use_it_all" }))
+            .await
+            .unwrap();
+        assert!(inv.get("accounts").is_some(), "answers the inventory");
+        call(
+            "agents.spare.add",
+            json!({ "text": "Tidy the docs", "agentId": "a1" }),
+        )
+        .await
+        .unwrap();
+        let said = call("agents.spare.spendNow", json!({})).await.unwrap();
+        assert!(said["line"]
+            .as_str()
+            .unwrap()
+            .contains("spare-capacity list"));
+        assert_eq!(
+            *stub.usage_changes.lock().unwrap(),
+            vec!["mode use_it_all", "add Tidy the docs for a1", "spend"]
+        );
+        for m in [
+            "agents.usage.setMode",
+            "agents.spare.add",
+            "agents.spare.spendNow",
+        ] {
+            assert!(!READ_ONLY_METHODS.contains(&m), "{m}");
+        }
+        let audited = stub.audited();
+        assert!(audited
+            .iter()
+            .any(|(_, m, d, ok)| m == "agents.usage.setMode"
+                && *ok
+                && d == "usage mode: use_it_all"));
+        assert!(audited
+            .iter()
+            .any(|(_, m, _, ok)| m == "agents.spare.spendNow" && *ok));
     }
 
     #[tokio::test]

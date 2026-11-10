@@ -3428,6 +3428,15 @@ struct Idle {
     hop: u8,
 }
 
+/// The scheduled runs the agent's current turn answers.
+fn turn_tickets(agent_id: &str) -> Vec<String> {
+    let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    runtimes
+        .get(agent_id)
+        .map(|r| r.tickets.clone())
+        .unwrap_or_default()
+}
+
 fn take_tickets(agent_id: &str) -> Vec<String> {
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     runtimes
@@ -5326,12 +5335,16 @@ async fn run_on_engine(
                 return Err(CommandError::expected(line));
             }
         };
-        // Set to one account that is out until a reset it reported: the turn
-        // ends now, on the usage-limit line and the Note, rather than spend
-        // a refused try on it (`wallet::pinned_and_out`).
-        if let Some(back) = wallet::pinned_and_out(pin.is_some(), &account, &tried, now) {
+        // Set to one account, or with only one signed in, that is out until a
+        // reset it reported: the turn ends now, on the usage-limit line (and
+        // the Note), rather than spend a refused try on it
+        // (`wallet::pinned_and_out`). A routine that ends so waits for the
+        // reset (`runs::settle`).
+        let lone = candidates.iter().filter(|c| c.signed_in).count() <= 1;
+        if let Some(back) = wallet::pinned_and_out(pin.is_some() || lone, &account, &tried, now) {
             let others = wallet::candidates(engine).await;
-            if wallet::can_switch(&others, std::slice::from_ref(&account.id), now) {
+            if pin.is_some() && wallet::can_switch(&others, std::slice::from_ref(&account.id), now)
+            {
                 let line = pinned_out_line(&agent.name, &account.name);
                 let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
             }
@@ -5714,8 +5727,14 @@ async fn run_turn(
             super::work::on_briefing(agent_id, key);
         }
     }
+    // A routine may have a model of its own (`CheckIn::model`).
+    let chosen = if routine && !crossed {
+        super::runs::routine_model(agent_id, &turn_tickets(agent_id))
+    } else {
+        None
+    };
     let model = if routine {
-        agent.routine_model()
+        super::schedule::model_for(&agent, chosen.as_deref())
     } else {
         agent.model.as_deref()
     };

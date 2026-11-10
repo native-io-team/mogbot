@@ -163,6 +163,19 @@ struct WalletFile {
     /// and sign-in go when it ends, or at the next launch.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     removing: Vec<String>,
+    /// "Use it all before reset" is spending an account's room before it
+    /// expires: turns on its engine start on it until then (`spend_first`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    spend_first: Vec<SpendFirst>,
+}
+
+/// Turns on `engine` start on account `id` until `until` (epoch ms).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpendFirst {
+    pub engine: Engine,
+    pub id: String,
+    pub until: i64,
 }
 
 fn this_mac(engine: Engine) -> Account {
@@ -411,6 +424,64 @@ pub fn use_first(engine: Engine, id: &str) -> Result<Vec<Account>, CommandError>
         ids.insert(0, first);
         reorder_in(file, engine, &ids)
     })
+}
+
+/// "Use it all before reset" found room about to expire on `id`, not the
+/// account turns run on next: turns on `engine` start on it until `until`
+/// (the window's reset), then the user's order holds again. An agent set to
+/// one account stays on it; failover still moves on when it runs out.
+pub fn spend_first(engine: Engine, id: &str, until: i64) -> Result<(), CommandError> {
+    change(|file| {
+        if !file.of(engine).any(|a| a.id == id) {
+            return Err(not_found());
+        }
+        file.spend_first.retain(|s| s.engine != engine);
+        file.spend_first.push(SpendFirst {
+            engine,
+            id: id.to_string(),
+            until,
+        });
+        Ok(())
+    })
+}
+
+/// The user left "Use it all before reset": their own order holds again.
+pub fn clear_spend_first() {
+    let has = {
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        !read().spend_first.is_empty()
+    };
+    if has {
+        let _ = change(|file| {
+            file.spend_first.clear();
+            Ok(())
+        });
+    }
+}
+
+/// The account `engine`'s turns start on for now, and until when, if any.
+pub fn spending_first(engine: Engine, now: i64) -> Option<SpendFirst> {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    read()
+        .spend_first
+        .into_iter()
+        .find(|s| s.engine == engine && s.until > now)
+}
+
+/// `accounts` in the order turns try them now: the one being spent first
+/// (`spend_first`), while it lasts, then the rest in the user's order.
+pub fn in_spending_order<T>(
+    mut accounts: Vec<T>,
+    first: Option<&str>,
+    id: impl Fn(&T) -> &str,
+) -> Vec<T> {
+    if let Some(first) = first {
+        if let Some(at) = accounts.iter().position(|a| id(a) == first) {
+            let a = accounts.remove(at);
+            accounts.insert(0, a);
+        }
+    }
+    accounts
 }
 
 /// The accounts a turn may run on, for an agent set to run on `pin`: only
@@ -812,6 +883,75 @@ pub fn reported_out_with_twins(engine: Engine, id: &str, resets_at: i64, now: i6
     }
 }
 
+/// Whether `reading`, taken after `limit` was hit, shows the account has
+/// room again: every plan window it names (5-hour, weekly) has a figure
+/// under 100% and isn't limited, and it names the window that was out (one
+/// resetting when the limit said) or both kinds. A reading that names only
+/// the other window can't say the one that was out is back, so it doesn't.
+pub fn room_clears(limit: &LimitHit, reading: &super::quota::Quota) -> bool {
+    use super::compute::{family, Family};
+    const SAME_RESET_MS: i64 = 30 * 60 * 1000;
+    let plan: Vec<&super::quota::QuotaWindow> = reading
+        .windows
+        .iter()
+        .filter(|w| family(w).is_some())
+        .collect();
+    if plan.is_empty() {
+        return false;
+    }
+    let room = plan.iter().all(|w| {
+        w.observed_at > limit.at && !w.limited && w.used_percent.is_some_and(|p| p < 100.0)
+    });
+    let names_it = limit.resets_at.is_some_and(|r| {
+        plan.iter()
+            .any(|w| w.resets_at.is_some_and(|x| (x - r).abs() <= SAME_RESET_MS))
+    });
+    let both = plan.iter().any(|w| family(w) == Some(Family::Session))
+        && plan.iter().any(|w| family(w) == Some(Family::Weekly));
+    room && (names_it || both)
+}
+
+/// A reading without a turn shows an account marked out has room again (an
+/// upgraded plan, extra usage bought, a limit lifted early): the mark goes,
+/// on its other sign-ins too, so turns use it again rather than waiting for
+/// a reset that no longer binds (persona review 2026-11-09). True when a
+/// mark went.
+pub fn back_by_reading(engine: Engine, id: &str, reading: &super::quota::Quota, now: i64) -> bool {
+    let mut ids = vec![id.to_string()];
+    let marked = |file: &WalletFile, id: &str| {
+        file.accounts
+            .iter()
+            .find(|a| a.engine == engine && a.id == id)
+            .and_then(|a| a.limit.clone().filter(|_| a.out(now).is_some()))
+    };
+    let known = {
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        marked(&read(), id)
+    };
+    let Some(limit) = known else {
+        return false;
+    };
+    if !room_clears(&limit, reading) {
+        return false;
+    }
+    ids.extend(twins_of(engine, id));
+    change(|file| {
+        let mut cleared = false;
+        for a in file
+            .accounts
+            .iter_mut()
+            .filter(|a| a.engine == engine && ids.contains(&a.id))
+        {
+            if a.limit.as_ref() == Some(&limit) || a.out(now).is_some() {
+                a.limit = None;
+                cleared = true;
+            }
+        }
+        Ok(cleared)
+    })
+    .unwrap_or(false)
+}
+
 /// Before recording an engine's plan reading from `seat`: true when the
 /// reading known came from another account, which the caller then clears
 /// (a reading is one account's picture, never two mixed).
@@ -898,7 +1038,9 @@ pub fn can_switch(candidates: &[Candidate], tried: &[String], now: i64) -> bool 
 /// account by the `auth.json` its sign-in wrote.
 pub async fn candidates(engine: Engine) -> Vec<Candidate> {
     let mut out = Vec::new();
-    for account in of(engine) {
+    let first = spending_first(engine, super::store::now_ms()).map(|s| s.id);
+    let order = in_spending_order(of(engine), first.as_deref(), |a| a.id.as_str());
+    for account in order {
         let signed_in = signed_in(&account).await;
         // Named as it is shown, so every line about it says the same.
         let account = labelled(account, signed_in);
@@ -1346,12 +1488,13 @@ where
     }
 }
 
-/// An agent set to one account (`pinned`) about to start a turn on it while
-/// it is out until a reset the engine reported: when that is, and the turn
-/// ends now instead of spending a refused try. A limit with no reset known
-/// is tried, as a lone account always is: it may be back.
-pub fn pinned_and_out(pinned: bool, account: &Account, tried: &[String], now: i64) -> Option<i64> {
-    if !pinned || !tried.is_empty() {
+/// An agent set to one account, or with only one signed in (`only`), about
+/// to start a turn on it while it is out until a reset the engine reported:
+/// when that is, and the turn ends now instead of spending a refused try
+/// (persona review 2026-11-09: one account out for the week spent a refused
+/// try per due routine). A limit with no reset known is tried: it may be back.
+pub fn pinned_and_out(only: bool, account: &Account, tried: &[String], now: i64) -> Option<i64> {
+    if !only || !tried.is_empty() {
         return None;
     }
     account.out(now).flatten()
@@ -1756,6 +1899,65 @@ mod tests {
             all_out_line(Engine::Codex, 3, None, &Utc, now()),
             "All 3 Codex accounts have reached their usage limit, and none said when it resets."
         );
+    }
+
+    /// Persona review 2026-11-09 (the Adversary): an account marked out
+    /// stayed out until the reported reset even when a later read showed
+    /// room (an upgraded plan, extra usage). A fresh reading with room,
+    /// naming the window that was out, clears the mark.
+    #[test]
+    fn a_later_reading_with_room_clears_an_out_mark() {
+        use super::super::quota::{Quota, QuotaWindow};
+        let hit = LimitHit {
+            at: now() - H,
+            resets_at: Some(now() + 3 * H),
+        };
+        let w = |kind: &str, used: f64, reset: i64, at: i64| QuotaWindow {
+            kind: kind.into(),
+            used_percent: Some(used),
+            resets_at: Some(reset),
+            window_minutes: None,
+            limited: false,
+            observed_at: at,
+        };
+        let q = |windows| Quota {
+            engine: Engine::Claude,
+            windows,
+            plan: None,
+        };
+        // The window that was out, now with room: cleared.
+        assert!(room_clears(
+            &hit,
+            &q(vec![w("five_hour", 40.0, now() + 3 * H, now())])
+        ));
+        // Both kinds with room: cleared, whatever the reset says.
+        assert!(room_clears(
+            &hit,
+            &q(vec![
+                w("five_hour", 10.0, now() + 5 * H, now()),
+                w("seven_day", 50.0, now() + 90 * H, now())
+            ])
+        ));
+        // Only the other window: it can't say the one that was out is back.
+        assert!(!room_clears(
+            &hit,
+            &q(vec![w("seven_day", 50.0, now() + 90 * H, now())])
+        ));
+        // Still used up, or limited: not cleared.
+        assert!(!room_clears(
+            &hit,
+            &q(vec![w("five_hour", 100.0, now() + 3 * H, now())])
+        ));
+        let mut limited = w("five_hour", 60.0, now() + 3 * H, now());
+        limited.limited = true;
+        assert!(!room_clears(&hit, &q(vec![limited])));
+        // A reading from before the limit was hit says nothing about after.
+        assert!(!room_clears(
+            &hit,
+            &q(vec![w("five_hour", 40.0, now() + 3 * H, now() - 2 * H)])
+        ));
+        // No plan windows at all: nothing to go on.
+        assert!(!room_clears(&hit, &q(vec![])));
     }
 
     /// Found live (`nf-account-pin`): an agent set to an account marked out

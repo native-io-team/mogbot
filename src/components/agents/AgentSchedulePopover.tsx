@@ -107,6 +107,7 @@ import {
   describeWatchCheck,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
+import { AgentRoutineModel } from './AgentRoutineModel';
 import { useQuotaLines } from './AgentsQuota';
 import {
   moveRoutineTo,
@@ -266,6 +267,13 @@ function ScheduleBody({
           <p className="agent-schedule__place">
             Runs {routineConversationLine(conversations, editing.id)}
           </p>
+        )}
+        {editing && editing.repeat && !editing.watch && (
+          <AgentRoutineModel
+            agent={agent}
+            // The live row: the editor opened on a copy.
+            routine={items.find((c) => c.id === editing.id) ?? editing}
+          />
         )}
         {!editing && (
           <div className="agent-schedule__mode">

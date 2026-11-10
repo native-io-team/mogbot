@@ -35,13 +35,17 @@ export default function UsageAccount() {
   }, [serves]);
   usePolling(read, 60_000);
   const { accounts } = useAccounts({ room: false });
-  const key = useMemo(() => {
-    if (!accounts || !inventory) return null;
-    return (
-      usageGlance(accounts, inventory).keys.find((k) => k.engine === engine && k.id === account) ??
-      null
-    );
-  }, [accounts, inventory, engine, account]);
+  const glance = useMemo(
+    () => (accounts && inventory ? usageGlance(accounts, inventory) : null),
+    [accounts, inventory]
+  );
+  const key = glance?.keys.find((k) => k.engine === engine && k.id === account) ?? null;
+  // "May be the same account as …": the question about this one, said on its page too.
+  const maybe = key
+    ? (glance?.sameNotes ?? []).filter(
+        (n) => n.includes(' may be the same ') && n.includes(key.name)
+      )
+    : [];
 
   return (
     <SheetPage>
@@ -59,7 +63,14 @@ export default function UsageAccount() {
         </Pressable>
         <SheetTitle numberOfLines={1}>{key?.name ?? 'Account'}</SheetTitle>
         {key ? (
-          <KeyCard k={key} titled={false} />
+          <>
+            <KeyCard k={key} titled={false} all={glance?.keys ?? []} />
+            {maybe.map((n) => (
+              <T key={n} variant="small" color={colors.textSecondary}>
+                {n}
+              </T>
+            ))}
+          </>
         ) : (
           <T color={colors.textSecondary}>
             {inventory ? 'This account isn’t on your Mac anymore.' : 'Reading it from your Mac…'}

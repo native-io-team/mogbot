@@ -23,6 +23,7 @@ import { Spinner } from '../components/agent';
 import { SheetTitle } from '../components/SheetTitle';
 import { ComputeAccount, ComputeQuiet, ComputeSummary, MeterRow } from '../components/usage';
 import { AccountRows as StackRows, TotalCard } from '../components/usageStack';
+import { servesUsageChanges, UsagePlanControls } from '../components/usagePlanControls';
 import { useAccounts } from '../lib/accounts';
 import { IconButton, Section, SectionTitle, SheetPage, T } from '../components/ui';
 import { engineName } from '../lib/agents';
@@ -141,6 +142,10 @@ export default function Usage() {
             <SectionTitle title="Accounts" />
             <StackRows keys={glance.keys} onOpen={(k) => openAccount(k.engine, k.id)} />
           </View>
+        )}
+
+        {inventory && servesUsageChanges() && (
+          <UsagePlanControls inventory={inventory} onChanged={setInventory} />
         )}
 
         {!stacked && total && (

@@ -35,7 +35,12 @@ import { QUOTA_WARN_PERCENT, resetPhrase } from './quota';
 import { planLabel } from './usage';
 import { roughWhen } from './usageSheet';
 import { accountLabel, switcherView, type SwitcherRow } from './accountSwitcher';
-import { sameAccountLine, sameAccountNote, signInChangedText } from './sameAccount';
+import {
+  maybeSameAccountNote,
+  sameAccountLine,
+  sameAccountNote,
+  signInChangedText,
+} from './sameAccount';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -1032,7 +1037,22 @@ export function usageGlance(
     meterKeys: keys.filter((k) => k.state !== 'same'),
     sameNotes: keys
       .filter((k) => k.state === 'same' && k.sameAs)
-      .map((k) => sameAccountNote(k.engine, k.name, k.sameAs as string)),
+      .map((k) => sameAccountNote(k.engine, k.name, k.sameAs as string))
+      // Moving together: asked, never counted (`lockstep.rs`).
+      .concat(
+        keys.flatMap((k) => {
+          const maybe = inventory?.accounts.find(
+            (l) => l.engine === k.engine && l.id === k.id
+          )?.maybeSameAs;
+          const line = maybe
+            ? inventory?.accounts.find((l) => l.engine === k.engine && l.name === maybe)
+            : undefined;
+          const other = line && keys.find((o) => o.engine === k.engine && o.id === line.id);
+          return k.state !== 'same' && other && other.state !== 'same'
+            ? [maybeSameAccountNote(k.engine, k.name, other.name)]
+            : [];
+        })
+      ),
     signInChanged: change
       ? { engine: change.engine, key: change.key, text: signInChangedText(change, macName) }
       : null,

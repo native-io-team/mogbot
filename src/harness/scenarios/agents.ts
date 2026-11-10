@@ -2364,7 +2364,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-schedule-edit',
     title: 'Agents — editing a routine in the schedule popover',
     looksRightWhen:
-      'The editor stands in for the list (the list is gone while it is open): a back arrow and “Edit routine” at the top, then the picker on the weekday brief: Weekdays selected, At 09:00, What holding the brief’s own words, the echo of the routine and its first run, and Cancel / Save, Save neutral (dark keycap in light, light in dark), never Finance’s colour.',
+      'The editor stands in for the list (the list is gone while it is open): a back arrow and “Edit routine” at the top, a quiet “Runs on” line with “Like its other routines (Fastest) ⌄” (the routine’s own model), then the picker on the weekday brief: Weekdays selected, At 09:00, What holding the brief’s own words, the echo of the routine and its first run, and Cancel / Save, Save neutral (dark keycap in light, light in dark), never Finance’s colour.',
     requires: '.agent-schedule__editor-head',
     openSelector: AGENTS_TAB,
     steps: [

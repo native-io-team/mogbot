@@ -653,6 +653,28 @@ impl Backend for DesktopBackend {
         json(crate::commands::agents_usage::agents_usage_overview(self.app.clone(), None).await?)
     }
 
+    async fn usage_set_mode(&self, mode: &str) -> Result<Value, CommandError> {
+        use crate::commands::agents_usage as u;
+        u::agents_set_usage_mode(self.app.clone(), mode.to_string()).await?;
+        json(u::agents_usage_overview(self.app.clone(), Some(false)).await?)
+    }
+
+    async fn spare_add(&self, text: &str, agent_id: Option<&str>) -> Result<Value, CommandError> {
+        use crate::commands::agents_usage as u;
+        u::agents_spare_add(
+            self.app.clone(),
+            text.to_string(),
+            agent_id.map(str::to_string),
+        )
+        .await?;
+        json(u::agents_usage_overview(self.app.clone(), Some(false)).await?)
+    }
+
+    async fn spare_spend_now(&self) -> Result<Value, CommandError> {
+        let line = crate::commands::agents_usage::agents_spare_spend_now(self.app.clone()).await?;
+        Ok(serde_json::json!({ "line": line }))
+    }
+
     async fn quiet_hours(&self) -> Result<Value, CommandError> {
         let window = cmd::agents_quiet_hours().await?;
         Ok(serde_json::json!({ "window": window }))

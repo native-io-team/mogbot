@@ -28,6 +28,11 @@ export function describeRun(run: CheckInRun, now = Date.now()): string {
       return run.step ? `Waiting for your OK after step ${run.step}` : 'Waiting for your OK';
     case 'declined':
       return run.step ? `Stopped after step ${run.step}` : 'Stopped';
+    case 'held':
+      // A usage limit to reset first (the detail says which, and when).
+      return run.retryAt
+        ? `Waiting for the reset · runs ${formatWhen(run.retryAt, now).replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())}`
+        : 'Waiting for the reset';
     default:
       return 'Unknown';
   }
