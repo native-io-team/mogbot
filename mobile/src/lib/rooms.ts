@@ -193,6 +193,23 @@ export const pendingHere = (messages: AgentMessage[]) =>
   messages.some((m) => m.approval?.status === 'pending' && !!m.agentId);
 
 /**
+ * Who in the room is waiting on you, by name, as the desk's room row says it
+ * beside its pill ("Ops", "Finance and Ops"): stopped on a card here, or the
+ * author of a card still open in the loaded thread. Empty when neither knows.
+ */
+export function askingNames(
+  room: Pick<RoomView, 'id'>,
+  members: Agent[],
+  messages?: AgentMessage[]
+): string {
+  const ids = new Set(askingHere(members, room.id).map((m) => m.id));
+  for (const m of messages ?? []) {
+    if (m.approval?.status === 'pending' && m.agentId) ids.add(m.agentId);
+  }
+  return memberNames(members.filter((m) => ids.has(m.id)));
+}
+
+/**
  * The room's row, in one line: who needs you, who's replying, else the
  * newest thing said (as the Mac wrote it: "Ops: Filed.").
  */
