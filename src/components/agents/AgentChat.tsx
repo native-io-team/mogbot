@@ -1738,6 +1738,7 @@ export const AgentChat = memo(function AgentChat({
                 onAnswer={onAnswer}
                 arrived={arrived}
                 series={similar.get(m.id)}
+                ownChat
               />
             );
           case 'error':

@@ -59,7 +59,9 @@ const chat =
         ]
       : messagesFor(args);
 
-const FINANCE_PENDING = TEAM.map((a) => (a.id === 'finance' ? { ...a, pendingApprovals: 1 } : a));
+// A skill card is an offer: the registry never counts it as waiting on you
+// (`store::count_pending`), so Finance's row carries no "Needs your OK".
+const FINANCE_PENDING = TEAM;
 
 export const agentsSkillsScenarios: Scenario[] = [
   {

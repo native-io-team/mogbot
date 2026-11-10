@@ -68,14 +68,14 @@ const V1 = {
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
-const registered = vi.hoisted(() => ({
-  commands: [] as { id: string; title: string; when: () => boolean }[],
-}));
+type Cmd = { id: string; title: string; when?: () => boolean; run: () => void };
+const registered = vi.hoisted(() => ({ byId: {} as Record<string, Cmd> }));
 vi.mock('../../commands/useCommands', () => ({
-  useCommands: (make: () => typeof registered.commands) => {
-    registered.commands = make();
+  useCommands: (make: () => Cmd[]) => {
+    for (const c of make()) registered.byId[c.id] = c;
   },
 }));
+const command = (id: string) => registered.byId[id];
 vi.mock('../../contexts/ToastContext', () => ({
   useOptionalToast: () => ({ showToast: vi.fn() }),
 }));
@@ -150,13 +150,26 @@ describe('ConversationPage', () => {
     await screen.findByRole('button', { name: /Job search/, expanded: false });
   });
 
+  it('⌘K folds the page and opens what changed, by name', async () => {
+    both();
+    await screen.findByRole('region', { name: 'Page: Job search' });
+    expect(command('agents.pageFold')?.title).toBe('Fold the page “Job search”');
+    expect(command('agents.pageVersions')?.title).toBe('What changed on this page');
+    act(() => command('agents.pageVersions').run());
+    expect(screen.getByRole('list', { name: 'Versions' })).toBeInTheDocument();
+    act(() => command('agents.pageFold').run());
+    expect(screen.queryByRole('list', { name: 'Versions' })).toBeNull();
+    expect(command('agents.pageFold')?.title).toBe('Show the page “Job search”');
+  });
+
   it('unpins: the page leaves, the header offers it back, ⌘K says which', async () => {
     both();
     await screen.findByRole('region', { name: 'Page: Job search' });
-    expect(registered.commands[0]?.title).toBe('Unpin this conversation’s page');
+    expect(command('agents.pagePin')?.title).toBe('Unpin this conversation’s page');
     expect(screen.queryByRole('button', { name: /Pin the page/ })).toBeNull();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Unpin the page' }));
+      await Promise.resolve();
     });
     expect(invoke).toHaveBeenCalledWith('agents_page_pin', {
       agentId: 'a1',
@@ -166,9 +179,10 @@ describe('ConversationPage', () => {
     await waitFor(() =>
       expect(screen.queryByRole('region', { name: 'Page: Job search' })).toBeNull()
     );
-    expect(registered.commands[0]?.title).toBe('Pin this conversation’s page');
+    expect(command('agents.pagePin')?.title).toBe('Pin this conversation’s page');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Pin the page “Job search”' }));
+      await Promise.resolve();
     });
     await screen.findByRole('region', { name: 'Page: Job search' });
   });
@@ -180,6 +194,6 @@ describe('ConversationPage', () => {
       expect(invoke).toHaveBeenCalledWith('agents_page', { agentId: 'a1', conversation: 'first' })
     );
     expect(screen.queryByRole('region')).toBeNull();
-    expect(registered.commands[0]?.when()).toBe(false);
+    expect(command('agents.pagePin')?.when?.()).toBe(false);
   });
 });

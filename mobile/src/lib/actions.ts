@@ -114,9 +114,9 @@ export function messageActions(
   }
   out.push(
     { id: 'quote', title: 'Quote', icon: 'text.quote' },
-    { id: 'select', title: 'Select Text', icon: 'selection.pin.in.out' }
+    { id: 'select', title: 'Select text', icon: 'selection.pin.in.out' }
   );
-  if (remember) out.push({ id: 'remember', title: 'Remember This', icon: 'pin' });
+  if (remember) out.push({ id: 'remember', title: 'Remember this', icon: 'pin' });
   if (goBack && message.kind === 'user') {
     out.push(
       { id: 'edit', title: GO_BACK_LABELS.edit, icon: 'pencil' },

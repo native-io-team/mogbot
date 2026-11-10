@@ -8,7 +8,7 @@
  */
 
 import { listen } from '@tauri-apps/api/event';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { SegmentedControl } from '../primitives/SegmentedControl';
@@ -100,7 +100,13 @@ export function AgentSkillCardBody({ card }: { card: SkillCard }) {
 }
 
 /** The editor's section: the setting, then the skills. */
-export function AgentSkills({ agent }: { agent: Agent }) {
+export function AgentSkills({ agent, focus = false }: { agent: Agent; focus?: boolean }) {
+  // Opened for this section (⌘K "What … knows how to do"): it sits at the
+  // foot of the editor, so it's brought into view rather than left below.
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focus) root.current?.scrollIntoView?.({ block: 'start' });
+  }, [focus]);
   const live = useAgentsSelector((s) => s.agents?.find((a) => a.id === agent.id)) ?? agent;
   const setting = learnSkillsOf(live);
   const [skills, setSkills] = useState<Skill[] | null>(null);
@@ -147,7 +153,12 @@ export function AgentSkills({ agent }: { agent: Agent }) {
     }).catch(() => undefined);
 
   return (
-    <div className="agent-editor__label agent-skills" role="group" aria-label={SKILLS_TITLE}>
+    <div
+      ref={root}
+      className="agent-editor__label agent-skills"
+      role="group"
+      aria-label={SKILLS_TITLE}
+    >
       {LEARN_SKILLS_LABEL}
       <SegmentedControl
         value={setting}

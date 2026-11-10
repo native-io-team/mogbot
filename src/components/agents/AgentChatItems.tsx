@@ -1012,6 +1012,11 @@ interface ApprovalCardProps extends Arrival {
    * from how many the agent might still send.
    */
   series?: { index: number; total: number };
+  /**
+   * Drawn in its own agent's chat, where the Step in bar above the composer
+   * holds Show window and Hand back: a step-in card under way leaves them to it.
+   */
+  ownChat?: boolean;
 }
 
 /** "subject" → "Subject", "cc_list" → "Cc list". */
@@ -1124,6 +1129,7 @@ const ApprovalCardBody = memo(function ApprovalCard({
   arrived,
   compact = false,
   series,
+  ownChat = false,
 }: ApprovalCardProps) {
   const approval = message.approval;
   const [busy, setBusy] = useState(false);
@@ -1170,6 +1176,7 @@ const ApprovalCardBody = memo(function ApprovalCard({
         message={message}
         onAnswer={(id, allow) => onAnswer(id, allow)}
         arrived={arrived}
+        barShown={ownChat}
       />
     );
   }

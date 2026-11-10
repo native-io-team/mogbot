@@ -2920,10 +2920,12 @@ sign-in on a site it's signed out of is still `request_login` with
   reading included (`tools::tab_of`), `tabs` names it without reading it,
   and the chat's live picture of it stops (`live::frame_on`). Its other tabs
   and `open` still work. Chrome's idle close waits. The chat shows the bar
-  "You're in <Agent>'s browser · Hand back" (pinned, with the site and when
-  it hands back by itself) and the card says so with **Show window**
-  (`agents_step_in_show`) and **Hand back**; ⌘K "Hand <Agent> its browser
-  back". The live state is laid over the card on read (`step_in::apply`),
+  "You're in <Agent>'s browser" (pinned, with the site, when it hands back
+  by itself, **Show window** (`agents_step_in_show`) and **Hand back**); in
+  that chat the card only says so and points at the bar, so the two buttons
+  aren't shown twice with opposite weights. Drawn anywhere else (the team
+  view, another chat's requests) the card keeps both; ⌘K "Hand <Agent> its
+  browser back". The live state is laid over the card on read (`step_in::apply`),
   never stored.
 - **Hand back** (`agents_step_in_hand_back`) parks the window, answers the
   card ("Handed back"), leaves a line ("You handed Finance its browser back
