@@ -1,6 +1,6 @@
 /**
- * The first few minutes: the Chief's three starters (ship fixes overnight,
- * a launch team, client briefs into sites) and "More ideas…", the whole
+ * The first few minutes: the Chief's three starters (a morning brief, the
+ * inbox, research written up) and "More ideas…", the whole
  * brief each leaves in the composer, the gallery and what picking from it
  * does, the New agent dialog on a ready-made agent (and the one that needs
  * an email app), a ready-made agent's own first open, and first results
@@ -174,19 +174,19 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-first-win-morning-brief',
     title: 'Agents — first run: “Brief me every morning”',
     looksRightWhen:
-      'The greeting with its starters still under it (Brief me every morning, Sort my inbox, draft replies, Run my launch as a team, left-aligned under the greeting, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
+      'The greeting with its starters still under it (Brief me every morning, Sort my inbox, draft replies, Research it and write it up, left-aligned under the greeting, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
     steps: [{ click: '.agent-chat__starters > [data-idea="morning-brief"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
   },
   {
-    id: 'agents-first-win-launch',
-    title: 'Agents — first run: “Run my launch as a team”',
+    id: 'agents-first-win-research',
+    title: 'Agents — first run: “Research it and write it up”',
     looksRightWhen:
-      'The composer holds the whole brief, “Run my launch as a team: create a strategist, a writer and a builder … The launch: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
+      'The composer holds the whole brief, “Have a researcher dig into this and collect good sources … The topic: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > [data-idea="launch"]' }],
+    steps: [{ click: '.agent-chat__starters > [data-idea="research"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
   },
@@ -194,7 +194,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-first-win-inbox',
     title: 'Agents — first run: “Sort my inbox, draft replies”',
     looksRightWhen:
-      'The composer holds the whole brief, “Set up an inbox crew: through the day, one agent sorts my new email … My email is in: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
+      'The composer holds the whole brief, “Through the day, have one agent sort my new email … My email is in: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
     steps: [{ click: '.agent-chat__starters > [data-idea="inbox"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
@@ -204,7 +204,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-ideas',
     title: 'Agents — first run: “More ideas…” opens the gallery',
     looksRightWhen:
-      'A dialog “Ideas to start with”: a short lede (each keeps running once set up; a pick is typed out and nothing is sent; your Chief sets up what it needs), then three groups (On a schedule, When something happens, Agents together), each row a title and one muted line on what happens. Nothing is in the accent. At the foot, two quiet links: Ready-made agents… and Talk to your team from your phone….',
+      'A dialog “Ideas to start with”: a short lede (each keeps running once set up; a pick is typed out and nothing is sent; your Chief sets up what it needs), then four groups (On a schedule, When something happens, Agents together, and last For builders), everyday jobs first (invoices, social posts, job applications, a place to live, meeting notes, a trip) and the GitHub, error and client-site ideas only under For builders, each row a title and one muted line on what happens. Nothing is in the accent. At the foot, two quiet links: Ready-made agents… and Talk to your team from your phone….',
     command: 'agents.open',
     steps: [{ click: '.agent-chat__starters > [data-idea="more"]' }],
     requires: '.agents-ideas__idea',
