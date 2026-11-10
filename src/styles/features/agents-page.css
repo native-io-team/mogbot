@@ -67,11 +67,12 @@
   white-space: nowrap;
 }
 
-.agent-page__when {
-  /* "Updated 3 min ago by <routine>": gives way to the title, then ellipsises. */
+/* Outranks `.text-button.button`'s own wrapping and flex box, so the line stays one. */
+.text-button.button.agent-page__when {
+  display: block;
+  /* "Updated 3 min ago by <routine>" (a name is at most 48 characters): one line; the title gives way first. */
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 60%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
