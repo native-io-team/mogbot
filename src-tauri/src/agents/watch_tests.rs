@@ -1130,6 +1130,44 @@ fn review_4_every_new_routine_leaves_a_chat_line() {
 }
 
 #[test]
+fn a_new_time_routine_line_says_when_and_its_first_run() {
+    use super::super::mcp::routine_time_line;
+    use chrono::{TimeZone, Utc};
+    crate::agents::clock::test_hour24(false);
+    let now = Utc
+        .with_ymd_and_hms(2026, 11, 10, 15, 0, 0)
+        .unwrap()
+        .timestamp_millis();
+    let tomorrow_8 = Utc
+        .with_ymd_and_hms(2026, 11, 11, 8, 0, 0)
+        .unwrap()
+        .timestamp_millis();
+    let mut c = watch_check_in(Source::GithubMentions);
+    c.watch = None;
+    c.note = "Send me a summary of the Acme inbox".into();
+    c.repeat = Some(crate::agents::schedule::Repeat::Days {
+        days: vec![1, 2, 3, 4, 5],
+        hour: 8,
+        minute: 0,
+    });
+    c.next_at = tomorrow_8;
+    assert_eq!(
+        routine_time_line(&c, &Utc, now),
+        "Set up a routine: Send me a summary of the Acme inbox · every weekday at 8:00 AM, first run tomorrow at 8:00 AM"
+    );
+    // Once, later today: "today at", never a bare "at".
+    c.repeat = None;
+    c.next_at = Utc
+        .with_ymd_and_hms(2026, 11, 10, 17, 30, 0)
+        .unwrap()
+        .timestamp_millis();
+    assert_eq!(
+        routine_time_line(&c, &Utc, now),
+        "Set up a routine: Send me a summary of the Acme inbox · once, today at 5:30 PM"
+    );
+}
+
+#[test]
 fn review_6_a_seen_file_touched_again_doesnt_refire() {
     let mut w = folder_watch();
     merge(&mut w, &[ev("a.pdf"), ev("b.pdf")], true, &[], NOW);

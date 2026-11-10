@@ -228,105 +228,120 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
     ? `Each check uses a little of ${agent.name}’s usage and can only read that app, up to ${perDay} a day.`
     : 'Checks are free.';
 
+  // The echo, as the time picker's: what it waits for, then what it does.
+  // A check in the user's own words is quoted, so it reads whatever they typed.
+  const waitsFor =
+    source.kind === 'custom'
+      ? `When ${agent.name} finds “${describeWatchSource(source)}”`
+      : `When ${describeWatchSource(source)}`;
+  const echo = note.trim() ? `${waitsFor} — ${note.trim().replace(/\s+/g, ' ')}` : waitsFor;
+
   return (
     <div className="agent-when">
-      <div className="agent-when__sources" role="radiogroup" aria-label="When this happens">
-        {choices.map((s) => (
-          <button
-            key={s.kind}
-            type="button"
-            role="radio"
-            aria-checked={kind === s.kind}
-            className="agent-when__source"
-            onClick={() => pick(s.kind)}
-          >
-            <span className="agent-when__source-label">{s.label}</span>
-            <span className="agent-when__source-how">{s.how}</span>
-          </button>
-        ))}
+      <div className="agent-schedule__field">
+        <span className="agent-schedule__label" id="agent-when-source">
+          When this happens
+        </span>
+        <div className="agent-when__sources" role="radiogroup" aria-labelledby="agent-when-source">
+          {choices.map((s) => (
+            <button
+              key={s.kind}
+              type="button"
+              role="radio"
+              aria-checked={kind === s.kind}
+              className="agent-when__source"
+              onClick={() => pick(s.kind)}
+            >
+              <span className="agent-when__source-label">{s.label}</span>
+              <span className="agent-when__source-how">{s.how}</span>
+            </button>
+          ))}
+        </div>
+
+        {kind === 'new_file' && (
+          <TextField
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Folder, e.g. ~/Downloads/invoices"
+            aria-label="Which folder"
+            maxLength={500}
+          />
+        )}
+        {kind === 'custom' && (
+          <TextField
+            value={check}
+            onChange={(e) => setCheck(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="What to look for, e.g. a new email from dana@acme.com"
+            aria-label="What to look out for"
+            maxLength={400}
+          />
+        )}
+        {kind === 'custom' &&
+          (apps.length > 0 ? (
+            <div className="agent-when__every">
+              <span className="agent-when__every-label">Through</span>
+              <SegmentedControl
+                aria-label="Which app to check through"
+                value={app}
+                onValueChange={(v) => {
+                  setApp(v);
+                  setError(null);
+                }}
+                options={apps}
+              />
+            </div>
+          ) : (
+            <p className="agent-when__cost">
+              It checks through an app connected under Apps and given to {agent.name}. Apps
+              connected on claude.ai can’t be used here.
+            </p>
+          ))}
+        <div className="agent-when__every">
+          <span className="agent-when__every-label">Check every</span>
+          <SegmentedControl
+            aria-label="How often to check"
+            value={String(every)}
+            onValueChange={(v) => setEvery(Number(v))}
+            options={intervals.map((m) => ({
+              value: String(m),
+              label: shortEvery(m),
+              ariaLabel: describeEvery(m),
+            }))}
+          />
+        </div>
       </div>
 
-      {kind === 'new_file' && (
+      <div className="agent-schedule__field">
+        <label className="agent-schedule__label" htmlFor="agent-when-what">
+          What
+        </label>
         <TextField
-          value={folder}
-          onChange={(e) => setFolder(e.target.value)}
+          id="agent-when-what"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Folder, e.g. ~/Downloads/invoices"
-          aria-label="Which folder"
-          maxLength={500}
-        />
-      )}
-      {kind === 'custom' && (
-        <TextField
-          value={check}
-          onChange={(e) => setCheck(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder="e.g. a new email from dana@acme.com"
-          aria-label="What to look out for"
-          maxLength={400}
-        />
-      )}
-      {kind === 'custom' &&
-        (apps.length > 0 ? (
-          <div className="agent-when__every">
-            <span className="agent-when__every-label">Through</span>
-            <SegmentedControl
-              aria-label="Which app to check through"
-              value={app}
-              onValueChange={(v) => {
-                setApp(v);
-                setError(null);
-              }}
-              options={apps}
-            />
-          </div>
-        ) : (
-          <p className="agent-when__cost">
-            It checks through an app connected under Apps and given to {agent.name}. Apps connected
-            on claude.ai can’t be used here.
-          </p>
-        ))}
-      <TextField
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder="Then what? e.g. triage it and tell me if it’s urgent"
-        aria-label="What to do when it happens"
-        maxLength={600}
-        invalid={error !== null}
-      />
-
-      <div className="agent-when__every">
-        <span className="agent-when__every-label">Check every</span>
-        <SegmentedControl
-          aria-label="How often to check"
-          value={String(every)}
-          onValueChange={(v) => setEvery(Number(v))}
-          options={intervals.map((m) => ({
-            value: String(m),
-            label: shortEvery(m),
-            ariaLabel: describeEvery(m),
-          }))}
+          placeholder="Triage it and tell me if it’s urgent"
+          aria-label="What to do when it happens"
+          maxLength={600}
+          invalid={error !== null}
         />
       </div>
 
-      <p
-        className="agent-schedule__readback"
-        data-invalid={error ? true : undefined}
-        aria-live="polite"
-      >
-        {error ??
-          (detailMissing
-            ? kind === 'new_file'
-              ? 'Which folder?'
-              : appMissing && check.trim()
-                ? 'Which app should it check?'
-                : 'What should it look out for?'
-            : `When ${describeWatchSource(source)}, ${agent.name} starts on it.`)}
-      </p>
-      <p className="agent-when__cost">
-        {cost} The first check only notes what’s already there, so nothing old starts work.
-      </p>
+      <div className="agent-schedule__echo" aria-live="polite">
+        {!detailMissing && <p className="agent-schedule__echo-line">{echo}</p>}
+        <p className="agent-schedule__readback" data-invalid={error ? true : undefined}>
+          {error ??
+            (detailMissing
+              ? kind === 'new_file'
+                ? 'Which folder?'
+                : appMissing && check.trim()
+                  ? 'Which app should it check?'
+                  : 'What should it look out for?'
+              : `${cost} The first check only notes what’s already there, so nothing old starts work.`)}
+        </p>
+      </div>
 
       <div className="agent-when__actions">
         {(editing || onCancel) && (

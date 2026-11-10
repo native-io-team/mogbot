@@ -14,6 +14,7 @@
  * @module components/agents/AgentChat
  */
 
+import { takeRoutineAsk } from '../../lib/routineHandoff';
 import { ChatAnnouncer } from './ChatAnnouncer';
 import {
   memo,
@@ -503,7 +504,8 @@ export const AgentChat = memo(function AgentChat({
   // ↑ in an empty composer: the last thing you said here, back in the field
   // to change and send again (it goes as a new message; the old one stays).
   const lastSent = useStableEvent((): string | null => {
-    for (let i = pending.length - 1; i >= 0; i--) if (pending[i].text.trim()) return pending[i].text;
+    for (let i = pending.length - 1; i >= 0; i--)
+      if (pending[i].text.trim()) return pending[i].text;
     const said = messages ?? [];
     for (let i = said.length - 1; i >= 0; i--) {
       if (said[i].kind === 'user' && said[i].text.trim()) return said[i].text;
@@ -550,10 +552,21 @@ export const AgentChat = memo(function AgentChat({
   const [scheduleOpen, setScheduleOpen] = useState(false);
   // Opened from ⌘K's "Start work when something happens…": on the When… composer.
   const [scheduleWhen, setScheduleWhen] = useState(false);
+  // Opened from the Routines page's Change: on that routine's editor.
+  const [scheduleRoutine, setScheduleRoutine] = useState<string | null>(null);
   const openSchedule = useCallback((open: boolean) => {
     setScheduleOpen(open);
-    if (!open) setScheduleWhen(false);
+    if (!open) {
+      setScheduleWhen(false);
+      setScheduleRoutine(null);
+    }
   }, []);
+  useEffect(() => {
+    const routine = takeRoutineAsk(agent.id);
+    if (!routine) return;
+    setScheduleRoutine(routine);
+    setScheduleOpen(true);
+  }, [agent.id]);
   const [filesOpen, setFilesOpen] = useState(false);
   const [renamingConversation, setRenamingConversation] = useState(false);
   // Which of its conversations is on screen, beside its name.
@@ -1764,6 +1777,7 @@ export const AgentChat = memo(function AgentChat({
                         open={scheduleOpen}
                         onOpenChange={openSchedule}
                         startWhen={scheduleWhen}
+                        startEditing={scheduleRoutine}
                       />
                       <AgentModelMenu agent={agent} />
                     </>

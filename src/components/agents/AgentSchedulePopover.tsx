@@ -34,7 +34,7 @@
  * @module components/agents/AgentSchedulePopover
  */
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
   ArrowLeftIcon,
   ChevronIcon,
@@ -141,6 +141,8 @@ interface AgentSchedulePopoverProps {
   onOpenChange: (open: boolean) => void;
   /** Open on the "When…" composer (⌘K → "Start work when something happens…"). */
   startWhen?: boolean;
+  /** Open on this routine's editor (the Routines page's Change). */
+  startEditing?: string | null;
 }
 
 export function AgentSchedulePopover({
@@ -148,6 +150,7 @@ export function AgentSchedulePopover({
   open,
   onOpenChange,
   startWhen = false,
+  startEditing = null,
 }: AgentSchedulePopoverProps) {
   const count = agent.checkIns?.length ?? 0;
   return (
@@ -196,7 +199,12 @@ export function AgentSchedulePopover({
         )
       }
     >
-      <ScheduleBody agent={agent} startWhen={startWhen} onRan={() => onOpenChange(false)} />
+      <ScheduleBody
+        agent={agent}
+        startWhen={startWhen}
+        startEditing={startEditing}
+        onRan={() => onOpenChange(false)}
+      />
     </Dropdown>
   );
 }
@@ -205,16 +213,19 @@ export function AgentSchedulePopover({
 function ScheduleBody({
   agent,
   startWhen,
+  startEditing,
   onRan,
 }: {
   agent: Agent;
   startWhen: boolean;
+  startEditing: string | null;
   onRan: () => void;
 }) {
   const items = sortCheckIns(agent.checkIns ?? []);
   /** The composer: open for a new routine (`'new'`) or for a row's edit. */
-  const [composing, setComposing] = useState<CheckIn | 'new' | null>(() =>
-    items.length === 0 || startWhen ? 'new' : null
+  const [composing, setComposing] = useState<CheckIn | 'new' | null>(
+    () =>
+      items.find((c) => c.id === startEditing) ?? (items.length === 0 || startWhen ? 'new' : null)
   );
   const editing = composing && composing !== 'new' ? composing : null;
   // Which conversation each routine runs in, read once per opening.
@@ -273,13 +284,6 @@ function ScheduleBody({
             Runs {routineConversationLine(conversations, editing.id)}
           </p>
         )}
-        {editing && editing.repeat && !editing.watch && (
-          <AgentRoutineModel
-            agent={agent}
-            // The live row: the editor opened on a copy.
-            routine={items.find((c) => c.id === editing.id) ?? editing}
-          />
-        )}
         {!editing && (
           <div className="agent-schedule__mode">
             <SegmentedControl
@@ -315,6 +319,16 @@ function ScheduleBody({
             editing={editing}
             busy={busy}
             error={error}
+            // Its model is a fine-tuning, not the first question: under What, not over When.
+            model={
+              editing?.repeat ? (
+                <AgentRoutineModel
+                  agent={agent}
+                  // The live row: the editor opened on a copy.
+                  routine={items.find((c) => c.id === editing.id) ?? editing}
+                />
+              ) : null
+            }
             onCancel={items.length > 0 || editing ? close : undefined}
             onSave={(phrase, note, then) =>
               void run(async () => {
@@ -427,6 +441,7 @@ function RoutinePicker({
   editing,
   busy,
   error,
+  model,
   onCancel,
   onSave,
 }: {
@@ -434,6 +449,8 @@ function RoutinePicker({
   editing: CheckIn | null;
   busy: boolean;
   error: string | null;
+  /** An existing repeating routine's model picker, shown under What. */
+  model?: ReactNode;
   /** Absent when there's nothing else to show (no routines yet). */
   onCancel?: () => void;
   /** `phrase` is empty for an edit that left When as it was; `then` is every step after What. */
@@ -517,8 +534,9 @@ function RoutinePicker({
       aria-label={editing ? 'Edit routine' : 'New routine'}
     >
       <div className="agent-schedule__field">
+        {/* "How often", not "When": "When…" is the other kind of routine, right above. */}
         <span className="agent-schedule__label" id="agent-schedule-when">
-          When
+          How often
         </span>
         <div className="agent-schedule__chips" role="group" aria-labelledby="agent-schedule-when">
           {CADENCES.map((c) => (
@@ -637,8 +655,10 @@ function RoutinePicker({
         <AgentStepsEditor steps={then} onChange={setThen} onKeyDown={onKeyDown} />
       </div>
 
+      {model}
+
       <div className="agent-schedule__echo" aria-live="polite">
-        {when && <p className="agent-schedule__echo-line">{routineEcho(when, note || '…')}</p>}
+        {when && <p className="agent-schedule__echo-line">{routineEcho(when, note)}</p>}
         {steps.length > 0 && (
           <p className="agent-schedule__readback">{stepsLine({ note, then: steps })}</p>
         )}

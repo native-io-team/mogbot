@@ -316,6 +316,10 @@ export function AgentEditorModal({
       setColor(d.color);
     }
     setKept(d.routines.map((r) => !r.problem));
+    // The review is what matters now: its key folds to the avatar beside
+    // the name (one click opens it), so the briefing and routines aren't
+    // pushed below a picker of two thousand icons.
+    setShowLook(false);
   };
   const startOver = () => {
     setDraft(null);

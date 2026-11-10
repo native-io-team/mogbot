@@ -718,8 +718,7 @@ pub async fn agents_create(
     };
     // Its folder, CLAUDE.md, registry entry and routines: off the async workers.
     let opening = input.opening;
-    let creator = app.clone();
-    let agent = blocking(move || {
+    let (agent, added) = blocking(move || {
         let agent = store::create(store::NewAgent {
             name: input.name,
             role: input.role,
@@ -750,13 +749,13 @@ pub async fn agents_create(
         } else {
             agent
         };
-        if !input.routines.is_empty() {
-            agents::draft::add_routines(&creator, &agent.id, &input.routines);
-        }
-        Ok(agent)
+        let added = agents::draft::add_routines(&agent.id, &input.routines);
+        Ok((agent, added))
     })
     .await?;
+    // Its welcome first, then what it will do on its own.
     agents::starters::open(&app, &agent.id, &opening, true).await;
+    added.post(&app);
     let agent = blocking(move || Ok(store::get(&agent.id).unwrap_or(agent))).await?;
     emit_registry(&app);
     Ok(agent)

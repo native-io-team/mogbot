@@ -24,6 +24,7 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { pauseCheckIn, type Agent } from '../../lib/agents';
+import { askToChangeRoutine } from '../../lib/routineHandoff';
 import {
   pauseAllRoutines,
   ROUTINES_ID,
@@ -175,6 +176,18 @@ export function AgentsRoutinesView({
                       </span>
                       <span className="agents-routines__when">{routineLine(routine)}</span>
                     </span>
+                    {/* Its own editor, in its agent's chat: the same one as there. */}
+                    <TextButton
+                      tabIndex={0}
+                      className="agents-routines__change"
+                      aria-label={`Change ${agent.name}’s routine: ${routine.note}`}
+                      onClick={() => {
+                        askToChangeRoutine(agent.id, routine.id);
+                        onOpenAgent(agent.id);
+                      }}
+                    >
+                      Change
+                    </TextButton>
                     <Toggle
                       on={on}
                       label={`${on ? 'Pause' : 'Resume'} ${agent.name}’s routine: ${routine.note}`}

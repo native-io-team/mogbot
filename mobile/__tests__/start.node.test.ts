@@ -11,6 +11,7 @@ import { join } from 'path';
 import {
   describeRoutineWhen,
   formatWhenIn,
+  formatWhenInlineIn,
   localDate,
   localTs,
   routineEcho,
@@ -122,7 +123,7 @@ describe('the routine picker', () => {
       /^Every weekday at 9:00\s?AM — Draft my day$/
     );
     expect(describeRoutineWhen({ kind: 'once', date: '2026-11-05', ...at9 }, now)).toMatch(
-      /^Once · Tomorrow 9:00\s?AM$/
+      /^Once, tomorrow at 9:00\s?AM$/
     );
     expect(describeRoutineWhen({ kind: 'every', minutes: 60 })).toBe('Every hour');
   });
@@ -364,6 +365,9 @@ describe('routine times on the Mac’s clock', () => {
       false
     );
     expect(formatWhenIn(ts, now, mac)).toMatch(/^Tomorrow 9:00\s?AM$/);
+    // Inside a sentence ("First run …"), as the desk writes it.
+    expect(formatWhenInlineIn(ts, now, mac)).toMatch(/^tomorrow at 9:00\s?AM$/);
+    expect(formatWhenInlineIn(ts + 3 * 86_400_000, now, mac)).toMatch(/ at 9:00\s?AM$/);
   });
 
   it('offers the Mac’s today, and says "Mac time" only when its clock differs', () => {

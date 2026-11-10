@@ -87,9 +87,13 @@ const DAY_WORDS = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|j
 
 /**
  * A drafted routine's time as the Mac's grammar read it ("every friday at
- * 16:00"), as a label: "Every Friday at 16:00". Only the case changes.
+ * 16:00"), as a label: "Every Friday at 16:00". The case changes, and a
+ * one-time run's UTC offset ("once, Thu 5 Nov 2026, 9:00 AM (UTC-05:00)",
+ * exact for an agent) is dropped: it is the Mac's own zone, which every
+ * other time on this screen is in too.
  */
 export function whenLabel(readsAs: string): string {
-  const named = readsAs.replace(DAY_WORDS, (w) => w[0].toUpperCase() + w.slice(1));
+  const plain = readsAs.replace(/\s*\(UTC[+-]\d{2}:\d{2}\)$/, '');
+  const named = plain.replace(DAY_WORDS, (w) => w[0].toUpperCase() + w.slice(1));
   return named.charAt(0).toUpperCase() + named.slice(1);
 }

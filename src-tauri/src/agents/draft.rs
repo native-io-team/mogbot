@@ -480,33 +480,53 @@ async fn run_codex(
 
 /* --------------------------------------------------- creating routines */
 
-/// Set up `routines` on a new agent, each leaving its "Set up a routine"
-/// line. One that can't be set (a time the grammar refuses) is named in one
-/// line instead, never dropped silently. Returns how many were set.
-pub fn add_routines(app: &AppHandle, agent_id: &str, routines: &[NewRoutine]) -> usize {
-    let mut set = 0;
+/// Set up `routines` on a new agent. Each leaves a "Set up a routine" line
+/// (when it runs and its first run), posted by [`AddedRoutines::post`] after
+/// the agent's welcome so its chat opens on its own voice, then what it will
+/// do on its own. One that can't be set (a time the grammar refuses) is named
+/// in one line instead, never dropped silently.
+pub fn add_routines(agent_id: &str, routines: &[NewRoutine]) -> AddedRoutines {
+    let mut added = AddedRoutines {
+        agent_id: agent_id.to_string(),
+        set: 0,
+        lines: Vec::new(),
+    };
     for r in routines.iter().take(MAX_ROUTINES) {
         match schedule::create_with_steps(agent_id, &r.when, &r.note, &r.then) {
             Ok(created) => {
-                super::mcp::created_routine_line(app, agent_id, &created.check_in);
-                set += 1;
+                added
+                    .lines
+                    .push(super::mcp::routine_line_text(&created.check_in));
+                added.set += 1;
             }
-            Err(e) => {
-                let line = runner::new_message(
-                    agent_id,
-                    MessageKind::Note,
-                    format!(
-                        "Couldn't set up “{}” ({}): {}",
-                        super::routine_steps::routine_name(&r.note),
-                        r.when.trim(),
-                        e
-                    ),
-                );
-                let _ = runner::record(app, line);
-            }
+            Err(e) => added.lines.push(format!(
+                "Couldn't set up “{}” ({}): {}",
+                super::routine_steps::routine_name(&r.note),
+                r.when.trim(),
+                e
+            )),
         }
     }
-    set
+    added
+}
+
+/// What [`add_routines`] set, and the lines it owes the agent's chat.
+#[must_use = "post the lines, or the new agent's chat never says what was set"]
+pub struct AddedRoutines {
+    agent_id: String,
+    /// How many were set.
+    pub set: usize,
+    lines: Vec<String>,
+}
+
+impl AddedRoutines {
+    /// Each routine's line, in the order they were asked for.
+    pub fn post(self, app: &AppHandle) {
+        for text in self.lines {
+            let line = runner::new_message(&self.agent_id, MessageKind::Note, text);
+            let _ = runner::record(app, line);
+        }
+    }
 }
 
 /// A tool's `then`: `[{text, ask_first}]`. Checked later, by the routine.

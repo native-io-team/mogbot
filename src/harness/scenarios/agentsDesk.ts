@@ -8,7 +8,7 @@
 
 import type { Scenario } from '../types';
 import { HARNESS_ROOT } from './base';
-import { AGENTS_TAB, MIN, TEAM, messagesFor, msg, now, overview } from './agents';
+import { AGENTS_TAB, MIN, TEAM, messagesFor, msg, now, overview, schedulePreview } from './agents';
 import { workCommands } from './agentsWork';
 
 const SEC = 1000;
@@ -163,7 +163,7 @@ export const agentsDeskScenarios: Scenario[] = [
     id: 'agents-desk-routines',
     title: 'Agents — every routine in one list, with Pause all asking first',
     looksRightWhen:
-      'The main pane is “Routines”. A muted count (“… on · 1 paused, across … agents”), then the confirm panel: “Pause all … running routines? Nothing runs until you resume them.” with Cancel and a neutral (not accent) Pause all at the card’s trailing edge, 8px apart. Below, one row per routine on hairlines: the agent’s small key, its name as a link and the routine’s note cut to one line, then a muted line in words (“Every weekday at 9:00 AM · next tomorrow at 9:00 AM”, “Every 4 hours · paused · last: didn’t run after 2 tries”: lower case after the first word) and an on/off switch on the right; the paused one is off and quieter. The sidebar’s Routines row, in the footer beside Usage (pages together; New agent and New room pinned under the list), wears the selected fill.',
+      'The main pane is “Routines”. A muted count (“… on · 1 paused, across … agents”), then the confirm panel: “Pause all … running routines? Nothing runs until you resume them.” with Cancel and a neutral (not accent) Pause all at the card’s trailing edge, 8px apart. Below, one row per routine on hairlines: the agent’s small key, its name as a link and the routine’s note cut to one line, then a muted line in words (“Every weekday at 9:00 AM · next tomorrow at 9:00 AM”, “Every 4 hours · paused · last: didn’t run after 2 tries”: lower case after the first word) then a quiet “Change” (it opens that routine’s editor in its agent’s chat) and an on/off switch on the right; the paused one is off and quieter. The sidebar’s Routines row, in the footer beside Usage (pages together; New agent and New room pinned under the list), wears the selected fill.',
     requires: '.agents-routines__confirm',
     openSelector: AGENTS_TAB,
     steps: [
@@ -171,6 +171,19 @@ export const agentsDeskScenarios: Scenario[] = [
       { click: '.agents-routines__bulk button', text: 'Pause all' },
     ],
     commands: routinesCommands,
+  },
+  {
+    id: 'agents-desk-routines-change',
+    title: 'Agents — Change on a routine opens its editor in that agent’s chat',
+    looksRightWhen:
+      'After Change on a Finance row of the Routines page: Finance’s chat, its schedule popover open under “N scheduled” straight on “Edit routine” for that routine (back arrow, How often, What filled in, Cancel and Save), not on the list.',
+    requires: '.agent-schedule [data-view="editor"]',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '.agents-list__routines' },
+      { click: '.agents-routines__change[aria-label*="Finance"]' },
+    ],
+    commands: { ...routinesCommands, agents_schedule_preview: schedulePreview },
   },
   {
     id: 'agents-desk-routines-compact',

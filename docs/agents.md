@@ -200,7 +200,11 @@ role, a briefing, up to four routines and the apps it will need. The draft
 fills the dialog's own fields, all editable, and adds one review list,
 **Routines**, each ticked; Create makes the agent with the routines still
 ticked (`agents_create`'s `routines`). "Start over" puts the one prompt back.
-Nothing is made before Create.
+Nothing is made before Create. The draft opens on its review: its key folds
+to the avatar beside the name (one click opens colour, icon and key), since
+the open picker pushed the briefing and routines below two thousand icons; on
+the phone the key beside the name does the same, and the review takes no
+keyboard until a field is tapped.
 
 - **One sealed call, no tools.** Claude Code with `--tools ""`, no MCP
   servers, `--setting-sources ""`, no slash commands, no session kept, in the
@@ -263,6 +267,11 @@ user sends anything.
   skipped, never cut.
 - An agent the Chief starts on a `first_task` gets the welcome but no
   starters: it is already busy.
+- **Then what it will do on its own.** Each routine set at Create leaves one
+  line after the welcome, with when it runs and its first run ("Set up a
+  routine: Brief me on Acme · every weekday at 8:00 AM, first run tomorrow at
+  8:00 AM", `mcp::routine_time_line`), so a routine made in one sentence is
+  seen to be set; one the grammar refused says which and why in its place.
 
 Not verified: a fresh agent's reach is usually just `gh` and its project
 (its engine lists connectors only once a turn runs), so most first opens
@@ -4140,10 +4149,18 @@ on the review card, and the interview is told not to ask again for a time that
 was already exact.
 
 The user sees them in a popover on the chat header ("N routines", or
-"Routines" when there are none; Cmd+K → "Schedule a check-in for <agent>…"). Each row
-can be paused (routines) or cancelled. The composer takes one line, `when:
-what`, split at the first colon followed by a space, and reads the time back
-as the backend resolved it before Return adds it.
+"Routines" when there are none; Cmd+K → "Schedule a routine for <agent>…").
+Each row can be paused (routines) or cancelled. New routine opens the picker,
+the phone's on the desk: "At a time / When…", then **How often** (chips:
+Every day, Weekdays, Weekly, Monthly, Every few hours, Once; never a second
+"When" under "When…"), At, **What**, "Then…" for steps, and an echo of the
+whole routine ("Every weekday at 8:00 AM — Send me a summary of X") with its
+first run as the backend resolved it. An existing routine's model ("Model",
+not "Runs on", which is the agent's engine and account) sits under What. The
+"When…" composer has the same shape: "When this happens" over the sources,
+Check every, What, and an echo ("When someone mentions you on GitHub —
+Triage it"; a check in the user's own words is quoted: "When Lead Gen finds
+“a new email from Dana” — …"), then what each check costs.
 
 **Run now** (`agents_schedule_run_now`) fires a row immediately as an ordinary
 wake: the same `check_in` line (marked `manual`, shown "· run now") and the
@@ -4228,7 +4245,9 @@ and its answer post one notification per turn.
 
 The sidebar's Routines row and ⌘K "Routines" open one list of every agent's
 routines: the agent's key, the note, how it runs in words, its next run, its
-last run's outcome, and an on/off switch. **Pause all routines…** and
+last run's outcome, **Change** and an on/off switch. Change opens that agent's
+chat with its schedule popover already on the routine's editor
+(`lib/routineHandoff.ts`, a one-slot ask its chat takes as it mounts). **Pause all routines…** and
 **Resume all routines…** (the list's buttons, or ⌘K) ask first. Resume all
 is the exact undo of Pause all: it wakes only routines marked
 `pausedByBulk`, never one paused by hand, by an admin (`pausedByAdmin`) or by

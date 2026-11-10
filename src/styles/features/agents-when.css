@@ -22,7 +22,7 @@
 .agent-when {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-tight);
+  gap: var(--spacing-md);
 }
 
 .agent-when__sources {
