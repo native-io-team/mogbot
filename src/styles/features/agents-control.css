@@ -526,7 +526,7 @@
 .agent-fresh-hint .text-button.agent-fresh-hint__action {
   font-weight: var(--font-weight-label);
   text-decoration: underline;
-  text-underline-offset: var(--spacing-2xs);
+  text-underline-offset: var(--text-underline-offset);
 }
 
 /* Login cards (`AgentLoginCard`): what it may do, the ways in, a sign-in under way. */

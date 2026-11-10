@@ -697,7 +697,7 @@ p.agent-schedule__place {
   color: var(--text-primary);
   text-decoration: underline;
   text-decoration-color: var(--border-strong);
-  text-underline-offset: 0.2em;
+  text-underline-offset: var(--text-underline-offset);
 }
 
 .agent-editor__other-ways .text-button.button:hover:not(:disabled),

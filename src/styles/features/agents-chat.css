@@ -596,7 +596,7 @@
   color: inherit;
   text-decoration: underline;
   text-decoration-color: var(--text-faint);
-  text-underline-offset: 2px;
+  text-underline-offset: var(--text-underline-offset);
 }
 
 .agent-markdown a:hover {

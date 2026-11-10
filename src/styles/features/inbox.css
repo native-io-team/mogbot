@@ -405,7 +405,7 @@
 .inbox-detail-body a {
   color: var(--accent-active);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: var(--text-underline-offset);
 }
 
 .inbox-detail-body a:hover {

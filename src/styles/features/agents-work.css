@@ -221,16 +221,22 @@
   white-space: nowrap;
 }
 
-/* The whole line opens the steps; it reads as text, never as a link. */
+/* The whole line opens the steps; it reads as text, never as a link, so it
+   carries no underline at rest (the finished "Worked …" line beside it has
+   none either). Hover and keyboard focus draw one, clear of the descenders,
+   with the words brightening, which is the affordance. */
 .text-button.button.agent-working__toggle {
   flex: 0 1 auto;
   justify-content: flex-start;
   min-width: 0;
   color: inherit;
+  text-decoration-line: none;
 }
 
-.text-button.button.agent-working__toggle:hover:not(:disabled) {
-  text-decoration: none;
+.text-button.button.agent-working__toggle:hover:not(:disabled),
+.text-button.button.agent-working__toggle:focus-visible {
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
 }
 
 .agent-working__toggle:hover .agent-working__meta,
