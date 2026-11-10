@@ -308,9 +308,58 @@ pub fn back_up(account: &wallet::Account, home: &Path, session: &str) {
     }
 }
 
+/// The last entry of Claude Code's conversation `session` as it stands
+/// (the most complete copy on this Mac, `home`'s kept one included): what
+/// `--resume-session-at` keeps up to. `None` when there is no copy or no
+/// entry in it.
+pub fn claude_leaf(home: &Path, session: &str) -> Option<String> {
+    if !valid_session(session) {
+        return None;
+    }
+    let mut found = claude_copies(&wallet::engine_folders(Engine::Claude), session);
+    let kept = home.join(DIR).join(format!("{session}.jsonl"));
+    if kept.is_file() {
+        found.push(kept);
+    }
+    let path = best(&found)?;
+    leaf_of(&std::fs::read_to_string(path).ok()?)
+}
+
+/// The id of the last main-chain entry in a Claude Code transcript (lines
+/// with a `uuid`, not a sub-agent's `isSidechain` ones). Verified on
+/// 2.1.322: resuming at that id with `--fork-session` keeps every turn up to
+/// it and nothing after.
+pub fn leaf_of(transcript: &str) -> Option<String> {
+    transcript.lines().rev().find_map(|line| {
+        if !line.contains("\"uuid\"") {
+            return None;
+        }
+        let v: serde_json::Value = serde_json::from_str(line).ok()?;
+        if v.get("isSidechain").and_then(serde_json::Value::as_bool) == Some(true) {
+            return None;
+        }
+        v.get("uuid")?.as_str().map(str::to_string)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_leaf_is_the_last_main_chain_entry() {
+        let t = [
+            r#"{"type":"user","uuid":"u1","parentUuid":null}"#,
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1"}"#,
+            r#"{"type":"attachment","uuid":"x1","parentUuid":"a1"}"#,
+            r#"{"type":"assistant","uuid":"s1","isSidechain":true}"#,
+            r#"{"type":"last-prompt"}"#,
+            "not json",
+        ]
+        .join("\n");
+        assert_eq!(leaf_of(&t).as_deref(), Some("x1"));
+        assert_eq!(leaf_of(r#"{"type":"mode"}"#), None);
+    }
 
     const SID: &str = "85100e7a-050c-4811-a26e-55203a85d28b";
 

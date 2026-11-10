@@ -1026,6 +1026,24 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsConversationRewind",
+        "Result<'agents.conversationRewind'>",
+        call(
+            "agents.conversationRewind",
+            json!({ "agentId": AGENT, "conversationId": "first", "messageId": "m-2" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsConversationFork",
+        "Result<'agents.conversationFork'>",
+        call(
+            "agents.conversationFork",
+            json!({ "agentId": AGENT, "conversationId": "first", "messageId": "m-2" }),
+        )
+        .await,
+    );
+    out += &entry(
         "agentsConversationRoutine",
         "Result<'agents.conversationRoutine'>",
         call(

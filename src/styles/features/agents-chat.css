@@ -1046,3 +1046,49 @@
 
 /* The working line (AgentWorkingIndicator) lives with the timeline it
    opens, in agents-work.css. */
+
+/* ------------------------------------- rewind, fork and edit (AgentGoBack) */
+
+/* What a rewind passed over: one quiet line that opens it. */
+.agent-go-back__summary .agent-go-back__chevron {
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agent-go-back__summary[data-open] .agent-go-back__chevron {
+  transform: rotate(90deg);
+}
+
+/* Why Edit and Rewind wait: under the menu's items. */
+.agent-go-back__reason {
+  max-width: 240px;
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}
+
+.agent-go-back__confirm .agent-go-back__body {
+  margin: 0;
+  padding: var(--spacing-lg) var(--spacing-xl) 0;
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+}
+
+.agent-go-back__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
+}
+
+.agent-go-back__editing .agent-quote-chip {
+  align-items: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-go-back__summary .agent-go-back__chevron {
+    transition: none;
+  }
+}

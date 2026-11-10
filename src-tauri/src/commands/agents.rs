@@ -1362,6 +1362,41 @@ pub async fn agents_conversation_rename(
     Ok(list)
 }
 
+/// "Rewind to here" (and Edit and resend, before its send): the
+/// conversation carries on from just before the user's message; what came
+/// after is folded, not deleted. Refused while a turn runs.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_conversation_rewind(
+    app: AppHandle,
+    agent_id: String,
+    conversation_id: String,
+    message_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let done = blocking(move || agents::rewind::rewind(&id, &conversation_id, &message_id)).await?;
+    let _ = runner::record(&app, done.line);
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(done.conversations)
+}
+
+/// "Fork from here": a new conversation with everything before the user's
+/// message, which the user is now in; the original stays as it is.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_conversation_fork(
+    app: AppHandle,
+    agent_id: String,
+    conversation_id: String,
+    message_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let done = blocking(move || agents::rewind::fork(&id, &conversation_id, &message_id)).await?;
+    let _ = runner::record(&app, done.line);
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(done.conversations)
+}
+
 /// Move a routine to another of the agent's conversations: it fires there
 /// from its next run.
 #[tauri::command]

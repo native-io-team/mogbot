@@ -241,6 +241,7 @@ export type RoomItem =
       | { kind: 'draft' }
       | { kind: 'room' }
       | { kind: 'setup' }
+      | { kind: 'rewound' }
     >
   | { kind: 'draft'; key: string; text: string; agentId: string }
   | { kind: 'working'; key: string; label: string; agentId: string };

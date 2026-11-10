@@ -160,6 +160,7 @@ pub mod recipe;
 pub mod remember;
 pub mod results;
 pub mod review;
+pub mod rewind;
 pub mod room_tools;
 pub mod rooms;
 pub mod routine_steps;

@@ -70,6 +70,15 @@ export const selectConversation = (agentId: string, conversationId: string) =>
   invoke<Conversations>('agents_conversation_select', { agentId, conversationId });
 export const renameConversation = (agentId: string, conversationId: string, title: string) =>
   invoke<Conversations>('agents_conversation_rename', { agentId, conversationId, title });
+/**
+ * "Rewind to here" (and Edit and resend, before its send): the conversation
+ * carries on from just before the user's message; what came after is folded.
+ */
+export const rewindConversation = (agentId: string, conversationId: string, messageId: string) =>
+  invoke<Conversations>('agents_conversation_rewind', { agentId, conversationId, messageId });
+/** "Fork from here": a new conversation with everything before the message; `current` is it. */
+export const forkConversation = (agentId: string, conversationId: string, messageId: string) =>
+  invoke<Conversations>('agents_conversation_fork', { agentId, conversationId, messageId });
 /** Move a routine to another of the agent's conversations: it fires there from its next run. */
 export const moveRoutine = (agentId: string, routineId: string, conversationId: string) =>
   invoke<Conversations>('agents_conversation_routine', { agentId, routineId, conversationId });

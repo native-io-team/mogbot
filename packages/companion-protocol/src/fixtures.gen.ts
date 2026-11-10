@@ -4719,7 +4719,7 @@ export const agentsConversationRename = {
     "ci_1": "c2"
   }
 } satisfies Result<'agents.conversationRename'>;
-export const agentsConversationRoutine = {
+export const agentsConversationRewind = {
   "agentId": "a1",
   "current": "c2",
   "items": [
@@ -4747,6 +4747,143 @@ export const agentsConversationRoutine = {
       "lastActivityAt": 1762290000000,
       "loaded": false,
       "named": false,
+      "rewinds": [
+        {
+          "at": "m-2",
+          "id": "r0",
+          "ids": [
+            "m-2",
+            "m-2-reply"
+          ],
+          "ts": 1762290100000
+        }
+      ],
+      "title": "Fix the login page",
+      "waiting": 1
+    }
+  ],
+  "routines": {
+    "ci_1": "c2"
+  }
+} satisfies Result<'agents.conversationRewind'>;
+export const agentsConversationFork = {
+  "agentId": "a1",
+  "current": "c3",
+  "items": [
+    {
+      "createdAt": 1762200002000,
+      "current": true,
+      "forkedFrom": {
+        "conversation": "first",
+        "message": "m-2",
+        "title": "Fix the login page"
+      },
+      "id": "c3",
+      "lastActivityAt": 1762290002000,
+      "loaded": true,
+      "named": false,
+      "preview": "On it",
+      "title": "Fork of Fix the login page",
+      "waiting": 0
+    },
+    {
+      "createdAt": 1762200001000,
+      "current": false,
+      "id": "c2",
+      "lastActivityAt": 1762290001000,
+      "loaded": false,
+      "named": true,
+      "preview": "On it",
+      "title": "Launch plan",
+      "waiting": 0
+    },
+    {
+      "context": {
+        "at": 1762290000000,
+        "model": "claude-opus-5-5",
+        "used": 64000,
+        "window": 200000
+      },
+      "createdAt": 1762200000000,
+      "current": false,
+      "id": "first",
+      "lastActivityAt": 1762290000000,
+      "loaded": false,
+      "named": false,
+      "rewinds": [
+        {
+          "at": "m-2",
+          "id": "r0",
+          "ids": [
+            "m-2",
+            "m-2-reply"
+          ],
+          "ts": 1762290100000
+        }
+      ],
+      "title": "Fix the login page",
+      "waiting": 1
+    }
+  ],
+  "routines": {
+    "ci_1": "c2"
+  }
+} satisfies Result<'agents.conversationFork'>;
+export const agentsConversationRoutine = {
+  "agentId": "a1",
+  "current": "c3",
+  "items": [
+    {
+      "createdAt": 1762200002000,
+      "current": true,
+      "forkedFrom": {
+        "conversation": "first",
+        "message": "m-2",
+        "title": "Fix the login page"
+      },
+      "id": "c3",
+      "lastActivityAt": 1762290002000,
+      "loaded": true,
+      "named": false,
+      "preview": "On it",
+      "title": "Fork of Fix the login page",
+      "waiting": 0
+    },
+    {
+      "createdAt": 1762200001000,
+      "current": false,
+      "id": "c2",
+      "lastActivityAt": 1762290001000,
+      "loaded": false,
+      "named": true,
+      "preview": "On it",
+      "title": "Launch plan",
+      "waiting": 0
+    },
+    {
+      "context": {
+        "at": 1762290000000,
+        "model": "claude-opus-5-5",
+        "used": 64000,
+        "window": 200000
+      },
+      "createdAt": 1762200000000,
+      "current": false,
+      "id": "first",
+      "lastActivityAt": 1762290000000,
+      "loaded": false,
+      "named": false,
+      "rewinds": [
+        {
+          "at": "m-2",
+          "id": "r0",
+          "ids": [
+            "m-2",
+            "m-2-reply"
+          ],
+          "ts": 1762290100000
+        }
+      ],
       "title": "Fix the login page",
       "waiting": 1
     }
@@ -5143,6 +5280,8 @@ export const frames = [
       "agents.conversationNew",
       "agents.conversationSelect",
       "agents.conversationRename",
+      "agents.conversationRewind",
+      "agents.conversationFork",
       "agents.conversationRoutine",
       "agents.create",
       "agents.draft",
