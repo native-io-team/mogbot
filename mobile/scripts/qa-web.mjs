@@ -1010,12 +1010,13 @@ const PROBE = [
     check: 'Builder working (the live line), its header saying “on Work”',
   },
   {
+    // Settings opens Usage on a Mac that serves it: the accounts live there.
     name: 'probe-accounts',
-    route: '/settings',
-    ready: 'Settings',
-    act: scrollToText('CLAUDE CODE ACCOUNTS'),
+    route: '/usage',
+    ready: 'Usage',
+    act: scrollToText('Accounts'),
     check:
-      'Three Claude accounts: sam@example.com in use; Work out of usage (amber name, when it refills, “Builder runs only on this one”), no Use now; Personal “Not signed in”, no Use now; arrows to reorder',
+      'Accounts, one list per engine: the three Claude accounts, sam@example.com in use; Work out of usage with when it refills and Builder running only on it; Personal not signed in; each row opens its own page',
   },
   {
     name: 'probe-runs-on',
@@ -1065,11 +1066,11 @@ const PROBE = [
   },
   {
     name: 'probe-carried',
-    route: '/settings',
-    ready: 'Settings',
-    act: scrollToText('CODEX ACCOUNTS'),
+    route: '/usage',
+    ready: 'Usage',
+    act: scrollToText('Codex'),
     check:
-      'Codex accounts: a neutral pill “Codex out · on Claude Code until …” under the heading (never amber), then its account “Out of usage until …”',
+      'Usage → Accounts, under the Codex heading: a neutral pill “Codex out · on Claude Code until …” (never amber), then its account, out of usage',
   },
   {
     name: 'probe-slack',
@@ -3092,7 +3093,9 @@ const TORTURE = [
       const first = await topOf(page, 'Written first');
       const second = await topOf(page, 'Written second');
       if (first == null || second == null || first > second)
-        page.errors.push('failed: an overtaken line is shown below the line written after it');
+        page.errors.push(
+          `failed: an overtaken line is shown below the line written after it (tops ${first} / ${second})`
+        );
     },
     check:
       'After a duplicated event, two lines out of order, a burst of 12, a streamed reply, a late draft, a card answered and a reply edited: each line once, in time order, no leftover draft, the newest line in view',
