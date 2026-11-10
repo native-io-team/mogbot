@@ -986,6 +986,8 @@ export interface AgentReach {
     kept: string;
     needsSignIn: boolean;
     lastUsedAt?: number;
+    /** One of this Mac's own apps (macOS asks once; said under the list, not per row). */
+    macApp?: boolean;
   }[];
   /** Absent for an agent on Codex, which has no browser. */
   /**

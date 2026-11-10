@@ -143,6 +143,8 @@ export interface ReachConnection {
   kept: string;
   needsSignIn: boolean;
   lastUsedAt?: number;
+  /** One of this Mac's own apps: macOS's one-time ask is said under the section, not per row. */
+  macApp?: boolean;
 }
 
 export interface Reach {

@@ -2622,6 +2622,10 @@ pub struct ReachConnection {
     pub needs_sign_in: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_used_at: Option<i64>,
+    /// One of this Mac's own apps (Calendar, Messages…): the list says how
+    /// macOS asks once, under the section, rather than on every row.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub mac_app: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -2695,6 +2699,7 @@ pub fn reach(agent: &Agent) -> Reach {
             .into_iter()
             .map(|(c, access)| ReachConnection {
                 kept: c.kept().to_string(),
+                mac_app: matches!(c.kind, connections::Kind::MacApp),
                 connection_id: c.id,
                 service: c.service,
                 title: c.title,
