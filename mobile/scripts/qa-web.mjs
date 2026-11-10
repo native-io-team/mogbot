@@ -1283,6 +1283,91 @@ const LIVE = [
       await page.eval(`globalThis.__qaDictation = {}`);
     },
   },
+  // A voice message: the mic held (pressed, not let go) while the scripted recognizer hears.
+  {
+    name: 'voice-held',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      const box = await page.eval(`(() => {
+        const el = [...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label') === 'Dictate');
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      })()`);
+      if (!box) throw new Error('No mic to hold');
+      globalThis.__qaHeld = box;
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...box });
+      await page.send('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        ...box,
+        button: 'left',
+        buttons: 1,
+        clickCount: 1,
+      });
+      await sleep(2600);
+    },
+    check:
+      'Held: the field keeps its capsule shape with the words streaming in (the last lighter), the mic is the accent and still under the finger, no ×/Stop/Send, and the line over the field says “Let go to send · slide away to cancel”',
+    after: async (page) => {
+      // Slide away before letting go: nothing is sent, so the Designer stays idle.
+      const box = globalThis.__qaHeld;
+      const away = { x: box.x - 160, y: box.y - 160 };
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...away, buttons: 1 });
+      await page.send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        ...away,
+        button: 'left',
+        buttons: 0,
+        clickCount: 1,
+      });
+      await sleep(800);
+    },
+  },
+  // Listen: hold a reply, pick Listen; the web's voice is a silent stand-in (dev/web/expo-speech.ts).
+  {
+    name: 'listen-reading',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      const box = await page.eval(`(() => {
+        const rows = [...document.querySelectorAll('[tabindex="0"]')].filter(
+          (e) => (e.innerText ?? '').trim().length > 40 && !e.querySelector('textarea') && e.getBoundingClientRect().height > 20
+        );
+        const el = rows.pop();
+        if (!el) return null;
+        el.scrollIntoView({ block: 'center' });
+        const r = el.getBoundingClientRect();
+        return { x: r.x + Math.min(r.width / 2, 120), y: r.y + Math.min(r.height / 2, 20) };
+      })()`);
+      if (!box) throw new Error('No reply to hold');
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...box });
+      await page.send('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        ...box,
+        button: 'left',
+        buttons: 1,
+        clickCount: 1,
+      });
+      await sleep(700);
+      await page.send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        ...box,
+        button: 'left',
+        buttons: 0,
+        clickCount: 1,
+      });
+      await sleep(600);
+      await page.clickText('Listen');
+      await sleep(600);
+    },
+    check:
+      'Reading aloud: a bar over the composer with the speaker icon, “Reading aloud”, a line saying how to pause (or, on Android, media volume), and an ✕ to stop',
+    after: async (page) => {
+      await page.clickLabel('Stop reading').catch(() => {});
+      await sleep(400);
+    },
+  },
   // The composer's shapes, as Claude's own input: one capsule empty, a card with words.
   {
     name: 'composer-empty',
@@ -1802,6 +1887,14 @@ const LIVE = [
     act: scrollToText('22:00–07:00'),
     check:
       'QUIET HOURS over one row: “Quiet hours” with “22:00–07:00” on the right and a chevron, then the footer “Nothing scheduled runs; only requests for your OK notify.”',
+  },
+  {
+    name: 'settings-voice',
+    route: '/settings',
+    ready: 'Attach the recording',
+    act: scrollToText('Attach the recording'),
+    check:
+      'VOICE over one row: “Attach the recording” with its switch off, then the footer on holding the mic to send, where words are recognised, and what the switch does with the recording',
   },
   {
     name: 'settings-text-size',

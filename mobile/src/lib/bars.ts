@@ -21,6 +21,7 @@ import {
 export const BAR_ORDER = [
   'demo',
   'connection',
+  'reading',
   'driven',
   'import',
   'setup',

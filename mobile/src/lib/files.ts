@@ -148,6 +148,10 @@ export const http: HttpAdapter = {
 /** Everything downloaded from this Mac. Forgetting the Mac wipes it. */
 export const clearCache = () => FileSystem.deleteAsync(CACHE, { idempotent: true });
 
+/** A file of the app's own it no longer needs (a voice message's audio, once sent). */
+export const discardFile = (uri: string) =>
+  FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+
 // ---- Opening ------------------------------------------------------------------------
 
 /** Quick Look on iOS (the system's own viewer); the share sheet where that isn't available. */

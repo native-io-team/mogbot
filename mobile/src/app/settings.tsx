@@ -78,6 +78,8 @@ export default function Settings() {
   const appearance = useApp((s) => s.prefs.appearance);
   const textSize = useApp((s) => s.prefs.textSize);
   const hapticsSwitch = useSwitchColors(haptics);
+  const voiceRecording = useApp((s) => s.prefs.voiceRecording);
+  const recordingSwitch = useSwitchColors(voiceRecording);
   const push = useApp((s) => s.push);
   const pushInfo = pushLine(push, isOfficialBuild());
   const [alerts, setAlerts] = useState<Notifications.PermissionStatus | null>(null);
@@ -344,6 +346,24 @@ export default function Settings() {
               onValueChange={(on) => setPref('haptics', on)}
               {...hapticsSwitch}
               accessibilityLabel="Haptics"
+            />
+          }
+          last
+        />
+      </Section>
+
+      <Section
+        title="Voice"
+        footer={`Hold the mic to send a voice message: let go to send, slide away to cancel. Your words are recognised on this phone when it can. With this on, the recording goes to ${macName} with them, as a file the agent can keep; it’s deleted from this phone once sent.`}
+      >
+        <Row
+          label="Attach the recording"
+          trailing={
+            <Switch
+              value={voiceRecording}
+              onValueChange={(on) => setPref('voiceRecording', on)}
+              {...recordingSwitch}
+              accessibilityLabel="Attach the recording to voice messages"
             />
           }
           last

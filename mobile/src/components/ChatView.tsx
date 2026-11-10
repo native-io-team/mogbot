@@ -61,6 +61,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { agentKeyState, askingLine, isQueued, needsYouHere, pendingApproval } from '../lib/agents';
 import { messageActions, plainText, type MessageAction } from '../lib/actions';
+import { canReadAloud, readAloud, stopReading, useReading } from '../lib/readAloud';
 import { announce } from '../lib/a11y';
 import { addQuote } from '../lib/drafts';
 import { preview } from '../lib/files';
@@ -495,29 +496,44 @@ export function ChatView({
       haptic.select();
       const remember = canCall('agents.memoryChange') && canCall('agents.memorySuggest');
       // The time it was sent lives here, not under every bubble.
-      showActions(sentAt(m.ts), messageActions(m, remember), (action: MessageAction) => {
-        switch (action) {
-          case 'copy':
-            void Clipboard.setStringAsync(m.kind === 'agent' ? plainText(m.text) : m.text);
-            haptic.success();
-            break;
-          case 'copyMarkdown':
-            void Clipboard.setStringAsync(m.text);
-            haptic.success();
-            break;
-          case 'quote':
-            addQuote(id, m.kind === 'agent' ? plainText(m.text) : m.text);
-            break;
-          case 'select':
-            setSelecting(m);
-            break;
-          case 'remember':
-            router.push({ pathname: '/remember', params: { id, messageId: m.id } });
-            break;
+      showActions(
+        sentAt(m.ts),
+        messageActions(m, remember, canReadAloud()),
+        (action: MessageAction) => {
+          switch (action) {
+            case 'copy':
+              void Clipboard.setStringAsync(m.kind === 'agent' ? plainText(m.text) : m.text);
+              haptic.success();
+              break;
+            case 'copyMarkdown':
+              void Clipboard.setStringAsync(m.text);
+              haptic.success();
+              break;
+            case 'listen':
+              if (!readAloud(id, m.id, m.text)) showError('This phone can’t read aloud right now.');
+              break;
+            case 'quote':
+              addQuote(id, m.kind === 'agent' ? plainText(m.text) : m.text);
+              break;
+            case 'select':
+              setSelecting(m);
+              break;
+            case 'remember':
+              router.push({ pathname: '/remember', params: { id, messageId: m.id } });
+              break;
+          }
         }
-      });
+      );
     },
-    [id, router]
+    [id, router, showError]
+  );
+
+  // A reply read aloud stops when its chat closes.
+  useEffect(
+    () => () => {
+      if (useReading.getState().reading?.agentId === id) stopReading();
+    },
+    [id]
   );
 
   const openPath = useCallback(

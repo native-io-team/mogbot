@@ -19,6 +19,7 @@ const WEB_STANDINS = {
   'expo-file-system': 'expo-file-system.ts',
   'expo-file-system/legacy': 'expo-file-system-legacy.ts',
   'expo-speech-recognition': 'expo-speech-recognition.ts',
+  'expo-speech': 'expo-speech.ts',
 };
 // Simulator QA only: `QA_SCRIPTED_DICTATION=1 expo start` gives a native
 // build the same scripted recognizer, so dictation's states can be looked at

@@ -927,7 +927,8 @@ The phone can start work as well as answer it. Each piece is gated by
   dead: every path ends in idle. The phases are a pure reducer
   (`dictationReducer`: idle → starting → listening → stopping → idle, ending
   `done`, `cancelled`, `sent` or `error`). The team's names are passed as
-  contextual strings. Nothing is recorded to a file.
+  contextual strings. Nothing is recorded to a file (a voice message's
+  recording, below, only when asked for).
   **Expo Go has no recognizer module**, so there the mic focuses the field
   and points at the keyboard's own mic; a development or release build
   (`pnpm ios`, `expo run:ios --configuration Release`) has it. The config
@@ -943,6 +944,39 @@ The phone can start work as well as answer it. Each piece is gated by
   expo start --dev-client` gives a simulator build the same one (silent: no
   microphone, no sound). Real recognition, real levels and the fallback need
   a phone.
+- **Voice messages** (the same `lib/dictation.ts`: `held`, `release`,
+  `sendsOnRelease`, `holdEnds`). **Hold the mic** (300 ms) and it listens
+  while you hold, the words streaming into the field as a tap's do; **let
+  go** and once its last words are in, the draft is sent as Send would send
+  it; **slide away** more than 64 pt before letting go and nothing is sent
+  (the draft goes back as it was). The field keeps the shape it had when the
+  hold began (`ComposerField`'s `hold`), so the mic isn't moved out from
+  under the finger, which would end the press; the held mic is the accent
+  and the line over the field says "Let go to send · slide away to cancel".
+  A pause never stops a hold that has heard you; letting go does. Nothing is
+  sent when it heard nothing or ended on an error (the words stay to read),
+  and a request the recognizer ended by itself while still held sends on
+  letting go. Recognition is dictation's: on the phone when it can be.
+  **The recording** is kept only with Settings → Voice → **Attach the
+  recording** on (off by default): a 16 kHz 16-bit WAV (about 2 MB a
+  minute, under the Mac's 25 MB a file) that the recognizer writes to the
+  phone's cache, uploaded with the words to the paired Mac as "Voice
+  message.wav" and deleted from the phone once sent; a failed upload sends
+  the words and says so. Otherwise nothing is written to a file. No audio
+  ever goes anywhere but the paired Mac.
+- **Listen** (`lib/readAloud.ts`). Hold an agent's reply → **Listen**: the
+  phone's own voice reads it (expo-speech: AVSpeechSynthesizer, Android's
+  TextToSpeech), never a service. It reads the reply as it would be said
+  (`speakable`: markdown's marks gone, a code block as "Code.", a bare link
+  as "a link to example.com"), in pieces of at most 4,000 characters cut at
+  sentence ends. One reply at a time; another stops the first. A bar over
+  the composer ("Reading aloud", `BAR_ORDER`'s `reading`) pauses and carries
+  on with a tap (iOS; Android's engine can only stop) and stops with its ✕;
+  leaving the chat or the app stops it. **Silent mode:** on iOS it plays in
+  the app's own audio session, set to `soloAmbient` before every reading
+  (dictation leaves it set for recording), so the Ring/Silent switch mutes
+  it as it mutes a game, and the bar says so. Android has no silent switch
+  for media and plays at media volume, which its bar says instead.
 - **The composer** is the system's glass where the phone has it
   (`components/Glass.tsx`, expo-glass-effect: iOS 26 Liquid Glass, the tab
   bar's material), shaped as Claude's own input: empty or one line, a 48pt
@@ -1042,6 +1076,82 @@ The phone can start work as well as answer it. Each piece is gated by
     otherwise name a file in the app's own storage, under a harmless name,
     and have it uploaded to the Mac. The sheet says the words came from a
     link and asks you to read them before sending.
+
+### Siri, Shortcuts and the Action button
+
+"**Tell** / **Ask** / **Message** \<app\>" asks for the words and sends them
+to the Chief of Staff; "**Tell \<agent\> in \<app\>**" to that agent. Both
+are also actions in Shortcuts ("Tell Your Chief of Staff", "Tell an
+Agent"), so they can sit on the Action button or a Home Screen shortcut.
+Built on **expo-app-intents** (`lib/siri.ts`, `lib/siriBridge.tsx`):
+
+- **The intents are Swift in `mobile/app-intents/`** (`TellAgentIntent.swift`,
+  `AppIntentsSetup.swift`), compiled into the app target by Expo inline
+  modules (`experiments.inlineModules.watchedDirectories`), since Apple's
+  App Intents metadata extraction can't see code in a pod. The intent only
+  records the request (`AppIntentDispatcher.dispatch("tellAgent")`) and opens
+  the app; Siri says "Opening the app to send that", never that it was sent,
+  because nothing comes back from JavaScript.
+- **The app sends it** once paired and holding its team: to the agent named
+  (by id from the catalog), else the Chief; trimmed; through the outbox as
+  typing would, then opens that chat. Each request sends with the `clientId`
+  `siri-<request id>` (`sendOnce`), so a replay after the app died mid-way
+  is one message: the system keeps a request until the app removes it. An
+  empty request, an agent since deleted, or no team yet sends nothing and
+  says why.
+- **No link sends.** There is deliberately no URL for this: any page or app
+  can open a link, and it must never speak as you. Only the system's intent
+  runner (something you said, or a shortcut you set up) gets here.
+- **Agents' names** are published as the `agent` catalog Siri matches
+  ("Inbox", the Chief also as "Chief"), in the app's own storage on the
+  phone, and re-published when a name changes. Names only.
+- **No entitlement**: App Intents need none, so every build has them,
+  self-built on a free team included. Phrases are compiled in; a new phrase
+  needs a new build, not an update.
+
+Checked: the Swift typechecks against expo-app-intents' signatures (iOS 16.4,
+Swift 5 and 6), `expo prebuild` puts `app-intents/` in the app target, and
+jest covers the plan (`siri.node.test.ts`). **Not yet tried on a device or
+built in Xcode**: Siri's phrases, the follow-up question, the catalog's
+matching, and the cold-start hand-over all need a phone.
+
+### Live Activity while an agent works
+
+The Lock Screen and Dynamic Island show one activity for the whole team
+while anyone is busy (`lib/liveActivity.ts`, `lib/liveActivityLayout.tsx`,
+`lib/liveActivityBridge.tsx`): the lead agent's key colour and name,
+"Working…" with a clock from when its turn began (only when the Mac sent
+`status.since`; no clock is drawn from a guess), or "Needs your OK" in the
+warning colour, and "+2 more". Waiting on you leads, then the longest turn.
+Tapping it opens that chat.
+
+- **What it may say:** the agent's name through `redact` (as a notification's
+  title is) and fixed words. Never a card's text, a step, a reply or a
+  preview: `activityProps` builds the only props there are and the test
+  holds them to exactly those fields.
+- **When:** ActivityKit starts one only while the app is in front, and only
+  while the Mac is connected (a saved overview is last-known). While open it
+  updates as the team changes and pushes its stale date on every 4 minutes.
+  A suspended app can't update it (that needs ActivityKit push through the
+  relay, not built), so after 10 minutes without an update it reads "Open
+  the app for the latest", and opening the app brings it up to date or ends
+  it. Ended activities go at once.
+- **Where it's built:** expo-widgets' config plugin adds the widget
+  extension, which needs an App Group a free Apple team can't always sign.
+  So, like the share extension, it's only in a build made with
+  **`SHIPSTUDIO_LIVE_ACTIVITY=1`** (`app.config.ts`: the extension
+  `<bundle id>.LiveActivity`, the group `group.<bundle id>`, and
+  `extra.liveActivity`, which is what the app checks). Without the flag
+  expo-widgets is kept out of the Podfile (`withoutWidgets`, so no widget
+  bundle is built at Xcode time) and out of Android autolinking with
+  @expo/ui (`expo.autolinking.android.exclude` in `mobile/package.json`).
+  The look is SwiftUI through @expo/ui, written as a `'widget'` function
+  that babel turns into a string and the extension runs.
+
+Checked: `expo prebuild -p ios` with and without the flag (the
+`ExpoWidgetsTarget` target, the App Group, `NSSupportsLiveActivities`), and
+jest for what it shows and when (`liveActivity.test.ts`,
+`voiceBuild.node.test.ts`). **Not built in Xcode or seen on a device.**
 
 ### Connection status
 
@@ -1354,7 +1464,12 @@ on a fork's binary. For self-builders, Reinstall is the update.
   clock, and share payloads; `share.test.tsx` the share sheet (a crafted
   `files=` link uploads nothing); `dictation.test.tsx` the state machine on its own and the mic against a
   fake recognizer (streaming, Stop, Send, ×, silence, errors, the fallback,
-  Android 12); `waveform.node.test.ts` the level→bar mapping and easing.
+  Android 12) and holding it for a voice message (let go, slide away, the
+  recording only when asked for); `waveform.node.test.ts` the level→bar
+  mapping and easing; `readAloud.test.ts` Listen (what's said, pieces,
+  pause, stop, a stopped reading's late callbacks); `siri.node.test.ts` and
+  `liveActivity.test.ts` what Siri sends and what the Lock Screen may show;
+  `voiceBuild.node.test.ts` the app config for both.
 - **Rooms:** `rooms.test.ts` (routing, gating, store keys, folding, the
   room's list), `roomParity.test.ts` (open copies, the foot line, @mentions,
   the intro's claim), `roomView.test.tsx` (the thread, Keep / Discard and Ask
@@ -1449,8 +1564,13 @@ the share extension, the camera, real keyboard behaviour).
   engine, model or project there.
 - Pushing to git from the phone: Remote Access gates it behind a PIN, and the
   phone gets nothing until the owner decides how.
-- Native targets that need a dev build and an Apple team: a needs-you widget
-  and a Live Activity per working turn. The "Send to agent…" extension is
+- A needs-you Home Screen widget. The Live Activity is built behind
+  `SHIPSTUDIO_LIVE_ACTIVITY=1` but not yet built in Xcode or tried on a
+  device, and can't update while the app is suspended (ActivityKit push
+  through the relay). Siri and Shortcuts, holding the mic, Listen and the
+  silent switch, and the attached recording are checked in tests and
+  prebuild only, not yet on a phone. A live two-way voice conversation with
+  an agent. The "Send to agent…" extension is
   configured behind `SHIPSTUDIO_SHARE_EXTENSION=1` but not yet built or
   tried on a device. Dictation's live waveform, streaming words and
   on-device → server fallback are checked on the simulator against fed
