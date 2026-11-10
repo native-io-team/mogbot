@@ -1,5 +1,5 @@
 /**
- * The chat header's usage ring (what is left of the current 5-hour window,
+ * The chat header's usage meter (what is left of the current 5-hour window,
  * as the engine reported it) and the bars the Usage sheet draws from an
  * older Mac, with the Mac's pace estimate under a bar when it sent one.
  * Every limit is said and drawn as what is left, as the stack says it; an
@@ -8,7 +8,7 @@
  */
 
 import { Pressable, StyleSheet, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { makeStyles, useColors } from '../lib/appearance';
 import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usageSheet';
 import { depthOf, iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
@@ -21,10 +21,34 @@ const inkOf = (colors: Palette, tone: UsageTone) =>
       ? colors.accentWarning
       : colors.textSecondary;
 
-/** The ring's diameter: an icon button's glyph. */
+/** The meter's diameter: an icon button's glyph. */
 const RING = iconSize.button;
-const STROKE = space['2xs'] + space['3xs'];
+/** The outline's width and the gap between it and the pie. */
+const OUTLINE = 1;
+const GAP = space['2xs'];
 
+/**
+ * A pie of `share` (0..1) from twelve o'clock, clockwise: a wedge, a full
+ * disc, or nothing.
+ */
+export function piePath(cx: number, cy: number, r: number, share: number): string | null {
+  const s = Math.max(0, Math.min(1, share));
+  if (s <= 0) return null;
+  if (s >= 1)
+    return `M ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy} A ${r} ${r} 0 1 1 ${cx - r} ${cy} Z`;
+  const a = 2 * Math.PI * s;
+  const f = (n: number) => Number(n.toFixed(3));
+  const x = f(cx + r * Math.sin(a));
+  const y = f(cy - r * Math.cos(a));
+  const large = s > 0.5 ? 1 : 0;
+  return `M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${large} 1 ${x} ${y} Z`;
+}
+
+/**
+ * The header's usage meter, as the desk draws it: a static outline with
+ * what is left as a pie inside it. A thin arc read as a loading spinner; a
+ * filled wedge in a whole circle reads as a gauge.
+ */
 export function UsageRing({
   percent,
   tone,
@@ -36,10 +60,10 @@ export function UsageRing({
 }) {
   const colors = useColors();
   const styles = useStyles();
-  const r = (RING - STROKE) / 2;
-  const length = 2 * Math.PI * r;
   // Filled to what is left, as every usage figure is said.
   const shown = 100 - Math.max(0, Math.min(100, percent));
+  const c = RING / 2;
+  const pie = piePath(c, c, c - OUTLINE - GAP, shown / 100);
   return (
     <Pressable
       accessibilityRole="button"
@@ -49,27 +73,16 @@ export function UsageRing({
       onPress={onPress}
       style={({ pressed }) => [styles.ring, pressed && PRESSED]}
     >
-      <Svg width={RING} height={RING} viewBox={`0 0 ${RING} ${RING}`}>
+      <Svg width={RING} height={RING} viewBox={`0 0 ${RING} ${RING}`} testID="usage-meter">
         <Circle
-          cx={RING / 2}
-          cy={RING / 2}
-          r={r}
-          stroke={colors.borderStrong}
-          strokeWidth={STROKE}
+          cx={c}
+          cy={c}
+          r={c - OUTLINE / 2}
+          stroke={colors.textSecondary}
+          strokeWidth={OUTLINE}
           fill="none"
         />
-        <Circle
-          cx={RING / 2}
-          cy={RING / 2}
-          r={r}
-          stroke={inkOf(colors, tone)}
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-          fill="none"
-          strokeDasharray={`${(length * shown) / 100} ${length}`}
-          // From twelve o'clock, clockwise.
-          transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
-        />
+        {pie && <Path d={pie} fill={inkOf(colors, tone)} />}
       </Svg>
     </Pressable>
   );

@@ -6,6 +6,7 @@
  * nothing here estimates, extrapolates or fills a gap. No reading, no line.
  */
 
+import { clockFormat, formatClock } from './clock';
 import type { AgentEngine, Quota, QuotaWindow, UsageTotals } from './model';
 
 /** The share of a window at which the line turns amber. */
@@ -14,13 +15,15 @@ export const QUOTA_WARN_PERCENT = 90;
 const ENGINE_SHORT: Record<AgentEngine, string> = { claude: 'Claude', codex: 'Codex' };
 const ENGINE_FULL: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
 
-const CLOCK = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+const CLOCK = { format: formatClock };
 const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
-const WEEKDAY_CLOCK = new Intl.DateTimeFormat(undefined, {
+const WEEKDAY_CLOCK = {
+  format: (at: number | Date) => clockFormat({
   weekday: 'short',
   hour: 'numeric',
   minute: '2-digit',
-});
+}).format(at),
+};
 const DATE = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;

@@ -81,7 +81,7 @@ export interface RemoteAccessStatus {
   openAtLoginAvailable: boolean;
   pushPin: PushPinState;
   projects: string[];
-  /** An assistant has reached this computer with the current link at least once. */
+  /** An assistant has reached this Mac with the current link at least once. */
   everConnected: boolean;
   activity: RemoteActivity;
 }
@@ -185,7 +185,7 @@ export function readinessItems(s: ReadinessInput): ReadinessItem[] {
       id: 'power',
       state: 'warn',
       title: 'Power unknown',
-      detail: 'Couldn’t tell whether this computer is plugged in. Make sure it is.',
+      detail: 'Couldn’t tell whether this Mac is plugged in. Make sure it is.',
     });
   }
 
@@ -272,7 +272,7 @@ export type ConnectionStep =
   | { kind: 'approveFunnel'; url: string }
   | { kind: 'funnelFailed'; detail: string }
   | { kind: 'starting' }
-  /** Funnel is on, but the internet can't find this computer yet. */
+  /** Funnel is on, but the internet can't find this Mac yet. */
   | { kind: 'publishing'; linkMasked: string; stage: PublishStage; minutes: number }
   /** Funnel is on and the name resolves, but requests don't get through. */
   | { kind: 'unreachable'; linkMasked: string; detail: string }
@@ -281,7 +281,7 @@ export type ConnectionStep =
 /**
  * One state, in the order the blockers have to be cleared: you can't turn on
  * a Funnel you can't sign in to, and "ready" means a request from the public
- * internet actually reached this computer — not just that Tailscale is
+ * internet actually reached this Mac — not just that Tailscale is
  * configured. Until then the link is shown (so it can be added in advance)
  * with what's still missing.
  */
@@ -336,7 +336,7 @@ export type SetupStepState = 'done' | 'current' | 'upcoming';
 
 /** Choices the user made in this modal that the backend doesn't record. */
 export interface SetupChoices {
-  /** Read and accepted "this computer has to stay on". */
+  /** Read and accepted "this Mac has to stay on". */
   understood: boolean;
   /** Pressed Continue after ticking projects. */
   projectsConfirmed: boolean;
@@ -351,8 +351,8 @@ export interface SetupStep {
 }
 
 const STEP_TITLES: Record<SetupStepId, string> = {
-  stayOn: 'This computer has to stay on',
-  connect: 'Give this computer a private link',
+  stayOn: 'This Mac has to stay on',
+  connect: 'Give this Mac a private link',
   projects: 'Choose what your assistant can reach',
   pushing: 'Pushing from your phone',
   assistant: 'Connect your AI assistant',

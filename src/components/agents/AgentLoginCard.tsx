@@ -21,7 +21,13 @@ import { Spinner } from '../primitives/Spinner';
 import { AgentCard } from './AgentCard';
 import { useCardGuard } from './useCardGuard';
 import { SignInHelp, useNotNeeded } from './SignInHelp';
-import { ErrorIcon, LockedIcon, MobileIcon } from '@/components/icons';
+import {
+  ChevronIcon,
+  ChevronRightIcon,
+  ErrorIcon,
+  LockedIcon,
+  MobileIcon,
+} from '@/components/icons';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   cancelLogin,
@@ -224,6 +230,10 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
                 aria-expanded={showOthers}
                 aria-controls={othersId}
                 onClick={() => setOthersOpen(!showOthers)}
+                rightIcon={
+                  // A disclosure, not a sentence: the chevron says it opens.
+                  showOthers ? <ChevronIcon size={12} /> : <ChevronRightIcon size={12} />
+                }
               >
                 {showOthers ? 'Fewer ways' : 'Other ways'}
               </TextButton>

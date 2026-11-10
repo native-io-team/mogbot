@@ -128,7 +128,62 @@ export function AgentKey({
   const g = keyGeometry(size);
   const neutrals = keyNeutrals[appearance];
   const box = { width: size, height: size + g.rest };
-  if (state === 'paused' || state === 'new') {
+  if (state === 'new') {
+    // Not a socket: a dashed outline where a key will go, with a plus. It's
+    // an action, so it never reads as a paused agent's empty socket.
+    const line = Math.max(1.5, g.arm / 2.5);
+    return (
+      <View
+        style={box}
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+        testID="agent-key"
+      >
+        <View
+          testID="agent-key-new"
+          style={{
+            position: 'absolute',
+            top: g.rest,
+            width: size,
+            height: size,
+            borderRadius: g.corner,
+            borderWidth: Math.max(1.5, size / 56),
+            borderStyle: 'dashed',
+            borderColor: neutrals.newRim,
+            backgroundColor: neutrals.newFill,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <View style={{ width: size * 0.32, height: size * 0.32 }}>
+            <View
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: (size * 0.32 - line) / 2,
+                height: line,
+                borderRadius: line / 2,
+                backgroundColor: neutrals.newPlus,
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: (size * 0.32 - line) / 2,
+                width: line,
+                borderRadius: line / 2,
+                backgroundColor: neutrals.newPlus,
+              }}
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+  if (state === 'paused') {
     return (
       <View
         style={box}
@@ -158,18 +213,15 @@ export function AgentKey({
               width: g.housing,
               height: g.housing,
               borderRadius: g.housingCorner,
-              backgroundColor: neutrals.housing,
+              // The agent's own darkest shade: its socket, never an Add button.
+              backgroundColor: paint.depth,
               borderTopWidth: Math.max(1, g.stemDrop),
               borderTopColor: neutrals.housingShade,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Stem
-              g={g}
-              fill={state === 'paused' ? paint.face : neutrals.stem}
-              shadow={state === 'paused' ? paint.depth : neutrals.stemDepth}
-            />
+            <Stem g={g} fill={paint.face} shadow={paint.skirt} />
           </View>
         </View>
       </View>

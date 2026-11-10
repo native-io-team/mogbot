@@ -13,14 +13,14 @@ import { AGENTS_TAB, MIN, TEAM, messagesFor, msg, now, overview, status } from '
 /** As `connections::Connection::kept` says it for this Mac's apps. */
 const KEPT = "This Mac's own app; macOS asks once, in System Settings → Privacy & Security";
 
-/** `mac_apps::card` for a send: what it wants, then what Allow gives. */
+/** `mac_apps::card` for a send: what it wants, then one line on what Allow gives; the rest behind Details. */
 const SEND_CARD = {
   requestId: 'mac-messages',
   title: 'Allow Hiring to use your Messages?',
   summary:
-    'It wants to send +15551234567 this message:\n\n“Hi Sam, thanks for applying. Are you free for a call on Thursday at 3pm?”\n\nAllow does this now, and lets it read your Messages on this Mac from now on. Anything else it adds, changes or sends follows how much you let it do on its own. Take it back any time in What it can reach. macOS may ask you once too.',
+    'It wants to send +1 (555) 123-4567 this message:\n\n“Hi Sam, thanks for applying. Are you free for a call on Thursday at 3pm?”\n\nAllow sends it and lets Hiring read your Messages from now on.',
   detail:
-    '{\n  "to": "+15551234567",\n  "text": "Hi Sam, thanks for applying. Are you free for a call on Thursday at 3pm?"\n}',
+    'Anything else it adds, changes or sends follows how much you let it do on its own. Take it back any time in What it can reach. macOS may ask you once too.\n\n{\n  "to": "+15551234567",\n  "text": "Hi Sam, thanks for applying. Are you free for a call on Thursday at 3pm?"\n}',
   status: 'pending',
 };
 
@@ -53,7 +53,7 @@ export const agentsMacAppsScenarios: Scenario[] = [
     id: 'agents-mac-apps-card',
     title: 'Agents — first use of Messages: one card that grants it and shows the words',
     looksRightWhen:
-      'Hiring’s chat: the user’s “Text Sam…” then one approval card titled “Allow Hiring to use your Messages?”, leading with “It wants to send +15551234567 this message:” and the exact words in quotes, then one paragraph saying Allow does this now and gives it Messages from now on, later changes follow its independence, and it’s taken back in What it can reach. Allow is neutral (never the accent), Deny beside it; the raw JSON only behind Details.',
+      'Hiring’s chat: the user’s “Text Sam…” then one approval card titled “Allow Hiring to use your Messages?”, leading with “It wants to send +1 (555) 123-4567 this message:” and the exact words in quotes, then one line: “Allow sends it and lets Hiring read your Messages from now on.” How it works after that, and the raw JSON, only behind Details. Allow is neutral (never the accent), Deny beside it.',
     openSelector: AGENTS_TAB,
     requires: '.agent-chat',
     steps: [{ click: '[data-agent-id="hiring"]' }],
@@ -66,7 +66,7 @@ export const agentsMacAppsScenarios: Scenario[] = [
     id: 'agents-mac-apps-reach',
     title: 'Agents — this Mac’s apps in What it can reach',
     looksRightWhen:
-      'Editing Hiring, the “Apps” section of What it can reach: “Calendar · This Mac — Can read · This Mac’s own app; macOS asks once, in System Settings → Privacy & Security · used 20m ago” and “Messages · This Mac — Can read; asks before it sends or changes anything”, each with a quiet Remove.',
+      'Editing Hiring, the “Apps” section of What it can reach: “Calendar · This Mac — Can read · used 20m ago” and “Messages · This Mac — Can read; asks before it sends or changes anything”, each with Remove; under them, once: “This Mac’s own apps: macOS asks once, in System Settings → Privacy & Security.”',
     openSelector: AGENTS_TAB,
     requires: '.agent-reach__section',
     clipSelector: '.agent-reach__section[aria-label="Apps"]',
@@ -89,6 +89,7 @@ export const agentsMacAppsScenarios: Scenario[] = [
             access: 'read',
             kept: KEPT,
             needsSignIn: false,
+            macApp: true,
             lastUsedAt: now - 20 * MIN,
           },
           {
@@ -99,6 +100,7 @@ export const agentsMacAppsScenarios: Scenario[] = [
             access: 'full',
             kept: KEPT,
             needsSignIn: false,
+            macApp: true,
           },
         ],
         browser: { on: true, sites: [], helperInstalled: true },

@@ -435,7 +435,7 @@ where
     ) else {
         return "soon".to_string();
     };
-    let time = then.format("%-I:%M %p").to_string();
+    let time = super::clock::of(&then);
     let days = (then.date_naive() - today.date_naive()).num_days();
     match days {
         ..=0 => format!("at {time}"),

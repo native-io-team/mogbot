@@ -3877,7 +3877,7 @@ mod tests {
             .iter()
             .any(|(_, m, detail, ok)| m == "agents.setMorningBrief"
                 && *ok
-                && detail == "morning brief: 07:30"));
+                && detail == "morning brief: 7:30 AM"));
         assert!(audited
             .iter()
             .any(|(_, m, detail, ok)| m == "agents.setMorningBrief"

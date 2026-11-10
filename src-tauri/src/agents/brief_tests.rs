@@ -73,7 +73,7 @@ fn on_at(minute: u32) -> Settings {
 fn it_is_on_at_eight_by_default_and_prepares_shortly_before() {
     let s = Settings::default();
     assert!(s.on);
-    assert_eq!(clock_label(s.at), "08:00");
+    assert_eq!(clock_label(s.at), "8:00 AM");
     let none = State::default();
     assert_eq!(decide(&s, &none, &utc(), at(7, 30)), Step::Nothing);
     let prepare = decide(&s, &none, &utc(), at(7, 45));
@@ -436,7 +436,10 @@ fn the_chief_sets_it_from_chat() {
     let now = Settings::default();
     let s = wanted(&json!({ "at": "7:30" }), &now).unwrap();
     assert_eq!((s.on, s.at), (true, 7 * 60 + 30));
-    assert_eq!(describe(&s), "The morning brief is on, at 07:30 every day.");
+    assert_eq!(
+        describe(&s),
+        "The morning brief is on, at 7:30 AM every day."
+    );
     let s = wanted(&json!({ "at": "6pm" }), &now).unwrap();
     assert_eq!(s.at, 18 * 60);
     let off = wanted(&json!({ "off": true }), &s).unwrap();

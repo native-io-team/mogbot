@@ -34,15 +34,16 @@ export default function TabsLayout() {
         ).length
       : 0
   );
-  const asking = useApp(
-    (s) =>
-      s.projects?.reduce(
-        (n, p) => n + p.sessions.filter((x) => x.state === 'needs_decision').length,
-        0
-      ) ?? 0
-  );
+  // Projects carries no count: a project whose agent is asking is already a
+  // row in Needs you, and its own row there carries the pill.
   return (
-    <NativeTabs tintColor={colors.textStrong} iconColor={{ default: colors.textMuted }}>
+    <NativeTabs
+      tintColor={colors.textStrong}
+      iconColor={{ default: colors.textMuted }}
+      // Neutral, like the desk's bell: red would say something is wrong.
+      badgeBackgroundColor={colors.badgeFill}
+      badgeTextColor={colors.badgeInk}
+    >
       {/* First: Catch up, every card waiting on you across all agents, with the one count. */}
       <NativeTabs.Trigger name="catch-up">
         <NativeTabs.Trigger.Icon
@@ -67,10 +68,6 @@ export default function TabsLayout() {
       <NativeTabs.Trigger name="projects">
         <NativeTabs.Trigger.Icon sf={{ default: 'folder', selected: 'folder.fill' }} md="folder" />
         <NativeTabs.Trigger.Label>Projects</NativeTabs.Trigger.Label>
-        {/* Rendered only when there's a count: a hidden badge could linger as "0". */}
-        {live && asking > 0 && (
-          <NativeTabs.Trigger.Badge>{String(asking)}</NativeTabs.Trigger.Badge>
-        )}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="search" role="search">
         <NativeTabs.Trigger.Icon sf="magnifyingglass" md="search" />

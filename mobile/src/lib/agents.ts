@@ -25,7 +25,12 @@ import {
   tokenCount,
   workingRowLine,
 } from '@shipstudio/companion-protocol';
-import { crossoverOutcome, previewText, stepInOutcome } from '@shipstudio/companion-protocol';
+import {
+  formatClock as clockOf,
+  crossoverOutcome,
+  previewText,
+  stepInOutcome,
+} from '@shipstudio/companion-protocol';
 import { drivenLine } from './bars';
 import { diffLineKind } from './diff';
 import { ENGINE_DEFAULT } from './newAgentDefaults';
@@ -330,9 +335,8 @@ export function usageLine(t: UsageTotals, onPlan = false): string {
     .join(' · ');
 }
 
-export function formatClock(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
+/** "9:00 AM" / "09:00", as the Mac shows times (companion-protocol `clock`). */
+export const formatClock = (ts: number): string => clockOf(ts);
 
 /**
  * A project's task, named by what it was asked: the first line of its
@@ -660,6 +664,9 @@ export function askingLine(
   if (!diff && lines[0] && !json) return lines[0];
   const edit = /^do you want to make this edit to (.+?)\?*$/i.exec(approval.title.trim());
   if (edit) return `Wants to edit ${edit[1]}`;
+  // A newer Mac's title says it plainly ("Edit Hero.tsx?"): the row says who wants it.
+  const plain = /^(Edit|Create) (.+?)\?$/.exec(approval.title.trim());
+  if (plain) return `Wants to ${plain[1].toLowerCase()} ${plain[2]}`;
   return approval.title;
 }
 

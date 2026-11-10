@@ -56,7 +56,7 @@ const IMPORTED: Imported[] = [
     logins: ['shop_mail', 'helpdesk'],
     asked: 'ls -la /workspace/inbox-watch/',
     routine: {
-      when: 'every day at 08:20',
+      when: 'every day at 8:20 AM',
       what: 'Check the shop inbox and send the morning digest',
     },
   },
@@ -65,7 +65,7 @@ const IMPORTED: Imported[] = [
     name: 'Events',
     role: 'Workshops and the weekly roundup',
     logins: ['eventbrite'],
-    routine: { when: 'every Friday at 16:00', what: 'Draft the weekly workshop roundup' },
+    routine: { when: 'every Friday at 4:00 PM', what: 'Draft the weekly workshop roundup' },
   },
   {
     id: 'site',
@@ -94,7 +94,7 @@ const IMPORTED: Imported[] = [
     name: 'Photo Posts',
     role: 'Drafts posts for sign-off',
     logins: ['buffer', 'pinboard'],
-    routine: { when: 'every weekday at 10:00', what: 'Draft today’s post for sign-off' },
+    routine: { when: 'every weekday at 10:00 AM', what: 'Draft today’s post for sign-off' },
   },
   {
     id: 'kitchen',
@@ -139,7 +139,7 @@ const IMPORTED: Imported[] = [
     role: 'Books, invoices and payroll',
     logins: ['business_bank', 'bankline', 'payroll_app'],
     asked: 'ls /workspace/books/; cat /workspace/books/status.md',
-    routine: { when: 'every Monday at 09:00', what: 'Send last week’s spending' },
+    routine: { when: 'every Monday at 9:00 AM', what: 'Send last week’s spending' },
     gaps: ['Nothing about payroll dates yet: tell me when remittances are due'],
   },
   {
@@ -435,7 +435,7 @@ export const agentsTeamSetupScenarios: Scenario[] = [
     id: 'agents-team-setup-routines',
     title: 'Agents — Setting up your team: routines',
     looksRightWhen:
-      'Logins is ticked (“Logins sorted”); “1 of 4 done”. Switch on routines is open: one line saying they came in paused, then each routine as “Inbox Watch · every day at 08:20” with what it does under it and a switch on the right (Inbox Watch’s on, the rest off). Skip for now and a neutral Done at the foot, right-aligned.',
+      'Logins is ticked (“Logins sorted”); “1 of 4 done”. Switch on routines is open: one line saying they came in paused, then each routine as “Inbox Watch · every day at 8:20 AM” with what it does under it and a switch on the right (Inbox Watch’s on, the rest off). Skip for now and a neutral Done at the foot, right-aligned.',
     command: 'agents.open',
     requires: '[data-testid="team-setup"] [data-step="routines"][data-open]',
     commands: {

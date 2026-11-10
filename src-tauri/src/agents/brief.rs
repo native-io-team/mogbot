@@ -98,7 +98,7 @@ impl Default for Settings {
 
 /// "08:00".
 pub fn clock_label(minute: u32) -> String {
-    format!("{:02}:{:02}", (minute / 60) % 24, minute % 60)
+    super::clock::hm((minute / 60) % 24, minute % 60)
 }
 
 /// Settings from the desk or the phone, checked.
@@ -577,7 +577,7 @@ where
 {
     tz.timestamp_millis_opt(ms)
         .single()
-        .map(|t| t.format("%-I:%M %p").to_string())
+        .map(|t| super::clock::of(&t))
         .unwrap_or_default()
 }
 

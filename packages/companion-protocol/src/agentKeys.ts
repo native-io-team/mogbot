@@ -158,6 +158,24 @@ export function freshColorway(worn: Iterable<string>): string {
   return best;
 }
 
+/**
+ * A colourway for a key with `icon` that no one on the team wears with that
+ * icon (`keys::distinct_colorway`): `preferred` when it's free, else the
+ * fewest-worn free one; `preferred` when every colourway is taken.
+ */
+export function distinctColorway(
+  preferred: string,
+  icon: string,
+  team: readonly (readonly [colorway: string, icon: string])[]
+): string {
+  const clash = (c: string) => team.some(([w, i]) => w === c && i === icon);
+  if (!clash(preferred)) return preferred;
+  const free = COLORWAY_IDS.filter((id) => !clash(id));
+  if (free.length === 0) return preferred;
+  const worn = (id: string) => team.filter(([w]) => w === id).length;
+  return free.reduce((best, id) => (worn(id) < worn(best) ? id : best), free[0]);
+}
+
 /** What an agent is drawn as. */
 export interface AgentKeyLook {
   colorway: string;

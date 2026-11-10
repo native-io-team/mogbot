@@ -78,15 +78,15 @@ function state(features: string[] | undefined) {
 it('lists rooms, with their members, from a Mac that does rooms', async () => {
   state(['rooms']);
   await render(<Agents />);
-  expect(screen.getByText('ROOMS')).toBeTruthy();
-  expect(screen.getByText('AGENTS')).toBeTruthy();
+  expect(screen.getByText('Rooms')).toBeTruthy();
+  expect(screen.getByText('Agents')).toBeTruthy();
   expect(screen.getByText('Month end')).toBeTruthy();
 });
 
 it('shows no rooms from a Mac that doesn’t say it does them', async () => {
   state(undefined);
   await render(<Agents />);
-  expect(screen.queryByText('ROOMS')).toBeNull();
+  expect(screen.queryByText('Rooms')).toBeNull();
   expect(screen.queryByText('Month end')).toBeNull();
   expect(screen.getByText('Finance')).toBeTruthy();
 });

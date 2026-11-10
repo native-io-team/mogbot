@@ -19,7 +19,7 @@ import type {
   AgentEngine,
   RoutineStep,
 } from '@shipstudio/companion-protocol';
-import { MAC_FEATURES, legacyColorFor } from '@shipstudio/companion-protocol';
+import { MAC_FEATURES, legacyColorFor, setClockHour24 } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -1280,6 +1280,8 @@ function watchAttention() {
   watchingAttention = true;
   useApp.subscribe((s, prev) => {
     if (s.overview === prev.overview && s.link === prev.link) return;
+    // Times read the Mac's way (it writes routine times into sentences itself).
+    setClockHour24(s.overview?.hour24);
     const refused = s.link.kind === 'refused';
     // The demo's count is samples; the icon outlives it, so it never shows one.
     const demo = isDemo(s.credentials);

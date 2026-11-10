@@ -213,6 +213,14 @@
   line-height: var(--line-height-heading);
 }
 
+.usage-hero__name {
+  margin: 0 0 var(--spacing-xs);
+  color: var(--text-primary);
+  font-size: var(--font-size-subhead-lg);
+  font-weight: var(--font-weight-title);
+  letter-spacing: var(--tracking-name);
+}
+
 .usage-hero[data-tone='warning'] .usage-hero__headline {
   color: var(--accent-warning);
 }

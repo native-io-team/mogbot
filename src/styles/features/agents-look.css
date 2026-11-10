@@ -81,7 +81,8 @@
   min-width: calc(var(--spacing-lg) * 2.5);
   height: var(--control-height-standard);
   padding: 0 var(--spacing-sm);
-  font-family: var(--font-code);
+  /* The UI face: the code face's O read as a zero ("Press O"). */
+  font-family: inherit;
   font-weight: var(--font-weight-heading);
   color: var(--text-primary);
   background: var(--surface-control);

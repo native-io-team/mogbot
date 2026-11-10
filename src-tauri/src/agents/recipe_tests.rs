@@ -117,7 +117,7 @@ fn memory_history_logins_and_project_are_never_in_it() {
     assert!(b.left_out.iter().any(|l| l == "1 one-time reminder"));
     // Routines as words; the app's own follow-up isn't one.
     assert_eq!(b.recipe.routines.len(), 1);
-    assert_eq!(b.recipe.routines[0].when, "every weekday at 09:00");
+    assert_eq!(b.recipe.routines[0].when, "every weekday at 9:00 AM");
     assert_eq!(b.recipe.watches.len(), 1);
     assert_eq!(b.recipe.apps, ["Linear", "Gmail"]);
     assert_eq!(b.recipe.look.key.as_deref(), Some("F"));

@@ -11,6 +11,7 @@ export * from './pairing';
 export { APP_NAME, SOURCE_URL, TAILNET_HTTPS_PORT } from './brand.gen';
 export * from './transport';
 export * from './version';
+export * from './clock';
 export * from './schedule';
 export * from './routinePicker';
 export * from './memory';

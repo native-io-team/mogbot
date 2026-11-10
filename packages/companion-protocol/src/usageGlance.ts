@@ -142,6 +142,11 @@ export interface UsageGlance {
   keys: StackKey[];
   /** "Plenty of room", "Runs out ~Thu, 2 days before reset", "Out of usage until 3:20 PM". */
   headline: string;
+  /**
+   * Signed in but nothing read yet: the headline is a quiet line, not the
+   * display figure (the biggest type on the page is for a reading).
+   */
+  unread: boolean;
   /** The headline is an estimate: what it rests on. */
   estimate: string | null;
   /**
@@ -567,6 +572,7 @@ export function usageGlance(
     engines,
     keys,
     headline,
+    unread: counted.length > 0 && read.length === 0,
     estimate,
     tone,
     summary,

@@ -1124,7 +1124,7 @@ export function createMockServer(opts: MockOptions = {}) {
         text: '',
         approval: {
           requestId: 'req_prompt',
-          title: 'Do you want to make this edit to Hero.tsx?',
+          title: 'Edit Hero.tsx?',
           detail:
             '@@ -18,3 +18,3 @@\n-      <section className="pt-24 pb-20">\n+      <section className="hero">\n       <h1>Ship faster</h1>',
           status: 'pending',

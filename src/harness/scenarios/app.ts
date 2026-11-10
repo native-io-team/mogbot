@@ -305,7 +305,7 @@ export const appScenarios: Scenario[] = [
     id: 'project-tools',
     title: 'Projects — the first new project asks for its tools',
     looksRightWhen:
-      'Only Claude Code was set up, so New project opens “Set up project tools”: one line on why, a plain list of only what’s required (a package manager, Node.js, Git, in plain words), an “Also connect GitHub — Optional” checkbox with a one-line reason, a line that Claude Code installs them and this computer checks each one, and Cancel / Set them up. The New project button showed a spinner while the check ran.',
+      'Only Claude Code was set up, so New project opens “Set up project tools”: one line on why, a plain list of only what’s required (a package manager, Node.js, Git, in plain words), an “Also connect GitHub — Optional” checkbox with a one-line reason, a line that Claude Code installs them and this Mac checks each one, and Cancel / Set them up. The New project button showed a spinner while the check ran.',
     startOn: 'projects',
     openSelector: '[data-education-id="new-project-button"]',
     requires: '.project-tools-modal .project-tools__list',

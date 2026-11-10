@@ -39,7 +39,7 @@ export function ProjectBulkActionConfirm<T extends DashboardProject>({
       body={
         isDelete ? (
           <>
-            Permanently delete <strong>{countLabel}</strong> from this computer?
+            Permanently delete <strong>{countLabel}</strong> from this Mac?
           </>
         ) : (
           <>
@@ -50,7 +50,7 @@ export function ProjectBulkActionConfirm<T extends DashboardProject>({
       hint={
         isDelete
           ? `${selection} will be removed from disk. This cannot be undone.`
-          : `${selection} will stay on this computer and can be added again later with Import project, Local folder.`
+          : `${selection} will stay on this Mac and can be added again later with Import project, Local folder.`
       }
       loading={loading}
       confirmLabel={isDelete ? 'Delete files' : 'Remove from projects'}

@@ -14,7 +14,7 @@ export const MIN = 60_000;
 const DEMO_HOME = '/harness/agents-demo';
 export const now = Date.now();
 
-/** Tomorrow at a local wall-clock time, so fixtures agree with their own "at 09:00". */
+/** Tomorrow at a local wall-clock time, so fixtures agree with their own "at 9:00 AM". */
 const tomorrowAt = (hour: number, minute = 0) => {
   const d = new Date(now);
   d.setDate(d.getDate() + 1);
@@ -194,7 +194,7 @@ const OTHER_APP_PREVIEW = {
       plan: 'merge',
       messages: 214,
       memory: ['Lives in Lisbon', 'Has two cats', 'Prefers short replies'],
-      routines: [{ schedule: 'every weekday at 08:00', what: 'Brief me on the day.' }],
+      routines: [{ schedule: 'every weekday at 8:00 AM', what: 'Brief me on the day.' }],
       rules: ['npm test'],
     }),
     otherAgent('f1', 'Finance', 'Tracks spending and chases invoices', 'green', {
@@ -203,14 +203,14 @@ const OTHER_APP_PREVIEW = {
       memory: ['Accountant is Sam', 'Invoices go out on the 1st', 'Reports in EUR'],
       routines: [
         { schedule: 'every 2 hours', what: 'Check for new invoices.' },
-        { schedule: 'every Monday at 09:00', what: 'Send me last week’s spending.' },
+        { schedule: 'every Monday at 9:00 AM', what: 'Send me last week’s spending.' },
       ],
       secrets: ['Stripe key', 'Bank login'],
       rules: ['git push', 'example-bank.com'],
       project: '/Users/you/ShipStudio/books',
     }),
     otherAgent('t1', 'Travel', 'Plans trips and keeps bookings straight', 'blue', {
-      routines: [{ schedule: 'every Friday at 17:00', what: 'Check next week’s flights.' }],
+      routines: [{ schedule: 'every Friday at 5:00 PM', what: 'Check next week’s flights.' }],
     }),
     otherAgent('r1', 'Research', 'Reads so you don’t have to', 'purple', {
       plan: 'imported',
@@ -442,7 +442,7 @@ export const REVIEW = {
         {
           when: 'every weekday at 9am',
           what: 'Check for new invoices',
-          schedule: 'every weekday at 09:00',
+          schedule: 'every weekday at 9:00 AM',
         },
       ],
       logins: [
@@ -480,7 +480,7 @@ export const REVIEW = {
         {
           when: 'every friday at 5pm',
           what: 'Check next week’s flights',
-          schedule: 'every Friday at 17:00',
+          schedule: 'every Friday at 5:00 PM',
         },
       ],
       logins: [],
@@ -499,7 +499,7 @@ export const PLAYBACK = [
       { kind: 'job', text: 'My job: tracks spending and chases invoices' },
       {
         kind: 'routine',
-        text: 'Every weekday at 09:00: Check for new invoices (arrives paused: you switch it on)',
+        text: 'Every weekday at 9:00 AM: Check for new invoices (arrives paused: you switch it on)',
       },
       {
         kind: 'watch',
@@ -526,7 +526,7 @@ export const PLAYBACK = [
       { kind: 'job', text: 'My job: trips and bookings' },
       {
         kind: 'routine',
-        text: 'Every Friday at 17:00: Check next week’s flights (arrives paused: you switch it on)',
+        text: 'Every Friday at 5:00 PM: Check next week’s flights (arrives paused: you switch it on)',
       },
       { kind: 'keep', text: 'I’ll keep in mind: Passport renewal due March' },
       { kind: 'keep', text: 'I’ll keep in mind: Loyalty with TAP' },
@@ -615,7 +615,7 @@ export const HANDOFF_CARD = () =>
 
 /** A Slack ask, its answer, and the card holding the reply's exact words (fictional). */
 const SLACK_REPLY_TEXT =
-  'Drafted. Launch is Friday at 10:00; Sam owns the checklist and the post goes out at 10:30.';
+  'Drafted. Launch is Friday at 10:00 AM; Sam owns the checklist and the post goes out at 10:30 AM.';
 export const SLACK_CHAT = [
   msg('user', 'draft the launch note for #launch from the doc Sam shared', 6, {
     via: { source: 'slack', place: '#launch' },
@@ -973,7 +973,7 @@ const schedulePreview = (args: Record<string, unknown>) => {
     const [, y, m, d, h, min] = once.map(Number);
     return { nextAt: new Date(y, m - 1, d, h, min).getTime(), repeat: null };
   }
-  // "every 3 months on the last friday at 09:00": the last Friday of next month, as a stand-in.
+  // "every 3 months on the last friday at 9:00 AM": the last Friday of next month, as a stand-in.
   const monthly = /^every (?:month|(\d+) months) on (.+) at (\d{2}):(\d{2})/.exec(when);
   if (monthly) {
     const months = Number(monthly[1] ?? 1);
@@ -1488,7 +1488,8 @@ const searchAcme = (args: Record<string, unknown>) =>
           messageId: GUTTERS.id,
           ts: GUTTERS.ts,
           kind: GUTTERS.kind,
-          snippet: 'Read both. The guidelines want 24px gutters on mobile, so the stacked cards use that.',
+          snippet:
+            'Read both. The guidelines want 24px gutters on mobile, so the stacked cards use that.',
           conversation: 'first',
         },
       ]

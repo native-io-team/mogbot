@@ -43,7 +43,7 @@ function GlobalModalsBody() {
   // Chief of Staff's colour (lives here to keep App.tsx under its LOC limit).
   useAppAccent();
   const ctx = usePaletteContext();
-  // An agent asked for a project and this computer can't make one yet.
+  // An agent asked for a project and this Mac can't make one yet.
   useProjectToolsNeededListener();
   const changelog = useModal('changelog');
   const attachedLibraries = useModal('attachedLibraries');

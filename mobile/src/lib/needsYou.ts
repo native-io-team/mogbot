@@ -17,6 +17,10 @@
  * - **mac**: a card only the Mac can answer (an import to review).
  * - **setup**: "Setting up your team" while it's open.
  *
+ * One import is one row: its stages (consent, playback, review) are cards of
+ * one `connector.talkId`, and only the newest still waiting is listed and
+ * counted, as the desk shows one card that replaces the last.
+ *
  * Order: what blocks an agent first, then the rest; newest first within
  * each, so what just arrived is on top. Answered cards leave by themselves:
  * the list is rebuilt from the store on every change.
@@ -77,9 +81,17 @@ export function feedItems(
   for (const agent of visible) {
     const messages = chats[agent.id]?.messages;
     let asks = 0;
+    // An import's newest waiting stage, per talk: the others aren't listed.
+    const newestStage = new Map<string, string>();
+    for (const m of messages ?? []) {
+      const talk = pendingCard(m)?.connector?.talkId;
+      if (talk) newestStage.set(talk, m.id);
+    }
     for (const m of messages ?? []) {
       const card = pendingCard(m);
       if (!card) continue;
+      const talk = card.connector?.talkId;
+      if (talk && newestStage.get(talk) !== m.id) continue;
       const here = answerableHere(card, reviewHere);
       items.push({
         key: `${here ? 'ask' : 'mac'}:${m.id}`,

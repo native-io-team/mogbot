@@ -414,6 +414,8 @@ fn odd_values_on_disk_never_panic() {
 
 #[test]
 fn what_its_called() {
+    // A Mac set to a 24-hour clock (`clock`); 12-hour reads back the same way.
+    crate::agents::clock::test_hour24(true);
     let m = |months, on, from| Repeat::Monthly {
         months,
         on,
@@ -509,8 +511,8 @@ fn the_tool_says_the_first_run_and_the_months() {
     .unwrap();
     assert!(
         made.summary
-            .contains("Routine set: every 3 months on the 1st at 09:00 (Jan, Apr, Jul and Oct)")
-            && made.summary.contains("First run Fri 1 Jan 2027, 09:00"),
+            .contains("Routine set: every 3 months on the 1st at 9:00 AM (Jan, Apr, Jul and Oct)")
+            && made.summary.contains("First run Fri 1 Jan 2027, 9:00 AM"),
         "{}",
         made.summary
     );

@@ -79,6 +79,7 @@ pub mod capabilities;
 pub mod capacity;
 pub mod chrome_health;
 pub mod claude;
+pub mod clock;
 pub mod codex;
 pub mod codex_app;
 pub mod compute;

@@ -67,7 +67,7 @@ export function SearchAndSort({
   onGitHubConnectForImport,
   titleAccessory,
 }: SearchAndSortProps) {
-  // A project start checks this computer's tools first; the button says so.
+  // A project start checks this Mac's tools first; the button says so.
   const checking = useProjectToolsChecking();
   return (
     <div className="dashboard-section-header">

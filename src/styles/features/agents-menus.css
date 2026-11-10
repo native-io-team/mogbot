@@ -301,9 +301,10 @@
 /* ------------------------------------------------------- conversations */
 
 /* The header's conversation switcher: beside the agent's name, the one on
-   screen, ellipsised so a long title never pushes the name out. */
+   screen, ellipsised so a long title never pushes the name out. With several
+   conversations the role leaves the header, so the title has its room. */
 .agent-conversations__trigger {
-  max-width: 220px;
+  max-width: 420px;
   min-width: 0;
   gap: var(--spacing-xs);
   color: var(--text-secondary);

@@ -31,7 +31,7 @@ export function QuitConfirmModal({
   backgroundAvailable = false,
   onKeepRunning,
 }: QuitConfirmModalProps) {
-  // Someone may be relying on this computer from their phone. Quitting is the
+  // Someone may be relying on this Mac from their phone. Quitting is the
   // one thing that silently cuts them off, so say so here, where it's decided.
   const remote = useAsyncState(getRemoteAccessBrief, { immediate: true });
   const remoteOn = remote.data?.enabled === true;
@@ -40,8 +40,8 @@ export function QuitConfirmModal({
   });
   const remoteLine = remoteOn && (
     <p className="quit-confirm-remote">
-      Remote access is on. Quitting stops your assistant reaching this computer until the app is
-      open again.
+      Remote access is on. Quitting stops your assistant reaching this Mac until the app is open
+      again.
     </p>
   );
 

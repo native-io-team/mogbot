@@ -200,7 +200,7 @@ function Group({
         style={styles.heading}
         accessibilityRole="header"
       >
-        {title.toUpperCase()}
+        {title}
       </T>
       <View style={styles.group}>{children}</View>
     </View>
@@ -611,7 +611,7 @@ const useStyles = makeStyles((colors) => ({
   root: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   loading: { padding: space.xl, alignItems: 'center' },
   section: { gap: space.sm, marginTop: space.sm },
-  heading: { marginLeft: space.lg, letterSpacing: 0.4 },
+  heading: { marginLeft: space.lg },
   group: {
     backgroundColor: colors.surfaceGroup,
     borderRadius: radius.card,

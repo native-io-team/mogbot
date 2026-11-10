@@ -57,7 +57,7 @@ export function ProjectBulkActionsBar({
           title={
             selectedIncludesExternalProject
               ? 'External projects can only be removed from your projects, not deleted'
-              : 'Delete selected project folders from this computer'
+              : 'Delete selected project folders from this Mac'
           }
           onClick={onDelete}
         >

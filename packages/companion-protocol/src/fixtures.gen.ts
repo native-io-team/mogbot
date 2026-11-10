@@ -360,6 +360,7 @@ export const agentsOverview = {
       "signedIn": false
     }
   ],
+  "hour24": false,
   "importChoice": "undecided",
   "independence": "go_hard"
 } satisfies Result<'agents.overview'>;
@@ -5378,6 +5379,7 @@ export const frames = [
             "signedIn": false
           }
         ],
+        "hour24": false,
         "importChoice": "undecided",
         "independence": "go_hard"
       }
@@ -5824,6 +5826,7 @@ export const frames = [
             "signedIn": false
           }
         ],
+        "hour24": false,
         "importChoice": "undecided",
         "independence": "go_hard"
       },

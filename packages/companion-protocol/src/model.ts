@@ -605,6 +605,8 @@ export interface AgentsOverview {
    * Mac from before it sends none, and then the phone never asks.
    */
   importChoice?: ImportChoice;
+  /** This Mac shows a 24-hour clock (`agents::clock`). Older Macs never send it. */
+  hour24?: boolean;
 }
 
 /** Mirrors `agents::import_choice::Choice`. */
@@ -971,6 +973,8 @@ export interface AgentReach {
     kept: string;
     needsSignIn: boolean;
     lastUsedAt?: number;
+    /** One of this Mac's own apps (macOS asks once; said under the list, not per row). */
+    macApp?: boolean;
   }[];
   /** Absent for an agent on Codex, which has no browser. */
   /**
