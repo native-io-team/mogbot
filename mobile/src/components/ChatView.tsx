@@ -1082,7 +1082,10 @@ const ItemView = memo(function ItemView({
         tight && styles.itemAfterLine,
         // An opened fold reads as past: one rule down the left, from the
         // "Rewound" row to "End of what was rewound", its lines muted.
-        (item.past || item.kind === 'rewound-end') && styles.past,
+        (item.past ||
+          item.kind === 'rewound-end' ||
+          (item.kind === 'rewound' && item.open)) &&
+          styles.past,
       ]}
     >
       {lit && <Glow />}
@@ -1495,14 +1498,8 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.inner,
   },
   rewoundPressed: PRESSED,
-  // Opened, the row heads the band: on its left edge, with the rule.
-  rewoundOpen: {
-    alignSelf: 'stretch',
-    paddingLeft: space.md,
-    borderLeftWidth: PAST.rule,
-    borderLeftColor: colors.borderDefault,
-    borderRadius: 0,
-  },
+  // Opened, the row heads the band (the rule is its wrapper's): on the left.
+  rewoundOpen: { alignSelf: 'flex-start' },
   rewoundEnd: { paddingVertical: space.xs },
   past: {
     paddingLeft: space.md,
