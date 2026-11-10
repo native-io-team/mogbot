@@ -466,7 +466,7 @@ export function SectionTitle({ title, style }: { title: string; style?: StylePro
       maxFontSizeMultiplier={chromeScale}
       accessibilityRole="header"
     >
-      {title.toUpperCase()}
+      {title}
     </T>
   );
 }
@@ -715,7 +715,7 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: 'center',
   },
   section: { marginBottom: space.xl },
-  sectionTitle: { marginLeft: space.lg, marginBottom: space.sm, letterSpacing: 0.4 },
+  sectionTitle: { marginLeft: space.lg, marginBottom: space.sm },
   // Groups sit on a sheet or a grouped screen (surfacePanel): a fill and the
   // card's hairline, which in light is the site's ring around a white card.
   sectionBody: {

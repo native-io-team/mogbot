@@ -115,14 +115,14 @@ describe('one agent', () => {
 describe('the team', () => {
   it('lists shared rules and each agent, a tap from its own list', async () => {
     await render(<OnItsOwnTeamList />);
-    await screen.findByText('RULES FOR EVERY AGENT');
+    await screen.findByText('Rules for every agent');
     fireEvent.press(screen.getByText('Finance'));
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/on-its-own', params: { id: 'a1' } });
   });
 
   it('takes a shared rule back through the Chief', async () => {
     await render(<OnItsOwnTeamList />);
-    await screen.findByText('RULES FOR EVERY AGENT');
+    await screen.findByText('Rules for every agent');
     fireEvent.press(screen.getByLabelText('Remove'));
     await waitFor(() =>
       expect(mockCall).toHaveBeenCalledWith('agents.onItsOwnNarrow', {

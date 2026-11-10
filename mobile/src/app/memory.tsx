@@ -182,7 +182,7 @@ function Memory() {
               >
                 {group.title && (
                   <T variant="caption" color={colors.textMuted} style={styles.heading}>
-                    {group.title.toUpperCase()}
+                    {group.title}
                   </T>
                 )}
                 <View style={styles.list}>
@@ -283,7 +283,7 @@ function Memory() {
 const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   center: { paddingVertical: space.xl, alignItems: 'center' },
-  heading: { marginLeft: space.lg, letterSpacing: 0.4 },
+  heading: { marginLeft: space.lg },
   list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
   row: { paddingHorizontal: space.lg, paddingVertical: space.md },
   entry: { flexDirection: 'row', alignItems: 'center', gap: space.md },

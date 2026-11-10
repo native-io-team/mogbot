@@ -107,7 +107,7 @@ describe('one agent’s level on the phone', () => {
 
   it('Settings is a four-stop slider VoiceOver can adjust, one stop at a time', async () => {
     await render(<IndependenceSetting />);
-    expect(screen.getByText('INDEPENDENCE')).toBeTruthy();
+    expect(screen.getByText('Independence')).toBeTruthy();
     const slider = screen.getByTestId('independence-slider');
     expect(slider.props.accessibilityRole).toBe('adjustable');
     expect(slider.props.accessibilityLabel).toBe('Independence');

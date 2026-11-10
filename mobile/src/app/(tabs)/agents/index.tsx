@@ -496,7 +496,7 @@ function SectionHeader({
         maxFontSizeMultiplier={chromeScale}
         accessibilityRole="header"
       >
-        {label.toUpperCase()}
+        {label}
       </T>
       {action}
     </View>
@@ -624,7 +624,7 @@ const useStyles = makeStyles((colors) => ({
     paddingTop: space.lg,
     paddingBottom: space.xs,
   },
-  sectionLabel: { flex: 1, letterSpacing: 0.4 },
+  sectionLabel: { flex: 1 },
   sectionNext: { paddingTop: space.xl },
   team: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs },
   teamLine: { flexDirection: 'row', alignItems: 'center', gap: space.tight },

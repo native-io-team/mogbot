@@ -94,10 +94,10 @@ describe('Agent controls', () => {
     await sheet();
     expect(screen.getByText('Agent controls')).toBeTruthy();
     expect(screen.getByText(/Designer · Opus 5\.5 · High/)).toBeTruthy();
-    expect(screen.getByText('MODEL')).toBeTruthy();
+    expect(screen.getByText('Model')).toBeTruthy();
     expect(screen.getByText('Switch to Codex…')).toBeTruthy();
-    expect(screen.getByText('EFFORT')).toBeTruthy();
-    expect(screen.getByText('INDEPENDENCE')).toBeTruthy();
+    expect(screen.getByText('Effort')).toBeTruthy();
+    expect(screen.getByText('Independence')).toBeTruthy();
     // One control: "Same as team" and the slider, never a list of the four levels.
     expect(screen.getByText('Same as team (Steady)')).toBeTruthy();
     expect(screen.getByTestId('independence-slider')).toBeTruthy();
@@ -120,9 +120,9 @@ describe('Agent controls', () => {
   it('leaves out what the Mac doesn’t take', async () => {
     mockState.welcome = { methods: ['agents.update'], features: ['agents.engine'] };
     await sheet();
-    expect(screen.queryByText('EFFORT')).toBeNull();
-    expect(screen.queryByText('INDEPENDENCE')).toBeNull();
-    expect(screen.getByText('MODEL')).toBeTruthy();
+    expect(screen.queryByText('Effort')).toBeNull();
+    expect(screen.queryByText('Independence')).toBeNull();
+    expect(screen.getByText('Model')).toBeTruthy();
     // No usage plan served: the row is there, without a mode.
     expect(screen.queryByText(/Save my limits/)).toBeNull();
   });

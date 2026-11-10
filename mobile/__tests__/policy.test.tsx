@@ -87,7 +87,7 @@ describe('What it can do', () => {
 
   it('lists each setting with whose it is, and which are only instructions', async () => {
     await render(<WhatItCanDo agentId="a1" name="Finance" />);
-    await screen.findByText('WHAT IT CAN DO');
+    await screen.findByText('What it can do');
     expect(mockCall).toHaveBeenCalledWith('agents.policy', { agentId: 'a1' });
     const lines = (real.agentsPolicy as AgentPolicyView).lines;
     expect(policyDetail(lines.find((l) => l.key === 'browser')!)).toBe('No · Its own');
@@ -111,7 +111,7 @@ describe('What it can do', () => {
   it('draws nothing for a Mac that doesn’t serve it', async () => {
     mockState.welcome.methods = [];
     await render(<WhatItCanDo agentId="a1" name="Finance" />);
-    await waitFor(() => expect(screen.queryByText('WHAT IT CAN DO')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('What it can do')).toBeNull());
     mockState.welcome.methods = ['agents.policy'];
   });
 });

@@ -22,7 +22,7 @@ import { getApp, setApp } from './store';
 
 /** How alerts work without push: Settings and the after-pairing card say the same. */
 export const ALERTS_WHILE_OPEN =
-  'Alerts arrive while this app is open on your phone. Your Mac still notifies you at the desk.';
+  'Notifications arrive while this app is open on your phone. Your Mac still notifies you at the desk.';
 
 /** The App Store build (or an official EAS build): `extra.official` in app.config.ts. */
 export const isOfficialBuild = () => Boolean(Constants.expoConfig?.extra?.official);
@@ -36,7 +36,7 @@ export function pushLine(
     return {
       value: 'Needs the official build',
       footer:
-        'Push needs the app from the App Store. This copy was built on your Mac, and Apple doesn’t let it receive push.',
+        'With the app closed, notifications need the App Store app. This copy was built on your Mac, and Apple doesn’t let it receive them.',
     };
   }
   switch (status) {
@@ -44,12 +44,12 @@ export function pushLine(
       return {
         value: 'On',
         footer:
-          'Your Mac can wake this phone through the push service. Alerts say only that an agent needs you or finished, never what it said.',
+          'Your Mac can wake this phone through the notification service. Notifications say only that an agent needs you or finished, never what it said.',
       };
     case 'pending':
       return {
         value: 'Connecting',
-        footer: 'Your Mac couldn’t reach the push service yet. It tries again with the next alert.',
+        footer: 'Your Mac couldn’t reach the notification service yet. It tries again with the next one.',
       };
     case 'off':
       return {
@@ -59,7 +59,7 @@ export function pushLine(
     case 'unavailable':
       return {
         value: 'Not on this Mac',
-        footer: 'The app on your Mac has no push service. Alerts arrive while this app is open.',
+        footer: 'The app on your Mac has no notification service. Notifications arrive while this app is open.',
       };
     default:
       return null;
