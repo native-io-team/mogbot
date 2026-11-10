@@ -57,7 +57,8 @@ import {
   type RoleTemplate,
   type TemplateStarter,
 } from '../../lib/agentTemplates';
-import { CHIEF_CHIPS, type ChiefIdea } from '../../lib/chiefIdeas';
+import { CHIEF_CHIPS, ideaRepeats, type ChiefIdea } from '../../lib/chiefIdeas';
+import { KeepAwakeLink } from './AgentsStayOn';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentUsageRing } from './AgentUsageRing';
 import { AgentAccountChip } from './AccountSwitcher';
@@ -138,6 +139,7 @@ import {
   roleWithoutPath,
   showsStarters,
   agentKeyState,
+  ROUTINES_NEED_THE_MAC,
 } from '../../lib/agents';
 import { AgentStarters } from './AgentStarters';
 import { BlockReplyContext, type BlockReply } from './blocks/blockReply';
@@ -192,9 +194,12 @@ import { scrollMotion } from '../../lib/motion';
 function ChiefStarters({
   onIdea,
   onMore,
+  picked,
 }: {
   onIdea: (idea: ChiefIdea) => void;
   onMore?: () => void;
+  /** The idea last typed in: one that sets up a routine says where routines run. */
+  picked?: ChiefIdea | null;
 }) {
   return (
     <div className="agent-chat__starters">
@@ -213,6 +218,12 @@ function ChiefStarters({
         <Button tabIndex={0} variant="ghost" data-idea="more" onClick={onMore}>
           More ideas…
         </Button>
+      )}
+      {picked && ideaRepeats(picked) && (
+        <p className="agent-chat__starters-note">
+          {ROUTINES_NEED_THE_MAC}
+          <KeepAwakeLink />
+        </p>
       )}
     </div>
   );
@@ -581,6 +592,8 @@ export const AgentChat = memo(function AgentChat({
   const [usageOpen, setUsageOpen] = useState(false);
   /** A starter's brief typed in with its blank still empty: not sendable as it is. */
   const [unfilled, setUnfilled] = useState<string | null>(null);
+  /** The Chief's starter last typed in, for the line on where routines run. */
+  const [pickedIdea, setPickedIdea] = useState<ChiefIdea | null>(null);
   // While you drive an agent with no project to open, its session is shown
   // here in place of the conversation, until you ask for the chat.
   const takeover = agent.takeover;
@@ -1350,9 +1363,12 @@ export const AgentChat = memo(function AgentChat({
   // something is written there, it can't be sent (`unfilled`).
   const startIdea = (idea: ChiefIdea) => {
     setUnfilled(idea.text);
+    setPickedIdea(idea);
     typeStarter(idea.text);
   };
-  const chiefStarters = <ChiefStarters onIdea={startIdea} onMore={onMoreIdeas} />;
+  const chiefStarters = (
+    <ChiefStarters onIdea={startIdea} onMore={onMoreIdeas} picked={pickedIdea} />
+  );
   const template = agent.isMain ? null : templateOf(agent);
   const templateStarters = template && (
     <TemplateStarters

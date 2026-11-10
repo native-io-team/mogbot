@@ -106,6 +106,7 @@ import {
   type UsageSummary,
   type WatchCheckOutcome,
   describeWatchCheck,
+  ROUTINES_NEED_THE_MAC,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
 // "At a time / When…", in the phone's words too.
@@ -349,8 +350,7 @@ function ScheduleBody({
             </>
           ) : (
             <>
-              Runs only while the app is open and this Mac is awake; a missed routine runs once when
-              it’s back.
+              {ROUTINES_NEED_THE_MAC}
               <KeepAwakeLink />
             </>
           )}
@@ -421,8 +421,7 @@ function ScheduleBody({
       </div>
 
       <p className="agent-schedule__foot">
-        Runs only while the app is open and this Mac is awake; a missed routine runs once when it’s
-        back.
+        {ROUTINES_NEED_THE_MAC}
         <KeepAwakeLink />
       </p>
     </div>

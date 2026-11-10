@@ -927,7 +927,7 @@ const PROBE = [
     ready: 'Settings',
     act: scrollToText('CLAUDE CODE ACCOUNTS'),
     check:
-      'Three Claude accounts: sam@example.com in use; Work out of usage (amber name, when it resets, “Builder runs only on this one”), no Use now; Personal “Not signed in”, no Use now; arrows to reorder',
+      'Three Claude accounts: sam@example.com in use; Work out of usage (amber name, when it refills, “Builder runs only on this one”), no Use now; Personal “Not signed in”, no Use now; arrows to reorder',
   },
   {
     name: 'probe-runs-on',
@@ -1084,10 +1084,10 @@ const LIVE = [
     ready: 'Usage',
     act: async (page) => {
       await sleep(1500);
-      await scrollToText('Spare-capacity list')(page);
+      await scrollToText('Ideas for leftover usage')(page);
     },
     check:
-      'Usage, under the accounts: "How agents use your limits" as a segmented Normal / Save / Use it all (the mode in force raised, neutral), its full name and one line under it; then "Spare-capacity list" with how many wait, a field with Add, and "Give agents something to do"',
+      'Usage, under the accounts: "How agents use your limits" as a segmented Normal / Save / Use it all (the mode in force raised, neutral), its full name and one line under it; then "Ideas for leftover usage" with how many wait, a field with Add, and "Give agents something to do"',
   },
   {
     name: 'catchup-done',
@@ -2211,10 +2211,10 @@ const LIVE = [
   {
     name: 'settings-usage',
     route: '/settings',
-    ready: 'Use it all before reset',
-    act: scrollToText('Spare-capacity list'),
+    ready: 'Use it all before the refill',
+    act: scrollToText('Ideas for leftover usage'),
     check:
-      'Usage: "Use it all before reset" with its line; "Claude 5-hour limit resets … · 62% left"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
+      'Usage: "Use it all before the refill" with its line; "Claude 5-hour limit refills … · 62% left"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
   },
   {
     name: 'connection',

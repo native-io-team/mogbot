@@ -787,11 +787,11 @@ function nudgeOf(
   const what = isSession(s) ? '5-hour limit' : isWeek(s) ? 'week' : s.kind.replace(/_/g, ' ');
   const waiting = inv.backlog.filter((i) => i.state === 'waiting');
   return {
-    text: `${unused}% of ${name}’s ${what} resets ${relativeIn(s.resetsAt, now)}`,
+    text: `${unused}% of ${name}’s ${what} refills ${relativeIn(s.resetsAt, now)}`,
     question:
       waiting.length > 0
         ? 'Give agents something to do before it goes?'
-        : 'Add something to your spare-capacity list to use it.',
+        : 'Add something to your ideas for leftover usage to use it.',
     items: waiting.slice(0, 3).map((i) => i.text),
     more: Math.max(0, waiting.length - 3),
     empty: waiting.length === 0,
@@ -941,7 +941,7 @@ export function usageGlance(
     const gap = after ? Math.round((after - r.reachesAt) / DAY_MS) : 0;
     // "~" marks the estimate, unless the phrase says so itself ("in about an hour").
     const when = roughWhen(r.reachesAt, now);
-    headline = `Runs out ${when.startsWith('in about') ? when : `~${when}`}${gap >= 1 ? `, ${plural(gap, 'day')} before reset` : ''}`;
+    headline = `Runs out ${when.startsWith('in about') ? when : `~${when}`}${gap >= 1 ? `, ${plural(gap, 'day')} before the refill` : ''}`;
     estimate = `Estimate from ${r.readings} readings across ${plural(r.accounts, 'account')}`;
     // An estimate is information: in ink, never the colour that says "needs you".
   } else if (read.every((k) => (k.left ?? 0) <= LOW_LEFT)) {
@@ -963,7 +963,7 @@ export function usageGlance(
   const n = counted.length;
   const summary = [
     n > 0 ? plural(n, 'account') : null,
-    soonest ? `resets ${soonest.resetsAt}` : null,
+    soonest ? `refills ${soonest.resetsAt}` : null,
   ]
     .filter(Boolean)
     .join(' · ');

@@ -61,7 +61,7 @@ describe('usageGlance', () => {
       ['Work', 30, 'next'],
     ]);
     expect(g.headline).toBe('Plenty of room');
-    expect(g.summary).toMatch(/^2 accounts · resets /);
+    expect(g.summary).toMatch(/^2 accounts · refills /);
     expect(g.keys[0].detail).toContain('Max plan');
     expect(g.low).toBeNull();
   });
@@ -114,7 +114,7 @@ describe('usageGlance', () => {
       { now: NOW }
     );
     expect(g.sameNotes).toEqual([
-      'Work and sam@example.com may be the same Claude account: their weekly limits have moved together and reset at the same moment. If they are, sign one in with a different account.',
+      'Work and sam@example.com may be the same Claude account: their weekly limits have moved together and refill at the same moment. If they are, sign one in with a different account.',
     ]);
     // Still two accounts on the meter and in the totals.
     expect(g.meterKeys.map((k) => k.id)).toEqual(['default', 'w']);
@@ -202,7 +202,7 @@ describe('usageGlance', () => {
       ),
       { now: NOW }
     );
-    expect(g.headline).toMatch(/^Runs out ~.*, 3 days before reset$/);
+    expect(g.headline).toMatch(/^Runs out ~.*, 3 days before the refill$/);
     expect(g.estimate).toBe('Estimate from 9 readings across 2 accounts');
     // An estimate is information, not "needs you": never the warning tone.
     expect(g.tone).toBe('calm');
@@ -285,7 +285,7 @@ describe('usageGlance', () => {
       }),
       { now: NOW }
     );
-    expect(g.headline).toBe('Runs out in about 50 minutes, 3 days before reset');
+    expect(g.headline).toBe('Runs out in about 50 minutes, 3 days before the refill');
   });
 
   it('a reset soon with lots left nudges, with what it would spend it on', () => {
@@ -311,7 +311,7 @@ describe('usageGlance', () => {
       }),
       { now: NOW }
     );
-    expect(g.nudge?.text).toBe('62% of Work’s week resets in 9 h');
+    expect(g.nudge?.text).toBe('62% of Work’s week refills in 9 h');
     expect(g.nudge?.items).toEqual(['Tidy the docs']);
     expect(g.nudge?.empty).toBe(false);
   });
@@ -336,7 +336,7 @@ describe('usageGlance', () => {
       { now: NOW }
     );
     expect(g.keys[0].name).toBe('sam@example.com');
-    expect(g.nudge?.text).toBe('62% of sam@example.com’s week resets in 9 h');
+    expect(g.nudge?.text).toBe('62% of sam@example.com’s week refills in 9 h');
   });
 
   it('two accounts with one name never read the same', () => {
@@ -541,7 +541,7 @@ describe('this Mac signed in as another account', () => {
     );
     expect(g.signInChanged?.key).toBe('claude:1');
     expect(g.signInChanged?.text).toBe(
-      'This Mac’s Claude Code is now signed in as me@example.com. Your previous account (work@example.com, resets Mondays 4 PM) isn’t connected anymore — add it to keep stacking.'
+      'This Mac’s Claude Code is now signed in as me@example.com. Your previous account (work@example.com, refills Mondays 4 PM) isn’t connected anymore — add it to keep stacking.'
     );
   });
 
@@ -564,7 +564,7 @@ describe('this Mac signed in as another account', () => {
       { now: NOW }
     );
     expect(g.signInChanged?.text).toBe(
-      'This Mac’s Claude Code is now signed in as me@example.com, whose week resets Saturdays 10 AM. It used to reset Mondays 4 PM, so that was another Claude account, and it isn’t connected anymore — add it to keep stacking.'
+      'This Mac’s Claude Code is now signed in as me@example.com, whose week refills Saturdays 10 AM. It used to refill Mondays 4 PM, so that was another Claude account, and it isn’t connected anymore — add it to keep stacking.'
     );
   });
 

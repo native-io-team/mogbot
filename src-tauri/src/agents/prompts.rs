@@ -342,8 +342,8 @@ pub fn usage_section(mode: super::usage_plan::Mode, is_main: bool) -> String {
         Mode::Normal => "Usage mode: Normal. Use what the work needs.",
         Mode::Save => "Usage mode: \"Save my limits\". Ask before heavy work (a tenth of a limit or \
 more by `forecast_usage`, or a fan-out), and hand light work to agents on lighter models or engines.",
-        Mode::UseItAll => "Usage mode: \"Use it all before reset\", the user's standing OK to spend \
-capacity that would otherwise expire on the spare-capacity list and their routines (the Chief of \
+        Mode::UseItAll => "Usage mode: \"Use it all before the refill\", the user's standing OK to spend \
+capacity that would otherwise expire on the list of ideas for leftover usage and their routines (the Chief of \
 Staff is woken for it). No approval changes.",
     };
     let mut s = format!("{USAGE}\n\n{mode_line}");

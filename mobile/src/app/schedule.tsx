@@ -39,6 +39,7 @@ import {
   routineWhenOf,
   routineWhenPhrase,
   ROUTINE_MODES,
+  ROUTINES_NEED_THE_MAC,
   zoneDiffers,
   type RoutineMode,
   type CheckInRun,
@@ -230,6 +231,13 @@ function Schedule() {
         ? `New routine for ${agent.name}`
         : 'New routine';
 
+  // Both kinds of routine run only while the app is open on an awake Mac.
+  const needsTheMac = (
+    <T variant="caption" color={colors.textMuted}>
+      {ROUTINES_NEED_THE_MAC}
+    </T>
+  );
+
   return (
     <SheetPage>
       <ScrollView
@@ -244,12 +252,15 @@ function Schedule() {
         )}
 
         {mode === 'when' && agent ? (
-          <WhenComposer
-            agent={agent}
-            editing={editingWatch ?? null}
-            onDone={() => router.back()}
-            onCancel={() => router.back()}
-          />
+          <>
+            <WhenComposer
+              agent={agent}
+              editing={editingWatch ?? null}
+              onDone={() => router.back()}
+              onCancel={() => router.back()}
+            />
+            {needsTheMac}
+          </>
         ) : (
           <>
             <View style={styles.group}>
@@ -413,6 +424,7 @@ function Schedule() {
                 style={{ flex: 1 }}
               />
             </View>
+            {needsTheMac}
             {!!editing?.runs?.length && <RunHistory runs={editing.runs} />}
           </>
         )}

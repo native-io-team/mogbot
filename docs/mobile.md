@@ -305,7 +305,10 @@ CA and no trust-on-first-use.
 
 ## Pairing
 
-1. **Mac:** Phone panel → **Pair a phone** (or Cmd+K). A one-time code
+1. **Mac:** Phone panel (titled "Phone" whether opened from Settings or the
+   sidebar's phone line, so the phone's "Phone (in Settings, or the phone line
+   at the foot of the sidebar) → Show code", `WHERE_TO_PAIR`, names what's on
+   screen) → **Show code** (or Cmd+K). A one-time code
    (128-bit, 5 minutes, single use) is shown as a QR code of
    `<companion.scheme>://pair?d=…` (`mogbot-companion` today) carrying the code, server id, Mac name,
    **exactly one route** and the **fingerprint of the Mac's identity key**,

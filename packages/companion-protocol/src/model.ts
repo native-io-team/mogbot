@@ -609,11 +609,12 @@ export interface NewAgentDefaultsChange {
 }
 
 /** The change field for one engine's default model. */
-export const MODEL_CHANGE_KEY: Record<AgentEngine, 'claudeModel' | 'codexModel' | 'opencodeModel'> = {
-  claude: 'claudeModel',
-  codex: 'codexModel',
-  opencode: 'opencodeModel',
-};
+export const MODEL_CHANGE_KEY: Record<AgentEngine, 'claudeModel' | 'codexModel' | 'opencodeModel'> =
+  {
+    claude: 'claudeModel',
+    codex: 'codexModel',
+    opencode: 'opencodeModel',
+  };
 
 export interface AgentsOverview {
   agents: Agent[];

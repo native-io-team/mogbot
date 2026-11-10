@@ -11,9 +11,9 @@ describe('previewText: a row says plain words', () => {
   });
 
   it('strips markdown markers and keeps the words', () => {
-    expect(previewText('## Done\n- **Fixed** the `footer` [links](https://x.example) on _mobile_')).toBe(
-      'Fixed the footer links on mobile'
-    );
+    expect(
+      previewText('## Done\n- **Fixed** the `footer` [links](https://x.example) on _mobile_')
+    ).toBe('Fixed the footer links on mobile');
   });
 
   it('a lone label is still said, without its colon', () => {
@@ -28,7 +28,9 @@ describe('previewText: a row says plain words', () => {
     expect(previewText('Two invoices are overdue: Northwind ($4,200) and…')).toBe(
       'Two invoices are overdue: Northwind ($4,200) and…'
     );
-    expect(firstSentence('Bumped to v1.2. e.g. the footer')).toBe('Bumped to v1.2. e.g. the footer');
+    expect(firstSentence('Bumped to v1.2. e.g. the footer')).toBe(
+      'Bumped to v1.2. e.g. the footer'
+    );
   });
 
   it('leaves snake_case, prices and plain text alone', () => {

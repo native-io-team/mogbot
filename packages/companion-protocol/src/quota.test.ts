@@ -69,7 +69,7 @@ describe('quotaLines', () => {
       ],
       NOW
     );
-    expect(line.text).toMatch(/^Claude usage 85% · resets Sat/);
+    expect(line.text).toMatch(/^Claude usage 85% · refills Sat/);
     expect(line.tone).toBe('calm');
     expect(line.detail).toMatch(/weekly limit/);
   });
@@ -108,7 +108,7 @@ describe('quotaLines', () => {
       [claude(win({ usedPercent: 34, resetsAt: saturday, observedAt: NOW - 7 * HOUR }))],
       NOW
     );
-    expect(today.text).toMatch(/^Claude usage 34% · resets Sat · read 7:00/);
+    expect(today.text).toMatch(/^Claude usage 34% · refills Sat · read 7:00/);
     // Read Tuesday: the day, in both.
     const tuesday = new Date(2026, 10, 3, 15, 0).getTime();
     const [old] = quotaLines(

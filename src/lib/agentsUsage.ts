@@ -71,7 +71,7 @@ export const onUsagePlanChanged = (fn: () => void): Promise<UnlistenFn> =>
   listen(USAGE_PLAN_EVENT, fn);
 
 /**
- * "Give agents something to do": the Chief starts the spare-capacity list
+ * "Give agents something to do": the Chief starts the list of ideas for leftover usage
  * now on a window near its reset with room left (`agents_spare_spend_now`).
  * Answers the line to show.
  */

@@ -70,7 +70,7 @@ fn carrying_on_is_what_the_user_chose_and_never_silent_asking_waits_for_the_turn
     };
     assert_eq!(before_turn(once), Route::Carry);
     assert_eq!(after_out(once), Route::Carry);
-    // Wait for the reset: never.
+    // Wait for the refill: never.
     let wait = Situation {
         mode: Mode::Wait,
         ..out()

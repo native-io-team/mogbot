@@ -136,7 +136,7 @@ function commands(
     agents_account_remove: null,
     agents_account_add: null,
     agents_set_usage_mode: null,
-    agents_spare_spend_now: 'Chief of Staff is starting your spare-capacity list (2 waiting).',
+    agents_spare_spend_now: 'Chief of Staff is starting your ideas for leftover usage (2 waiting).',
     agents_spare_add: null,
     agents_spare_remove: null,
     agents_crossover: crossover,
@@ -595,7 +595,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'reset-soon',
     'a reset soon with lots left',
-    'Under “How agents use your limits” (on “Use it all before reset”) a sheet: “62% of sam@example.com’s week resets in 9 h”, the first three waiting items and “and 1 more”, and a neutral “Give agents something to do”.',
+    'Under “How agents use your limits” (on “Use it all before the refill”) a sheet: “62% of sam@example.com’s week resets in 9 h”, the first three waiting items and “and 1 more”, and a neutral “Give agents something to do”.',
     RESET_SOON,
     null
   ),

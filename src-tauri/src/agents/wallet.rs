@@ -163,7 +163,7 @@ struct WalletFile {
     /// and sign-in go when it ends, or at the next launch.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     removing: Vec<String>,
-    /// "Use it all before reset" is spending an account's room before it
+    /// "Use it all before the refill" is spending an account's room before it
     /// expires: turns on its engine start on it until then (`spend_first`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     spend_first: Vec<SpendFirst>,
@@ -431,7 +431,7 @@ pub fn use_first(engine: Engine, id: &str) -> Result<Vec<Account>, CommandError>
     })
 }
 
-/// "Use it all before reset" found room about to expire on `id`, not the
+/// "Use it all before the refill" found room about to expire on `id`, not the
 /// account turns run on next: turns on `engine` start on it until `until`
 /// (the window's reset), then the user's order holds again. An agent set to
 /// one account stays on it; failover still moves on when it runs out.
@@ -450,7 +450,7 @@ pub fn spend_first(engine: Engine, id: &str, until: i64) -> Result<(), CommandEr
     })
 }
 
-/// The user left "Use it all before reset": their own order holds again.
+/// The user left "Use it all before the refill": their own order holds again.
 pub fn clear_spend_first() {
     let has = {
         let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -1509,7 +1509,7 @@ where
             "{all} reached their usage limit. The first is back {}.",
             super::failure::clock_phrase(tz, at, now)
         ),
-        None => format!("{all} reached their usage limit, and none said when it resets."),
+        None => format!("{all} reached their usage limit, and none said when it refills."),
     }
 }
 
@@ -1925,7 +1925,7 @@ mod tests {
         );
         assert_eq!(
             all_out_line(Engine::Codex, 3, None, &Utc, now()),
-            "All 3 Codex accounts have reached their usage limit, and none said when it resets."
+            "All 3 Codex accounts have reached their usage limit, and none said when it refills."
         );
     }
 

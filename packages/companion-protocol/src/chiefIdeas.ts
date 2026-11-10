@@ -36,6 +36,8 @@ export interface ChiefIdea {
   /** Typed into the Chief's composer: a whole brief whose one blank ends it. */
   text: string;
   group: ChiefIdeaGroup;
+  /** Asked once, not on a schedule or a trigger: no routine comes of it. */
+  oneOff?: true;
 }
 
 export const GROUP_LABEL: Record<ChiefIdeaGroup, string> = {
@@ -108,6 +110,7 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
     what: 'A researcher gathers sources and a writer turns them into a clear draft with every source linked. Then your Chief asks whether you want it kept up to date each week.',
     text: 'Have a researcher dig into this and collect good sources, and a writer turn them into a clear draft with every source linked. When it’s done, ask me whether I want it kept up to date each week. The topic: ',
     group: 'together',
+    oneOff: true,
   },
   {
     id: 'travel',
@@ -129,6 +132,7 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
     what: 'Two new agents take opposite sides, each answers the other’s case, and your Chief brings you the verdict.',
     text: 'Create two agents, a Skeptic and a Champion, have them argue this out, each answering the other’s case, and bring me your verdict: ',
     group: 'together',
+    oneOff: true,
   },
   {
     id: 'ship-fixes',
@@ -163,6 +167,11 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
  * screenshot and the app.
  */
 export const CHIEF_CHIP_IDS = ['morning-brief', 'inbox', 'research'] as const;
+
+/** The idea sets up a routine (a time or a trigger), so it runs only while this Mac does. */
+export function ideaRepeats(idea: ChiefIdea): boolean {
+  return !idea.oneOff;
+}
 
 export function findIdea(id: string): ChiefIdea | null {
   return CHIEF_IDEAS.find((idea) => idea.id === id) ?? null;

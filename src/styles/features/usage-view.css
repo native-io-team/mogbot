@@ -913,6 +913,19 @@
   color: var(--text-muted);
 }
 
+/* A signed-out row's Sign in, over its empty refill column (outside the row's
+   button, so it is its own control). */
+.usage-row__item {
+  position: relative;
+}
+
+.usage-row__sign-in {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--spacing-lg) + var(--spacing-md) + 14px); /* css-ok: past the 14px chevron */
+  transform: translateY(-50%);
+}
+
 /* Narrow: the bar and refill give way; name, room and state stay. */
 @container usage-panel (max-width: 34rem) {
   .usage-row {
@@ -921,7 +934,8 @@
 
   .usage-row__bar,
   .usage-row__refill,
-  .usage-row__chevron {
+  .usage-row__chevron,
+  .usage-row__sign-in {
     display: none;
   }
 }

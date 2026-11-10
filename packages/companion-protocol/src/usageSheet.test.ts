@@ -63,7 +63,7 @@ describe('the pace line', () => {
   it('says when, roughly, and what it rests on', () => {
     const line = paceLine(pace(), NOW)!;
     expect(line.text).toBe(
-      `At this pace you’ll hit the limit in about 2 hours, before it resets ${'at'} ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(NOW + 4 * HOUR)}`
+      `At this pace you’ll hit the limit in about 2 hours, before it refills ${'at'} ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(NOW + 4 * HOUR)}`
     );
     expect(line.basis).toBe('Estimate from 6 readings over 2 hours');
   });

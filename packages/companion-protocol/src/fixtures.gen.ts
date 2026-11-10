@@ -1675,7 +1675,7 @@ export const agentsSpareAdd = {
   }
 } satisfies Result<'agents.spare.add'>;
 export const agentsSpareSpendNow = {
-  "line": "Chief of Staff is starting your spare-capacity list (2 waiting)."
+  "line": "Chief of Staff is starting your ideas for leftover usage (2 waiting)."
 } satisfies Result<'agents.spare.spendNow'>;
 export const agentsMessages = {
   "asOf": {

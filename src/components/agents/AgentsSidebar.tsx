@@ -68,7 +68,7 @@ import { AgentActionItems, type AgentActions } from './AgentActions';
 import { AgentsSearchResults } from './AgentsSearchResults';
 import { AgentMark } from './AgentSwitcher';
 import { RoomRow, type RoomActions } from './AgentRoomParts';
-import { sortRooms, type Room } from '../../lib/agentRooms';
+import { ROOM_WHAT, sortRooms, type Room } from '../../lib/agentRooms';
 import { useFlipReorder, useNewKeys } from './useAgentMotion';
 import { useSteadyList } from './useAttentionOrder';
 import { useAgentsSelector } from '../../lib/agentsStore';
@@ -499,6 +499,7 @@ export function AgentsSidebarActions({
           width="fill"
           className="workspace-sidebar-add-project agents-list__new-room"
           onClick={onNewRoom}
+          title={ROOM_WHAT}
         >
           <CollaboratorsIcon size={16} />
           <span>New room</span>

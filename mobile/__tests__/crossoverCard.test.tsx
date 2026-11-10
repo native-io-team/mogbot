@@ -114,6 +114,6 @@ it('Catch up opens it, and the receipt is the desk’s line', () => {
     'Just this time · carrying on with Codex'
   );
   expect(cardOutcome(card({ status: 'denied', choice: 'Wait' }))).toBe(
-    'Waiting · back when Claude Code resets'
+    'Waiting · back when Claude Code refills'
   );
 });

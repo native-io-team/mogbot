@@ -66,7 +66,7 @@ export function crossoverOptions(home: AgentEngine): { value: CrossoverMode; lab
   return [
     { value: 'ask', label: 'Ask first' },
     { value: 'carry', label: `Carry on with ${LABEL[otherEngine(home)]}` },
-    { value: 'wait', label: 'Wait for the reset' },
+    { value: 'wait', label: 'Wait for the refill' },
   ];
 }
 
@@ -80,7 +80,7 @@ export function crossoverDetail(home: AgentEngine, mode: CrossoverMode): string 
     case 'carry':
       return `Turns move to ${to} until ${from} has room again, then go back, with a line each way. Never for an agent set to one account.`;
     case 'wait':
-      return `Agents stop on the usage-limit line until a ${from} account resets.`;
+      return `Agents stop on the usage-limit line until a ${from} account refills.`;
   }
 }
 
@@ -92,7 +92,7 @@ export function crossoverOutcome(
 ): string | null {
   const to = LABEL[ask.to];
   const from = LABEL[ask.from];
-  if (status === 'denied') return `Waiting · back when ${from} resets`;
+  if (status === 'denied') return `Waiting · back when ${from} refills`;
   if (status !== 'allowed') return null;
   if (choice === CROSSOVER_ALWAYS) return `Always · carrying on with ${to} whenever ${from} is out`;
   return ask.resume

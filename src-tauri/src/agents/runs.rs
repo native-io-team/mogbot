@@ -12,7 +12,7 @@
 //!
 //! - **Temporary failures are retried** (`failure::is_temporary`: the usage
 //!   limit, Anthropic overloaded or erroring, the network): with backoff for
-//!   up to [`RETRY_WINDOW_MS`]; a usage limit that says when it resets is
+//!   up to [`RETRY_WINDOW_MS`]; a usage limit that says when it refills is
 //!   retried just after that instead. A routine's retry never runs into its
 //!   own next run, which supersedes it. A sign-in or anything we can't name
 //!   isn't retried: retrying wouldn't help.
@@ -68,7 +68,7 @@ pub enum Outcome {
     /// A routine in steps the user stopped between two steps, or whose OK
     /// never came before its next run.
     Declined,
-    /// Waiting for a usage limit to reset instead of running: every account
+    /// Waiting for a usage limit to refill instead of running: every account
     /// it runs on is out until a known reset, or "Save my limits" holds it
     /// while the account is nearly out (`saver`). It runs once the limit
     /// is back; the detail says until when.
@@ -302,7 +302,7 @@ pub fn settle(
             run,
             retry: None,
             alert: Some((ticket.attempt == 1).then(|| {
-                format!("{what} “{name}” is waiting for the usage limit to reset: {reason}{sign}")
+                format!("{what} “{name}” is waiting for the usage limit to refill: {reason}{sign}")
             })),
         };
     }
@@ -828,10 +828,10 @@ mod tests {
         assert_eq!(s.retry, None);
         let said = s.alert.unwrap().unwrap();
         assert!(
-            said.contains("is waiting for the usage limit to reset"),
+            said.contains("is waiting for the usage limit to refill"),
             "{said}"
         );
-        // A limit that didn't say when it resets still fails as before.
+        // A limit that didn't say when it refills still fails as before.
         let unknown = Failure {
             kind: FailureKind::UsageLimit,
             resets_at: None,

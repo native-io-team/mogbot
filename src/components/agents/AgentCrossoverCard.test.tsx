@@ -71,7 +71,7 @@ describe('Carry on with the other engine (card)', () => {
     expect(screen.queryByRole('button', { name: 'Wait' })).toBeNull();
     unmount();
     renderCard(card({ status: 'denied', choice: 'Wait' }));
-    expect(screen.getByText('Waiting · back when Claude Code resets')).toBeTruthy();
+    expect(screen.getByText('Waiting · back when Claude Code refills')).toBeTruthy();
   });
 
   it('closed by the app when the engine has room again, it says so', () => {

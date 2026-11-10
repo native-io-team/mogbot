@@ -94,7 +94,7 @@ export const phoneScenarios: Scenario[] = [
   phone(
     'phone-off',
     'Phone — off, nothing paired: install comes first',
-    'Titled “Your phone”. One line on what the phone is for, then three short numbered steps: ' +
+    'Titled “Phone”, the Settings section’s name. One line on what the phone is for, then three short numbered steps: ' +
       '“Get the app” with a primary “Get the app…” and a secondary “I already have it”; ' +
       '“Tailscale, on this Mac and your phone” saying a scan never gets here without it, a green ' +
       'tick on “This Mac: set up.”, and “Your phone: Install Tailscale on your phone and sign in ' +

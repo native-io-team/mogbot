@@ -5,13 +5,13 @@
 // file and `pnpm check:brand` fails if this copy drifts.
 
 /** The app's display name, for copy that genuinely needs it. */
-export const APP_NAME = "Mogbot";
+export const APP_NAME = 'Mogbot';
 
 /** The pairing link's custom URL scheme (`<scheme>://pair?d=…`). */
-export const PAIRING_SCHEME = "mogbot-companion";
+export const PAIRING_SCHEME = 'mogbot-companion';
 
 /** The HTTPS port `tailscale serve` publishes the Mac's companion server on. */
 export const TAILNET_HTTPS_PORT = 47463;
 
 /** The app's source repository, or null when it has none to link to. */
-export const SOURCE_URL: string | null = "https://github.com/native-io-team/mogbot";
+export const SOURCE_URL: string | null = 'https://github.com/native-io-team/mogbot';
