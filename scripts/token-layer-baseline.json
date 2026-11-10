@@ -1245,12 +1245,6 @@
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
     },
     {
-      "path": "src/styles/features/settings.css",
-      "token": "--transition",
-      "count": 4,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
-    },
-    {
       "path": "src/styles/features/setup-agent-led.css",
       "token": "--radius-full",
       "count": 1,
