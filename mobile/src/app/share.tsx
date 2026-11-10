@@ -15,7 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { AgentKey } from '../components/AgentKey';
-import { Button, SheetPage, T, useRipple } from '../components/ui';
+import { Button, SectionTitle, SheetPage, T, useRipple } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { makeStyles, useColors } from '../lib/appearance';
 import { sortAgents } from '../lib/agents';
@@ -140,14 +140,16 @@ export default function Share() {
               </T>
             )}
 
-            <T variant="caption" color={colors.textMuted} style={styles.eyebrow}>
-              PUT IT IN A CHAT FOR YOU TO SEND
-            </T>
+            <SectionTitle title="Put it in a chat for you to send" style={styles.eyebrow} />
           </View>
         }
         ListEmptyComponent={
           <T color={colors.textSecondary} style={styles.empty}>
-            {overview ? 'No agents yet.' : `Connecting to ${macName}…`}
+            {overview
+              ? 'No agents yet.'
+              : connected
+                ? `Connecting to ${macName}…`
+                : `${macName} is away. Your agents show here once it’s back.`}
           </T>
         }
         renderItem={({ item, index }) => (
@@ -256,7 +258,7 @@ const useStyles = makeStyles((colors) => ({
   root: { padding: space.lg, paddingTop: space.xl, gap: space.md },
   list: { padding: space.lg, paddingTop: space.xl, paddingBottom: space['2xl'] },
   header: { gap: space.md, marginBottom: space.sm },
-  eyebrow: { marginTop: space.sm, marginLeft: space.lg, letterSpacing: 0.4 },
+  eyebrow: { marginTop: space.sm, marginBottom: 0 },
   preview: {
     gap: space.xs,
     padding: space.md,

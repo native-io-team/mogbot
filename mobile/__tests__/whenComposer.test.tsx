@@ -58,11 +58,11 @@ describe('the phone’s “When…” composer', () => {
 
   it('offers the desk’s sources, from your Mac, Linear only with a Linear app', async () => {
     await mount();
-    expect(screen.getByText('WHEN THIS HAPPENS')).toBeTruthy();
+    expect(screen.getByText('When this happens')).toBeTruthy();
     expect(screen.getByText('Someone mentions you on GitHub')).toBeTruthy();
     expect(screen.getAllByText('Free · checked from your Mac')).toHaveLength(2);
     expect(screen.getByText('A Linear issue is assigned to you')).toBeTruthy();
-    expect(screen.getByText('CHECK EVERY')).toBeTruthy();
+    expect(screen.getByText('Check every')).toBeTruthy();
     // Everyday sources first, as on the desk; GitHub further down.
     const labels = screen
       .getAllByText(/^(An email arrives|A text arrives|Someone mentions you)/)

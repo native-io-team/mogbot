@@ -146,8 +146,8 @@ export function WhenComposer({
   return (
     <>
       <View style={styles.group}>
-        <T variant="caption" color={colors.textMuted} style={styles.label}>
-          {WHEN_WORDS.source.toUpperCase()}
+        <T variant="caption" color={colors.textMuted}>
+          {WHEN_WORDS.source}
         </T>
         <View
           style={styles.list}
@@ -267,8 +267,8 @@ export function WhenComposer({
             />
             {found.apps.length > 0 ? (
               <>
-                <T variant="caption" color={colors.textMuted} style={styles.label}>
-                  {WHEN_WORDS.through.toUpperCase()}
+                <T variant="caption" color={colors.textMuted}>
+                  {WHEN_WORDS.through}
                 </T>
                 <ChipRow label="Which app to check through">
                   {found.apps.map((a) => (
@@ -294,8 +294,8 @@ export function WhenComposer({
           </Animated.View>
         )}
 
-        <T variant="caption" color={colors.textMuted} style={styles.label}>
-          {WHEN_WORDS.every.toUpperCase()}
+        <T variant="caption" color={colors.textMuted}>
+          {WHEN_WORDS.every}
         </T>
         <ChipRow label="How often to check">
           {intervals.map((m) => (
@@ -311,8 +311,8 @@ export function WhenComposer({
       </View>
 
       <View style={styles.group}>
-        <T variant="caption" color={colors.textMuted} style={styles.label} nativeID="when-what">
-          {WHEN_WORDS.what.toUpperCase()}
+        <T variant="caption" color={colors.textMuted} nativeID="when-what">
+          {WHEN_WORDS.what}
         </T>
         <TextInput
           value={note}
@@ -366,7 +366,6 @@ export function WhenComposer({
 
 const useStyles = makeStyles((colors) => ({
   group: { gap: space.sm },
-  label: { letterSpacing: 0.4 },
   list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
   noCheck: { width: iconSize.body },
   input: {
