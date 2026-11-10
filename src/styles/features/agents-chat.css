@@ -126,6 +126,12 @@
   max-width: 100%;
 }
 
+/* The name gives way before the chevron does: squeezed, the chevron shrank
+   to a 3px dot beside a one-letter name. */
+.agent-chat__switcher-chevron {
+  flex: none;
+}
+
 .agent-chat__name {
   flex: 0 1 auto;
   min-width: 0;
@@ -200,6 +206,16 @@
 
 @container agent-chat-header (max-width: 440px) {
   .agent-chat__title > .agent-chat__project {
+    display: none;
+  }
+}
+
+/* Narrowest (compact, a 400px window): the mode toggle and the actions leave
+   the switcher about 20px for a name, which showed "C…". The key says who it
+   is (the button's label and the composer still name it); the switcher keeps
+   its key and chevron. */
+@container agent-chat-header (max-width: 420px) {
+  .agent-chat__switcher .agent-chat__name {
     display: none;
   }
 }
