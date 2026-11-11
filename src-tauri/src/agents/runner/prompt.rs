@@ -175,6 +175,11 @@ pub(in crate::agents) fn system_prompt_for(
             prompt.push_str("\n\n");
             prompt.push_str(&team);
         }
+        // First run's "bring your agents over" guide, while it runs.
+        if let Some(line) = crate::agents::guide::briefing_line() {
+            prompt.push_str("\n\n");
+            prompt.push_str(&line);
+        }
     }
     prompt
 }

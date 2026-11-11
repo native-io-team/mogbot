@@ -2888,6 +2888,41 @@ pub async fn agents_set_import_choice(
     Ok(choice)
 }
 
+/// First run: the user picked the assistant their agents live in, under the
+/// Chief's greeting (`agents::guide`).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_guide_start(app: AppHandle, assistant: String) -> Result<(), CommandError> {
+    let handle = app.clone();
+    blocking(move || agents::guide::start(&handle, &assistant).map(|_| ())).await?;
+    emit_registry(&app);
+    Ok(())
+}
+
+/// The app reached a guide step: the Chief says it, once.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_guide_post(app: AppHandle, step: String) -> Result<bool, CommandError> {
+    let step = agents::guide::Step::parse(&step)?;
+    blocking(move || agents::guide::post(&app, step)).await
+}
+
+/// The guide while one runs (the assistant and the steps said), else null.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_guide_state() -> Result<Option<agents::guide::Guide>, CommandError> {
+    blocking(|| Ok(agents::guide::current())).await
+}
+
+/// "Start fresh" partway through the guide.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_guide_stop(app: AppHandle) -> Result<(), CommandError> {
+    blocking(|| agents::guide::stop(store::now_ms())).await?;
+    emit_registry(&app);
+    Ok(())
+}
+
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_desktop_settings() -> Result<agents::quick_entry::Settings, CommandError> {

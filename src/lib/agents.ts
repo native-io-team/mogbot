@@ -514,11 +514,25 @@ export interface AgentsOverview {
 }
 
 /** Mirrors `agents::import_choice::Choice`. */
-export type ImportChoice = 'undecided' | 'imported' | 'declined' | 'skipped';
+export type ImportChoice = 'undecided' | 'imported' | 'declined' | 'skipped' | 'bringing';
 
 /** Answer "bring your agents, or start fresh?" (an import sets `imported` itself). */
 export const setImportChoice = (choice: ImportChoice) =>
   invoke<ImportChoice>('agents_set_import_choice', { choice });
+
+/** First run's "bring your agents over" guide in the Chief's chat (`agents::guide`). */
+export interface ImportGuide {
+  assistant: 'grok' | 'chatgpt' | 'claude' | 'other';
+  posted: string[];
+  startedAt: number;
+}
+export const startImportGuide = (assistant: ImportGuide['assistant']) =>
+  invoke<void>('agents_guide_start', { assistant });
+/** The app reached `step`: the Chief says it, once (true when it did). */
+export const postImportGuideStep = (step: string) =>
+  invoke<boolean>('agents_guide_post', { step });
+export const getImportGuide = () => invoke<ImportGuide | null>('agents_guide_state');
+export const stopImportGuide = () => invoke<void>('agents_guide_stop');
 
 /** Mirrors `agents::independence::Level`; worded in `lib/agentIndependence`. */
 export type AgentIndependence = 'often' | 'judgement' | 'go_hard' | 'full_send';

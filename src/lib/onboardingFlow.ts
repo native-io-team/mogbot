@@ -48,6 +48,7 @@
  * @module lib/onboardingFlow
  */
 
+import type { GuideStepId } from '../../packages/companion-protocol/src/blocks';
 import { SETUP_DEPENDENCIES, type SetupItem } from './setup';
 import { describeFailure, type InstallFailure } from './installProgress';
 import {
@@ -94,8 +95,14 @@ export type FlowStep = (typeof FLOW_STEPS)[number];
  * a screen here; it is the Chief's chat, and the bar shows it so the last
  * screen reads as the last thing in the way.
  */
-export const FLOW_SECTIONS = ['welcome', 'engine', 'agents', 'phone', 'chief'] as const;
-export type FlowSection = (typeof FLOW_SECTIONS)[number];
+export type FlowSection = 'welcome' | 'engine' | 'agents' | 'phone' | 'chief';
+/**
+ * What first run shows: the engine is the only screen in the way. Bringing
+ * agents over and the phone happen in the Chief's chat, a step at a time
+ * (`components/agents/ImportGuide.tsx`, `ChiefPhoneOffer`); their screens
+ * stay for the Phone panel and for a launch saved partway through them.
+ */
+export const FLOW_SECTIONS: readonly FlowSection[] = ['welcome', 'engine', 'chief'];
 
 export const SECTION_LABEL: Record<FlowSection, string> = {
   welcome: 'Welcome',
@@ -235,7 +242,9 @@ export function isOnboardingInProgress(p: FlowProgress | null = readProgress()):
 export function resumeStep(saved: FlowProgress | null): FlowStep {
   if (!saved || saved.finished) return 'welcome';
   // A phone's request and its answer last minutes; a relaunch makes a new code.
-  if (saved.step === 'phoneAllow' || saved.step === 'phonePaired') return 'phoneScan';
+  // Saved on a screen first run no longer shows: the engine, which goes on
+  // by itself when it's ready, then the Chief's chat.
+  if (saved.step.startsWith('agents') || saved.step.startsWith('phone')) return 'engine';
   return saved.step;
 }
 
@@ -311,6 +320,34 @@ export function firstAgentsStep(
     return 'agentsStart';
   }
   return linkIsOn(s, now) ? 'agentsConnect' : 'agentsLink';
+}
+
+/**
+ * Where first run's in-chat guide stands (`agents::guide`), from the same
+ * checks the Remote access window shows. Null while the status isn't in yet.
+ * The consent card belongs to "send" (the assistant said hello; the Chief
+ * asks once); "talking" is the interview through to the review card.
+ */
+export function guideStep(
+  s: RemoteAccessStatus | null,
+  talk: { state: string } | null | undefined,
+  assistant: AssistantId | null,
+  now: number
+): GuideStepId | null {
+  if (talk && (talk.state === 'interviewing' || talk.state === 'playback' || talk.state === 'review')) {
+    return 'talking';
+  }
+  if (!s) return null;
+  switch (firstAgentsStep(s, now, assistant)) {
+    case 'agentsTailscale':
+      return 'tailscale';
+    case 'agentsConnect':
+      return 'connect';
+    case 'agentsStart':
+      return 'send';
+    default:
+      return s.enabled && s.funnelApprovalUrl ? 'approve' : 'link';
+  }
 }
 
 /**

@@ -137,7 +137,7 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
     await onComplete();
   }, [onComplete]);
 
-  /** The engine is installed and signed in: make it the default, then the optional parts. */
+  /** The engine is installed and signed in: make it the default, then the Chief's chat. */
   const engineReady = useCallback(
     async (key: AgentCardKey) => {
       const agentId = agentIdForBinary(key);
@@ -148,9 +148,10 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
         entry_path: 'agent_led',
         $screen_name: 'Onboarding',
       });
-      go('agentsAsk');
+      // Everything after the engine happens in the Chief's chat.
+      await finish();
     },
-    [go]
+    [finish]
   );
 
   /** "Not now" / "Skip for now": the next part, or the Chief's chat after the last. */

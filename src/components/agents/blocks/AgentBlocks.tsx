@@ -13,6 +13,7 @@
  * @module components/agents/blocks/AgentBlocks
  */
 
+import { GuideStepAction } from '../ImportGuide';
 import { memo, type ReactNode } from 'react';
 import type { Agent } from '../../../lib/agents';
 import {
@@ -148,6 +149,8 @@ function BlockView({
   section?: boolean;
 }) {
   switch (block.kind) {
+    case 'guide':
+      return <GuideStepAction block={block} />;
     case 'chart':
       return (
         <Panel block={block} bare={block.chart === 'sparkline'}>

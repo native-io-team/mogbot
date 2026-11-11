@@ -179,7 +179,30 @@ export interface ImageBlock extends Base {
   caption?: string;
 }
 
+/**
+ * A step of first run's "bring your agents over" guide (`agents::guide`):
+ * only the Mac posts these, never an agent's `show`. Drawn as that step's
+ * one action; `summary` holds the Chief's words.
+ */
+export type GuideStepId = 'tailscale' | 'link' | 'approve' | 'connect' | 'send' | 'talking';
+export type GuideAssistant = 'grok' | 'chatgpt' | 'claude' | 'other';
+export const GUIDE_STEPS: readonly GuideStepId[] = [
+  'tailscale',
+  'link',
+  'approve',
+  'connect',
+  'send',
+  'talking',
+];
+
+export interface GuideBlock extends Base {
+  kind: 'guide';
+  step: GuideStepId;
+  assistant: GuideAssistant;
+}
+
 export type Block =
+  | GuideBlock
   | ChartBlock
   | TableBlock
   | MetricsBlock
@@ -276,6 +299,8 @@ function wellFormed(b: unknown): b is Block {
       return str(b.code);
     case 'image':
       return isObject(b.file) && str(b.file.path);
+    case 'guide':
+      return str(b.step) && (GUIDE_STEPS as readonly string[]).includes(b.step) && str(b.assistant);
     default:
       return false;
   }

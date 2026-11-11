@@ -1,0 +1,67 @@
+<!doctype html>
+<!--
+  The DMG window's background, rendered to background.png (@1x) and
+  background@2x.png by scripts/dmg/render-background.mjs. Geometry must match
+  scripts/dmg/layout.sh: window 660x420, icons 128px centred at (170,210) and
+  (490,210), Finder draws each label under its icon.
+  {{NAME}} is filled from brand.json.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 660px; height: 420px; overflow: hidden; }
+  body {
+    position: relative;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    background:
+      radial-gradient(120% 90% at 50% 0%, #fbfaf6 0%, #f3f0e8 60%, #ebe7dc 100%);
+    color: #1d1e21;
+    -webkit-font-smoothing: antialiased;
+  }
+  .title {
+    position: absolute; top: 46px; left: 0; right: 0;
+    text-align: center; font-size: 22px; font-weight: 650; letter-spacing: -0.01em;
+  }
+  .sub {
+    position: absolute; top: 80px; left: 0; right: 0;
+    text-align: center; font-size: 13px; color: #6b6a64;
+  }
+  /* Soft wells the icons sit in, so the two ends of the drag read as places. */
+  .well {
+    box-sizing: border-box;
+    position: absolute; width: 168px; height: 168px; border-radius: 40px;
+    top: 126px;
+    background: rgba(255, 255, 255, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(29, 30, 33, 0.06), 0 1px 2px rgba(29, 30, 33, 0.04);
+  }
+  .well.app { left: 86px; }
+  .well.apps { left: 406px; border: 2px dashed rgba(29, 30, 33, 0.16); background: rgba(255,255,255,0.35); box-shadow: none; }
+  svg.arrow { position: absolute; left: 0; top: 0; }
+  .foot {
+    position: absolute; bottom: 22px; left: 0; right: 0;
+    text-align: center; font-size: 11.5px; color: #8a8880;
+  }
+  kbd {
+    font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5px;
+    background: #fff; box-shadow: inset 0 0 0 1px rgba(29,30,33,.14), 0 1px 0 rgba(29,30,33,.12);
+    color: #3b3c40;
+  }
+</style>
+</head>
+<body>
+  <div class="title">Drag {{NAME}} into Applications</div>
+  <div class="sub">Then open it from your Applications folder.</div>
+  <div class="well app"></div>
+  <div class="well apps"></div>
+  <svg class="arrow" width="660" height="420" viewBox="0 0 660 420">
+    <defs>
+      <marker id="head" viewBox="0 0 12 12" refX="7" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+        <path d="M2 1.5 L8.5 6 L2 10.5" fill="none" stroke="#1d1e21" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+    </defs>
+    <path d="M272 214 C 312 182, 348 182, 388 212" fill="none" stroke="#1d1e21" stroke-width="2.4"
+          stroke-linecap="round" stroke-dasharray="1 8" marker-end="url(#head)"/>
+  </svg>
+</body>
+</html>

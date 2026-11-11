@@ -184,7 +184,7 @@ import {
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { ImportTalkBar } from './ImportTalkBar';
-import { ImportChoiceCard } from './ImportChoiceCard';
+import { ImportGuideAsk, ImportGuideProvider, useImportGuide } from './ImportGuide';
 import { ChiefPhoneOffer, reachedFirstResult } from './ChiefPhoneOffer';
 import { WaitingForYouBar } from './WaitingForYouBar';
 import { TeamSetupCard } from './TeamSetupCard';
@@ -944,6 +944,8 @@ export const AgentChat = memo(function AgentChat({
   // are answered on it, so they aren't offered again as "Review X's request".
   const teamSetup = useTeamSetup();
   const setupHere = agent.isMain ? teamSetup : null;
+  // First run's "bring your agents over", step by step in this chat.
+  const guideLive = useImportGuide(agent.isMain);
   const shownRequestIds = useMemo(() => {
     const ids = new Set(listed.flatMap((m) => (m.approval ? [m.approval.requestId] : [])));
     // Cards an admin brought here are already answerable in the chat.
@@ -2040,6 +2042,7 @@ export const AgentChat = memo(function AgentChat({
                 role="region"
                 aria-label="Messages"
               >
+                <ImportGuideProvider value={guideLive}>
                 <div
                   className="agent-chat__messages"
                   ref={messagesRef}
@@ -2048,9 +2051,7 @@ export const AgentChat = memo(function AgentChat({
                   {/* Asked once, for an install that never answered it. On a
               first run it comes after the greeting and its starters (below),
               so the Chief speaks first. */}
-                  {agent.isMain && engineReady && !greetingOnly && (
-                    <ImportChoiceCard onImport={onImport} />
-                  )}
+                  {agent.isMain && engineReady && !greetingOnly && <ImportGuideAsk />}
                   {items.length === 0 ? (
                     <div className="agent-chat__empty">
                       <AgentKey id={agent.id} name={agent.name} color={agent.color} size="lg" />
@@ -2097,13 +2098,14 @@ export const AgentChat = memo(function AgentChat({
                   {/* The Chief spoke first (its stored greeting); the ways in sit
               under it until the user says something. */}
                   {greetingOnly && engineReady && chiefStarters}
-                  {greetingOnly && engineReady && <ImportChoiceCard onImport={onImport} />}
+                  {greetingOnly && engineReady && <ImportGuideAsk />}
                   {/* The phone, offered once the first thing asked for is back. */}
                   {agent.isMain &&
                     engineReady &&
                     onSetUpPhone &&
                     !busy &&
                     importChoice !== 'undecided' &&
+                    importChoice !== 'bringing' &&
                     reachedFirstResult(shown) && <ChiefPhoneOffer onSetUp={onSetUpPhone} />}
                   {/* A ready-made agent the Chief just made: only "Created by" so
               far, so its own starters sit under it until the user speaks. */}
@@ -2127,6 +2129,7 @@ export const AgentChat = memo(function AgentChat({
                     />
                   )}
                 </div>
+                </ImportGuideProvider>
               </div>
 
               <div className="agent-chat__footer">

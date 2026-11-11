@@ -1,0 +1,56 @@
+/*
+ * First run's "bring your agents over", in the Chief's chat
+ * (components/agents/ImportGuide.tsx): the ask under the greeting, and each
+ * step's one action under its Chief message.
+ */
+
+.agent-guide-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin: var(--spacing-md) 0 var(--spacing-lg);
+}
+
+.agent-guide-ask__text {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: var(--line-height-relaxed);
+}
+
+.agent-guide-ask__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.agent-guide-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.agent-guide-step__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.agent-guide-step__list {
+  margin: 0;
+  padding-left: var(--spacing-xl);
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+/* In the chat a check is a quiet line, not a boxed card. */
+.agent-guide-step .flow-check,
+.agent-block .flow-check {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}

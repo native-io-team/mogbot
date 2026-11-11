@@ -62,6 +62,21 @@ export const IMPORT_CHOICE_DECLINE = 'No thanks, start fresh';
 export const IMPORT_CHOICE_BRING = 'Bring my agents';
 
 /**
+ * First run's ask under the Chief's greeting (`agents::guide`): a question
+ * in the Chief's voice with the assistants as replies. Picking one is the
+ * yes; the Chief then walks them through it in the chat, a step at a time.
+ */
+export const GUIDE_ASK_TEXT =
+  'Already have agents somewhere else? Tell me where and I’ll bring them all over, with everything they know. You won’t need to set anything up by hand.';
+export const GUIDE_ASK_OPTIONS = [
+  { id: 'grok', label: 'Grok' },
+  { id: 'chatgpt', label: 'ChatGPT' },
+  { id: 'claude', label: 'Claude' },
+  { id: 'other', label: 'Somewhere else' },
+] as const;
+export const GUIDE_ASK_FRESH = 'I’m starting fresh';
+
+/**
  * Puts an account first in its engine's order, so new work starts on it
  * (desk Usage rows and pages, Settings, phone). Said as what it does: the
  * owner couldn't tell "Use this one now" from switching a running turn.

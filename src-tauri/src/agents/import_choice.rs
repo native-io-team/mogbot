@@ -30,6 +30,10 @@ pub enum Choice {
     /// left the card pinned above the greeting for good, and the phone offer
     /// waiting on it never came.
     Skipped,
+    /// They picked the assistant their agents live in and the Chief is
+    /// walking them through bringing them over (`agents::guide`). An import
+    /// ends it as Imported; "start fresh" as Declined.
+    Bringing,
 }
 
 impl Choice {
@@ -39,6 +43,7 @@ impl Choice {
             "imported" => Ok(Choice::Imported),
             "declined" => Ok(Choice::Declined),
             "skipped" => Ok(Choice::Skipped),
+            "bringing" => Ok(Choice::Bringing),
             _ => Err(super::err_invalid(
                 "choice",
                 "Pick imported, declined or undecided.",

@@ -113,6 +113,7 @@ pub mod follow_up;
 pub mod forecast;
 pub mod full_send;
 pub mod go_hard;
+pub mod guide;
 pub mod handoff;
 pub mod harvest;
 pub mod identity;
