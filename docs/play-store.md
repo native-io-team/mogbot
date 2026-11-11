@@ -7,8 +7,9 @@ what differs. Nothing here has been uploaded or submitted; every step that
 reaches Google is in the **Owner checklist** at the end.
 
 **Publisher**: Galluzzo Conseil Inc. (Canada), as an **organization**
-Play Console account (to be created; the owner has a D-U-N-S number). The
-app's name is **Mogbot**, a working name that lives only in `brand.json`.
+Play Console account (created and verified; the app is in internal testing
+as `io.native.mogbot.companion`, so it goes straight to production review,
+with no closed-testing requirement). The app's name is **Mogbot**, a working name that lives only in `brand.json`.
 
 ## Building the store bundle
 
@@ -390,7 +391,7 @@ displays the user's own agents' output from the user's own computer).
 From what is documented here, to be verified in Play Console when signing up
 (the rules change):
 
-- **Organization account** (what the owner is making): needs the D-U-N-S
+- **Organization account** (what this app is published under): needs the D-U-N-S
   number, the organization's legal name and address matching it, a website,
   and a contact email and phone verified by Google; a one-time US$25 fee.
   Organization accounts are **exempt from the closed-testing requirement**
@@ -412,16 +413,16 @@ From what is documented here, to be verified in Play Console when signing up
 
 Only the owner can do these; each reaches Google or speaks for the business.
 
-1. **Play Console organization account** for Galluzzo Conseil Inc. (D-U-N-S,
-   website, verified email and phone, US$25). Wait for verification.
+1. **Play Console organization account** for Galluzzo Conseil Inc.: done,
+   verified.
 2. **Final name** and the **package**: `io.native.mogbot.companion` is
    permanent on Play once uploaded. Change `brand.json` first if either
    should be different.
-3. **Upload key**: make it (Signing, above), back it up, put its four
+3. **Upload key** (done): make it (Signing, above), back it up, put its four
    properties in `~/.gradle/gradle.properties`.
-4. **Build**: `mobile/scripts/store-android.sh --build-number 1
+4. **Build** (done for internal testing): `mobile/scripts/store-android.sh --build-number 1
    --require-upload-key`.
-5. **Create the app** in Play Console: name, default language English
+5. **Create the app** in Play Console (done): name, default language English
    (United States), App, Free. Accept the declarations.
 6. **App content** answers above: privacy policy URL, app access (the demo
    instructions, with the real download link), ads, content rating, target
@@ -430,7 +431,7 @@ Only the owner can do these; each reaches Google or speaks for the business.
 7. **Store listing**: name, short and full description, icon, feature
    graphic, at least 4 phone screenshots from Android, category, contact
    email, website.
-8. **Internal testing** release: upload the `.aab`, choose **Play App
+8. **Internal testing** release (live): upload the `.aab`, choose **Play App
    Signing (Google-generated key)**, add testers, install from the Play link
    on a real Android phone, pair with a real Mac, and answer an approval.
    Read the pre-launch report.
