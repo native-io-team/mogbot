@@ -187,6 +187,7 @@ fn protected(p: &Path) -> bool {
     })
 }
 
-#[cfg(test)]
+// Symlinks are made with std::os::unix in these tests.
+#[cfg(all(test, unix))]
 #[path = "links_tests.rs"]
 mod tests;

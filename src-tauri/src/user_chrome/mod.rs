@@ -27,7 +27,16 @@
 
 pub mod auth;
 pub mod frame;
+#[cfg(unix)]
 pub mod host;
+/// No native host off Unix: the link is a Unix socket ([`SUPPORTED`]).
+#[cfg(not(unix))]
+pub mod host {
+    /// Never started by Chrome here.
+    pub fn from_argv() -> Option<i32> {
+        None
+    }
+}
 pub mod install;
 pub mod link;
 pub mod managed;
@@ -78,10 +87,21 @@ impl Running {
 /// Start the link in `dir` with a fresh token. Must run inside the async
 /// runtime.
 pub async fn start_at(dir: &Path, registry: Arc<link::Registry>) -> std::io::Result<Running> {
-    let token = auth::fresh_token(dir)?;
-    let (listener, socket) = link::bind(dir)?;
-    let task = tokio::spawn(link::serve(listener, token, registry));
-    Ok(Running { task, socket })
+    #[cfg(unix)]
+    {
+        let token = auth::fresh_token(dir)?;
+        let (listener, socket) = link::bind(dir)?;
+        let task = tokio::spawn(link::serve(listener, token, registry));
+        Ok(Running { task, socket })
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (dir, registry);
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "the Chrome link needs a Unix socket",
+        ))
+    }
 }
 
 static RUNNING: Mutex<Option<Running>> = Mutex::new(None);
@@ -310,6 +330,6 @@ pub async fn set_enabled(on: bool) -> Result<Status, crate::errors::CommandError
     Ok(status())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 #[path = "tests.rs"]
 mod tests;

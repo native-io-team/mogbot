@@ -36,7 +36,10 @@ pub(super) async fn first_run(h: &H) -> Check {
     let chief = h.chief();
     // The suite shares one HOME: other scenarios may have talked to the
     // Chief already. What a new install has is the greeting, first.
-    let first = log(&chief.id).into_iter().next().ok_or("an empty Chief chat")?;
+    let first = log(&chief.id)
+        .into_iter()
+        .next()
+        .ok_or("an empty Chief chat")?;
     ensure(
         first.kind == MessageKind::Agent && first.text == agents::prompts::CHIEF_GREETING,
         format!("the chat doesn't open on the greeting: {:?}", first.text),
@@ -91,7 +94,10 @@ pub(super) async fn first_run(h: &H) -> Check {
         .cloned()
         .unwrap_or_default();
     let kinds: Vec<&str> = items.iter().filter_map(|b| b["kind"].as_str()).collect();
-    ensure(kinds == ["facts", "choices"], format!("draft kinds: {kinds:?}"))?;
+    ensure(
+        kinds == ["facts", "choices"],
+        format!("draft kinds: {kinds:?}"),
+    )?;
     ensure(
         store::list().unwrap_or_default().len() == team_before,
         "an agent was made before the user said yes",

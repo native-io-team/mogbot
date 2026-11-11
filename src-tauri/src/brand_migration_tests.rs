@@ -161,6 +161,7 @@ fn running_it_again_changes_nothing() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn a_launch_that_stopped_half_way_finishes_the_rest() {
     let home = tempfile::tempdir().unwrap();
@@ -253,6 +254,7 @@ fn the_reopen_item_names_this_bundle_when_there_is_one() {
     assert!(plist.contains("/Applications/Newbot.app"), "{plist}");
 }
 
+#[cfg(unix)]
 #[test]
 fn rewriting_keeps_a_files_permissions() {
     use std::os::unix::fs::PermissionsExt;

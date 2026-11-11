@@ -12,7 +12,7 @@
 
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -243,9 +243,10 @@ impl Registry {
 
 /* -------------------------------------------------------- the socket */
 
+#[cfg(unix)]
 /// Bind the link's socket in `dir`: 0600, a stale one from a crashed run
 /// replaced, a live one (another copy of the app) left alone.
-pub fn bind(dir: &Path) -> std::io::Result<(tokio::net::UnixListener, PathBuf)> {
+pub fn bind(dir: &Path) -> std::io::Result<(tokio::net::UnixListener, std::path::PathBuf)> {
     let path = auth::socket_path(dir);
     if path.as_os_str().len() > auth::MAX_SOCKET_PATH {
         return Err(std::io::Error::new(
@@ -277,6 +278,7 @@ pub fn bind(dir: &Path) -> std::io::Result<(tokio::net::UnixListener, PathBuf)> 
     Ok((listener, path))
 }
 
+#[cfg(unix)]
 /// Accept hosts for ever (until the task is aborted).
 pub async fn serve(listener: tokio::net::UnixListener, token: String, registry: Arc<Registry>) {
     loop {
@@ -301,6 +303,7 @@ pub async fn serve(listener: tokio::net::UnixListener, token: String, registry: 
     }
 }
 
+#[cfg(unix)]
 /// The peer runs as this user (the socket's mode already says so; this is
 /// the second wall).
 fn same_user(stream: &tokio::net::UnixStream) -> bool {

@@ -4,7 +4,24 @@
 
 use super::*;
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
+/// A connected pair standing in for Chrome's pipes: a Unix socket pair where
+/// there is one, two loopback TCP ends elsewhere (Windows).
+#[cfg(unix)]
+type UnixStream = std::os::unix::net::UnixStream;
+#[cfg(not(unix))]
+type UnixStream = std::net::TcpStream;
+
+#[cfg(unix)]
+fn stream_pair() -> (UnixStream, UnixStream) {
+    UnixStream::pair().unwrap()
+}
+#[cfg(not(unix))]
+fn stream_pair() -> (UnixStream, UnixStream) {
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let a = UnixStream::connect(l.local_addr().unwrap()).unwrap();
+    let (b, _) = l.accept().unwrap();
+    (a, b)
+}
 
 /// A Chrome that answers what the service asks, and records it.
 pub(crate) struct Fake {
@@ -22,7 +39,7 @@ pub(crate) fn tiny_jpeg(w: u32, h: u32) -> Vec<u8> {
 
 /// A connected [`Browser`] whose other end is the fake.
 pub(crate) fn fake_browser() -> (Browser, Fake) {
-    let (ours, theirs) = UnixStream::pair().unwrap();
+    let (ours, theirs) = stream_pair();
     let calls = Arc::new(Mutex::new(Vec::new()));
     let rec = calls.clone();
     std::thread::spawn(move || {
@@ -250,6 +267,7 @@ fn jpeg_size_reads_the_header() {
 /// A "Chrome" that is a Perl script: writes its arguments to a file, then
 /// answers every CDP message on fd 3 through fd 4, and exits on
 /// `Browser.close`.
+#[cfg(unix)]
 fn fake_chrome(dir: &Path) -> Option<(PathBuf, PathBuf)> {
     let perl = Path::new("/usr/bin/perl");
     if !perl.is_file() {
@@ -279,6 +297,7 @@ while (my $m = <$in>) {{
     Some((script, argv))
 }
 
+#[cfg(unix)]
 #[test]
 fn launch_speaks_over_the_pipe_and_closes_cleanly() {
     let dir = tempfile::tempdir().unwrap();
@@ -305,6 +324,7 @@ fn launch_speaks_over_the_pipe_and_closes_cleanly() {
     assert!(svc.browser.exited());
 }
 
+#[cfg(unix)]
 #[test]
 fn launch_refuses_a_profile_that_isnt_ours() {
     let dir = tempfile::tempdir().unwrap();
@@ -322,6 +342,7 @@ fn launch_refuses_a_profile_that_isnt_ours() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_chrome_that_dies_is_seen_dead() {
     let dir = tempfile::tempdir().unwrap();

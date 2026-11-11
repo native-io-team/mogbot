@@ -193,7 +193,10 @@ fn read_new(path: &Path, cursor: &mut Cursor) -> (String, bool) {
     cursor.head = head;
     // A tail read starts mid-line: skip to the first whole one.
     let from = if first && start > 0 {
-        bytes.iter().position(|b| *b == b'\n').map_or(bytes.len(), |p| p + 1)
+        bytes
+            .iter()
+            .position(|b| *b == b'\n')
+            .map_or(bytes.len(), |p| p + 1)
     } else {
         0
     };
@@ -297,7 +300,10 @@ impl AgentIndex {
         if let Some(card) = &m.result {
             let mut body = clip(&card.summary, 400);
             if !card.checked.is_empty() {
-                body.push_str(&format!(" It says it checked: {}.", card.checked.join("; ")));
+                body.push_str(&format!(
+                    " It says it checked: {}.",
+                    card.checked.join("; ")
+                ));
             }
             if !card.not_verified.is_empty() {
                 body.push_str(&format!(" Not verified: {}.", card.not_verified.join("; ")));
@@ -612,10 +618,14 @@ pub fn parse_since(since: &str, now: i64) -> Result<i64, String> {
             .earliest()
             .map(|t| t.timestamp_millis())
     };
-    let today = chrono::DateTime::from_timestamp_millis(now)
-        .map(|t| t.with_timezone(&Local).date_naive());
+    let today =
+        chrono::DateTime::from_timestamp_millis(now).map(|t| t.with_timezone(&Local).date_naive());
     match s.as_str() {
-        "today" => return today.and_then(local_midnight).ok_or_else(|| "a bad clock".into()),
+        "today" => {
+            return today
+                .and_then(local_midnight)
+                .ok_or_else(|| "a bad clock".into())
+        }
         "yesterday" => {
             return today
                 .and_then(|d| d.pred_opt())
@@ -748,7 +758,9 @@ pub fn digest(entries: &[(Entry, String)], ask: &Ask, rights: Rights, now: i64) 
         if withheld > 0 {
             out.push_str(&withheld_line(withheld));
         } else {
-            out.push_str(" Try other words, then your own chat (search_my_chat) before asking the user.");
+            out.push_str(
+                " Try other words, then your own chat (search_my_chat) before asking the user.",
+            );
         }
         return Digest {
             text: redact(&out),
@@ -831,7 +843,12 @@ fn headline_for(e: &Entry, name: &str) -> String {
     let what = if e.title.is_empty() {
         clip(&e.body, 50)
     } else {
-        clip(e.title.trim_start_matches("Allowed: ").trim_start_matches("Denied: "), 50)
+        clip(
+            e.title
+                .trim_start_matches("Allowed: ")
+                .trim_start_matches("Denied: "),
+            50,
+        )
     };
     match (name.is_empty(), e.kind) {
         (true, _) => what,
@@ -860,7 +877,10 @@ fn short_role(role: &str) -> String {
     if words.len() <= ROLE_WORDS {
         return words.join(" ").trim_end_matches('.').to_string();
     }
-    format!("{}…", words[..ROLE_WORDS].join(" ").trim_end_matches([',', '.']))
+    format!(
+        "{}…",
+        words[..ROLE_WORDS].join(" ").trim_end_matches([',', '.'])
+    )
 }
 
 pub const ROSTER_HEADER: &str = "## The team now\n\nTheir latest results (team_lookup for more):";
@@ -874,7 +894,9 @@ pub fn roster(members: &[Member], roles: bool, now: i64) -> Option<String> {
     let mut members: Vec<&Member> = members.iter().collect();
     members.sort_by(|a, b| {
         let at = |m: &Member| m.last_result.as_ref().map_or(0, |r| r.1);
-        at(b).cmp(&at(a)).then(b.last_activity.cmp(&a.last_activity))
+        at(b)
+            .cmp(&at(a))
+            .then(b.last_activity.cmp(&a.last_activity))
     });
     let mut out = ROSTER_HEADER.to_string();
     let reserve = 30;
@@ -942,7 +964,11 @@ pub fn roster_for(me: &store::Agent) -> Option<String> {
 }
 
 /// `team_lookup` for `caller`.
-pub fn lookup(caller: &store::Agent, args: &serde_json::Value, rights: Rights) -> Result<Digest, String> {
+pub fn lookup(
+    caller: &store::Agent,
+    args: &serde_json::Value,
+    rights: Rights,
+) -> Result<Digest, String> {
     let s = |k: &str| {
         args.get(k)
             .and_then(serde_json::Value::as_str)
@@ -959,12 +985,19 @@ pub fn lookup(caller: &store::Agent, args: &serde_json::Value, rights: Rights) -
             .find(|a| a.id == name || a.name.eq_ignore_ascii_case(name))
         {
             Some(a) => Some(a.id.clone()),
-            None => return Err(format!("There's no agent called {name} on the team. list_agents shows who exists.")),
+            None => {
+                return Err(format!(
+                    "There's no agent called {name} on the team. list_agents shows who exists."
+                ))
+            }
         },
     };
     let query = s("query").unwrap_or_default().to_string();
     if query.is_empty() && only.is_none() && since.is_none() {
-        return Err("Give `query` (what you're looking for), or `agent` or `since` to see the newest work.".into());
+        return Err(
+            "Give `query` (what you're looking for), or `agent` or `since` to see the newest work."
+                .into(),
+        );
     }
     let names: HashMap<String, String> = everyone
         .iter()

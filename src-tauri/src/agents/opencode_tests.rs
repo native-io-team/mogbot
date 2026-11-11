@@ -519,6 +519,7 @@ fn mcp_names_split_on_the_longest_server_it_has() {
 /// writable folder holding `notes.md -> ~/.zshrc` or `hooks -> .git/hooks`
 /// used to pass as "ours" (written without a card) because only the path as
 /// written was looked at.
+#[cfg(unix)]
 #[test]
 fn a_symlink_in_a_writable_folder_is_judged_by_where_it_points() {
     let tmp = tempfile::tempdir().unwrap();

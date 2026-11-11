@@ -209,7 +209,9 @@ describe('Usage view', () => {
     const items = document.querySelectorAll('.usage-row__item');
     expect(items[0]).toHaveTextContent('Starts new work');
     expect(rows()[0]).toHaveAccessibleName(/new work starts here/);
-    expect(within(items[0] as HTMLElement).queryByRole('button', { name: /^Use for new work/ })).toBeNull();
+    expect(
+      within(items[0] as HTMLElement).queryByRole('button', { name: /^Use for new work/ })
+    ).toBeNull();
     expect(
       within(items[1] as HTMLElement).getByRole('button', { name: /^Use for new work/ })
     ).toBeInTheDocument();

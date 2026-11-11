@@ -21,7 +21,7 @@ vi.mock('../terminal/lazyTerminals', async () => {
   };
 });
 
-const check = vi.hoisted(() => ({ fn: vi.fn() }));
+const check = vi.hoisted(() => ({ fn: vi.fn<(...a: unknown[]) => unknown>() }));
 vi.mock('../../lib/agentsUsage', async (orig) => ({
   ...(await orig<typeof import('../../lib/agentsUsage')>()),
   checkNewAccount: (...a: unknown[]) => check.fn(...a),

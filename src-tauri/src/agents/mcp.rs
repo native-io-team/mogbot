@@ -1509,7 +1509,12 @@ fn search_my_chat(caller: &store::Agent, args: &Value) -> Value {
 /// (`team_record`). Its step in "What it did" names what it found.
 async fn team_lookup(caller: &store::Agent, args: &Value) -> Value {
     // Its step is in the timeline before it is relabelled below.
-    super::work::caught_up(&caller.id, super::team_record::TOOL, super::work::CATCH_UP_MS).await;
+    super::work::caught_up(
+        &caller.id,
+        super::team_record::TOOL,
+        super::work::CATCH_UP_MS,
+    )
+    .await;
     let outside = runner::from_outside(&caller.id);
     let rights = super::team_record::Rights {
         chats: may_search_team(caller, outside),

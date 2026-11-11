@@ -118,7 +118,8 @@
 }
 
 /* The warning role from 80% used, or when the user has something to do. */
-.agent-usage__meter-head:is([data-tone='warning'], [data-tone='limited']) .agent-usage__meter-figure {
+.agent-usage__meter-head:is([data-tone='warning'], [data-tone='limited'])
+  .agent-usage__meter-figure {
   color: var(--accent-warning);
 }
 

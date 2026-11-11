@@ -527,6 +527,6 @@ mod brand_copy_tests;
 #[cfg(test)]
 mod keys_tests;
 #[cfg(test)]
-mod team_record_tests;
-#[cfg(test)]
 mod long_chat_tests;
+#[cfg(test)]
+mod team_record_tests;

@@ -246,10 +246,11 @@ jobs:
       # when they pass — these tests exist to answer a quoting question, not
       # just to gate.
       - name: PTY spawn-shape canaries (verbose)
-        run: cargo test --manifest-path src-tauri/Cargo.toml preserves_pipe_and_spaces_through_pty -- --nocapture
+        # --lib --bins --tests: the examples are Mac-only dev drivers (Unix sockets, process groups).
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins --tests preserves_pipe_and_spaces_through_pty -- --nocapture
 
       - name: Backend tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins --tests
 
       - name: Check Tauri build (no bundle)
         run: pnpm tauri build --no-bundle
