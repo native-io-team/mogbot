@@ -8,6 +8,7 @@
 import type { Scenario } from '../types';
 import { HARNESS_ROOT, dashboardProject } from './base';
 import { MIN, TEAM, messagesFor, now, overview } from './agents';
+import { workspaceCommands } from './workspace';
 
 const SITE = `${HARNESS_ROOT}/lumen-site`;
 const ACME = `${HARNESS_ROOT}/acme-marketing`;
@@ -85,6 +86,9 @@ const busyCommands = {
 };
 
 const chatCommands = {
+  ...workspaceCommands,
+  get_current_branch: 'feat/pricing-page',
+  get_hide_main_branch_warning: true,
   get_dashboard_projects: [dashboardProject('lumen-site'), dashboardProject('acme-marketing')],
   list_pinned_projects: [SITE],
   agents_overview: overview(team()),
@@ -100,7 +104,7 @@ export const projectsAtWorkScenarios: Scenario[] = [
       'lumen-site’s workspace. Acme Site is selected under Sessions in the sidebar; the Session panel, where the terminal would be, shows Acme Site’s conversation with its composer at the bottom, headed "Session · Acme Site" with Show terminal. No terminal footer under it.',
     project: SITE,
     requires: '[data-testid="session-agent-chat"]',
-    steps: [{ click: '.sidebar-row--agent', text: 'Acme Site' }],
+    steps: [{ click: '.sidebar-row--agent .sidebar-row-hit[aria-label="Acme Site"]' }],
     commands: chatCommands,
   },
   {
@@ -111,7 +115,7 @@ export const projectsAtWorkScenarios: Scenario[] = [
     project: SITE,
     requires: '.terminal-pane-footer',
     steps: [
-      { click: '.sidebar-row--agent', text: 'Acme Site' },
+      { click: '.sidebar-row--agent .sidebar-row-hit[aria-label="Acme Site"]' },
       { click: '.terminal-agent-header__actions button', text: 'Show terminal' },
     ],
     commands: chatCommands,

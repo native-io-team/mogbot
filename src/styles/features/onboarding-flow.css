@@ -636,6 +636,28 @@
   color: var(--text-muted);
 }
 
+/* "Not working?" on the phone's Tailscale step: what to check, in order. */
+.flow-trouble-toggle {
+  align-self: center;
+}
+
+.flow-trouble {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  max-width: 460px;
+  text-align: left;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.flow-trouble strong {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
 /* ---- Paired: the moment, not a settings line --------------------------- */
 
 @keyframes flow-paired-ring {

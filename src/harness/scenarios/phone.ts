@@ -140,8 +140,16 @@ export const phoneScenarios: Scenario[] = [
     'phone-flow-phone-tailscale',
     'phonePhoneTailscale',
     'Phone — 3. Tailscale on your phone, same account',
-    '“Turn on Tailscale on your phone”, the line naming julian@example.com (the Mac’s account) and the VPN prompt, “Looking for your phone on your Tailscale…” with a spinner, App Store ↗ only (no Google Play: the phone app is iPhone only), a big “I did it”.',
+    '“Turn on Tailscale on your phone”, the line naming julian@example.com (the Mac’s account), the VPN prompt and that this Mac sees the phone a few seconds after it says Connected, “Looking for your phone on your Tailscale…” with a spinner, a quiet “Not working?”, App Store ↗ only (no Google Play: the phone app is iPhone only), a big “I did it”.',
     { tailscale: LOGIN }
+  ),
+  flowStep(
+    'phone-flow-phone-tailscale-trouble',
+    'phonePhoneTailscale',
+    'Phone — 3. Tailscale on your phone, “Not working?” open',
+    'Under the looking line, a numbered list, each item a bold lead then muted detail: Same account on both (naming julian@example.com, Sign in with Apple/Google/email are separate accounts), Switched on, On on this Mac too, Switch it off and on, Look for it in Tailscale (Machines), The same Wi-Fi isn’t needed.',
+    { tailscale: LOGIN },
+    { afterCommand: [{ click: '[data-testid="tailnet-not-working"]' }] }
   ),
   flowStep(
     'phone-flow-access',

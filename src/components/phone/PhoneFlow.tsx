@@ -21,6 +21,7 @@ import { listen } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
+import { TextButton } from '../primitives/TextButton';
 import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon, WarningIcon } from '@/components/icons';
 import { CheckLine, ADVANCE_MS } from '../setup/flow/FlowParts';
 import { PhoneQr } from './PhoneQr';
@@ -48,6 +49,7 @@ import {
   phoneStep,
   phoneTailscaleSignIn,
   phoneTailnetCheck,
+  phoneTailnetTroubleSteps,
   PHONE_TAILNET_PATIENCE_MS,
   retryPhoneTailscale,
   setPhoneAccess,
@@ -543,10 +545,13 @@ function useStepView(p: {
       const check = phoneTailnetCheck(p.phones ?? null, status?.tailscale ?? null, slowTailnet);
       return {
         title: TAILSCALE_YOUR_PHONE_TITLE,
-        lede: `Install Tailscale on your phone, ${phoneTailscaleSignIn(status?.tailscale ?? null)}, and switch it on. It asks to add a VPN configuration: tap Allow.`,
+        lede: `Install Tailscale on your phone, ${phoneTailscaleSignIn(status?.tailscale ?? null)}, and switch it on. It asks to add a VPN configuration: tap Allow. This Mac sees your phone a few seconds after it says Connected.`,
         children: (
           <>
             <CheckLine result={check} />
+            {!onPhone && (
+              <TailnetTrouble steps={phoneTailnetTroubleSteps(status?.tailscale ?? null)} />
+            )}
             <div className="flow-links">
               <Button
                 variant="secondary"
@@ -762,6 +767,35 @@ export function savePanelStep(step: PhoneFlowStep | null) {
  * modules). A spinner while it's made; on a failure, nothing: the button
  * under it opens the same page.
  */
+/** "Not working?": what to check when this Mac can't see the phone on Tailscale. */
+function TailnetTrouble({ steps }: { steps: string[] }) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <TextButton
+        tabIndex={0}
+        className="flow-trouble-toggle"
+        onClick={() => setOpen(true)}
+        data-testid="tailnet-not-working"
+      >
+        Not working?
+      </TextButton>
+    );
+  }
+  return (
+    <ol className="flow-trouble" data-testid="tailnet-trouble">
+      {steps.map((line) => {
+        const cut = line.indexOf('. ');
+        return (
+          <li key={line}>
+            <strong>{line.slice(0, cut + 1)}</strong> {line.slice(cut + 2)}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /** Under the TestFlight code: it downloads the app, it doesn't pair. */
 export const DOWNLOAD_NOT_PAIRING =
   'This only downloads the app. It isn’t the pairing code: you’ll scan that in a few steps.';

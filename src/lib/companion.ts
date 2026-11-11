@@ -351,7 +351,26 @@ export function phoneTailnetCheck(
     state: 'waiting',
     line: 'This Mac can’t see your phone on its Tailscale yet.',
     fix: account
-      ? `On the phone, open Tailscale: it should say Connected and show ${account}. If it shows another account (Sign in with Apple makes a separate one), sign out and sign in as ${account}. The same Wi-Fi isn’t needed.`
-      : 'On the phone, open Tailscale: it should say Connected, signed in with the same account as this Mac. The same Wi-Fi isn’t needed.',
+      ? `Usually the phone is signed in to another Tailscale account. It should show ${account}. “Not working?” lists what to check.`
+      : 'Usually the phone is signed in to another Tailscale account. “Not working?” lists what to check.',
   };
+}
+
+/**
+ * "Not working?" on the phone's Tailscale step: everything to check, most
+ * likely first. The account comes first because it's the usual cause and
+ * looks fine on both screens ("Connected" on each, on different accounts).
+ */
+export function phoneTailnetTroubleSteps(t: TailscaleState | null): string[] {
+  const account = t?.state === 'connected' && t.login ? t.login : null;
+  return [
+    account
+      ? `Same account on both. This Mac is signed in to Tailscale as ${account}. On the phone, open Tailscale and tap the account at the top: it must say ${account} too. Sign in with Apple, Google or an email each make a separate account, so sign out and sign back in as ${account} if it doesn’t match.`
+      : 'Same account on both. On the phone, open Tailscale and tap the account at the top: it must be the account this Mac is signed in with. Sign in with Apple, Google or an email each make a separate account.',
+    'Switched on. On the phone, Tailscale’s switch is on and it says Connected. If it asked to add a VPN configuration, you tapped Allow (Settings → VPN shows Tailscale as connected).',
+    'On on this Mac too. Tailscale’s icon in the menu bar says Connected.',
+    'Switch it off and on. On the phone, turn Tailscale off and back on, then give this Mac a few seconds to notice.',
+    'Look for it in Tailscale. On login.tailscale.com, under Machines, your phone should be listed with this Mac. If it isn’t there, the phone is on another account.',
+    'The same Wi-Fi isn’t needed. Tailscale connects them over any network, at home or away.',
+  ];
 }

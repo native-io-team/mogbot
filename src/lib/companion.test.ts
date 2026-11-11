@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   phoneTailnetCheck,
+  phoneTailnetTroubleSteps,
   activityLine,
   deviceLine,
   phoneCapabilities,
@@ -172,7 +173,7 @@ describe('phoneTailscaleText', () => {
 
 describe('phoneTailnetCheck', () => {
   const mac = { state: 'connected' as const, dnsName: 'mac.tail.ts.net', login: 'sam@example.com' };
-  const phone = (online: boolean) => ({ name: 'Sams-iPhone', os: 'ios', online });
+  const phone = (online: boolean) => ({ name: 'Sams-iPhone', os: 'ios' as const, online });
 
   it('passes on a phone switched on', () => {
     expect(phoneTailnetCheck([phone(false), phone(true)], mac, false).state).toBe('pass');
@@ -189,7 +190,14 @@ describe('phoneTailnetCheck', () => {
     expect(c.state).toBe('waiting');
     if (c.state !== 'waiting') return;
     expect(c.fix).toContain('sam@example.com');
-    expect(c.fix).toContain('Sign in with Apple');
-    expect(c.fix).toContain('same Wi-Fi isn’t needed');
+    expect(c.fix).toContain('Not working?');
+  });
+
+  it('lists the account check first, naming this Mac’s account, and says Wi-Fi doesn’t matter', () => {
+    const steps = phoneTailnetTroubleSteps(mac);
+    expect(steps[0]).toMatch(/^Same account on both\./);
+    expect(steps[0]).toContain('sam@example.com');
+    expect(steps.join(' ')).toContain('same Wi-Fi isn’t needed');
+    expect(phoneTailnetTroubleSteps(null)[0]).not.toContain('undefined');
   });
 });

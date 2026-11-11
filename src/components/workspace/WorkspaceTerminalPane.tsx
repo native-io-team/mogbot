@@ -209,42 +209,44 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
                 )}
               </span>
             </span>
-            {chatting && onCloseChat && (
+            {(chatting || !isPreviewHidden) && (
               <span className="terminal-agent-header__actions">
-                <Button
-                  variant="ghost"
-                  size="compact"
-                  onClick={onCloseChat}
-                  title="Back to this project’s terminal sessions"
-                >
-                  Show terminal
-                </Button>
-              </span>
-            )}
-            {!isPreviewHidden && (
-              <span className="terminal-agent-header__actions">
-                <ToggleButton
-                  variant="ghost"
-                  size="compact"
-                  className="button--icon-only panel-pin-toggle"
-                  onClick={toggleAgentPanelPinned}
-                  title={
-                    agentPanelPinned ? 'Unpin — float over the workspace' : 'Pin to the window'
-                  }
-                  aria-label={
-                    agentPanelPinned ? 'Unpin Agent panel' : 'Pin Agent panel to the window'
-                  }
-                  pressed={agentPanelPinned}
-                  leftIcon={<PinIcon size={13} />}
-                />
-                <IconButton
-                  variant="ghost"
-                  size="compact"
-                  onClick={toggleAgentPanel}
-                  title="Close Agent panel"
-                  aria-label="Close Agent panel"
-                  icon={<CloseIcon size={14} />}
-                />
+                {chatting && onCloseChat && (
+                  <Button
+                    variant="ghost"
+                    size="compact"
+                    onClick={onCloseChat}
+                    title="Back to this project’s terminal sessions"
+                  >
+                    Show terminal
+                  </Button>
+                )}
+                {!isPreviewHidden && (
+                  <>
+                    <ToggleButton
+                      variant="ghost"
+                      size="compact"
+                      className="button--icon-only panel-pin-toggle"
+                      onClick={toggleAgentPanelPinned}
+                      title={
+                        agentPanelPinned ? 'Unpin — float over the workspace' : 'Pin to the window'
+                      }
+                      aria-label={
+                        agentPanelPinned ? 'Unpin Agent panel' : 'Pin Agent panel to the window'
+                      }
+                      pressed={agentPanelPinned}
+                      leftIcon={<PinIcon size={13} />}
+                    />
+                    <IconButton
+                      variant="ghost"
+                      size="compact"
+                      onClick={toggleAgentPanel}
+                      title="Close Agent panel"
+                      aria-label="Close Agent panel"
+                      icon={<CloseIcon size={14} />}
+                    />
+                  </>
+                )}
               </span>
             )}
           </div>
