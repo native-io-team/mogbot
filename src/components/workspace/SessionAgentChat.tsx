@@ -14,13 +14,7 @@ import { AgentChat } from '../agents/AgentChat';
 import { PaneBoundary } from '../agents/AgentsErrorBoundary';
 import { Spinner } from '../primitives/Spinner';
 import { focusAgent, markAgentUnread, updateAgent, type Agent } from '../../lib/agents';
-import {
-  agentIn,
-  readChat,
-  startConversation,
-  useAgentsList,
-  useAgentsSelector,
-} from '../../lib/agentsStore';
+import { agentIn, readChat, startConversation, useAgentsList } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { requestAgentsIntent } from '../../commands/useAgentsCommands';
@@ -100,10 +94,4 @@ export function SessionAgentChat({
       </PaneBoundary>
     </div>
   );
-}
-
-/** The agent's name, for the Session panel's heading while its chat is shown. */
-export function SessionAgentName({ agentId }: { agentId: string }) {
-  const name = useAgentsSelector((s) => s.agents.find((a) => a.id === agentId)?.name);
-  return <>{name ?? 'Agent'}</>;
 }

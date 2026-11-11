@@ -31,7 +31,7 @@ import {
   UndoIcon,
 } from '@/components/icons';
 import { ToolbarDropdown } from './ToolbarDropdown';
-import { SessionAgentChat, SessionAgentName } from './SessionAgentChat';
+import { SessionAgentChat } from './SessionAgentChat';
 import { TerminalSplitDividers } from './TerminalSplitDividers';
 import { TerminalSplitHeaders } from './TerminalSplitHeaders';
 
@@ -198,58 +198,41 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
     >
       <div className="terminal-pane">
         <div className="workspace-terminal-view">
-          <div className="terminal-agent-header panel-heading-pair" data-dockable-drag-handle>
-            <span className="terminal-agent-header__identity">
-              <span className="panel-heading-pair-title workspace-panel-title">Session</span>
-              <span className="panel-heading-pair-meta">
-                {chatAgentId ? (
-                  <SessionAgentName agentId={chatAgentId} />
-                ) : (
-                  getActiveTabAgent().displayName
-                )}
+          {/* An agent's chat brings its own header: no Session bar above it. */}
+          {!chatting && (
+            <div className="terminal-agent-header panel-heading-pair" data-dockable-drag-handle>
+              <span className="terminal-agent-header__identity">
+                <span className="panel-heading-pair-title workspace-panel-title">Terminal</span>
+                <span className="panel-heading-pair-meta">{getActiveTabAgent().displayName}</span>
               </span>
-            </span>
-            {(chatting || !isPreviewHidden) && (
-              <span className="terminal-agent-header__actions">
-                {chatting && onCloseChat && (
-                  <Button
+              {!isPreviewHidden && (
+                <span className="terminal-agent-header__actions">
+                  <ToggleButton
                     variant="ghost"
                     size="compact"
-                    onClick={onCloseChat}
-                    title="Back to this project’s terminal sessions"
-                  >
-                    Show terminal
-                  </Button>
-                )}
-                {!isPreviewHidden && (
-                  <>
-                    <ToggleButton
-                      variant="ghost"
-                      size="compact"
-                      className="button--icon-only panel-pin-toggle"
-                      onClick={toggleAgentPanelPinned}
-                      title={
-                        agentPanelPinned ? 'Unpin — float over the workspace' : 'Pin to the window'
-                      }
-                      aria-label={
-                        agentPanelPinned ? 'Unpin Agent panel' : 'Pin Agent panel to the window'
-                      }
-                      pressed={agentPanelPinned}
-                      leftIcon={<PinIcon size={13} />}
-                    />
-                    <IconButton
-                      variant="ghost"
-                      size="compact"
-                      onClick={toggleAgentPanel}
-                      title="Close Agent panel"
-                      aria-label="Close Agent panel"
-                      icon={<CloseIcon size={14} />}
-                    />
-                  </>
-                )}
-              </span>
-            )}
-          </div>
+                    className="button--icon-only panel-pin-toggle"
+                    onClick={toggleAgentPanelPinned}
+                    title={
+                      agentPanelPinned ? 'Unpin — float over the workspace' : 'Pin to the window'
+                    }
+                    aria-label={
+                      agentPanelPinned ? 'Unpin Agent panel' : 'Pin Agent panel to the window'
+                    }
+                    pressed={agentPanelPinned}
+                    leftIcon={<PinIcon size={13} />}
+                  />
+                  <IconButton
+                    variant="ghost"
+                    size="compact"
+                    onClick={toggleAgentPanel}
+                    title="Close Agent panel"
+                    aria-label="Close Agent panel"
+                    icon={<CloseIcon size={14} />}
+                  />
+                </span>
+              )}
+            </div>
+          )}
           <StaleEnvBanner projectPath={currentProject.path} />
           <div
             className={`terminal-content${isSplitActive ? ' split' : ''}`}

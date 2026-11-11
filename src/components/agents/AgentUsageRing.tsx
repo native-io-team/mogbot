@@ -101,30 +101,6 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   return (
     <div className="agent-usage__body">
       <p className="agent-usage__title">Usage</p>
-      {context && (
-        <Section title="Conversation length">
-          <MeterHead
-            name={`${agent.name}’s conversation`}
-            figure={context.label}
-            tone={context.tone}
-          />
-          <div
-            className="agent-usage__bar"
-            data-tone={context.tone}
-            role="meter"
-            aria-label={`${agent.name}’s conversation`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={context.percent}
-          >
-            <span
-              className="agent-usage__fill"
-              style={{ '--agent-usage-fill': `${context.percent}%` } as CSSProperties}
-            />
-          </div>
-          <span className="agent-usage__muted">{context.detail}</span>
-        </Section>
-      )}
       {stacked && (
         <Section title={glance.keys.length === 1 ? 'Your account' : 'Your accounts'}>
           {/* The Usage view's hero, small: the same figure and the same refill. */}
@@ -150,6 +126,31 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
             <span className="agent-usage__muted">{glance.total.unread}.</span>
           )}
           <SameNotes notes={glance.sameNotes} />
+        </Section>
+      )}
+      {/* Last: the conversation tidies itself, so its length is a footnote to the plan's usage. */}
+      {context && (
+        <Section title="Conversation length">
+          <MeterHead
+            name={`${agent.name}’s conversation`}
+            figure={context.label}
+            tone={context.tone}
+          />
+          <div
+            className="agent-usage__bar"
+            data-tone={context.tone}
+            role="meter"
+            aria-label={`${agent.name}’s conversation`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={context.percent}
+          >
+            <span
+              className="agent-usage__fill"
+              style={{ '--agent-usage-fill': `${context.percent}%` } as CSSProperties}
+            />
+          </div>
+          <span className="agent-usage__muted">{context.detail}</span>
         </Section>
       )}
       {!context && !stacked && (

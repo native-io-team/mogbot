@@ -145,17 +145,6 @@ export default function Usage() {
           Usage
         </SheetTitle>
 
-        {context && (
-          <Section title="Conversation length">
-            <View style={styles.block}>
-              <MeterRow
-                meter={context}
-                title={agent ? `${agent.name}’s conversation` : 'Conversation'}
-              />
-            </View>
-          </Section>
-        )}
-
         {stacked && glance && (
           // The total first; each account a row that opens its own screen.
           <View style={styles.accounts}>
@@ -286,6 +275,19 @@ export default function Usage() {
             {others.map((a, i) => (
               <AccountRows key={a.key} account={a} divided={i > 0} />
             ))}
+          </Section>
+        )}
+
+        {/* Last: how full this conversation is matters little (it tidies itself),
+            so it never sits above the plan's usage (Julian, 2026-11-11). */}
+        {context && (
+          <Section title="Conversation length">
+            <View style={styles.block}>
+              <MeterRow
+                meter={context}
+                title={agent ? `${agent.name}’s conversation` : 'Conversation'}
+              />
+            </View>
           </Section>
         )}
 

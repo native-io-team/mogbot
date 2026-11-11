@@ -101,7 +101,7 @@ export const projectsAtWorkScenarios: Scenario[] = [
     id: 'project-agent-chat-in-session',
     title: 'A project: an agent at work in it, its chat open in the Session panel',
     looksRightWhen:
-      'lumen-site’s workspace. Acme Site is selected under Sessions in the sidebar; the Session panel, where the terminal would be, shows Acme Site’s conversation with its composer at the bottom, headed "Session · Acme Site" with Show terminal. No terminal footer under it.',
+      'lumen-site’s workspace. The sidebar reads Agents (Acme Site, selected), Terminals (Claude Code 1), Dev server. The panel where the terminal was shows Acme Site’s conversation under its own header, as in Agents, with the composer at the bottom; no Terminal bar above it and no terminal footer under it.',
     project: SITE,
     requires: '[data-testid="session-agent-chat"]',
     steps: [{ click: '.sidebar-row--agent .sidebar-row-hit[aria-label="Acme Site"]' }],
@@ -109,14 +109,14 @@ export const projectsAtWorkScenarios: Scenario[] = [
   },
   {
     id: 'project-agent-chat-back-to-terminal',
-    title: 'A project: Show terminal after an agent’s chat brings the terminals back',
+    title: 'A project: picking a terminal after an agent’s chat brings the terminals back',
     looksRightWhen:
-      'lumen-site’s workspace with the terminal session showing again and its footer back; no agent row selected.',
+      'lumen-site’s workspace with the Terminal bar, the terminal and its footer back; Claude Code 1 selected under Terminals, no agent row selected.',
     project: SITE,
     requires: '.terminal-pane-footer',
     steps: [
       { click: '.sidebar-row--agent .sidebar-row-hit[aria-label="Acme Site"]' },
-      { click: '.terminal-agent-header__actions button', text: 'Show terminal' },
+      { click: '.sidebar-row-hit[aria-label="Claude Code 1"]' },
     ],
     commands: chatCommands,
   },
@@ -134,7 +134,7 @@ export const projectsAtWorkScenarios: Scenario[] = [
     id: 'projects-agents-expanded',
     title: 'Projects: a project expanded, agents working in it sit among its sessions',
     looksRightWhen:
-      'Under Sessions, one row per working agent: avatar, name, then its live step, clipped to one line with an ellipsis. Clicking one opens its chat.',
+      'Under Agents, one row per working agent: avatar, name, then its live step, clipped to one line with an ellipsis. Clicking one opens its chat.',
     startOn: 'projects',
     requires: '.sidebar-project',
     clipSelector: '.workspace-sidebar',
@@ -145,7 +145,7 @@ export const projectsAtWorkScenarios: Scenario[] = [
     id: 'projects-agent-at-work',
     title: 'Projects — the project an agent is working in, with what it’s doing',
     looksRightWhen:
-      'Projects. The sidebar’s Pinned group starts with lumen-site with one small agent avatar at its right (and no line under the row); acme-marketing (not pinned) appears in the Active group with its own avatar. Expanded, the agents are rows under Sessions.',
+      'Projects. The sidebar’s Pinned group starts with lumen-site with one small agent avatar at its right (and no line under the row); acme-marketing (not pinned) appears in the Active group with its own avatar. Expanded, the agents are rows under Agents.',
     startOn: 'projects',
     requires: '.sidebar-project-at-work',
     clipSelector: '.workspace-sidebar',

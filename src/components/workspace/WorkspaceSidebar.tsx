@@ -60,7 +60,7 @@ import { NewAccountModal } from '../accounts/NewAccountModal';
 import { RenameProjectModal } from '../dashboard/RenameProjectModal';
 import { useOpenPalette } from '../CommandPalette/paletteContext';
 import { useModal } from '../../contexts/ModalContext';
-import { ALL_AGENTS, TERMINAL, getAgentById, type AgentConfig } from '../../lib/agent';
+import { ALL_TAB_OPTIONS, getAgentById, type AgentConfig } from '../../lib/agent';
 import { getDevServerPort, setDevServerPort } from '../../lib/project';
 import { preferredPortForProject } from '../../lib/ports';
 import { type WorktreeInfo } from '../../lib/worktrees';
@@ -1438,61 +1438,51 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                   emptyHint={filter ? 'No matches' : 'No worktrees'}
                 />
               )}
-              {/* Teammates from Agents bound to this project; click to message one. */}
-              {projectAgents.length > 0 && (
+              {/* Agents: the team's agents at work here, then those bound to it.
+                  A click opens its chat in the Session panel. */}
+              {workItems.length + projectAgents.length > 0 && (
                 <SidebarSection
                   id="team"
                   label="Agents"
-                  total={projectAgents.length}
+                  total={workItems.length + projectAgents.length}
                   collapsed={collapsed.team}
                   onToggle={() => toggleSection('team')}
-                  items={projectAgents
-                    .filter((i) => matchesFilter(i.label))
-                    .map((i) => ({
-                      ...i,
-                      // The agent's own key, as at work and everywhere in Agents; never a grey dot.
-                      leading: (
-                        <AgentKey
-                          id={i.agentId}
-                          name={i.label}
-                          color={i.color}
-                          state={
-                            i.dotState === 'waiting' ? 'needsOk' : i.working ? 'working' : 'idle'
-                          }
-                          size="xs"
-                        />
-                      ),
-                    }))}
+                  items={[
+                    ...workItems.filter((i) => matchesFilter(i.label)),
+                    ...projectAgents
+                      .filter((i) => matchesFilter(i.label))
+                      .map((i) => ({
+                        ...i,
+                        // The agent's own key, as at work and everywhere in Agents; never a grey dot.
+                        leading: (
+                          <AgentKey
+                            id={i.agentId}
+                            name={i.label}
+                            color={i.color}
+                            state={
+                              i.dotState === 'waiting' ? 'needsOk' : i.working ? 'working' : 'idle'
+                            }
+                            size="xs"
+                          />
+                        ),
+                      })),
+                  ]}
                   emptyHint="No matches"
                 />
               )}
-              {/* Terminal sessions (Claude Code, Codex…) running in this project. */}
-              <SidebarSection
-                id="agents"
-                label="Sessions"
-                total={workItems.length + agentItems.length}
-                collapsed={collapsed.agents}
-                onToggle={() => toggleSection('agents')}
-                addOptions={atMaxTabs ? undefined : AGENT_ADD_OPTIONS}
-                onAdd={atMaxTabs ? undefined : (agentId) => onAddTab(agentId)}
-                addLabel="New session"
-                addShortcut={kbd('mod', 'T')}
-                addFooterLabel={atMaxTabs ? undefined : 'New session'}
-                items={[
-                  ...workItems.filter((i) => matchesFilter(i.label)),
-                  ...withAgentColors(filteredAgents, atWork),
-                ]}
-                emptyHint={filter ? 'No matches' : 'No sessions running'}
-              />
+              {/* Terminals: Claude Code, Codex, OpenCode and plain shells, one list. */}
               <SidebarSection
                 id="terminals"
                 label="Terminals"
-                total={terminalItems.length}
+                total={agentItems.length + terminalItems.length}
                 collapsed={collapsed.terminals}
                 onToggle={() => toggleSection('terminals')}
-                onAdd={atMaxTabs ? undefined : () => onAddTab(TERMINAL.id)}
-                addLabel="Add terminal"
-                items={filteredTerminals}
+                addOptions={atMaxTabs ? undefined : TERMINAL_ADD_OPTIONS}
+                onAdd={atMaxTabs ? undefined : (agentId) => onAddTab(agentId)}
+                addLabel="New terminal"
+                addShortcut={kbd('mod', 'T')}
+                addFooterLabel={atMaxTabs ? undefined : 'New terminal'}
+                items={[...withAgentColors(filteredAgents, atWork), ...filteredTerminals]}
                 emptyHint={filter ? 'No matches' : 'No terminals'}
               />
               <SidebarSection
@@ -2165,7 +2155,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   );
 });
 
-const AGENT_ADD_OPTIONS: AgentConfig[] = ALL_AGENTS;
+/** A new terminal: an agent CLI, or a plain shell last. */
+const TERMINAL_ADD_OPTIONS: AgentConfig[] = ALL_TAB_OPTIONS;
 
 function CompactSidebarGroupMarker({ label }: { label: 'Pinned' | 'Active' }) {
   return (
@@ -2290,22 +2281,24 @@ function InactiveProjectSections({
           emptyHint={filterLower ? 'No matches' : 'No worktrees'}
         />
       )}
-      <SidebarSection
-        id="agents"
-        label="Sessions"
-        total={workItems.length + agents.length}
-        collapsed={false}
-        onToggle={() => {}}
-        items={[...workItems.filter((i) => matches(i.label)), ...withAgentColors(agents, atWork)]}
-        emptyHint={filterLower ? 'No matches' : 'No sessions running'}
-      />
+      {workItems.length > 0 && (
+        <SidebarSection
+          id="team"
+          label="Agents"
+          total={workItems.length}
+          collapsed={false}
+          onToggle={() => {}}
+          items={workItems.filter((i) => matches(i.label))}
+          emptyHint="No matches"
+        />
+      )}
       <SidebarSection
         id="terminals"
         label="Terminals"
-        total={terminals.length}
+        total={agents.length + terminals.length}
         collapsed={false}
         onToggle={() => {}}
-        items={terminals}
+        items={[...withAgentColors(agents, atWork), ...terminals]}
         emptyHint={filterLower ? 'No matches' : 'No terminals'}
       />
       <SidebarSection
