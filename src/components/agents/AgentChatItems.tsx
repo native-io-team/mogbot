@@ -15,7 +15,9 @@ import {
   type MouseEvent,
   type ReactNode,
 } from 'react';
-import { DraftProse, FinishedProse, Prose } from './AgentProse';
+import { DraftProse, FinishedProse, GrowingProse, Prose } from './AgentProse';
+import { useStreamIn } from './useStreamIn';
+import { TypingDots } from '../primitives/TypingDots';
 import { agentIn, getAgentsSnapshot, useAgentsSelector } from '../../lib/agentsStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
@@ -236,6 +238,8 @@ interface AgentBubbleProps extends Arrival {
   streaming?: boolean;
   /** "Remember this", with this message. */
   onRemember?: (message: AgentMessage) => void;
+  /** One of the Chief's scripted lines: it types itself out when first seen (`useStreamIn`). */
+  scripted?: boolean;
 }
 
 /** The reply an agent is writing, as it is now: read from the store, not passed down. */
@@ -249,8 +253,10 @@ export const AgentBubble = memo(function AgentBubble({
   arrived,
   streaming,
   onRemember,
+  scripted,
 }: AgentBubbleProps) {
   const onClick = useProseLinks(agent.id);
+  const streamIn = useStreamIn(message.id, message.text, message.ts, !!scripted && !streaming);
   // Blocks (`show`) draw in place of the text, which is their plain version.
   const blocks = streaming ? null : readBlocks(message);
   const attachments = attachmentsOutsideBlocks(message.attachments, blocks);
@@ -263,6 +269,24 @@ export const AgentBubble = memo(function AgentBubble({
   );
   // Still being written: its words live in the store, not in this message.
   const onKeyDown = useCopyOnKey(streaming ? () => draftTextOf(message.agentId) : message.text);
+  if (streamIn.phase !== 'done') {
+    return (
+      <div
+        className="agent-chat__row agent-chat__row--agent"
+        data-arrived={arrived || undefined}
+        data-message-ids={message.id}
+        data-stream-in={streamIn.phase}
+      >
+        <div className="agent-bubble agent-bubble--agent agent-markdown" aria-busy>
+          {streamIn.phase === 'typing' || streamIn.phase === 'waiting' ? (
+            <TypingDots label={`${agent.name} is typing`} />
+          ) : (
+            <GrowingProse text={streamIn.shown} />
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       tabIndex={-1}

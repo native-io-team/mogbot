@@ -14,6 +14,7 @@ import {
   installAndRestart,
   startAutomaticUpdateChecks,
   subscribeUpdates,
+  moveToApplications,
 } from '../lib/updateStore';
 import { agentsBusy } from '../lib/agents';
 import { usePolling } from '../hooks/usePolling';
@@ -282,6 +283,10 @@ export function UpdateBanner() {
           {phase === 'installing' ? (
             <Button variant="primary" disabled leftIcon={<Spinner size="sm" />}>
               Installing…
+            </Button>
+          ) : update.needsMove ? (
+            <Button variant="primary" onClick={() => void moveToApplications()}>
+              Move to Applications
             </Button>
           ) : (
             <Button variant="primary" onClick={() => void handleRestart()}>

@@ -39,8 +39,6 @@ interface AccountSelectScreenProps {
 export function AccountSelectScreen({ onContinue, onBack }: AccountSelectScreenProps) {
   const { showToast } = useOptionalToast();
 
-
-
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -90,9 +88,7 @@ export function AccountSelectScreen({ onContinue, onBack }: AccountSelectScreenP
 
   return (
     <div className="account-select-screen">
-      <div
-        className="account-select-drag-region" data-window-drag
-      />
+      <div className="account-select-drag-region" data-window-drag />
 
       {onBack && (
         <Button

@@ -1,3 +1,4 @@
+import { shouldDragWindow } from '../../lib/windowDrag';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceHeader, WorkspaceTitlebar, type WorkspaceHeaderProps } from './WorkspaceHeader';
@@ -164,11 +165,21 @@ describe('WorkspaceHeader title bar', () => {
       </WorkspaceTitlebar>
     );
 
-    fireEvent.mouseDown(screen.getByText('Project location'), { button: 0 });
-    expect(startDragging).toHaveBeenCalledTimes(1);
-
-    fireEvent.mouseDown(screen.getByRole('button', { name: 'Action' }), { button: 0 });
-    expect(startDragging).toHaveBeenCalledTimes(1);
+    // The app-wide window drag (lib/windowDrag) takes the titlebar's empty
+    // space, never its controls.
+    const press = {
+      button: 0,
+      clientY: 200,
+      defaultPrevented: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+    };
+    expect(shouldDragWindow(screen.getByText('Project location'), press, false)).toBe(true);
+    expect(shouldDragWindow(screen.getByRole('button', { name: 'Action' }), press, false)).toBe(
+      false
+    );
 
     expect(container.querySelector('.workspace-titlebar-center')).toBeInTheDocument();
   });

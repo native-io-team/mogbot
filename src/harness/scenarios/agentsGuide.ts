@@ -35,7 +35,8 @@ const WORDS: Record<string, string> = {
 const step = (id: string, minutesAgo: number) => ({
   id: `guide-${id}`,
   agentId: 'chief',
-  ts: now - minutesAgo * MIN,
+  // Older than an hour: shown as history, not typed out (`useStreamIn`).
+  ts: now - (90 + minutesAgo) * MIN,
   kind: 'agent' as const,
   text: WORDS[id],
   blocks: {
@@ -46,8 +47,8 @@ const step = (id: string, minutesAgo: number) => ({
 });
 
 const picked = [
-  chiefGreeting('chief', now - 9 * MIN),
-  { id: 'pick', agentId: 'chief', ts: now - 8 * MIN, kind: 'user' as const, text: 'Grok' },
+  chiefGreeting('chief', now - 99 * MIN),
+  { id: 'pick', agentId: 'chief', ts: now - 98 * MIN, kind: 'user' as const, text: 'Grok' },
 ];
 
 const guideCommands = (steps: string[], status: Record<string, unknown>) => ({
@@ -92,5 +93,54 @@ export const agentsGuideScenarios: Scenario[] = [
       everConnected: true,
       activity: { lastRequestMs: now - MIN, lastClient: 'Grok', rejectedRequests: 0 },
     }),
+  },
+  {
+    id: 'agents-first-run-fresh',
+    title: 'Agents — first run: “I’m starting fresh”, then the starters',
+    looksRightWhen:
+      'The greeting, the user’s own “I’m starting fresh” on the right, then the Chief: “Okay! What do you want me to do?” with its four starters and More ideas… under it. No import question any more.',
+    command: 'agents.open',
+    requires: '.agent-chat__starters',
+    commands: {
+      agents_overview: { ...BASE_OVERVIEW, importChoice: 'declined' },
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief'
+          ? [
+              chiefGreeting('chief', now - 99 * MIN),
+              {
+                id: 'fresh-pick',
+                agentId: 'chief',
+                ts: now - 98 * MIN,
+                kind: 'user' as const,
+                text: 'I’m starting fresh',
+              },
+              {
+                id: 'fresh-ask',
+                agentId: 'chief',
+                ts: now - 97 * MIN,
+                kind: 'agent' as const,
+                text: 'Okay! What do you want me to do?',
+                blocks: {
+                  v: 1,
+                  intro: 'Okay! What do you want me to do?',
+                  items: [{ kind: 'guide', summary: '', step: 'fresh', assistant: 'other' }],
+                },
+              },
+            ]
+          : [],
+    },
+  },
+  {
+    id: 'agents-first-run-streaming',
+    title: 'Agents — first run: the greeting types itself out',
+    looksRightWhen:
+      'Caught mid-way: the Chief’s greeting part-written (or its typing dots), nothing under it yet. The “Already have agents somewhere else?” question follows once the greeting is done, then its buttons.',
+    command: 'agents.open',
+    requires: '[data-stream-in]',
+    commands: {
+      agents_overview: { ...BASE_OVERVIEW, importChoice: 'undecided' },
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? [chiefGreeting('chief', Date.now())] : [],
+    },
   },
 ];

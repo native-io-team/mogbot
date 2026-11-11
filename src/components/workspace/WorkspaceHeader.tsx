@@ -157,8 +157,6 @@ interface WorkspaceTitlebarProps {
 
 /** Window-drag region shared by the titlebars that sit below macOS traffic lights. */
 export function WorkspaceTitlebar({ children }: WorkspaceTitlebarProps) {
-
-
   return (
     <div className="workspace-titlebar" data-window-drag>
       {children}

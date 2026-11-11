@@ -17,13 +17,9 @@ interface OnboardingRouterProps {
 }
 
 export function OnboardingRouter({ onComplete }: OnboardingRouterProps) {
-
-
   return (
     <div className="onboarding-router">
-      <div
-        className="onboarding-drag-region" data-window-drag
-      />
+      <div className="onboarding-drag-region" data-window-drag />
       <AgentOnboardingScreen onComplete={onComplete} />
     </div>
   );

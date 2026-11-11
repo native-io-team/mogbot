@@ -260,7 +260,11 @@ pub fn fresh(app: &AppHandle) -> Result<(), CommandError> {
     }
     runner::record(
         app,
-        runner::new_message(&chief, MessageKind::User, "I\u{2019}m starting fresh".to_string()),
+        runner::new_message(
+            &chief,
+            MessageKind::User,
+            "I\u{2019}m starting fresh".to_string(),
+        ),
     )?;
     let mut message = runner::new_message(&chief, MessageKind::Agent, FRESH_WORDS.to_string());
     message.blocks = Some(serde_json::json!({

@@ -1,3 +1,4 @@
+import { shouldDragWindow } from '../../lib/windowDrag';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CompactTopbar } from './CompactTopbar';
@@ -63,11 +64,19 @@ describe('CompactTopbar project menu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'nextjs-tailwind-test' }));
     expect(onSelectProject).toHaveBeenCalledWith('/projects/nextjs-tailwind-test');
 
+    // The app-wide window drag (lib/windowDrag) moves the window from the
+    // topbar's empty space, never from its buttons.
     const topbar = container.querySelector('.compact-topbar');
-    fireEvent.mouseDown(topbar!, { button: 0 });
-    expect(startDragging).toHaveBeenCalledTimes(1);
-
-    fireEvent.mouseDown(projectButton, { button: 0 });
-    expect(startDragging).toHaveBeenCalledTimes(1);
+    const press = {
+      button: 0,
+      clientY: 200,
+      defaultPrevented: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+    };
+    expect(shouldDragWindow(topbar, press, false)).toBe(true);
+    expect(shouldDragWindow(projectButton, press, false)).toBe(false);
   });
 });

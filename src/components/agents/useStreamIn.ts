@@ -49,13 +49,43 @@ export function shouldStreamIn(id: string, ts: number, now = Date.now()): boolea
   return !streamed().includes(id);
 }
 
-export type StreamIn = { phase: 'typing' } | { phase: 'writing'; shown: string } | { phase: 'done' };
+export type StreamIn =
+  | { phase: 'typing' }
+  | { phase: 'writing'; shown: string }
+  | { phase: 'done' };
 
-/** Drives one line's stream-in; `enabled` is read once, at mount. */
-export function useStreamIn(id: string, text: string, ts: number, enabled: boolean): StreamIn {
-  const [start] = useState(() => (enabled && shouldStreamIn(id, ts) ? performance.now() : null));
-  const [state, setState] = useState<StreamIn>(() =>
-    start === null ? { phase: 'done' } : { phase: 'typing' }
+/** When the line typing out now finishes (performance.now() time). */
+let busyUntil = 0;
+
+/** How long a line of `chars` takes to type out, dots included. */
+export const streamInMs = (chars: number) => STREAM_IN_TYPING_MS + (chars / STREAM_IN_RATE) * 1000;
+
+/**
+ * Drives one line's stream-in; `enabled` is read once, at mount. Lines take
+ * turns (a later one waits, showing nothing, until the one above is done);
+ * `afterMs` holds one back further.
+ */
+export function useStreamIn(
+  id: string,
+  text: string,
+  ts: number,
+  enabled: boolean,
+  afterMs = 0
+): StreamIn | { phase: 'waiting' } {
+  const [start] = useState(() => {
+    if (!enabled || !shouldStreamIn(id, ts)) return null;
+    // Lines take turns: one starting while another types waits for it.
+    const now = performance.now();
+    const begin = Math.max(now + afterMs, busyUntil);
+    busyUntil = begin + streamInMs(text.length);
+    return begin;
+  });
+  const [state, setState] = useState<StreamIn | { phase: 'waiting' }>(() =>
+    start === null
+      ? { phase: 'done' }
+      : start > performance.now() + 1
+        ? { phase: 'waiting' }
+        : { phase: 'typing' }
   );
 
   useEffect(() => {
@@ -64,7 +94,12 @@ export function useStreamIn(id: string, text: string, ts: number, enabled: boole
     let frame = 0;
     const tick = (now: number) => {
       const t = now - start;
+      if (t < 0) {
+        frame = requestAnimationFrame(tick);
+        return;
+      }
       if (t < STREAM_IN_TYPING_MS) {
+        setState((prev) => (prev.phase === 'typing' ? prev : { phase: 'typing' }));
         frame = requestAnimationFrame(tick);
         return;
       }

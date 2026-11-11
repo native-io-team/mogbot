@@ -45,7 +45,6 @@ export function CompactTopbar({
   const openProjectPalette = useCallback(() => openPalette({ tab: 'project' }), [openPalette]);
   const openAllPalette = useCallback(() => openPalette(), [openPalette]);
 
-
   const [isPinned, setIsPinned] = useState(false);
   const togglePin = useCallback(() => {
     const next = !isPinned;

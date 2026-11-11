@@ -20,6 +20,8 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../primitives/Button';
 import { ExternalLinkIcon } from '@/components/icons';
 import { CheckLine } from '../setup/flow/FlowParts';
+import { TypingDots } from '../primitives/TypingDots';
+import { useStreamIn } from './useStreamIn';
 import { MessageCard } from './ImportParts';
 import { useImportGate } from './ImportConnectorPanel';
 import { usePolling } from '../../hooks/usePolling';
@@ -140,7 +142,20 @@ export function ImportGuideAsk() {
   const { talk } = useImportGate();
   const { showToast } = useOptionalToast();
   const [busy, setBusy] = useState(false);
+  // Types out after the greeting above it (the first time it's seen).
+  const [mountedAt] = useState(() => Date.now());
+  const streamIn = useStreamIn('import-ask', GUIDE_ASK_TEXT, mountedAt, choice === 'undecided');
   if (choice !== 'undecided' || talk) return null;
+  if (streamIn.phase === 'waiting') return null;
+  if (streamIn.phase !== 'done') {
+    return (
+      <div className="agent-guide-ask" data-testid="agent-import-choice" data-stream-in>
+        <div className="agent-bubble agent-bubble--agent agent-guide-ask__text" aria-busy>
+          {streamIn.phase === 'typing' ? <TypingDots /> : streamIn.shown}
+        </div>
+      </div>
+    );
+  }
 
   const run = (work: () => Promise<unknown>) => {
     setBusy(true);

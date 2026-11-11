@@ -506,8 +506,6 @@ export function ProjectList({
     setMoveProject(project);
   };
 
-
-
   const handleOpenProjectSettings = useCallback(
     async (project: DashboardProject) => {
       try {
@@ -584,9 +582,7 @@ export function ProjectList({
 
   return (
     <div className="dashboard-scroll-container">
-      <div
-        className="dashboard-drag-region" data-window-drag
-      />
+      <div className="dashboard-drag-region" data-window-drag />
       <div className="project-list dashboard">
         {SLACK_INVITE_URL && !slackCtaHidden && <DashboardCommunityBanner onHide={hideSlackCta} />}
 

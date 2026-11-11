@@ -369,9 +369,9 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-first-run-import-choice',
     title: 'Agents — first run, straight from onboarding: the Chief speaks first',
     looksRightWhen:
-      'The Chief’s greeting, its four starters and More ideas… directly under it, then the Chief asking, in its own voice, “Already have agents somewhere else?” with Grok, ChatGPT, Claude and Somewhere else as replies, and a quiet “I’m starting fresh”. No card, no modal: picking one starts the walk-through in this chat.',
+      'The Chief’s greeting, then the Chief asking, in its own voice, “Already have agents somewhere else?” with Grok, ChatGPT, Claude and Somewhere else as replies, and a quiet “I’m starting fresh”. Nothing else: no starters yet (they come after “I’m starting fresh”), no card, no modal.',
     command: 'agents.open',
-    requires: '[data-testid="agent-import-choice"] ~ .agent-chat__starters',
+    requires: '[data-testid="agent-import-choice"]',
     commands: { agents_overview: { ...BASE_OVERVIEW, importChoice: 'undecided' } },
   },
   {

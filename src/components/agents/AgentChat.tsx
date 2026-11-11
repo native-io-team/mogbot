@@ -919,6 +919,9 @@ export const AgentChat = memo(function AgentChat({
     shown.length > 0 &&
     shown.every((m) => m.kind === 'agent') &&
     agent.status.state === 'idle';
+  // The Chief's greeting (its first line) and scripted steps type themselves out.
+  const chiefScripts = agent.isMain;
+  const firstShownId = shown[0]?.id;
   /** The Chief just asked "what do you want me to do?" (they started fresh). */
   const lastShown = shown[shown.length - 1];
   const freshAsked =
@@ -1770,6 +1773,7 @@ export const AgentChat = memo(function AgentChat({
                 agent={rowAgent}
                 streaming={m === streaming}
                 onRemember={setRemembering}
+                scripted={chiefScripts && !m.work && (m.id === firstShownId || isGuideLine(m))}
               />
             );
           case 'approval':
@@ -1841,6 +1845,8 @@ export const AgentChat = memo(function AgentChat({
     [
       items,
       startIndex,
+      chiefScripts,
+      firstShownId,
       agent.engine,
       projectsCtx?.openProject,
       arrivedAt,
@@ -2362,8 +2368,16 @@ function withIndicatorAt(at: number, rows: ReactNode[], extra: ReactNode): React
   return [...rows.slice(0, at), extra, ...rows.slice(at)];
 }
 
+function guideItems(m: AgentMessage) {
+  return (m.blocks as { items?: Array<{ kind?: string; step?: string }> } | undefined)?.items;
+}
+
 /** The Chief's "what do you want me to do?" after "I'm starting fresh" (`agents::guide::fresh`). */
 function isFreshAsk(m: AgentMessage): boolean {
-  const items = (m.blocks as { items?: Array<{ kind?: string; step?: string }> } | undefined)?.items;
-  return !!items?.some((b) => b.kind === 'guide' && b.step === 'fresh');
+  return !!guideItems(m)?.some((b) => b.kind === 'guide' && b.step === 'fresh');
+}
+
+/** One of the Chief's scripted first-run lines (`agents::guide`). */
+function isGuideLine(m: AgentMessage): boolean {
+  return !!guideItems(m)?.some((b) => b.kind === 'guide');
 }

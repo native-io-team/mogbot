@@ -29,6 +29,7 @@ import {
   type UpdateHandle,
   type UpdateInfo,
 } from './updater';
+import { invoke } from '@tauri-apps/api/core';
 import { getWindowLabel } from './window';
 import { logger } from './logger';
 import { asCommandError, formatCommandError } from './errors';
@@ -58,6 +59,9 @@ export interface UpdateSnapshot {
   info: UpdateInfo | null;
   progress: number;
   error: string | null;
+  /** Running from the installer disk (or a quarantined copy): it can't replace
+   *  itself until it's in Applications (`commands::app_location`). */
+  needsMove: boolean;
   /** The user said Later to this version. */
   dismissed: boolean;
 }
@@ -76,6 +80,7 @@ const IDLE: UpdateSnapshot = {
   info: null,
   progress: 0,
   error: null,
+  needsMove: false,
   dismissed: false,
 };
 
@@ -262,10 +267,39 @@ export function dismissUpdate(): void {
   void trackEvent('update_deferred', { version, $screen_name: 'Project Sidebar' });
 }
 
+/** What the banner says when the app runs from the installer disk. */
+export const MOVE_FIRST =
+  'The app is running from the installer disk, so it can’t update itself. Move it to Applications and it will update from there.';
+
+/** Is the app somewhere it can't replace itself (the installer disk, a quarantined copy)? */
+async function runningOutsideApplications(): Promise<boolean> {
+  try {
+    const where = await invoke<{ needsMove: boolean }>('app_location');
+    return where.needsMove;
+  } catch {
+    return false;
+  }
+}
+
+/** Copy the app into Applications and reopen it from there (it quits this copy). */
+export async function moveToApplications(): Promise<void> {
+  try {
+    await invoke<string>('move_to_applications');
+  } catch (err) {
+    set({ phase: 'error', needsMove: true, error: formatCommandError(asCommandError(err)) });
+  }
+}
+
 /** Put the downloaded version in place and relaunch into it. */
 export async function installAndRestart(): Promise<void> {
   const current = handle;
   if (!current || (snapshot.phase !== 'ready' && snapshot.phase !== 'error')) return;
+  // From the installer disk the update can only fail (and a half-done
+  // attempt can leave nothing to open): say so and offer the move instead.
+  if (await runningOutsideApplications()) {
+    set({ phase: 'error', needsMove: true, error: MOVE_FIRST });
+    return;
+  }
   set({ phase: 'installing', error: null });
   try {
     await installUpdate(current);
@@ -273,6 +307,10 @@ export async function installAndRestart(): Promise<void> {
     const detail = formatCommandError(asCommandError(err));
     logger.warn('[Updates] Install failed', { error: detail });
     trackError('update_install', err, 'Project Sidebar');
+    if (/read-only file system|os error 30/i.test(detail)) {
+      set({ phase: 'error', needsMove: true, error: MOVE_FIRST });
+      return;
+    }
     set({ phase: 'error', error: `Couldn't install the update: ${detail}` });
     return;
   }
