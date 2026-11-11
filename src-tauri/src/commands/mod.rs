@@ -13,6 +13,7 @@ pub mod agents_slack;
 pub mod agents_usage;
 pub mod ai;
 pub mod analytics;
+pub mod app_location;
 pub mod assets;
 pub mod attached_libraries;
 pub mod claude;

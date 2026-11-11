@@ -1186,6 +1186,8 @@ pub fn run() {
             commands::snapshots::snapshot_undo,
             commands::snapshots::snapshot_redo,
             // Window / Compact Mode
+            commands::app_location::app_location,
+            commands::app_location::move_to_applications,
             commands::window::set_always_on_top,
             commands::window::set_window_title,
             app_menu::set_menu_context,
