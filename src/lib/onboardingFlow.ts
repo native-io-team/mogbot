@@ -261,6 +261,11 @@ export type CheckResult =
   | {
       state: 'waiting';
       line: string;
+      /**
+       * Who it waits on, when it isn't the user ("Grok"): the label then
+       * reads "Waiting for Grok", never "Waiting for you".
+       */
+      on?: string;
       /** What to do, when the line alone doesn't say. */
       fix?: string;
       action?: { label: string; url: string };

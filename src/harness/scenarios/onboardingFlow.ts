@@ -394,7 +394,7 @@ function optionalParts(): Scenario[] {
       'onboarding-agents-start',
       'agentsStart',
       '3d. Send Claude this message',
-      'The import is allowed on arrival (no Start button): "Send Claude this message", one line (paste it into a new chat; you choose what comes over), the message box with "Copy message" focused, a neutral "Waiting for you. Claude hasn’t started the import yet." and Skip for now.',
+      'The import is allowed on arrival (no Start button): "Send Claude this message", one line (paste it into a new chat; you choose what comes over), the message box with "Copy message" focused, a neutral "Waiting for Claude. It hasn’t started the import yet." and Skip for now.',
       {
         ...remote({ ...REMOTE_ON, everConnected: true }),
         agents_import_talk: gateWith(null),

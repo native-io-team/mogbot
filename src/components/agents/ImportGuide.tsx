@@ -364,7 +364,13 @@ function SendStep({ name }: { name: string }) {
         to={name}
         onCopied={() => showToast(`Copied. Send it to ${name}.`, 'success')}
       />
-      <CheckLine result={{ state: 'waiting', line: `I’ll know when ${name} says hello.` }} />
+      <CheckLine
+        result={{
+          state: 'waiting',
+          on: name,
+          line: 'I’ll know the moment it says hello.',
+        }}
+      />
     </div>
   );
 }

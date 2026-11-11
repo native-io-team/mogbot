@@ -433,7 +433,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
   // agentsStart
   const check: CheckResult = started
     ? { state: 'pass', line: `${talk.source} is asking to start the import.` }
-    : { state: 'waiting', line: `${Who} hasn’t started the import yet.` };
+    : { state: 'waiting', on: who, line: 'It hasn’t started the import yet.' };
   return (
     <FlowShell
       step={step}

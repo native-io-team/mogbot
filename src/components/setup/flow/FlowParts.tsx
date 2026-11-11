@@ -222,7 +222,10 @@ export function CheckLine({
       </span>
       <div className="flow-check__body">
         <span className="flow-check__line">
-          <strong>{waiting ? WAITING : NOT_DONE}.</strong> {result.line}
+          <strong>
+            {waiting ? (result.on ? `Waiting for ${result.on}` : WAITING) : NOT_DONE}.
+          </strong>{' '}
+          {result.line}
         </span>
         {result.fix && <span className="flow-check__fix">{result.fix}</span>}
         {(result.action || onCheckAgain) && (
