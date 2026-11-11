@@ -368,6 +368,13 @@
   min-height: 0;
 }
 
+/* In a project the chat's header is one of the workspace's panel bars: the
+   same height as the terminal header it replaces, so its line meets the
+   sidebar's and the other panels' (Agents keeps its own header height). */
+.session-agent-chat .agent-chat__header {
+  height: var(--panel-header-h);
+}
+
 .session-agent-chat--loading {
   align-items: center;
   justify-content: center;
