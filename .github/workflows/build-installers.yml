@@ -4,7 +4,9 @@ name: Build installers
 # Mac (scripts/release-mac.sh); these jobs only build and upload the installers
 # as workflow artifacts. Attaching them to a release on the releases repo is a
 # separate, deliberate step:
-#   gh run download <run-id> -D dist && gh release upload v<version> dist/*/* -R <releases repo>
+#   gh run download <run-id> -D dist
+#   node scripts/latest-json-add-platforms.mjs <latest.json> dist v<version>
+#   gh release upload v<version> dist/*/* <latest.json> --clobber -R <releases repo>
 #
 # Run it by hand (gh workflow run build-installers.yml --ref main) or by pushing
 # a v* tag. Nothing here publishes anything.
@@ -79,6 +81,50 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Windows code signing with Azure Trusted Signing. Off until the repo
+      # has the secrets AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+      # and the variables TRUSTED_SIGNING_ENDPOINT (e.g.
+      # https://eus.codesigning.azure.net), TRUSTED_SIGNING_ACCOUNT and
+      # TRUSTED_SIGNING_PROFILE. Tauri runs signCommand on the app exe and on
+      # each installer; trusted-signing-cli reads the AZURE_* variables.
+      - name: Set up Windows signing
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ENDPOINT: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
+          ACCOUNT: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+          PROFILE: ${{ vars.TRUSTED_SIGNING_PROFILE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AZURE_CLIENT_ID" ] || [ -z "$ENDPOINT" ] || [ -z "$ACCOUNT" ] || [ -z "$PROFILE" ]; then
+            echo "::warning::Windows signing not configured; the installers will be unsigned"
+            exit 0
+          fi
+          cargo install trusted-signing-cli --locked
+          NAME=$(node -p "require('./brand.json').name")
+          node -e '
+            const [e,a,p,n]=process.argv.slice(1);
+            const cfg={bundle:{windows:{signCommand:`trusted-signing-cli -e ${e} -a ${a} -c ${p} -d ${n} %1`}}};
+            require("fs").writeFileSync("tauri.signing.json", JSON.stringify(cfg));
+          ' "$ENDPOINT" "$ACCOUNT" "$PROFILE" "$NAME"
+          echo "TAURI_EXTRA_CONFIG=--config tauri.signing.json" >> "$GITHUB_ENV"
+
+      # The update bundles (and their .sig) for Windows and Linux. Off until
+      # the repo has the secret TAURI_SIGNING_PRIVATE_KEY (the same key as the
+      # Mac's ~/.tauri/<slug>-updater.key) and its password.
+      - name: Set up update bundles
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::warning::No updater key; no update bundles for this platform"
+            exit 0
+          fi
+          echo '{"bundle":{"createUpdaterArtifacts":true}}' > tauri.updater.json
+          echo "TAURI_UPDATER_CONFIG=--config tauri.updater.json" >> "$GITHUB_ENV"
+
       - name: Build installers
         shell: bash
         env:
@@ -86,7 +132,12 @@ jobs:
           # the runner; extract-and-run avoids it.
           APPIMAGE_EXTRACT_AND_RUN: '1'
           NO_STRIP: 'true'
-        run: pnpm tauri build --bundles ${{ matrix.bundles }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --bundles ${{ matrix.bundles }} ${TAURI_EXTRA_CONFIG:-} ${TAURI_UPDATER_CONFIG:-}
 
       - name: Stage installers
         shell: bash
@@ -102,9 +153,22 @@ jobs:
           for f in $B/deb/*.deb; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.deb"; done
           for f in $B/rpm/*.rpm; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.rpm"; done
           for f in $B/appimage/*.AppImage; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.AppImage"; done
+          # Update bundles and their signatures, when the updater key was set.
+          for f in $B/nsis/*-setup.exe.sig; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}-setup.exe.sig"; done
+          for f in $B/appimage/*.AppImage.sig; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.AppImage.sig"; done
+          # Stable names too, so releases/latest/download/<name> always means
+          # the newest one (like Mogbot.dmg on the Mac).
+          for f in $B/nsis/*-setup.exe; do cp "$f" "out/${NAME}-${{ matrix.artifact }}-setup.exe"; done
+          for f in $B/deb/*.deb; do cp "$f" "out/${NAME}-${{ matrix.artifact }}.deb"; done
+          for f in $B/rpm/*.rpm; do cp "$f" "out/${NAME}-${{ matrix.artifact }}.rpm"; done
+          for f in $B/appimage/*.AppImage; do cp "$f" "out/${NAME}-${{ matrix.artifact }}.AppImage"; done
+          # Is the Windows installer signed? Printed so a run says so plainly.
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            for f in out/*.exe; do powershell -NoProfile -Command "(Get-AuthenticodeSignature '$f').Status" || true; done
+          fi
           ls -la out
           [ -n "$(ls out)" ] || { echo "::error::No installers were produced"; exit 1; }
-          (cd out && for f in *; do sha256sum "$f" > "$f.sha256"; done)
+          (cd out && for f in $(ls | grep -v '\.sig$'); do sha256sum "$f" > "$f.sha256"; done)
 
       - name: Upload installers
         uses: actions/upload-artifact@v6
