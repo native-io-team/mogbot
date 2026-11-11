@@ -73,7 +73,7 @@ import {
   pendingApproval,
   pendingApprovalIds,
 } from '../lib/agents';
-import { messageActions, plainText, type MessageAction } from '../lib/actions';
+import { messageActions, plainText, type Action, type MessageAction } from '../lib/actions';
 import { canReadAloud, readAloud, stopReading, useReading } from '../lib/readAloud';
 import { announce } from '../lib/a11y';
 import { addQuote, setComposer } from '../lib/drafts';
@@ -147,7 +147,6 @@ import { TeamSetupCard } from './TeamSetupCard';
 import { PathContext } from './Markdown';
 import { GalleryContext, chatGallery } from '../lib/gallery';
 import { PaneContext, type Pane } from './ApprovalCard';
-import { UsageRing } from './usage';
 import { useQuotas } from '../lib/quota';
 import { ringPercent } from '../lib/usageSheet';
 import { choose, showActions } from './menu';
@@ -726,12 +725,11 @@ export function ChatView({
   // One way into Conversations: the title row under the header once there
   // are several; the header's icon only while there's one (to start another).
   const switchRow = Boolean(offered && conversations && conversations.items.length > 1);
-  const conversationsButton = offered && !switchRow && (
-    <IconButton name="bubble.left" label="Conversations" onPress={openConversations} />
-  );
-  const usageRing = ring && (
-    <UsageRing percent={ring.percent} tone={ring.tone} onPress={openUsage} />
-  );
+  const moreActions = headerActions(agent.name, ring?.percent, offered);
+  const openMore = () =>
+    showActions(undefined, moreActions, (a) =>
+      a === 'usage' ? openUsage() : a === 'conversations' ? openConversations() : openSheet()
+    );
   const urgentBelow =
     !follow.pinned &&
     (needsYouHere(agent, chat?.messages) || asking) &&
@@ -749,8 +747,6 @@ export function ChatView({
           >
             {header}
           </Pressable>
-          {usageRing}
-          {conversationsButton}
           {TALK_OFFERED && (
             <IconButton
               name="waveform"
@@ -758,7 +754,7 @@ export function ChatView({
               onPress={() => router.push({ pathname: '/talk', params: { id } })}
             />
           )}
-          <IconButton name="info.circle" label={`About ${agent.name}`} onPress={openSheet} />
+          <IconButton name="ellipsis.circle" label="More" fallback="⋯" onPress={openMore} />
         </View>
       ) : (
         <ChatHeader
@@ -1308,24 +1304,20 @@ const ChatHeader = memo(function ChatHeader({
   const router = useRouter();
   const accent = useAccent();
   const id = agent.id;
-  const ring = percent != null && tone != null;
-  const buttons = (ring ? 1 : 0) + (offered && !switchRow ? 1 : 0) + (TALK_OFFERED ? 1 : 0) + 1;
+  const buttons = (TALK_OFFERED ? 1 : 0) + 1;
   const header = <Header agent={agent} buttons={buttons} />;
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
   const openUsage = () => router.push({ pathname: '/usage', params: { id } });
   const openConversations = () => router.push({ pathname: '/conversations', params: { id } });
   const openTalk = () => router.push({ pathname: '/talk', params: { id } });
-  const conversationsButton = offered && !switchRow && (
-    <IconButton name="bubble.left" label="Conversations" onPress={openConversations} />
-  );
-  const usageRing = ring && (
-    <UsageRing
-      percent={percent}
-      tone={tone}
-      tint={NATIVE_HEADER_BUTTONS ? accent.accent : undefined}
-      onPress={openUsage}
-    />
-  );
+  // Usage, Conversations and About live behind one ⋯ so the title has room
+  // (Julian, 2026-11-10: the 17% pill crowded the bar). The figure rides along
+  // as the Usage row's subtitle; a usage line in the chat still says when it's low.
+  const moreActions = headerActions(agent.name, percent, offered);
+  const run = (a: HeaderAction) =>
+    a === 'usage' ? openUsage() : a === 'conversations' ? openConversations() : openSheet();
+  void tone;
+  void switchRow;
   return (
     <>
       <Stack.Screen
@@ -1349,8 +1341,6 @@ const ChatHeader = memo(function ChatHeader({
             : {
                 headerRight: () => (
                   <View style={styles.headerRight}>
-                    {usageRing}
-                    {conversationsButton}
                     {TALK_OFFERED && (
                       <IconButton
                         name="waveform"
@@ -1359,10 +1349,10 @@ const ChatHeader = memo(function ChatHeader({
                       />
                     )}
                     <IconButton
-                      name="info.circle"
-                      label={`About ${agent.name}`}
-                      fallback="ⓘ"
-                      onPress={openSheet}
+                      name="ellipsis.circle"
+                      label="More"
+                      fallback="⋯"
+                      onPress={() => showActions(undefined, moreActions, run)}
                     />
                   </View>
                 ),
@@ -1371,16 +1361,6 @@ const ChatHeader = memo(function ChatHeader({
       />
       {NATIVE_HEADER_BUTTONS && (
         <Stack.Toolbar placement="right">
-          {/* Left of ⓘ: the ring, only once an engine has reported the window,
-              in the same glass group as the buttons so the set reads as one. */}
-          <Stack.Toolbar.View hidden={!ring}>{usageRing || <View />}</Stack.Toolbar.View>
-          <Stack.Toolbar.Button
-            hidden={!offered || switchRow}
-            icon="bubble.left"
-            accessibilityLabel="Conversations"
-            tintColor={accent.accent}
-            onPress={openConversations}
-          />
           <Stack.Toolbar.Button
             hidden={!TALK_OFFERED}
             icon="waveform"
@@ -1388,12 +1368,18 @@ const ChatHeader = memo(function ChatHeader({
             tintColor={accent.accent}
             onPress={openTalk}
           />
-          <Stack.Toolbar.Button
-            icon="info.circle"
-            accessibilityLabel={`About ${agent.name}`}
-            tintColor={accent.accent}
-            onPress={openSheet}
-          />
+          <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel="More" tintColor={accent.accent}>
+            {moreActions.map((m) => (
+              <Stack.Toolbar.MenuAction
+                key={m.id}
+                icon={m.icon}
+                subtitle={m.subtitle}
+                onPress={() => run(m.id)}
+              >
+                {m.title}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
         </Stack.Toolbar>
       )}
     </>
@@ -1655,3 +1641,26 @@ const useStyles = makeStyles((colors) => ({
     gap: space.md,
   },
 }));
+
+type HeaderAction = 'usage' | 'conversations' | 'about';
+
+/** The chat header's ⋯ menu: Usage (with the figure, once an engine reported it),
+ *  Conversations, About. Same rows on iOS's native menu and the sheet elsewhere. */
+export function headerActions(
+  name: string,
+  percent: number | undefined,
+  offered: boolean
+): (Action<HeaderAction> & { subtitle?: string })[] {
+  return [
+    {
+      id: 'usage',
+      title: 'Usage',
+      icon: 'gauge.with.dots.needle.33percent',
+      subtitle: percent != null ? `${Math.round(percent)}% of the 5-hour limit used` : undefined,
+    },
+    ...(offered
+      ? [{ id: 'conversations' as const, title: 'Conversations', icon: 'bubble.left' as const }]
+      : []),
+    { id: 'about', title: `About ${name}`, icon: 'info.circle' },
+  ];
+}
