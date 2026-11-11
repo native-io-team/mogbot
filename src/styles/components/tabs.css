@@ -69,6 +69,9 @@
   background: transparent;
   border: none;
   border-radius: 0;
+  /* No tray, so no tray shadow either (it showed as a dark band above the
+     workspace's Preview / Focus / Code tabs). */
+  box-shadow: none;
 }
 
 .tabs__list--appearance-underline .tabs__tab.button {
