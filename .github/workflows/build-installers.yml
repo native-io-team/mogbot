@@ -1,0 +1,126 @@
+name: Build installers
+
+# Windows and Linux installers. The Mac release is made by hand on the owner's
+# Mac (scripts/release-mac.sh); these jobs only build and upload the installers
+# as workflow artifacts. Attaching them to a release on the releases repo is a
+# separate, deliberate step:
+#   gh run download <run-id> -D dist && gh release upload v<version> dist/*/* -R <releases repo>
+#
+# Run it by hand (gh workflow run build-installers.yml --ref main) or by pushing
+# a v* tag. Nothing here publishes anything.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            bundles: nsis,msi
+            artifact: windows-x86_64
+          - name: Linux x64
+            os: ubuntu-22.04
+            bundles: deb,rpm,appimage
+            artifact: linux-x86_64
+          - name: Linux arm64
+            os: ubuntu-22.04-arm
+            bundles: deb,rpm,appimage
+            artifact: linux-aarch64
+    steps:
+      - name: Force LF line endings
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v6
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            patchelf \
+            rpm \
+            file \
+            xdg-utils
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.9
+
+      - name: Use bash for package scripts
+        if: runner.os == 'Windows'
+        run: npm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          key: installers-${{ matrix.artifact }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build installers
+        shell: bash
+        env:
+          # AppImage's bundler shells out to linuxdeploy, which needs FUSE on
+          # the runner; extract-and-run avoids it.
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+          NO_STRIP: 'true'
+        run: pnpm tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Stage installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          NAME=$(node -p "require('./brand.json').name")
+          B=src-tauri/target/release/bundle
+          mkdir -p out
+          shopt -s nullglob
+          for f in $B/nsis/*-setup.exe; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}-setup.exe"; done
+          for f in $B/msi/*.msi; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.msi"; done
+          for f in $B/deb/*.deb; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.deb"; done
+          for f in $B/rpm/*.rpm; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.rpm"; done
+          for f in $B/appimage/*.AppImage; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.AppImage"; done
+          ls -la out
+          [ -n "$(ls out)" ] || { echo "::error::No installers were produced"; exit 1; }
+          (cd out && for f in *; do sha256sum "$f" > "$f.sha256"; done)
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v6
+        with:
+          name: installers-${{ matrix.artifact }}
+          path: out/
+          if-no-files-found: error

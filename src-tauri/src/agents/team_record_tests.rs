@@ -29,7 +29,8 @@ fn user_line(id: &str, ts: i64, text: &str) -> String {
 }
 
 fn card_line(id: &str, request: &str, ts: i64, title: &str, detail: &str, extra: Value) -> String {
-    let mut approval = json!({ "requestId": request, "title": title, "detail": detail, "status": "pending" });
+    let mut approval =
+        json!({ "requestId": request, "title": title, "detail": detail, "status": "pending" });
     if let (Value::Object(a), Value::Object(e)) = (&mut approval, extra) {
         a.extend(e);
     }
@@ -83,8 +84,14 @@ fn ask(q: &str) -> Ask {
 fn the_index_reads_only_what_was_added() {
     let home = tempfile::tempdir().unwrap();
     let log = home.path().join("messages.jsonl");
-    append(&log, &result_line("m1", "r1", NOW - HOUR, "Q3 summary", "Revenue up 12%."));
-    append(&log, &reply_line("m2", NOW - HOUR, "Done, the Q3 summary is on the card."));
+    append(
+        &log,
+        &result_line("m1", "r1", NOW - HOUR, "Q3 summary", "Revenue up 12%."),
+    );
+    append(
+        &log,
+        &reply_line("m2", NOW - HOUR, "Done, the Q3 summary is on the card."),
+    );
     let mut index = AgentIndex::default();
     index.refresh("a", home.path());
     assert_eq!(index.results.len(), 1);
@@ -92,7 +99,9 @@ fn the_index_reads_only_what_was_added() {
     let r = &index.results[0];
     assert_eq!(r.title, "Q3 summary");
     assert!(r.body.contains("Revenue up 12%."));
-    assert!(r.body.contains("It says it checked: Totals tie to the ledger."));
+    assert!(r
+        .body
+        .contains("It says it checked: Totals tie to the ledger."));
     assert!(r.body.contains("Not verified: VAT."));
 
     // Nothing new: nothing read twice.
@@ -166,12 +175,48 @@ fn a_revised_result_replaces_its_earlier_version() {
 fn decisions_are_allow_and_deny_only_and_secret_cards_give_only_their_title() {
     let home = tempfile::tempdir().unwrap();
     let log = home.path().join("messages.jsonl");
-    append(&log, &card_line("c1", "q1", NOW, "Post to LinkedIn", "Post the launch note", json!({})));
-    append(&log, &card_line("c2", "q2", NOW, "Push to main", "git push origin main", json!({})));
-    append(&log, &card_line("c3", "q3", NOW, "Run a command", "npm test", json!({})));
-    append(&log, &card_line("c4", "q4", NOW, "Save your Stripe key", "sk_live_shown_nowhere", json!({ "secret": { "name": "Stripe", "purpose": "Billing", "kind": "api_key", "fields": [], "reference": "$STRIPE" } })));
+    append(
+        &log,
+        &card_line(
+            "c1",
+            "q1",
+            NOW,
+            "Post to LinkedIn",
+            "Post the launch note",
+            json!({}),
+        ),
+    );
+    append(
+        &log,
+        &card_line(
+            "c2",
+            "q2",
+            NOW,
+            "Push to main",
+            "git push origin main",
+            json!({}),
+        ),
+    );
+    append(
+        &log,
+        &card_line("c3", "q3", NOW, "Run a command", "npm test", json!({})),
+    );
+    append(
+        &log,
+        &card_line(
+            "c4",
+            "q4",
+            NOW,
+            "Save your Stripe key",
+            "sk_live_shown_nowhere",
+            json!({ "secret": { "name": "Stripe", "purpose": "Billing", "kind": "api_key", "fields": [], "reference": "$STRIPE" } }),
+        ),
+    );
     let answers = home.path().join("approvals.jsonl");
-    append(&answers, &answer_line("q1", "denied", Some("not before Monday")));
+    append(
+        &answers,
+        &answer_line("q1", "denied", Some("not before Monday")),
+    );
     append(&answers, &answer_line("q2", "allowed", None));
     append(&answers, &answer_line("q3", "expired", None));
     append(&answers, &answer_line("q4", "allowed", None));
@@ -182,7 +227,10 @@ fn decisions_are_allow_and_deny_only_and_secret_cards_give_only_their_title() {
     let titles: Vec<&str> = d.iter().map(|e| e.title.as_str()).collect();
     assert!(titles.contains(&"Denied: Post to LinkedIn"), "{titles:?}");
     assert!(titles.contains(&"Allowed: Push to main"));
-    assert!(!titles.iter().any(|t| t.contains("Run a command")), "expired isn't a decision");
+    assert!(
+        !titles.iter().any(|t| t.contains("Run a command")),
+        "expired isn't a decision"
+    );
     let deny = d.iter().find(|e| e.title.starts_with("Denied")).unwrap();
     assert!(deny.body.contains("not before Monday"));
     let secret = d.iter().find(|e| e.title.contains("Stripe")).unwrap();
@@ -207,7 +255,10 @@ fn what_follows_outside_text_is_marked_until_the_user_writes() {
         "checkIn": { "dueAt": NOW, "late": false, "repeats": true, "found": "2 new emails" }
     }));
     index.ingest_messages("a", &firing);
-    index.ingest_messages("a", &result_line("m3", "r1", NOW, "Inbox digest", "Two mails."));
+    index.ingest_messages(
+        "a",
+        &result_line("m3", "r1", NOW, "Inbox digest", "Two mails."),
+    );
     let outside: Vec<bool> = index.replies.iter().map(|e| e.outside).collect();
     assert_eq!(outside, [true, false]);
     assert!(index.results[0].outside, "a \"When…\" firing marks it too");
@@ -221,12 +272,19 @@ fn what_follows_outside_text_is_marked_until_the_user_writes() {
         .collect();
     let d = digest(&named, &ask("inbox digest"), ALL, NOW);
     assert!(d.has_outside);
-    assert!(d.text.contains("[outside text] Inbox · result"), "{}", d.text);
+    assert!(
+        d.text.contains("[outside text] Inbox · result"),
+        "{}",
+        d.text
+    );
 }
 
 #[test]
 fn a_turn_answering_outside_text_gets_the_digest_marked_untrusted() {
-    let e = vec![(entry(Kind::Result, "Q3 summary", "Revenue up.", NOW), "Finance".into())];
+    let e = vec![(
+        entry(Kind::Result, "Q3 summary", "Revenue up.", NOW),
+        "Finance".into(),
+    )];
     let rights = Rights {
         chats: false,
         outside_turn: true,
@@ -245,9 +303,23 @@ fn a_turn_answering_outside_text_gets_the_digest_marked_untrusted() {
 #[test]
 fn results_rank_above_replies_and_titles_above_bodies() {
     let e = vec![
-        (entry(Kind::Reply, "", "the q3 summary is coming", NOW), "Finance".into()),
-        (entry(Kind::Result, "Q3 summary", "Revenue up 12%.", NOW - 3 * HOUR), "Finance".into()),
-        (entry(Kind::Result, "Weekly notes", "mentions the q3 summary", NOW), "Ops".into()),
+        (
+            entry(Kind::Reply, "", "the q3 summary is coming", NOW),
+            "Finance".into(),
+        ),
+        (
+            entry(
+                Kind::Result,
+                "Q3 summary",
+                "Revenue up 12%.",
+                NOW - 3 * HOUR,
+            ),
+            "Finance".into(),
+        ),
+        (
+            entry(Kind::Result, "Weekly notes", "mentions the q3 summary", NOW),
+            "Ops".into(),
+        ),
     ];
     let d = digest(&e, &ask("Q3 summary"), ALL, NOW);
     let first = d.text.lines().nth(1).unwrap();
@@ -261,7 +333,10 @@ fn results_rank_above_replies_and_titles_above_bodies() {
 
 #[test]
 fn stop_words_are_ignored_and_a_teammates_name_counts() {
-    assert_eq!(terms("what did we find about the Q3 revenue?"), ["find", "q3", "revenue"]);
+    assert_eq!(
+        terms("what did we find about the Q3 revenue?"),
+        ["find", "q3", "revenue"]
+    );
     assert_eq!(terms("the"), ["the"]);
     let e = entry(Kind::Result, "Revenue", "Up 12%.", NOW);
     assert!(score(&e, "Finance", &terms("finance revenue"), NOW).is_some());
@@ -282,11 +357,19 @@ fn since_reads_the_shapes_it_promises() {
     assert!(parse_since("today", NOW).unwrap() <= NOW);
     assert!(parse_since("yesterday", NOW).unwrap() < parse_since("today", NOW).unwrap());
     assert!(parse_since("2026-11-01", NOW).is_ok());
-    assert!(parse_since("soonish", NOW).unwrap_err().contains("isn't a time"));
+    assert!(parse_since("soonish", NOW)
+        .unwrap_err()
+        .contains("isn't a time"));
 
     let e = vec![
-        (entry(Kind::Result, "Old report", "", NOW - 10 * 24 * HOUR), "A".into()),
-        (entry(Kind::Result, "New report", "", NOW - HOUR), "A".into()),
+        (
+            entry(Kind::Result, "Old report", "", NOW - 10 * 24 * HOUR),
+            "A".into(),
+        ),
+        (
+            entry(Kind::Result, "New report", "", NOW - HOUR),
+            "A".into(),
+        ),
     ];
     let d = digest(
         &e,
@@ -298,7 +381,11 @@ fn since_reads_the_shapes_it_promises() {
         ALL,
         NOW,
     );
-    assert!(d.text.contains("New report") && !d.text.contains("Old report"), "{}", d.text);
+    assert!(
+        d.text.contains("New report") && !d.text.contains("Old report"),
+        "{}",
+        d.text
+    );
 }
 
 /* ------------------------------------------------------------------- caps */
@@ -308,14 +395,27 @@ fn the_digest_never_passes_its_cap() {
     let e: Vec<(Entry, String)> = (0..200)
         .map(|i| {
             (
-                entry(Kind::Result, &format!("Report {i}"), &"report body ".repeat(80), NOW - i),
+                entry(
+                    Kind::Result,
+                    &format!("Report {i}"),
+                    &"report body ".repeat(80),
+                    NOW - i,
+                ),
                 format!("Agent {i}"),
             )
         })
         .collect();
     let d = digest(&e, &ask("report"), ALL, NOW);
-    assert!(d.text.chars().count() <= DIGEST_CAP, "{}", d.text.chars().count());
-    assert!(d.text.contains("more: narrow it with `agent` or `since`"), "{}", d.text);
+    assert!(
+        d.text.chars().count() <= DIGEST_CAP,
+        "{}",
+        d.text.chars().count()
+    );
+    assert!(
+        d.text.contains("more: narrow it with `agent` or `since`"),
+        "{}",
+        d.text
+    );
     for l in d.text.lines().skip(1) {
         assert!(l.chars().count() <= 361, "{l}");
     }
@@ -335,13 +435,19 @@ fn the_roster_stays_tiny() {
     assert!(r.chars().count() <= ROSTER_CAP, "{}", r.chars().count());
     assert!(r.contains("(list_agents)"), "{r}");
     // A role is at most eight words.
-    assert!(r.contains(": Keeps the books, chases invoices, files receipts and…"), "{r}");
+    assert!(
+        r.contains(": Keeps the books, chases invoices, files receipts and…"),
+        "{r}"
+    );
     // Freshest result first.
     assert!(r.lines().nth(3).unwrap().contains("Agent number 0:"), "{r}");
     assert!(r.contains("today"));
 
     let chief = roster(&members[..2], false, NOW).unwrap();
-    assert!(!chief.contains("Keeps the books"), "the Chief's team section has roles");
+    assert!(
+        !chief.contains("Keeps the books"),
+        "the Chief's team section has roles"
+    );
     assert!(chief.contains("no results yet"));
     assert_eq!(roster(&[], true, NOW), None);
 }
@@ -359,20 +465,39 @@ fn ages_are_coarse_so_the_briefing_stays_put() {
 #[test]
 fn chats_and_memory_are_withheld_without_the_right_and_counted() {
     let e = vec![
-        (entry(Kind::Reply, "", "the truck is an F150", NOW), "Car".into()),
-        (entry(Kind::Memory, "", "Truck: F150, tow hitch fitted", 0), "Car".into()),
-        (entry(Kind::Result, "Truck service plan", "F150 service due", NOW), "Car".into()),
+        (
+            entry(Kind::Reply, "", "the truck is an F150", NOW),
+            "Car".into(),
+        ),
+        (
+            entry(Kind::Memory, "", "Truck: F150, tow hitch fitted", 0),
+            "Car".into(),
+        ),
+        (
+            entry(Kind::Result, "Truck service plan", "F150 service due", NOW),
+            "Car".into(),
+        ),
     ];
     let plain = digest(&e, &ask("f150"), PLAIN, NOW);
     assert!(!plain.text.contains("tow hitch"), "{}", plain.text);
     assert!(!plain.text.contains("the truck is an F150"));
     assert!(plain.text.contains("Truck service plan"));
-    assert!(plain.text.contains("2 more in teammates' chats or memory aren't open to you"), "{}", plain.text);
+    assert!(
+        plain
+            .text
+            .contains("2 more in teammates' chats or memory aren't open to you"),
+        "{}",
+        plain.text
+    );
     let open = digest(&e, &ask("f150"), ALL, NOW);
     assert!(open.text.contains("tow hitch") && !open.text.contains("aren't open"));
     // Only withheld matches: said so, not "nothing".
     let only = digest(&e[..2], &ask("hitch"), PLAIN, NOW);
-    assert!(only.text.contains("1 more in teammates' chats"), "{}", only.text);
+    assert!(
+        only.text.contains("1 more in teammates' chats"),
+        "{}",
+        only.text
+    );
     assert_eq!(only.headline, None);
 }
 
@@ -380,7 +505,15 @@ fn chats_and_memory_are_withheld_without_the_right_and_counted() {
 fn a_known_secret_never_leaves_in_a_digest() {
     let secret = "tr-team-record-secret-0f9e8d7c6b5a";
     super::secrets::remember_external(secret, "the test token");
-    let e = vec![(entry(Kind::Result, "Deploy notes", &format!("used token {secret}"), NOW), "Ops".into())];
+    let e = vec![(
+        entry(
+            Kind::Result,
+            "Deploy notes",
+            &format!("used token {secret}"),
+            NOW,
+        ),
+        "Ops".into(),
+    )];
     let d = digest(&e, &ask("deploy"), ALL, NOW);
     super::secrets::forget_external(secret);
     assert!(!d.text.contains(secret), "{}", d.text);
@@ -401,7 +534,10 @@ fn apps_are_named_never_their_account() {
     let e = login_entries_from(&[conn], &[agent]);
     assert_eq!(e.len(), 1);
     let all = format!("{} {}", e[0].title, e[0].body);
-    assert!(all.contains("Gmail") && all.contains("Used by Inbox"), "{all}");
+    assert!(
+        all.contains("Gmail") && all.contains("Used by Inbox"),
+        "{all}"
+    );
     assert!(!all.contains("sam@private.example"));
 }
 
@@ -437,14 +573,20 @@ fn an_agent_finds_a_teammates_result_and_the_roster_names_it() {
     m.result = Some(card);
     store::append_message(&m).unwrap();
     let mut h = super::runner::new_message(&hidden.id, store::MessageKind::Agent, "q3 squirrel");
-    h.result = Some(serde_json::from_value(json!({"id": "res2", "version": 1, "title": "Q3 squirrel"})).unwrap());
+    h.result = Some(
+        serde_json::from_value(json!({"id": "res2", "version": 1, "title": "Q3 squirrel"}))
+            .unwrap(),
+    );
     store::append_message(&h).unwrap();
 
     let found = lookup(&writer, &json!({ "query": "Q3 revenue" }), PLAIN).unwrap();
     assert!(found.text.contains("Finance · result"), "{}", found.text);
     assert!(found.text.contains("Revenue £1.2m"));
     assert!(found.text.contains("[Finance's result res1]"));
-    assert!(!found.text.contains("squirrel"), "hidden agents are left out");
+    assert!(
+        !found.text.contains("squirrel"),
+        "hidden agents are left out"
+    );
     assert_eq!(found.headline.as_deref(), Some("Finance's Q3 summary"));
 
     // Its own work isn't "the team".
@@ -459,7 +601,10 @@ fn an_agent_finds_a_teammates_result_and_the_roster_names_it() {
     assert!(lookup(&writer, &json!({}), PLAIN).is_err());
 
     let roster = roster_for(&writer).unwrap();
-    assert!(roster.contains("- Finance: Finance work · \"Q3 summary\", today"), "{roster}");
+    assert!(
+        roster.contains("- Finance: Finance work · \"Q3 summary\", today"),
+        "{roster}"
+    );
     assert!(!roster.contains("Squirrel"));
     assert!(!roster.contains("- Writer"), "not itself");
 
