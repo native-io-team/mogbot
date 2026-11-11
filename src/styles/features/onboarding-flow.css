@@ -561,7 +561,9 @@
 /* ---- Motion: each screen arrives, the bar fills, Done lands ------------- */
 
 :root {
-  --flow-paired-size: 96px;
+  --flow-paired-tile: 64px;
+  --flow-paired-link: 72px;
+  --flow-paired-check: 26px;
   --flow-arrive-rise: 10px;
 }
 
@@ -671,22 +673,103 @@
 
 .flow-paired {
   display: flex;
+  align-items: center;
   justify-content: center;
+  margin-bottom: var(--spacing-lg);
 }
 
-.flow-paired__mark {
-  width: var(--flow-paired-size);
-  height: var(--flow-paired-size);
+/* This Mac and the phone, as two quiet tiles. */
+.flow-paired__device {
+  width: var(--flow-paired-tile);
+  height: var(--flow-paired-tile);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-card);
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-default);
+  box-shadow: var(--shadow-md);
+  animation: flow-paired-arrive var(--motion-celebrate) both;
+}
+
+.flow-paired__device:last-child {
+  animation-delay: var(--duration-fast);
+}
+
+/* The line between them draws in, then the tick lands on it. */
+.flow-paired__link {
+  position: relative;
+  width: var(--flow-paired-link);
+  height: var(--border-width-emphasis);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-success);
+  transform-origin: left center;
+  animation: flow-paired-draw var(--motion-celebrate) var(--duration-fast) both;
+}
+
+.flow-paired__check {
+  position: absolute;
+  width: var(--flow-paired-check);
+  height: var(--flow-paired-check);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
-  color: var(--accent-success);
-  background: var(--surface-panel);
-  border: var(--border-width-emphasis) solid var(--accent-success);
+  color: var(--surface-panel);
+  background: var(--accent-success);
   animation:
-    flow-tick-pop var(--motion-celebrate) both,
+    flow-tick-pop var(--motion-celebrate) var(--motion-celebrate-delay) both,
     flow-paired-ring var(--motion-celebrate-ring) var(--motion-celebrate-delay) both;
+}
+
+@keyframes flow-paired-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(var(--flow-arrive-rise)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes flow-paired-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* What the phone can do now: three short lines, an icon each. */
+.flow-paired__can {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin: 0 auto;
+  padding: var(--spacing-md) var(--spacing-lg);
+  list-style: none;
+  border-radius: var(--radius-card);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-subtle);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  animation: flow-paired-arrive var(--motion-celebrate) var(--motion-celebrate-delay) both;
+}
+
+.flow-paired__can li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.flow-paired__can-icon {
+  display: inline-flex;
+  color: var(--text-muted);
 }
 
 /* The device and code-end under an Allow, and store links under a step. */
@@ -708,7 +791,10 @@
   .flow-body,
   .flow-check[data-state='pass'],
   .flow-check[data-state='pass'] .flow-check__mark,
-  .flow-paired__mark {
+  .flow-paired__device,
+  .flow-paired__link,
+  .flow-paired__check,
+  .flow-paired__can {
     animation-duration: var(--motion-reduced);
   }
 }

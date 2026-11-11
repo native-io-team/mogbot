@@ -22,7 +22,17 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
 import { TextButton } from '../primitives/TextButton';
-import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon, WarningIcon } from '@/components/icons';
+import {
+  ArrowLeftIcon,
+  BellIcon,
+  CheckIcon,
+  CommentIcon,
+  ExternalLinkIcon,
+  LaptopIcon,
+  MobileIcon,
+  ShieldCheckIcon,
+  WarningIcon,
+} from '@/components/icons';
 import { CheckLine, ADVANCE_MS } from '../setup/flow/FlowParts';
 import { PhoneQr } from './PhoneQr';
 import { usePolling } from '../../hooks/usePolling';
@@ -66,7 +76,6 @@ import {
   ALLOW_BUTTON,
   GET_PHONE_APP_TITLE,
   I_DID_IT,
-  PAIRED_TITLE,
   PHONE_ACCESS_TITLE,
   SCAN_LINE,
   SKIP_FOR_NOW,
@@ -716,22 +725,52 @@ function useStepView(p: {
       };
     }
     case 'phonePaired':
+      // The end of setting up: a moment, not a settings line. This Mac and the
+      // phone, joined, then what the phone can do now.
       return {
         mark: (
-          <div className="flow-paired">
-            <span className="flow-paired__mark" aria-hidden>
-              <CheckIcon size={36} />
+          <div className="flow-paired" data-testid="flow-paired">
+            <span className="flow-paired__device">
+              <LaptopIcon size={26} />
+            </span>
+            <span className="flow-paired__link" aria-hidden>
+              <span className="flow-paired__check">
+                <CheckIcon size={14} />
+              </span>
+            </span>
+            <span className="flow-paired__device">
+              <MobileIcon size={26} />
             </span>
           </div>
         ),
-        title: PAIRED_TITLE,
+        title: ALL_SET_TITLE,
         lede: p.paired
-          ? `${p.paired} can reach your agents now. Try it: send your Chief of Staff a message from it.`
-          : 'Your phone can reach your agents now.',
+          ? `${p.paired} is paired with this Mac. Your agents go where you go.`
+          : 'Your phone is paired with this Mac. Your agents go where you go.',
+        children: (
+          <ul className="flow-paired__can" aria-label="What your phone can do now">
+            {PHONE_CAN.map(({ icon, text }) => (
+              <li key={text}>
+                <span className="flow-paired__can-icon">{icon}</span>
+                {text}
+              </li>
+            ))}
+          </ul>
+        ),
         primary: <Primary onClick={p.onDone}>{p.doneLabel}</Primary>,
       };
   }
 }
+
+/** The last screen's title: the person is done, not just the pairing. */
+export const ALL_SET_TITLE = 'You’re all set';
+
+/** What the phone can do now, on the last screen. */
+const PHONE_CAN = [
+  { icon: <CommentIcon size={14} />, text: 'Message any agent, wherever you are' },
+  { icon: <ShieldCheckIcon size={14} />, text: 'Answer approvals, even from the Lock Screen' },
+  { icon: <BellIcon size={14} />, text: 'Get a ping when one needs you' },
+];
 
 /** Where the Phone panel's flow stopped, so reopening it opens the same screen. */
 export const PANEL_FLOW_KEY = 'shipstudio.phone.flow';

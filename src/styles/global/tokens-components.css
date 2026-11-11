@@ -271,8 +271,9 @@
 
   --compact-topbar-height: var(--size-control-large);
   --compact-topbar-padding-inline: var(--spacing-sm);
+  /* Clears the traffic lights (they end ~70px in) with a 16px gap. */
   --compact-topbar-macos-padding-start: calc(
-    var(--space-32) + var(--space-24) + var(--space-16) + var(--space-06)
+    var(--space-32) + var(--space-24) + var(--space-16) + var(--space-06) + var(--space-08)
   );
   --compact-topbar-cluster-gap: var(--spacing-xs);
   --compact-topbar-border-width: var(--stroke-1);

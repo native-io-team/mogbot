@@ -21,6 +21,9 @@ import {
   type Agent,
   type AgentMessage,
   type UsageTone,
+  conversationTitle,
+  othersWaiting,
+  type Conversations,
 } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
@@ -97,7 +100,6 @@ import {
 } from '../lib/session';
 import { useAccent } from '../lib/accent';
 import { chatKeyFor, conversationsOffered, jumpStep } from '../lib/conversations';
-import { ConversationSwitch } from './ConversationSwitch';
 import { getApp, useApp } from '../lib/store';
 import { SETUP_KEY, chatItems, isRowFor, sentAt, withSetupCard, type Item } from '../lib/timeline';
 import { setupAnchor, shows as showsSetup } from '../lib/teamSetup';
@@ -720,10 +722,10 @@ export function ChatView({
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
   const openUsage = () => router.push({ pathname: '/usage', params: { id } });
   const openConversations = () => router.push({ pathname: '/conversations', params: { id } });
-  // One way into Conversations: the title row under the header once there
-  // are several; the header's icon only while there's one (to start another).
-  const switchRow = Boolean(offered && conversations && conversations.items.length > 1);
-  const moreActions = headerActions(agent.name, ring?.percent, offered);
+  // Which conversation this is lives in the ⋯ menu, as Conversations' subtitle
+  // (Julian, 2026-11-11: a row under the header for it was always in the way).
+  const conversationNow = conversationLine(conversations, viewing, offered);
+  const moreActions = headerActions(agent.name, ring?.percent, offered, conversationNow);
   const openMore = () =>
     showActions(undefined, moreActions, (a) =>
       a === 'usage' ? openUsage() : a === 'conversations' ? openConversations() : openSheet()
@@ -760,14 +762,7 @@ export function ChatView({
           ringPercent={ring?.percent}
           ringTone={ring?.tone}
           offered={offered}
-          switchRow={switchRow}
-        />
-      )}
-      {switchRow && conversations && (
-        <ConversationSwitch
-          list={conversations}
-          viewing={viewing ?? conversations.current}
-          onPress={openConversations}
+          conversationNow={conversationNow}
         />
       )}
       {/* This conversation's living page, kept current by the agent (`agents/page.rs`). */}
@@ -1290,13 +1285,14 @@ const ChatHeader = memo(function ChatHeader({
   ringPercent: percent,
   ringTone: tone,
   offered,
-  switchRow,
+  conversationNow,
 }: {
   agent: Agent;
   ringPercent?: number;
   ringTone?: UsageTone;
   offered: boolean;
-  switchRow: boolean;
+  /** Conversations' subtitle in the ⋯ menu: which one is on screen. */
+  conversationNow?: string;
 }) {
   const styles = useStyles();
   const router = useRouter();
@@ -1311,11 +1307,10 @@ const ChatHeader = memo(function ChatHeader({
   // Usage, Conversations and About live behind one ⋯ so the title has room
   // (Julian, 2026-11-10: the 17% pill crowded the bar). The figure rides along
   // as the Usage row's subtitle; a usage line in the chat still says when it's low.
-  const moreActions = headerActions(agent.name, percent, offered);
+  const moreActions = headerActions(agent.name, percent, offered, conversationNow);
   const run = (a: HeaderAction) =>
     a === 'usage' ? openUsage() : a === 'conversations' ? openConversations() : openSheet();
   void tone;
-  void switchRow;
   return (
     <>
       <Stack.Screen
@@ -1604,12 +1599,25 @@ const useStyles = makeStyles((colors) => ({
 
 type HeaderAction = 'usage' | 'conversations' | 'about';
 
+/** "Now: Launch plan · another needs you": once there are several, for the ⋯ menu. */
+export function conversationLine(
+  list: Conversations | null | undefined,
+  viewing: string | null | undefined,
+  offered: boolean
+): string | undefined {
+  if (!offered || !list || list.items.length < 2) return undefined;
+  const id = viewing ?? list.current;
+  const now = conversationTitle(list.items.find((c) => c.id === id) ?? { id, title: '' });
+  return othersWaiting(list, id) ? `Now: ${now} · another needs you` : `Now: ${now}`;
+}
+
 /** The chat header's ⋯ menu: Usage (with the figure, once an engine reported it),
  *  Conversations, About. Same rows on iOS's native menu and the sheet elsewhere. */
 export function headerActions(
   name: string,
   percent: number | undefined,
-  offered: boolean
+  offered: boolean,
+  conversationNow?: string
 ): (Action<HeaderAction> & { subtitle?: string })[] {
   return [
     {
@@ -1619,7 +1627,14 @@ export function headerActions(
       subtitle: percent != null ? `${Math.round(percent)}% of the 5-hour limit used` : undefined,
     },
     ...(offered
-      ? [{ id: 'conversations' as const, title: 'Conversations', icon: 'bubble.left' as const }]
+      ? [
+          {
+            id: 'conversations' as const,
+            title: 'Conversations',
+            icon: 'bubble.left' as const,
+            subtitle: conversationNow,
+          },
+        ]
       : []),
     { id: 'about', title: `About ${name}`, icon: 'info.circle' },
   ];

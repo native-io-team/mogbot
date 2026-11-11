@@ -220,6 +220,38 @@ export const phoneScenarios: Scenario[] = [
     },
     { requires: 'phoneAllow' }
   ),
+  flowStep(
+    'phone-flow-paired',
+    'phoneScan',
+    'Phone — 7. Paired: you’re all set',
+    'After Allow: this Mac and the phone as two tiles joined by a green line, a green tick landing on it; “You’re all set”, “Sam’s iPhone is paired with this Mac. Your agents go where you go.”, a quiet card of three lines (message any agent, approvals from the Lock Screen, a ping when one needs you), one big button. No Back.',
+    {
+      ...ON,
+      tailscale: LOGIN,
+      pairing: {
+        active: false,
+        request: {
+          id: 'pr_1',
+          device: {
+            name: 'Sam’s iPhone',
+            platform: 'ios',
+            model: 'iPhone 16 Pro',
+            appVersion: '1.0.0',
+            build: 'official',
+          },
+          requestedAt: Date.now() - 20_000,
+          codeHint: '5D2Q',
+          login: 'julian@example.com',
+          replaces: [],
+        },
+      },
+    },
+    {
+      requires: 'phonePaired',
+      commands: { companion_pair_decide: null },
+      afterCommand: [{ click: '[data-phone-flow-step="phoneAllow"] [data-flow-primary]' }],
+    }
+  ),
   phone(
     'phone-ready',
     'Phone — on, two phones paired',
