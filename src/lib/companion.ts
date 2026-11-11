@@ -7,6 +7,7 @@
  * @module lib/companion
  */
 
+import type { CheckResult } from './onboardingFlow';
 import { invoke } from '@tauri-apps/api/core';
 import type { Device, DevicePlatform } from '../../packages/companion-protocol/src/model';
 
@@ -318,3 +319,39 @@ export const PUSH_COPY = {
   officialOnly:
     'Needs the official app from TestFlight or the App Store. A self-built app can’t receive push.',
 } as const;
+
+/** How long the phone's Tailscale step looks quietly before it says how to fix it. */
+export const PHONE_TAILNET_PATIENCE_MS = 15_000;
+
+/**
+ * The phone's Tailscale step's check, from what this Mac's Tailscale sees:
+ * a phone switched on passes; one that's there but off says so by name; none
+ * after a short wait says the usual cause (the phone signed in to another
+ * account: "Sign in with Apple" makes a separate one) and that the same
+ * Wi-Fi isn't needed, since Tailscale connects them over any network.
+ */
+export function phoneTailnetCheck(
+  phones: TailnetPhone[] | null,
+  t: TailscaleState | null,
+  slow: boolean
+): CheckResult {
+  const on = phones?.find((p) => p.online);
+  if (on) return { state: 'pass', line: `${on.name} is on your Tailscale.` };
+  const off = phones?.[0];
+  const account = t?.state === 'connected' && t.login ? t.login : null;
+  if (off) {
+    return {
+      state: 'waiting',
+      line: `${off.name} is on your Tailscale, but switched off.`,
+      fix: 'Open Tailscale on the phone and switch it on, until it says Connected.',
+    };
+  }
+  if (!slow) return { state: 'checking', line: 'Looking for your phone on your Tailscale…' };
+  return {
+    state: 'waiting',
+    line: 'This Mac can’t see your phone on its Tailscale yet.',
+    fix: account
+      ? `On the phone, open Tailscale: it should say Connected and show ${account}. If it shows another account (Sign in with Apple makes a separate one), sign out and sign in as ${account}. The same Wi-Fi isn’t needed.`
+      : 'On the phone, open Tailscale: it should say Connected, signed in with the same account as this Mac. The same Wi-Fi isn’t needed.',
+  };
+}

@@ -47,6 +47,8 @@ import {
   getTailnetPhones,
   phoneStep,
   phoneTailscaleSignIn,
+  phoneTailnetCheck,
+  PHONE_TAILNET_PATIENCE_MS,
   retryPhoneTailscale,
   setPhoneAccess,
   startPairing,
@@ -444,6 +446,17 @@ function useStepView(p: {
     step
   );
   useAdvanceWhenPassed(step === 'phonePhoneTailscale' && !!onPhone, () => go('phoneAccess'), step);
+  // Looking for the phone: quiet at first, then how to fix it.
+  const [slowOn, setSlowOn] = useState<string | null>(null);
+  useEffect(() => {
+    if (step !== 'phonePhoneTailscale') return;
+    const t = setTimeout(() => setSlowOn(step), PHONE_TAILNET_PATIENCE_MS);
+    return () => {
+      clearTimeout(t);
+      setSlowOn(null);
+    };
+  }, [step]);
+  const slowTailnet = slowOn === step;
   useAdvanceWhenPassed(
     step === 'phoneAccess' && access?.kind === 'ready',
     () => go('phoneScan'),
@@ -527,9 +540,7 @@ function useStepView(p: {
         skip,
       });
     case 'phonePhoneTailscale': {
-      const check: CheckResult = onPhone
-        ? { state: 'pass', line: `${onPhone.name} is on your Tailscale.` }
-        : { state: 'checking', line: 'Looking for your phone on your Tailscale…' };
+      const check = phoneTailnetCheck(p.phones ?? null, status?.tailscale ?? null, slowTailnet);
       return {
         title: TAILSCALE_YOUR_PHONE_TITLE,
         lede: `Install Tailscale on your phone, ${phoneTailscaleSignIn(status?.tailscale ?? null)}, and switch it on. It asks to add a VPN configuration: tap Allow.`,

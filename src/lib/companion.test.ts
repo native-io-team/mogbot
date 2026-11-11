@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  phoneTailnetCheck,
   activityLine,
   deviceLine,
   phoneCapabilities,
@@ -166,5 +167,29 @@ describe('phoneTailscaleText', () => {
         'Install Tailscale on your phone and sign in with the same account as this Mac.'
       );
     }
+  });
+});
+
+describe('phoneTailnetCheck', () => {
+  const mac = { state: 'connected' as const, dnsName: 'mac.tail.ts.net', login: 'sam@example.com' };
+  const phone = (online: boolean) => ({ name: 'Sams-iPhone', os: 'ios', online });
+
+  it('passes on a phone switched on', () => {
+    expect(phoneTailnetCheck([phone(false), phone(true)], mac, false).state).toBe('pass');
+  });
+
+  it('names a phone that is there but switched off', () => {
+    const c = phoneTailnetCheck([phone(false)], mac, false);
+    expect(c).toMatchObject({ state: 'waiting', line: expect.stringContaining('Sams-iPhone') });
+  });
+
+  it('looks quietly at first, then says the usual cause and that Wi-Fi does not matter', () => {
+    expect(phoneTailnetCheck([], mac, false).state).toBe('checking');
+    const c = phoneTailnetCheck(null, mac, true);
+    expect(c.state).toBe('waiting');
+    if (c.state !== 'waiting') return;
+    expect(c.fix).toContain('sam@example.com');
+    expect(c.fix).toContain('Sign in with Apple');
+    expect(c.fix).toContain('same Wi-Fi isn’t needed');
   });
 });
