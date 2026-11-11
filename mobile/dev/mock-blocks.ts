@@ -301,11 +301,13 @@ export function blocksMessages(now: number, attach: Attach): AgentMessage[] {
   show(14, 'Good. When should I move it?', [
     {
       kind: 'choices',
-      summary: '“This weekend” / “Next weekend” / “Tonight”',
+      question: 'Which weekend works for the move?',
+      summary:
+        '“This weekend, after 10 (my pick)” / “Next weekend” / “Let me check the calendar first”',
       options: [
-        { label: 'This weekend', reply: 'This weekend.' },
+        { label: 'This weekend, after 10 (my pick)', reply: 'This weekend, after 10.' },
         { label: 'Next weekend', reply: 'Next weekend.' },
-        { label: 'Tonight, after 10', reply: 'Tonight, after 10.' },
+        { label: 'Let me check the calendar first', reply: 'Let me check the calendar first.' },
       ],
     },
     {

@@ -7,7 +7,8 @@
  *   while it works: what you say queues, as what you type does. With words,
  *   Send queues (the line over the field says it reads it when it’s done with this one
  *   ends) and **Send now** (interrupt, then send) sits at that line's right;
- * - waiting on your OK: Send queues, and no Stop: the card above is the control;
+ * - waiting on your OK: no Stop, and Send goes now: the turn waiting on the
+ *   card is interrupted, the card closes as moved on, and your message is read;
  * - offline: **Send** waits for the Mac (outbox.ts), and says so;
  * - dictating: the field listens (lib/dictation.ts) and becomes one glass
  *   card, as Claude's own dictation is. On top, the words stream in across
@@ -466,12 +467,21 @@ export function Composer({
       );
       return;
     }
-    send(agent.id, body, now && connected, undefined, files, mentions, draft.revising).catch(
-      (error: unknown) => {
-        haptic.error();
-        onError(describeError(error));
-      }
-    );
+    // Waiting on a card: the message is the answer. It goes now and the card
+    // closes as moved on, rather than waiting behind a question nobody must answer.
+    const answersCard = mode === 'queue' && waitingOnYou && !driven;
+    send(
+      agent.id,
+      body,
+      (now || answersCard) && connected,
+      undefined,
+      files,
+      mentions,
+      draft.revising
+    ).catch((error: unknown) => {
+      haptic.error();
+      onError(describeError(error));
+    });
   };
 
   /** Send while listening: stop, and send what's on screen now. */
@@ -526,7 +536,7 @@ export function Composer({
   const queued =
     mode === 'queue' && !driven
       ? waitingOnYou
-        ? `${agent.name} reads it after you answer above`
+        ? `Sends now, instead of answering above`
         : `${agent.name} reads it when it’s done with this one`
       : null;
   // Listening while it works, the queued line stays, so Send now has its sentence.

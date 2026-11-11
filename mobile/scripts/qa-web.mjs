@@ -72,7 +72,12 @@ const WEB = `http://localhost:${WEB_PORT}`;
 const MOCK = `http://localhost:${MOCK_PORT}`;
 // `--size 375x667` (or QA_SIZE) captures at another phone, e.g. a small one.
 const [SIZE_W, SIZE_H] = opt('--size', 'QA_SIZE', '402x874').split('x').map(Number);
-const VIEWPORT = { width: SIZE_W || 402, height: SIZE_H || 874, deviceScaleFactor: 3, mobile: true };
+const VIEWPORT = {
+  width: SIZE_W || 402,
+  height: SIZE_H || 874,
+  deviceScaleFactor: 3,
+  mobile: true,
+};
 const CHROME = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
@@ -1291,6 +1296,14 @@ const LIVE = [
     pages: 10,
     check:
       'Every block kind: metric tiles with deltas and a sparkline, a two-series line chart with a legend, a stacked bar, a donut with its slices listed, a sortable table with Show all, facts, a checklist with its count, steps with done/current/failed marks, two callouts with icon and word, link chips with their domain, a tinted diff, an image; the comparison answered (Picked on Vercel), the choices and form still live with neutral answers',
+  },
+  {
+    name: 'blocks-choices',
+    route: '/chat/blocks',
+    ready: 'Blocks',
+    act: scrollToText('Which weekend works for the move?'),
+    check:
+      'Choices: the question, then one full-width row per option, its words left-aligned and never squeezed beside another; the field below still sends',
   },
   {
     name: 'blocks-brief',

@@ -69,17 +69,24 @@ export function BlockChoices({ block, answering }: { block: ChoicesBlock; answer
               key={o.label + i}
               title={o.label}
               variant={on ? 'answer' : 'outline'}
-              size="compact"
-              lines={2}
+              lines={3}
               icon={on ? 'checkmark' : undefined}
               disabled={!answering.live && !on}
               accessibilityState={{ selected: on, disabled: !answering.live }}
               onPress={answering.live ? () => answering.reply(o.reply) : undefined}
+              // A choice reads as a row of a list, left-aligned, one per line:
+              // side by side they wrapped raggedly and read as a menu to finish.
+              style={styles.choice}
               testID="block-choice"
             />
           );
         })}
       </View>
+      {answering.live && (
+        <T variant="caption" color={colors.textMuted}>
+          Or type your own reply below
+        </T>
+      )}
     </View>
   );
 }
@@ -422,7 +429,8 @@ function DateField({
 const useStyles = makeStyles((colors) => ({
   flex: { flex: 1 },
   ask: { gap: space.sm },
-  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  choices: { gap: space.sm },
+  choice: { alignSelf: 'stretch', justifyContent: 'flex-start', paddingHorizontal: space.lg },
   options: { gap: space.sm },
   option: {
     gap: space.sm,
