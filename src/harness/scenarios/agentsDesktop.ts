@@ -543,13 +543,20 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-accounts',
     title: 'Settings — Agents → Accounts (usage wallets)',
     looksRightWhen:
-      'Settings → Accounts & usage is the Usage view’s panel. Claude Code’s accounts are key cards in order, each with a grip (drag, or the grip with the keyboard; no ↑/↓ buttons): 1 this Mac’s own sign-in named “Claude Code account” (never “This Mac”, with “this Mac’s own sign-in” as its detail), 2 “Work” with a neutral “Out until …” pill and its email, 3 “Personal” with its email. Codex: its own sign-in named “Codex account”, and “ChatGPT Plus” “Not signed in” with a Sign in button and its fix line. Each key has a “…” menu (Rename, Sign in again, Remove…). “Add a … account” buttons below. Neutral buttons only, no accent.',
+      'Settings → Accounts & usage is the Usage view’s panel. Claude Code’s accounts are key cards in order, each with a grip (drag, or the grip with the keyboard; no ↑/↓ buttons): 1 this Mac’s own sign-in named “Claude Code account” (never “This Mac”, with “this Mac’s own sign-in” as its detail), 2 “Work” with a neutral “Out until …” pill and its email, 3 “Personal” with its email. Codex: its own sign-in named “Codex account”, and “ChatGPT Plus” “Not signed in” with a Sign in button and its fix line. Each key has a “…” menu (Rename, Sign in again, Remove…). “Add a Claude Code account”, “Add a Codex account” and “Set up OpenCode” (not on this Mac yet; opens its install, then its sign-in) beside Accounts. Neutral buttons only, no accent.',
     command: 'settings.page.accounts',
     requires: '.usage-panel .usage-row',
     clipSelector: '.settings-window',
     viewport: { width: 1280, height: 2800 },
     commands: {
-      agents_overview: overview(),
+      agents_overview: {
+        ...overview(),
+        // As the Mac lists them: every engine, OpenCode not installed here.
+        engines: [
+          ...ENGINES,
+          { id: 'opencode', label: 'OpenCode', installed: false, signedIn: false, asks: true, models: [] },
+        ],
+      },
       agents_desktop_settings: {
         supported: true,
         menuBarIcon: true,

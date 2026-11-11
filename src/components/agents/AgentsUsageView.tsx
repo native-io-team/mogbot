@@ -158,10 +158,25 @@ export function UsagePanel({
     useUsageGlance({ look: true });
   const [signingIn, setSigningIn] = useState<UsageAccount | null>(null);
   const [macSignIn, setMacSignIn] = useState<AgentEngine | null>(null);
+  // An engine not on this Mac yet: its install, then its sign-in.
+  const [setUp, setSetUp] = useState<AgentEngine | null>(null);
   const [busy, setBusy] = useState(false);
   // The account whose page is showing; null on the overview.
   const [open, setOpen] = useState<UsageAccountRef | null>(() => takeUsageAccount());
   const installed = engines.filter((e) => e.installed).map((e) => e.id);
+  // Engines agents can run on that aren't here yet: offered, never hidden.
+  const missing = engines.filter((e) => !e.installed).map((e) => e.id);
+  const setUpButtons = missing.map((engine) => (
+    <Button
+      key={engine}
+      variant="ghost"
+      leftIcon={<AddIcon size={14} />}
+      onClick={() => setSetUp(engine)}
+      data-set-up-engine={engine}
+    >
+      Set up {ENGINE_LABEL[engine]}
+    </Button>
+  ));
   const top = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const cameFrom = useRef<string | null>(null);
@@ -438,11 +453,12 @@ export function UsagePanel({
                         onClick={() => void add(engine)}
                         data-add-account={engine}
                       >
-                        {installed.length > 1
+                        {installed.length > 1 || missing.length > 0
                           ? `Add a ${ENGINE_LABEL[engine]} account`
                           : 'Add an account'}
                       </Button>
                     ))}
+                    {setUpButtons}
                   </div>
                 )}
               </div>
@@ -490,6 +506,7 @@ export function UsagePanel({
                     Add a {ENGINE_LABEL[engine]} account
                   </Button>
                 ))}
+                {setUpButtons}
               </div>
               <p className="usage-section__muted">{ADD_ACCOUNT_WHY}</p>
             </div>
@@ -598,6 +615,16 @@ export function UsagePanel({
       )}
       {macSignIn && (
         <EngineSignInModal engine={macSignIn} step="sign-in" onClose={() => setMacSignIn(null)} />
+      )}
+      {setUp && (
+        <EngineSignInModal
+          engine={setUp}
+          step="install"
+          onClose={() => {
+            setSetUp(null);
+            void reload();
+          }}
+        />
       )}
     </div>
   );
