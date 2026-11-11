@@ -174,3 +174,44 @@ describe('DirectTransport when the Mac moves', () => {
     }
   });
 });
+
+describe('DirectTransport coming back from the background', () => {
+  const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
+  afterAll(() => mock.close());
+
+  it('opens a new socket at once after a long time away, and keeps a trail of why', async () => {
+    const url = await mock.listen();
+    const { token } = mock.issueToken();
+    const t = new DirectTransport({
+      routes: [{ kind: 'tailscale', url }],
+      token,
+      app: { version: '0.1.0', runtimeVersion: 'test' },
+      getResume: () => undefined,
+      foreground: true,
+      WebSocketImpl: WebSocket as unknown as typeof globalThis.WebSocket,
+      ...provenBy(mock),
+    });
+    const realNow = Date.now;
+    try {
+      await until(() => t.state.kind === 'connected');
+      t.setForeground(false);
+      // A minute away: iOS would have suspended the app by now.
+      const back = realNow() + 60_000;
+      Date.now = () => back;
+      const startedAt = realNow();
+      t.setForeground(true);
+      expect(t.state.kind).toBe('reconnecting');
+      Date.now = realNow;
+      await until(() => t.state.kind === 'connected');
+      // No 4 s probe wait or backoff first.
+      expect(realNow() - startedAt).toBeLessThan(3000);
+      const trail = t.recentTrail().map((e) => e.what);
+      expect(trail).toContain('background');
+      expect(trail.some((w) => w.startsWith('fresh socket after 60s away'))).toBe(true);
+      expect(trail.filter((w) => w.startsWith('welcome via tailscale')).length).toBe(2);
+    } finally {
+      Date.now = realNow;
+      t.close();
+    }
+  });
+});

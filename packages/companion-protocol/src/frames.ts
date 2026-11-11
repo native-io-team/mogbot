@@ -88,6 +88,12 @@ export interface HelloFrame {
    * only what it will use. An older app sends none. See `FEATURES`.
    */
   features?: Feature[];
+  /**
+   * Why the link ended the last few times, as the phone saw it (closed with
+   * a code, silent, a probe unanswered, a try timed out), oldest first. The
+   * Mac only logs it: it's how a drop gets explained after the fact.
+   */
+  trail?: { at: number; what: string }[];
 }
 
 /** Optional things an app can say it shows (`hello.features`). */

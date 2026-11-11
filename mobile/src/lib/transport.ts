@@ -224,6 +224,20 @@ const passing = (reason: RefusedFrame['reason']): reason is MacSaid => PASSING_R
  */
 export const OTHER_ACCOUNT_RETRY_MS = 15_000;
 
+/**
+ * Away from the screen longer than this, iOS has suspended the app and its
+ * socket can't be trusted: coming back opens a new one at once.
+ */
+export const SUSPENDED_AFTER_MS = 20_000;
+
+/** One line of the link's trail: when, and what happened. */
+export interface TrailEntry {
+  at: number;
+  what: string;
+}
+const TRAIL_KEPT = 40;
+const TRAIL_SENT = 20;
+
 /** `retryNow` leaves a try this young alone, so a burst of triggers doesn't churn sockets. */
 const FRESH_TRY_MS = 1500;
 
@@ -254,6 +268,14 @@ export class DirectTransport implements Transport {
   private welcomeListeners = new Set<(w: WelcomeFrame) => void>();
   private refusedListeners = new Set<(r: RefusedFrame) => void>();
   private foreground: boolean;
+  /** When the app last left the screen; 0 while it's in front. */
+  private backgroundedAt = 0;
+  /**
+   * Why the link ended, the last few times (`LinkTrail`): sent with the next
+   * hello so the Mac's log says why phones drop (Julian and Bradford,
+   * 2026-11-11: "the connection keeps dropping", with no way to see why).
+   */
+  private trail: TrailEntry[] = [];
 
   state: LinkState = { kind: 'connecting', attempt: 0 };
   /** The last frame from the Mac (epoch ms), 0 before the first. */
@@ -394,8 +416,29 @@ export class DirectTransport implements Transport {
 
   setForeground(foreground: boolean) {
     const cameForward = foreground && !this.foreground;
+    const away = cameForward && this.backgroundedAt ? Date.now() - this.backgroundedAt : 0;
+    if (foreground !== this.foreground) this.note(foreground ? 'foreground' : 'background');
     this.foreground = foreground;
+    this.backgroundedAt = foreground ? 0 : Date.now();
     if (this.ready) {
+      // Away long enough for iOS to have suspended the app, its socket is as
+      // good as dead: a new one now, rather than a ping that waits 4 s for no
+      // answer, then a backoff, then the handshake (5–8 s of "Reconnecting…"
+      // on every return).
+      if (away > SUSPENDED_AFTER_MS) {
+        this.note(`fresh socket after ${Math.round(away / 1000)}s away`);
+        this.teardown();
+        this.attempt = 0;
+        this.troubleSince = Date.now();
+        this.setState({
+          kind: 'reconnecting',
+          lastSeenAt: this.lastSeenAt,
+          nextTryAt: Date.now(),
+          since: this.troubleSince,
+        });
+        this.connect();
+        return;
+      }
       this.send({ t: 'presence', foreground });
       // A socket that sat in the background may be dead without knowing it.
       if (cameForward) this.probe();
@@ -466,7 +509,7 @@ export class DirectTransport implements Transport {
     this.send({ t: 'ping' });
     // Any frame re-arms the full wait (`onmessage`).
     if (this.deadTimer) clearTimeout(this.deadTimer);
-    this.deadTimer = setTimeout(() => this.lost(), probeWaitMs(this.latencyMs));
+    this.deadTimer = setTimeout(() => this.lost('probe-unanswered'), probeWaitMs(this.latencyMs));
   }
 
   close() {
@@ -540,14 +583,15 @@ export class DirectTransport implements Transport {
       if (this.ready && (ev as { code?: number } | null)?.code === CLOSE_MAC_CLOSING) {
         this.macClosing = true;
       }
-      this.lost();
+      const code = (ev as { code?: number } | null)?.code;
+      this.lost(this.ready ? `closed-${code ?? 'no-code'}` : `closed-before-welcome-${code ?? 'no-code'}`);
     };
   }
 
   private armConnectTimer(ws: SocketLike, ms: number) {
     if (this.connectTimer) clearTimeout(this.connectTimer);
     this.connectTimer = setTimeout(() => {
-      if (ws === this.ws && !this.ready) this.lost();
+      if (ws === this.ws && !this.ready) this.lost(this.opened ? 'handshake-timeout' : 'connect-timeout');
     }, ms);
   }
 
@@ -579,6 +623,7 @@ export class DirectTransport implements Transport {
       ...(resume ? { resume } : {}),
       foreground: this.foreground,
       features: [FEATURES.liveWork, FEATURES.rooms, FEATURES.alerts, FEATURES.otherAccount],
+      ...(this.trail.length ? { trail: this.trail.slice(-TRAIL_SENT) } : {}),
     });
   }
 
@@ -607,6 +652,7 @@ export class DirectTransport implements Transport {
         this.stuckSince = 0;
         this.macSaid = undefined;
         this.handshakeMs = Date.now() - this.triedAt;
+        this.note(`welcome via ${this.route.kind} in ${this.handshakeMs}ms`);
         if (this.connectTimer) clearTimeout(this.connectTimer);
         this.connectTimer = null;
         this.welcome = frame;
@@ -666,7 +712,8 @@ export class DirectTransport implements Transport {
   }
 
   /** The socket closed or went silent: fail what's in flight and retry with backoff. */
-  private lost() {
+  private lost(why: string) {
+    this.note(`${why}${this.foreground ? '' : ' (background)'} via ${this.route.kind}`);
     const unanswered = this.silent;
     const wasReady = this.ready;
     // Took the connection and said nothing: the Mac is there, its app isn't answering.
@@ -771,12 +818,22 @@ export class DirectTransport implements Transport {
 
   private armDeadTimer() {
     if (this.deadTimer) clearTimeout(this.deadTimer);
-    this.deadTimer = setTimeout(() => this.lost(), DEAD_AFTER_MS);
+    this.deadTimer = setTimeout(() => this.lost('silent'), DEAD_AFTER_MS);
   }
 
   private send(frame: ClientFrame) {
     // OPEN is 1 for every WebSocket implementation.
     if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(frame));
+  }
+
+  private note(what: string) {
+    this.trail.push({ at: Date.now(), what });
+    if (this.trail.length > TRAIL_KEPT) this.trail.splice(0, this.trail.length - TRAIL_KEPT);
+  }
+
+  /** The link's recent trail, for the phone's own diagnostics. */
+  recentTrail(): readonly TrailEntry[] {
+    return this.trail;
   }
 
   private setState(state: LinkState) {

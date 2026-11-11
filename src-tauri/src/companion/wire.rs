@@ -315,6 +315,16 @@ pub struct HelloFrame {
     /// frames.ts). An older app sends none.
     #[serde(default)]
     pub features: Vec<String>,
+    /// Why the link ended the last few times, as the phone saw it; logged only.
+    #[serde(default)]
+    pub trail: Vec<TrailEntry>,
+}
+
+/// One line of `hello.trail`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TrailEntry {
+    pub at: i64,
+    pub what: String,
 }
 
 /// `hello.features`: the app shows a running turn's steps (`status.work`).

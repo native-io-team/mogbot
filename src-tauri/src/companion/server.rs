@@ -859,8 +859,24 @@ where
     );
     c.backend.changed();
 
+    // Why phones drop, findable afterwards: each socket's life and how it
+    // ended, with what the phone saw end the ones before (`hello.trail`).
+    let trail = trail_line(&hello.trail);
+    tracing::info!(
+        device = %record.id,
+        foreground = hello.foreground,
+        resumed = hello.resume.is_some(),
+        trail = %trail,
+        "[Companion] phone connected"
+    );
+    let opened = Instant::now();
     let ended = connected(&c, &mut ws, &caller, protocol, &hello, caller.shows).await;
-    tracing::debug!(device = %record.id, ?ended, "[Companion] socket closed");
+    tracing::info!(
+        device = %record.id,
+        ?ended,
+        secs = opened.elapsed().as_secs(),
+        "[Companion] phone socket closed"
+    );
 
     c.close_conn(conn);
     let _ = c.backend.focus(&caller.label, None).await;
@@ -1363,3 +1379,25 @@ where
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+/// `hello.trail` as one log line: "-63s silent via tailscale; -2s welcome …",
+/// times relative to now, at most 20 entries of 80 characters each.
+fn trail_line(trail: &[wire::TrailEntry]) -> String {
+    let now = now_ms() as i64;
+    trail
+        .iter()
+        .rev()
+        .take(20)
+        .rev()
+        .map(|e| {
+            let what: String = e
+                .what
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(80)
+                .collect();
+            format!("-{}s {}", (now - e.at).max(0) / 1000, what)
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
