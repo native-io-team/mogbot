@@ -60,6 +60,18 @@ export interface AgentStatus {
   room?: string;
 }
 
+/** The status words of a tidy between turns (`agents/tidy.rs` `ACTIVITY`). */
+export const TIDY_ACTIVITY = 'Tidying its memory';
+
+/**
+ * Whether Keep and Discard must wait: the agent is working on something, or
+ * driven by hand. Only tidying its memory doesn't count: Keep makes the tidy
+ * give way on the Mac (`runner::clear_tidy`).
+ */
+export function holdsCopy(status: AgentStatus): boolean {
+  return status.state !== 'idle' && status.activity !== TIDY_ACTIVITY;
+}
+
 /**
  * What kind of thing a timeline step was, for its icon (`agents::work::StepKind`).
  * A newer Mac may send a kind this build doesn't know: draw it as `tool`.

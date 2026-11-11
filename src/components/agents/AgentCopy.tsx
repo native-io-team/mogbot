@@ -10,6 +10,7 @@
  * @module components/agents/AgentCopy
  */
 
+import { holdsCopy } from '../../../packages/companion-protocol/src/model';
 import { useState } from 'react';
 import { GlobeIcon, MoreHorizontalIcon, PullRequestIcon, TrashIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
@@ -118,7 +119,7 @@ export function CopyActions({
   const otherBranch =
     answeredBranch ??
     (stuck?.outcome === 'otherBranch' ? { current: stuck.current, base: stuck.base } : null);
-  const working = agent.status.state !== 'idle';
+  const working = holdsCopy(agent.status);
   // You're driving it by hand: the copy may be mid-edit in the terminal, and
   // the backend refuses Keep and Discard until it's handed back.
   const driven = Boolean(agent.takeover);

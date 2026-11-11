@@ -1510,8 +1510,14 @@ async fn dropped_if_unused(agent_id: &str, copy: &TaskCopy) -> bool {
 /// project lock: a turn claims the agent (`in_turn`) before it prepares its
 /// copy, so a Keep that got the lock first finishes before the turn reads
 /// the copy, and one that got it second sees the turn and stops.
-fn refuse_while_working(agent: &store::Agent) -> Result<(), CommandError> {
-    if super::runner::in_turn(&agent.id) {
+/// How long Keep or Discard waits for a tidy to give way.
+const TIDY_GIVES_WAY: std::time::Duration = std::time::Duration::from_secs(20);
+
+async fn refuse_while_working(agent: &store::Agent) -> Result<(), CommandError> {
+    // Tidying its memory between turns isn't working on it: that gives way.
+    if super::runner::in_turn(&agent.id)
+        && !super::runner::clear_tidy(&agent.id, TIDY_GIVES_WAY).await
+    {
         return Err(CommandError::expected(format!(
             "{} is still working on it. Try again when it's finished.",
             agent.name
@@ -1582,11 +1588,11 @@ pub async fn keep(
     into: Option<&str>,
 ) -> Result<Kept, CommandError> {
     let agent = store::get(agent_id)?;
-    refuse_while_working(&agent)?;
+    refuse_while_working(&agent).await?;
     let copy = open_copy(&agent, copy_id)?;
     let _guard = lock(&copy.project).await;
     let agent = store::get(agent_id)?;
-    refuse_while_working(&agent)?;
+    refuse_while_working(&agent).await?;
     let copy = open_copy(&agent, copy_id)?;
     let name = super::project::folder_name(&copy.project).to_string();
     let kept = keep_copy(&copy, &agent.name, Some(agent.engine.label()), into).await?;
@@ -1616,11 +1622,11 @@ pub async fn discard(
     copy_id: Option<&str>,
 ) -> Result<(), CommandError> {
     let agent = store::get(agent_id)?;
-    refuse_while_working(&agent)?;
+    refuse_while_working(&agent).await?;
     let copy = open_copy(&agent, copy_id)?;
     let _guard = lock(&copy.project).await;
     let agent = store::get(agent_id)?;
-    refuse_while_working(&agent)?;
+    refuse_while_working(&agent).await?;
     let copy = open_copy(&agent, copy_id)?;
     remove(&copy, Branch::Force).await?;
     store::update(agent_id, |a| a.copy = None)?;

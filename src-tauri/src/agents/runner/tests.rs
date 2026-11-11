@@ -1017,3 +1017,39 @@ fn an_import_conversation_never_reaches_the_chiefs_own_session() {
     ];
     assert_eq!(recap_lines(&log), vec!["User: Hi"]);
 }
+
+/// Keep or Discard during a memory tidy: the tidy is cut off (as an
+/// interruption, so a quiet turn leaves no line) and Keep goes ahead once
+/// the turn ends. The user's own turn is never cut off for it.
+#[tokio::test]
+async fn keep_makes_a_tidy_give_way_but_never_the_users_turn() {
+    let id = "keep-tidy-agent";
+    let cancel = Arc::new(Notify::new());
+    {
+        let mut runtimes = RUNTIMES.lock().unwrap();
+        let r = runtimes.entry(id.into()).or_default();
+        r.running = true;
+        r.cancel = Some(cancel.clone());
+    }
+    // A real turn: not the app's own, so nothing is cut off and Keep waits.
+    assert!(!only_tidying(id));
+    assert!(!give_way_if_quiet(id));
+    assert!(!clear_tidy(id, Duration::from_millis(200)).await);
+    assert!(!RUNTIMES.lock().unwrap().get(id).unwrap().interrupt);
+
+    // The memory tidy: it gives way, and once its turn ends Keep goes.
+    let quiet = super::super::tidy::QuietTurn::begin(id, false);
+    assert!(only_tidying(id));
+    let ended = {
+        let cancel = cancel.clone();
+        tokio::spawn(async move {
+            cancel.notified().await;
+            RUNTIMES.lock().unwrap().get_mut(id).unwrap().running = false;
+        })
+    };
+    assert!(clear_tidy(id, Duration::from_secs(5)).await);
+    ended.await.unwrap();
+    assert!(RUNTIMES.lock().unwrap().get(id).unwrap().interrupt);
+    drop(quiet);
+    RUNTIMES.lock().unwrap().remove(id);
+}

@@ -15,6 +15,7 @@
  * requests need the Mac's workspace, so they stay there.
  */
 
+import { holdsCopy } from '@shipstudio/companion-protocol';
 import type { Agent, CopyRef, KeptCopy, LeftOut } from '@shipstudio/companion-protocol';
 import { useState, type ReactNode } from 'react';
 import { Alert, View } from 'react-native';
@@ -130,7 +131,7 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
   const share = useActionShare(['Discard', 'Keep there too']);
   if (!props || !served) return null;
   const { agent, copy, leftOut, warning, stats, size, onError } = props;
-  const working = agent.status.state !== 'idle';
+  const working = holdsCopy(agent.status);
   // Driven by hand on the Mac: the copy may be mid-edit in the terminal, and
   // the Mac refuses Keep and Discard until it's handed back.
   const driven = Boolean(agent.takeover);

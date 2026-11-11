@@ -406,6 +406,58 @@ pub fn interrupt(agent_id: &str) -> bool {
     true
 }
 
+/// The app's own quiet turn (a memory tidy, a compaction) gives way: it is
+/// cut off as an interruption, which a quiet turn takes without a line, and
+/// the tidy tries again after the next turn. False when the turn in progress
+/// isn't the app's own: that one is the user's work, and isn't cut off.
+pub fn give_way_if_quiet(agent_id: &str) -> bool {
+    if !super::tidy::is_quiet(agent_id) {
+        return false;
+    }
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(runtime) = runtimes.get_mut(agent_id) else {
+        return false;
+    };
+    let Some(cancel) = runtime.cancel.clone().filter(|_| runtime.running) else {
+        return false;
+    };
+    runtime.interrupt = true;
+    cancel.notify_one();
+    true
+}
+
+/// Whether the agent is only tidying between turns: its own quiet turn, or
+/// the moment between the tidy's two steps (its status still says so).
+pub fn only_tidying(agent_id: &str) -> bool {
+    if super::tidy::is_quiet(agent_id) {
+        return true;
+    }
+    let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    runtimes.get(agent_id).is_some_and(|r| {
+        r.running
+            && r.status
+                .as_ref()
+                .and_then(|s| s.activity.as_deref())
+                .is_some_and(|a| a == super::tidy::ACTIVITY)
+    })
+}
+
+/// Keep or Discard while the agent only tidies: the tidy gives way and this
+/// waits (at most `bound`) for the turn to end. True once nothing runs.
+pub async fn clear_tidy(agent_id: &str, bound: Duration) -> bool {
+    let until = tokio::time::Instant::now() + bound;
+    loop {
+        if !in_turn(agent_id) {
+            return true;
+        }
+        if !only_tidying(agent_id) || tokio::time::Instant::now() >= until {
+            return false;
+        }
+        give_way_if_quiet(agent_id);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 /// Move what was said in `place` (a room's id, or `None` for the agent's own
 /// chat) ahead of the rest, each side keeping its order. False when nothing
 /// queued was said there.
