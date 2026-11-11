@@ -486,14 +486,20 @@ fn an_import_asks_for_no_logins_up_front_and_keeps_them_for_later() {
         },
     ])
     .unwrap();
+    // The third only a key opens, so it waits until a task needs it and the
+    // step is done without asking.
     let v = view().unwrap();
-    let open: Vec<_> = step_of(&v, StepId::Logins)
+    let quarry = step_of(&v, StepId::Logins)
         .later
         .iter()
-        .filter(|g| g.state == crate::agents::access_check::LaterState::Open)
-        .collect();
-    assert_eq!(open.len(), 1);
-    assert_eq!(step_of(&v, StepId::Logins).state, StepState::Open);
+        .find(|g| g.key == "other:quarry crm")
+        .unwrap();
+    assert_eq!(
+        quarry.state,
+        crate::agents::access_check::LaterState::WhenNeeded
+    );
+    assert_eq!(step_of(&v, StepId::Logins).state, StepState::Done);
+    // Saying it isn't needed keeps it done.
     set_later(
         "other:quarry crm",
         crate::agents::access_check::LaterState::NotNeeded,

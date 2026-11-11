@@ -151,6 +151,7 @@ describe('SetupReach', () => {
     expect(composerDraft('t')).toContain('Do you actually need the Tenspeed supabase?');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'No' }));
+      await Promise.resolve();
     });
     expect(calls.later).toHaveBeenCalledWith('other:tenspeed supabase', 'not_needed');
   });
@@ -159,6 +160,7 @@ describe('SetupReach', () => {
     render(<SetupReach step={step()} />);
     await act(async () => {
       fireEvent.click(screen.getAllByRole('button', { name: 'Later' })[0]);
+      await Promise.resolve();
     });
     expect(calls.later).toHaveBeenCalledWith('linkedin', 'when_needed');
   });

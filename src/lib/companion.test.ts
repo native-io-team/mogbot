@@ -181,7 +181,8 @@ describe('phoneTailnetCheck', () => {
 
   it('names a phone that is there but switched off', () => {
     const c = phoneTailnetCheck([phone(false)], mac, false);
-    expect(c).toMatchObject({ state: 'waiting', line: expect.stringContaining('Sams-iPhone') });
+    expect(c.state).toBe('waiting');
+    expect(c.line).toContain('Sams-iPhone');
   });
 
   it('looks quietly at first, then says the usual cause and that Wi-Fi does not matter', () => {

@@ -899,7 +899,7 @@ mod tests {
         assert!(prompt.contains("Never tell them to go to their computer"));
         // The chain, in order: our own connection, the browser, then one ask;
         // claude.ai's connectors are an extra, never waited on.
-        assert!(prompt.contains("an extra: use it if it works, never wait on it"));
+        assert!(prompt.contains("is an extra, never waited on"));
         let chain = [
             "One of the app's own connections",
             "the user's own Chrome",
