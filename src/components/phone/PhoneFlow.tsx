@@ -7,7 +7,7 @@
  * says from its side (`companion-protocol/src/pairWords.ts`). Every tick is
  * this Mac's own check (its Tailscale, a phone on its tailnet, phone access,
  * the phone's request); where only the person can know (the app is on the
- * phone), the button says so ("I have it"), and nothing is ticked.
+ * phone), the button says so ("I already have the app"), and nothing is ticked.
  *
  * The same screens run in onboarding (inside `FlowShell`) and in the Phone
  * panel (inside its own small frame): the caller passes `render`, which
@@ -460,8 +460,16 @@ function useStepView(p: {
         // this screen. Only the person knows when it's installed.
         return {
           title: GET_PHONE_APP_TITLE,
-          lede: 'It’s a free beta on TestFlight. Point your iPhone’s camera at the code to get it.',
-          children: <LinkQr url={testFlight} label="Code for the phone app on TestFlight" />,
+          // People took this code for the pairing code: it says plainly what it is
+          // (the download) and what it isn't, and those who have the app skip it.
+          lede: 'Don’t have it yet? Point your iPhone’s camera at this code to download the free beta from TestFlight.',
+          children: (
+            <LinkQr
+              url={testFlight}
+              label="Download link for the phone app on TestFlight"
+              caption={DOWNLOAD_NOT_PAIRING}
+            />
+          ),
           primary: (
             <Primary external onClick={() => void openUrl(testFlight)}>
               {GET_ON_TESTFLIGHT}
@@ -475,7 +483,7 @@ function useStepView(p: {
                 onClick={() => go('phoneMacTailscale')}
                 data-flow-have-it
               >
-                I have it
+                {HAVE_PHONE_APP}
               </Button>
               {skip}
             </>
@@ -506,7 +514,7 @@ function useStepView(p: {
             )}
           </div>
         ),
-        primary: <Primary onClick={() => go('phoneMacTailscale')}>I have it</Primary>,
+        primary: <Primary onClick={() => go('phoneMacTailscale')}>{HAVE_PHONE_APP}</Primary>,
         secondary: skip,
       };
     }
@@ -743,7 +751,13 @@ export function savePanelStep(step: PhoneFlowStep | null) {
  * modules). A spinner while it's made; on a failure, nothing: the button
  * under it opens the same page.
  */
-function LinkQr({ url, label }: { url: string; label: string }) {
+/** Under the TestFlight code: it downloads the app, it doesn't pair. */
+export const DOWNLOAD_NOT_PAIRING =
+  'This only downloads the app. It isn’t the pairing code: you’ll scan that in a few steps.';
+/** The way past the download, for someone who has the app already. */
+export const HAVE_PHONE_APP = 'I already have the app';
+
+function LinkQr({ url, label, caption }: { url: string; label: string; caption?: string }) {
   const { data, error } = useAsyncState(() => getLinkQr(url), { immediate: true });
   if (error) return null;
   return (
@@ -754,6 +768,11 @@ function LinkQr({ url, label }: { url: string; label: string }) {
         </div>
       ) : (
         <Spinner size="lg" />
+      )}
+      {caption && (
+        <p className="flow-qr__meta" data-testid="flow-link-qr-caption">
+          {caption}
+        </p>
       )}
     </div>
   );

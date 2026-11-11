@@ -69,7 +69,7 @@ describe('PhoneFlow', () => {
   it('asks for the app on the person’s word, never a tick', () => {
     const { go } = show('phoneGetApp');
     expect(screen.queryByText(/Done\./)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'I have it' }));
+    fireEvent.click(screen.getByRole('button', { name: 'I already have the app' }));
     expect(go).toHaveBeenCalledWith('phoneMacTailscale');
   });
 
@@ -78,7 +78,7 @@ describe('PhoneFlow', () => {
     fireEvent.click(screen.getByRole('button', { name: /Get it on TestFlight/ }));
     expect(openUrl).toHaveBeenCalledWith(PHONE_APP_TESTFLIGHT_URL);
     expect(
-      await screen.findByRole('img', { name: 'Code for the phone app on TestFlight' })
+      await screen.findByRole('img', { name: 'Download link for the phone app on TestFlight' })
     ).toBeInTheDocument();
     expect(getLinkQr).toHaveBeenCalledWith(PHONE_APP_TESTFLIGHT_URL);
   });
