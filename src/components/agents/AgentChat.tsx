@@ -1540,7 +1540,11 @@ export const AgentChat = memo(function AgentChat({
   };
 
   /** `now`: rather than queue behind the turn in progress, interrupt it. */
-  const send = useStableEvent((now: boolean = false) => {
+  const send = useStableEvent((asked: boolean = false) => {
+    // Waiting on a card: a message is the answer. It goes now (the turn
+    // waiting on the card is interrupted and the card closes as moved on),
+    // rather than waiting behind a question nobody must answer.
+    const now = asked || (agent.status.state === 'waiting' && !agent.takeover);
     const draft = getDraft();
     const canSend = draft.trim().length > 0 || staged.length > 0 || quotes.length > 0;
     if (!canSend || dictating) return;

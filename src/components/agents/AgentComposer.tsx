@@ -148,7 +148,8 @@ export const AgentComposer = memo(function AgentComposer({
   // (lib/queueHint); the field's description says it for as long as it holds.
   const queueHintId = useId();
   const [learned, setLearned] = useState(queueHintLearned);
-  const queueing = busy && canSend && !dictating && !blank;
+  // Holding a card open (not working), a message goes now: nothing to queue for.
+  const queueing = busy && working && canSend && !dictating && !blank;
   const sendFromHere = (now: boolean) => {
     if (busy) setLearned(queueHintLearned(noteQueueHintUse(now)));
     onSend(now);
