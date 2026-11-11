@@ -95,12 +95,17 @@ export function TotalBar({
       data-size={size}
       data-tone={total.tone}
       data-unread={used === null || undefined}
-      role="meter"
-      aria-label={used === null ? 'Usage used: not read yet' : 'Usage used, across accounts'}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={used ?? undefined}
-      aria-valuetext={used === null ? 'Not read yet' : `${used}% used`}
+      {...(used === null
+        ? // Nothing read has no value, and a meter must have one: an image with a name.
+          { role: 'img', 'aria-label': 'Usage used: not read yet' }
+        : {
+            role: 'meter',
+            'aria-label': 'Usage used, across accounts',
+            'aria-valuemin': 0,
+            'aria-valuemax': 100,
+            'aria-valuenow': used,
+            'aria-valuetext': `${used}% used`,
+          })}
     >
       {used !== null && (
         <span

@@ -1325,8 +1325,10 @@ export function RoundButton({
             disabled && field.off,
             pressed && field.pressed,
           ];
+          // Not `interactive` glass: its own touch handling on iOS 26 took the
+          // touch from the Pressable now and then, and a tap on Send did nothing.
           return tone === 'accent' ? (
-            <Glass interactive tint={accent.accent} style={look}>
+            <Glass tint={accent.accent} style={look}>
               {children}
             </Glass>
           ) : (

@@ -61,6 +61,8 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   'doc.on.clipboard': 'content_paste',
   'doc.text': 'description',
   ellipsis: 'more_horiz',
+  'ellipsis.circle': 'more_horiz',
+  'gauge.with.dots.needle.33percent': 'speed',
   'exclamationmark.circle': 'error',
   'exclamationmark.triangle': 'warning',
   'exclamationmark.triangle.fill': 'warning',

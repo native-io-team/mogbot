@@ -22,7 +22,7 @@ import { MenuButton } from '../primitives/MenuButton';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { queueSubmitReview } from '../../lib/reviewHandoff';
-import { isFocusClick } from '../../lib/firstClick';
+import { FOCUS_CLICK_NOTE, isFocusClick } from '../../lib/firstClick';
 import { useCopyCommands } from './useCopyCommands';
 import { useResultAsk } from './AgentResult';
 import {
@@ -125,6 +125,13 @@ export function CopyActions({
   const driven = Boolean(agent.takeover);
   const held = working || driven;
   const fail = (e: unknown) => showToast(formatCommandError(asCommandError(e)), 'error');
+
+  // Not the click that only brought the window forward (lib/firstClick), and
+  // never silently: it says why, so the next click is the one that counts.
+  const unlessFocusClick = (event: { detail: number }, run: () => void) => {
+    if (isFocusClick(event)) showToast(FOCUS_CLICK_NOTE, 'info');
+    else run();
+  };
 
   const keep = async (into?: string) => {
     setBusy('keep');
@@ -300,7 +307,7 @@ export function CopyActions({
           <Tooltip content={waitHint ?? 'Throw these changes away'}>
             <Button
               variant="danger"
-              onClick={(event) => !isFocusClick(event) && void discard()}
+              onClick={(event) => unlessFocusClick(event, () => void discard())}
               disabled={busy !== null || held}
               leftIcon={busy === 'discard' ? <Spinner size="sm" /> : <TrashIcon size={14} />}
             >
@@ -376,8 +383,7 @@ export function CopyActions({
         <Tooltip content={waitHint ?? keepHint(agent.name, project)}>
           <Button
             variant="strong"
-            // Not the click that only brought the window forward (lib/firstClick).
-            onClick={(event) => !isFocusClick(event) && void keep()}
+            onClick={(event) => unlessFocusClick(event, () => void keep())}
             disabled={busy !== null || held}
             leftIcon={busy === 'keep' ? <Spinner size="sm" /> : undefined}
           >

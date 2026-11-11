@@ -47,6 +47,7 @@ function StepMark({ n, done }: { n?: number; done: boolean }) {
   return (
     <span
       className={`user-chrome-step__mark${done ? ' user-chrome-step__mark--done' : ''}`}
+      role="img"
       aria-label={done ? 'Done' : `Step ${n}`}
     >
       {done ? <CheckIcon size={12} /> : n}

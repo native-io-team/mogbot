@@ -47,15 +47,12 @@ export const hasLiquidGlass = () => getGlass() !== null;
 export function Glass({
   style,
   tint,
-  interactive,
   onLayout,
   children,
 }: {
   style?: StyleProp<ViewStyle>;
   /** A tinted glass, for the one prominent action (Send). The plain surface takes it as its fill. */
   tint?: string;
-  /** It's a button: the glass answers the touch as the system's own do. */
-  interactive?: boolean;
   onLayout?: (e: LayoutChangeEvent) => void;
   children?: ReactNode;
 }) {
@@ -66,7 +63,8 @@ export function Glass({
     return (
       <g.GlassView
         glassEffectStyle="regular"
-        isInteractive={interactive}
+        // Never isInteractive: its own touch handling takes taps from the Pressable
+        // around it now and then (a tap on Send that did nothing).
         tintColor={tint}
         colorScheme={appearance}
         style={style}
