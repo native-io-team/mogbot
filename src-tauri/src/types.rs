@@ -19,9 +19,9 @@ pub enum ProjectType {
     /// Plain HTML/CSS/JS project (no framework, no package.json required)
     Statichtml,
     /// React Native or Expo app (native mobile, previewed via a device mirror,
-    /// not a web iframe). See docs/internal/mobile-app-preview-plan.md.
+    /// not a web iframe). See docs/design/mobile-app-preview-plan.md.
     Reactnative,
-    /// Flutter app (native mobile). See docs/internal/mobile-app-preview-plan.md.
+    /// Flutter app (native mobile). See docs/design/mobile-app-preview-plan.md.
     Flutter,
     /// Shopify Liquid theme (Online Store 2.0). Previewed via `shopify theme dev`,
     /// which renders Liquid server-side against a connected store.

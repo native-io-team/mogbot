@@ -1300,12 +1300,6 @@
     },
     {
       "path": "src/styles/features/update-banner.css",
-      "token": "--space-02",
-      "count": 3,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/features/update-banner.css",
       "token": "--space-04",
       "count": 5,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."

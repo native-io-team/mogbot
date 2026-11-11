@@ -1,4 +1,4 @@
-/* An agent's key (AgentKey.tsx; the spec is docs/internal/agent-keys.md, the
+/* An agent's key (AgentKey.tsx; the spec is docs/design/agent-keys.md, the
  * data packages/companion-protocol/src/agent-keys.json). The look and motion
  * are the marketing site's keys (mogbot-site src/styles/agent-key.css and
  * src/scripts/motion.ts), carried over value for value where they can be.

@@ -3,7 +3,7 @@
  * The app icon, for the desk and the phone, from one drawing.
  *
  * The mark is the site's: the "M" (a dome with two slot eyes) on a Graphite
- * agent key (docs/internal/agent-keys.md): three shades of one hue (face,
+ * agent key (docs/design/agent-keys.md): three shades of one hue (face,
  * skirt, depth) and the cream legend. The light Dock option is the same key in
  * the site's putty (`.key` in the site's global.css).
  *

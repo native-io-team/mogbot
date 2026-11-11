@@ -845,7 +845,7 @@ request, the diff and the photo viewer push over them. At
 
 ### Agent keys
 
-Every agent is its keycap, as on the desk (docs/internal/agent-keys.md):
+Every agent is its keycap, as on the desk (docs/design/agent-keys.md):
 `components/AgentKey.tsx` draws it from the shared spec
 (`packages/companion-protocol/src/agentKeys.ts`, `agentKeyIcons.ts`):
 Views for the skirt, the inset face and the solid depth under them, one
@@ -884,7 +884,7 @@ a Mac, seeded with a colourway nobody wears, an icon read from what it's
 for and the first free letter of its name.
 
 Icons beyond the 22 featured legends come from the shared Lucide pack
-(docs/internal/agent-keys.md, "The icon pack"): under the featured row,
+(docs/design/agent-keys.md, "The icon pack"): under the featured row,
 "Search 2,029 more icons" opens `components/KeyIconSheet.tsx`, a sheet with
 the 112pt key, a search focused on open (the desk's `searchIcons`), the
 categories as chips, the icons picked this session and a virtualised grid.

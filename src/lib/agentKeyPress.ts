@@ -1,5 +1,5 @@
 /**
- * The on-screen answer to an agent's bound key (docs/internal/agent-keys.md,
+ * The on-screen answer to an agent's bound key (docs/design/agent-keys.md,
  * "Shortcuts"): every key drawn for that agent goes down for a beat, as on
  * the site. `data-hit` is styled in agent-key.css.
  *

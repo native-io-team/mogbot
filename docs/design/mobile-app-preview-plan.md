@@ -278,7 +278,7 @@ Modified:
 
 ## 10b. Spike findings (2026-06-02)
 
-Empirical results from the first de-risking spike, run on Julian's machine.
+Empirical results from the first de-risking spike, run on the owner's machine.
 
 ### Tooling reality on this machine
 - **iOS: ready.** Xcode 26 installed, iOS 26.1 runtimes, iPhone 15/16e/17/17 Pro/

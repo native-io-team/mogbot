@@ -1,5 +1,5 @@
 /**
- * What's in flight as a board ordered by attention (docs/internal/in-flight-board-2026-11-10.md):
+ * What's in flight as a board ordered by attention (docs/design/in-flight-board-2026-11-10.md):
  * twenty agents, with nothing, one or five needing you (an email to send, a
  * login, a step-in, a session's question, a failed turn), three working,
  * three unread results, one paused by a usage limit, the rest idle. And the

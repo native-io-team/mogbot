@@ -104,7 +104,7 @@ a team" went for the same reason ("I'm not launching anything").
   nothing broke, since a routine always leaves its line) and turn client
   briefs into sites (`watch_for` `new_file`, each brief a project handed back
   with `share_result` and Preview). The everyday set came from a beginner
-  walk-through (docs/internal/persona-beginners-2026-11-09.md): a
+  walk-through: a
   small-business owner and a student found nothing that was theirs. Its foot
   links Ready-made agents and the Phone panel.
 
@@ -296,7 +296,7 @@ offer the login ask when the job needs a connector.
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, its key (`colorway`, `icon`, `boundKey`: docs/internal/agent-keys.md; filled in on read for agents saved before keys, `agents/keys.rs`), the old colour key and `avatar` (kept for phones that still draw avatars), pinned/hidden, unread, Claude session id |
+| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, its key (`colorway`, `icon`, `boundKey`: docs/design/agent-keys.md; filled in on read for agents saved before keys, `agents/keys.rs`), the old colour key and `avatar` (kept for phones that still draw avatars), pinned/hidden, unread, Claude session id |
 | Home | `<projects root>/.shipstudio/agents/<id>/` | the agent's working directory |
 | Instructions + memory | `<home>/CLAUDE.md` | Claude Code loads it every turn. Instructions on top, `## Memory` below, which the agent maintains itself. Editing instructions never touches memory. |
 | Conversation | `<home>/messages.jsonl` | what *you* were shown: your messages, its replies, agent-to-agent lines, approval cards, errors. Append-only |
@@ -387,7 +387,7 @@ From the stream:
   traces, JSON, os errors) is logged and said as "stopped with an error it
   didn't explain", never shown. The row's words and each kind's one button
   are shared with the phone (`companion-protocol/src/failures.ts`); the whole
-  list is docs/internal/failure-states.md. The agent's registry entry
+  list is docs/design/failure-states.md. The agent's registry entry
   carries the tag while the error is the newest line (`Agent.failure`, cleared
   by anything said after it), so the sidebar shows "<reason> · didn't finish"
   (the reason first, over up to two lines) with a red dot, or "Out of usage until
@@ -1026,7 +1026,7 @@ steps has no line.
   says the step and how long ("Running the Cypress tests · 5m") or "No
   progress for 5 min", never "Working…". The avatar looks around while it
   works (no blink, no ring around it) and presses once, like a key, when
-  the turn ends (docs/internal/avatars.md, "Motion").
+  the turn ends.
 - **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
   again on `agents://message` when the turn ends, and applied only to the
   paged chat reads (desktop and phone), after the log's lock is released,
@@ -2641,7 +2641,7 @@ Claude in Chrome is only the fallback. Settings → Chrome says which way
 agents use now and why, and each agent's "What it can reach" says its own. A
 Chrome profile managed by work (Developer mode off) is detected and the page
 offers a personal profile instead (`user_chrome/managed.rs`). Design, trust,
-install routes and what's verified: docs/internal/own-browser-layer.md.
+install routes and what's verified: docs/design/own-browser-layer.md.
 
 **Set up once, checked by the app.** ⌘K "Let agents use your browser…", the
 setup checklist and "What it can reach" open one guided card: Claude Code
@@ -2909,7 +2909,7 @@ their own, and the person signs in to it from the phone.
   user's Chrome folder: `chrome::profile_is_ours`), over
   `--remote-debugging-pipe`. No TCP port (nothing else on the Mac can
   attach), no automation-masking switch, never headless (decision and
-  measurements: docs/internal/agent-browser.md). One window per tab, parked
+  measurements: docs/design/agent-browser.md). One window per tab, parked
   in the bottom-right corner, not minimized. Started on first use, closed
   after 15 idle minutes, when its Settings switch goes off, for a plain
   sign-in, and when the app quits.
@@ -3137,7 +3137,7 @@ submitted); Google's refusal page itself (the detection is from its
 published words and URL); the plain-window path end to end (capture and
 CGEvent input need the two permissions granted to a built app, which
 weren't given); the frame rate over cellular; passkeys in the Agents
-profile. What was run: see docs/internal/agent-browser.md, "v1".
+profile. What was run: see docs/design/agent-browser.md, "v1".
 
 ### Signing in on your Mac from the phone (`agents/phone_signin.rs`)
 
@@ -6627,7 +6627,7 @@ cards.
   if it matches an agent exactly.
 - **What's in flight** (⌘K, id `agents.team`, or the bell beside the sidebar
   toggle, which counts what waits on you) is ordered by attention
-  (docs/internal/in-flight-board-2026-11-10.md), each heading with its count
+  (docs/design/in-flight-board-2026-11-10.md), each heading with its count
   ("Needs you · 5") and present even when empty: **Needs you** (pending
   approval, login, question and step-in cards, answerable in place with the
   card's own buttons, and turns that didn't finish, with Retry or Sign in;

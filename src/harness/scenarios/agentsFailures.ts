@@ -1,5 +1,5 @@
 /**
- * When things go wrong (docs/internal/failure-states.md): a turn whose
+ * When things go wrong (docs/design/failure-states.md): a turn whose
  * engine isn't on this Mac any more, the network gone, a turn cut off by a
  * restart, and What's in flight with each kind at once. Every line is a
  * sentence the Mac writes (`agents/failure.rs`, `agents/runner.rs`); every

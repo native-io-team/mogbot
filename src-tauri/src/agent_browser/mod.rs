@@ -8,7 +8,7 @@
 //!   switch. That is a decision, not an oversight: a fixed port lets any
 //!   process on the Mac drive the browser and read its cookies, and the
 //!   masking switch disguises an automated browser as a person
-//!   (docs/internal/agent-browser.md, "Where the line is").
+//!   (docs/design/agent-browser.md, "Where the line is").
 //! - [`cdp`]: CDP over the pipe. [`service`]: the running Chrome, a window
 //!   per tab, owners, frames. [`axtree`]: the page as agents read it, with
 //!   refs. [`keys`]: the keys anyone may press.
@@ -21,7 +21,7 @@
 //! - [`settings`]: the Settings → Agents switch (on by default).
 //! - [`viewer`]: the prototype's loopback stand-in for the phone (the demo).
 //!
-//! Design, measurements and the security model: docs/internal/agent-browser.md.
+//! Design, measurements and the security model: docs/design/agent-browser.md.
 
 pub mod axtree;
 pub mod cdp;

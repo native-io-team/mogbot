@@ -9,7 +9,7 @@ patched; the app's update feed moves you to the fixed one.
 
 **Please don't open a public GitHub issue for a security report.**
 
-Email **[juliangalluzzois@gmail.com](mailto:juliangalluzzois@gmail.com)** with
+Email **[julian@native.agency](mailto:julian@native.agency)** with
 "Security" in the subject. Once this repository is public you can also use
 GitHub's private vulnerability reporting (the repo's **Security** tab →
 **Report a vulnerability**), which only the maintainers can see.

@@ -1,7 +1,7 @@
 //! Pages that refuse the automated window, told apart from ordinary ones.
 //!
 //! A browser driven over CDP tells every page `navigator.webdriver = true`
-//! (docs/internal/agent-browser.md, "Not getting blocked"). Some sites
+//! (docs/design/agent-browser.md, "Not getting blocked"). Some sites
 //! answer that with a page of their own instead of the sign-in. We never
 //! hide the flag; we recognise the page and hand the person a plain Chrome
 //! window (no automation attached) for that one sign-in (`plain`).

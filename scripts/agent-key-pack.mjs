@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Vendors the icon pack agent keys can wear (docs/internal/agent-keys.md,
+ * Vendors the icon pack agent keys can wear (docs/design/agent-keys.md,
  * "The icon pack") as data: Lucide's drawings, names, tags and categories,
  * written into packages/companion-protocol/src/agent-key-pack/ for the desk,
  * the phone and the Mac to read. Not a runtime dependency: run it by hand to

@@ -1261,7 +1261,7 @@ function Glow() {
  * What the header's controls take, measured on an iPhone 16 Pro (iOS 26):
  * back and its gap on the left, each button of the right-hand glass group
  * and the group's inset. The title stops short of them; a flat 200 let the
- * group sit over the account ("On julian@native.agen…" under the glass).
+ * group sit over the account ("On you@example.co…" under the glass).
  */
 const HEADER_LEFT = 80;
 const HEADER_PER_BUTTON = 54;

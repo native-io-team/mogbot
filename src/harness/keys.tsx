@@ -1,6 +1,6 @@
 /**
- * Standalone harness surface for agent keys (docs/internal/agent-keys.md),
- * laid out like the approved reference (docs/internal/agent-keys-reference.html)
+ * Standalone harness surface for agent keys (docs/design/agent-keys.md),
+ * laid out like the approved reference (docs/design/agent-keys-reference.html)
  * so the two can be put side by side: one key in every state at 112px and
  * 30px, in sidebar rows, the independence pips, the fourteen colourways as a
  * board, every legend, and the sizes. Either theme:
@@ -73,7 +73,7 @@ const SIZES: [AgentKeySize, string][] = [
 ];
 
 /**
- * The squint test (docs/internal/agent-keys.md, "At a glance"): twelve agents
+ * The squint test (docs/design/agent-keys.md, "At a glance"): twelve agents
  * in mixed states with no words, at every size. Blurred or at half size, you
  * should still count working (pressed, softly lit), free (at rest, unlit) and
  * needs your help (proud, bright, the loudest) at once; paused (grey, sunk)

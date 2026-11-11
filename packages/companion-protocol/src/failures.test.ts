@@ -12,7 +12,7 @@ import {
 
 const NOW = new Date(2026, 10, 9, 15, 0).getTime();
 
-// docs/internal/failure-states.md: one set of words for desk and phone.
+// docs/design/failure-states.md: one set of words for desk and phone.
 describe('failure words', () => {
   it('says each kind once, with the reason first for anything else', () => {
     expect(failureLine({ kind: 'signed_out' }, 'x', 'Codex', NOW)).toBe('Codex is signed out');

@@ -921,7 +921,7 @@ mod tests {
         );
     }
 
-    /// docs/internal/failure-states.md: the network, the provider's own
+    /// docs/design/failure-states.md: the network, the provider's own
     /// trouble and an engine that's gone each get one plain sentence with
     /// its fix, and still read as temporary (or not) as before.
     #[test]

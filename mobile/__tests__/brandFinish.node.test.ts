@@ -1,5 +1,5 @@
 /**
- * The brand direction's last three (docs/internal/brand-direction.md): the
+ * The brand direction's last three (docs/design/brand-direction.md): the
  * keycap's side, the status pill's contrast, and which rows count as arrivals.
  */
 

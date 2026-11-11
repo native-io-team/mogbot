@@ -53,7 +53,7 @@ export function stepInOutcome(approval: Pick<Approval, 'status' | 'setAside'>): 
  * The one-time card under the Chief's greeting (`ImportChoiceCard`, desk and
  * phone). Asked as "already have…?" because a first-timer read "Bring your
  * agents…?" with the bright button as the step they were meant to take, and
- * they have no agents anywhere (docs/internal/persona-beginners-2026-11-09.md).
+ * they have no agents anywhere.
  */
 export const IMPORT_CHOICE_TITLE = 'Already have agents in another assistant?';
 export const IMPORT_CHOICE_NOTE =

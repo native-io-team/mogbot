@@ -5,7 +5,7 @@
 //! of that table changing shape underneath it.
 //!
 //! Two verified facts shape this file (see
-//! `docs/internal/hosting-provider-matrix.md`):
+//! `docs/design/hosting-provider-matrix.md`):
 //!
 //! * `?sha=` really is a server-side filter — a real SHA returns its
 //!   deployment, a bogus one returns nothing.

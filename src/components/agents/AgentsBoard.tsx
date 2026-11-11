@@ -1,5 +1,5 @@
 /**
- * The team as a board of keys (docs/internal/agent-keys.md): every agent you
+ * The team as a board of keys (docs/design/agent-keys.md): every agent you
  * have, at full size on a plate, in the state it's in, with its name and a
  * line under it: the state's word in its colour (Live green, Working in
  * ink, as on the site; Needs your OK in the status pill the sidebar, the In

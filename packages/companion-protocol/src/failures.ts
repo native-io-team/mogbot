@@ -1,6 +1,6 @@
 /**
  * A failed turn, and a note's one fix, in the words the desk and the phone
- * both say (docs/internal/failure-states.md). The sentence in the chat is
+ * both say (docs/design/failure-states.md). The sentence in the chat is
  * the Mac's (`agents/failure.rs`); this is everything said *about* it: the
  * row's line and pill, and the one button that fixes it. Kept once so the
  * two never drift. Pure; no rendering.

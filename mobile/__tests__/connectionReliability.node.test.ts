@@ -1,6 +1,6 @@
 /**
  * The link after pairing, under the conditions real phones meet
- * (docs/internal/connection-reliability-2026-11-10.md): a slow link, the
+ * (docs/design/connection-reliability-2026-11-10.md): a slow link, the
  * phone's Tailscale on another account, the Mac's Keychain locked, the Mac
  * too busy to answer a send, hours in the background. A fake socket and fake
  * timers, so every wait is exact.

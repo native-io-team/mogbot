@@ -13,7 +13,7 @@ In short:
 ## Reporting
 
 If you experience or witness behaviour that breaks this code, email
-[juliangalluzzois@gmail.com](mailto:juliangalluzzois@gmail.com). Reports are
+[julian@native.agency](mailto:julian@native.agency). Reports are
 handled in confidence, and there is no retaliation against good-faith
 reporters.
 

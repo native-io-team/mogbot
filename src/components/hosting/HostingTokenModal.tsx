@@ -11,7 +11,7 @@
  * app will happily borrow it when it's there — that's what makes hosting
  * work with no setup at all — but it stops working mid-afternoon, and the only
  * durable fix is a token the user owns. See
- * `docs/internal/hosting-provider-matrix.md`.
+ * `docs/design/hosting-provider-matrix.md`.
  */
 
 import { useState } from 'react';

@@ -23,7 +23,7 @@
 //! - Which way agents use, Your Chrome or Claude in Chrome, and why:
 //!   `agents::chrome_route` (Your Chrome whenever it's connected).
 //!
-//! Design, threat model and what's verified: docs/internal/own-browser-layer.md.
+//! Design, threat model and what's verified: docs/design/own-browser-layer.md.
 
 pub mod auth;
 pub mod frame;

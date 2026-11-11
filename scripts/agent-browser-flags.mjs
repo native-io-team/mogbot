@@ -1,4 +1,4 @@
-// Agent browser research (docs/internal/agent-browser.md): which launch modes
+// Agent browser research (docs/design/agent-browser.md): which launch modes
 // make navigator.webdriver true in the installed Chrome, and what that does.
 //   node scripts/agent-browser-flags.mjs <scratch dir>                 webdriver per mode
 //   MODE=google node scripts/agent-browser-flags.mjs <scratch dir>     + two Google searches per mode

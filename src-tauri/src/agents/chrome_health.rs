@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(Reach::from_probe(Some(2)), Reach::Up);
     }
 
-    /// docs/internal/failure-states.md: the button never contradicts the
+    /// docs/design/failure-states.md: the button never contradicts the
     /// note (on but not connected says opening Chrome reconnects it).
     #[test]
     fn the_button_matches_the_note() {

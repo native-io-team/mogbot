@@ -1,5 +1,5 @@
 /**
- * An agent's key (docs/internal/agent-keys.md): a keycap in its colourway
+ * An agent's key (docs/design/agent-keys.md): a keycap in its colourway
  * with one legend on its face, the keyboard key it's bound to as a small
  * sublegend, and its independence as pips on the front edge. Pure CSS shapes
  * (agent-key.css, the approved reference's geometry); the legend is the one

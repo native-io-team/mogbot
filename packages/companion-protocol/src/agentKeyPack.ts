@@ -1,6 +1,6 @@
 /**
  * The icon pack agent keys can wear beyond the featured legends
- * (docs/internal/agent-keys.md, "The icon pack"): Lucide, vendored as data
+ * (docs/design/agent-keys.md, "The icon pack"): Lucide, vendored as data
  * in `agent-key-pack/` by `scripts/agent-key-pack.mjs` (ISC; its licence is
  * beside the data). An id is `lucide:` and the icon's name (`lucide:wallet`).
  *

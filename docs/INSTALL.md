@@ -796,7 +796,7 @@ pairing), so don't run both at once.
 On macOS 15 and later, right-click → Open no longer gets around it; the other
 person has to use System Settings (below). Better: have them build it
 themselves with this guide. A signed and notarized download needs the owner's
-Apple Developer account (docs/internal/release-checklist.md).
+Apple Developer account.
 
 ---
 

@@ -161,7 +161,7 @@ export function ColorSwatches({
 
 /**
  * How an agent looks: its key's colourway, its legend and the keyboard key
- * it's bound to (docs/internal/agent-keys.md), the desk's `AgentKeyPicker`
+ * it's bound to (docs/design/agent-keys.md), the desk's `AgentKeyPicker`
  * for a thumb. Each colour and legend is drawn as the key it would make; the
  * bound key is picked from the letters and digits nobody else has.
  */

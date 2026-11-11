@@ -57,7 +57,7 @@ pub struct Agent {
     /// The old avatar colour key, kept beside its key's colourway (nearest)
     /// for clients that only read this.
     pub color: String,
-    /// Its key (docs/internal/agent-keys.md, `keys`): a colourway, a legend
+    /// Its key (docs/design/agent-keys.md, `keys`): a colourway, a legend
     /// and the keyboard key it's bound to. Filled in on read for an agent
     /// saved before keys (`keys::fill`), so never absent once loaded.
     #[serde(default, skip_serializing_if = "Option::is_none")]

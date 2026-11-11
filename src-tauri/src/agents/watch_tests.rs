@@ -1,7 +1,7 @@
 use super::*;
 use crate::agents::failure::Failure;
 
-/// docs/internal/failure-states.md: the pause is said once, with its fix.
+/// docs/design/failure-states.md: the pause is said once, with its fix.
 #[test]
 fn a_routine_that_paused_itself_says_so_once() {
     let line = paused_words(

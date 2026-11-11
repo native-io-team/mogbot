@@ -1,5 +1,5 @@
 /*
- * Avatar directions, for choosing between (docs/internal/avatars.md).
+ * Avatar directions, for choosing between.
  * Each direction is a complete system drawn on one 32-unit grid:
  *   render(variant, hue, px, theme, ctx) -> an <svg> string.
  * Nothing here ships; it exists to make contact sheets.

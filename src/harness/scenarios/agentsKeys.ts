@@ -1,5 +1,5 @@
 /**
- * Agent keys (docs/internal/agent-keys.md): the team as a board of keys in
+ * Agent keys (docs/design/agent-keys.md): the team as a board of keys in
  * What's in flight, the sidebar's small keys in every state, the chat
  * header's key, the editor's pickers (colourway, legend, press-to-bind), a
  * bind refused because another agent has the key, and a key changed from
@@ -111,7 +111,7 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-board',
     title: 'Agents — the team as a board of keys (What’s in flight)',
     looksRightWhen:
-      'What’s in flight ordered by attention (docs/internal/in-flight-board-2026-11-10.md): Needs you · 1 leads with Lead Gen’s row (its key proud with an amber legend and spill, the loudest key) and its card; Working now has Acme Site and Research pressed and lit warm, each with Stop; Paused has Native App, drained grey and sunk; then Everyone else as a quiet well of small keys, each named with its bound letter at the top right (Hiring says “Live · You’re driving it” under its name), and the dashed New agent key. Readable in both themes; keys keep their colours.',
+      'What’s in flight ordered by attention (docs/design/in-flight-board-2026-11-10.md): Needs you · 1 leads with Lead Gen’s row (its key proud with an amber legend and spill, the loudest key) and its card; Working now has Acme Site and Research pressed and lit warm, each with Stop; Paused has Native App, drained grey and sunk; then Everyone else as a quiet well of small keys, each named with its bound letter at the top right (Hiring says “Live · You’re driving it” under its name), and the dashed New agent key. Readable in both themes; keys keep their colours.',
     requires: '.agents-team .agent-key[data-state="needsOk"]',
     command: 'agents.team',
     viewport: { width: 1440, height: 1000 },

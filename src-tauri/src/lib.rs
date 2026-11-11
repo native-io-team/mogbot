@@ -13,7 +13,7 @@
 
 pub mod agent;
 pub mod agent_bridge;
-// The agents' browser: docs/internal/agent-browser.md.
+// The agents' browser: docs/design/agent-browser.md.
 pub mod agent_browser;
 pub mod agents;
 pub mod app_menu;
@@ -35,7 +35,7 @@ pub mod preview_isolation;
 pub mod proxy;
 pub mod remote_access;
 // "Your Chrome": the user's Chrome through the app's own extension
-// (docs/internal/own-browser-layer.md).
+// (docs/design/own-browser-layer.md).
 pub mod state;
 pub mod static_server;
 pub mod types;

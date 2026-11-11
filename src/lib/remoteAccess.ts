@@ -640,7 +640,7 @@ export interface AssistantGuide {
 
 /**
  * Where to paste the link in each assistant, checked against each one's own
- * help pages on 2026-11-10 (docs/internal/import-remote-reliability-2026-11-10.md
+ * help pages on 2026-11-10 (docs/design/import-remote-reliability-2026-11-10.md
  * says what was and wasn't confirmed). Menus move: each guide names the
  * setting so it can be searched for when a label changes. The link is
  * pasted only into the connector's URL field, never into a chat.

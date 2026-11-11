@@ -694,7 +694,7 @@
 }
 
 .flow-paired__device:last-child {
-  animation-delay: var(--duration-fast);
+  animation-delay: var(--motion-stagger);
 }
 
 /* The line between them draws in, then the tick lands on it. */
@@ -707,7 +707,7 @@
   justify-content: center;
   background: var(--accent-success);
   transform-origin: left center;
-  animation: flow-paired-draw var(--motion-celebrate) var(--duration-fast) both;
+  animation: flow-paired-draw var(--motion-celebrate) var(--motion-stagger) both;
 }
 
 .flow-paired__check {

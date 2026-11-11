@@ -865,7 +865,7 @@ const scrollToIncludes = (text) => async (page) => {
 
 /** The states the other phases miss (`--probe`, dev/mock-probe.ts). */
 const PROBE = [
-  // docs/internal/failure-states.md: each failure with its one fix.
+  // docs/design/failure-states.md: each failure with its one fix.
   {
     name: 'probe-failure-offline',
     route: '/chat/offline',

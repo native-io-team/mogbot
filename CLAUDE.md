@@ -186,7 +186,7 @@ these without updating that doc.
   reads, `gh` reads, local work and scripts (renders, headless Chrome on `file://`), builds,
   project installs, dev servers and here-document scripts carry on without a card
   (`go_hard_hardening_tests.rs`)
-- **Your Chrome through our own extension** (`user_chrome/`, off by default): a Unix socket, never a port; the native host is the app's own binary and only our extension id starts it; app and host prove a per-launch token to each other; the extension relays only the page logic's CDP methods and expressions, in tabs the agent opened; `browser_gate` decides every call as for Claude in Chrome, any engine ([docs/internal/own-browser-layer.md](docs/internal/own-browser-layer.md))
+- **Your Chrome through our own extension** (`user_chrome/`, off by default): a Unix socket, never a port; the native host is the app's own binary and only our extension id starts it; app and host prove a per-launch token to each other; the extension relays only the page logic's CDP methods and expressions, in tabs the agent opened; `browser_gate` decides every call as for Claude in Chrome, any engine ([docs/design/own-browser-layer.md](docs/design/own-browser-layer.md))
 - **Agents never hold an app's token.** A connection made on a login card is reached through the
   bridge's relay (`agents/conn_relay.rs`), which adds the Keychain token and enforces the grant
   for every engine ([docs/agents.md](docs/agents.md), "Grants, read vs send, and turns")
@@ -537,7 +537,7 @@ Answers one question: **did the commit I just pushed actually deploy?**
    dashboard for
 
 Verified against live accounts for all three providers, with what is observed versus assumed
-recorded in [docs/internal/hosting-provider-matrix.md](docs/internal/hosting-provider-matrix.md).
+recorded in [docs/design/hosting-provider-matrix.md](docs/design/hosting-provider-matrix.md).
 
 ### Pull Request Flow
 1. User clicks "Submit for Review" on a branch

@@ -255,7 +255,7 @@ export function AgentEditorModal({
   const first = agent ? null : findTemplate(initialTemplate);
   const [template, setTemplate] = useState<RoleTemplate | null>(first);
   const [name, setName] = useState(agent?.name ?? first?.name ?? '');
-  // Its key (docs/internal/agent-keys.md). Editing: what it wears now.
+  // Its key (docs/design/agent-keys.md). Editing: what it wears now.
   // Creating: a template's colour, else the colourway fewest wear; a legend
   // read from its name and role and the first free letter of its name, both
   // following what's typed until one is picked. The old colour field (and

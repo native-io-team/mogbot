@@ -380,7 +380,7 @@ pub const MAC_FEATURE_LOOKS: &str = "agents.looks";
 pub const MAC_FEATURE_KEYCAPS: &str = "agents.keycaps";
 
 /// `welcome.features`: agents carry their key (`colorway`, `icon`,
-/// `boundKey`; docs/internal/agent-keys.md), and `agents.create` /
+/// `boundKey`; docs/design/agent-keys.md), and `agents.create` /
 /// `agents.update` take them from the phone. A bound key someone else has
 /// is refused with a line saying whose it is.
 pub const MAC_FEATURE_AGENT_KEYS: &str = "agents.keys";

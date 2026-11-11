@@ -1,5 +1,5 @@
 {
-  "$comment": "Agent keys (docs/internal/agent-keys.md): the data every client and the Mac read. agentKeys.ts and src-tauri/src/agents/keys.rs both load this file; the icon drawings are in agentKeyIcons.ts.",
+  "$comment": "Agent keys (docs/design/agent-keys.md): the data every client and the Mac read. agentKeys.ts and src-tauri/src/agents/keys.rs both load this file; the icon drawings are in agentKeyIcons.ts.",
   "colorways": [
     { "id": "blue", "name": "Blue", "face": "#3F6FD8", "skirt": "#3159B4", "depth": "#223F85", "legend": "#FFFFFF", "light": false, "legacy": "blue" },
     { "id": "orange", "name": "Orange", "face": "#EC6A2E", "skirt": "#C9521C", "depth": "#8F3810", "legend": "#1F1005", "light": false, "legacy": "orange" },

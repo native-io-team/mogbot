@@ -6,7 +6,7 @@
  * icon there is (`AgentKeyIconPicker`). Each choice is drawn as the key it
  * would make. The bound key is a press-to-bind field: a
  * letter or digit binds it, and one another agent has is refused with a line
- * saying whose (docs/internal/agent-keys.md).
+ * saying whose (docs/design/agent-keys.md).
  *
  * @module components/agents/AgentKeyPicker
  */

@@ -1,7 +1,7 @@
 //! Netlify adapter.
 //!
 //! Shapes here were checked against a live site and deploy (see
-//! `docs/internal/hosting-provider-matrix.md`), not taken from documentation:
+//! `docs/design/hosting-provider-matrix.md`), not taken from documentation:
 //!
 //! * A deploy carries `commit_ref` (the full SHA) but Netlify has **no**
 //!   server-side commit filter, so finding one means narrowing by branch and
@@ -247,7 +247,7 @@ pub async fn find_for_commit(
     // the scan degrades to "we don't know", which is the honest direction. It
     // matters because the question this asks is always about a commit the user
     // just pushed, which sits at the top of this list. Full pagination is
-    // recorded as a limitation in docs/internal/hosting-provider-matrix.md
+    // recorded as a limitation in docs/design/hosting-provider-matrix.md
     // rather than left for someone to discover.
     let url = format!(
         "{API}/sites/{site}/deploys?branch={branch}&per_page=100",

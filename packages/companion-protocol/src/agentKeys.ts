@@ -1,5 +1,5 @@
 /**
- * Agent keys: every agent is a keycap (docs/internal/agent-keys.md). A
+ * Agent keys: every agent is a keycap (docs/design/agent-keys.md). A
  * colourway, a legend (an icon) and the keyboard key it's bound to, shown in
  * one of six physical states, with its independence as pips on the front
  * edge. The one spec the desk's `AgentKey` and the phone draw from, so the
@@ -73,7 +73,7 @@ export const LEGACY_COLORWAYS: Readonly<Record<string, string>> = data.legacyCol
 /** Words in a name or role, each rule in order: the first that matches picks the icon. */
 export const ICON_RULES: readonly { icon: string; words: string[] }[] = data.iconRules;
 
-/** The six states a key shows (docs/internal/agent-keys.md, "States"). */
+/** The six states a key shows (docs/design/agent-keys.md, "States"). */
 export const KEY_STATES = ['idle', 'working', 'live', 'needsOk', 'paused', 'new'] as const;
 export type KeyState = (typeof KEY_STATES)[number];
 

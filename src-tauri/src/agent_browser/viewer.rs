@@ -1,7 +1,7 @@
 //! A stand-in for the phone's live view: a loopback HTTP server that shows
 //! the latest screencast frame (long-polled JPEGs) and
 //! sends taps and keys back. The real thing rides the companion channel
-//! (docs/internal/agent-browser.md, "Phone live view"); this proves the
+//! (docs/design/agent-browser.md, "Phone live view"); this proves the
 //! loop — frames out, input in — with nothing but std.
 //!
 //! Every request must carry the random token (`?t=`); it binds 127.0.0.1

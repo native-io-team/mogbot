@@ -1,5 +1,5 @@
 /**
- * Every agent is bound to a key (docs/internal/agent-keys.md, "Shortcuts"):
+ * Every agent is bound to a key (docs/design/agent-keys.md, "Shortcuts"):
  * pressing it in Agents opens that agent's chat. Only a bare letter or digit,
  * and only when nothing that takes typing has focus (a field, a contenteditable,
  * a terminal) and nothing is open on top (a dialog, a menu, a list of

@@ -1,5 +1,5 @@
 /**
- * Every icon an agent's key can wear (docs/internal/agent-keys.md, "The icon
+ * Every icon an agent's key can wear (docs/design/agent-keys.md, "The icon
  * pack"), in a sheet: the key at full size on top (it changes as you tap),
  * a search that's focused when the sheet opens, the categories as chips,
  * the icons picked lately, and a virtualised grid of keys. The search is

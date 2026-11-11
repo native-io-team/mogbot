@@ -1,4 +1,4 @@
-//! Agent keys (docs/internal/agent-keys.md): every agent is a keycap with a
+//! Agent keys (docs/design/agent-keys.md): every agent is a keycap with a
 //! colourway, a legend (an icon) and a keyboard key it's bound to. This holds
 //! the ids, fills them in for agents saved before keys existed, keeps bound
 //! keys unique, and checks a change from chat or a client.

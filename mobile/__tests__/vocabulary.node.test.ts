@@ -96,7 +96,7 @@ const BANNED: [RegExp, string][] = [
   ],
   [/Being driven on your Mac/, '"You’re driving <name> on your Mac"'],
   [/Keep into /, '"Keep there too": no version names'],
-  // The beginners' glossary (docs/internal/persona-beginners-2026-11-09.md):
+  // The beginners' glossary:
   // words that mean nothing to someone who has never run an agent.
   [/\bworktrees?\b/i, '"a copy" of the project'],
   [/\bMCP\b/, '"a connector" (an app it can use)'],

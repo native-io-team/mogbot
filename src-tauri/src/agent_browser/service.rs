@@ -6,7 +6,7 @@
 //!   using it, when the Settings switch goes off, for a plain-mode sign-in
 //!   (`plain`), and when the app quits.
 //! - **A window per tab.** A tab behind another tab in the same window
-//!   paints nothing (docs/internal/agent-browser.md), so every tab an agent
+//!   paints nothing (docs/design/agent-browser.md), so every tab an agent
 //!   opens, and the one a sign-in uses, is a window of its own, parked in the
 //!   bottom-right corner of the screen: not minimized (a minimized window
 //!   stops painting and misses clicks), in the Dock, brought forward only for

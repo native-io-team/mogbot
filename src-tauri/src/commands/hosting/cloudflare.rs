@@ -1,7 +1,7 @@
 //! Cloudflare Pages adapter.
 //!
 //! Verified against a live Pages project and deployment (see
-//! `docs/internal/hosting-provider-matrix.md`).
+//! `docs/design/hosting-provider-matrix.md`).
 //!
 //! Four things make Cloudflare different from the other two:
 //!

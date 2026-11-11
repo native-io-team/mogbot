@@ -310,7 +310,7 @@ export function addProbeAccount(
     ]
   );
 
-  // When things go wrong (docs/internal/failure-states.md): the network
+  // When things go wrong (docs/design/failure-states.md): the network
   // gone mid-turn (Retry), its engine gone from the Mac (install there),
   // and signed out (sign in there). The Mac's own sentences.
   const failed = (

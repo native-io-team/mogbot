@@ -1,5 +1,5 @@
 //! Looks from before keys (a shape, a face, a finish): nothing draws them
-//! any more (agents are keys, docs/internal/agent-keys.md), so they are no
+//! any more (agents are keys, docs/design/agent-keys.md), so they are no
 //! longer kept, served or changed from chat. A registry that still holds
 //! one reads as before and drops it on the next save. Fixtures are fictional
 //! (Hiring).

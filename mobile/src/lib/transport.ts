@@ -272,7 +272,7 @@ export class DirectTransport implements Transport {
   private backgroundedAt = 0;
   /**
    * Why the link ended, the last few times (`LinkTrail`): sent with the next
-   * hello so the Mac's log says why phones drop (Julian and Bradford,
+   * hello so the Mac's log says why phones drop (testers
    * 2026-11-11: "the connection keeps dropping", with no way to see why).
    */
   private trail: TrailEntry[] = [];

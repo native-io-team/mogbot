@@ -20,7 +20,7 @@
 //! * [`git_ref`] — the commit the provider could actually have seen.
 //!
 //! Verified provider behaviour is recorded in
-//! `docs/internal/hosting-provider-matrix.md`; anything unverified is marked
+//! `docs/design/hosting-provider-matrix.md`; anything unverified is marked
 //! there and must not become load-bearing until it is checked.
 
 pub mod cloudflare;

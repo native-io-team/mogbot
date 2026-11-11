@@ -282,7 +282,7 @@ describe('ErrorLine', () => {
     }
   });
 
-  // docs/internal/failure-states.md: an engine that's gone offers Install,
+  // docs/design/failure-states.md: an engine that's gone offers Install,
   // not only Retry, which would fail the same way.
   it('offers Install when its engine isn’t on this Mac', () => {
     const onInstall = vi.fn();

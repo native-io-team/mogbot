@@ -102,7 +102,7 @@ ring = "0.17"
 tauri-plugin-global-shortcut = "2"
 
 [features]
-# The agent browser (docs/internal/agent-browser.md): the user's installed
+# The agent browser (docs/design/agent-browser.md): the user's installed
 # Chrome on a profile of the app's own, driven over a CDP pipe. Always in
 # the build unless `no-agent-browser` is named: an opt-out, never a default
 # feature, because `tauri dev` builds with `--no-default-features` and adds

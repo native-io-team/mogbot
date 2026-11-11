@@ -1,6 +1,6 @@
 # Agent keys (identity system)
 
-Every agent is a physical keycap. This replaces the blob/character avatars everywhere (desktop, phone, site). Reference render: `docs/internal/agent-keys-reference.html` (open in a browser; it is the approved look).
+Every agent is a physical keycap. This replaces the blob/character avatars everywhere (desktop, phone, site). Reference render: `docs/design/agent-keys-reference.html` (open in a browser; it is the approved look).
 
 ## Why
 Avatars exist for wayfinding: colour plus icon tells you which agent you're in without reading. Keys do the same job, belong to our brand (the site's tactile keys) rather than copying Grok Bot, and can show state. The roster should feel like a board you build, not a set of pets.

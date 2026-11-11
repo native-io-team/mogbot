@@ -85,7 +85,7 @@ on `security -i`'s stdin, never on a command line:
 ```bash
 keytool -genkeypair -storetype PKCS12 -keyalg RSA -keysize 4096 -validity 10950 \
   -alias upload -keystore ~/.android-keys/mogbot-upload.jks \
-  -dname "CN=Galluzzo Conseil Inc., O=Galluzzo Conseil Inc., L=Morin-Heights, ST=QC, C=CA" \
+  -dname "CN=Galluzzo Conseil Inc., O=Galluzzo Conseil Inc., L=<your city>, ST=<your region>, C=<country>" \
   -storepass:env KS_PW -keypass:env KS_PW
 ```
 

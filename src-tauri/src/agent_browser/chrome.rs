@@ -6,7 +6,7 @@
 //! binary, a profile folder of our own, a CDP pipe rather than a port, and
 //! none of the switches automation frameworks add (`--enable-automation`,
 //! `--headless`, `--disable-blink-features=…`, `--remote-debugging-port`).
-//! See docs/internal/agent-browser.md, "Not getting blocked".
+//! See docs/design/agent-browser.md, "Not getting blocked".
 
 use std::path::{Path, PathBuf};
 
@@ -44,7 +44,7 @@ pub enum Window {
     OffScreen { width: u32, height: u32 },
     /// Parked in the bottom-right corner of the main display: macOS keeps
     /// its top-left corner showing, it's in the Dock, and it keeps painting
-    /// (docs/internal/agent-browser.md, "Hiding the window").
+    /// (docs/design/agent-browser.md, "Hiding the window").
     Parked { width: u32, height: u32 },
 }
 

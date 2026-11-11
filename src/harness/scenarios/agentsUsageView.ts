@@ -2,7 +2,7 @@
  * Usage: the sidebar's one-glance row and the full Usage view, across the
  * states that matter: one account, three, one out, every account nearly
  * empty, a reset soon with lots left, accounts nobody has read, and a second
- * sign-in of the same account (the owner's two "juliangalluzzois@…" lines).
+ * sign-in of the same account (two lines for one account).
  * Built on the Agents team fixture (`./agents`); every name and address is
  * fictional.
  */

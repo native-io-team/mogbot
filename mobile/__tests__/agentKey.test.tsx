@@ -1,6 +1,6 @@
 /**
  * An agent's key on the phone (components/AgentKey.tsx; the spec is
- * docs/internal/agent-keys.md): the desk's geometry, its colourway and
+ * docs/design/agent-keys.md): the desk's geometry, its colourway and
  * legend from the registry, the six physical states, the sublegend and pips
  * on big keys only, and the two loops (a working key's breath, the
  * Needs-your-OK pulse), each only on its state and only while things may move.

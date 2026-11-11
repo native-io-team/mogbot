@@ -195,7 +195,7 @@ export interface Agent {
   role: string;
   shape: number;
   /**
-   * Its key (docs/internal/agent-keys.md): a colourway, a legend and the
+   * Its key (docs/design/agent-keys.md): a colourway, a legend and the
    * keyboard key it's bound to. Older Macs omit them: `keyLookFor` draws
    * one from `color`, the name and the role.
    */

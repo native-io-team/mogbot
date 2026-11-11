@@ -143,7 +143,7 @@ const media = {
 
 const dark: Palette = {
   // Warm charcoal, the site's dark keys, step for step the desk's warm grey
-  // ramp (tokens-core.css --color-gray-*; docs/internal/brand-direction.md),
+  // ramp (tokens-core.css --color-gray-*; docs/design/brand-direction.md),
   // so desk, phone and site read as one brand.
   surfaceApp: '#151413',
   surfacePanel: '#1c1b19',
@@ -634,7 +634,7 @@ export const waveform = {
 export const heroMark = 56;
 
 /**
- * Agent keys (docs/internal/agent-keys.md; components/AgentKey.tsx): every
+ * Agent keys (docs/design/agent-keys.md; components/AgentKey.tsx): every
  * agent is a keycap. Its sizes are the desk's (`AgentKey`'s `size`): a line
  * of text, a menu item or a group, a list row's small key, a header, and the
  * big key with its sublegend and pips (the agent sheet).

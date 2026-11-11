@@ -164,7 +164,7 @@ free it refuses (`funnelPortsInUse`).
 
 The no-Remote-Access paths (export file or folder, pasted reply) report
 through `import_export::Preview`; their states are listed in
-docs/internal/import-remote-reliability-2026-11-10.md.
+docs/design/import-remote-reliability-2026-11-10.md.
 
 **Live** (`RemoteLive`), shown from the first connection onwards:
 

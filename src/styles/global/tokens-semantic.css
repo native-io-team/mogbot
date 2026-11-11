@@ -179,6 +179,7 @@
   --motion-celebrate: var(--duration-loader-fast) var(--ease-arrive);
   --motion-celebrate-ring: var(--duration-loader-isolated) var(--ease-arrive);
   --motion-celebrate-delay: var(--duration-slow);
+  --motion-stagger: var(--duration-fast);
   --motion-reduced: var(--duration-reduced);
 
   --shadow-button:

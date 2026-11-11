@@ -1,6 +1,6 @@
 /**
  * The legend on an agent's key, from every icon there is
- * (docs/internal/agent-keys.md, "The icon pack"): the featured legends first,
+ * (docs/design/agent-keys.md, "The icon pack"): the featured legends first,
  * then the pack's two thousand, found by typing what the agent is for
  * ("money", "invoice", "house"). The search is instant and forgiving
  * (`searchIcons`: names, tags, synonyms, one typo); categories narrow it;

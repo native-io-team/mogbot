@@ -1190,7 +1190,7 @@ mod tests {
         assert!(!agents_browser_allowed(true, true, &a, false));
     }
 
-    /// docs/internal/failure-states.md: offline while a token needed
+    /// docs/design/failure-states.md: offline while a token needed
     /// renewing is not an expired sign-in, so it never asks for one.
     #[test]
     fn an_offline_refresh_is_not_called_an_expired_sign_in() {
