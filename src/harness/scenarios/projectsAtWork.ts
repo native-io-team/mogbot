@@ -121,6 +121,41 @@ export const projectsAtWorkScenarios: Scenario[] = [
     commands: chatCommands,
   },
   {
+    id: 'project-worktrees-agent-copy',
+    title: 'A project with an agent’s copy: the Worktrees list, hovered',
+    looksRightWhen:
+      'Under lumen-site, Worktrees lists main and the agent’s copy, each on one line: the branch name truncates before its age (“4 minutes ago”), and the hovered row’s × sits at the row’s right end, never under the name.',
+    project: SITE,
+    requires: '#sidebar-section-worktrees',
+    steps: [{ hover: '#sidebar-section-worktrees .sidebar-row:last-child' }],
+    clipSelector: '.workspace-sidebar',
+    commands: {
+      ...chatCommands,
+      list_worktrees: [
+        {
+          path: SITE,
+          head: 'a1b2c3d',
+          branch: 'main',
+          isMain: true,
+          isCurrent: true,
+          locked: null,
+          prunable: null,
+          lastCommitDate: now - 2 * 60 * MIN,
+        },
+        {
+          path: `${HARNESS_ROOT}/.worktrees/lumen-site/mogbot-builder-the-pricing-cards-fc23`,
+          head: 'e4f5a6b',
+          branch: 'mogbot-builder/the-pricing-cards-fc23',
+          isMain: false,
+          isCurrent: false,
+          locked: null,
+          prunable: null,
+          lastCommitDate: now - 4 * MIN,
+        },
+      ],
+    },
+  },
+  {
     id: 'projects-agents-collapsed',
     title: 'Projects: three projects, agents working in two, rows collapsed',
     looksRightWhen:

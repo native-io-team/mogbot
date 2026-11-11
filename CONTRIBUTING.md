@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing. Mogbot (a working name, set only in `brand.json`) is the evolution of Ship Studio; read [docs/MISSION.md](docs/MISSION.md) first, then [docs/ROADMAP.md](docs/ROADMAP.md). This guide gets you from a clone to a passing PR.
+Thanks for your interest in contributing. Mogbot (its name set only in `brand.json`) is the evolution of Ship Studio; read [docs/MISSION.md](docs/MISSION.md) first, then [docs/ROADMAP.md](docs/ROADMAP.md). This guide gets you from a clone to a passing PR.
 
 > **Before you start**
 >

@@ -67,6 +67,13 @@
   box-shadow: inset 0 calc(var(--border-width-default) * -1) 0 var(--border-subtle);
 }
 
+/* …all the way to the window's edge: the collapsed rail runs up into that
+   line instead of fading in over it, so the rail's fade overlays are off. */
+.app.workspace-home.agents-mode .workspace-sidebar.is-hidden .workspace-sidebar-top-row::before,
+.app.workspace-home.agents-mode .workspace-sidebar.is-hidden .workspace-sidebar-top-row::after {
+  display: none;
+}
+
 .agent-chat__title {
   display: inline-flex;
   align-items: center;

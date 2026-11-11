@@ -382,8 +382,15 @@
 
 .sidebar-row > .sidebar-row-control-slot,
 .sidebar-row > .sidebar-row-rename,
-.sidebar-project-row > .sidebar-project-control,
+.sidebar-project-row > .sidebar-project-control:not(.sidebar-project-close),
 .sidebar-project-row > .drag-sort__handle {
   position: relative;
+  z-index: 1;
+}
+
+/* The close is placed absolutely over the status slot (sidebar.css); made
+   relative here it fell out of place, below the name. It only needs to sit
+   above the row's hit area. */
+.sidebar-project-row > .sidebar-project-close {
   z-index: 1;
 }

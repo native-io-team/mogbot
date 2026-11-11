@@ -516,7 +516,7 @@ The real app: no Metro, a Home Screen icon, dictation and quick actions work.
 Needs **full Xcode** from the App Store (Expo SDK 58 needs **Xcode 26.4 or
 later**), a free Apple ID, and the iPhone plugged in by cable.
 
-The desktop app's **Phone → Get the phone app** checklist does this same build
+The desktop app's **Pair your phone** flow (foot of the sidebar) does this same build
 with an agent beside it (docs/mobile.md, "Installing the app"), but it is
 **only offered when the app runs from source** (`pnpm tauri dev`). A `.app`
 from Step 8 hides it, because `links.companionSource` in `brand.json` is null,

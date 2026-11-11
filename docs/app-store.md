@@ -12,8 +12,8 @@ older personal team H8NN6DM6G6 is for self-builds only and must not sign a
 store build. Free Apps Agreement active; Paid Apps not signed (not needed for
 a free app with no purchases); EU trader status not yet declared.
 
-The app's name is **Mogbot**, a working name (it lives only in
-`brand.json`). Whatever the final name is, change `brand.json` and run
+The app's name is **Mogbot** (it lives only in
+`brand.json`). To rename a fork, change `brand.json` and run
 `pnpm check:brand --write`; the store listing below uses `<Name>` where it
 names the app.
 
@@ -287,8 +287,7 @@ companion app.
 
 ## Store listing (drafts, not published)
 
-**Name** (30): `<Name>`. "Mogbot" is a working name: confirm the final one,
-and that it's free in App Store Connect, before creating the record.
+**Name** (30): `Mogbot` (the record exists in App Store Connect).
 
 **Subtitle** (30): `Your AI agents, on your phone` (29)
 
@@ -326,26 +325,22 @@ keep running on your Mac.`
 
 **Price**: Free (owner decides). No in-app purchases.
 
-**Support URL / Marketing URL / Privacy Policy URL**: the pages are written
-for the marketing site (`~/ShipStudio/mogbot-site`, `src/pages/support.astro`
-and `src/pages/privacy.astro`, contact juliangalluzzois@gmail.com) but not
-deployed. Once it is live they are `<site>/support` and `<site>/privacy`
-(the site's `astro.config.mjs` says `https://mogbot.app` until a
-domain is picked); put the site in `brand.json` (`links.website`). The
-store won't accept a listing without both. The short version of the policy:
+**Support URL / Marketing URL / Privacy Policy URL**: https://mogbot.app/support,
+https://mogbot.app and https://mogbot.app/privacy (the marketing site,
+`links.website` in `brand.json`). Listing contact: julian@native.agency. The short version of the policy:
 
 > <Name> for iPhone collects no data. It has no account and no analytics,
 > and sends nothing to us. It connects only to the Mac you pair it with,
 > over your own Tailscale network, and what you see and send goes only
 > between this phone and that Mac. Pairing keys are kept in this phone's
 > keychain. Removing the app, or "Forget this Mac", removes them. Contact:
-> juliangalluzzois@gmail.com.
+> julian@native.agency.
 
 **Age rating** (Apple's questionnaire, as of 2026): everything "None" / "No"
 except **Unrestricted Web Access: Yes** (the sign-in screen shows the Mac's
 own browser page by page, and agents' links open), and **AI-generated
-content**: the agents reply with text a model wrote, unfiltered by us. Expect
-the 18+ rating from those answers; the owner confirms. No user-to-user
+content**: the agents reply with text a model wrote, unfiltered by us. The
+rating is **18+** (the owner's decision). No user-to-user
 messaging, no gambling, no medical, no ads, no contests.
 
 **Copyright**: `© 2026 Galluzzo Conseil Inc.` (also the build's

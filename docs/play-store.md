@@ -9,7 +9,7 @@ reaches Google is in the **Owner checklist** at the end.
 **Publisher**: Galluzzo Conseil Inc. (Canada), as an **organization**
 Play Console account (created and verified; the app is in internal testing
 as `io.native.mogbot.companion`, so it goes straight to production review,
-with no closed-testing requirement). The app's name is **Mogbot**, a working name that lives only in `brand.json`.
+with no closed-testing requirement). The app's name is **Mogbot**; it lives only in `brand.json`.
 
 ## Building the store bundle
 
@@ -254,10 +254,9 @@ or short description (Play's metadata and impersonation policies). If
 the not-affiliated line, is allowed; keep it out of the title.)
 
 **Category**: Productivity. **Tags**: Productivity, Business tools.
-**Contact details**: email juliangalluzzois@gmail.com (shown on the
-listing; required), website = the marketing site once deployed. Phone
-optional. **Privacy policy URL**: `<site>/privacy` (written in
-`~/ShipStudio/mogbot-site/src/pages/privacy.astro`, not deployed).
+**Contact details**: email julian@native.agency (shown on the
+listing; required), website https://mogbot.app. Phone optional.
+**Privacy policy URL**: https://mogbot.app/privacy.
 **Price**: Free. No in-app products, no ads (answer "No, my app does not
 contain ads").
 

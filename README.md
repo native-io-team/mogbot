@@ -1,10 +1,16 @@
 # Mogbot
 
-**Your own team of AI agents, on your Mac, on the Claude or ChatGPT plan you
-already pay for.**
+**The bot that makes your other bots look bad.**
+
+Mogbot runs your Claude and ChatGPT plans as a team of agents, on your
+computer and your phone. Free and open source (MIT). Mac now, Windows and
+Linux soon, with apps for iPhone and Android.
 
 <p align="center">
-  <img src="docs/images/readme/agent-keys-board.webp" alt="What's in flight: every agent as a key on a board, with its state under it (Working, Needs your OK, Live, Paused), and Lead Gen's email waiting on Deny or Allow" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/agents-dark.webp">
+    <img src="docs/images/readme/agents-light.webp" alt="The Chief of Staff's chat on the desk, the team in the sidebar with Inbox waiting on your OK, and the same team on the phone" width="900">
+  </picture>
 </p>
 
 You talk to a **Chief of Staff**. It creates named agents for the work you hand
@@ -14,8 +20,8 @@ Codex or OpenCode** (your pick, per agent) on your own machine. Anything that sp
 sends something as you, or changes what other people see waits for your
 **Allow**. Follow along and answer from your phone.
 
-Open source (MIT). Mogbot is a working name; it lives in one file,
-[`brand.json`](brand.json).
+The app's name lives in one file, [`brand.json`](brand.json), so a fork can
+rename it in one place.
 
 ## What it does
 
@@ -30,10 +36,6 @@ own session in a terminal and hand it back.
 
 ### Work comes back checked
 
-<p align="center">
-  <img src="docs/images/readme/result-card.webp" alt="A result card in Finance's chat: October invoice summary, a PDF, a CSV and the source sheet, what it says it checked, what it didn't verify, and Ask for changes" width="900">
-</p>
-
 Finished work is one card: the files and links, what the agent **says** it
 checked, and what it **didn't** verify. Ask for changes and you get a new
 version. Under every reply, a folded "what it did" timeline shows the steps it
@@ -42,10 +44,6 @@ worktree on its own branch), so you choose Keep changes, Review, Preview or
 Discard.
 
 ### Usage you can trust
-
-<p align="center">
-  <img src="docs/images/readme/usage-view.webp" alt="The Usage view: Plenty of room, the 5-hour and weekly limits with when they reset, what each agent used this week, and Where did my usage go" width="900">
-</p>
 
 The app shows your plan's limits only as the engine reports them, and what
 each agent and routine used this week. Nothing is guessed; an estimate is
@@ -64,7 +62,10 @@ chat. Logins use the provider's own sign-in; agents never ask for a password.
 ### Your phone, talking only to your Mac
 
 <p align="center">
-  <img src="docs/images/readme/phone-needs-you.webp" alt="The phone app's Needs you list: a delete waiting on Deny or Allow, an import to review, an account switch to answer and a file edit to answer" width="360">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/phone-dark.webp">
+    <img src="docs/images/readme/phone-light.webp" alt="Three phone screens: the Chief of Staff with tomorrow's plan, Inbox with a reply waiting to send, and a result card saying what it checked" width="900">
+  </picture>
 </p>
 
 The companion app pairs by QR code and reaches your Mac over your own
@@ -99,11 +100,25 @@ Mac proves it's yours. Nothing passes through our servers.
   Hermes) or a pasted reply; it ends on one card where you pick what to
   import. Share an agent as a recipe file, without its memory or logins.
 - **Projects underneath:** when work becomes a site or an app, it lives in a
-  full workspace with agent sessions, live preview, visual editing, git and
-  hosting status.
+  full workspace with your agents and terminals, live preview, visual editing,
+  git and hosting status (below).
 - A menu bar and Dock menu that follow where you are, and keyboard shortcuts
   ([docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)).
 - Light and dark, on desktop and phone.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/projects-dark.webp">
+    <img src="docs/images/readme/projects-light.webp" alt="A project open: its agents, terminals and dev server in the sidebar, Claude Code at work in a terminal, the site live beside it, and an approval on the phone" width="900">
+  </picture>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/editor-dark.webp">
+    <img src="docs/images/readme/editor-light.webp" alt="Visual editing: click a card on the live page and change it in the Elements and Edit panels while the agent works in the terminal" width="900">
+  </picture>
+</p>
 
 ## Download
 
@@ -195,7 +210,8 @@ pinned identity, and every pairing is confirmed on the desk. Details:
 
 ## Status
 
-Early, and moving fast. macOS only for now. No App Store build or push
+Early, and moving fast. Mac now; Windows and Linux builds are coming. The
+iPhone app is on TestFlight, the Android app in testing. No push
 notifications yet, and no telemetry: each stays off until `brand.json` names
 an endpoint for it. Several features landed recently and say in the docs where
 they haven't yet been tried on a real phone or a live account. What's next: [docs/ROADMAP.md](docs/ROADMAP.md).

@@ -14,8 +14,6 @@ as you, or changes what other people see waits for your **Allow**. A phone app
 lets you chat, approve and review from anywhere, talking only to your own Mac
 over your own Tailscale. Nothing goes through our servers.
 
-Mogbot is a working name.
-
 ## What to expect
 
 It's early. Expect rough edges, things that change from one week to the next,
@@ -68,10 +66,10 @@ your plate in plain words. Everything else is offered when it matters, and
 each can be skipped:
 
 - **Bring agents from another assistant** (Grok, ChatGPT…): one card under
-  the Chief's first message. No agents yet? Press **No thanks, start fresh**.
+  the Chief's first message. No agents yet? Press **I’m starting fresh**.
 - **Your phone**: offered once your first piece of work comes back, and any
-  time from **Get the phone app** at the bottom left. Ten minutes to an hour
-  (there's no App Store app yet):
+  time from **Pair your phone** at the bottom of the sidebar. About ten
+  minutes, with the iPhone app from TestFlight:
   Tailscale (a free app that lets your phone reach your Mac privately) on
   both, signed in to the **same account**, the phone app, then scan a code.
   The phone app is Expo Go or built with Xcode for now; your setup agent
