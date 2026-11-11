@@ -10,7 +10,6 @@
  */
 
 import { useCallback } from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { AgentOnboardingScreen } from './agent-led/AgentOnboardingScreen';
 
 interface OnboardingRouterProps {
@@ -19,26 +18,12 @@ interface OnboardingRouterProps {
 }
 
 export function OnboardingRouter({ onComplete }: OnboardingRouterProps) {
-  const handleDrag = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button, a, input, select, [role="button"]')) return;
-    e.preventDefault();
-    void getCurrentWindow().startDragging();
-  }, []);
 
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button, a, input, select, [role="button"]')) return;
-    const win = getCurrentWindow();
-    void win.isMaximized().then((maximized) => {
-      void (maximized ? win.unmaximize() : win.maximize());
-    });
-  }, []);
 
   return (
     <div className="onboarding-router">
       <div
-        className="onboarding-drag-region"
-        onMouseDown={handleDrag}
-        onDoubleClick={handleDoubleClick}
+        className="onboarding-drag-region" data-window-drag
       />
       <AgentOnboardingScreen onComplete={onComplete} />
     </div>

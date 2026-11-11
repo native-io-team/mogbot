@@ -1802,7 +1802,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         style={sidebarStyle}
       >
         {showNavigationControls && (
-          <div className="workspace-sidebar-top-row">
+          <div className="workspace-sidebar-top-row" data-window-drag>
             {onToggleSidebar && (
               <IconButton
                 variant="ghost"

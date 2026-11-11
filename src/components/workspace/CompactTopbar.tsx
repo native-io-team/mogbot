@@ -9,7 +9,6 @@
  */
 
 import { useCallback, useState } from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { PinIcon, ChevronIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { CompactModeToggle } from './ModeToggle';
@@ -46,13 +45,6 @@ export function CompactTopbar({
   const openProjectPalette = useCallback(() => openPalette({ tab: 'project' }), [openPalette]);
   const openAllPalette = useCallback(() => openPalette(), [openPalette]);
 
-  const handleDragStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    const target = event.target as HTMLElement;
-    if (target.closest('button, a, input, select, [role="menu"]')) return;
-    event.preventDefault();
-    void getCurrentWindow().startDragging();
-  }, []);
 
   const [isPinned, setIsPinned] = useState(false);
   const togglePin = useCallback(() => {
@@ -65,7 +57,7 @@ export function CompactTopbar({
   }, [isPinned]);
 
   return (
-    <div className={`compact-topbar ${topbarPlatformClass}`} onMouseDown={handleDragStart}>
+    <div className={`compact-topbar ${topbarPlatformClass}`} data-window-drag>
       {onGoAgents && <CompactModeToggle mode="projects" onAgents={onGoAgents} />}
       <div className="compact-topbar__spacer" aria-hidden="true" />
       <div className="compact-topbar__actions">

@@ -13,7 +13,6 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   DashboardProject,
   setHideMainBranchWarning,
@@ -507,19 +506,7 @@ export function ProjectList({
     setMoveProject(project);
   };
 
-  const handleDashboardDrag = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button, a, input, select, [role="button"]')) return;
-    e.preventDefault();
-    void getCurrentWindow().startDragging();
-  }, []);
 
-  const handleDashboardDoubleClick = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button, a, input, select, [role="button"]')) return;
-    const win = getCurrentWindow();
-    void win.isMaximized().then((maximized) => {
-      void (maximized ? win.unmaximize() : win.maximize());
-    });
-  }, []);
 
   const handleOpenProjectSettings = useCallback(
     async (project: DashboardProject) => {
@@ -598,9 +585,7 @@ export function ProjectList({
   return (
     <div className="dashboard-scroll-container">
       <div
-        className="dashboard-drag-region"
-        onMouseDown={handleDashboardDrag}
-        onDoubleClick={handleDashboardDoubleClick}
+        className="dashboard-drag-region" data-window-drag
       />
       <div className="project-list dashboard">
         {SLACK_INVITE_URL && !slackCtaHidden && <DashboardCommunityBanner onHide={hideSlackCta} />}

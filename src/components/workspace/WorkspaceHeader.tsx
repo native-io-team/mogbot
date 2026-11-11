@@ -14,7 +14,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { BranchIndicator } from '../branches/BranchIndicator';
 import { BranchesMenu } from '../branches/BranchesMenu';
 import { openInFinder } from '../../lib/ide';
@@ -158,32 +157,10 @@ interface WorkspaceTitlebarProps {
 
 /** Window-drag region shared by the titlebars that sit below macOS traffic lights. */
 export function WorkspaceTitlebar({ children }: WorkspaceTitlebarProps) {
-  const handleDrag = useCallback((event: MouseEvent<HTMLDivElement>) => {
-    if (
-      (event.target as HTMLElement).closest(
-        'button, a, input, select, [role="button"], [role="menu"]'
-      )
-    )
-      return;
-    event.preventDefault();
-    void getCurrentWindow().startDragging();
-  }, []);
 
-  const handleDoubleClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
-    if (
-      (event.target as HTMLElement).closest(
-        'button, a, input, select, [role="button"], [role="menu"]'
-      )
-    )
-      return;
-    const win = getCurrentWindow();
-    void win.isMaximized().then((maximized) => {
-      void (maximized ? win.unmaximize() : win.maximize());
-    });
-  }, []);
 
   return (
-    <div className="workspace-titlebar" onMouseDown={handleDrag} onDoubleClick={handleDoubleClick}>
+    <div className="workspace-titlebar" data-window-drag>
       {children}
     </div>
   );

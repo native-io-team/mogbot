@@ -13,7 +13,6 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Spinner } from '../primitives/Spinner';
 import { Button } from '../primitives/Button';
 import { ArrowLeftIcon, NewWorkspaceIcon, SwitchWorkspaceIcon } from '@/components/icons';
@@ -42,19 +41,7 @@ const INTERACTIVE = 'button, a, input, select, [role="button"]';
 export function AccountSelectScreen({ onContinue, onBack }: AccountSelectScreenProps) {
   const { showToast } = useOptionalToast();
 
-  const handleDrag = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest(INTERACTIVE)) return;
-    e.preventDefault();
-    void getCurrentWindow().startDragging();
-  }, []);
 
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest(INTERACTIVE)) return;
-    const win = getCurrentWindow();
-    void win.isMaximized().then((maximized) => {
-      void (maximized ? win.unmaximize() : win.maximize());
-    });
-  }, []);
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -106,9 +93,7 @@ export function AccountSelectScreen({ onContinue, onBack }: AccountSelectScreenP
   return (
     <div className="account-select-screen">
       <div
-        className="account-select-drag-region"
-        onMouseDown={handleDrag}
-        onDoubleClick={handleDoubleClick}
+        className="account-select-drag-region" data-window-drag
       />
 
       {onBack && (

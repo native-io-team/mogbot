@@ -1938,7 +1938,7 @@ export const AgentChat = memo(function AgentChat({
               {...dropHandlers}
             >
               <ChatAnnouncer chatId={agent.id} messages={messages} agentName={agent.name} />
-              <header className="agent-chat__header">
+              <header className="agent-chat__header" data-window-drag>
                 {compact && (
                   <CompactModeToggle
                     mode="agents"

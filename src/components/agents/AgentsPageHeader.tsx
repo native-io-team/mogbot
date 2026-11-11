@@ -83,7 +83,7 @@ export function AgentsPageHeader({
     </>
   );
   return (
-    <header className="agent-chat__header">
+    <header className="agent-chat__header" data-window-drag>
       {compact && (
         <CompactModeToggle
           mode="agents"
