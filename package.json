@@ -1,7 +1,7 @@
 {
   "name": "mogbot",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "packageManager": "pnpm@9.15.9",
   "description": "A desktop app for running your own team of AI agents.",
   "license": "MIT",
