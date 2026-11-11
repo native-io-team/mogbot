@@ -191,6 +191,11 @@ if [ "$SKIP_BUILD" = 0 ]; then
     done
   fi
   say "Building (pnpm tauri build --bundles app --target $TRIPLE)"
+  # Automatic error reports (docs/error-reporting.md): the endpoint's secret is
+  # compiled in from the Keychain item `<slug>-bug-report-secret`. Without it
+  # (or with links.errorReports null) the build simply sends nothing.
+  BUG_REPORT_SECRET="$(security find-generic-password -a release -s "${SLUG}-bug-report-secret" -w 2>/dev/null || true)"
+  if [ -n "$BUG_REPORT_SECRET" ]; then ok "error reports: secret found"; else say "error reports: no secret in the Keychain, this build won't send any"; fi
   # Tauri signs with APPLE_SIGNING_IDENTITY from the keychain, with the
   # hardened runtime and src-tauri/Entitlements.plist. Notarization is done
   # below with the keychain profile, so Tauri's own notarize env is cleared.
@@ -202,6 +207,7 @@ if [ "$SKIP_BUILD" = 0 ]; then
       -u APPLE_API_KEY -u APPLE_API_ISSUER -u APPLE_API_KEY_PATH \
       -u TAURI_SIGNING_PRIVATE_KEY -u TAURI_SIGNING_PRIVATE_KEY_PATH -u TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
       APPLE_SIGNING_IDENTITY="$IDENTITY" \
+      BUG_REPORT_SECRET="$BUG_REPORT_SECRET" \
       pnpm tauri build --bundles app --target "$TRIPLE" \
         --config '{"bundle":{"createUpdaterArtifacts":false}}'
 fi
