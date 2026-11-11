@@ -48,7 +48,10 @@ pub enum Step {
 impl Step {
     pub fn parse(value: &str) -> Result<Step, CommandError> {
         serde_json::from_value(serde_json::Value::String(value.trim().to_string())).map_err(|_| {
-            super::err_invalid("step", "Pick tailscale, link, approve, connect, send or talking.")
+            super::err_invalid(
+                "step",
+                "Pick tailscale, link, approve, connect, send or talking.",
+            )
         })
     }
 }
@@ -192,6 +195,7 @@ pub fn start(app: &AppHandle, assistant: &str) -> Result<Guide, CommandError> {
 pub fn block(step: Step, assistant: &str) -> serde_json::Value {
     serde_json::json!({
         "v": 1,
+        "intro": words(step, assistant),
         "items": [{
             "kind": "guide",
             "summary": words(step, assistant),
@@ -219,7 +223,8 @@ pub fn post(app: &AppHandle, step: Step) -> Result<bool, CommandError> {
         write(&guide)?;
         guide
     };
-    let mut message = runner::new_message(&chief, MessageKind::Agent, words(step, &guide.assistant));
+    let mut message =
+        runner::new_message(&chief, MessageKind::Agent, words(step, &guide.assistant));
     message.blocks = Some(block(step, &guide.assistant));
     runner::record(app, message)?;
     Ok(true)
@@ -282,7 +287,10 @@ mod tests {
                 Step::Talking,
             ] {
                 let w = words(step, a);
-                assert!(w.contains(assistant_name(a)) || w.contains(&capital(assistant_name(a))), "{w}");
+                assert!(
+                    w.contains(assistant_name(a)) || w.contains(&capital(assistant_name(a))),
+                    "{w}"
+                );
                 assert!(!w.contains("http"), "{w}");
             }
         }

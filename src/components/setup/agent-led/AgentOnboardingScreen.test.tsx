@@ -51,7 +51,7 @@ describe('AgentOnboardingScreen', () => {
     getOnboardingTestMode.mockReset().mockResolvedValue({ mock: false, forceOnboarding: false });
   });
 
-  it('walks Welcome, the engine, then the two optional questions, then hands off to the Chief', async () => {
+  it('walks Welcome and the engine, then hands off to the Chief, where the rest happens', async () => {
     getFullSetupStatus.mockResolvedValue(machine({ codex: 'ready', codex_auth: 'ready' }));
     const onComplete = vi.fn();
     render(<AgentOnboardingScreen onComplete={onComplete} />);
@@ -69,14 +69,7 @@ describe('AgentOnboardingScreen', () => {
     press('Continue');
     await waitFor(() => expect(setDefaultAgentId).toHaveBeenCalledWith('codex'));
 
-    // The two optional parts, each one question with a plain way past it.
-    // Your agents is answered by picking the assistant, or starting fresh.
-    expect(await heading('Bring your agents from another assistant?')).toBeInTheDocument();
-    expect(onComplete).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Claude/ })).toHaveFocus());
-    press(/I’m starting fresh/);
-    expect(await heading('Use your agents from your phone?')).toBeInTheDocument();
-    press('Not now');
+    // Bringing agents over and the phone happen in the Chief's chat now.
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
     expect(JSON.parse(localStorage.getItem(FLOW_STORAGE_KEY) ?? '{}')).toMatchObject({
       finished: true,
@@ -129,7 +122,7 @@ describe('AgentOnboardingScreen', () => {
     expect(screen.getByText('Claude Code · 1 of 2')).toBeInTheDocument();
   });
 
-  it('force mode shows the choice even with an engine ready; its card goes on', async () => {
+  it('force mode shows the choice even with an engine ready; its card goes on to the Chief', async () => {
     saveProgress('engine');
     getOnboardingTestMode.mockResolvedValue({ mock: false, forceOnboarding: true });
     getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready', claude_auth: 'ready' }));
@@ -140,7 +133,7 @@ describe('AgentOnboardingScreen', () => {
       screen.getByText('Claude Code', { selector: '.agent-pick-card-name' }).closest('button')!
     );
     await waitFor(() => expect(setDefaultAgentId).toHaveBeenCalledWith('claude-code'));
-    expect(await heading('Bring your agents from another assistant?')).toBeInTheDocument();
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 
   it('a failed status check offers a retry instead of guessing', async () => {

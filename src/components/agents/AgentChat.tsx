@@ -478,7 +478,6 @@ export const AgentChat = memo(function AgentChat({
   onSetUpEngine,
   onSignIn,
   onInstallEngine,
-  onImport,
   onSetUpPhone,
   onEscape,
   compact,
@@ -2043,92 +2042,94 @@ export const AgentChat = memo(function AgentChat({
                 aria-label="Messages"
               >
                 <ImportGuideProvider value={guideLive}>
-                <div
-                  className="agent-chat__messages"
-                  ref={messagesRef}
-                  data-greeting={(greetingOnly && engineReady) || undefined}
-                >
-                  {/* Asked once, for an install that never answered it. On a
+                  <div
+                    className="agent-chat__messages"
+                    ref={messagesRef}
+                    data-greeting={(greetingOnly && engineReady) || undefined}
+                  >
+                    {/* Asked once, for an install that never answered it. On a
               first run it comes after the greeting and its starters (below),
               so the Chief speaks first. */}
-                  {agent.isMain && engineReady && !greetingOnly && <ImportGuideAsk />}
-                  {items.length === 0 ? (
-                    <div className="agent-chat__empty">
-                      <AgentKey id={agent.id} name={agent.name} color={agent.color} size="lg" />
-                      <p className="agent-chat__empty-name">{agent.name}</p>
-                      {agent.isMain ? (
-                        <>
-                          <p className="agent-chat__empty-role">
-                            Tell me what you’re working on and I’ll put a team together. I create
-                            agents, hand them the work, and bring you what comes back.
-                          </p>
-                          {engineReady && chiefStarters}
-                        </>
-                      ) : (
-                        <>
-                          {agent.role && <p className="agent-chat__empty-role">{agent.role}</p>}
-                          <p className="agent-chat__empty-hint">
-                            It remembers what you tell it. Anything risky comes to you first, for
-                            you to Allow or Deny.
-                          </p>
-                          <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
-                            View instructions
-                          </TextButton>
-                          {engineReady && templateStarters}
-                          {engineReady && !template && (
-                            <div className="agent-chat__starters">
-                              {AGENT_STARTERS.map((text) => (
-                                <Button
-                                  key={text}
-                                  tabIndex={0}
-                                  variant="secondary"
-                                  onClick={() => sendStarter(text)}
-                                >
-                                  {text}
-                                </Button>
-                              ))}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    rows
-                  )}
-                  {/* The Chief spoke first (its stored greeting); the ways in sit
+                    {agent.isMain && engineReady && !greetingOnly && <ImportGuideAsk />}
+                    {items.length === 0 ? (
+                      <div className="agent-chat__empty">
+                        <AgentKey id={agent.id} name={agent.name} color={agent.color} size="lg" />
+                        <p className="agent-chat__empty-name">{agent.name}</p>
+                        {agent.isMain ? (
+                          <>
+                            <p className="agent-chat__empty-role">
+                              Tell me what you’re working on and I’ll put a team together. I create
+                              agents, hand them the work, and bring you what comes back.
+                            </p>
+                            {engineReady && chiefStarters}
+                          </>
+                        ) : (
+                          <>
+                            {agent.role && <p className="agent-chat__empty-role">{agent.role}</p>}
+                            <p className="agent-chat__empty-hint">
+                              It remembers what you tell it. Anything risky comes to you first, for
+                              you to Allow or Deny.
+                            </p>
+                            <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
+                              View instructions
+                            </TextButton>
+                            {engineReady && templateStarters}
+                            {engineReady && !template && (
+                              <div className="agent-chat__starters">
+                                {AGENT_STARTERS.map((text) => (
+                                  <Button
+                                    key={text}
+                                    tabIndex={0}
+                                    variant="secondary"
+                                    onClick={() => sendStarter(text)}
+                                  >
+                                    {text}
+                                  </Button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      rows
+                    )}
+                    {/* The Chief spoke first (its stored greeting); the ways in sit
               under it until the user says something. */}
-                  {greetingOnly && engineReady && chiefStarters}
-                  {greetingOnly && engineReady && <ImportGuideAsk />}
-                  {/* The phone, offered once the first thing asked for is back. */}
-                  {agent.isMain &&
-                    engineReady &&
-                    onSetUpPhone &&
-                    !busy &&
-                    importChoice !== 'undecided' &&
-                    importChoice !== 'bringing' &&
-                    reachedFirstResult(shown) && <ChiefPhoneOffer onSetUp={onSetUpPhone} />}
-                  {/* A ready-made agent the Chief just made: only "Created by" so
+                    {/* The Chief asks where their agents are first; its starters
+              are the other way in, under it. */}
+                    {greetingOnly && engineReady && <ImportGuideAsk />}
+                    {greetingOnly && engineReady && chiefStarters}
+                    {/* The phone, offered once the first thing asked for is back. */}
+                    {agent.isMain &&
+                      engineReady &&
+                      onSetUpPhone &&
+                      !busy &&
+                      importChoice !== 'undecided' &&
+                      importChoice !== 'bringing' &&
+                      reachedFirstResult(shown) && <ChiefPhoneOffer onSetUp={onSetUpPhone} />}
+                    {/* A ready-made agent the Chief just made: only "Created by" so
               far, so its own starters sit under it until the user speaks. */}
-                  {templateFirstOpen && engineReady && !firstOpen && templateStarters}
-                  {/* A new agent's welcome, then three things it can do now. */}
-                  {firstOpen && engineReady && (
-                    <AgentStarters starters={agent.starters ?? []} onSend={sendStarter} />
-                  )}
-                  {items.length > 0 && (
-                    <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
-                  )}
-                  {items.length === 0 && indicator.mounted && (
-                    <WorkingIndicator
-                      activity={activity}
-                      work={agent.status.work}
-                      agent={rowAgent}
-                      bare={importTalking}
-                      entering={indicator.entering}
-                      leaving={indicator.leaving}
-                      onExited={indicator.onExited}
-                    />
-                  )}
-                </div>
+                    {templateFirstOpen && engineReady && !firstOpen && templateStarters}
+                    {/* A new agent's welcome, then three things it can do now. */}
+                    {firstOpen && engineReady && (
+                      <AgentStarters starters={agent.starters ?? []} onSend={sendStarter} />
+                    )}
+                    {items.length > 0 && (
+                      <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
+                    )}
+                    {items.length === 0 && indicator.mounted && (
+                      <WorkingIndicator
+                        activity={activity}
+                        work={agent.status.work}
+                        agent={rowAgent}
+                        bare={importTalking}
+                        entering={indicator.entering}
+                        leaving={indicator.leaving}
+                        onExited={indicator.onExited}
+                      />
+                    )}
+                  </div>
                 </ImportGuideProvider>
               </div>
 

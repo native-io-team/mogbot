@@ -182,22 +182,19 @@ describe('the line', () => {
     expect(skipPart('phoneScan')).toBeNull();
   });
 
-  it('shows five parts, the last being where it leads, and moves within a part', () => {
-    expect(progressOf('welcome')).toEqual({ section: 1, sections: 5, within: 0 });
+  it('shows three parts: welcome, the engine, then the Chief’s chat where the rest happens', () => {
+    expect(progressOf('welcome')).toEqual({ section: 1, sections: 3, within: 0 });
     expect(progressOf('engine').section).toBe(2);
-    expect(progressOf('agentsAsk')).toEqual({ section: 3, sections: 5, within: 0 });
-    expect(progressOf('agentsConnect').within).toBeGreaterThan(progressOf('agentsLink').within);
-    expect(progressOf('phonePaired').section).toBe(4);
-    expect(progressOf('phonePaired').within).toBeLessThan(1);
-    expect(FLOW_SECTIONS[4]).toBe('chief');
+    expect(FLOW_SECTIONS).toEqual(['welcome', 'engine', 'chief']);
     expect(sectionOf('engine')).toBe('engine');
     expect(sectionOf('agentsLink')).toBe('agents');
     expect(sectionOf('phoneScan')).toBe('phone');
   });
 
-  it('a relaunch on a phone’s answer opens on a new code', () => {
-    expect(resumeStep({ v: 1, step: 'phoneAllow', finished: false })).toBe('phoneScan');
-    expect(resumeStep({ v: 1, step: 'agentsLink', finished: false })).toBe('agentsLink');
+  it('a relaunch saved on a screen first run no longer shows goes to the engine, then the chat', () => {
+    expect(resumeStep({ v: 1, step: 'phoneAllow', finished: false })).toBe('engine');
+    expect(resumeStep({ v: 1, step: 'agentsLink', finished: false })).toBe('engine');
+    expect(resumeStep({ v: 1, step: 'welcome', finished: false })).toBe('welcome');
   });
 });
 

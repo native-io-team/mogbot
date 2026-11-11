@@ -64,9 +64,11 @@ interface GuideLive {
   guide: ImportGuide | null;
   step: GuideStepId | null;
   status: RemoteAccessStatus | null;
+  /** When `status` was read. */
+  at: number;
 }
 
-const GuideContext = createContext<GuideLive>({ guide: null, step: null, status: null });
+const GuideContext = createContext<GuideLive>({ guide: null, step: null, status: null, at: 0 });
 
 const POLL_MS = 2500;
 
@@ -80,13 +82,14 @@ export function useImportGuide(isChief: boolean): GuideLive {
   const running = isChief && choice === 'bringing';
   const { talk } = useImportGate();
   const [guide, setGuide] = useState<ImportGuide | null>(null);
-  const [status, setStatus] = useState<RemoteAccessStatus | null>(null);
+  const [{ status, at }, setRead] = useState<{ status: RemoteAccessStatus | null; at: number }>({
+    status: null,
+    at: 0,
+  });
 
   useEffect(() => {
-    if (!running) {
-      setGuide(null);
-      return;
-    }
+    // Not running: what's kept is ignored (the return below gates it).
+    if (!running) return;
     let live = true;
     void getImportGuide()
       .then((g) => live && setGuide(g))
@@ -98,12 +101,13 @@ export function useImportGuide(isChief: boolean): GuideLive {
 
   usePolling(
     async () => {
-      setStatus(await getRemoteAccessStatus());
+      const next = await getRemoteAccessStatus();
+      setRead({ status: next, at: Date.now() });
     },
     { intervalMs: POLL_MS, enabled: running }
   );
 
-  const step = running && guide ? guideStep(status, talk, guide.assistant, Date.now()) : null;
+  const step = running && guide ? guideStep(status, talk, guide.assistant, at) : null;
 
   // Say each step the first time it's reached. The Mac keeps the "once".
   const asked = useRef<string | null>(null);
@@ -119,7 +123,7 @@ export function useImportGuide(isChief: boolean): GuideLive {
       });
   }, [step]);
 
-  return { guide: running ? guide : null, step, status };
+  return { guide: running ? guide : null, step, status, at };
 }
 
 export const ImportGuideProvider = GuideContext.Provider;
@@ -148,7 +152,7 @@ export function ImportGuideAsk() {
 
   return (
     <div className="agent-guide-ask" data-testid="agent-import-choice">
-      <p className="agent-guide-ask__text">{GUIDE_ASK_TEXT}</p>
+      <p className="agent-bubble agent-bubble--agent agent-guide-ask__text">{GUIDE_ASK_TEXT}</p>
       <div className="agent-guide-ask__options" role="group" aria-label={GUIDE_ASK_TEXT}>
         {GUIDE_ASK_OPTIONS.map((o) => (
           <Button
@@ -181,7 +185,7 @@ const order = (s: GuideStepId) => GUIDE_STEPS.indexOf(s);
 
 /** The `guide` block under a Chief message: that step's one action. */
 export function GuideStepAction({ block }: { block: GuideBlock }) {
-  const { guide, step: current, status } = useContext(GuideContext);
+  const { guide, step: current, status, at } = useContext(GuideContext);
   // The guide ended (imported, or start fresh): the words stay, the actions go.
   if (!guide || !current) return null;
   const past =
@@ -189,10 +193,14 @@ export function GuideStepAction({ block }: { block: GuideBlock }) {
     // "approve" is skipped when Tailscale never asks: link is done once connect is reached.
     (block.step === 'approve' && order(current) > order('approve'));
   if (past) {
-    return <CheckLine result={{ state: 'pass', line: DONE_LINES[block.step] }} />;
+    return (
+      <div className="agent-guide-step">
+        <CheckLine result={{ state: 'pass', line: DONE_LINES[block.step] }} />
+      </div>
+    );
   }
   if (block.step !== current) return null;
-  return <CurrentStep block={block} status={status} />;
+  return <CurrentStep block={block} status={status} at={at} />;
 }
 
 const DONE_LINES: Record<GuideStepId, string> = {
@@ -204,7 +212,15 @@ const DONE_LINES: Record<GuideStepId, string> = {
   talking: 'Done.',
 };
 
-function CurrentStep({ block, status }: { block: GuideBlock; status: RemoteAccessStatus | null }) {
+function CurrentStep({
+  block,
+  status,
+  at,
+}: {
+  block: GuideBlock;
+  status: RemoteAccessStatus | null;
+  at: number;
+}) {
   const { showToast } = useOptionalToast();
   const [busy, setBusy] = useState(false);
   const act = (work: () => Promise<unknown>) => {
@@ -219,15 +235,22 @@ function CurrentStep({ block, status }: { block: GuideBlock; status: RemoteAcces
   switch (block.step) {
     case 'tailscale':
       return (
-        <StepRow waiting="Waiting for Tailscale…">
-          <Button variant="strong" size="compact" onClick={() => void openUrl(TAILSCALE_DOWNLOAD_URL)}>
+        <StepRow waiting="I’ll notice when it’s on.">
+          <Button
+            variant="strong"
+            size="compact"
+            onClick={() => void openUrl(TAILSCALE_DOWNLOAD_URL)}
+          >
             Get Tailscale <ExternalLinkIcon size={12} />
           </Button>
         </StepRow>
       );
     case 'link': {
-      const problem = status ? linkCheckFor(remoteProblem(status, Date.now())) : null;
-      const line = problem && problem.kind === 'check' && problem.check.state === 'fail' ? problem.check : null;
+      const problem = status ? linkCheckFor(remoteProblem(status, at)) : null;
+      const line =
+        problem && problem.kind === 'check' && problem.check.state === 'fail'
+          ? problem.check
+          : null;
       return (
         <StepRow failure={line?.line}>
           <Button
@@ -249,7 +272,7 @@ function CurrentStep({ block, status }: { block: GuideBlock; status: RemoteAcces
     }
     case 'approve':
       return (
-        <StepRow waiting="Waiting for your OK in Tailscale…">
+        <StepRow waiting="I’ll carry on once you’ve approved it.">
           <Button
             variant="strong"
             size="compact"
@@ -270,7 +293,7 @@ function CurrentStep({ block, status }: { block: GuideBlock; status: RemoteAcces
               ))}
             </ol>
           )}
-          <StepRow waiting={`Waiting for ${name} to connect…`}>
+          <StepRow waiting={`I’ll see it the moment ${name} connects.`}>
             <Button
               variant="strong"
               size="compact"
@@ -285,7 +308,11 @@ function CurrentStep({ block, status }: { block: GuideBlock; status: RemoteAcces
               Copy my link
             </Button>
             {guideFor?.url && (
-              <Button variant="secondary" size="compact" onClick={() => void openUrl(guideFor.url as string)}>
+              <Button
+                variant="secondary"
+                size="compact"
+                onClick={() => void openUrl(guideFor.url as string)}
+              >
                 Open {name} <ExternalLinkIcon size={12} />
               </Button>
             )}
@@ -317,8 +344,11 @@ function SendStep({ name }: { name: string }) {
   if (!message) return null;
   return (
     <div className="agent-guide-step">
-      <MessageCard message={message} onCopied={() => showToast(`Copied. Send it to ${name}.`, 'success')} />
-      <CheckLine result={{ state: 'waiting', line: `Waiting for ${name} to say hello…` }} />
+      <MessageCard
+        message={message}
+        onCopied={() => showToast(`Copied. Send it to ${name}.`, 'success')}
+      />
+      <CheckLine result={{ state: 'waiting', line: `I’ll know when ${name} says hello.` }} />
     </div>
   );
 }

@@ -529,8 +529,7 @@ export interface ImportGuide {
 export const startImportGuide = (assistant: ImportGuide['assistant']) =>
   invoke<void>('agents_guide_start', { assistant });
 /** The app reached `step`: the Chief says it, once (true when it did). */
-export const postImportGuideStep = (step: string) =>
-  invoke<boolean>('agents_guide_post', { step });
+export const postImportGuideStep = (step: string) => invoke<boolean>('agents_guide_post', { step });
 export const getImportGuide = () => invoke<ImportGuide | null>('agents_guide_state');
 export const stopImportGuide = () => invoke<void>('agents_guide_stop');
 

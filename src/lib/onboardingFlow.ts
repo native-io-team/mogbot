@@ -334,7 +334,10 @@ export function guideStep(
   assistant: AssistantId | null,
   now: number
 ): GuideStepId | null {
-  if (talk && (talk.state === 'interviewing' || talk.state === 'playback' || talk.state === 'review')) {
+  if (
+    talk &&
+    (talk.state === 'interviewing' || talk.state === 'playback' || talk.state === 'review')
+  ) {
     return 'talking';
   }
   if (!s) return null;
