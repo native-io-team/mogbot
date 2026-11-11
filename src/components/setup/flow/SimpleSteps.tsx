@@ -30,7 +30,9 @@ export function WelcomeStep({ onNext }: { onNext: () => void }) {
         </Button>
       }
     >
-      <p className="flow-note">About five minutes.</p>
+      <p className="flow-note">
+        About five minutes, all here on this Mac. Your phone comes after, if you want it.
+      </p>
     </FlowShell>
   );
 }

@@ -3,6 +3,11 @@
  * agent is bound to, or into groups you name yourself ("Acme", "Internal")
  * and drag agents into. Groups fold. The Chief stays first, outside any.
  *
+ * And its order: by recent activity (what waits on you, then what's working,
+ * then the rest; the default), or your own, set by dragging a row. Dragging
+ * is what switches to your own order; "Sort agents by recent activity" goes
+ * back. Agents new since you arranged them go at the end.
+ *
  * A per-viewer convenience of this window's sidebar, so it lives in
  * localStorage (never the agents' registry, never the phone), and every read
  * survives storage being unavailable: grouping is simply off then.
@@ -14,6 +19,9 @@ import { useSyncExternalStore } from 'react';
 import type { Agent } from './agents';
 
 export type GroupMode = 'off' | 'project' | 'custom';
+
+/** The list's order: by recent activity (attention), or yours, set by dragging. */
+export type SortMode = 'activity' | 'yours';
 
 export interface AgentGroup {
   id: string;
@@ -28,12 +36,23 @@ export interface GroupSettings {
   assign: Record<string, string>;
   /** Folded groups, by key. */
   collapsed: string[];
+  /** The order the list is in. */
+  sort: SortMode;
+  /** Your order, by agent id, once you've dragged one. */
+  order: string[];
   /** "New group" is being named in the sidebar. Not saved. */
   naming?: boolean;
 }
 
 const KEY = 'shipstudio.agents.groups';
-const EMPTY: GroupSettings = { mode: 'off', groups: [], assign: {}, collapsed: [] };
+const EMPTY: GroupSettings = {
+  mode: 'off',
+  groups: [],
+  assign: {},
+  collapsed: [],
+  sort: 'activity',
+  order: [],
+};
 
 /** A stored value, read leniently: anything malformed reads as off. Pure. */
 export function parseGroups(raw: string | null): GroupSettings {
@@ -56,7 +75,11 @@ export function parseGroups(raw: string | null): GroupSettings {
     const collapsed = Array.isArray(v.collapsed)
       ? v.collapsed.filter((k): k is string => typeof k === 'string')
       : [];
-    return { mode, groups, assign, collapsed };
+    const order = Array.isArray(v.order)
+      ? v.order.filter((k): k is string => typeof k === 'string')
+      : [];
+    const sort: SortMode = v.sort === 'yours' && order.length > 0 ? 'yours' : 'activity';
+    return { mode, groups, assign, collapsed, sort, order };
   } catch {
     return EMPTY;
   }
@@ -146,6 +169,53 @@ export function moveToGroup(agentId: string, groupId: string | null) {
   if (groupId && current.groups.some((g) => g.id === groupId)) assign[agentId] = groupId;
   else delete assign[agentId];
   set({ ...current, assign });
+}
+
+export function setSortMode(sort: SortMode) {
+  set({ ...current, sort });
+}
+
+/**
+ * `ids` in your order: the ones you placed as you placed them, then any new
+ * since, in the order given (newest last when given by creation). Pure.
+ */
+export function inYourOrder<T extends { id: string }>(
+  items: readonly T[],
+  order: readonly string[]
+): T[] {
+  const place = new Map(order.map((id, i) => [id, i]));
+  const placed = items.filter((a) => place.has(a.id));
+  placed.sort((a, b) => place.get(a.id)! - place.get(b.id)!);
+  return [...placed, ...items.filter((a) => !place.has(a.id))];
+}
+
+/**
+ * `shown` (the ids as the list shows them now) with `moved` put just before
+ * `target`, or at the end when `target` is null. Pure.
+ */
+export function reorder(
+  shown: readonly string[],
+  moved: string,
+  target: string | null,
+  after = false
+): string[] {
+  if (moved === target) return [...shown];
+  const rest = shown.filter((id) => id !== moved);
+  if (target == null) return [...rest, moved];
+  const at = rest.indexOf(target);
+  if (at < 0) return [...rest, moved];
+  rest.splice(after ? at + 1 : at, 0, moved);
+  return rest;
+}
+
+/** A row dragged onto another: the list takes your order from now on. */
+export function moveAgent(
+  shown: readonly string[],
+  moved: string,
+  target: string | null,
+  after = false
+) {
+  set({ ...current, sort: 'yours', order: reorder(shown, moved, target, after) });
 }
 
 export function toggleCollapsed(key: string) {

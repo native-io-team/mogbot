@@ -33,7 +33,13 @@ import { DESCRIBE_START, ROLE_TEMPLATES } from '../lib/agentTemplates';
 import { SHARE_RECIPE_EVENT } from '../lib/agentRecipe';
 import { openLogs } from '../lib/agentDesk';
 import { composerDraft, setComposerDraft } from '../lib/composerDraft';
-import { setGroupMode, startNamingGroup, useAgentGroups, type GroupMode } from '../lib/agentGroups';
+import {
+  setGroupMode,
+  setSortMode,
+  startNamingGroup,
+  useAgentGroups,
+  type GroupMode,
+} from '../lib/agentGroups';
 import { asCommandError, formatCommandError } from '../lib/errors';
 
 /** What went wrong, in words: never `String(e)`'s "Error: …" or "[object Object]". */
@@ -191,7 +197,10 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
   const chief = agents.find((a) => a.isMain);
   const chiefId = chief?.id;
   const chiefName = chief?.name;
-  const groupMode = useAgentGroups().mode;
+  const groupSettings = useAgentGroups();
+  const groupMode = groupSettings.mode;
+  const sortMode = groupSettings.sort;
+  const hasOwnOrder = groupSettings.order.length > 0;
   // Whether the other app has agents on this Mac, asked once from its
   // registry alone (not the preview, which reads every agent's folder): it
   // gates the palette's "Import agents from …", which only means something then.
@@ -572,6 +581,30 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         },
       })),
       {
+        id: 'agents.sort.activity',
+        title: 'Sort agents by recent activity',
+        icon: <AgentsIcon size={14} />,
+        category: 'navigation',
+        when: () => sortMode === 'yours',
+        keywords: ['agents', 'sort', 'order', 'chronological', 'recent', 'sidebar', 'reorder'],
+        run: () => {
+          setSortMode('activity');
+          setView('agents');
+        },
+      },
+      {
+        id: 'agents.sort.yours',
+        title: 'Sort agents in your own order',
+        icon: <AgentsIcon size={14} />,
+        category: 'navigation',
+        when: () => sortMode === 'activity' && hasOwnOrder,
+        keywords: ['agents', 'sort', 'order', 'custom', 'manual', 'sidebar', 'reorder', 'drag'],
+        run: () => {
+          setSortMode('yours');
+          setView('agents');
+        },
+      },
+      {
         id: 'agents.groups.new',
         title: 'New agent group…',
         icon: <PlusIcon size={14} />,
@@ -617,6 +650,17 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         },
       })),
     ],
-    [setView, agents, showToast, otherApp, setup, chiefId, chiefName, groupMode]
+    [
+      setView,
+      agents,
+      showToast,
+      otherApp,
+      setup,
+      chiefId,
+      chiefName,
+      groupMode,
+      sortMode,
+      hasOwnOrder,
+    ]
   );
 }

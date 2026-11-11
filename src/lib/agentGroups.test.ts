@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   addGroup,
+  inYourOrder,
+  reorder,
   getAgentGroups,
   moveToGroup,
   parseGroups,
@@ -104,5 +106,25 @@ describe('changing groups', () => {
 
   it('never names a group with nothing', () => {
     expect(addGroup('   ')).toBeNull();
+  });
+});
+
+describe('your own order', () => {
+  it('moves a row before or after another', () => {
+    expect(reorder(['a', 'b', 'c', 'd'], 'd', 'b')).toEqual(['a', 'd', 'b', 'c']);
+    expect(reorder(['a', 'b', 'c', 'd'], 'a', 'c', true)).toEqual(['b', 'c', 'a', 'd']);
+    expect(reorder(['a', 'b'], 'a', 'a')).toEqual(['a', 'b']);
+    expect(reorder(['a', 'b'], 'a', null)).toEqual(['b', 'a']);
+  });
+
+  it('keeps your order and puts agents new since then at the end', () => {
+    const items = ['x', 'a', 'b', 'c'].map((id) => ({ id }));
+    expect(inYourOrder(items, ['c', 'a', 'gone']).map((i) => i.id)).toEqual(['c', 'a', 'x', 'b']);
+  });
+
+  it('reads a saved order, and falls back to activity without one', () => {
+    expect(parseGroups(JSON.stringify({ sort: 'yours', order: ['a'] })).sort).toBe('yours');
+    expect(parseGroups(JSON.stringify({ sort: 'yours', order: [] })).sort).toBe('activity');
+    expect(parseGroups(null).sort).toBe('activity');
   });
 });

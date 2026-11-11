@@ -2,7 +2,7 @@
  * Welcome and pairing, one screen at a time (`lib/pairSteps`): one question,
  * one big button, Back and a progress bar on every screen.
  *
- * Do you have the app on your Mac? (Not yet: where to get it) → Tailscale on
+ * Start at your computer (not set up there yet: where to get it) → Tailscale on
  * this phone, signed in as the Mac is (ticks Done when this phone can see
  * it) → "On your Mac, click Pair your phone" (Scan the code) → the camera
  * → "Pair with <Mac>?" → "Reaching <Mac>…" while it proves itself → "Click
@@ -24,12 +24,14 @@ import {
   CLICK_PAIR_TITLE,
   GET_MAC_LINE,
   GET_MAC_TITLE,
+  HAVE_MAC_LINE,
   HAVE_MAC_TITLE,
+  MAC_NOT_YET,
+  MAC_READY,
   I_DID_IT,
   PAIR_BUTTON,
   PAIRED_TITLE,
   PAIRING_SCHEME,
-  SAME_ACCOUNT_LINE,
   SCAN_THE_CODE,
   TAILSCALE_LINE,
   TAILSCALE_PHONE_TITLE,
@@ -426,11 +428,9 @@ function IntroScreen({
             </View>
           }
           title={HAVE_MAC_TITLE}
-          line="Your agents run there. This phone is how you reach them when you’re away from it."
-          primary={<Button title="Yes" variant="primary" size="large" onPress={next} />}
-          secondary={
-            <Button title="Not yet" variant="ghost" onPress={() => go('getMac')} />
-          }
+          line={HAVE_MAC_LINE}
+          primary={<Button title={MAC_READY} variant="primary" size="large" onPress={next} />}
+          secondary={<Button title={MAC_NOT_YET} variant="ghost" onPress={() => go('getMac')} />}
           footer={<TryDemo />}
         />
       );
@@ -482,8 +482,8 @@ function IntroScreen({
           title={TAILSCALE_PHONE_TITLE}
           line={
             installed
-              ? `${TAILSCALE_LINE} Open it and switch it on. ${SAME_ACCOUNT_LINE}`
-              : `${TAILSCALE_LINE} Install it and switch it on; it asks to add a VPN configuration: tap Allow. ${SAME_ACCOUNT_LINE}`
+              ? `${TAILSCALE_LINE} Open it, sign in with the same account you used on your Mac, and switch it on.`
+              : `${TAILSCALE_LINE} Install it, sign in with the same account you used on your Mac, and switch it on. When it asks to add a VPN configuration, tap Allow.`
           }
           primary={
             installed ? (

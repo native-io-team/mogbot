@@ -4,7 +4,7 @@
  * desk walks from its side (`companion-protocol/src/pairWords.ts` holds the
  * words both sides say):
  *
- * 1. Do you have the app on your Mac? (Not yet: where to get it.)
+ * 1. Start at your computer: the Mac is set up first (not yet: where to get it).
  * 2. Turn on Tailscale on this phone, signed in as your Mac is.
  * 3. On your Mac, click "Pair your phone": Scan the code.
  * 4. The camera.

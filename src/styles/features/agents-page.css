@@ -148,6 +148,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Muted is 3.6:1 on the selected surface: the current version's head lifts. */
+.agent-page__version[aria-current] .agent-page__version-head {
+  color: var(--text-primary);
+}
+
 .agent-page__older {
   margin: 0;
   color: var(--text-muted);

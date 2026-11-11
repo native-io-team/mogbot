@@ -192,6 +192,14 @@ jobs:
     runs-on: windows-latest
     needs: [config-integrity]
     timeout-minutes: 40
+    env:
+      # `cargo test --lib --bins --tests` codegens the crate twice at once
+      # (the lib for the bins, and the lib's tests). With full MSVC debuginfo
+      # that ran the runner out of memory ("rustc-LLVM ERROR: out of memory",
+      # run 43043767228) after type checking had passed. Panic messages keep
+      # their file:line without debuginfo; only debugger symbols are lost.
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
     steps:
       # Match the release-windows.yml pipeline: keep LF so bash scripts and
       # snapshot-style tests don't trip over CRLF on checkout.

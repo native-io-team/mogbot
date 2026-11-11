@@ -507,12 +507,12 @@ async function prePairShots(page, d) {
         [
           'pair-start',
           null,
-          'Do you have',
-          '“Do you have Mogbot on your Mac?” under the Chief’s key, the bar at 1 of 6 with no Back; big Yes, an outline Not yet, then a quiet “Try the demo” with its one line',
+          'Start at your computer',
+          '“Start at your computer” under the Chief’s key, its line saying the Mac comes first and nothing here works until then; the bar at 1 of 6 with no Back; big “My Mac is set up”, an outline “I don’t have it on my Mac yet”, then a quiet “Try the demo” with its one line',
         ],
         [
           'pair-getmac',
-          'Not yet',
+          'I don’t have it on my Mac yet',
           'first',
           '“Get Mogbot on your Mac first”, its one line, the download address in a panel; big “Send the link to my Mac”, quiet “I have it now”; Back, the bar still 1 of 6',
         ],
@@ -606,7 +606,7 @@ async function demoShots(page) {
       await capture(page, `demo-welcome-${theme}`, {
         route: '/pair',
         check:
-          '“Try the demo” quiet under Yes / Not yet on the first question, with “No Mac nearby?…” under it',
+          '“Try the demo” quiet under “My Mac is set up” / “I don’t have it on my Mac yet” on the first screen, with “No Mac nearby?…” under it',
         theme,
       });
     await page.clickText('Try the demo');

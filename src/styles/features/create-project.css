@@ -805,7 +805,9 @@
   color: var(--text-secondary);
 }
 
-/* On the selected surface secondary is 4.3:1: the description lifts a step. */
-.stack-card-selected .stack-card-desc {
+/* On the selected surface secondary is 4.3:1 and muted 3.6:1: the
+   description and the meta line lift to primary. */
+.stack-card-selected .stack-card-desc,
+.stack-card-selected .stack-card-meta {
   color: var(--text-primary);
 }

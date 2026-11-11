@@ -11,6 +11,9 @@
  * the last row with the phone, remote and Settings icons. The sidebar's top field searches
  * conversations here; while it has a query the results take the list's place.
  *
+ * Drag a row to put the list in your own order (then it stays there); ⌘K
+ * "Sort agents by recent activity" goes back to the order by attention.
+ *
  * Right-click a row (or Shift+F10 on it) for Pin, Mark as unread, Mute notifications, Edit, Hide
  * and Delete; the conversation header's … menu has the same items for the
  * open agent.
@@ -20,8 +23,11 @@
 
 import {
   memo,
+  useCallback,
   useMemo,
   useRef,
+  useState,
+  type DragEvent,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -43,12 +49,15 @@ import {
   ContextMenuTrigger,
 } from '../primitives/ContextMenu';
 import {
+  AGENT_DRAG_TYPE,
   AgentGroupSection,
   MoveToGroupItems,
   NewGroupField,
   startAgentDrag,
 } from './AgentGroupParts';
 import {
+  inYourOrder,
+  moveAgent,
   sectionAgents,
   toggleCollapsed,
   useAgentGroups,
@@ -322,7 +331,13 @@ export function AgentsSidebar({
   // list is in use so a row never moves under the pointer, and re-sorted at
   // most every few seconds.
   const listRef = useRef<HTMLDivElement>(null);
-  const { agents: sorted } = useSteadyList(agents, listRef, false);
+  const { agents: byAttention } = useSteadyList(agents, listRef, false);
+  // Your own order, once you've dragged a row: it holds, and new agents join at the end.
+  const yours = grouping.sort === 'yours';
+  const sorted = useMemo(
+    () => (yours ? inYourOrder(agents, grouping.order) : byAttention),
+    [yours, agents, grouping.order, byAttention]
+  );
   const { visible, hidden } = useMemo(
     () => ({
       visible: sorted.filter((a) => !a.hidden || a.id === selectedId),
@@ -363,6 +378,16 @@ export function AgentsSidebar({
     );
 
   const custom = grouping.mode === 'custom';
+  // The rows' order as shown, for a drop to be placed in.
+  const shownKey = shown
+    .filter((a) => !a.isMain)
+    .map((a) => a.id)
+    .join(' ');
+  const onReorder = useCallback(
+    (moved: string, target: string, after: boolean) =>
+      moveAgent(shownKey.split(' ').filter(Boolean), moved, target, after),
+    [shownKey]
+  );
   const row = (agent: Agent) => (
     <AgentRow
       key={agent.id}
@@ -374,6 +399,7 @@ export function AgentsSidebar({
       actions={actions}
       groups={custom ? grouping.groups : undefined}
       group={custom ? grouping.assign[agent.id] : undefined}
+      onReorder={onReorder}
     />
   );
   const team = visible.filter((a) => !a.isMain);
@@ -574,6 +600,7 @@ const AgentRow = memo(function AgentRow({
   actions,
   groups,
   group,
+  onReorder,
 }: {
   agent: Agent;
   current: boolean;
@@ -586,7 +613,17 @@ const AgentRow = memo(function AgentRow({
   groups?: AgentGroup[];
   /** The group it's in. */
   group?: string;
+  /** Another row dropped on this one: put it just before (or after) this. */
+  onReorder: (moved: string, target: string, after: boolean) => void;
 }) {
+  // Where a dragged row would land: a line above or below this one.
+  const [drop, setDrop] = useState<'before' | 'after' | null>(null);
+  // The Chief stays first: it neither moves nor takes a row above it.
+  const movable = !agent.isMain;
+  const dropSide = (e: DragEvent<HTMLElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    return e.clientY > box.top + box.height / 2 ? 'after' : 'before';
+  };
   // Its loaded lines, only while it's waiting: the row says what it's asking.
   const lines = useAgentsSelector((s) => (needsYou(agent) ? s.messages[agent.id] : undefined));
   const asking = needsYou(agent) ? askingLine(agent, lines) : null;
@@ -609,8 +646,28 @@ const AgentRow = memo(function AgentRow({
           aria-current={current ? 'true' : undefined}
           onPointerEnter={tooltipIfTruncated}
           onClick={() => onSelect(agent.id)}
-          draggable={groups ? true : undefined}
-          onDragStart={groups ? (e) => startAgentDrag(e, agent.id) : undefined}
+          data-drop={drop ?? undefined}
+          draggable={movable || undefined}
+          onDragStart={movable ? (e) => startAgentDrag(e, agent.id) : undefined}
+          onDragOver={(e) => {
+            if (!movable || !e.dataTransfer.types.includes(AGENT_DRAG_TYPE)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const side = dropSide(e);
+            if (side !== drop) setDrop(side);
+          }}
+          onDragLeave={() => setDrop(null)}
+          onDrop={(e) => {
+            const side = drop ?? dropSide(e);
+            setDrop(null);
+            if (!movable) return;
+            const moved = e.dataTransfer.getData(AGENT_DRAG_TYPE);
+            if (!moved) return;
+            e.preventDefault();
+            // Not stopped: inside your own groups, the group under it takes the agent too.
+            onReorder(moved, agent.id, side === 'after');
+          }}
+          onDragEnd={() => setDrop(null)}
         >
           <AgentKey
             id={agent.id}

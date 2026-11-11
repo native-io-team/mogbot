@@ -66,6 +66,7 @@ import {
   PHONE_ACCESS_TITLE,
   SCAN_LINE,
   SKIP_FOR_NOW,
+  TAILSCALE_ACCOUNT_LINE,
   TAILSCALE_LINE,
   TAILSCALE_MAC_TITLE,
   TAILSCALE_YOUR_PHONE_TITLE,
@@ -179,13 +180,13 @@ export function tailscaleMacCheck(t: TailscaleState | undefined): CheckResult {
       return {
         state: 'waiting',
         line: 'Tailscale is installed but not signed in.',
-        fix: 'Click the Tailscale icon in the menu bar and sign in.',
+        fix: 'Click the Tailscale icon in the menu bar, sign in, and switch it on. This ticks by itself.',
       };
     case 'notInstalled':
       return {
         state: 'waiting',
         line: 'Tailscale isn’t on this Mac yet.',
-        fix: 'Install it and sign in. It asks to add a VPN configuration: click Allow.',
+        fix: 'Download it, open it, sign in (or make a free account) and switch it on. It asks to add a VPN configuration: click Allow. This ticks by itself.',
       };
     case 'unknown':
       return { state: 'fail', line: 'Couldn’t read Tailscale on this Mac.', fix: t.detail };
@@ -210,7 +211,7 @@ export function tailscaleMacView({
   const notInstalled = tailscale?.state === 'notInstalled';
   return {
     title: TAILSCALE_MAC_TITLE,
-    lede: TAILSCALE_LINE,
+    lede: `${TAILSCALE_LINE} ${TAILSCALE_ACCOUNT_LINE}`,
     children: (
       <CheckLine
         result={check}

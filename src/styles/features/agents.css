@@ -684,3 +684,23 @@
   :is(.agents-list__group-toggle, .agents-list__group-empty, .agents-list__group-new) {
   display: none;
 }
+
+/* A dragged agent over a row: a line where it will land. */
+.agents-list__row[data-drop]::after {
+  content: '';
+  position: absolute;
+  left: var(--spacing-sm);
+  right: var(--spacing-sm);
+  height: var(--border-width-emphasis);
+  border-radius: var(--radius-pill);
+  background: var(--text-primary);
+  pointer-events: none;
+}
+
+.agents-list__row[data-drop='before']::after {
+  top: 0;
+}
+
+.agents-list__row[data-drop='after']::after {
+  bottom: 0;
+}

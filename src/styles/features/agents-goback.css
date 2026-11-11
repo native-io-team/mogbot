@@ -38,21 +38,18 @@
   padding-top: var(--spacing-xl);
 }
 
-.agent-chat__messages
-  > .agent-go-back__summary[data-open]
-  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *)
-  > * {
-  opacity: 0.55;
-  transition: opacity var(--transition-interaction);
-}
-
 /* What's in a past row is muted, not the row: the rule stays one even line.
-   Read closely (hovered or in focus), a past row comes up to full ink. */
+   Muted by stepping its ink down a role rather than by opacity: a fade took
+   the timestamps and the user's bubble under 4.5:1 (axe, both themes).
+   Secondary text passes on the quieter control surface, not on the selected
+   one, so the user's bubble steps down with it. Read closely (hovered or in
+   focus), a past row comes up to full ink. */
 .agent-chat__messages
   > .agent-go-back__summary[data-open]
-  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *):is(:hover, :focus-within)
+  ~ :not(.agent-go-back__end, .agent-go-back__end ~ *):not(:hover, :focus-within)
   > * {
-  opacity: 1;
+  --text-primary: var(--text-secondary);
+  --surface-selected: var(--surface-control);
 }
 
 .agent-chat__messages > .agent-go-back__end {
@@ -141,8 +138,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-go-back__summary .agent-go-back__chevron,
-  .agent-chat__messages > .agent-go-back__summary[data-open] ~ * > * {
+  .agent-go-back__summary .agent-go-back__chevron {
     transition: none;
   }
 }
