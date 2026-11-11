@@ -196,7 +196,7 @@ pub fn set_keep_awake_asked(asked: bool, remote_on: bool) -> Result<(), CommandE
     if asked {
         start_keep_awake()
     } else {
-        if !remote_on {
+        if !remote_on && !phone_holds_awake() {
             stop_keep_awake();
         }
         Ok(())
@@ -205,6 +205,31 @@ pub fn set_keep_awake_asked(asked: bool, remote_on: bool) -> Result<(), CommandE
 
 pub fn keep_awake_asked() -> bool {
     KEEP_AWAKE_ASKED.load(Ordering::SeqCst)
+}
+
+/// A paired phone is reaching this Mac (`companion::desktop`): it holds the
+/// Mac awake too, since a Mac that idles to sleep is a phone that can't reach
+/// it until someone wakes it. `caffeinate -s` holds system sleep on mains only.
+static PHONE_HOLDS: AtomicBool = AtomicBool::new(false);
+
+/// Hold or release the assertion for the phone. Releasing leaves it held for
+/// the user's own preference or remote access.
+pub fn set_keep_awake_for_phone(holds: bool, remote_on: bool) -> Result<(), CommandError> {
+    if PHONE_HOLDS.swap(holds, Ordering::SeqCst) == holds && (!holds || keep_awake_active()) {
+        return Ok(());
+    }
+    if holds {
+        start_keep_awake()
+    } else {
+        if !remote_on && !keep_awake_asked() {
+            stop_keep_awake();
+        }
+        Ok(())
+    }
+}
+
+pub fn phone_holds_awake() -> bool {
+    PHONE_HOLDS.load(Ordering::SeqCst)
 }
 
 pub fn keep_awake_active() -> bool {

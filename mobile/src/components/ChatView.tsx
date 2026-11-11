@@ -8,7 +8,6 @@
  * (`embedded`), where it draws its own header instead of the stack's.
  */
 
-import { headerSubtitle, headerSubtitleParts, roleCutPastReading } from '../lib/accountsView';
 import {
   FIRST_CONVERSATION,
   forkConfirm,
@@ -112,7 +111,6 @@ import {
   iconSize,
   radius,
   space,
-  type,
   PRESSED,
   PAST,
 } from '../lib/theme';
@@ -1389,19 +1387,10 @@ const ChatHeader = memo(function ChatHeader({
 function Header({ agent, buttons }: { agent: Agent; buttons: number }) {
   const colors = useColors();
   const styles = useStyles();
-  const { width, fontScale } = useWindowDimensions();
-  const whole = headerSubtitleParts(agent);
-  // A role cut to "Desig…" is dropped for the account alone, until the role,
-  // the account or the room changes.
-  const fit = `${whole.role}|${whole.on}|${width}|${buttons}|${fontScale}|${type.caption}`;
-  const [cutAt, setCutAt] = useState<string | null>(null);
-  const roleCut = cutAt === fit;
-  const parts = roleCut
-    ? headerSubtitleParts({ role: '', ranOn: agent.ranOn, engine: agent.engine })
-    : whole;
-  const subtitle = roleCut
-    ? headerSubtitle({ role: '', ranOn: agent.ranOn, engine: agent.engine })
-    : headerSubtitle(agent);
+  const { width } = useWindowDimensions();
+  // The role alone, across the whole title: which account a turn ran on is
+  // desk detail, not something to read on the phone (Julian, 2026-11-10).
+  const role = agent.role?.trim();
   return (
     <View style={[styles.header, { maxWidth: headerTitleWidth(width, buttons) }]}>
       <AgentKey
@@ -1420,41 +1409,15 @@ function Header({ agent, buttons }: { agent: Agent; buttons: number }) {
         >
           {agent.name}
         </T>
-        {!!subtitle && (
-          // The role gives way before the account its last turn ran on.
-          <View style={styles.subtitle} accessible accessibilityLabel={subtitle}>
-            {!!parts.role && (
-              <T
-                variant="caption"
-                color={colors.textSecondary}
-                numberOfLines={1}
-                maxFontSizeMultiplier={chromeScale}
-                style={styles.subtitleRole}
-                onLayout={
-                  parts.on
-                    ? (e: LayoutChangeEvent) => {
-                        const size = type.caption * Math.min(fontScale, chromeScale);
-                        if (roleCutPastReading(e.nativeEvent.layout.width, parts.role, size))
-                          setCutAt(fit);
-                      }
-                    : undefined
-                }
-              >
-                {parts.role}
-              </T>
-            )}
-            {!!parts.on && (
-              <T
-                variant="caption"
-                color={colors.textSecondary}
-                numberOfLines={1}
-                maxFontSizeMultiplier={chromeScale}
-                style={styles.subtitleOn}
-              >
-                {parts.on}
-              </T>
-            )}
-          </View>
+        {!!role && (
+          <T
+            variant="caption"
+            color={colors.textSecondary}
+            numberOfLines={1}
+            maxFontSizeMultiplier={chromeScale}
+          >
+            {role}
+          </T>
         )}
       </View>
     </View>
@@ -1584,10 +1547,7 @@ const useStyles = makeStyles((colors) => ({
   start: { alignItems: 'center', paddingVertical: space.xl },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.sm, maxWidth: 260 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  subtitle: { flexDirection: 'row', minWidth: 0 },
   // Shrinks ten times faster than the account beside it.
-  subtitleRole: { flexShrink: 10 },
-  subtitleOn: { flexShrink: 1 },
   embeddedHeader: {
     flexDirection: 'row',
     alignItems: 'center',

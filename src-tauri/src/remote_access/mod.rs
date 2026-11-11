@@ -937,8 +937,8 @@ pub async fn tear_down() {
         }
     }
     stop_server();
-    // Still held if the user asked for it apart from remote access.
-    if !power::keep_awake_asked() {
+    // Still held if the user asked for it apart from remote access, or a phone needs it.
+    if !power::keep_awake_asked() && !power::phone_holds_awake() {
         power::stop_keep_awake();
     }
 }

@@ -279,6 +279,8 @@ function learnRoutes(routes: Credentials['routes']) {
   const next = { ...c, routes };
   setApp({ credentials: next });
   void saveCredentials(next);
+  const usable = usableRoutes(routes);
+  if (usable.length && transport instanceof DirectTransport) transport.setRoutes(usable);
 }
 
 /** Whether this Mac serves `method` (older Macs list fewer; the phone hides the rest). */

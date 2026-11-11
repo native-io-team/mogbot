@@ -145,3 +145,32 @@ describe('DirectTransport against the mock Mac', () => {
     expect(transport.state).toEqual({ kind: 'refused', reason: 'revoked' });
   });
 });
+
+describe('DirectTransport when the Mac moves', () => {
+  const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
+  afterAll(() => mock.close());
+
+  it('stops trying a dead address and connects on the new one at once', async () => {
+    const url = await mock.listen();
+    const { token } = mock.issueToken();
+    const t = new DirectTransport({
+      // Nothing listens here: the old address after a rename.
+      routes: [{ kind: 'tailscale', url: 'ws://127.0.0.1:9/v1/ws' }],
+      token,
+      app: { version: '0.1.0', runtimeVersion: 'test' },
+      getResume: () => undefined,
+      foreground: true,
+      WebSocketImpl: WebSocket as unknown as typeof globalThis.WebSocket,
+      ...provenBy(mock),
+    });
+    try {
+      // Let the first try be refused (node's ws throws on closing a socket mid-open; React Native's doesn't).
+      await new Promise((r) => setTimeout(r, 300));
+      t.setRoutes([{ kind: 'tailscale', url }]);
+      await until(() => t.state.kind === 'connected');
+      expect(t.route.url).toBe(url);
+    } finally {
+      t.close();
+    }
+  });
+});

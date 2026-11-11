@@ -283,14 +283,18 @@ export class DirectTransport implements Transport {
   /** In this spell of trouble, what the Mac said as it turned the phone away. */
   private macSaid: MacSaid | undefined;
 
+  /** Where the Mac can be reached; the Mac's welcome may bring newer ones (`setRoutes`). */
+  private routes: Route[];
+
   constructor(private readonly opts: DirectTransportOptions) {
     this.foreground = opts.foreground;
     if (!opts.routes.length) throw new Error('No route to the Mac');
+    this.routes = [...opts.routes];
     this.connect();
   }
 
   get route(): Route {
-    return this.opts.routes[this.routeIndex];
+    return this.routes[this.routeIndex];
   }
 
   // ---- Transport ------------------------------------------------------------
@@ -419,11 +423,29 @@ export class DirectTransport implements Transport {
     if (this.ws) {
       if (Date.now() - this.triedAt < FRESH_TRY_MS) return;
       // The try in flight is stuck on its route: the next one goes elsewhere.
-      this.routeIndex = (this.routeIndex + 1) % this.opts.routes.length;
+      this.routeIndex = (this.routeIndex + 1) % this.routes.length;
     }
     this.teardown();
     this.attempt = 0;
     this.connect();
+  }
+
+  /**
+   * The Mac's routes changed (renamed, moved tailnet): use them from now on.
+   * Connected, the next try uses them; trying on the old ones, start again on
+   * the new ones at once instead of waiting out a dead address until the app restarts.
+   */
+  setRoutes(routes: Route[]) {
+    if (!routes.length || JSON.stringify(routes) === JSON.stringify(this.routes)) return;
+    const current = this.routes[this.routeIndex];
+    this.routes = [...routes];
+    const same = this.routes.findIndex((r) => JSON.stringify(r) === JSON.stringify(current));
+    this.routeIndex = same >= 0 ? same : 0;
+    if (!this.ready && same < 0 && !this.closed && !this.refused) {
+      this.teardown();
+      this.attempt = 0;
+      this.connect();
+    }
   }
 
   /**
@@ -655,7 +677,7 @@ export class DirectTransport implements Transport {
     if (unanswered && !this.probed) void this.probeOldMac(this.route.url);
     // A route that failed before ever answering hands over to the next one;
     // one that was working is tried again first (the Mac restarting is still there).
-    if (!wasReady) this.routeIndex = (this.routeIndex + 1) % this.opts.routes.length;
+    if (!wasReady) this.routeIndex = (this.routeIndex + 1) % this.routes.length;
     if (!this.troubleSince) this.troubleSince = Date.now();
     const schedule = this.foreground ? FOREGROUND_BACKOFF_MS : BACKGROUND_BACKOFF_MS;
     const base = schedule[Math.min(this.attempt, schedule.length - 1)];

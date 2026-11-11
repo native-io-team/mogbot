@@ -1676,14 +1676,39 @@ pub async fn bring_up(app: &AppHandle) -> Result<(), CommandError> {
     let port = start_server(c.clone()).await?;
     publish(port).await;
     c.backend.changed();
+    hold_awake_for_phone(&c);
     start_keeper(c);
     Ok(())
+}
+
+/// While the phone server is on with a phone paired, keep this Mac from idling
+/// to sleep: asleep, the phone can't reach it at all until someone wakes it.
+fn hold_awake_for_phone(c: &Arc<Companion>) {
+    let holds = c.registry.read(|s| s.enabled && !s.devices.is_empty());
+    let remote_on = crate::remote_access::read_config().enabled;
+    if let Err(e) = crate::remote_access::power::set_keep_awake_for_phone(holds, remote_on) {
+        tracing::warn!(
+            "[Companion] Could not keep the Mac awake for the phone: {}",
+            e
+        );
+    }
 }
 
 // ---- Keeping the route up -----------------------------------------------------
 
 /// How often the keeper reads Tailscale back while the phone server is on.
 const KEEP_EVERY: Duration = Duration::from_secs(30);
+/// How often the keeper looks at the wall clock, to notice the Mac waking.
+const KEEP_TICK: Duration = Duration::from_secs(5);
+/// A tick that took this much longer than [`KEEP_TICK`] by the wall clock
+/// means the Mac slept (the monotonic clock stops while it does).
+const WOKE_AFTER: Duration = Duration::from_secs(15);
+
+/// The keeper reads Tailscale back now: its interval came round, or the Mac
+/// just woke (a tick that took far longer by the wall clock than it slept).
+fn keep_due(since_check: Duration, tick_wall: Duration) -> bool {
+    since_check >= KEEP_EVERY || tick_wall >= KEEP_TICK + WOKE_AFTER
+}
 
 /// What the keeper does after reading Tailscale back.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1750,8 +1775,23 @@ fn start_keeper(c: Arc<Companion>) {
         return;
     }
     tauri::async_runtime::spawn(async move {
+        let mut checked = std::time::Instant::now();
         loop {
-            tokio::time::sleep(KEEP_EVERY).await;
+            let before = std::time::SystemTime::now();
+            tokio::time::sleep(KEEP_TICK).await;
+            let wall = std::time::SystemTime::now()
+                .duration_since(before)
+                .unwrap_or_default();
+            if !keep_due(checked.elapsed(), wall) {
+                continue;
+            }
+            if wall >= KEEP_TICK + WOKE_AFTER {
+                tracing::info!(
+                    slept_s = wall.as_secs(),
+                    "[Companion] Mac woke; checking the phone route now"
+                );
+            }
+            checked = std::time::Instant::now();
             keep_once(&c).await;
         }
     });
@@ -1763,6 +1803,8 @@ async fn keep_once(c: &Arc<Companion>) {
     if !c.registry.read(|s| s.enabled) {
         return;
     }
+    // A phone paired since, or the last one removed.
+    hold_awake_for_phone(c);
     let now = tailscale::status().await;
     let current = serve_state();
     let serving = match (&current, &now) {
@@ -1879,6 +1921,8 @@ pub async fn tear_down(app: &AppHandle) {
     }
     c.hub.signal(HubItem::Shutdown);
     c.backend.changed();
+    // Off: the phone no longer holds the Mac awake (the user's own setting may).
+    hold_awake_for_phone(&c);
 }
 
 /// Turn the companion on or off. Paired devices are kept either way.
@@ -1954,6 +1998,16 @@ mod keep_tests {
             dns_name: host.into(),
             login: None,
         }
+    }
+
+    #[test]
+    fn the_keeper_checks_on_its_interval_and_at_once_after_a_sleep() {
+        assert!(!keep_due(Duration::from_secs(5), KEEP_TICK));
+        assert!(keep_due(KEEP_EVERY, KEEP_TICK));
+        // Five seconds of monotonic time, ten minutes by the wall clock: it woke.
+        assert!(keep_due(Duration::from_secs(5), Duration::from_secs(600)));
+        // A slow tick (a busy Mac) isn't a wake.
+        assert!(!keep_due(Duration::from_secs(5), Duration::from_secs(9)));
     }
 
     #[test]
