@@ -49,6 +49,7 @@ import {
   useProjectAgents,
   type AtWorkLine,
 } from './useProjectAgents';
+import { showAgentInSession, useSessionAgent } from '../../lib/sessionAgentChat';
 import { ProjectAtWork } from './ProjectAtWork';
 import { AgentKey } from '../agents/AgentKey';
 import { useSteadyLine } from '../../lib/steady';
@@ -799,7 +800,34 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   const agentsAtWork = useAgentsAtWork(Boolean(onGoAgents));
   const anyAtWork = agentsAtWork.some((a) => a.status.state !== 'idle');
   const now = useNow(anyAtWork, 5_000);
-  const projectAgents = useProjectAgents(agentsAtWork, currentProjectPath, onGoAgents, now);
+  // In a project, an agent's row opens its chat in the Session panel, where a
+  // terminal would be (`lib/sessionAgentChat`); elsewhere it opens in Agents.
+  const chatShown = useSessionAgent(currentProjectPath);
+  const chatIn = useCallback(
+    (projectPath: string) => (id: string) => {
+      showAgentInSession(projectPath, id);
+      if (projectPath !== currentProjectPath) onSelectProject(projectPath);
+    },
+    [currentProjectPath, onSelectProject]
+  );
+  const openHere = useMemo(
+    () => (currentProjectPath ? chatIn(currentProjectPath) : undefined),
+    [currentProjectPath, chatIn]
+  );
+  const goAgentsHere = useMemo(
+    () => (openHere ? () => undefined : onGoAgents),
+    [openHere, onGoAgents]
+  );
+  const projectAgentsRaw = useProjectAgents(agentsAtWork, currentProjectPath, goAgentsHere, now);
+  const projectAgents = useMemo(
+    () =>
+      projectAgentsRaw.map((r) =>
+        openHere
+          ? { ...r, isActive: chatShown === r.agentId, onSelect: () => openHere(r.agentId) }
+          : r
+      ),
+    [projectAgentsRaw, openHere, chatShown]
+  );
   const openAgent = onGoAgents ? (id: string) => openAgentChat(onGoAgents, id) : undefined;
   const atWorkProjects = useMemo(
     () => [
@@ -915,7 +943,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
       const item: SidebarItem = {
         key: `tab-${tab.id}`,
         label,
-        isActive,
+        isActive: isActive && !chatShown,
         dotState: tabDotState({ attention: hasAttention, status: regTab?.status }),
         onSelect: () => onSelectTab(tab.id),
         onClose: terminalTabs.length > 1 ? () => onCloseTab(tab.id) : undefined,
@@ -981,6 +1009,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
     devServerUrl,
     currentServerStatus,
     currentServerAddress,
+    chatShown,
   ]);
 
   // Worktree rows for the current project. Clicking a non-current worktree
@@ -1353,7 +1382,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         : (sessionRegistry.snapshot(row.projectPath)?.terminalTabs ?? []).map((t) =>
             t.title?.trim() ? t.title : ''
           ),
-      openAgent
+      currentProjectPath ? chatIn(row.projectPath) : openAgent,
+      isCurrent ? chatShown : null
     );
     const familyWorktreeItems: SidebarItem[] = sessionRegistry
       .snapshotAll()
@@ -1485,6 +1515,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 filterLower={filterLower}
                 serverSnapshot={serverSnapshot}
                 onSelectTab={(sessionId) => {
+                  showAgentInSession(row.projectPath, null);
                   if (onSelectProjectTab) {
                     onSelectProjectTab(row.projectPath, sessionId);
                   } else {
@@ -2861,7 +2892,9 @@ function workingColorway(
 function agentWorkItems(
   lines: AtWorkLine[],
   sessionLabels: readonly string[],
-  openAgent: ((agentId: string) => void) | undefined
+  openAgent: ((agentId: string) => void) | undefined,
+  /** The agent whose chat the Session panel shows, marked as the selected row. */
+  shown: string | null = null
 ): SidebarItem[] {
   const taken = new Set(sessionLabels.map((l) => l.trim().toLowerCase()));
   return lines
@@ -2869,6 +2902,7 @@ function agentWorkItems(
     .map((l) => ({
       key: `agent-work-${l.agentId}`,
       label: l.name,
+      isActive: shown === l.agentId,
       detail: l.text,
       dotState: l.waiting ? ('waiting' as const) : ('active' as const),
       leading: (

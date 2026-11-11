@@ -31,6 +31,7 @@ import {
   UndoIcon,
 } from '@/components/icons';
 import { ToolbarDropdown } from './ToolbarDropdown';
+import { SessionAgentChat, SessionAgentName } from './SessionAgentChat';
 import { TerminalSplitDividers } from './TerminalSplitDividers';
 import { TerminalSplitHeaders } from './TerminalSplitHeaders';
 
@@ -103,6 +104,15 @@ export interface WorkspaceTerminalPaneProps {
   onMcp: () => void;
   onAutoAcceptToggle: () => void;
   onHelp: () => void;
+  /**
+   * An agent's chat shown here instead of the terminals (`lib/sessionAgentChat`):
+   * its id and name. The terminals keep running underneath.
+   */
+  chatAgentId?: string | null;
+  /** Back to the terminals. */
+  onCloseChat?: () => void;
+  /** Leave for Agents, from the chat. */
+  onGoAgents?: () => void;
 }
 
 const AGENT_PANEL_FLOATING_SIZE = { width: 560, height: 680 };
@@ -161,7 +171,11 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
     onMcp,
     onAutoAcceptToggle,
     onHelp,
+    chatAgentId,
+    onCloseChat,
+    onGoAgents,
   } = props;
+  const chatting = Boolean(chatAgentId);
 
   // The rail: which slot this panel's placeholder belongs in, and where to
   // report a drag of the header below.
@@ -187,8 +201,26 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
           <div className="terminal-agent-header panel-heading-pair" data-dockable-drag-handle>
             <span className="terminal-agent-header__identity">
               <span className="panel-heading-pair-title workspace-panel-title">Session</span>
-              <span className="panel-heading-pair-meta">{getActiveTabAgent().displayName}</span>
+              <span className="panel-heading-pair-meta">
+                {chatAgentId ? (
+                  <SessionAgentName agentId={chatAgentId} />
+                ) : (
+                  getActiveTabAgent().displayName
+                )}
+              </span>
             </span>
+            {chatting && onCloseChat && (
+              <span className="terminal-agent-header__actions">
+                <Button
+                  variant="ghost"
+                  size="compact"
+                  onClick={onCloseChat}
+                  title="Back to this project’s terminal sessions"
+                >
+                  Show terminal
+                </Button>
+              </span>
+            )}
             {!isPreviewHidden && (
               <span className="terminal-agent-header__actions">
                 <ToggleButton
@@ -247,6 +279,7 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
                 const isVisible =
                   isCurrentProject &&
                   !showHealthLogs &&
+                  !chatting &&
                   (isSplitActive ? inSplitPane : activeTerminalTab === tab.id);
                 const refKey = `${session.projectPath}::${tab.id}`;
                 // Anchor both edges to percentages computed from
@@ -335,7 +368,17 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
                 );
               })
             )}
-            {showHealthLogs && (
+            {chatAgentId && onCloseChat && (
+              <div className="terminal-tab-content active session-agent-chat-slot">
+                <SessionAgentChat
+                  key={chatAgentId}
+                  agentId={chatAgentId}
+                  onGoAgents={onGoAgents}
+                  onGone={onCloseChat}
+                />
+              </div>
+            )}
+            {showHealthLogs && !chatting && (
               <div className="terminal-tab-content active">
                 <DevServerLogs
                   output={healthOutput}
@@ -347,112 +390,114 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
           </div>
         </div>
 
-        <div
-          className={`terminal-pane-footer${isPreviewHidden ? ' terminal-pane-footer--focus' : ''}`}
-        >
-          <div className="terminal-pane-footer-left">
-            <IconButton
-              variant="ghost"
-              icon={<UndoIcon size={12} />}
-              onClick={() => void undoSnapshot()}
-              disabled={!canUndo}
-              title={undoTitle}
-              aria-label="Undo"
-            />
-            <IconButton
-              variant="ghost"
-              icon={<RedoIcon size={12} />}
-              onClick={() => void redoSnapshot()}
-              disabled={!canRedo}
-              title={redoTitle}
-              aria-label="Redo"
-            />
-          </div>
+        {!chatting && (
+          <div
+            className={`terminal-pane-footer${isPreviewHidden ? ' terminal-pane-footer--focus' : ''}`}
+          >
+            <div className="terminal-pane-footer-left">
+              <IconButton
+                variant="ghost"
+                icon={<UndoIcon size={12} />}
+                onClick={() => void undoSnapshot()}
+                disabled={!canUndo}
+                title={undoTitle}
+                aria-label="Undo"
+              />
+              <IconButton
+                variant="ghost"
+                icon={<RedoIcon size={12} />}
+                onClick={() => void redoSnapshot()}
+                disabled={!canRedo}
+                title={redoTitle}
+                aria-label="Redo"
+              />
+            </div>
 
-          <div className="terminal-pane-footer-center">
-            {/* Screenshot actions only make sense when the Preview
+            <div className="terminal-pane-footer-center">
+              {/* Screenshot actions only make sense when the Preview
         tab has a web preview to capture. The project being a web project
         isn't enough — with Code/Branches/PRs showing (or the preview pane
         collapsed) there is no iframe to grab, so capture would no-op
         silently and crop mode would latch on with nothing to crop. */}
-            {isWebProject && (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => void handleCaptureScreenshot()}
-                  disabled={isCapturing || isCropMode || !isPreviewCaptureAvailable}
-                  title={
-                    isPreviewCaptureAvailable
-                      ? `Screenshot preview for Claude (${kbd('mod', 'shift', 'S')})`
-                      : 'Open the Preview tab to capture a screenshot'
-                  }
-                  data-education-id="screenshot-button"
-                >
-                  {isCapturing ? (
-                    <Spinner size="sm" className="ss-spinner--muted" />
-                  ) : (
-                    <CameraIcon size={14} />
-                  )}
-                  <span className="capture-label-full">Full Screenshot</span>
-                  <span className="capture-shortcut">{kbd('mod', 'shift', 'S')}</span>
-                </Button>
+              {isWebProject && (
+                <>
+                  <Button
+                    variant="ghost"
+                    onClick={() => void handleCaptureScreenshot()}
+                    disabled={isCapturing || isCropMode || !isPreviewCaptureAvailable}
+                    title={
+                      isPreviewCaptureAvailable
+                        ? `Screenshot preview for Claude (${kbd('mod', 'shift', 'S')})`
+                        : 'Open the Preview tab to capture a screenshot'
+                    }
+                    data-education-id="screenshot-button"
+                  >
+                    {isCapturing ? (
+                      <Spinner size="sm" className="ss-spinner--muted" />
+                    ) : (
+                      <CameraIcon size={14} />
+                    )}
+                    <span className="capture-label-full">Full Screenshot</span>
+                    <span className="capture-shortcut">{kbd('mod', 'shift', 'S')}</span>
+                  </Button>
+                  <ToggleButton
+                    variant="ghost"
+                    pressed={isCropMode}
+                    onClick={() => setIsCropMode(!isCropMode)}
+                    // Still clickable while crop mode is already on, so a mode
+                    // latched before the tab changed can always be switched off.
+                    disabled={
+                      isCapturing || isCropCapturing || (!isPreviewCaptureAvailable && !isCropMode)
+                    }
+                    title={
+                      isPreviewCaptureAvailable || isCropMode
+                        ? `Crop screenshot for Claude (${kbd('mod', 'shift', 'C')})`
+                        : 'Open the Preview tab to crop a screenshot'
+                    }
+                    data-education-id="crop-button"
+                  >
+                    {isCropCapturing ? (
+                      <Spinner size="sm" className="ss-spinner--muted" />
+                    ) : (
+                      <CropIcon size={14} />
+                    )}
+                    <span className="capture-label-full">Crop Screenshot</span>
+                    <span className="capture-shortcut">{kbd('mod', 'shift', 'C')}</span>
+                  </ToggleButton>
+                </>
+              )}
+            </div>
+
+            <div className="terminal-pane-footer-right">
+              {canSplit && (
                 <ToggleButton
                   variant="ghost"
-                  pressed={isCropMode}
-                  onClick={() => setIsCropMode(!isCropMode)}
-                  // Still clickable while crop mode is already on, so a mode
-                  // latched before the tab changed can always be switched off.
-                  disabled={
-                    isCapturing || isCropCapturing || (!isPreviewCaptureAvailable && !isCropMode)
-                  }
-                  title={
-                    isPreviewCaptureAvailable || isCropMode
-                      ? `Crop screenshot for Claude (${kbd('mod', 'shift', 'C')})`
-                      : 'Open the Preview tab to crop a screenshot'
-                  }
-                  data-education-id="crop-button"
+                  type="button"
+                  pressed={isSplitActive}
+                  onClick={() => (isSplitActive ? disableSplitView() : enableSplitView())}
+                  title={isSplitActive ? 'Exit side-by-side view' : 'View agents side by side'}
+                  aria-label="Toggle side-by-side view"
                 >
-                  {isCropCapturing ? (
-                    <Spinner size="sm" className="ss-spinner--muted" />
-                  ) : (
-                    <CropIcon size={14} />
-                  )}
-                  <span className="capture-label-full">Crop Screenshot</span>
-                  <span className="capture-shortcut">{kbd('mod', 'shift', 'C')}</span>
+                  <SplitViewIcon aria-hidden="true" />
+                  <span>Split</span>
+                  <span
+                    className={`toggle-pill-switch ${isSplitActive ? 'is-on' : ''}`}
+                    aria-hidden
+                  />
                 </ToggleButton>
-              </>
-            )}
+              )}
+              <ToolbarDropdown
+                agent={getActiveTabAgent()}
+                autoAcceptMode={autoAcceptMode}
+                onNotificationSettings={onNotificationSettings}
+                onSkills={onSkills}
+                onMcp={onMcp}
+                onAutoAcceptToggle={onAutoAcceptToggle}
+                onHelp={onHelp}
+              />
+            </div>
           </div>
-
-          <div className="terminal-pane-footer-right">
-            {canSplit && (
-              <ToggleButton
-                variant="ghost"
-                type="button"
-                pressed={isSplitActive}
-                onClick={() => (isSplitActive ? disableSplitView() : enableSplitView())}
-                title={isSplitActive ? 'Exit side-by-side view' : 'View agents side by side'}
-                aria-label="Toggle side-by-side view"
-              >
-                <SplitViewIcon aria-hidden="true" />
-                <span>Split</span>
-                <span
-                  className={`toggle-pill-switch ${isSplitActive ? 'is-on' : ''}`}
-                  aria-hidden
-                />
-              </ToggleButton>
-            )}
-            <ToolbarDropdown
-              agent={getActiveTabAgent()}
-              autoAcceptMode={autoAcceptMode}
-              onNotificationSettings={onNotificationSettings}
-              onSkills={onSkills}
-              onMcp={onMcp}
-              onAutoAcceptToggle={onAutoAcceptToggle}
-              onHelp={onHelp}
-            />
-          </div>
-        </div>
+        )}
       </div>
     </DockablePanel>
   );

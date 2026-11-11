@@ -7,7 +7,7 @@
 
 import type { Scenario } from '../types';
 import { HARNESS_ROOT, dashboardProject } from './base';
-import { MIN, TEAM, now, overview } from './agents';
+import { MIN, TEAM, messagesFor, now, overview } from './agents';
 
 const SITE = `${HARNESS_ROOT}/lumen-site`;
 const ACME = `${HARNESS_ROOT}/acme-marketing`;
@@ -84,7 +84,38 @@ const busyCommands = {
   agents_with_projects: busyTeam(),
 };
 
+const chatCommands = {
+  get_dashboard_projects: [dashboardProject('lumen-site'), dashboardProject('acme-marketing')],
+  list_pinned_projects: [SITE],
+  agents_overview: overview(team()),
+  agents_with_projects: team(),
+  agents_messages: messagesFor,
+};
+
 export const projectsAtWorkScenarios: Scenario[] = [
+  {
+    id: 'project-agent-chat-in-session',
+    title: 'A project: an agent at work in it, its chat open in the Session panel',
+    looksRightWhen:
+      'lumen-site’s workspace. Acme Site is selected under Sessions in the sidebar; the Session panel, where the terminal would be, shows Acme Site’s conversation with its composer at the bottom, headed "Session · Acme Site" with Show terminal. No terminal footer under it.',
+    project: SITE,
+    requires: '[data-testid="session-agent-chat"]',
+    steps: [{ click: '.sidebar-row--agent', text: 'Acme Site' }],
+    commands: chatCommands,
+  },
+  {
+    id: 'project-agent-chat-back-to-terminal',
+    title: 'A project: Show terminal after an agent’s chat brings the terminals back',
+    looksRightWhen:
+      'lumen-site’s workspace with the terminal session showing again and its footer back; no agent row selected.',
+    project: SITE,
+    requires: '.terminal-pane-footer',
+    steps: [
+      { click: '.sidebar-row--agent', text: 'Acme Site' },
+      { click: '.terminal-agent-header__actions button', text: 'Show terminal' },
+    ],
+    commands: chatCommands,
+  },
   {
     id: 'projects-agents-collapsed',
     title: 'Projects: three projects, agents working in two, rows collapsed',

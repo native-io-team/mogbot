@@ -58,6 +58,7 @@ import { useWorkspaceComments } from '../../hooks/useWorkspaceComments';
 import { useWorkspaceVariablesPanel } from '../../hooks/useWorkspaceVariablesPanel';
 import { useWorkspaceTerminalShortcuts } from '../../hooks/useWorkspaceTerminalShortcuts';
 import '../../styles/features/notifications.css';
+import { showAgentInSession, useSessionAgent } from '../../lib/sessionAgentChat';
 
 /**
  * The workspace, with a rail around it.
@@ -488,6 +489,16 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
     setWorkspaceTab,
     startDevServer: handleStartDevServer,
   });
+  // An agent's chat in the Session panel instead of a terminal (the sidebar's agent rows).
+  const chatAgentId = useSessionAgent(currentProject.path);
+  const closeChat = useCallback(
+    () => showAgentInSession(currentProject.path, null),
+    [currentProject.path]
+  );
+  // Asked for from the sidebar with the panel closed: open it, or nothing would show.
+  useEffect(() => {
+    if (chatAgentId) setIsAgentPanelHidden(false);
+  }, [chatAgentId]);
   const toggleAgentPanel = useCallback(() => {
     if (!isAgentPanelHidden) {
       setIsPreviewHidden(false);
@@ -819,6 +830,7 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
               attentionTabs={attentionTabs}
               maxTabs={maxTerminalTabs}
               onSelectTab={(tabId) => {
+                showAgentInSession(currentProject.path, null);
                 setShowHealthLogs(false);
                 setActiveTerminalTab(tabId);
                 setAttentionTabs((prev) => {
@@ -1007,6 +1019,9 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
                     onMcp={mcpModal.open}
                     onAutoAcceptToggle={handleToolbarAutoAcceptToggle}
                     onHelp={helpModal.open}
+                    chatAgentId={chatAgentId}
+                    onCloseChat={closeChat}
+                    onGoAgents={homeNav?.onGoAgents}
                   />
                   {team.panel}
                 </WorkspaceDock>
