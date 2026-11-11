@@ -346,6 +346,7 @@ function SendStep({ name }: { name: string }) {
     <div className="agent-guide-step">
       <MessageCard
         message={message}
+        to={name}
         onCopied={() => showToast(`Copied. Send it to ${name}.`, 'success')}
       />
       <CheckLine result={{ state: 'waiting', line: `I’ll know when ${name} says hello.` }} />

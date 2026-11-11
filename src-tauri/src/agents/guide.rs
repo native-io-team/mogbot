@@ -189,16 +189,29 @@ pub fn start(app: &AppHandle, assistant: &str) -> Result<Guide, CommandError> {
     Ok(guide)
 }
 
+/// Where the step happens, in a line: the phone (and any build that doesn't
+/// draw the step) shows this under the Chief's words, never the words twice.
+pub fn where_line(step: Step, assistant: &str) -> String {
+    let a = assistant_name(assistant);
+    match step {
+        Step::Tailscale => "On your Mac: install Tailscale and sign in.".to_string(),
+        Step::Link => "On your Mac: turn on your link.".to_string(),
+        Step::Approve => "On your Mac: approve the link in Tailscale.".to_string(),
+        Step::Connect => format!("On your Mac: add your link to {a}."),
+        Step::Send => format!("On your Mac: copy the message and send it to {a}."),
+        Step::Talking => format!("{} is talking to me.", capital(a)),
+    }
+}
+
 /// The block that marks a Chief message as a guide step: drawn as that
-/// step's action on the desk and the phone; a build that doesn't know it
-/// shows the words alone.
+/// step's action on the desk; elsewhere, its `where_line`.
 pub fn block(step: Step, assistant: &str) -> serde_json::Value {
     serde_json::json!({
         "v": 1,
         "intro": words(step, assistant),
         "items": [{
             "kind": "guide",
-            "summary": words(step, assistant),
+            "summary": where_line(step, assistant),
             "step": step,
             "assistant": assistant,
         }],

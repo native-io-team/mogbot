@@ -62,8 +62,11 @@ export function MessageCard({
   onCopied,
   lead = true,
   autoFocus = false,
+  to,
 }: {
   message: string;
+  /** The assistant it goes to, when known (the guide): the hint names it. */
+  to?: string;
   onCopied?: () => void;
   /** Primary until the user has moved past this step. */
   lead?: boolean;
@@ -101,8 +104,10 @@ export function MessageCard({
         </Button>
         <span className="agents-import-message__hint" aria-live="polite">
           {isCopied
-            ? 'Now paste it into a chat with your assistant.'
-            : 'Grok Bot, ChatGPT, Claude or any other assistant.'}
+            ? `Now paste it into a chat with ${to ?? 'your assistant'}.`
+            : to
+              ? `Paste it into a new chat with ${to}.`
+              : 'Grok Bot, ChatGPT, Claude or any other assistant.'}
         </span>
       </div>
     </div>

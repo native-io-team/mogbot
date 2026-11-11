@@ -14,7 +14,7 @@
 .agent-guide-ask__text {
   margin: 0;
   color: var(--text-primary);
-  line-height: var(--line-height-relaxed);
+  line-height: var(--line-height-reading);
 }
 
 .agent-guide-ask__options {
@@ -52,5 +52,5 @@
   background: none;
   padding: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-body-sm);
 }

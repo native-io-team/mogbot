@@ -182,7 +182,7 @@ export interface ImageBlock extends Base {
 /**
  * A step of first run's "bring your agents over" guide (`agents::guide`):
  * only the Mac posts these, never an agent's `show`. Drawn as that step's
- * one action; `summary` holds the Chief's words.
+ * one action on the desk; `summary` is where it happens ("On your Mac: …"), which the phone shows.
  */
 export type GuideStepId = 'tailscale' | 'link' | 'approve' | 'connect' | 'send' | 'talking';
 export type GuideAssistant = 'grok' | 'chatgpt' | 'claude' | 'other';

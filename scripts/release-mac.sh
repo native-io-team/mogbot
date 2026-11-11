@@ -347,12 +347,17 @@ fi
 # ---------------------------------------------------------------- DMG
 say "Making the DMG"
 mkdir -p "$OUT_DIR"
-STAGE="$(mktemp -d "${TMPDIR:-/tmp}/${APP_NAME}-dmg.XXXXXX")"
-trap 'rm -rf "$STAGE"' EXIT
-ditto "$APP_PATH" "$STAGE/$APP_NAME.app"
-ln -s /Applications "$STAGE/Applications"
 rm -f "$DMG_PATH"
-hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO -imagekey zlib-level=9 -ov "$DMG_PATH" >/dev/null
+# The window people see: the app, an arrow, Applications (scripts/dmg/).
+# If Finder can't lay it out, fall back to the plain image.
+if ! "$REPO_ROOT/scripts/dmg/make-dmg.sh" "$APP_PATH" "$DMG_PATH" "$APP_NAME"; then
+  warn "Designed DMG failed; making a plain one"
+  STAGE="$(mktemp -d "${TMPDIR:-/tmp}/${APP_NAME}-dmg.XXXXXX")"
+  trap 'rm -rf "$STAGE"' EXIT
+  ditto "$APP_PATH" "$STAGE/$APP_NAME.app"
+  ln -s /Applications "$STAGE/Applications"
+  hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO -imagekey zlib-level=9 -ov "$DMG_PATH" >/dev/null
+fi
 codesign --force --timestamp --sign "$IDENTITY" "$DMG_PATH"
 ok "dmg: $DMG_PATH"
 

@@ -217,6 +217,13 @@ function BlockView({
           <BlockForm block={block} answering={answering} />
         </Card>
       );
+    case 'guide':
+      // First run's import steps happen on the Mac: a quiet line saying so.
+      return (
+        <T variant="caption" color={colors.textMuted} testID="block-guide">
+          {block.summary}
+        </T>
+      );
     default:
       // A kind this phone doesn't draw: its words.
       return (

@@ -41,7 +41,7 @@ const step = (id: string, minutesAgo: number) => ({
   blocks: {
     v: 1,
     intro: WORDS[id],
-    items: [{ kind: 'guide', summary: WORDS[id], step: id, assistant: 'grok' }],
+    items: [{ kind: 'guide', summary: 'On your Mac.', step: id, assistant: 'grok' }],
   },
 });
 
