@@ -267,3 +267,20 @@
   gap: var(--spacing-2xs);
   margin-bottom: var(--spacing-xs);
 }
+
+/* The update above New agent: its icon and label on New agent's columns. */
+.workspace-sidebar:not(.is-hidden) .update-indicator-update-action {
+  gap: calc(var(--agents-foot-icon-inset) + var(--spacing-sm));
+  padding-inline: var(--agents-foot-icon-inset) var(--spacing-sm);
+}
+
+.workspace-sidebar:not(.is-hidden) .update-indicator-icon {
+  flex-basis: var(--size-icon-button);
+  width: var(--size-icon-button);
+  height: var(--size-icon-button);
+}
+
+.workspace-sidebar:not(.is-hidden) .update-indicator-icon > svg {
+  width: 100%;
+  height: 100%;
+}

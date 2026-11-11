@@ -6,11 +6,12 @@
   z-index: var(--z-dropdown);
   flex: 0 0 auto;
   align-self: stretch;
-  max-height: calc(var(--control-height-standard) + (var(--space-02) * 2));
+  /* Same height and corners as New agent below it: one control, not a card. */
+  max-height: var(--control-height-standard);
   margin-bottom: var(--space-04);
-  padding: var(--space-02);
+  padding: 0;
   overflow: hidden;
-  border-radius: var(--radius-card);
+  border-radius: var(--button-radius);
   background: color-mix(in srgb, var(--status-info) 14%, var(--surface-control));
   color: var(--status-info);
   box-shadow: var(--shadow-button);
@@ -33,8 +34,8 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: var(--space-02);
-  min-height: var(--control-height-standard);
+  gap: 0;
+  height: var(--control-height-standard);
 }
 
 .update-indicator-update-action {
