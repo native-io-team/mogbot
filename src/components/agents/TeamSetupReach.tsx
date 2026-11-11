@@ -2,8 +2,10 @@
  * The Logins step of "Setting up your team", after the app checked what the
  * team can already reach (`agents/access_check.rs`): one calm progress line
  * while it runs, then only the residue — "Your team is ready. 3 things I
- * couldn't reach on this Mac" — each with one sign-in button and "Not
- * needed". What was reached folds into one line of receipts.
+ * couldn't reach on this Mac" — each with one sign-in button, "Not
+ * needed" and "Later". A key nothing had is never asked for up front: it
+ * waits under "keys they may ask for when a task needs them", each with
+ * No, Chat about it and Yes, add it. What was reached folds into receipts.
  *
  * Also the guided "Let agents use your browser" card (`BrowserSetupCard`),
  * shown here before the check can use the browser, and from ⌘K.
@@ -20,14 +22,18 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   checkLine,
+  chatAboutLine,
   checkTeamReach,
+  laterLater,
   openLater,
   receiptLine,
   residueLine,
   setupLater,
   type SetupLater,
   type SetupStep,
+  whenNeededLine,
 } from '../../lib/teamSetup';
+import { setComposerDraft } from '../../lib/composerDraft';
 import {
   BROWSER_CHECK_CONSENT,
   BROWSER_TITLE,
@@ -74,6 +80,7 @@ export function SetupReach({
   }
 
   const open = openLater(later);
+  const deferred = laterLater(later);
   const reached = later.filter((l) => l.state === 'reachable');
   const waiting = later.filter((l) => l.state === 'asked');
   return (
@@ -94,9 +101,60 @@ export function SetupReach({
                 })
               }
               onNotNeeded={() => void run(`skip:${l.key}`, () => setupLater(l.key, 'not_needed'))}
+              onLater={() => void run(`later:${l.key}`, () => setupLater(l.key, 'when_needed'))}
             />
           ))}
         </ul>
+      )}
+      {deferred.length > 0 && (
+        <>
+          <p className="team-setup__detail">{whenNeededLine(deferred.length)}</p>
+          <ul className="team-setup__list" data-testid="team-setup-when-needed">
+            {deferred.map((l) => (
+              <li key={l.key} className="team-setup__item" data-later="when_needed">
+                <div className="team-setup__item-text">
+                  <span className="team-setup__item-title">{l.title}</span>
+                  <span className="team-setup__item-detail">{l.agents.join(', ')}</span>
+                </div>
+                <TextButton
+                  tabIndex={0}
+                  disabled={!!busy}
+                  onClick={() => void run(`skip:${l.key}`, () => setupLater(l.key, 'not_needed'))}
+                >
+                  No
+                </TextButton>
+                {onOpenAgent && l.agentIds[0] && (
+                  <TextButton
+                    tabIndex={0}
+                    disabled={!!busy}
+                    title={`Opens ${l.agents[0]}’s chat with the question in its message box`}
+                    onClick={() => {
+                      setComposerDraft(l.agentIds[0], chatAboutLine(l));
+                      onOpenAgent(l.agentIds[0]);
+                    }}
+                  >
+                    Chat about it
+                  </TextButton>
+                )}
+                {l.action && (
+                  <Button
+                    variant="secondary"
+                    size="compact"
+                    disabled={!!busy}
+                    onClick={() =>
+                      void run(`connect:${l.key}`, async () => {
+                        const raised = await setupLater(l.key, 'connect');
+                        if (raised) onOpenAgent?.(raised.agentId);
+                      })
+                    }
+                  >
+                    {busy === `connect:${l.key}` ? <Spinner size="sm" /> : 'Yes, add it'}
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {waiting.length > 0 && (
         <ul className="team-setup__list">
@@ -152,11 +210,13 @@ function ResidueRow({
   busy,
   onConnect,
   onNotNeeded,
+  onLater,
 }: {
   row: SetupLater;
   busy: string | null;
   onConnect: () => void;
   onNotNeeded: () => void;
+  onLater: () => void;
 }) {
   const connecting = busy === `connect:${row.key}`;
   return (
@@ -167,6 +227,9 @@ function ResidueRow({
       </div>
       <TextButton tabIndex={0} disabled={!!busy} onClick={onNotNeeded}>
         Not needed
+      </TextButton>
+      <TextButton tabIndex={0} disabled={!!busy} onClick={onLater}>
+        Later
       </TextButton>
       {row.action && (
         <Button variant="secondary" size="compact" disabled={!!busy} onClick={onConnect}>

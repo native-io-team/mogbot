@@ -680,6 +680,16 @@ pub fn resolve_later(found: &[super::access_check::Found]) -> Result<usize, Comm
     Ok(change(|s| super::access_check::resolve(&mut s.later, found))?.unwrap_or(0))
 }
 
+/// After the check: rows only a key opens wait until a task needs them.
+pub fn defer_key_only() -> Result<usize, CommandError> {
+    Ok(change(|s| {
+        let ids = s.agents.clone();
+        let names = |id: &str| ids.iter().any(|a| a == id).then(|| id.to_string());
+        super::access_check::defer_key_only(&mut s.later, &names)
+    })?
+    .unwrap_or(0))
+}
+
 /// The user decided a row: Not needed, or a card raised for it.
 pub fn set_later(key: &str, state: super::access_check::LaterState) -> Result<(), CommandError> {
     let found = change(|s| {
@@ -841,9 +851,18 @@ fn build(setup: &TeamSetup) -> SetupView {
         })
         .collect();
     let names = |id: &str| agents.iter().find(|a| a.id == id).map(|a| a.name.clone());
-    let later = setup.later.groups(&names);
     let check = super::access_check::current();
     let checking = check.as_ref().is_some_and(|c| c.running);
+    let mut later = setup.later.groups(&names);
+    // A key nothing reached is never asked for up front, also on a setup
+    // checked before keys waited (the check now moves them itself).
+    if !checking {
+        for g in later.iter_mut() {
+            if g.key_only && g.state == super::access_check::LaterState::Open {
+                g.state = super::access_check::LaterState::WhenNeeded;
+            }
+        }
+    }
     // Open: nothing reached it and the user hasn't decided; a card raised
     // from the row is open until it's answered.
     let later_open = later.iter().any(|g| match &g.state {

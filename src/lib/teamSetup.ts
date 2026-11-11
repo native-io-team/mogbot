@@ -74,6 +74,8 @@ export type SetupLaterState =
   | { state: 'open' }
   | { state: 'reachable'; via: string }
   | { state: 'not_needed' }
+  /** Not asked for now: the agent asks when a task needs it. */
+  | { state: 'when_needed' }
   | { state: 'asked'; agentId: string; requestId: string };
 
 export type SetupLater = {
@@ -143,7 +145,7 @@ export const askChiefAboutMissing = () => invoke<AgentMessage>('agents_team_setu
 export const dismissTeamSetup = () => invoke<void>('agents_team_setup_dismiss');
 export const reopenTeamSetup = () => invoke<void>('agents_team_setup_reopen');
 /** A row nothing reached: one sign-in card, started on this Mac, or put away. */
-export const setupLater = (key: string, action: 'connect' | 'not_needed') =>
+export const setupLater = (key: string, action: 'connect' | 'not_needed' | 'when_needed') =>
   invoke<{ agentId: string; requestId: string } | null>('agents_team_setup_later', { key, action });
 /** Check again what the team can already reach (progress arrives on the checklist). */
 export const checkTeamReach = () => invoke<number>('agents_access_check');
@@ -445,11 +447,30 @@ export function openLater(later: SetupLater[]): SetupLater[] {
   return later.filter((l) => l.state === 'open');
 }
 
+/** Rows left for when a task needs them: nothing to do now. */
+export function laterLater(later: SetupLater[]): SetupLater[] {
+  return later.filter((l) => l.state === 'when_needed');
+}
+
 /** The Logins step's head once the check is done. */
 export function residueLine(later: SetupLater[]): string {
   const n = openLater(later).length;
+  if (n === 0 && laterLater(later).length > 0)
+    return 'Your team is ready. Nothing to sign in to now.';
   if (n === 0) return 'Your team is ready. Everything it mentioned is reachable on this Mac.';
   return `Your team is ready. ${n} thing${n === 1 ? '' : 's'} I couldn’t reach on this Mac:`;
+}
+
+/** The head over the keys left for later. */
+export function whenNeededLine(n: number): string {
+  return n === 1
+    ? 'One key it may ask for when a task needs it. Need it now?'
+    : `${n} keys they may ask for when a task needs them. Need any now?`;
+}
+
+/** "Chat about it": what goes in the agent's message box, not sent. */
+export function chatAboutLine(l: Pick<SetupLater, 'title'>): string {
+  return `Do you actually need the ${l.title}? What would you use it for, and can you do it without it?`;
 }
 
 /** "Figma: your browser, signed in on www.figma.com". */

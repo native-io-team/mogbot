@@ -1282,6 +1282,8 @@ export type TeamSetupLaterState =
   | { state: 'open' }
   | { state: 'reachable'; via: string }
   | { state: 'not_needed' }
+  /** Not asked for now: the agent asks when a task needs it. */
+  | { state: 'when_needed' }
   | { state: 'asked'; agentId: string; requestId: string };
 
 export type TeamSetupLater = {

@@ -3903,8 +3903,8 @@ pub async fn agents_access_check(app: AppHandle) -> Result<usize, CommandError> 
     agents::access_check::run(&app).await
 }
 
-/// A row nothing reached: "connect" (one sign-in card, started now) or
-/// "not_needed". Returns the card raised, for showing it in place.
+/// A row nothing reached: "connect" (one sign-in card, started now),
+/// "not_needed", or "when_needed" (the agent asks when a task needs it). Returns the card raised, for showing it in place.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_team_setup_later(
@@ -3923,10 +3923,18 @@ pub async fn agents_team_setup_later(
                 request_id,
             }))
         }
-        "not_needed" => {
-            blocking(move || agents::access_check::not_needed(&app, &key)).await?;
+        "not_needed" | "when_needed" => {
+            let state = if action == "not_needed" {
+                agents::access_check::LaterState::NotNeeded
+            } else {
+                agents::access_check::LaterState::WhenNeeded
+            };
+            blocking(move || agents::access_check::decide(&app, &key, state)).await?;
             Ok(None)
         }
-        _ => Err(agents::err_invalid("action", "connect or not_needed")),
+        _ => Err(agents::err_invalid(
+            "action",
+            "connect, not_needed or when_needed",
+        )),
     }
 }

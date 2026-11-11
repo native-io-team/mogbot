@@ -51,6 +51,10 @@ pub enum LaterState {
     Reachable { via: String },
     /// The user said it isn't needed.
     NotNeeded,
+    /// Not asked for now: the agent asks when a task actually needs it.
+    /// A key nothing on this Mac had lands here by itself after the check,
+    /// so an import never opens on a list of keys to paste.
+    WhenNeeded,
     /// Turned into a sign-in card (for this agent): the card decides now.
     #[serde(rename_all = "camelCase")]
     Asked {
@@ -242,6 +246,144 @@ pub fn resolve(book: &mut LaterBook, found: &[Found]) -> usize {
         }
     }
     n
+}
+
+/// Every open row only a key opens becomes [`LaterState::WhenNeeded`]:
+/// the agent asks on the day a task needs it. Returns how many moved.
+pub fn defer_key_only(book: &mut LaterBook, name_of: &dyn Fn(&str) -> Option<String>) -> usize {
+    let keys: Vec<String> = book
+        .groups(name_of)
+        .into_iter()
+        .filter(|g| g.key_only && g.state == LaterState::Open)
+        .map(|g| g.key)
+        .collect();
+    for k in &keys {
+        book.states.insert(k.clone(), LaterState::WhenNeeded);
+    }
+    keys.len()
+}
+
+/* ----------------------------------------------------- keys on this Mac */
+
+/// Words in a login's name that say nothing about which service it is.
+const GENERIC: &[&str] = &[
+    "key", "keys", "api", "token", "tokens", "secret", "secrets", "app", "the", "passcode",
+    "password", "pass", "access", "auth", "login", "account", "code", "pin", "url", "id", "client",
+    "private", "public", "next", "env",
+];
+
+/// The distinctive words of a login's names ("Tenspeed supabase" →
+/// tenspeed, supabase).
+pub fn key_words(title: &str, names: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for n in std::iter::once(title).chain(names.iter().map(String::as_str)) {
+        for w in n
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .map(|w| w.to_ascii_lowercase())
+        {
+            if w.len() >= 4 && !GENERIC.contains(&w.as_str()) && !out.contains(&w) {
+                out.push(w);
+            }
+        }
+    }
+    out
+}
+
+/// One project's `.env*` variable names (never values).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectEnv {
+    /// The project's folder name.
+    pub project: String,
+    pub vars: Vec<String>,
+}
+
+/// The receipt when a project on this Mac already holds the key: a variable
+/// whose name carries one of the login's words, in a project named for
+/// another of them or bound to the agent. A project's name alone is not
+/// enough ("Tenspeed" has a .env; that isn't its Supabase key).
+pub fn env_hit(title: &str, names: &[String], envs: &[ProjectEnv]) -> Option<String> {
+    let words = key_words(title, names);
+    for e in envs {
+        let bound = e.project.starts_with('@');
+        let name = e.project.trim_start_matches('@');
+        let lower = name.to_ascii_lowercase();
+        // The words a variable must carry: any, in the agent's own project;
+        // elsewhere the project must be named for one word and the variable
+        // carry another.
+        let want: Vec<&String> = if bound {
+            words.iter().collect()
+        } else if words.iter().any(|w| lower.contains(w.as_str())) {
+            words
+                .iter()
+                .filter(|w| !lower.contains(w.as_str()))
+                .collect()
+        } else {
+            continue;
+        };
+        if let Some(v) = e.vars.iter().find(|v| {
+            let v = v.to_ascii_lowercase();
+            want.iter().any(|w| v.contains(w.as_str()))
+        }) {
+            return Some(format!("in {name}’s .env on this Mac ({v})"));
+        }
+    }
+    None
+}
+
+/// The `.env*` names of the projects the asking agents work in (marked
+/// `@`, they count on any word) and of every project in the projects
+/// folder. Names only; a value is never read into memory past the `=`.
+fn project_envs(agent_ids: &[String]) -> Vec<ProjectEnv> {
+    let mut dirs: Vec<(String, std::path::PathBuf)> = Vec::new();
+    for id in agent_ids {
+        if let Some(p) = store::get(id).ok().and_then(|a| a.project) {
+            let path = std::path::PathBuf::from(&p);
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            dirs.push((format!("@{name}"), path));
+        }
+    }
+    if let Ok(root) = crate::utils::projects_root() {
+        if let Ok(rd) = std::fs::read_dir(&root) {
+            for e in rd.flatten().take(500) {
+                let name = e.file_name().to_string_lossy().to_string();
+                if !name.starts_with('.') && e.path().is_dir() {
+                    dirs.push((name, e.path()));
+                }
+            }
+        }
+    }
+    dirs.into_iter()
+        .filter_map(|(project, dir)| {
+            let mut vars = Vec::new();
+            for f in [
+                ".env",
+                ".env.local",
+                ".env.development",
+                ".env.development.local",
+                ".env.production",
+            ] {
+                let Ok(text) = std::fs::read_to_string(dir.join(f)) else {
+                    continue;
+                };
+                for line in text.lines().take(500) {
+                    let line = line.trim().trim_start_matches("export ").trim();
+                    if line.starts_with('#') {
+                        continue;
+                    }
+                    if let Some((k, v)) = line.split_once('=') {
+                        let k = k.trim();
+                        if !v.trim().is_empty() && !k.is_empty() && !vars.iter().any(|x| x == k) {
+                            vars.push(k.to_string());
+                        }
+                    }
+                }
+            }
+            (!vars.is_empty()).then_some(ProjectEnv { project, vars })
+        })
+        .collect()
 }
 
 /// The one line per service once it's reached: "Figma: your browser, …".
@@ -470,6 +612,16 @@ async fn run_inner(app: &AppHandle) -> Result<usize, CommandError> {
         if via.is_none() {
             via = app_for(&g.service, &apps).map(|a| format!("Claude Code's {a} app"));
         }
+        // A key: already in one of this Mac's projects (`.env` names only).
+        if via.is_none() && g.key_only {
+            let names: Vec<String> = book
+                .items
+                .iter()
+                .filter(|l| key_of(&l.service, &l.title) == g.key)
+                .map(|l| l.name.clone())
+                .collect();
+            via = env_hit(&g.title, &names, &project_envs(&g.agent_ids));
+        }
         let reached = via.is_some();
         if let Some(via) = via {
             found.push(Found {
@@ -482,6 +634,8 @@ async fn run_inner(app: &AppHandle) -> Result<usize, CommandError> {
     }
     drop(chrome);
     let n = super::team_setup::resolve_later(&found)?;
+    // What's left that only a key opens isn't asked for now.
+    super::team_setup::defer_key_only()?;
     set_check(Some(app), |v| {
         v.running = false;
         v.finished_at = Some(store::now_ms());
@@ -586,9 +740,9 @@ pub async fn connect(
     Ok((first, request_id))
 }
 
-/// "Not needed" on a row: nobody is asked about it.
-pub fn not_needed(app: &AppHandle, key: &str) -> Result<(), CommandError> {
-    super::team_setup::set_later(key, LaterState::NotNeeded)?;
+/// "Not needed" or "Later" on a row: nobody is asked about it now.
+pub fn decide(app: &AppHandle, key: &str, state: LaterState) -> Result<(), CommandError> {
+    super::team_setup::set_later(key, state)?;
     super::team_setup::emit(app);
     Ok(())
 }

@@ -608,7 +608,11 @@ function reachRows(done: boolean) {
     agentIds: r.agents.map((n) => IMPORTED.find((a) => a.name === n)?.id ?? n),
     action: r.action ?? `Connect ${r.title}`,
     keyOnly: !!r.keyOnly,
-    ...(r.via && (done || i < 6) ? { state: 'reachable', via: r.via } : { state: 'open' }),
+    ...(r.via && (done || i < 6)
+      ? { state: 'reachable', via: r.via }
+      : r.keyOnly && done
+        ? { state: 'when_needed' }
+        : { state: 'open' }),
   }));
 }
 
@@ -677,9 +681,9 @@ agentsTeamSetupScenarios.push(
   },
   {
     id: 'agents-team-setup-reach',
-    title: 'Agents — Setting up your team: 40 asks → 3 left',
+    title: 'Agents — Setting up your team: 40 asks → 1 left, 2 keys for later',
     looksRightWhen:
-      'The forty logins the import mentioned came to fourteen services; eleven were reached on this Mac. Logins reads “Your team is ready. 3 things I couldn’t reach on this Mac:” then three rows: Stripe (Bookkeeper, Wholesale) with Connect Stripe, Bankline (Bookkeeper) with “Add a key for Bankline”, Hirehub (Recruiting) with “Add a key for Hirehub”, each with a quiet Not needed before its button. Under them “11 reached on this Mac” and Check again, both text actions. Nothing asks for a password; no button is the accent.',
+      'The forty logins the import mentioned came to fourteen services; eleven were reached on this Mac. Logins reads “Your team is ready. 1 thing I couldn’t reach on this Mac:” then one row: Stripe (Bookkeeper, Wholesale) with quiet Not needed and Later before Connect Stripe. The two keys nothing had aren’t asked for: under “2 keys they may ask for when a task needs them. Need any now?” Bankline (Bookkeeper) and Hirehub (Recruiting), each with quiet No and Chat about it, then a secondary “Yes, add it”. Under them “11 reached on this Mac” and Check again, both text actions. Nothing asks for a password; no button is the accent.',
     command: 'agents.open',
     requires: '[data-testid="team-setup-reach"]',
     commands: {

@@ -393,6 +393,7 @@ function Reach({
   const reached = reachedRows(rows);
   const waiting = rows.filter((r) => r.state === 'asked');
   const notNeeded = rows.filter((r) => r.state === 'not_needed');
+  const whenNeeded = rows.filter((r) => r.state === 'when_needed');
   return (
     <View style={styles.items} testID="team-setup-reach">
       <T variant="small" color={colors.textStrong}>
@@ -457,6 +458,12 @@ function Reach({
           )}
         </View>
       ))}
+      {whenNeeded.length > 0 && (
+        <T variant="caption" color={colors.textMuted} testID="reach-when-needed">
+          {whenNeeded.length === 1 ? 'Asked for when a task needs it: ' : 'Asked for when a task needs them: '}
+          {whenNeeded.map((r) => r.title).join(', ')}
+        </T>
+      )}
       {notNeeded.map((r) => (
         <T key={r.key} variant="caption" color={colors.textMuted}>
           {r.title} · {NOT_NEEDED}

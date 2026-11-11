@@ -164,3 +164,76 @@ fn progress_reads_as_one_calm_line() {
         "Figma: your browser, signed in on www.figma.com"
     );
 }
+
+fn env(project: &str, vars: &[&str]) -> ProjectEnv {
+    ProjectEnv {
+        project: project.into(),
+        vars: vars.iter().map(|v| v.to_string()).collect(),
+    }
+}
+
+#[test]
+fn a_key_already_in_a_projects_env_counts_as_reached() {
+    let names = vec!["tenspeed_supabase".to_string()];
+    let envs = [
+        env("memberstack-site", &["SUPABASE_URL"]),
+        env("tenspeed", &["NEXT_PUBLIC_SUPABASE_URL", "OTHER"]),
+    ];
+    assert_eq!(
+        env_hit("Tenspeed supabase", &names, &envs).as_deref(),
+        Some("in tenspeed’s .env on this Mac (NEXT_PUBLIC_SUPABASE_URL)")
+    );
+    // A project named for it with nothing that names the service: not it.
+    assert_eq!(
+        env_hit("Tenspeed supabase", &names, &[env("tenspeed", &["PORT"])]),
+        None
+    );
+    // Another project's Supabase isn't Tenspeed's.
+    assert_eq!(
+        env_hit(
+            "Tenspeed supabase",
+            &names,
+            &[env("simmer", &["SUPABASE_URL"])]
+        ),
+        None
+    );
+    // The agent's own project: any word will do.
+    assert!(env_hit(
+        "Simmer anthropic key",
+        &[],
+        &[env("@recipes", &["ANTHROPIC_API_KEY"])]
+    )
+    .is_some());
+    // Generic words never match on their own.
+    assert_eq!(
+        key_words("Spanish brain app passcode", &[]),
+        vec!["spanish", "brain"]
+    );
+}
+
+#[test]
+fn keys_nothing_reached_wait_until_a_task_needs_them() {
+    let mut book = LaterBook::default();
+    book.add(later_from(
+        "a",
+        "tenspeed_supabase",
+        "reads rows",
+        "api_key",
+    ));
+    book.add(later_from("a", "figma", "exports", ""));
+    let all = |id: &str| Some(id.to_string());
+    assert_eq!(defer_key_only(&mut book, &all), 1);
+    assert_eq!(
+        book.state("other:tenspeed supabase"),
+        LaterState::WhenNeeded
+    );
+    assert_eq!(
+        book.state("figma"),
+        LaterState::Open,
+        "a sign-in is still offered"
+    );
+    // The user's own answer is never overwritten.
+    book.states
+        .insert("other:tenspeed supabase".into(), LaterState::NotNeeded);
+    assert_eq!(defer_key_only(&mut book, &all), 0);
+}

@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { SetupLater, SetupStep } from '../../lib/teamSetup';
 import { checkLine, residueLine } from '../../lib/teamSetup';
 import { SetupReach } from './TeamSetupReach';
+import { composerDraft } from '../../lib/composerDraft';
 
 const calls = vi.hoisted(() => ({
   later: vi.fn((_k: string, _a: string) => Promise.resolve(null as unknown)),
@@ -126,5 +127,39 @@ describe('SetupReach', () => {
     expect(checkLine({ running: false, total: 1, checked: [], browser: false })).toBe(
       'Checked 1 service.'
     );
+  });
+
+  it('never asks for a key up front: No, Chat about it, or Yes', async () => {
+    const open = vi.fn();
+    const keys: SetupLater[] = [
+      row('other:tenspeed supabase', 'Tenspeed supabase', {
+        service: 'other',
+        action: 'Add a key for Tenspeed supabase',
+        keyOnly: true,
+        state: 'when_needed',
+        agents: ['Tenspeed App'],
+        agentIds: ['t'],
+      }),
+    ];
+    render(<SetupReach step={step({ later: keys })} onOpenAgent={open} />);
+    expect(screen.getByText(residueLine(keys))).toBeInTheDocument();
+    expect(residueLine(keys)).toBe('Your team is ready. Nothing to sign in to now.');
+    expect(screen.getByTestId('team-setup-when-needed')).toHaveTextContent('Tenspeed App');
+    expect(screen.queryByRole('button', { name: 'Add a key for Tenspeed supabase' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Chat about it' }));
+    expect(open).toHaveBeenCalledWith('t');
+    expect(composerDraft('t')).toContain('Do you actually need the Tenspeed supabase?');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'No' }));
+    });
+    expect(calls.later).toHaveBeenCalledWith('other:tenspeed supabase', 'not_needed');
+  });
+
+  it('a sign-in can wait too', async () => {
+    render(<SetupReach step={step()} />);
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Later' })[0]);
+    });
+    expect(calls.later).toHaveBeenCalledWith('linkedin', 'when_needed');
   });
 });
