@@ -31,7 +31,7 @@ import {
 } from '../../../lib/onboardingFlow';
 
 /** How long "Done" stays before the next screen, when it was just done here. */
-export const ADVANCE_MS = 1200;
+export const ADVANCE_MS = 700;
 
 /**
  * What takes focus on a screen, best first: its big button, the first

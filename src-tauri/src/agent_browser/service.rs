@@ -326,7 +326,9 @@ impl Service {
         }
         let t = self.browser.call(
             "Target.createTarget",
-            json!({ "url": "about:blank", "newWindow": true }),
+            // `background`: shown inactive, so Chrome never comes to the front
+            // and takes the keyboard from whatever the user is doing.
+            json!({ "url": "about:blank", "newWindow": true, "background": true }),
             None,
             T,
         )?;

@@ -127,7 +127,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
       setNow(Date.now());
       return load();
     },
-    { intervalMs: 3000, enabled: step !== 'agentsAsk', name: 'agents-flow' }
+    { intervalMs: 1500, enabled: step !== 'agentsAsk', name: 'agents-flow' }
   );
   useEffect(() => {
     void load();

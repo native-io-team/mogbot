@@ -18,9 +18,9 @@ const KEPT = 200;
 /** A scripted line older than this is history: shown as is. */
 export const STREAM_IN_FRESH_MS = 60 * 60 * 1000;
 /** The dots before the words. */
-export const STREAM_IN_TYPING_MS = 650;
-/** Characters a second: a quick reply's pace, readable as it lands. */
-export const STREAM_IN_RATE = 110;
+export const STREAM_IN_TYPING_MS = 350;
+/** Characters a second: fast enough to never be waited on, still seen to arrive. */
+export const STREAM_IN_RATE = 220;
 
 function streamed(): string[] {
   try {

@@ -828,12 +828,17 @@ pub(crate) fn only_blank_tab(text: &str) -> Option<u64> {
 /// told (no probe page, no browser, an answer it couldn't read).
 pub async fn probe(mcp: &mut ChromeMcp, service: &str, site: &str) -> Option<bool> {
     let url = probe_url(service)?;
-    let _ = mcp
+    // A new group comes in a new window with one empty tab: use that tab, so
+    // closing it closes the window. Opening a second left the empty one (and
+    // its window) behind in the user's Chrome after every check.
+    let context = mcp
         .call("tabs_context_mcp", json!({ "createIfEmpty": true }))
         .await
         .ok()?;
-    let created = mcp.call("tabs_create_mcp", json!({})).await.ok()?;
-    let tab = find_tab(&created);
+    let tab = match only_blank_tab(&context) {
+        Some(t) => Some(t),
+        None => find_tab(&mcp.call("tabs_create_mcp", json!({})).await.ok()?),
+    };
     let mut nav = json!({ "url": url });
     if let Some(t) = tab {
         nav["tabId"] = json!(t);

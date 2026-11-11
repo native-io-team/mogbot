@@ -72,7 +72,7 @@ interface GuideLive {
 
 const GuideContext = createContext<GuideLive>({ guide: null, step: null, status: null, at: 0 });
 
-const POLL_MS = 2500;
+const POLL_MS = 1000;
 
 /**
  * Runs the guide for the Chief's chat: polls only while one runs, and asks

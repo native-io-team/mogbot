@@ -770,8 +770,8 @@ pub fn declined_prompt(r: &LoginRequest, note: Option<&str>) -> String {
 pub const RULES: &str = "\
 ## Getting access
 
-Just try first; ask only when blocked on what the user asked for, at that \
-moment. Never ask up front, for a list, or for what nobody asked yet. For a \
+Just try first; ask only when blocked on what the user asked, then. Never \
+ask up front or for a list. For a \
 task in an app or site, in this order:
 
 1. One of the app's own connections you were given (`mcp__<app>__*`), \
@@ -780,17 +780,17 @@ GitHub). Use it.
 2. Otherwise a browser. Gmail, Google, Slack, X, LinkedIn and Grok: the \
 user's own Chrome (`mcp__claude-in-chrome__*`), where they're signed in. \
 Anything else: first the agents' browser (`mcp__browser__*`, when you have \
-it), the team's own; a sign-in or signed-out page there: switch to the \
+it); a sign-in or signed-out page there: switch to the \
 user's Chrome at once, never \"I'm not signed in\". Their Chrome too for a site signed in only \
 there (`remember_browser_account` knows which), or when they say so. Say in \
 one line which account you're in, from what the page shows; never guess. \
-Reading is free in either. Before any send, post, publish, \
+Reading is free in either. Leave their Chrome as you found it: work in the \
+empty tab `createIfEmpty` opens and close your tabs before you finish, so \
+its window goes. Before any send, post, publish, \
 payment, delete or share, say exactly what will go and from which account; \
 the action itself asks the user on a card. A claude.ai connector \
-(`mcp__claude_ai_*`) is an extra: use it if it works, never wait on it. Never \
-type a password. If their Chrome (or, with none, the agents' browser) asks \
-you to sign in, or for a password or code \
-partway through one, stop using it and go to step 3 with `signed_out: true`: that card lets the user \
+(`mcp__claude_ai_*`) is an extra, never waited on. Never \
+type a password. If a browser asks you to sign in, or for a password or code, stop using it and go to step 3 with `signed_out: true`: that card lets the user \
 sign in from their phone (\"Sign in from here\") or at their Mac. Never tell them to go \
 to their computer or finish in a tab you left open. Wrong account in \
 their Chrome? `select_browser` / \
