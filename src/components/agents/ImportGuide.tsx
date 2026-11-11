@@ -32,7 +32,7 @@ import {
   getImportGuide,
   getImportPrompt,
   postImportGuideStep,
-  setImportChoice,
+  startFresh,
   startImportGuide,
   stopImportGuide,
   type ImportGuide,
@@ -170,7 +170,7 @@ export function ImportGuideAsk() {
           variant="ghost"
           size="compact"
           disabled={busy}
-          onClick={() => run(() => setImportChoice('declined'))}
+          onClick={() => run(() => startFresh())}
         >
           {GUIDE_ASK_FRESH}
         </Button>
@@ -187,7 +187,7 @@ const order = (s: GuideStepId) => GUIDE_STEPS.indexOf(s);
 export function GuideStepAction({ block }: { block: GuideBlock }) {
   const { guide, step: current, status, at } = useContext(GuideContext);
   // The guide ended (imported, or start fresh): the words stay, the actions go.
-  if (!guide || !current) return null;
+  if (block.step === 'fresh' || !guide || !current) return null;
   const past =
     order(block.step) < order(current) ||
     // "approve" is skipped when Tailscale never asks: link is done once connect is reached.
@@ -203,7 +203,7 @@ export function GuideStepAction({ block }: { block: GuideBlock }) {
   return <CurrentStep block={block} status={status} at={at} />;
 }
 
-const DONE_LINES: Record<GuideStepId, string> = {
+const DONE_LINES: Record<Exclude<GuideStepId, 'fresh'>, string> = {
   tailscale: 'Tailscale is on.',
   link: 'Your link is on.',
   approve: 'Tailscale approved it.',

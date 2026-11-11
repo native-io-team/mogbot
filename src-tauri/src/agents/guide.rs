@@ -166,7 +166,7 @@ fn chief_id() -> Result<String, CommandError> {
 /// The user picked their assistant under the greeting. Their pick shows as
 /// their own message (the conversation reads right), the choice becomes
 /// `Bringing`, and the app asks for the first step next.
-pub fn start(app: &AppHandle, assistant: &str) -> Result<Guide, CommandError> {
+pub fn start(app: &AppHandle, assistant: &str, record_pick: bool) -> Result<Guide, CommandError> {
     let chief = chief_id()?;
     let assistant = known(assistant);
     let now = store::now_ms();
@@ -181,11 +181,13 @@ pub fn start(app: &AppHandle, assistant: &str) -> Result<Guide, CommandError> {
         write(&guide)?;
         guide
     };
-    let said = match assistant {
-        "other" => "Another assistant".to_string(),
-        a => assistant_name(a).to_string(),
-    };
-    runner::record(app, runner::new_message(&chief, MessageKind::User, said))?;
+    if record_pick {
+        let said = match assistant {
+            "other" => "Another assistant".to_string(),
+            a => assistant_name(a).to_string(),
+        };
+        runner::record(app, runner::new_message(&chief, MessageKind::User, said))?;
+    }
     Ok(guide)
 }
 
@@ -241,6 +243,33 @@ pub fn post(app: &AppHandle, step: Step) -> Result<bool, CommandError> {
     message.blocks = Some(block(step, &guide.assistant));
     runner::record(app, message)?;
     Ok(true)
+}
+
+/// What the Chief says when they start fresh: the ways in sit under it.
+pub const FRESH_WORDS: &str = "Okay! What do you want me to do?";
+
+/// "I'm starting fresh" on the first question: their answer shows as their
+/// own message, the question is answered for good (the phone stops asking
+/// too), and the Chief asks what to do, with the starters under it (a
+/// `guide` block of step `fresh`, which the desk draws as the starters).
+pub fn fresh(app: &AppHandle) -> Result<(), CommandError> {
+    let chief = chief_id()?;
+    {
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        import_choice::set(Choice::Declined, store::now_ms())?;
+    }
+    runner::record(
+        app,
+        runner::new_message(&chief, MessageKind::User, "I\u{2019}m starting fresh".to_string()),
+    )?;
+    let mut message = runner::new_message(&chief, MessageKind::Agent, FRESH_WORDS.to_string());
+    message.blocks = Some(serde_json::json!({
+        "v": 1,
+        "intro": FRESH_WORDS,
+        "items": [{ "kind": "guide", "summary": "", "step": "fresh", "assistant": "other" }],
+    }));
+    runner::record(app, message)?;
+    Ok(())
 }
 
 /// "Start fresh" partway: the guide ends and the question is answered.

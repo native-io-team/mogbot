@@ -36,8 +36,6 @@ interface AccountSelectScreenProps {
   onBack?: () => void;
 }
 
-const INTERACTIVE = 'button, a, input, select, [role="button"]';
-
 export function AccountSelectScreen({ onContinue, onBack }: AccountSelectScreenProps) {
   const { showToast } = useOptionalToast();
 

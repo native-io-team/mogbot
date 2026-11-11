@@ -663,6 +663,7 @@ pub fn run() {
             commands::agents::agents_guide_post,
             commands::agents::agents_guide_state,
             commands::agents::agents_guide_stop,
+            commands::agents::agents_guide_fresh,
             commands::agents::agents_set_admin,
             commands::agents::agents_admin_activity,
             commands::agents::agents_recently_deleted,

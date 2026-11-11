@@ -532,6 +532,8 @@ export const startImportGuide = (assistant: ImportGuide['assistant']) =>
 export const postImportGuideStep = (step: string) => invoke<boolean>('agents_guide_post', { step });
 export const getImportGuide = () => invoke<ImportGuide | null>('agents_guide_state');
 export const stopImportGuide = () => invoke<void>('agents_guide_stop');
+/** "I'm starting fresh": the Chief asks what to do, starters under it. */
+export const startFresh = () => invoke<void>('agents_guide_fresh');
 
 /** Mirrors `agents::independence::Level`; worded in `lib/agentIndependence`. */
 export type AgentIndependence = 'often' | 'judgement' | 'go_hard' | 'full_send';

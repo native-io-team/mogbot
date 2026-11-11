@@ -13,7 +13,7 @@
  * @module components/WorkspaceHeader
  */
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BranchIndicator } from '../branches/BranchIndicator';
 import { BranchesMenu } from '../branches/BranchesMenu';
 import { openInFinder } from '../../lib/ide';

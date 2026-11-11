@@ -127,11 +127,14 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "bring_agents_over",
-        description: "The user wants agents from another app (Grok Bot, OpenBot, OpenClaw, Hermes…) without Remote Access. `path`: an export file or folder they named; the app reads it (you never see what's in it) and puts one review card in this chat, nothing made until they press Import. No `path`: opens Import on the Mac at copy and paste. Only on the user's own message.",
+        description: "The user wants to bring agents over from another assistant or app. `assistant` (grok, chatgpt, claude or other) when they live in Grok, ChatGPT, Claude or any chat assistant: the app walks the user through it step by step in this chat (Tailscale, a private link, adding it to their assistant, one message to send it) and their assistant tells you about each agent itself. Use this the moment they say they have agents elsewhere; never try to open or read their assistant in a browser, and never ask them to sign in to it. Otherwise (Grok Bot, OpenBot, OpenClaw, Hermes… without Remote Access) `path`: an export file or folder they named; the app reads it (you never see what's in it) and puts one review card in this chat, nothing made until they press Import. No `path`: opens Import on the Mac at copy and paste. Only on the user's own message.",
         schema: || {
             json!({
                 "type": "object",
-                "properties": { "path": { "type": "string", "description": "A file or folder on this Mac (~ is fine)." } }
+                "properties": {
+                    "assistant": { "type": "string", "enum": ["grok", "chatgpt", "claude", "other"] },
+                    "path": { "type": "string", "description": "A file or folder on this Mac (~ is fine)." }
+                }
             })
         },
     },
@@ -300,6 +303,12 @@ fn share_recipe(app: &AppHandle, args: &Value) -> Value {
 /// An export read by the app (`import_export`), never by the model: the
 /// Chief hears only counts and what blocked it, in the app's own words.
 async fn bring_agents_over(app: &AppHandle, args: &Value) -> Value {
+    if let Some(assistant) = arg(args, "assistant") {
+        return match super::guide::start(app, assistant, false) {
+            Ok(_) => text("The app is walking the user through it in this chat now, one step at a time, starting with its next message. Say one short line (\"Great, I'll walk you through it.\") and stop: don't list the steps, don't open their assistant in a browser, don't ask them to sign in to it."),
+            Err(e) => error(format!("Couldn't start it: {e}")),
+        };
+    }
     let Some(path) = arg(args, "path") else {
         let _ = app.emit(EVENT_OPEN_IMPORT, "paste");
         return text("Opened Import agents on the Mac at copy and paste: the user sends their old assistant the message there and pastes its reply back. Tell them in a line.");

@@ -919,6 +919,13 @@ export const AgentChat = memo(function AgentChat({
     shown.length > 0 &&
     shown.every((m) => m.kind === 'agent') &&
     agent.status.state === 'idle';
+  /** The Chief just asked "what do you want me to do?" (they started fresh). */
+  const lastShown = shown[shown.length - 1];
+  const freshAsked =
+    agent.isMain &&
+    agent.status.state === 'idle' &&
+    lastShown?.kind === 'agent' &&
+    isFreshAsk(lastShown);
   const templateFirstOpen =
     !agent.isMain &&
     agent.template !== undefined &&
@@ -2099,7 +2106,12 @@ export const AgentChat = memo(function AgentChat({
                     {/* The Chief asks where their agents are first; its starters
               are the other way in, under it. */}
                     {greetingOnly && engineReady && <ImportGuideAsk />}
-                    {greetingOnly && engineReady && chiefStarters}
+                    {/* The first question is only about bringing agents over;
+              the starters come once it's answered ("I'm starting fresh"
+              asks what to do and puts them under that). */}
+                    {((greetingOnly && importChoice !== 'undecided') || freshAsked) &&
+                      engineReady &&
+                      chiefStarters}
                     {/* The phone, offered once the first thing asked for is back. */}
                     {agent.isMain &&
                       engineReady &&
@@ -2348,4 +2360,10 @@ function retryScheduledAt(checkIns: Agent['checkIns'], at: number): boolean {
 function withIndicatorAt(at: number, rows: ReactNode[], extra: ReactNode): ReactNode[] {
   if (!extra) return rows;
   return [...rows.slice(0, at), extra, ...rows.slice(at)];
+}
+
+/** The Chief's "what do you want me to do?" after "I'm starting fresh" (`agents::guide::fresh`). */
+function isFreshAsk(m: AgentMessage): boolean {
+  const items = (m.blocks as { items?: Array<{ kind?: string; step?: string }> } | undefined)?.items;
+  return !!items?.some((b) => b.kind === 'guide' && b.step === 'fresh');
 }

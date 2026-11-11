@@ -15,6 +15,10 @@ import { lazyReactErrorHandler } from './instrument';
 import './lib/noAnimationIterationListeners';
 // The root's data-app-hidden / data-app-background, which pause loops and polling.
 import './lib/appActivity';
+import { installWindowDrag } from './lib/windowDrag';
+
+// Move the window by its top edge on every screen (macOS draws no title bar).
+installWindowDrag();
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';

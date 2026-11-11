@@ -2894,7 +2894,7 @@ pub async fn agents_set_import_choice(
 #[tracing::instrument(skip(app))]
 pub async fn agents_guide_start(app: AppHandle, assistant: String) -> Result<(), CommandError> {
     let handle = app.clone();
-    blocking(move || agents::guide::start(&handle, &assistant).map(|_| ())).await?;
+    blocking(move || agents::guide::start(&handle, &assistant, true).map(|_| ())).await?;
     emit_registry(&app);
     Ok(())
 }
@@ -2912,6 +2912,16 @@ pub async fn agents_guide_post(app: AppHandle, step: String) -> Result<bool, Com
 #[tracing::instrument]
 pub async fn agents_guide_state() -> Result<Option<agents::guide::Guide>, CommandError> {
     blocking(|| Ok(agents::guide::current())).await
+}
+
+/// "I'm starting fresh" on the first question: the Chief asks what to do.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_guide_fresh(app: AppHandle) -> Result<(), CommandError> {
+    let handle = app.clone();
+    blocking(move || agents::guide::fresh(&handle)).await?;
+    emit_registry(&app);
+    Ok(())
 }
 
 /// "Start fresh" partway through the guide.

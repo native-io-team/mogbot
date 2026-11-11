@@ -219,6 +219,7 @@ function BlockView({
       );
     case 'guide':
       // First run's import steps happen on the Mac: a quiet line saying so.
+      if (!block.summary) return null;
       return (
         <T variant="caption" color={colors.textMuted} testID="block-guide">
           {block.summary}

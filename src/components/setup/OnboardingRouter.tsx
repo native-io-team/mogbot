@@ -9,7 +9,6 @@
  * contradict it.
  */
 
-import { useCallback } from 'react';
 import { AgentOnboardingScreen } from './agent-led/AgentOnboardingScreen';
 
 interface OnboardingRouterProps {
