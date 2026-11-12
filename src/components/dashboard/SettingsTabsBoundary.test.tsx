@@ -4,7 +4,8 @@
  * list keeps working), it opens on the page a command asked for, and ↓/↑
  * move through the list.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
+import { overrideRelayForHarness } from '../../lib/brand';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { SettingsModal } from './SettingsModal';
@@ -16,6 +17,10 @@ import {
   requestSettingsTabOnOpen,
 } from '../../lib/settings';
 import { SETTINGS_PAGES, openingPage, visibleSettingsPages } from '../../lib/settingsPages';
+
+// These tests read the Tailscale path (a build with no relay); the relay's own tests opt in.
+beforeEach(() => overrideRelayForHarness(false));
+afterEach(() => overrideRelayForHarness(null));
 
 vi.mock('../agents/AgentsSettings', () => ({
   AgentsPage: () => <p>agents page</p>,

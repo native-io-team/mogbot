@@ -32,7 +32,7 @@
     "appStore": null,
     "testFlight": "https://testflight.apple.com/join/fsm64m5E",
     "pushRelay": null,
-    "relay": null,
+    "relay": "wss://mogbot-relay.mogbot-relay.workers.dev",
     "macDownload": "https://mogbot.app/start"
   },
   "chromeExtension": {

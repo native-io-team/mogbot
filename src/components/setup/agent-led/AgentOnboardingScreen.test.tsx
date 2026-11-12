@@ -5,7 +5,8 @@
  * independence each wait for their moment in the app. Each screen has one
  * big button and Back; the step is saved, so a relaunch resumes it.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { overrideRelayForHarness } from '../../../lib/brand';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { SetupItem } from '../../../lib/setup';
 import { FLOW_STORAGE_KEY, saveProgress } from '../../../lib/onboardingFlow';
@@ -27,6 +28,10 @@ vi.mock('../../../lib/analytics', () => ({
 }));
 vi.mock('../OnboardingTerminal', () => ({ OnboardingTerminal: () => null }));
 import { AgentOnboardingScreen } from './AgentOnboardingScreen';
+
+// These tests read the Tailscale path (a build with no relay); the relay's own tests opt in.
+beforeEach(() => overrideRelayForHarness(false));
+afterEach(() => overrideRelayForHarness(null));
 
 const item = (id: string, status: SetupItem['status']): SetupItem => ({
   id,

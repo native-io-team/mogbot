@@ -23,32 +23,33 @@ import {
 } from '../src/lib/pairSteps';
 
 describe('pairSteps', () => {
+  // Without a relay (a fork, or Tailscale only) unless a test says otherwise.
   it('walks mac → tailscale → code, then the camera', () => {
     expect([...INTRO_STEPS]).toEqual(['mac', 'tailscale', 'code']);
-    expect(nextIntro('mac')).toBe('tailscale');
-    expect(nextIntro('tailscale')).toBe('code');
-    expect(nextIntro('code')).toBeNull();
-    expect(prevIntro('mac')).toBeNull();
-    expect(prevIntro('code')).toBe('tailscale');
+    expect(nextIntro('mac', false)).toBe('tailscale');
+    expect(nextIntro('tailscale', false)).toBe('code');
+    expect(nextIntro('code', false)).toBeNull();
+    expect(prevIntro('mac', false)).toBeNull();
+    expect(prevIntro('code', false)).toBe('tailscale');
   });
 
   it('treats "Not yet" as the first question still, and goes on to Tailscale', () => {
     expect(stageOf('getMac')).toBe('mac');
-    expect(prevIntro('getMac')).toBe('mac');
-    expect(nextIntro('getMac')).toBe('tailscale');
+    expect(prevIntro('getMac', false)).toBe('mac');
+    expect(nextIntro('getMac', false)).toBe('tailscale');
   });
 
   it('counts the camera and both answers on the bar', () => {
     expect(PAIR_STAGES.length).toBe(6);
-    expect(progressOf('mac')).toEqual({ n: 1, of: 6 });
-    expect(progressOf('allow')).toEqual({ n: 6, of: 6 });
+    expect(progressOf('mac', false)).toEqual({ n: 1, of: 6 });
+    expect(progressOf('allow', false)).toEqual({ n: 6, of: 6 });
   });
 
   it('resumes where it stopped, and skips what a paired phone has done', () => {
-    expect(startStep(null, false)).toBe('mac');
-    expect(startStep('tailscale', false)).toBe('tailscale');
-    expect(startStep(null, true)).toBe('code');
-    expect(startStep('tailscale', true)).toBe('code');
+    expect(startStep(null, false, false)).toBe('mac');
+    expect(startStep('tailscale', false, false)).toBe('tailscale');
+    expect(startStep(null, true, false)).toBe('code');
+    expect(startStep('tailscale', true, false)).toBe('code');
   });
 
   // docs/relay.md: through the relay the phone needs no Tailscale to pair.

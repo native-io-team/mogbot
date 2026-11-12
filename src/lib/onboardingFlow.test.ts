@@ -3,7 +3,8 @@
  * every check says when it passes or fails. A failed check always
  * names the one fix; nothing here is ever a silent "try again".
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, afterEach } from 'vitest';
+import { overrideRelayForHarness } from './brand';
 import {
   FLOW_SECTIONS,
   FLOW_STEPS,
@@ -30,6 +31,10 @@ import {
 } from './onboardingFlow';
 import type { SetupItem } from './setup';
 import { remoteProblem, type RemoteAccessStatus } from './remoteAccess';
+
+// These tests read the Tailscale path (a build with no relay); the relay's own tests opt in.
+beforeEach(() => overrideRelayForHarness(false));
+afterEach(() => overrideRelayForHarness(null));
 
 const remote = (over: Partial<RemoteAccessStatus> = {}): RemoteAccessStatus => ({
   supported: true,
@@ -165,6 +170,14 @@ describe('the line', () => {
     expect(nextStep('engine')).toBe('agentsAsk');
     expect(nextStep('agentsStart')).toBe('phoneAsk');
     expect(nextStep('phonePaired')).toBeNull();
+  });
+
+  it('with the relay: Welcome, then "Sign in?", then the engine, and no Tailscale screens for the phone', () => {
+    overrideRelayForHarness(true);
+    expect(nextStep('welcome')).toBe('account');
+    expect(nextStep('account')).toBe('engine');
+    expect(nextStep('phoneGetApp')).toBe('phoneAccess');
+    expect(prevStep('phoneAccess')).toBe('phoneGetApp');
   });
 
   it('Back goes one screen back; an optional part’s question goes back to the one before', () => {

@@ -41,6 +41,10 @@ import { PHONE_APP_TESTFLIGHT_URL } from '../../lib/phoneApp';
 import { overrideRelayForHarness } from '../../lib/brand';
 import { readPhoneRoute } from '../../lib/account';
 
+// These tests read the Tailscale path (a build with no relay); the relay's own tests opt in.
+beforeEach(() => overrideRelayForHarness(false));
+afterEach(() => overrideRelayForHarness(null));
+
 const status = (over: Partial<PhoneStatus> = {}): PhoneStatus => ({
   enabled: true,
   running: true,

@@ -2947,7 +2947,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 6
+      "consumerCount": 7
     },
     {
       "name": "--preview-toolbar-h",
@@ -5299,7 +5299,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 270
+      "consumerCount": 271
     },
     {
       "name": "--surface-control",
@@ -6307,7 +6307,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 640
+      "consumerCount": 641
     },
     {
       "name": "--spacing-lg",
@@ -6795,7 +6795,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 270
+      "consumerCount": 271
     },
     {
       "name": "--surface-control",
