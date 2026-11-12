@@ -507,7 +507,10 @@ mod tls_tests {
         use futures_util::StreamExt;
         let base = std::env::var("MOGBOT_RELAY_URL").expect("MOGBOT_RELAY_URL");
         super::tls_ready();
-        let url = format!("{}/v1/phone/AAAAAAAAAAAAAAAAAAAAAA", base.trim_end_matches('/'));
+        let url = format!(
+            "{}/v1/phone/AAAAAAAAAAAAAAAAAAAAAA",
+            base.trim_end_matches('/')
+        );
         let (mut ws, _) = tokio_tungstenite::connect_async_with_config(&url, None, false)
             .await
             .expect("TLS connect to the relay");

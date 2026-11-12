@@ -374,7 +374,9 @@ impl Link {
             .map_err(|_| NOT_CONNECTED.to_string())?;
         match tokio::time::timeout(DELETE_TIMEOUT, done).await {
             Ok(Ok(result)) => result,
-            _ => Err("The sign-in service didn't answer. Your account is still there; try again.".into()),
+            _ => Err(
+                "The sign-in service didn't answer. Your account is still there; try again.".into(),
+            ),
         }
     }
 }

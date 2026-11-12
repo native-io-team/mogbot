@@ -521,7 +521,10 @@ async fn a_phone_reaches_the_mac_through_the_relay_end_to_end() {
     relay.heard("deleteAccount").await;
     relay.to_mac(json!({ "t": "accountDeleted", "ok": false, "error": "clerk_failed" }));
     assert!(failing.await.unwrap().is_err());
-    assert!(link.status().account.is_some(), "a failed delete keeps the account");
+    assert!(
+        link.status().account.is_some(),
+        "a failed delete keeps the account"
+    );
     let deleting = {
         let link = link.clone();
         tokio::spawn(async move { link.delete_account().await })

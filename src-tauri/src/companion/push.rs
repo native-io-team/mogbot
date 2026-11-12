@@ -860,8 +860,14 @@ mod tests {
         set_enabled(&c, false).await.unwrap();
         assert!(!c.registry.read(|s| s.push.on()));
         let before = relay.calls().len();
-        assert!(deliver_all(&c, &alert(PushKind::NeedsYou), 10).await.is_empty());
-        assert_eq!(relay.calls().len(), before, "nothing leaves the Mac while it's off");
+        assert!(deliver_all(&c, &alert(PushKind::NeedsYou), 10)
+            .await
+            .is_empty());
+        assert_eq!(
+            relay.calls().len(),
+            before,
+            "nothing leaves the Mac while it's off"
+        );
         set_enabled(&c, true).await.unwrap();
         assert!(c.registry.read(|s| s.push.on()));
     }

@@ -117,12 +117,18 @@ mod scrub_tests {
             "failed at /Users/<redacted>/…/page.tsx: boom"
         );
         assert_eq!(scrub_string("in /Users/julian"), "in /Users/<redacted>");
-        assert_eq!(scrub_string("'/Users/julian/notes.md'"), "'/Users/<redacted>/notes.md'");
+        assert_eq!(
+            scrub_string("'/Users/julian/notes.md'"),
+            "'/Users/<redacted>/notes.md'"
+        );
         assert_eq!(
             scrub_string(r"C:\Users\pat\Work\Client\a.txt"),
             r"C:\Users\<redacted>\…\a.txt"
         );
-        assert_eq!(scrub_string("/home/pat/x/y (os error 2)"), "/home/<redacted>/…/y (os error 2)");
+        assert_eq!(
+            scrub_string("/home/pat/x/y (os error 2)"),
+            "/home/<redacted>/…/y (os error 2)"
+        );
         assert_eq!(scrub_string("nothing here"), "nothing here");
     }
 }
