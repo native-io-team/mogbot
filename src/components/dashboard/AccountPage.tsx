@@ -71,6 +71,9 @@ export function AccountPage() {
   };
 
   const error = signIn.error ?? signOut.error?.message ?? turnOn.error?.message ?? null;
+  // Never a spinner forever: past `SLOW_MS` connecting, say so with Try again.
+  const connecting = !!status && status.relay.state === 'connecting' && !signIn.waiting;
+  const slow = useSlow(connecting);
 
   return (
     <div className="agents-settings" data-account-page>
@@ -107,7 +110,16 @@ export function AccountPage() {
               Turn on phone access
             </Button>
           </Row>
-        ) : status.relay.state === 'connecting' && !signIn.waiting ? (
+        ) : connecting && slow ? (
+          <Row
+            label="Can’t reach the sign-in service"
+            description="This Mac keeps trying. Check its internet connection. Your phone still works over Tailscale."
+          >
+            <Button variant="secondary" onClick={() => void reload()} data-account-retry>
+              Try again
+            </Button>
+          </Row>
+        ) : connecting ? (
           <Row label="Connecting…" description="Checking your account.">
             <Spinner size="sm" />
           </Row>
@@ -157,4 +169,20 @@ export function AccountPage() {
       )}
     </div>
   );
+}
+
+/** How long "Connecting…" may spin before the page says it can't reach the relay. */
+export const SLOW_MS = 15_000;
+
+/** True once `on` has held for `SLOW_MS`; false again the moment it stops. */
+function useSlow(on: boolean): boolean {
+  const [slow, setSlow] = useState(false);
+  // Stopped connecting: forget it during render (derived state), not in an effect.
+  if (!on && slow) setSlow(false);
+  useEffect(() => {
+    if (!on) return;
+    const t = setTimeout(() => setSlow(true), SLOW_MS);
+    return () => clearTimeout(t);
+  }, [on]);
+  return on && slow;
 }

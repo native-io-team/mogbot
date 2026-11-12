@@ -17,7 +17,7 @@ vi.mock('../../lib/companion', async (importOriginal) => {
 });
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 
-import { AccountPage } from './AccountPage';
+import { AccountPage, SLOW_MS } from './AccountPage';
 import { requestAccountOnOpen } from '../../lib/account';
 
 const status = (relay: PhoneStatus['relay'], enabled = true): PhoneStatus =>
@@ -51,6 +51,21 @@ describe('AccountPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByText('Finish signing in in your browser')).toBeInTheDocument();
     expect(signInAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('connecting too long: says it can’t reach the sign-in service, with Try again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      getPhoneStatus.mockResolvedValue(status({ state: 'connecting', account: null }));
+      render(<AccountPage />);
+      expect(await screen.findByText('Connecting…')).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(SLOW_MS + 100);
+      expect(await screen.findByText('Can’t reach the sign-in service')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      await waitFor(() => expect(getPhoneStatus.mock.calls.length).toBeGreaterThan(1));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('phone access off: says it can’t tell, never “Not signed in”', async () => {
