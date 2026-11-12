@@ -142,6 +142,10 @@ export function pill(s: Inputs, now = Date.now()): Pill {
   // The first moments of trying read as calm: the phone tries every few
   // seconds with the app in front, and the Mac is usually back by then.
   const calm = link.since != null && now - link.since < CALM_MS;
+  // The relay said the Mac isn't connected to it: known, once the calm is over.
+  if (link.macOffline && !calm && !(link.kind === 'reconnecting' && link.macClosing)) {
+    return { tone: 'problem', label: 'Mac offline' };
+  }
   if (link.kind === 'reconnecting') {
     // The Mac's app said it was closing (a quit, an update's restart): waiting for it isn't a fault.
     if (link.macClosing && now - link.lastSeenAt < MAC_CLOSING_WAIT_MS) {
@@ -216,7 +220,7 @@ export interface LinkBar {
   detail: string;
   /** "What to check": the likely causes, most likely first, each with its fix. */
   checks: string[];
-  kind: 'offline' | 'connecting' | 'closing' | 'stuck' | 'unreachable' | MacSaid;
+  kind: 'offline' | 'connecting' | 'closing' | 'stuck' | 'unreachable' | 'mac_offline' | MacSaid;
 }
 
 /** "Last heard from it 2 min ago", or that nothing has been heard yet. */
@@ -225,6 +229,16 @@ function heard(at: number, now: number): string {
 }
 
 const SAVED = ' · showing what was saved';
+
+/**
+ * The relay answered that the Mac isn't connected to it: the Mac is asleep,
+ * off the internet, or the app on it is closed. Nothing on this phone to fix,
+ * so no Tailscale advice.
+ */
+export const MAC_OFFLINE_CHECKS = [
+  'Wake your Mac, with the app open on it. It reconnects by itself.',
+  'If your Mac is awake, check it’s online, then quit the app there and open it again: your agents and chats are kept.',
+];
 
 export const STUCK_CHECKS = [
   'The app on your Mac may be stuck. Quit it and open it again: your agents and chats are kept.',
@@ -255,12 +269,19 @@ export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
       checks: ['Turn on Wi-Fi or mobile data on this phone. It reconnects by itself.'],
     };
   }
+  // Tailscale advice only where Tailscale is one of the ways to the Mac: a
+  // phone that reaches it only through the relay has nothing of it to check.
+  const viaTailscale = !s.credentials || s.credentials.routes.some((r) => r.kind === 'tailscale');
   const unreachable = [
     'Your Mac may be asleep or shut. Wake it, with the app open on it.',
-    'Tailscale may be off on this phone or on your Mac. Open Tailscale and check it’s on, with the same account on both.',
-    // MagicDNS off on the phone: the Mac's *.ts.net name doesn't resolve,
-    // which looks exactly like Tailscale being off.
-    'If Tailscale is on here, check “Use Tailscale DNS” is on in its settings: your Mac’s address is a Tailscale name.',
+    ...(viaTailscale
+      ? [
+          'Tailscale may be off on this phone or on your Mac. Open Tailscale and check it’s on, with the same account on both.',
+          // MagicDNS off on the phone: the Mac's *.ts.net name doesn't resolve,
+          // which looks exactly like Tailscale being off.
+          'If Tailscale is on here, check “Use Tailscale DNS” is on in its settings: your Mac’s address is a Tailscale name.',
+        ]
+      : ['This phone may not be online. Check Wi-Fi or mobile data.']),
     'If the app on your Mac is stuck, quit it and open it again.',
   ];
   const mac = s.mac;
@@ -287,6 +308,15 @@ export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
       title: said.title,
       detail: `Your Mac answered · ${heard(lastSeen, now).toLowerCase()}${lastSeen ? SAVED : ''}`,
       checks: said.checks,
+    };
+  }
+  if (link.macOffline && p.tone === 'problem') {
+    return {
+      kind: 'mac_offline',
+      tone: 'problem',
+      title: 'Your Mac is offline or asleep',
+      detail: since,
+      checks: MAC_OFFLINE_CHECKS,
     };
   }
   // Known stuck: said once the calm first seconds are over, not after the
@@ -348,7 +378,8 @@ export function layers(
   });
 
   if (connected) {
-    const via = s.link.kind === 'connected' && s.link.route === 'tailscale' ? 'Tailscale' : 'LAN';
+    const route = s.link.kind === 'connected' ? s.link.route : null;
+    const via = route === 'tailscale' ? 'Tailscale' : route === 'relay' ? 'the relay' : 'LAN';
     out.push({
       title: 'Mac reachable',
       tone: 'ok',
@@ -357,7 +388,12 @@ export function layers(
   } else {
     const seen = seenAt ? `Last seen ${formatAgo(seenAt, now)}` : 'Not seen yet';
     // We can't know why from here; list the likely causes from the last status we had.
-    const causes = ['Tailscale may be off on this phone or on the Mac'];
+    const causes =
+      'macOffline' in s.link && s.link.macOffline
+        ? ['The relay says your Mac isn’t connected: it may be asleep, offline, or the app closed']
+        : s.credentials && !s.credentials.routes.some((r) => r.kind === 'tailscale')
+          ? ['It may be asleep, or this phone offline']
+          : ['Tailscale may be off on this phone or on the Mac'];
     if (mac && !mac.power.keepAwake && mac.power.onBattery === 'yes') {
       const pct = mac.power.batteryPercent != null ? ` at ${mac.power.batteryPercent}%` : '';
       causes.unshift(`It was on battery${pct} with keep-awake off: it may be asleep`);

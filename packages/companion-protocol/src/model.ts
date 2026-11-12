@@ -2381,11 +2381,18 @@ export interface MacStatus {
   routes: Route[];
 }
 
-export type RouteKind = 'tailscale' | 'lan';
+/**
+ * How the phone reaches the Mac. `relay`: through the relay (docs/relay.md),
+ * end to end encrypted to the Mac's pinned key; Tailscale stays a second route.
+ */
+export type RouteKind = 'tailscale' | 'lan' | 'relay';
 
 export interface Route {
   kind: RouteKind;
-  /** `https://mac.tailnet.ts.net:47443` or `https://192.168.1.20:47444`. */
+  /**
+   * `https://mac.tailnet.ts.net:47443`, `https://192.168.1.20:47444`, or for
+   * the relay `wss://<relay host>/v1/phone/<fingerprint>` (`relayPhoneUrl`).
+   */
   url: string;
   /** LAN only: SHA-256 of the Mac's certificate public key (SPKI), base64url. */
   pin?: string;

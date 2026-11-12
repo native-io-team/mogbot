@@ -16,6 +16,7 @@
 
 import {
   HTTP,
+  RELAY_CLOSE_MAC_OFFLINE,
   SUPPORTED,
   type IdentityResponse,
   type PairRequest,
@@ -24,6 +25,8 @@ import {
   type Route,
 } from '@shipstudio/companion-protocol';
 import { checkMac, checkPairAnswer, newChallenge, UPDATE_MAC } from './identity';
+import { RelayClosed, relayFetch } from './relayHttp';
+import { RELAY_NOT_YOUR_MAC } from './relaySocket';
 
 export type PairFailure =
   | { kind: 'lan_only' }
@@ -31,6 +34,8 @@ export type PairFailure =
   | { kind: 'not_your_mac' }
   | { kind: 'tailscale_off' }
   | { kind: 'mac_unreachable' }
+  /** Over the relay: it says the Mac isn't connected to it (asleep, offline, the app closed). */
+  | { kind: 'mac_offline' }
   /**
    * The code went and the Mac had it, but no answer came back inside the
    * desk's window. Whether someone clicked Allow is unknown here.
@@ -82,6 +87,8 @@ export const PAIR_TIMEOUT_MS = 135_000;
 export interface PairDeps {
   fetch: typeof fetch;
   random: (n: number) => Uint8Array;
+  /** For a relay route (tests pass node's `ws`). */
+  WebSocketImpl?: typeof WebSocket;
   device: PairRequest['device'];
   publicKey: string;
   signal?: AbortSignal;
@@ -117,16 +124,46 @@ function within(outer: AbortSignal | undefined, ms: number) {
   };
 }
 
-const post = (deps: PairDeps, url: string, body: unknown, signal: AbortSignal) =>
-  deps.fetch(url, {
+type Answer = { ok: boolean; status: number; json(): Promise<unknown> };
+
+/**
+ * POST to a path on the Mac at `route`: plain HTTPS on Tailscale, or frames
+ * through the relay's channel, which only the pinned Mac can open.
+ */
+function post(
+  deps: PairDeps,
+  route: Route,
+  fingerprint: string,
+  path: string,
+  body: unknown,
+  signal: AbortSignal
+): Promise<Answer> {
+  const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal,
-  });
+  };
+  if (route.kind === 'relay') {
+    return relayFetch(route.url, {
+      fingerprint,
+      random: deps.random,
+      WebSocketImpl: deps.WebSocketImpl,
+    })(path, init);
+  }
+  return deps.fetch(route.url.replace(/\/$/, '') + path, init);
+}
 
-const unreachable = async (deps: PairDeps, route: Route) =>
-  new PairError((await deps.diagnose?.(route.url)) ?? { kind: 'mac_unreachable' });
+const unreachable = async (deps: PairDeps, route: Route, error?: unknown) => {
+  if (route.kind === 'relay') {
+    // The relay knows whether the Mac is there; nothing to ask the OS.
+    const code = error instanceof RelayClosed ? error.code : 0;
+    if (code === RELAY_CLOSE_MAC_OFFLINE) return new PairError({ kind: 'mac_offline' });
+    if (code === RELAY_NOT_YOUR_MAC) return new PairError({ kind: 'not_your_mac' });
+    return new PairError({ kind: 'mac_unreachable' });
+  }
+  return new PairError((await deps.diagnose?.(route.url)) ?? { kind: 'mac_unreachable' });
+};
 
 /**
  * Ask the Mac at `route` to prove it's the one the link named. Throws a
@@ -134,16 +171,17 @@ const unreachable = async (deps: PairDeps, route: Route) =>
  * No answer within `IDENTITY_TIMEOUT_MS` is the same as no route: diagnosed.
  */
 export async function proveMac(link: PairingLink, route: Route, deps: PairDeps): Promise<void> {
-  const base = route.url.replace(/\/$/, '');
   const challenge = newChallenge(deps.random);
-  let res!: Response;
+  let res!: Answer;
   let answer: IdentityResponse | null = null;
   for (let attempt = 1; ; attempt++) {
     const clock = within(deps.signal, deps.identityTimeoutMs ?? IDENTITY_TIMEOUT_MS);
     try {
       res = await post(
         deps,
-        base + HTTP.identity,
+        route,
+        link.fingerprint,
+        HTTP.identity,
         { protocol: SUPPORTED, challenge },
         clock.signal
       );
@@ -154,7 +192,7 @@ export async function proveMac(link: PairingLink, route: Route, deps: PairDeps):
       // Slow is not gone: a timed-out try gets one more. A fast failure
       // (no such host, refused) is an answer already.
       if (clock.timedOut() && attempt < IDENTITY_TRIES) continue;
-      throw await unreachable(deps, route);
+      throw await unreachable(deps, route, error);
     } finally {
       clock.done();
     }
@@ -174,13 +212,13 @@ export async function proveMac(link: PairingLink, route: Route, deps: PairDeps):
 }
 
 /**
- * Pair from `link` over its one Tailscale route: the Mac proves itself,
+ * Pair from `link` over its one route (Tailscale or the relay): the Mac proves itself,
  * then the code goes, then the answer is checked before its token is kept.
  * The request stays open while someone at the desk decides (up to 120 s),
  * and is given up a little after that, so it can never wait forever.
  */
 export async function pairWith(link: PairingLink, deps: PairDeps): Promise<Paired> {
-  const route = link.routes.find((r) => r.kind === 'tailscale');
+  const route = link.routes.find((r) => r.kind === 'tailscale' || r.kind === 'relay');
   if (!route) throw new PairError({ kind: 'lan_only' });
   deps.onStep?.('reaching');
   await proveMac(link, route, deps);
@@ -194,10 +232,10 @@ export async function pairWith(link: PairingLink, deps: PairDeps): Promise<Paire
     challenge,
   };
   const clock = within(deps.signal, deps.pairTimeoutMs ?? PAIR_TIMEOUT_MS);
-  let res: Response;
+  let res: Answer;
   let answer: PairResponse | null;
   try {
-    const sent = post(deps, route.url.replace(/\/$/, '') + HTTP.pair, body, clock.signal);
+    const sent = post(deps, route, link.fingerprint, HTTP.pair, body, clock.signal);
     // Only now is the Mac asking: the code is on its way to a proven Mac.
     deps.onStep?.('asking');
     res = await sent;
@@ -206,7 +244,7 @@ export async function pairWith(link: PairingLink, deps: PairDeps): Promise<Paire
     if (deps.signal?.aborted) throw error;
     // The code went: past the desk's window, say that, not "unreachable".
     if (clock.timedOut()) throw new PairError({ kind: 'no_answer' });
-    throw await unreachable(deps, route);
+    throw await unreachable(deps, route, error);
   } finally {
     clock.done();
   }

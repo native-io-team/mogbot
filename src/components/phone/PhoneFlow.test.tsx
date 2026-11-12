@@ -19,7 +19,14 @@ vi.mock('../../lib/companion', async (importOriginal) => {
 });
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl }));
 
-import { PanelStepShell, PhoneFlow, prevPhoneStep, type PhoneFlowStep } from './PhoneFlow';
+import {
+  PanelStepShell,
+  PhoneFlow,
+  afterGetApp,
+  prevPhoneStep,
+  type PhoneFlowStep,
+} from './PhoneFlow';
+import { isPassedOver, nextStep, prevStep } from '../../lib/onboardingFlow';
 import { SCAN_LINE } from '../../../packages/companion-protocol/src/pairWords';
 import { PHONE_APP_TESTFLIGHT_URL } from '../../lib/phoneApp';
 
@@ -129,5 +136,17 @@ describe('PhoneFlow', () => {
     expect(prevPhoneStep('phoneAllow')).toBe('phoneScan');
     expect(prevPhoneStep('phoneMacTailscale')).toBe('phoneGetApp');
     expect(prevPhoneStep('phoneGetApp')).toBeNull();
+  });
+
+  it('with the relay, the Tailscale screens are passed over both ways', () => {
+    expect(afterGetApp(true)).toBe('phoneAccess');
+    expect(afterGetApp(false)).toBe('phoneMacTailscale');
+    expect(prevPhoneStep('phoneAccess', true)).toBe('phoneGetApp');
+    expect(prevPhoneStep('phoneAccess', false)).toBe('phonePhoneTailscale');
+    expect(isPassedOver('phoneMacTailscale', true)).toBe(true);
+    expect(isPassedOver('agentsTailscale', true)).toBe(false);
+    // The onboarding list reads the build's own brand: no relay in it yet.
+    expect(nextStep('phoneGetApp')).toBe(isPassedOver('phoneMacTailscale') ? 'phoneAccess' : 'phoneMacTailscale');
+    expect(prevStep('phoneAccess')).toBe(isPassedOver('phonePhoneTailscale') ? 'phoneGetApp' : 'phonePhoneTailscale');
   });
 });

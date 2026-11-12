@@ -667,6 +667,11 @@ function failureCopy(failure: PairFailure, mac: string): [string, string] {
     case 'tailscale_off':
     case 'mac_unreachable':
       return [`Can’t reach ${mac}`, 'Check these, then try again.'];
+    case 'mac_offline':
+      return [
+        `${mac} is offline or asleep`,
+        'Wake your Mac, with the app open on it, then try again.',
+      ];
     case 'no_answer':
       return [
         `No answer from ${mac}`,

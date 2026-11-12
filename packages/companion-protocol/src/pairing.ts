@@ -9,6 +9,7 @@
 import type { DevicePlatform, Route } from './model';
 import type { ProtocolRange } from './version';
 import { PAIRING_SCHEME, PREVIOUS_PAIRING_SCHEME } from './brand.gen';
+import { isRelayUrl } from './relay';
 
 // From brand.json, through the generated file both apps build against.
 export { PAIRING_SCHEME, PREVIOUS_PAIRING_SCHEME };
@@ -122,10 +123,13 @@ export function isTailnetUrl(url: string): boolean {
 
 export interface ParseOptions {
   /**
-   * Also accept a Tailscale route on this other host (the mock Mac in
-   * development and tests). Never set in a release build.
+   * Also accept a Tailscale route, or a relay route, on this other host (the
+   * mock Mac and mock relay in development and tests). Never set in a
+   * release build. A relay route's path is checked either way.
    */
   allowHost?: (url: string) => boolean;
+  /** The relay host a relay route must be on (default: brand.json's, `RELAY_HOST`). */
+  relayHost?: string | null;
 }
 
 /** `<PAIRING_SCHEME>://pair?d=<base64url(JSON)>`. A custom scheme, so the camera opens the app. */
@@ -156,8 +160,9 @@ export type ParsedLink = { ok: true; link: PairingLink } | { ok: false; problem:
 /**
  * The link's contents, or why not. A usable link is v1 with exactly one
  * route (so the host the confirm screen shows is the only one the phone
- * will try), a Tailscale route only on a `*.ts.net` host, and the Mac's
- * identity fingerprint.
+ * will try), a Tailscale route only on a `*.ts.net` host, a relay route only
+ * on the brand's relay host and for the very Mac the link pins
+ * (`/v1/phone/<fingerprint>`), and the Mac's identity fingerprint.
  */
 export function readPairingLink(text: string, options: ParseOptions = {}): ParsedLink {
   const invalid = { ok: false, problem: 'invalid' } as const;
@@ -178,12 +183,15 @@ export function readPairingLink(text: string, options: ParseOptions = {}): Parse
     }
     const routesOk = link.routes.every(
       (r) =>
-        (r.kind === 'tailscale' || r.kind === 'lan') &&
+        (r.kind === 'tailscale' || r.kind === 'lan' || r.kind === 'relay') &&
         typeof r.url === 'string' &&
         (r.kind === 'tailscale'
           ? isTailnetUrl(r.url) || options.allowHost?.(r.url) === true
-          : // A LAN route is only usable with its certificate pin.
-            r.url.startsWith('https://') && typeof r.pin === 'string')
+          : r.kind === 'relay'
+            ? // Checked against the fingerprint below, once it's known to be one.
+              true
+            : // A LAN route is only usable with its certificate pin.
+              r.url.startsWith('https://') && typeof r.pin === 'string')
     );
     if (!routesOk) return invalid;
     // Everything else is right and there's no fingerprint: a Mac from
@@ -192,6 +200,12 @@ export function readPairingLink(text: string, options: ParseOptions = {}): Parse
     if (typeof link.fingerprint !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(link.fingerprint)) {
       return invalid;
     }
+    const fingerprint = link.fingerprint;
+    // A relay route names the Mac it's for: only the one this link pins.
+    const relayOk = link.routes.every(
+      (r) => r.kind !== 'relay' || isRelayUrl(r.url, fingerprint, options)
+    );
+    if (!relayOk) return invalid;
     return { ok: true, link: link as PairingLink };
   } catch {
     return invalid;
@@ -231,8 +245,8 @@ export interface PairRequest {
   };
   protocol: ProtocolRange;
   /**
-   * X25519 public key, base64url. Unused by direct routes; kept so the future
-   * relay can encrypt end to end without pairing again.
+   * X25519 public key, base64url. Unused: the relay's channel makes fresh keys
+   * per connection, signed by the Mac's identity key (docs/relay.md).
    */
   publicKey: string;
   /** 32 random bytes, base64url, for the Mac to sign (`PairResponse.identity`). */

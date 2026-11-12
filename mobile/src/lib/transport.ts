@@ -13,6 +13,7 @@ import {
   HEARTBEAT_MS,
   HTTP,
   MAX_ATTACHMENT_BYTES,
+  RELAY_CLOSE_MAC_OFFLINE,
   SUPPORTED,
   type BlobRef,
   type ClientFrame,
@@ -33,6 +34,8 @@ import {
   type WireError,
 } from '@shipstudio/companion-protocol';
 import { checkMac, MAC_RESET, NOT_YOUR_MAC, UPDATE_MAC, type Pinned } from './identity';
+import { relayRequest, type RelayHttpAnswer } from './relayHttp';
+import { RELAY_NOT_YOUR_MAC, RelaySocket } from './relaySocket';
 
 /**
  * Where a frame this phone couldn't handle is reported (the session sends it
@@ -104,6 +107,16 @@ export interface DirectTransportOptions {
   /** File bytes over HTTP (`files.ts` on the phone; `fetch` and `fs` in tests). */
   http?: HttpAdapter;
   /**
+   * The phone's own files, for HTTP over the relay: there the bytes travel
+   * as frames, so the transport reads an upload and writes a download itself.
+   */
+  files?: LocalFiles;
+  /**
+   * Random bytes for each relay channel's key (`Crypto.getRandomBytes` on the
+   * phone). Defaults to `crypto.getRandomValues`.
+   */
+  random?: (n: number) => Uint8Array;
+  /**
    * The Mac this phone pinned at pairing. Each connection's first frame is
    * a fresh `challenge`; the token goes only after the Mac's `identity`
    * answer checks out against this (`checkMac`), for the host this socket
@@ -141,6 +154,22 @@ export interface HttpAdapter {
     key: string
   ): Promise<{ status: number; uri: string }>;
 }
+
+/**
+ * The phone's files as the relay route needs them: on Tailscale the OS moves
+ * the bytes (`HttpAdapter`); over the relay they go through the channel.
+ */
+export interface LocalFiles {
+  /** A picked file's bytes. */
+  read(uri: string): Promise<Uint8Array>;
+  /** The cached copy kept under `key` (`HttpAdapter.download`'s), or null. */
+  cached(key: string): Promise<string | null>;
+  /** Keep `bytes` under `key`; resolves its file URI. */
+  write(key: string, bytes: Uint8Array): Promise<string>;
+}
+
+/** Downloads over the relay give up after this long with nothing arriving. */
+const RELAY_HTTP_IDLE_MS = 30_000;
 
 type SocketLike = Pick<WebSocket, 'send' | 'close' | 'readyState'> & {
   onopen: ((ev: unknown) => void) | null;
@@ -318,6 +347,8 @@ export class DirectTransport implements Transport {
   private handshakeMs = 0;
   /** In this spell of trouble, what the Mac said as it turned the phone away. */
   private macSaid: MacSaid | undefined;
+  /** The relay's last answer in this spell: that Mac isn't connected to it (4404). */
+  private macOffline = false;
 
   /** Where the Mac can be reached; the Mac's welcome may bring newer ones (`setRoutes`). */
   private routes: Route[];
@@ -389,32 +420,59 @@ export class DirectTransport implements Transport {
     file: { uri: string; name: string; mime: string },
     onProgress?: (fraction: number) => void
   ): Promise<BlobRef> {
+    const headers = {
+      ...this.authHeaders,
+      'Content-Type': file.mime || 'application/octet-stream',
+      'X-Name': encodeURIComponent(file.name),
+    };
+    if (this.route.kind === 'relay') {
+      const files = this.files();
+      const body = await files.read(file.uri);
+      const res = await this.relayHttp({
+        method: 'PUT',
+        path: HTTP.uploadBlob,
+        headers,
+        body,
+        onProgress,
+      });
+      if (res.status === 200) return JSON.parse(new TextDecoder().decode(res.body)) as BlobRef;
+      throw httpFailure(res.status, file.name);
+    }
     const http = this.http();
     const res = await http
-      .upload(
-        this.baseUrl + HTTP.uploadBlob,
-        file.uri,
-        {
-          ...this.authHeaders,
-          'Content-Type': file.mime || 'application/octet-stream',
-          'X-Name': encodeURIComponent(file.name),
-        },
-        onProgress
-      )
+      .upload(this.baseUrl + HTTP.uploadBlob, file.uri, headers, onProgress)
       .catch(() => Promise.reject(notConnected()));
     if (res.status === 200) return JSON.parse(res.body) as BlobRef;
     throw httpFailure(res.status, file.name);
   }
 
-  async download(source: { blobId: string } | { agentId: string; path: string }): Promise<string> {
-    const http = this.http();
-    const [url, key] =
+  async download(
+    source: { blobId: string } | { agentId: string; path: string },
+    width?: number
+  ): Promise<string> {
+    const w = width ? Math.round(width) : 0;
+    const [path, key] =
       'blobId' in source
-        ? [this.baseUrl + HTTP.blob(source.blobId), `blob/${source.blobId}`]
+        ? [HTTP.blob(source.blobId), `blob/${source.blobId}`]
         : [
-            this.attachmentUrl(source.agentId, source.path),
-            `attachment/${source.agentId}/${source.path}`,
+            HTTP.attachment(source.agentId, source.path) + (w ? `?w=${w}` : ''),
+            `attachment/${source.agentId}/${source.path}${w ? `@${w}` : ''}`,
           ];
+    if (this.route.kind === 'relay') {
+      const files = this.files();
+      const kept = await files.cached(key);
+      if (kept) return kept;
+      const res = await this.relayHttp({
+        method: 'GET',
+        path,
+        headers: this.authHeaders,
+        idleMs: RELAY_HTTP_IDLE_MS,
+      });
+      if (res.status === 200) return files.write(key, res.body);
+      throw httpFailure(res.status);
+    }
+    const http = this.http();
+    const url = this.baseUrl + path;
     const res = await http
       .download(url, this.authHeaders, key)
       .catch(() => Promise.reject(notConnected()));
@@ -426,6 +484,28 @@ export class DirectTransport implements Transport {
     if (!this.opts.http) throw new Error('No HTTP adapter');
     if (!this.ready) throw notConnected();
     return this.opts.http;
+  }
+
+  private files(): LocalFiles {
+    if (!this.opts.files) throw new Error('No local files');
+    if (!this.ready) throw notConnected();
+    return this.opts.files;
+  }
+
+  private random = (n: number) =>
+    this.opts.random ? this.opts.random(n) : crypto.getRandomValues(new Uint8Array(n));
+
+  /** One request over the relay route in use, on a channel of its own. */
+  private relayHttp(init: Parameters<typeof relayRequest>[2]): Promise<RelayHttpAnswer> {
+    return relayRequest(
+      this.route.url,
+      {
+        fingerprint: this.opts.pinned.fingerprint,
+        random: this.random,
+        WebSocketImpl: this.opts.WebSocketImpl,
+      },
+      init
+    ).catch(() => Promise.reject(notConnected()));
   }
 
   setForeground(foreground: boolean) {
@@ -546,10 +626,15 @@ export class DirectTransport implements Transport {
         since: this.troubleSince,
         ...(this.appStuck ? { appStuck: true } : {}),
         ...(this.macSaid ? { macSaid: this.macSaid } : {}),
+        ...(this.macOffline ? { macOffline: true } : {}),
       });
     }
-    const url = this.route.url.replace(/^http/, 'ws').replace(/\/$/, '') + HTTP.ws;
-    const ws = this.dial(url);
+    // A relay route is the socket's own address; a Tailscale one is the Mac's, plus `/v1/ws`.
+    const relay = this.route.kind === 'relay';
+    const url = relay
+      ? this.route.url
+      : this.route.url.replace(/^http/, 'ws').replace(/\/$/, '') + HTTP.ws;
+    const ws = this.dial(url, relay);
     this.ws = ws;
     this.triedAt = Date.now();
     this.armConnectTimer(ws, tryBudgetMs(this.attempt, this.handshakeMs));
@@ -561,7 +646,7 @@ export class DirectTransport implements Transport {
           if (ws !== this.ws || this.opened || this.spare || this.closed) return;
           this.note('second try beside a slow first');
           this.spareAt = Date.now();
-          this.spare = this.dial(url);
+          this.spare = this.dial(url, relay);
         }, SECOND_TRY_MS)
       : null;
   }
@@ -570,9 +655,17 @@ export class DirectTransport implements Transport {
   private spareAt = 0;
 
   /** A socket to `url`, wired to this transport; `connect` decides whether it's the try or a spare. */
-  private dial(url: string): SocketLike {
+  private dial(url: string, relay = false): SocketLike {
     const Impl = this.opts.WebSocketImpl ?? WebSocket;
-    const ws = new Impl(url) as unknown as SocketLike;
+    // Over the relay the socket opens only once the pinned Mac signed the
+    // channel's handshake; from there it's the same frames as on Tailscale.
+    const ws = (relay
+      ? new RelaySocket(url, {
+          fingerprint: this.opts.pinned.fingerprint,
+          random: this.random,
+          WebSocketImpl: Impl,
+        })
+      : new Impl(url)) as unknown as SocketLike;
     ws.onopen = () => {
       if (ws !== this.ws) {
         // Only a spare that beat the first try to it is kept; anything else is late.
@@ -639,12 +732,22 @@ export class DirectTransport implements Transport {
         this.armConnectTimer(this.ws, tryBudgetMs(this.attempt, this.handshakeMs));
         return;
       }
+      const code = (ev as { code?: number } | null)?.code;
+      // Whatever answered at the relay couldn't sign for the pinned key.
+      if (code === RELAY_NOT_YOUR_MAC) {
+        this.note(`not your Mac via ${this.route.kind}`);
+        this.refuseLocally('not_your_mac', NOT_YOUR_MAC);
+        return;
+      }
+      // The relay says whether the Mac is connected to it; only it can.
+      if (this.route.kind === 'relay') this.macOffline = code === RELAY_CLOSE_MAC_OFFLINE;
       // The Mac's app closing says so; anything else (a drop, a refusal) doesn't.
-      if (this.ready && (ev as { code?: number } | null)?.code === CLOSE_MAC_CLOSING) {
+      if (this.ready && code === CLOSE_MAC_CLOSING) {
         this.macClosing = true;
       }
-      const code = (ev as { code?: number } | null)?.code;
-      this.lost(this.ready ? `closed-${code ?? 'no-code'}` : `closed-before-welcome-${code ?? 'no-code'}`);
+      this.lost(
+        this.ready ? `closed-${code ?? 'no-code'}` : `closed-before-welcome-${code ?? 'no-code'}`
+      );
     };
     return ws;
   }
@@ -662,7 +765,8 @@ export class DirectTransport implements Transport {
   private armConnectTimer(ws: SocketLike, ms: number) {
     if (this.connectTimer) clearTimeout(this.connectTimer);
     this.connectTimer = setTimeout(() => {
-      if (ws === this.ws && !this.ready) this.lost(this.opened ? 'handshake-timeout' : 'connect-timeout');
+      if (ws === this.ws && !this.ready)
+        this.lost(this.opened ? 'handshake-timeout' : 'connect-timeout');
     }, ms);
   }
 
@@ -722,6 +826,7 @@ export class DirectTransport implements Transport {
         this.appStuck = false;
         this.stuckSince = 0;
         this.macSaid = undefined;
+        this.macOffline = false;
         this.handshakeMs = Date.now() - this.triedAt;
         this.note(`welcome via ${this.route.kind} in ${this.handshakeMs}ms`);
         if (this.connectTimer) clearTimeout(this.connectTimer);
@@ -792,7 +897,10 @@ export class DirectTransport implements Transport {
     this.stuckSince = 0;
     this.teardown();
     if (this.closed || this.refused) return;
-    if (unanswered && !this.probed) void this.probeOldMac(this.route.url);
+    // Over the relay a socket opens only once the Mac answered: no old Mac to find.
+    if (unanswered && !this.probed && this.route.kind !== 'relay') {
+      void this.probeOldMac(this.route.url);
+    }
     // A route that failed before ever answering hands over to the next one;
     // one that was working is tried again first (the Mac restarting is still there).
     if (!wasReady) this.routeIndex = (this.routeIndex + 1) % this.routes.length;
@@ -813,6 +921,7 @@ export class DirectTransport implements Transport {
             ...(this.macClosing ? { macClosing: true } : {}),
             ...(this.appStuck && !this.macClosing ? { appStuck: true } : {}),
             ...(this.macSaid ? { macSaid: this.macSaid } : {}),
+            ...(this.macOffline ? { macOffline: true } : {}),
           }
         : {
             kind: 'connecting',
@@ -820,6 +929,7 @@ export class DirectTransport implements Transport {
             since: this.troubleSince,
             ...(this.appStuck ? { appStuck: true } : {}),
             ...(this.macSaid ? { macSaid: this.macSaid } : {}),
+            ...(this.macOffline ? { macOffline: true } : {}),
           }
     );
     this.retryTimer = setTimeout(() => this.connect(), delay);

@@ -1,0 +1,34 @@
+{
+  "note": "docs/relay.md. Secrets are 32 bytes filled with the number given. Checked by mobile/__tests__/relayCrypto.node.test.ts and src-tauri companion::relay tests.",
+  "phoneSecretFill": 1,
+  "macIdentitySeedFill": 2,
+  "macSecretFill": 3,
+  "fingerprint": "ajgD1fBZkCocba-8m6Rykg",
+  "phoneHello": "{\"v\":1,\"e\":\"pOCSkrZRwni5dyxWn1-puxPZBrRqtoyd-dwrRAn4ogk\"}",
+  "macAnswer": "{\"v\":1,\"e\":\"Xf7dO2vUf2-ijuFdlp1bsOpTd01Ii9r53xxuASSz7yI\",\"publicKey\":\"gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q\",\"signature\":\"5vETGXhGCt4Oc-3-970zXzvgc4zznNCeQexT4c_0ciWWqOQkAAo88qDs05EnAG0fcZrUOwtgDNqO6jmOaU4BBw\"}",
+  "transcript": "mogbot-companion:relay:v1\npOCSkrZRwni5dyxWn1-puxPZBrRqtoyd-dwrRAn4ogk\nXf7dO2vUf2-ijuFdlp1bsOpTd01Ii9r53xxuASSz7yI\najgD1fBZkCocba-8m6Rykg",
+  "phoneToMacKey": "UGnE8Kaa4dR1Vv8UeMSbLeBEuatknBxtiz4PXYk7z_E",
+  "macToPhoneKey": "a9-bgybYiUBxaLSug5YrbcihAdXzTu9OKtr6qgfgAzk",
+  "phoneFrames": [
+    {
+      "plain": "{\"t\":\"challenge\",\"challenge\":\"x\"}",
+      "sealed": "aDuGwnIA0JQkIHNWIwZo2oo6eQ3J3Mg3HnrG4hfM-Pu_X0pXa--KaIJaxVf34wlm1A"
+    },
+    {
+      "plain": "second",
+      "sealed": "NQYAhpe0OdgNdhlc53ZV4bvUaAtBqQ"
+    }
+  ],
+  "macFrames": [
+    {
+      "plain": "{\"t\":\"identity\"}",
+      "sealed": "5GFrCnbuJL8e2fPBsagwE6KiXxXmcIJzzd_psLLEQrI"
+    }
+  ],
+  "macLogin": {
+    "nonce": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU",
+    "message": "mogbot-companion:relay-mac:v1\nBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU\najgD1fBZkCocba-8m6Rykg",
+    "signature": "8JxE2UCEqNhhNSdyBRkRHUvS0ZSjVNme9WKGi_m4DrRri-4FB_eXKUmIWKdEo-vFyJmhWmL0VANAcC1cV5WqCA",
+    "publicKey": "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q"
+  }
+}

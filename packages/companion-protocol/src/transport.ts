@@ -1,10 +1,10 @@
 /**
- * The seam the future relay plugs into.
+ * The seam between the screens and the link.
  *
- * The app's screens talk to a `Transport`, never to a socket. Today there is
- * one implementation, `DirectTransport` (WebSocket + HTTP to a route); a relay
- * becomes a second one carrying the same frames, end-to-end encrypted with the
- * keys exchanged at pairing. Nothing above this interface changes.
+ * The app's screens talk to a `Transport`, never to a socket. `DirectTransport`
+ * carries the same frames over each route: a Tailscale socket and HTTP, or the
+ * relay's socket end to end encrypted to the Mac's pinned key, with HTTP as
+ * frames inside it (docs/relay.md). Nothing above this interface changes.
  */
 
 import type { CompanionEvent } from './events';
@@ -28,12 +28,14 @@ export type LinkState =
       appStuck?: boolean;
       /** As for `reconnecting`. */
       macSaid?: MacSaid;
+      /** As for `reconnecting`. */
+      macOffline?: boolean;
     }
   /**
    * `stuck`: since when a request went unanswered though the Mac's heartbeat
    * still arrives. Its connection is fine; the app on it isn't answering.
    */
-  | { kind: 'connected'; route: RouteKind | 'relay'; since: number; stuck?: number }
+  | { kind: 'connected'; route: RouteKind; since: number; stuck?: number }
   /**
    * Was connected; retrying with backoff. `lastSeenAt` is the last frame from
    * the Mac; `since` as for `connecting`. `macClosing`: the Mac's app said
@@ -59,6 +61,13 @@ export type LinkState =
        * never "can't reach".
        */
       macSaid?: MacSaid;
+      /**
+       * The relay's last answer in this spell was that the Mac isn't
+       * connected to it (close 4404, `RELAY_CLOSE_MAC_OFFLINE`): asleep, off
+       * the internet, or the app closed. Known, not guessed: "Your Mac is
+       * offline", never Tailscale advice.
+       */
+      macOffline?: boolean;
     }
   /** The Mac said no for good: re-pair (revoked) or update a side. */
   | {
@@ -83,8 +92,14 @@ export interface Transport {
     file: { uri: string; name: string; mime: string },
     onProgress?: (fraction: number) => void
   ): Promise<BlobRef>;
-  /** A local file URI for a blob or attachment, downloaded (and cached) on demand. */
-  download(source: { blobId: string } | { agentId: string; path: string }): Promise<string>;
+  /**
+   * A local file URI for a blob or attachment, downloaded (and cached) on
+   * demand. `width` asks for an image attachment's thumbnail (`?w=`).
+   */
+  download(
+    source: { blobId: string } | { agentId: string; path: string },
+    width?: number
+  ): Promise<string>;
   setForeground(foreground: boolean): void;
   close(): void;
 }

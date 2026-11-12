@@ -90,11 +90,21 @@ fn generate_brand() {
         ("STARTER_REPO_BASE", "starterRepoBase"),
         ("COMPANION_SOURCE", "companionSource"),
         ("PUSH_RELAY", "pushRelay"),
+        ("RELAY", "relay"),
     ] {
         let value = opt(&format!("/links/{key}"));
         writeln!(out, "    pub const {name}: Option<&str> = {value:?};").ok();
     }
     writeln!(out, "}}").ok();
+    // The phone relay (docs/relay.md) is `wss://host`: the Mac and the phone
+    // add their own paths to it.
+    if let Some(relay) = opt("/links/relay") {
+        let host = relay.strip_prefix("wss://").unwrap_or("");
+        assert!(
+            !host.is_empty() && !host.contains(['/', '?', '#', '@']),
+            "brand.json: links.relay must be wss://<host> with no path, got {relay}"
+        );
+    }
 
     // The app's Chrome extension (`user_chrome`): its Web Store id once
     // the listing exists. Null keeps it to the unpacked (dev) id only.

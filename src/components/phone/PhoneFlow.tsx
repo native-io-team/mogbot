@@ -39,7 +39,7 @@ import { usePolling } from '../../hooks/usePolling';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { BRAND } from '../../lib/brand';
+import { BRAND, RELAY_ON } from '../../lib/brand';
 import { TAILSCALE_DOWNLOAD_URL } from '../../lib/remoteAccess';
 import {
   GET_ON_TESTFLIGHT,
@@ -97,9 +97,18 @@ export const PHONE_FLOW_STEPS = [
 export type PhoneFlowStep = (typeof PHONE_FLOW_STEPS)[number];
 
 /** Back: the screen before; Allow and Paired go back to the code. */
-export function prevPhoneStep(step: PhoneFlowStep): PhoneFlowStep | null {
+export function prevPhoneStep(step: PhoneFlowStep, relay = RELAY_ON): PhoneFlowStep | null {
   if (step === 'phoneAllow' || step === 'phonePaired') return 'phoneScan';
+  if (relay && step === 'phoneAccess') return 'phoneGetApp';
   return PHONE_FLOW_STEPS[PHONE_FLOW_STEPS.indexOf(step) - 1] ?? null;
+}
+
+/**
+ * After the phone app: Tailscale on this Mac, or, when phones come through
+ * the relay (docs/relay.md), straight to turning phone access on.
+ */
+export function afterGetApp(relay = RELAY_ON): PhoneFlowStep {
+  return relay ? 'phoneAccess' : 'phoneMacTailscale';
 }
 
 /** One screen's parts, for the caller's shell to draw. */
@@ -450,6 +459,11 @@ function useStepView(p: {
   const { step, status, skip, go } = p;
   const access = status ? phoneStep(status) : null;
   const onPhone = p.phones?.find((ph) => ph.online) ?? null;
+  // A saved step from before the relay: its Tailscale screens are passed over now.
+  const passedOver = RELAY_ON && (step === 'phoneMacTailscale' || step === 'phonePhoneTailscale');
+  useEffect(() => {
+    if (passedOver) go('phoneAccess');
+  }, [passedOver, go]);
   // Each check's own "moved on by itself", per screen.
   useAdvanceWhenPassed(
     step === 'phoneMacTailscale' && status?.tailscale.state === 'connected',
@@ -504,7 +518,7 @@ function useStepView(p: {
               <Button
                 variant="secondary"
                 size="large"
-                onClick={() => go('phoneMacTailscale')}
+                onClick={() => go(afterGetApp())}
                 data-flow-have-it
               >
                 {HAVE_PHONE_APP}
@@ -538,7 +552,7 @@ function useStepView(p: {
             )}
           </div>
         ),
-        primary: <Primary onClick={() => go('phoneMacTailscale')}>{HAVE_PHONE_APP}</Primary>,
+        primary: <Primary onClick={() => go(afterGetApp())}>{HAVE_PHONE_APP}</Primary>,
         secondary: skip,
       };
     }

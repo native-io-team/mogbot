@@ -53,6 +53,7 @@ import { PhoneInstallEntry } from './PhoneInstallEntry';
 import {
   PanelStepShell,
   PhoneFlow,
+  afterGetApp,
   prevPhoneStep,
   readPanelStep,
   savePanelStep,
@@ -229,7 +230,7 @@ function PhonePanel({
     flowDecided.current = true;
     if (s.devices.length === 0) {
       autoIssued.current = true;
-      setFlow(readPanelStep() ?? (readInstallRecord() ? 'phoneMacTailscale' : 'phoneGetApp'));
+      setFlow(readPanelStep() ?? (readInstallRecord() ? afterGetApp() : 'phoneGetApp'));
     }
   }, [isOpen, s]);
 
@@ -276,7 +277,7 @@ function PhonePanel({
           const ready = !!s && phoneStep(s).kind === 'ready';
           // The first phone: on into the flow, on the code when it can be shown.
           if (flow || (s && s.devices.length === 0))
-            goFlow(ready ? 'phoneScan' : 'phoneMacTailscale');
+            goFlow(ready ? 'phoneScan' : afterGetApp());
           else if (ready) void pair();
         }}
       />

@@ -63,11 +63,13 @@ export { PairError, type PairFailure, type PairStep };
  */
 export function readLink(text: string): ParsedLink {
   return readPairingLink(text, {
-    allowHost: __DEV__
-      ? (url) => /^https?:\/\/(localhost|127\.0\.0\.1):\d+\/?$/.test(url)
-      : undefined,
+    allowHost: __DEV__ ? isDevHost : undefined,
   });
 }
+
+/** The mock Mac (`https?://`) and the mock relay (`wss?://…/v1/phone/<fingerprint>`) on this machine. */
+export const isDevHost = (url: string) =>
+  /^(https?|wss?):\/\/(localhost|127\.0\.0\.1):\d+(\/v1\/phone\/[A-Za-z0-9_-]{22})?\/?$/.test(url);
 
 export function parseLink(text: string): PairingLink | null {
   const read = readLink(text);
@@ -221,10 +223,12 @@ export const saveCredentials = (c: Credentials) =>
 export const forgetCredentials = () => SecureStore.deleteItemAsync(KEY, STORE_OPTS);
 
 /**
- * P1 connects over Tailscale only. A LAN route needs the pinned-transport
- * native module (P2), and plain fetch can't pin a self-signed certificate.
+ * The relay (docs/relay.md) and Tailscale, in the Mac's order (relay first
+ * when it offers one). A LAN route needs the pinned-transport native module
+ * (P2), and plain fetch can't pin a self-signed certificate.
  */
-export const usableRoutes = (routes: Route[]) => routes.filter((r) => r.kind === 'tailscale');
+export const usableRoutes = (routes: Route[]) =>
+  routes.filter((r) => r.kind === 'tailscale' || r.kind === 'relay');
 
 export const appInfo = () => ({
   version: Application.nativeApplicationVersion ?? '0.0.0',

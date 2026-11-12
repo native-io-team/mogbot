@@ -50,6 +50,7 @@
 
 import type { GuideStepId } from '../../packages/companion-protocol/src/blocks';
 import { SETUP_DEPENDENCIES, type SetupItem } from './setup';
+import { RELAY_ON } from './brand';
 import { describeFailure, type InstallFailure } from './installProgress';
 import {
   assistantName,
@@ -90,6 +91,13 @@ export const FLOW_STEPS = [
 ] as const;
 export type FlowStep = (typeof FLOW_STEPS)[number];
 
+/** Screens passed over: Tailscale's, when phones come through the relay (docs/relay.md). */
+export const isPassedOver = (step: FlowStep, relay = RELAY_ON) =>
+  relay && (step === 'phoneMacTailscale' || step === 'phonePhoneTailscale');
+
+/** The screens shown, in order. */
+const shown = (): FlowStep[] => FLOW_STEPS.filter((s) => !isPassedOver(s));
+
 /**
  * The parts the progress bar shows, then where they lead. The last is never
  * a screen here; it is the Chief's chat, and the bar shows it so the last
@@ -119,7 +127,7 @@ export function sectionOf(step: FlowStep): FlowSection {
 
 /** The screens of one part, in order. */
 export function stepsOf(section: FlowSection): FlowStep[] {
-  return FLOW_STEPS.filter((s) => sectionOf(s) === section);
+  return shown().filter((s) => sectionOf(s) === section);
 }
 
 /**
@@ -142,7 +150,7 @@ export function progressOf(step: FlowStep): {
 
 /** The screen after this one; null after the last, which is the Chief's chat. */
 export function nextStep(step: FlowStep): FlowStep | null {
-  return FLOW_STEPS[FLOW_STEPS.indexOf(step) + 1] ?? null;
+  return FLOW_STEPS.find((s, i) => i > FLOW_STEPS.indexOf(step) && !isPassedOver(s)) ?? null;
 }
 
 /**
@@ -165,7 +173,8 @@ export function prevStep(step: FlowStep): FlowStep | null {
   if (step === 'phoneAllow' || step === 'phonePaired') return 'phoneScan';
   if (step === 'phoneAsk') return 'agentsAsk';
   if (step === 'agentsAsk') return 'engine';
-  return FLOW_STEPS[FLOW_STEPS.indexOf(step) - 1] ?? null;
+  const before = FLOW_STEPS.slice(0, FLOW_STEPS.indexOf(step)).filter((s) => !isPassedOver(s));
+  return before[before.length - 1] ?? null;
 }
 
 // ============ Persistence ============

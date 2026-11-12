@@ -1,0 +1,23 @@
+// The phone-to-Mac relay. Not deployed by this repo: see README.md.
+// No routes or custom domain yet: `wrangler deploy` serves it on workers.dev.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mogbot-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // No Workers Logs: the relay prints nothing about who or what.
+  "observability": { "enabled": false },
+  "durable_objects": {
+    "bindings": [{ "name": "MAC", "class_name": "MacRelay" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MacRelay"] }],
+  // New connections per client address (Mac or phone). Optional: the Worker
+  // runs without it. A phone reconnecting on every app open stays well under.
+  "ratelimits": [
+    {
+      "name": "RATE_LIMITER",
+      "namespace_id": "2001",
+      "simple": { "limit": 60, "period": 60 }
+    }
+  ]
+}

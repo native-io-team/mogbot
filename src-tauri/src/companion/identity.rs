@@ -80,6 +80,22 @@ impl Identity {
         fingerprint_of(self.key.public_key().as_ref())
     }
 
+    /// A key from a fixed 32-byte seed: the relay's test vectors.
+    #[cfg(test)]
+    pub fn from_seed(seed: &[u8; 32]) -> Identity {
+        #[allow(clippy::expect_used)]
+        let key = Ed25519KeyPair::from_seed_unchecked(seed).expect("a 32-byte seed");
+        Identity { key }
+    }
+
+    /// The relay's signatures (`relay/crypto.rs`): each message there starts
+    /// with its own `<scheme>:relay…:v1` line, so none of them can stand in
+    /// for the proofs below, nor those for them.
+    pub(crate) fn prove_relay(&self, message: &str) -> IdentityProof {
+        debug_assert!(message.starts_with(&format!("{PAIRING_SCHEME}:relay")));
+        self.prove(message)
+    }
+
     fn prove(&self, message: &str) -> IdentityProof {
         IdentityProof {
             public_key: self.public_key(),

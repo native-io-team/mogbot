@@ -49,6 +49,11 @@ export interface BrandLinks {
    */
   playStore?: string | null;
   pushRelay: string | null;
+  /**
+   * The relay phones reach this Mac through without Tailscale (`wss://host`,
+   * docs/relay.md). Null (a fork, or a build without one): Tailscale only.
+   */
+  relay?: string | null;
   /** Where the Mac app is downloaded from (the phone's pairing screen links it). */
   macDownload: string | null;
 }
@@ -84,6 +89,13 @@ export interface Brand {
 export const BRAND: Brand = brandJson as Brand;
 
 export const BRAND_LINKS: BrandLinks = BRAND.links;
+
+/**
+ * Phones reach this Mac through the relay, so setting one up needs no
+ * Tailscale: its two Tailscale screens are passed over (Tailscale stays a
+ * fallback route once it's on).
+ */
+export const RELAY_ON = !!BRAND_LINKS.relay;
 
 /** A name for something of ours in a shared namespace: `<slug>-<what>`. */
 export function brandScoped(what: string): string {

@@ -88,6 +88,11 @@ for (const [group, value] of Object.entries({ links: brand.links, telemetry: bra
   }
 }
 
+// The phone relay (docs/relay.md): `wss://host`, the paths are added by each side.
+if (brand.links?.relay != null && !/^wss:\/\/[^/?#@\s]+$/.test(brand.links.relay)) {
+  fail('brand.json: "links.relay" must be wss://<host> with no path, or null');
+}
+
 // --- generated: companion-protocol --------------------------------------------
 const GEN_PATH = 'packages/companion-protocol/src/brand.gen.ts';
 const gen = `// Generated from brand.json by scripts/check-brand.mjs --write. Do not edit.

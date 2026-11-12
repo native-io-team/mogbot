@@ -11,6 +11,9 @@ import {
   pairProofMessage,
   parsePairingLink,
   readPairingLink,
+  isRelayUrl,
+  relayPhoneUrl,
+  RELAY_CLOSE_MAC_OFFLINE,
   type PairingLink,
 } from './index';
 
@@ -103,6 +106,52 @@ describe('pairing links', () => {
       problem: 'other_app',
     });
     expect(readPairingLink(formatPairingLink(link)).ok).toBe(true);
+  });
+
+  // docs/relay.md: the relay route names the Mac it's for, on the brand's relay only.
+  it('takes a relay route only on the relay host and only for the pinned Mac', () => {
+    const fp = link.fingerprint;
+    const relay = (url: string, options = {}) =>
+      parsePairingLink(formatPairingLink({ ...link, routes: [{ kind: 'relay', url }] }), {
+        relayHost: 'relay.example.app',
+        ...options,
+      });
+    expect(relay(`wss://relay.example.app/v1/phone/${fp}`)).not.toBeNull();
+    expect(relay(`wss://relay.example.app:8443/v1/phone/${fp}`)).not.toBeNull();
+    // Only as the Mac writes it: nothing the URL parser would have to tidy.
+    expect(relay(`wss://Relay.Example.App:443/v1/phone/${fp}`)).toBeNull();
+    // Another Mac's slot, another host, not TLS, extra bits: never.
+    expect(relay(`wss://relay.example.app/v1/phone/AAAAAAAAAAAAAAAAAAAAAA`)).toBeNull();
+    expect(relay(`wss://attacker.example/v1/phone/${fp}`)).toBeNull();
+    expect(relay(`ws://relay.example.app/v1/phone/${fp}`)).toBeNull();
+    expect(relay(`wss://relay.example.app/v1/phone/${fp}?x=1`)).toBeNull();
+    expect(relay(`wss://u@relay.example.app/v1/phone/${fp}`)).toBeNull();
+    expect(relay(`wss://relay.example.app/v1/mac/${fp}`)).toBeNull();
+    expect(relay(`wss://relay.example.app/v1/x/../phone/${fp}`)).toBeNull();
+    // A build with no relay takes none, except the dev mock when asked for.
+    expect(relay(`wss://relay.example.app/v1/phone/${fp}`, { relayHost: null })).toBeNull();
+    expect(
+      relay(`ws://localhost:4000/v1/phone/${fp}`, {
+        relayHost: null,
+        allowHost: (u: string) => u.startsWith('ws://localhost:'),
+      })
+    ).not.toBeNull();
+    // Still exactly one route.
+    const both = {
+      ...link,
+      routes: [link.routes[0], { kind: 'relay', url: `wss://relay.example.app/v1/phone/${fp}` }],
+    } as PairingLink;
+    expect(
+      parsePairingLink(formatPairingLink(both), { relayHost: 'relay.example.app' })
+    ).toBeNull();
+    expect(isRelayUrl(`wss://relay.example.app/v1/phone/${fp}`, fp, { relayHost: null })).toBe(
+      false
+    );
+    expect(relayPhoneUrl(fp, 'https://relay.example.app')).toBe(
+      `wss://relay.example.app/v1/phone/${fp}`
+    );
+    expect(relayPhoneUrl(fp, null)).toBeNull();
+    expect(RELAY_CLOSE_MAC_OFFLINE).toBe(4404);
   });
 
   // The confirm screen shows one host: a second, unshown route could be anyone's.

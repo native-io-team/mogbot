@@ -8,6 +8,7 @@ export * from './methods';
 export * from './events';
 export * from './frames';
 export * from './pairing';
+export * from './relay';
 export * from './pairWords';
 export { APP_NAME, MAC_DOWNLOAD_URL, SOURCE_URL, TAILNET_HTTPS_PORT } from './brand.gen';
 export * from './transport';
