@@ -138,9 +138,11 @@ The full runbook, with a check for every step, is
 - A paid **Claude plan (Pro or Max)** for Claude Code, or a paid **ChatGPT
   plan** for Codex, or both. Or **OpenCode**, with any provider you set up in
   it (an API key, or a model served on this Mac)
-- For the phone: an iPhone (or Android phone) and a free **Tailscale** account,
-  signed in on the Mac **and** the phone with the same account before you scan
-  the pairing code
+- For the phone: an iPhone (or Android phone). Sign in on the Mac (a free
+  account, Google or email) and the phone reaches it from anywhere through our
+  relay, end to end encrypted. Or skip the account and use a free **Tailscale**
+  account, signed in on the Mac **and** the phone with the same account before
+  you scan the pairing code. What's hosted and what's free: [docs/OPEN-AND-HOSTED.md](docs/OPEN-AND-HOSTED.md)
 
 **Easiest:** open this folder in Claude Code or Codex and say:
 
@@ -237,6 +239,7 @@ run side by side. You can copy Ship Studio's agents in from Agents → Import.
 - [docs/WELCOME.md](docs/WELCOME.md): for invited testers, what to expect
 - [docs/INSTALL.md](docs/INSTALL.md): the setup runbook your agent follows
 - [docs/MISSION.md](docs/MISSION.md): why it exists and the rules that follow
+- [docs/OPEN-AND-HOSTED.md](docs/OPEN-AND-HOSTED.md): what's free and open, and the few services Native hosts
 - [docs/ROADMAP.md](docs/ROADMAP.md): what's done and what's next
 - [docs/agents.md](docs/agents.md): agents, approvals, routines, memory, engines
 - [docs/mobile.md](docs/mobile.md): the phone app and pairing

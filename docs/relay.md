@@ -22,8 +22,9 @@ The Mac proves its key to the relay too (a signed challenge), so nobody else can
 
 ### Accounts: what unlocks our hosted services
 
-The first screen offers **Continue with Google**, **Continue with email**, or **Use without signing
-in**. Signing in unlocks what we host (the relay now; push notifications and anything later).
+The screen after Welcome asks **Sign in?** (one button; the page that opens offers Google or email) or **Use without signing
+in**. Signing in lets this Mac use the phone relay we host. Push notifications need no account.
+Nothing in the app checks the account: only our servers do (docs/OPEN-AND-HOSTED.md).
 Without signing in, everything that runs on your own machines still works: the phone over your own
 Tailscale, exactly as before. Forks and self-hosters never need our accounts.
 

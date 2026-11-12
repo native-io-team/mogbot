@@ -93,10 +93,13 @@ nothing should block a future headless, always-on host.
 
 - **Not a coding tool.** T3 Code and its kind are for developers — "code" is
   in the name. Code is one thing agents do here, not the point.
-- **Not an infrastructure company.** We don't build our own models, clouds,
-  relays or runtimes when the best ones already exist. We stand on Claude
-  Code, Codex, git, Tailscale and the user's own machine, and spend our
-  effort on the experience.
+- **Not an infrastructure company.** We don't build our own models, clouds
+  or runtimes when the best ones already exist. We stand on Claude Code,
+  Codex, git and the user's own machine, and spend our effort on the
+  experience. The few servers we do run (the phone relay, the push relay)
+  exist only where a server someone pays for is unavoidable, each with a
+  route that doesn't need us (Tailscale, or your own copy from this repo),
+  and an account only says who may use them: [OPEN-AND-HOSTED.md](OPEN-AND-HOSTED.md).
 
 ## How it's built
 
