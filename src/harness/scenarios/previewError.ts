@@ -54,7 +54,7 @@ export const previewErrorScenarios: Scenario[] = [
     looksRightWhen:
       'A card at the bottom of the preview, outside the iframe, reads "Send this error to the agent?" and shows ' +
       'the error text verbatim but with no escape sequence: the last line reads "[201~" then the curl command on ' +
-      'its own line, never a raw ESC. "Send to Claude Code · …" names the agent tab; nothing has been sent.',
+      'its own line, never a raw ESC. "Send to Claude Code · …" names the agent tab (or the agent chat open in the project); nothing has been sent.',
     project: WORKSPACE_PROJECT,
     requires: '[data-testid="preview-error-agent-chip"]',
     clipSelector: '.preview-container',

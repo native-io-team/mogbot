@@ -172,7 +172,7 @@ pub fn extract_error_message(html: &str) -> String {
     }
 
     // Fallback
-    "The dev server returned an error. Check the terminal for details.".to_string()
+    "The dev server returned an error. The full log is in the dev server panel.".to_string()
 }
 
 /// Strip HTML tags from a string, leaving only text content.
@@ -226,50 +226,55 @@ fn build_overlay_panel(
     format!(
         r#"<style>
 body{{display:block!important;visibility:visible!important;opacity:1!important}}
-.__ss-err-overlay{{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;background:#1e1e1e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#ccc;display:flex;align-items:center;justify-content:center;padding:24px}}
-.__ss-err-panel{{max-width:680px;width:100%;background:#252526;border:1px solid #3c3c3c;border-radius:12px;overflow:hidden}}
-.__ss-err-header{{display:flex;align-items:center;gap:10px;padding:16px 20px;background:#2d2d2d;border-bottom:1px solid #3c3c3c}}
-.__ss-err-badge{{background:#f44747;color:#fff;font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px}}
-.__ss-err-title{{font-size:14px;font-weight:600;color:#ccc}}
-.__ss-err-body{{padding:20px;max-height:400px;overflow-y:auto}}
-.__ss-err-intro{{font-size:13px;line-height:1.6;color:#9d9d9d;margin-bottom:14px}}
-.__ss-err-msg{{font-family:'SF Mono',Monaco,'Cascadia Code',monospace;font-size:13px;line-height:1.6;color:#d4d4d4;white-space:pre-wrap;word-break:break-word;background:#1e1e1e;padding:16px;border-radius:8px;border:1px solid #3c3c3c}}
-.__ss-err-hint{{margin-top:16px;font-size:12px;color:#6d6d6d;text-align:center}}
-.__ss-err-footer{{display:flex;gap:8px;padding:16px 20px;border-top:1px solid #3c3c3c;justify-content:flex-end}}
-.__ss-err-btn{{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;border:1px solid #3c3c3c;background:#2d2d2d;color:#ccc;font-size:12px;font-weight:500;cursor:pointer;transition:background 0.15s}}
-.__ss-err-btn:hover{{background:#3c3c3c}}
-.__ss-err-btn--primary{{background:#D97757;border-color:#D97757;color:#fff}}
-.__ss-err-btn--primary:hover{{background:#C4684A}}
+.__ss-err-overlay{{--e-app:#f4f2ee;--e-panel:#fdfcfa;--e-recessed:#f4f2ee;--e-border:#e9e6e0;--e-text:#1c1c1c;--e-text2:#55524b;--e-muted:#6b675f;--e-ctl:#fdfcfa;--e-ctl-hover:#e9e6e0;--e-ctl-border:#dad6ce;--e-strong:#1c1c1c;--e-strong-hover:#403d39;--e-on-strong:#fff;--e-err:#cf222e;--e-err-tint:rgba(207,34,46,.1)}}
+@media (prefers-color-scheme:dark){{.__ss-err-overlay{{--e-app:#151413;--e-panel:#1c1b19;--e-recessed:#151413;--e-border:#31302d;--e-text:#d6d2ca;--e-text2:#a29d95;--e-muted:#8a857e;--e-ctl:#292725;--e-ctl-hover:#31302d;--e-ctl-border:#4f4c48;--e-strong:#f4f2ee;--e-strong-hover:#fff;--e-on-strong:#151413;--e-err:#f47067;--e-err-tint:rgba(244,71,71,.14)}}}}
+.__ss-err-overlay{{position:fixed;inset:0;z-index:2147483647;background:var(--e-app);font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,sans-serif;color:var(--e-text);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;-webkit-font-smoothing:antialiased}}
+.__ss-err-overlay *{{box-sizing:border-box}}
+.__ss-err-panel{{max-width:640px;width:100%;background:var(--e-panel);border:1px solid var(--e-border);border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.08)}}
+.__ss-err-header{{display:flex;align-items:center;gap:10px;padding:16px 20px 0}}
+.__ss-err-badge{{display:inline-flex;align-items:center;gap:5px;background:var(--e-err-tint);color:var(--e-err);font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;font-variant-numeric:tabular-nums}}
+.__ss-err-badge::before{{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}}
+.__ss-err-title{{font-size:14px;font-weight:600;color:var(--e-text)}}
+.__ss-err-body{{padding:14px 20px 4px;max-height:60vh;overflow-y:auto}}
+.__ss-err-intro{{font-size:13px;line-height:1.55;color:var(--e-text2);margin-bottom:12px}}
+.__ss-err-intro code{{font-family:'SF Mono',Monaco,'JetBrains Mono',monospace;font-size:12px}}
+.__ss-err-msg{{font-family:'SF Mono',Monaco,'JetBrains Mono',monospace;font-size:12px;line-height:1.6;color:var(--e-text);white-space:pre-wrap;word-break:break-word;background:var(--e-recessed);padding:12px 14px;border-radius:8px;border:1px solid var(--e-border)}}
+.__ss-err-hint{{margin-top:10px;font-size:12px;color:var(--e-muted)}}
+.__ss-err-footer{{display:flex;gap:8px;padding:14px 20px 16px;justify-content:flex-end}}
+.__ss-err-btn{{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--e-ctl-border);background:var(--e-ctl);color:var(--e-text);font:500 12px/1 inherit;font-family:inherit;cursor:pointer;transition:background .12s}}
+.__ss-err-btn:hover{{background:var(--e-ctl-hover)}}
+.__ss-err-btn:focus-visible{{outline:1.5px solid var(--e-text);outline-offset:2px}}
+.__ss-err-btn--primary{{background:var(--e-strong);border-color:var(--e-strong);color:var(--e-on-strong)}}
+.__ss-err-btn--primary:hover{{background:var(--e-strong-hover)}}
 </style>
-<div class="__ss-err-overlay"><div class="__ss-err-panel">
+<div class="__ss-err-overlay"><div class="__ss-err-panel" role="alert">
 <div class="__ss-err-header"><span class="__ss-err-badge">{status_code}</span><span class="__ss-err-title">{title}</span></div>
 <div class="__ss-err-body">{intro_html}<div class="__ss-err-msg">{escaped_message}</div><div class="__ss-err-hint">{hint}</div></div>
-<div class="__ss-err-footer"><button class="__ss-err-btn" id="__ss-err-copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy Error</button><button class="__ss-err-btn __ss-err-btn--primary" id="__ss-err-send">Send to Claude</button></div>
+<div class="__ss-err-footer"><button class="__ss-err-btn" id="__ss-err-copy">Copy error</button><button class="__ss-err-btn __ss-err-btn--primary" id="__ss-err-send">Send to agent</button></div>
 </div></div>
 <script>(function(){{
 var msg={js_escaped};
 window.parent.postMessage({{type:'shipstudio:error',status:{status_code},message:msg}},'*');
 document.getElementById('__ss-err-copy').onclick=function(){{
 window.parent.postMessage({{type:'shipstudio:copy-error',message:msg}},'*');
-this.textContent='Copied!';var b=this;setTimeout(function(){{b.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy Error'}},1500)
+var b=this;b.textContent='Copied';setTimeout(function(){{b.textContent='Copy error'}},1500)
 }};
 document.getElementById('__ss-err-send').onclick=function(){{
 window.parent.postMessage({{type:'shipstudio:send-error-to-claude',message:msg}},'*')
-}};
 }})()</script>"#,
     )
 }
 
 /// Build a self-contained error overlay (HTML/CSS/JS) for 5xx responses.
 /// Forces body visible (overrides Next.js FOUC prevention), shows a styled error panel,
-/// and sends a postMessage to the parent so Ship Studio can log the error.
+/// and sends a postMessage to the parent so the app can log the error.
 pub fn build_error_overlay(status_code: u16, error_message: &str) -> String {
     build_overlay_panel(
         status_code,
-        "Dev Server Error",
+        "The dev server returned an error",
         None,
         error_message,
-        "Check the terminal for full error details",
+        "The full log is in the dev server panel.",
     )
 }
 
@@ -465,7 +470,7 @@ mod tests {
     fn test_extract_error_fallback() {
         let html = r#"<html><body></body></html>"#;
         let msg = extract_error_message(html);
-        assert!(msg.contains("Check the terminal"));
+        assert!(msg.contains("dev server panel"));
     }
 
     #[test]
@@ -524,8 +529,13 @@ mod tests {
     fn test_error_overlay_keeps_dev_server_title_and_no_intro() {
         // The generalized panel builder must not change the 5xx overlay.
         let overlay = build_error_overlay(500, "boom");
-        assert!(overlay.contains("Dev Server Error"));
+        assert!(overlay.contains("The dev server returned an error"));
         assert!(!overlay.contains(r#"<div class="__ss-err-intro">"#));
+        // The app's own look: light and dark, no Claude-orange, a neutral answer.
+        assert!(overlay.contains("prefers-color-scheme:dark"));
+        assert!(!overlay.contains("D97757"));
+        assert!(overlay.contains("Send to agent"));
+        assert!(!overlay.contains("Send to Claude"));
     }
 
     #[test]

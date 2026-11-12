@@ -3,6 +3,7 @@ import type { TerminalHandle } from '../components/terminal/Terminal';
 import type { TerminalTab } from '../hooks/useTerminalManagement';
 import type { CommentAgent } from './canvasComments';
 import { getAgentById, TERMINAL } from './agent';
+import { composerDraft, setComposerDraft } from './composerDraft';
 
 export function commentAgents(
   projectPath: string,
@@ -30,4 +31,29 @@ export function commentAgents(
       await terminal.pastePrompt(prompt);
     },
   }));
+}
+
+/**
+ * The agent whose chat the project's Session panel shows (`lib/sessionAgentChat`),
+ * as a target: the text lands in that chat's composer, appended to whatever is
+ * already typed, never sent. It leads the list and counts as active, because
+ * when an agent chat is open it is what the user is working with.
+ */
+export function chatAgentTarget(
+  agentId: string,
+  name: string,
+  setHidden: (hidden: boolean) => void
+): CommentAgent {
+  return {
+    id: -1,
+    label: name,
+    isAgent: true,
+    isActive: true,
+    send: (prompt: string) => {
+      const before = composerDraft(agentId).trimEnd();
+      setComposerDraft(agentId, before ? `${before}\n\n${prompt}` : prompt);
+      setHidden(false);
+      return Promise.resolve();
+    },
+  };
 }

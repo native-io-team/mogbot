@@ -1,4 +1,5 @@
-import { commentAgents } from '../../lib/commentAgents';
+import { chatAgentTarget, commentAgents } from '../../lib/commentAgents';
+import { agentIn, useAgentsList } from '../../lib/agentsStore';
 import type { WorkspaceViewProps } from './workspaceViewTypes';
 export type { WorkspaceViewProps } from './workspaceViewTypes';
 /**
@@ -640,7 +641,13 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
   }, [currentProject.path, registryVersion]);
 
   // One agent list for both the Team panel's handoff and the preview's pins.
-  const agentsForComments = commentAgents(currentProject.path, terminal, tabTitles, setIsAgentPanelHidden); // prettier-ignore
+  const terminalAgents = commentAgents(currentProject.path, terminal, tabTitles, setIsAgentPanelHidden); // prettier-ignore
+  // The agent chat open in the Session panel takes notes and errors too, ahead of the terminals.
+  const agentsList = useAgentsList();
+  const chatAgent = chatAgentId ? agentIn(agentsList, chatAgentId) : undefined;
+  const agentsForComments = chatAgent
+    ? [chatAgentTarget(chatAgent.id, chatAgent.name, setIsAgentPanelHidden), ...terminalAgents]
+    : terminalAgents;
   const team = useWorkspaceComments({
     project: currentProject,
     agents: agentsForComments,

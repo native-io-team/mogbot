@@ -29,7 +29,10 @@ Opening a project opens its workspace:
 - **Sessions:** Claude Code, Codex or OpenCode working in the project, in tabs or side by side.
   Sessions stay running when you switch between projects.
 - **Live preview:** your site as it runs, with device sizes, zoom and full screen. **Every
-  breakpoint** shows every device size at once, each page in full.
+  breakpoint** shows every device size at once, each page in full. When the dev server returns an
+  error, the preview shows it with **Copy error** and **Send to agent**. Send to agent asks first,
+  then puts the error in the composer of the agent chat open in the project (or an agent tab) for
+  you to send.
 - **Panels:** every panel can be docked anywhere, floated, or moved. The layout is remembered per
   project.
 - **Mobile apps:** Expo, React Native and Flutter apps build and show in the iOS Simulator.
