@@ -115,6 +115,20 @@ pub const TOOLS: &[Def] = &[
         },
     },
     Def {
+        name: "report_problem",
+        description: "Send a problem with this app to the people who make it, when the user tells you something in the app is broken or wrong (\"this is broken\", \"report this\", \"the phone keeps dropping\") and wants it reported. Write `title` (what's wrong, one line) and `details` (what they did, what happened, what they expected, how often, in their words; ask one short question first if you can't say what happened). Never put in names, emails, keys, file contents or anything private: it may become a public GitHub issue. The user sees the exact text on a card and sends it. Only on the user's own message.",
+        schema: || {
+            json!({
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string", "description": "One line: what's wrong." },
+                    "details": { "type": "string", "description": "What they did, what happened, what they expected, how often." }
+                },
+                "required": ["title", "details"]
+            })
+        },
+    },
+    Def {
         name: "free_up_space",
         description: "Free disk space in agents' own folders when the user asks (or disk is low and they agree): removes only dependency and build folders that rebuild themselves (node_modules, .next, .turbo, target), never a project, a report or anything git tracks. `agent`: a name, or \"everyone\". An agent working now is skipped. Applies at once with a line.",
         schema: || {
@@ -277,8 +291,57 @@ pub async fn call(
             bring_agents_over(app, args).await
         }
         "open_settings" => open_settings(app, caller, args),
+        "report_problem" => {
+            if !super::runner::answering_user(&caller.id) {
+                return error(NOT_THE_USERS);
+            }
+            report_problem(app, caller, args).await
+        }
         "share_recipe" => share_recipe(app, args),
         _ => error("Unknown tool"),
+    }
+}
+
+/// The card's words for a problem report: exactly what will be sent.
+pub fn problem_card_detail(title: &str, details: &str) -> String {
+    format!(
+        "{title}\n\n{details}\n\nGoes to the people who make the app, with this app's version and your Mac's system (macOS, chip). It may become a public GitHub issue."
+    )
+}
+
+/// A problem the user asked to report: one card with its exact text, then
+/// the same endpoint automatic error reports use (`error_reporting`).
+async fn report_problem(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    let (Some(title), Some(details)) = (arg(args, "title"), arg(args, "details")) else {
+        return error("`title` and `details` are required.");
+    };
+    let answer = super::mcp::ask_user(
+        app,
+        caller,
+        "Send this problem report?".to_string(),
+        problem_card_detail(title, details),
+        None,
+    )
+    .await;
+    if let Some(refused) = super::mcp::refused_reply(&answer, "send it") {
+        return error(refused);
+    }
+    use crate::error_reporting::{send_user_report, UserReportOutcome};
+    match send_user_report(title, details).await {
+        UserReportOutcome::Sent { issue_url: Some(url) } => {
+            said(app, caller, "report_problem", &format!("Problem report sent: {url}"));
+            text(format!("Sent. It's tracked at {url}. Tell the user in one line, with the link."))
+        }
+        UserReportOutcome::Sent { issue_url: None } => {
+            said(app, caller, "report_problem", "Problem report sent");
+            text("Sent. The people who make the app have it; an issue may follow once they've looked. Tell the user in one line.")
+        }
+        UserReportOutcome::Off => error(
+            "This copy of the app can't send reports (a build from source without the report key). Tell the user, and offer the text so they can file it themselves.",
+        ),
+        UserReportOutcome::Failed => error(
+            "It didn't go through (the network or the report service). Tell the user in one line; they can ask you to try again.",
+        ),
     }
 }
 

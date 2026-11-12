@@ -194,6 +194,16 @@ The app tells you what will and won't keep running.
 - **Next to cloud agent services:** nothing runs on our servers, and nothing
   is stored there. The trade-off is that your Mac has to be on.
 
+## Something broken?
+
+Tell your Chief of Staff, in your own words ("the phone keeps dropping",
+"this button does nothing"). It writes the problem up, shows you exactly what
+will be sent, and on your OK sends it to us; an agent of ours checks it against
+the code and files or links the GitHub issue. Crashes and errors are reported
+the same way automatically, scrubbed of anything personal, unless you turn
+off "Usage analytics & error reports" in Settings → Advanced. Or
+[open an issue](https://github.com/native-io-team/mogbot/issues) yourself.
+
 ## Security
 
 Agents run with edits allowed and everything else routed through an approval

@@ -683,6 +683,58 @@ pub fn report_error(message: &str, stack: Option<&str>, source: &str, fingerprin
     });
 }
 
+/// How a problem report the user asked for went (`send_user_report`).
+#[derive(Debug, PartialEq, Eq)]
+pub enum UserReportOutcome {
+    /// The endpoint took it; `issue_url` only when it returned a valid one.
+    Sent { issue_url: Option<String> },
+    /// This build sends no reports (no endpoint or secret, or a dev build).
+    Off,
+    /// It didn't go: the network, or the endpoint said no.
+    Failed,
+}
+
+/// Longest problem description sent, in characters.
+const MAX_USER_REPORT_CHARS: usize = 6000;
+
+/// The body of a problem report the user asked for, in their words: scrubbed
+/// like every report (home paths), its text capped, `source: user-report`.
+fn user_report_body(title: &str, details: &str) -> serde_json::Value {
+    let details: String = details.chars().take(MAX_USER_REPORT_CHARS).collect();
+    let mut body = build_body(&format!("User report: {title}"), None, "user-report", None);
+    body["context"]["details"] = json!(scrub_string(&details));
+    body
+}
+
+/// Send a problem report the user asked for in chat, after they saw its exact
+/// text on a card (`report_problem`). Unlike automatic reports it isn't held
+/// by the usage-and-error-reports switch, the session dedup or the daily cap:
+/// the user chose to send this one. Same endpoint, secret and scrubbing.
+pub async fn send_user_report(title: &str, details: &str) -> UserReportOutcome {
+    if !reporting_build_enabled() {
+        return UserReportOutcome::Off;
+    }
+    let Some(secret) = secret() else {
+        return UserReportOutcome::Off;
+    };
+    if ENDPOINT.is_none() {
+        return UserReportOutcome::Off;
+    }
+    match post(secret, user_report_body(title, details)).await {
+        Some(accepted) => {
+            if let Some(path) = receipt_ledger_path() {
+                let now = chrono::Utc::now();
+                let receipt = make_receipt("user-report", title, accepted.issue_url.clone(), now);
+                persist_receipt(&path, receipt, now);
+            }
+            UserReportOutcome::Sent {
+                issue_url: accepted.issue_url,
+            }
+        }
+        None => UserReportOutcome::Failed,
+    }
+}
+
 /// Cap on how much captured backtrace ships with a panic report. Backtraces
 /// from release builds are mostly hex frames plus a handful of symbolized
 /// ones — the useful part is at the top, and reports can end up in public
@@ -1085,6 +1137,21 @@ pub fn get_automatic_report_status() -> Result<AutomaticReportStatus, crate::err
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_user_report_is_scrubbed_capped_and_marked_as_theirs() {
+        let home = dirs::home_dir().unwrap().to_string_lossy().to_string();
+        let long = "x".repeat(super::MAX_USER_REPORT_CHARS + 50);
+        let body = super::user_report_body(
+            "The phone drops",
+            &format!("It said {home}/Desktop/secret.txt. {long}"),
+        );
+        assert_eq!(body["source"], "user-report");
+        assert_eq!(body["message"], "User report: The phone drops");
+        let details = body["context"]["details"].as_str().unwrap();
+        assert!(!details.contains(&home), "home path left in: {details}");
+        assert!(details.chars().count() <= super::MAX_USER_REPORT_CHARS);
+    }
+
     #[test]
     fn a_slicing_panic_never_carries_the_string() {
         let text = "Finance works from our İstanbul office. password: hunter22";
