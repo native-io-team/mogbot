@@ -171,7 +171,8 @@ jobs:
         run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -A clippy::uninlined_format_args
 
       - name: Run tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        # --lib --bins --tests: the examples are Mac-only dev drivers (the Keychain, Unix sockets).
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib --bins --tests
 
       # The vendored PTY plugin is a path dependency, not a workspace member,
       # so the run above compiles it but never runs its tests. It owns the

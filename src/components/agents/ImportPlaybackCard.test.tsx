@@ -68,7 +68,11 @@ describe('ImportPlaybackCard', () => {
     await waitFor(() =>
       expect(answer).toHaveBeenCalledWith('chief', 'r1', 'It also pays rent on the 1st')
     );
-    fireEvent.click(screen.getByRole('button', { name: 'That’s everything' }));
+    // The card is busy until the first answer settles; on a slow runner a click
+    // before then lands on a disabled button and is dropped.
+    const everything = screen.getByRole('button', { name: 'That’s everything' });
+    await waitFor(() => expect(everything).toBeEnabled());
+    fireEvent.click(everything);
     await waitFor(() => expect(answer).toHaveBeenLastCalledWith('chief', 'r1', undefined));
   });
 
