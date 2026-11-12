@@ -70,6 +70,8 @@ export interface Prefs {
   textSize: TextSize;
   /** Settings → Voice: a voice message (the held mic) sends its audio to the Mac too. Off: words only. */
   voiceRecording: boolean;
+  /** Settings → Error reports: this phone's crashes go to the Mac to report (lib/crash.ts `sendCrashes`). */
+  errorReports: boolean;
 }
 
 export const defaultPrefs: Prefs = {
@@ -77,6 +79,7 @@ export const defaultPrefs: Prefs = {
   appearance: 'system',
   textSize: 'default',
   voiceRecording: false,
+  errorReports: true,
 };
 
 export const useApp = create<AppState>(() => ({

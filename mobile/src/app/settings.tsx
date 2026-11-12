@@ -82,6 +82,8 @@ export default function Settings() {
   const hapticsSwitch = useSwitchColors(haptics);
   const voiceRecording = useApp((s) => s.prefs.voiceRecording);
   const recordingSwitch = useSwitchColors(voiceRecording);
+  const errorReports = useApp((s) => s.prefs.errorReports);
+  const reportsSwitch = useSwitchColors(errorReports);
   const push = useApp((s) => s.push);
   // An official build that can't be woken (Android without Firebase) says only what arrives while open.
   const pushInfo =
@@ -383,6 +385,24 @@ export default function Settings() {
               onValueChange={(on) => setPref('voiceRecording', on)}
               {...recordingSwitch}
               accessibilityLabel="Attach the recording to voice messages"
+            />
+          }
+          last
+        />
+      </Section>
+
+      <Section
+        title="Error reports"
+        footer={`When this app crashes or hits an error, ${macName} sends the details to the people who make it, scrubbed of anything personal, so they can fix it. Nothing about what you do in the app is sent. ${macName} has its own switch in Settings → Advanced.`}
+      >
+        <Row
+          label="Send error reports"
+          trailing={
+            <Switch
+              value={errorReports}
+              onValueChange={(on) => setPref('errorReports', on)}
+              {...reportsSwitch}
+              accessibilityLabel="Send error reports"
             />
           }
           last

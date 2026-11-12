@@ -240,7 +240,7 @@ function connect(c: Credentials) {
     if (!roomsOffered(welcome)) setApp({ rooms: null });
     if (!canCall('agents.teamSetup', welcome)) setApp({ teamSetup: null });
     if (canCall('devices.setPush', welcome)) void syncPush();
-    if (canCall('system.reportCrashes', welcome)) {
+    if (canCall('system.reportCrashes', welcome) && getApp().prefs.errorReports) {
       void sendCrashes((crashes) =>
         call('system.reportCrashes', {
           crashes,
