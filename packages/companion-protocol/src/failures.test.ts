@@ -55,6 +55,12 @@ describe('failure words', () => {
     expect(failureFixAtMac('install', 'Codex')).toBe(
       'Install Codex on your computer, then send it again.'
     );
+    expect(failureFixAtMac('install', 'Codex', 'mac')).toBe(
+      'Install Codex on your Mac, then send it again.'
+    );
+    expect(failureFixAtMac('install', 'Codex', 'pc')).toBe(
+      'Install Codex on your PC, then send it again.'
+    );
     expect(failureFixAtMac('retry', 'Codex')).toBeNull();
   });
 

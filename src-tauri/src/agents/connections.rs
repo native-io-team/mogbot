@@ -136,7 +136,8 @@ impl Connection {
             Kind::Oauth { .. } => concat!(
                 "Signed in on this ",
                 crate::computer::noun!(),
-                "; the token is in its Keychain"
+                "; the token is in ",
+                crate::keychain::store_name!()
             ),
             Kind::ClaudeAi { .. } => "Connected on claude.ai; the sign-in is held there",
             Kind::Gh => concat!("GitHub CLI sign-in on this ", crate::computer::noun!()),

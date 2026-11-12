@@ -837,7 +837,11 @@ fn as_read(s: &str) -> String {
 }
 
 /// A form whose title or button asks for a secret.
-const SECRET_FORM: &str = "this form asks for a secret (a password, a key, a token or a one-time code). Never in a form: an API key or token is request_secret (a masked card, into the Keychain); an account is request_login; a code for a site is the user's to type there (ask_user_to_step_in).";
+const SECRET_FORM: &str = concat!(
+    "this form asks for a secret (a password, a key, a token or a one-time code). Never in a form: an API key or token is request_secret (a masked card, into ",
+    crate::keychain::store_name!(),
+    "); an account is request_login; a code for a site is the user's to type there (ask_user_to_step_in)."
+);
 
 /// Secrets spelled as one run of letters, whatever sits between them
 /// ("p.a.s.s.w.o.r.d", "api_key", "one-time-code").
@@ -1223,8 +1227,9 @@ fn check_form(f: &mut Form) -> Result<(), String> {
         );
         if asks_for_secret(&hint) {
             return Err(format!(
-                "fields[{i}] (\"{}\") asks for a secret. Never in a form: an API key or token is request_secret (a masked card, into the Keychain); an account is request_login.",
-                field.label.trim()
+                "fields[{i}] (\"{}\") asks for a secret. Never in a form: an API key or token is request_secret (a masked card, into {}); an account is request_login.",
+                field.label.trim(),
+                crate::keychain::STORE_NAME
             ));
         }
         if field.id.trim().is_empty() {

@@ -18,6 +18,7 @@ export const systemStatus = {
     "signedIn": "unknown",
     "version": "2.1.0"
   },
+  "computer": "mac",
   "name": "Julian’s MacBook Pro",
   "power": {
     "batteryPercent": 64,
@@ -6506,6 +6507,7 @@ export const frames = [
       "type": "system.status",
       "status": {
         "name": "Julian’s MacBook Pro",
+        "computer": "mac",
         "appVersion": "1.7.0",
         "power": {
           "keepAwake": true,
@@ -6920,6 +6922,7 @@ export const frames = [
       },
       "status": {
         "name": "Julian’s MacBook Pro",
+        "computer": "mac",
         "appVersion": "1.7.0",
         "power": {
           "keepAwake": true,

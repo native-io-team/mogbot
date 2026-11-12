@@ -7,7 +7,9 @@
 //! spawned terminals/processes.
 //!
 //! Credentials (Vercel/Figma/OpenAI tokens, git identity) are stored in the
-//! macOS Keychain via the `security` CLI — values never leave the Rust layer.
+//! system's secret store (`crate::keychain`: the macOS Keychain, Windows
+//! Credential Manager, the Linux Secret Service) — values never leave the
+//! Rust layer.
 //! Claude Code and GitHub CLI logins are isolated via `CLAUDE_CONFIG_DIR` /
 //! `GH_CONFIG_DIR`, each pointed at a per-account directory under
 //! `~/.<slug>/accounts/<id>/`.
@@ -111,25 +113,15 @@ pub fn validate_account_id(account_id: &str) -> Result<(), CommandError> {
     }
 }
 
-// ============ Keychain helpers (macOS `security` CLI) ============
+// ============ Secret store helpers ============
 //
-// The vault is macOS-only. Everything below shells out to `security`, which
-// exists on no other platform, so on Windows and Linux a workspace credential
-// save failed with "Keychain write failed: program not found" — a message that
-// describes a missing binary rather than a missing feature, and that was filed
-// as a malfunction every time (issue #922).
-//
-// Making it *work* elsewhere is a real piece of work with a real decision in
-// it: Windows means the Credential Manager through the Win32 API (no CLI can
-// read a secret back), Linux means Secret Service over D-Bus, which is not
-// present on a headless box or under WSL. Until that is decided, the honest
-// behaviour is to say so — a workspace's credentials are simply not stored on
-// this platform, which is a limitation the user can act on (use the default
-// workspace, or sign in with the provider's own CLI) rather than a bug for
-// them to report.
+// Every secret goes through `crate::keychain`: the login Keychain on macOS,
+// Windows Credential Manager on Windows, the Secret Service on Linux
+// (GNOME Keyring, KWallet). Where none of those exists (another platform) the
+// honest behaviour is to say so rather than fail like a bug (issue #922).
 
 /// Whether this platform has a credential vault behind these helpers.
-const KEYCHAIN_SUPPORTED: bool = cfg!(target_os = "macos");
+const KEYCHAIN_SUPPORTED: bool = crate::keychain::SUPPORTED;
 
 /// The refusal used everywhere the vault is asked for and isn't there.
 ///
@@ -137,8 +129,8 @@ const KEYCHAIN_SUPPORTED: bool = cfg!(target_os = "macos");
 /// with a user-side course of action, not something going wrong.
 fn keychain_unsupported() -> CommandError {
     CommandError::expected(
-        "Per-workspace credentials are only stored on macOS at the moment — the app has no \
-         credential vault on this platform yet. Use the default workspace, or sign in with the \
+        "Per-workspace credentials can't be stored on this platform: the app has no \
+         credential vault here. Use the default workspace, or sign in with the \
          provider's own CLI (`vercel login`, `gh auth login`, `claude /login`), and this project \
          will use those credentials.",
     )
@@ -162,22 +154,15 @@ fn write_to_keychain(account_id: &str, key: &str, value: &str) -> Result<(), Com
 pub(crate) fn keychain_write(service: &str, key: &str, value: &str) -> Result<(), CommandError> {
     if !KEYCHAIN_SUPPORTED {
         return Err(CommandError::expected(
-            "Secrets are only stored on macOS at the moment: there's no credential vault on this platform yet.",
+            "Secrets can't be stored on this platform: there's no credential vault here.",
         ));
     }
-    #[cfg(target_os = "macos")]
-    {
-        crate::keychain::write(service, key, value).map_err(|e| {
-            CommandError::from(format!(
-                "Failed to store credential '{key}' in keychain: {e}"
-            ))
-        })
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (service, key, value);
-        Err(keychain_unsupported())
-    }
+    crate::keychain::write(service, key, value).map_err(|e| {
+        CommandError::from(format!(
+            "Failed to store credential '{key}' in {}: {e}",
+            crate::keychain::STORE_NAME
+        ))
+    })
 }
 
 fn read_from_keychain(account_id: &str, key: &str) -> Option<String> {
@@ -206,17 +191,11 @@ pub(crate) fn keychain_read(service: &str, key: &str) -> Option<String> {
 /// Found / definitely not there / couldn't check.
 pub(crate) fn keychain_read_checked(service: &str, key: &str) -> crate::keychain::Read {
     if !KEYCHAIN_SUPPORTED {
-        return crate::keychain::Read::Error("there's no Keychain on this platform".into());
+        return crate::keychain::Read::Error(
+            "there's nowhere to keep secrets on this platform".into(),
+        );
     }
-    #[cfg(target_os = "macos")]
-    {
-        crate::keychain::read(service, key)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (service, key);
-        crate::keychain::Read::Error("there's no Keychain on this platform".into())
-    }
+    crate::keychain::read(service, key)
 }
 
 fn delete_from_keychain(account_id: &str, key: &str) {
@@ -227,12 +206,9 @@ pub(crate) fn keychain_delete(service: &str, key: &str) {
     if !KEYCHAIN_SUPPORTED {
         return;
     }
-    #[cfg(target_os = "macos")]
     if let Err(e) = crate::keychain::delete(service, key) {
         tracing::warn!(service, error = %e, "[Keychain] delete failed");
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = (service, key);
 }
 
 fn delete_all_account_credentials(account_id: &str) {
@@ -1082,7 +1058,9 @@ pub async fn get_account_credential_status(
                 .unwrap_or_else(|| "Connected".to_string()),
         ),
         ClaudeConnState::NeedsReconnect => Some("Reconnect needed".to_string()),
-        ClaudeConnState::KeychainUnavailable => Some("Couldn't check the Keychain".to_string()),
+        ClaudeConnState::KeychainUnavailable => {
+            Some(format!("Couldn't check {}", crate::keychain::STORE_NAME))
+        }
         ClaudeConnState::NotConnected => None,
     };
     let codex_auth_email = agent_connected("codex");
@@ -2357,7 +2335,7 @@ mod tests {
         let err = keychain_unsupported();
         assert!(matches!(err, CommandError::Expected { .. }));
         let msg = err.to_string();
-        assert!(msg.contains("macOS"), "got: {msg}");
+        assert!(msg.contains("this platform"), "got: {msg}");
         assert!(msg.contains("default workspace"), "got: {msg}");
         // Nothing about a missing program: that was the old message, and it
         // sent people looking for something to install.

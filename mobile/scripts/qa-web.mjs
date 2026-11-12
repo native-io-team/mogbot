@@ -508,31 +508,52 @@ async function prePairShots(page, d) {
           'pair-start',
           null,
           'Start at your computer',
-          '“Start at your computer” under the Chief’s key, its line saying the Mac comes first and nothing here works until then; the bar at 1 of 6 with no Back; big “My Mac is set up”, an outline “I don’t have it on my Mac yet”, then a quiet “Try the demo” with its one line',
+          '“Start at your computer” under the Chief’s key, its line saying the computer comes first and nothing here works until then; the bar at 1 of 6 with no Back; big “My computer is set up”, an outline “I don’t have it on my computer yet”, then a quiet “Try the demo” with its one line',
         ],
         [
           'pair-getmac',
-          'I don’t have it on my Mac yet',
+          'I don’t have it on my computer yet',
           'first',
-          '“Get Mogbot on your Mac first”, its one line, the download address in a panel; big “Send the link to my Mac”, quiet “I have it now”; Back, the bar still 1 of 6',
+          '“Get Mogbot on your computer first”, its one line (Mac or PC), the download address in a panel; big “Send the link to my computer”, quiet “I have it now”; Back, the bar still 1 of 6',
         ],
         [
           'pair-tailscale',
           'I have it now',
           'Turn on Tailscale on this phone',
-          '“Turn on Tailscale on this phone”, one line that says what it is and to sign in with the same account as the Mac; a Done tick only if the phone saw it installed; one big button (Get/Open Tailscale, or It’s on) and one quiet one; bar 2 of 6',
+          '“Turn on Tailscale on this phone”, one line that says what it is and to sign in with the same account as the computer; a Done tick only if the phone saw it installed; one big button (Get/Open Tailscale, or It’s on) and one quiet one; bar 2 of 6',
         ],
         [
           'pair-code',
           '__next',
           'Pair your phone',
-          '“On your Mac, click “Pair your phone” at the bottom of the sidebar”, “Already looking at a code on your Mac? Scan it now.”; big Scan the code (the words the Mac’s QR screen says), quiet Paste a pairing link instead; bar 3 of 6',
+          '“On your computer, click “Pair your phone” at the bottom of the sidebar”, “Already looking at a code on your computer? Scan it now.”; big Scan the code (the words the Mac’s QR screen says), quiet Paste a pairing link instead; bar 3 of 6',
         ],
       ];
       if (steps.some(([n]) => wanted(`${n}-${theme}`))) {
         await toFirstPairScreen(page);
+        // With a relay (brand.json `links.relay`) the phone has no Tailscale step:
+        // "I have it now" goes straight to the code screen.
+        let skippedTailscale = false;
         for (const [name, tap, waitText, check] of steps) {
-          if (tap === '__next')
+          if (name === 'pair-tailscale') {
+            await page.clickText(tap);
+            await page.waitFor(
+              `document.body.innerText.includes(${JSON.stringify(waitText)}) || document.body.innerText.includes('Pair your phone')`,
+              20_000,
+              name
+            );
+            skippedTailscale = !(await page.eval(
+              `document.body.innerText.includes(${JSON.stringify(waitText)})`
+            ));
+            if (skippedTailscale) continue;
+            await sleep(600);
+            if (wanted(`${name}-${theme}`))
+              await capture(page, `${name}-${theme}`, { route: '/pair', check, theme });
+            continue;
+          }
+          if (tap === '__next' && skippedTailscale) {
+            // Already on the code screen.
+          } else if (tap === '__next')
             await page.clickText(
               (await page.eval(`document.body.innerText.includes('It’s on')`))
                 ? 'It’s on'
@@ -606,7 +627,7 @@ async function demoShots(page) {
       await capture(page, `demo-welcome-${theme}`, {
         route: '/pair',
         check:
-          '“Try the demo” quiet under “My Mac is set up” / “I don’t have it on my Mac yet” on the first screen, with “No Mac nearby?…” under it',
+          '“Try the demo” quiet under “My computer is set up” / “I don’t have it on my computer yet” on the first screen, with “No computer nearby?…” under it',
         theme,
       });
     await page.clickText('Try the demo');

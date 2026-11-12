@@ -596,7 +596,7 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
             id: "oauth".into(),
             method: Method::Oauth,
             label: format!("Connect {title}"),
-            detail: format!("Opens {title}'s own sign-in in this Mac's browser. The token stays in this Mac's Keychain; {name} never sees a password, and you can disconnect it any time."),
+            detail: format!("Opens {title}'s own sign-in in this Mac's browser. The token stays in {store}; {name} never sees a password, and you can disconnect it any time.", store = crate::keychain::THIS_STORE),
             connection_id: None,
         }),
         // An extra, after the browser: never the default, never the only way.
@@ -698,7 +698,7 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
                 id: "key".into(),
                 method: Method::Key,
                 label: "Enter an API key".into(),
-                detail: format!("Only for a key made for apps, never a password. It goes into this Mac's Keychain; {name} gets ${}, never the value.", r.fields[0].env),
+                detail: format!("Only for a key made for apps, never a password. It goes into {store}; {name} gets ${}, never the value.", r.fields[0].env, store = crate::keychain::THIS_STORE),
                 connection_id: None,
             });
             Some(r)

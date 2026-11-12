@@ -17,12 +17,12 @@ pub mod agent_bridge;
 pub mod agent_browser;
 pub mod agents;
 pub mod app_menu;
-pub mod computer;
 pub mod brand;
 pub mod brand_migration;
 pub mod cache;
 pub mod commands;
 pub mod companion;
+pub mod computer;
 pub mod dock_menu;
 pub mod error_reporting;
 pub mod errors;
@@ -127,7 +127,10 @@ fn raise_open_file_limit() {
     const WANT: libc::rlim_t = 10_240;
     // SAFETY: getrlimit/setrlimit only read and write the struct passed.
     unsafe {
-        let mut lim = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        let mut lim = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
         if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) == 0 && lim.rlim_cur < WANT {
             lim.rlim_cur = WANT.min(lim.rlim_max);
             libc::setrlimit(libc::RLIMIT_NOFILE, &lim);

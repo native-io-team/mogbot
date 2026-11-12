@@ -277,9 +277,15 @@ pub async fn companion_pair_start(app: AppHandle) -> Result<PairingCode, Command
         .identity()
         .filter(|_| c.registry.identity_is_durable());
     let Some(identity) = identity else {
-        return Err(CommandError::expected(
-            "This Mac can't keep its identity key in the Keychain, so it can't pair a phone safely. Unlock the Keychain (or check Keychain Access) and try again.",
-        ));
+        return Err(CommandError::expected(concat!(
+            "This ",
+            crate::computer::noun!(),
+            " can't keep its identity key in ",
+            crate::keychain::store_name!(),
+            ", so it can't pair a phone safely. ",
+            crate::keychain::unlock_hint!(),
+            " and try again."
+        )));
     };
     // Exactly one route: the host the phone shows is the only one it tries.
     // The relay's when this Mac is signed in there, else Tailscale's; the

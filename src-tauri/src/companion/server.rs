@@ -287,7 +287,15 @@ fn serve_hosts(c: &Companion) -> Vec<String> {
     c.backend.serve_hosts()
 }
 
-const KEY_UNAVAILABLE: &str = "Your Mac can't read its identity key from the Keychain right now. Unlock your Mac, then try again.";
+const KEY_UNAVAILABLE: &str = concat!(
+    "Your ",
+    crate::computer::noun!(),
+    " can't read its identity key from ",
+    crate::keychain::store_name!(),
+    " right now. Unlock your ",
+    crate::computer::noun!(),
+    ", then try again."
+);
 
 /// `POST /v1/identity`: who this Mac is, signed over the phone's challenge,
 /// before the phone sends a pairing code.
@@ -382,7 +390,14 @@ async fn pair(c: Arc<Companion>, req: Request<Incoming>, peer: &Peer) -> Respons
     if !c.registry.identity_is_durable() {
         return json_response(&PairResponse::refused(
             PairRefusal::Denied,
-            "This Mac can't keep its identity key in the Keychain, so it can't pair a phone safely. Check Keychain Access on the Mac.",
+            concat!(
+                "This ",
+                crate::computer::noun!(),
+                " can't keep its identity key in ",
+                crate::keychain::store_name!(),
+                ", so it can't pair a phone safely. ",
+                crate::keychain::store_check!()
+            ),
         ));
     }
     let device = super::clean_pair_device(&request.device);

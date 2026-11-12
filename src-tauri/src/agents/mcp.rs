@@ -432,7 +432,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "request_secret",
-        description: "Ask the user for an API key or token made for programs (a Stripe restricted key, an X API token) through a secure card in this chat. They type it into a masked field; it goes into the macOS Keychain for you alone, and you get an environment variable and a reference, never the value. For an account (email, Slack, LinkedIn, X, GitHub, Linear…) use request_login instead; never ask for a password, here or in chat. It returns at once: stop and tell the user in one line what it's for; you'll be woken when they save or decline it.",
+        description: concat!("Ask the user for an API key or token made for programs (a Stripe restricted key, an X API token) through a secure card in this chat. They type it into a masked field; it goes into ", crate::keychain::store_name!(), " for you alone, and you get an environment variable and a reference, never the value. For an account (email, Slack, LinkedIn, X, GitHub, Linear…) use request_login instead; never ask for a password, here or in chat. It returns at once: stop and tell the user in one line what it's for; you'll be woken when they save or decline it."),
         main_only: false,
         schema: || json!({
             "type": "object",

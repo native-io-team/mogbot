@@ -3,6 +3,7 @@ import type { UsageAccount, UsageAccountLine, UsageInventory } from './model';
 import {
   inUseOf,
   movedIds,
+  ownSignIn,
   pinnedLine,
   placeLabel,
   roomOf,
@@ -96,6 +97,8 @@ describe('which account is working', () => {
     ]);
     // Never the email twice: it's the name of the unnamed one.
     expect(claude.rows[0].detail).toEqual(['Max plan', 'this computer’s own sign-in']);
+    expect(ownSignIn('mac')).toBe('this Mac’s own sign-in');
+    expect(ownSignIn('pc')).toBe('this PC’s own sign-in');
     expect(claude.rows[1].detail).toEqual(['me@work.example']);
     expect(claude.rows[0].room.map((r) => [r.label, r.left])).toEqual([
       ['5-hour', 62],

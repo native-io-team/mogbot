@@ -1,6 +1,12 @@
 //! The login Keychain, for every secret the app keeps (workspace
 //! credentials, agents' secrets, the companion's identity key).
 //!
+//! Everything below is about macOS. On Windows (Credential Manager) and
+//! Linux (the Secret Service) secrets go through [`os_store`] instead, which
+//! keeps the same three-way [`Read`] and nothing else of this: those
+//! platforms never had legacy items or a previous name. The user-facing name
+//! of wherever this build keeps secrets is [`STORE_NAME`].
+//!
 //! ## Why there are two kinds of item
 //!
 //! Older builds wrote items with `security add-generic-password`, so each
@@ -71,6 +77,110 @@
 
 #[cfg(target_os = "macos")]
 mod macos;
+
+#[cfg(any(windows, target_os = "linux", test))]
+mod keyring_store;
+#[cfg(any(windows, target_os = "linux", test))]
+mod os_store;
+
+/// Where this build keeps secrets, as copy says it: "the Keychain",
+/// "Windows Credential Manager", "your system keyring". A macro too, for
+/// `concat!`-built constants.
+#[cfg(target_os = "macos")]
+macro_rules! store_name {
+    () => {
+        "the Keychain"
+    };
+}
+#[cfg(windows)]
+macro_rules! store_name {
+    () => {
+        "Windows Credential Manager"
+    };
+}
+#[cfg(target_os = "linux")]
+macro_rules! store_name {
+    () => {
+        "your system keyring"
+    };
+}
+#[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+macro_rules! store_name {
+    () => {
+        "a credential store"
+    };
+}
+pub(crate) use store_name;
+
+/// The same place, said of this computer: "this Mac's Keychain",
+/// "Windows Credential Manager on this PC", "this computer's system keyring".
+#[cfg(target_os = "macos")]
+macro_rules! this_store {
+    () => {
+        "this Mac's Keychain"
+    };
+}
+#[cfg(windows)]
+macro_rules! this_store {
+    () => {
+        "Windows Credential Manager on this PC"
+    };
+}
+#[cfg(not(any(target_os = "macos", windows)))]
+macro_rules! this_store {
+    () => {
+        "this computer's system keyring"
+    };
+}
+
+/// What to try when the store didn't answer, as a sentence's start (no full
+/// stop): "Unlock the Keychain (or check Keychain Access)".
+#[cfg(target_os = "macos")]
+macro_rules! unlock_hint {
+    () => {
+        "Unlock the Keychain (or check Keychain Access)"
+    };
+}
+#[cfg(windows)]
+macro_rules! unlock_hint {
+    () => {
+        "Make sure you're signed in to Windows as yourself"
+    };
+}
+#[cfg(not(any(target_os = "macos", windows)))]
+macro_rules! unlock_hint {
+    () => {
+        "Unlock your system keyring (GNOME Keyring or KWallet)"
+    };
+}
+pub(crate) use unlock_hint;
+
+/// Where to look when the store can't keep a secret, as a whole sentence.
+#[cfg(target_os = "macos")]
+macro_rules! store_check {
+    () => {
+        "Check Keychain Access on the Mac."
+    };
+}
+#[cfg(windows)]
+macro_rules! store_check {
+    () => {
+        "Check Windows Credential Manager on the PC."
+    };
+}
+#[cfg(not(any(target_os = "macos", windows)))]
+macro_rules! store_check {
+    () => {
+        "Check that your system keyring (GNOME Keyring or KWallet) is running and unlocked."
+    };
+}
+pub(crate) use store_check;
+
+pub const STORE_NAME: &str = store_name!();
+pub const THIS_STORE: &str = this_store!();
+
+/// Whether this build has somewhere to keep secrets at all.
+pub const SUPPORTED: bool = cfg!(any(target_os = "macos", windows, target_os = "linux"));
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -627,7 +737,19 @@ fn memory() -> Option<std::sync::MutexGuard<'static, HashMap<(String, String), S
         .map(|m| m.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
-#[cfg(target_os = "macos")]
+/// Windows Credential Manager / the Secret Service. No rename carry-over:
+/// these platforms never kept a secret under a previous name.
+#[cfg(any(windows, target_os = "linux"))]
+static PLAIN: std::sync::LazyLock<os_store::Plain<keyring_store::OsStore>> =
+    std::sync::LazyLock::new(|| {
+        os_store::Plain::new(keyring_store::OsStore, keyring_store::MAX_BLOB)
+    });
+
+#[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+fn unsupported() -> String {
+    "there's nowhere to keep secrets on this platform".into()
+}
+
 pub fn read(service: &str, account: &str) -> Read {
     if let Some(m) = memory() {
         return match m.get(&(service.to_string(), account.to_string())) {
@@ -635,10 +757,20 @@ pub fn read(service: &str, account: &str) -> Read {
             None => Read::NotFound,
         };
     }
-    VAULT.read_carrying(service, account, previous_service(service).as_deref())
+    #[cfg(target_os = "macos")]
+    {
+        VAULT.read_carrying(service, account, previous_service(service).as_deref())
+    }
+    #[cfg(any(windows, target_os = "linux"))]
+    {
+        PLAIN.read(service, account)
+    }
+    #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+    {
+        Read::Error(unsupported())
+    }
 }
 
-#[cfg(target_os = "macos")]
 pub fn write(service: &str, account: &str, value: &str) -> Result<(), String> {
     if let Some(mut m) = memory() {
         m.insert(
@@ -647,16 +779,38 @@ pub fn write(service: &str, account: &str, value: &str) -> Result<(), String> {
         );
         return Ok(());
     }
-    VAULT.write(service, account, value)
+    #[cfg(target_os = "macos")]
+    {
+        VAULT.write(service, account, value)
+    }
+    #[cfg(any(windows, target_os = "linux"))]
+    {
+        PLAIN.write(service, account, value)
+    }
+    #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+    {
+        let _ = value;
+        Err(unsupported())
+    }
 }
 
-#[cfg(target_os = "macos")]
 pub fn delete(service: &str, account: &str) -> Result<(), String> {
     if let Some(mut m) = memory() {
         m.remove(&(service.to_string(), account.to_string()));
         return Ok(());
     }
-    VAULT.delete_carrying(service, account, previous_service(service).as_deref())
+    #[cfg(target_os = "macos")]
+    {
+        VAULT.delete_carrying(service, account, previous_service(service).as_deref())
+    }
+    #[cfg(any(windows, target_os = "linux"))]
+    {
+        PLAIN.delete(service, account)
+    }
+    #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+    {
+        Err(unsupported())
+    }
 }
 
 #[cfg(target_os = "macos")]

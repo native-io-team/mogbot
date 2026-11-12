@@ -383,7 +383,8 @@ pub fn parse(args: &Value) -> Result<Update, String> {
         let mut value = serde_json::to_value(&block).map_err(|e| e.to_string())?;
         if let Some(what) = secret_in(&value) {
             return Err(format!(
-                "blocks[{i}] ({kind}) looks like it holds {what}. Never put secrets on a page: keys and passwords stay in the Keychain (request_secret)."
+                "blocks[{i}] ({kind}) looks like it holds {what}. Never put secrets on a page: keys and passwords stay in {store} (request_secret).",
+                store = crate::keychain::STORE_NAME
             ));
         }
         if let Value::Object(map) = &mut value {

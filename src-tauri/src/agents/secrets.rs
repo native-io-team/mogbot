@@ -606,17 +606,21 @@ pub fn env_for(agent: &Agent) -> Vec<(String, String)> {
 
 /* ------------------------------------------------------------ prompts */
 
-pub const RULES: &str = "\
+pub const RULES: &str = concat!(
+    "\
 ## Secrets
 
 `request_secret` is only for an API key or token made for programs (a \
 Stripe restricted key, an X API token): the user types it into a secure card \
-here, it goes into the macOS Keychain, and you get an environment variable, \
+here, it goes into ",
+    crate::keychain::store_name!(),
+    ", and you get an environment variable, \
 never the value. For an account (email, Slack, LinkedIn, X, GitHub…) use \
 `request_login` instead. Never ask for a password. Never ask the user to \
 paste a credential in chat. Use a secret only through its variable \
 (`\"$STRIPE_KEY\"` in a command, or read from the environment in a script). \
-Never print, echo, log or write one to a file, and never put it in a message.";
+Never print, echo, log or write one to a file, and never put it in a message."
+);
 
 /// The secrets this turn has, by variable. Empty when it has none.
 pub fn prompt_section(agent: &Agent, env: &[(String, String)]) -> String {
