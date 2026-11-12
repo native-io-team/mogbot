@@ -784,7 +784,17 @@ export const answerApproval = (
     ...(always ? { always } : {}),
     ...(note ? { note } : {}),
     ...(choice !== undefined ? { choice } : {}),
+  }).catch((e: unknown) => {
+    // Closed on the Mac while this copy sat in the cache: drop it here too.
+    if (ALREADY_ANSWERED.test(describeError(e))) {
+      update((s) => closeCard(s, requestId));
+      void loadLatest(agentId).catch(() => {});
+    }
+    throw e;
   });
+
+/** The Mac's word for a card someone (or expiry) already answered (`answer_gate::already`). */
+const ALREADY_ANSWERED = /^Already answered\b/;
 
 /** A secure input card's values, straight to the Mac's Keychain (see `secrets.ts`). */
 export function saveSecret(agentId: string, requestId: string, values: string[]) {

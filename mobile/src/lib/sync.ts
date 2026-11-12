@@ -340,6 +340,31 @@ export function mergePage(
   return { ...s, seqs, chats: { ...s.chats, [agentId]: { messages, more, loaded: true } } };
 }
 
+/**
+ * The Mac said a card is already answered (closed while this phone was away,
+ * so no event reached its cached copy): close every copy here, so Catch up
+ * and the badges stop counting it. The next page read brings the real answer.
+ */
+export function closeCard(s: SyncState, requestId: string): SyncState {
+  let changed = false;
+  const chats: SyncState['chats'] = {};
+  for (const [key, chat] of Object.entries(s.chats)) {
+    if (!chat) {
+      chats[key] = chat;
+      continue;
+    }
+    let hit = false;
+    const messages = chat.messages.map((m) => {
+      if (m.approval?.requestId !== requestId || m.approval.status !== 'pending') return m;
+      hit = true;
+      return { ...m, approval: { ...m.approval, status: 'expired' as const } };
+    });
+    chats[key] = hit ? { ...chat, messages } : chat;
+    changed ||= hit;
+  }
+  return changed ? { ...s, chats } : s;
+}
+
 export function addPending(s: SyncState, p: PendingSend): SyncState {
   return { ...s, pending: { ...s.pending, [p.agentId]: [...(s.pending[p.agentId] ?? []), p] } };
 }
