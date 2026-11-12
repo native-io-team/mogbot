@@ -54,6 +54,7 @@ testing, and known gotchas. This file is the contract in brief.
     neutral affirmatives, one word per idea ([docs/agents.md](docs/agents.md), "Lines, cards and bars").
 11. **Stay compatible with Ship Studio** — `~/ShipStudio` and in-project `.shipstudio/` are
     shared; app state is ours (see CLAUDE.md, "Brand and identity").
+12. **Keep the user guide current** — Any change users can see updates the matching page in docs/guide/ in the same commit.
 
 ## Layout in one breath
 

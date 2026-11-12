@@ -78,6 +78,9 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - Example: Don't construct URLs like `https://{project-name}.vercel.app` - only show URLs that were explicitly returned from an API or saved from a real operation
 - This prevents confusing users with incorrect information
 
+### Keep the user guide current
+- Any change users can see updates the matching page in docs/guide/ in the same commit.
+
 ### Data Storage
 - Project metadata is stored in `.shipstudio/project.json` within each project
 - This file stores: last_opened timestamp, and the project's hosting link (provider, project id, scope)
