@@ -142,7 +142,7 @@ function tailscaleCheck({ phoneOnline, tailscaleInstalled, diagnosis }: ReachInp
     title,
     tone: 'unknown',
     status: 'Can’t see from here whether it’s switched on.',
-    fix: 'Open Tailscale and check it’s on, with the same account as your Mac. It needs to be on there too.',
+    fix: 'Open Tailscale and check it’s on, with the same account as your Mac. It needs to be on there too. If Tailscale says “Could not sign device”, your network has Tailnet Lock: sign this phone from a device you already trust, or use your Mogbot account instead of Tailscale.',
     action: 'open_tailscale',
   };
 }

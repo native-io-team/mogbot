@@ -142,7 +142,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "On your Mac, sign in, or use your own Tailscale instead.",
   "On your Mac, sign in, or use your own Tailscale instead. Then try again.",
   "On your Mac: Agents → Usage.",
-  "Open Tailscale and check it’s on, with the same account as your Mac. It needs to be on there too.",
+  "Open Tailscale and check it’s on, with the same account as your Mac. It needs to be on there too. If Tailscale says “Could not sign device”, your network has Tailnet Lock: sign this phone from a device you already trust, or use your Mogbot account instead of Tailscale.",
   "Open Tailscale on this phone and switch to the account it was paired on, the same account as your Mac. It reconnects by itself.",
   "Open Tailscale, switch it on, and check it’s the same account as your Mac.",
   "Open in …",
