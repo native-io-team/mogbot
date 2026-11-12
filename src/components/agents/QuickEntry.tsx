@@ -24,6 +24,7 @@ import { TextButton } from '../primitives/TextButton';
 import { TextArea } from '../primitives/TextField';
 import { AgentKey } from './AgentKey';
 import { ComposerAttachments } from './AgentAttachments';
+import { ListeningStatus, useFollowDictation } from './AgentComposer';
 import { useMentionPicker } from './AgentMentions';
 import { useDictation } from './useDictation';
 import { toOutgoing, useComposerAttachments } from './useComposerAttachments';
@@ -98,6 +99,7 @@ export function QuickEntry() {
     enabled: true,
   });
   const dictating = dictation.phase !== 'idle';
+  useFollowDictation(inputRef, draft, dictating);
   const blocked = dictation.blocked ? blockedCopy(dictation.blocked) : null;
 
   const load = useCallback(async () => {
@@ -271,27 +273,17 @@ export function QuickEntry() {
           aria-label={`Message ${to?.name ?? 'an agent'}`}
         />
         <div className="agent-composer__bar">
-          {dictating ? (
-            <span className="agent-composer__listening" role="status">
-              <span className="agent-composer__listening-dot" aria-hidden />
-              {dictation.phase === 'finishing' ? 'Finishing…' : 'Listening'}
-              <span aria-hidden>·</span>
-              <TextButton tabIndex={0} onClick={dictation.cancel}>
-                Cancel
-              </TextButton>
-            </span>
-          ) : (
-            <IconButton
-              tabIndex={0}
-              variant="ghost"
-              className="agent-composer__attach quick-entry__shot"
-              icon={<CameraIcon size={14} />}
-              onClick={() => void screenshot()}
-              disabled={capturing}
-              aria-label="Attach a screenshot"
-              title="Attach a screenshot: drag to select, or press Space and click a window"
-            />
-          )}
+          <IconButton
+            tabIndex={0}
+            variant="ghost"
+            className="agent-composer__attach quick-entry__shot"
+            icon={<CameraIcon size={14} />}
+            onClick={() => void screenshot()}
+            disabled={capturing}
+            aria-label="Attach a screenshot"
+            title="Attach a screenshot: drag to select, or press Space and click a window"
+          />
+          {dictating && <ListeningStatus phase={dictation.phase} onCancel={dictation.cancel} />}
           <div className="agent-composer__actions">
             <IconButton
               ref={micRef}

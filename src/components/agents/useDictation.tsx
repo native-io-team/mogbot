@@ -113,8 +113,16 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
     if (phaseRef.current !== 'listening' || sessionRef.current === null) return;
     setPhase('finishing');
     setLevel(0);
-    void stopDictation(sessionRef.current);
-  }, [setLevel, setPhase]);
+    const session = sessionRef.current;
+    // If the stop never reaches the Mac, no "ended" follows: keep what was
+    // heard and give the field back rather than sit on "Finishing…".
+    stopDictation(session).catch((error) => {
+      if (sessionRef.current !== session) return;
+      sessionRef.current = null;
+      setPhase('idle');
+      showToast(formatCommandError(asCommandError(error)), 'error');
+    });
+  }, [setLevel, setPhase, showToast]);
 
   const cancel = useCallback(() => {
     holdingRef.current = false;
@@ -175,9 +183,17 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
         cancel();
         return true;
       }
+      // Enter while listening finishes the dictation rather than doing
+      // nothing: the last words are still settling, so it never sends. The
+      // field takes focus when it ends, and the next Enter sends.
+      if (e.key === 'Enter' && phaseRef.current !== 'idle') {
+        e.preventDefault();
+        stop();
+        return true;
+      }
       return false;
     },
-    [start, cancel]
+    [start, stop, cancel]
   );
 
   // Releasing either key of the hold ends it; ⌘⇧D toggles from anywhere in

@@ -58,10 +58,17 @@
   display: contents;
 }
 
-.agent-composer__bar > .agent-composer__attach,
-.agent-composer__bar > .agent-composer__listening {
+.agent-composer__bar > .agent-composer__attach {
   grid-column: 1;
   order: 1;
+}
+
+/* "● Listening · Cancel": its own small row under the text, starting where
+   the text starts, so the words arriving keep the field's full width and the
+   paperclip keeps its place (beside it, it squeezed them into a column). */
+.agent-composer__bar > .agent-composer__listening {
+  grid-column: 2 / -1;
+  order: 4;
 }
 
 .agent-composer__bar > .agent-composer__hint {
@@ -275,13 +282,16 @@
     color-mix(in srgb, var(--accent-active) 12%, transparent);
 }
 
-/* "● Listening · Esc to cancel", in the paperclip's place. */
+/* "● Listening · Cancel", under the text (placed in the grid above). */
 .agent-composer__listening {
   display: inline-flex;
   align-items: center;
+  justify-self: start;
   gap: var(--spacing-xs);
-  padding-left: var(--spacing-sm);
+  /* The field's own padding, so the dot lines up with the first letter. */
+  padding: 0 var(--spacing-xs) var(--spacing-2xs);
   font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
   color: var(--text-secondary);
 }
 

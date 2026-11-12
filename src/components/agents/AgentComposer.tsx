@@ -86,6 +86,58 @@ interface AgentComposerProps {
   lastSent?: () => string | null;
 }
 
+/**
+ * "● Listening · Cancel" while dictating: its own small row under the text
+ * (the CSS places it), so it never takes width from the words arriving.
+ */
+export function ListeningStatus({
+  phase,
+  onCancel,
+}: {
+  phase: DictationPhase;
+  onCancel: () => void;
+}) {
+  return (
+    <span className="agent-composer__listening" role="status">
+      <span className="agent-composer__listening-dot" aria-hidden />
+      {phase === 'finishing' ? 'Finishing…' : 'Listening'}
+      <span aria-hidden>·</span>
+      <TextButton tabIndex={0} onClick={onCancel}>
+        Cancel
+      </TextButton>
+    </span>
+  );
+}
+
+/**
+ * While dictating, keep the newest words in view: the field is read-only and
+ * its value set from outside, so past its cap it would sit on the first lines.
+ * When it ends (stopped, cancelled or cut off), the field takes focus with the
+ * caret after the last word, so you can carry on typing or press Enter.
+ */
+export function useFollowDictation(
+  inputRef: RefObject<HTMLTextAreaElement | null>,
+  draft: string,
+  dictating: boolean
+) {
+  const wasDictating = useRef(dictating);
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!dictating || !el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [inputRef, draft, dictating]);
+  useEffect(() => {
+    const ended = wasDictating.current && !dictating;
+    wasDictating.current = dictating;
+    const el = inputRef.current;
+    if (!ended || !el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+    el.scrollTop = el.scrollHeight;
+  }, [inputRef, dictating]);
+}
+
 /** True while the draft is the starter's brief with its blank still empty. */
 export function isUnfilled(draft: string, unfilled: string | null | undefined): boolean {
   return Boolean(unfilled) && draft.trim() === (unfilled ?? '').trim();
@@ -191,6 +243,7 @@ export const AgentComposer = memo(function AgentComposer({
     el.style.transition = '';
     el.style.height = next;
   }, [draft, inputRef]);
+  useFollowDictation(inputRef, draft, dictating);
 
   return (
     <form
@@ -266,26 +319,17 @@ export const AgentComposer = memo(function AgentComposer({
         aria-describedby={queueing ? queueHintId : undefined}
       />
       <div className="agent-composer__bar">
-        {dictating ? (
-          <span className="agent-composer__listening" role="status">
-            <span className="agent-composer__listening-dot" aria-hidden />
-            {dictation.phase === 'finishing' ? 'Finishing…' : 'Listening'}
-            <span aria-hidden>·</span>
-            <TextButton tabIndex={0} onClick={dictation.cancel}>
-              Cancel
-            </TextButton>
-          </span>
-        ) : (
-          <IconButton
-            tabIndex={0}
-            variant="ghost"
-            className="agent-composer__attach"
-            icon={<PaperclipIcon size={14} />}
-            onClick={onPickFiles}
-            aria-label="Attach files"
-            title="Attach files, or paste or drop them here"
-          />
-        )}
+        {/* The paperclip stays while listening, so the text never moves. */}
+        <IconButton
+          tabIndex={0}
+          variant="ghost"
+          className="agent-composer__attach"
+          icon={<PaperclipIcon size={14} />}
+          onClick={onPickFiles}
+          aria-label="Attach files"
+          title="Attach files, or paste or drop them here"
+        />
+        {dictating && <ListeningStatus phase={dictation.phase} onCancel={dictation.cancel} />}
         {/* Its own row above the text, so a long hint never squeezes it. */}
         {blank && !dictating ? (
           <span className="agent-composer__hint" role="status">

@@ -1199,6 +1199,24 @@ const startListening = () => {
   return { status: 'listening', session: 1 };
 };
 
+/** A long dictation: a finished segment, then a partial still arriving. */
+const startListeningLong = () => {
+  setTimeout(() => {
+    void emit('dictation://event', {
+      kind: 'final',
+      session: 1,
+      text: 'OK so I would like to get this live and test this as soon as possible and make sure that it’s working tonight.',
+    });
+    void emit('dictation://event', {
+      kind: 'partial',
+      session: 1,
+      text: 'Assuming everything is good am I able to log in with Google and do everything that I need to do already',
+    });
+    void emit('dictation://event', { kind: 'level', session: 1, level: 0.4 });
+  }, 50);
+  return { status: 'listening', session: 1 };
+};
+
 /**
  * A reply streaming in, played the way the backend sends it: drafts every
  * 40ms carrying the text so far, then the finished message under the draft's
@@ -3615,7 +3633,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-dictating',
     title: 'Agents — dictating into the composer',
     looksRightWhen:
-      'The words arriving sit in the composer in the full text colour, never mistakable for the placeholder. The mic is green with a green halo sized by the voice level; the composer border is tinted green; in the paperclip’s place a pulsing dot says Listening with a Cancel beside it. Nothing reads as an error, and Send is unchanged.',
+      'The words arriving sit in the composer in the full text colour, never mistakable for the placeholder. The mic is green with a green halo sized by the voice level; the composer border is tinted green; the paperclip stays put, and a small row under the text, at its left edge, has a pulsing dot saying Listening with a Cancel beside it. Nothing reads as an error, and Send is unchanged.',
     // Steps run before a palette command, so walk in through the sidebar.
     openSelector: AGENTS_TAB,
     requires: '.agent-composer[data-dictation="listening"]',
@@ -3625,6 +3643,27 @@ export const agentsScenarios: Scenario[] = [
       agents_overview: overview(),
       agents_messages: messagesFor,
       start_dictation: startListening,
+      cancel_dictation: null,
+      stop_dictation: null,
+    },
+  },
+  {
+    id: 'agents-dictating-long',
+    title: 'Agents — a long dictation after typed text',
+    looksRightWhen:
+      'The composer reads like typing: “Quick one:” (typed first) then the spoken sentences, starting at the same left edge and the same size as typed text, the full width of the field, wrapping evenly. The paperclip stays where it is. A small row under the text, at the text’s left edge, says ● Listening · Cancel; it takes no width from the text. The field grows to its cap and shows the newest words.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-composer[data-dictation="listening"]',
+    clipSelector: '.agent-chat__footer',
+    steps: [
+      { fill: '.agent-composer__input', value: 'Quick one:' },
+      { click: '.agent-composer__mic' },
+    ],
+    mockEvents: true,
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      start_dictation: startListeningLong,
       cancel_dictation: null,
       stop_dictation: null,
     },

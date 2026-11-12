@@ -6075,7 +6075,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 88
+      "consumerCount": 89
     },
     {
       "name": "--line-height-help",
@@ -6283,7 +6283,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 289
+      "consumerCount": 290
     },
     {
       "name": "--spacing-xs",
@@ -6291,7 +6291,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 794
+      "consumerCount": 795
     },
     {
       "name": "--spacing-sm",
@@ -6299,7 +6299,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 981
+      "consumerCount": 980
     },
     {
       "name": "--spacing-md",

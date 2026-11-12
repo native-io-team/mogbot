@@ -97,6 +97,45 @@ describe('useDictation', () => {
     expect(hook.result.current.phase).toBe('idle');
   });
 
+  it('Enter while listening finishes the dictation and sends nothing', async () => {
+    const { hook, draft } = setup();
+    await act(async () => {
+      hook.result.current.toggle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    act(() => emit({ kind: 'partial', session: 7, text: 'ship it' }));
+    const preventDefault = vi.fn();
+    let handled = false;
+    act(() => {
+      handled = hook.result.current.onComposerKeyDown({
+        key: 'Enter',
+        code: 'Enter',
+        preventDefault,
+      } as unknown as Parameters<typeof hook.result.current.onComposerKeyDown>[0]);
+    });
+    expect(handled).toBe(true);
+    expect(preventDefault).toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledWith(7);
+    expect(hook.result.current.phase).toBe('finishing');
+    expect(draft()).toBe('Hi ship it');
+  });
+
+  it('gives the field back if the stop never reaches the Mac', async () => {
+    stop.mockRejectedValueOnce(new Error('gone'));
+    const { hook, draft } = setup();
+    await act(async () => {
+      hook.result.current.toggle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    act(() => emit({ kind: 'partial', session: 7, text: 'kept' }));
+    await act(async () => {
+      hook.result.current.toggle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hook.result.current.phase).toBe('idle');
+    expect(draft()).toBe('Hi kept');
+  });
+
   it('reports a denied permission instead of listening', async () => {
     start.mockResolvedValue({ status: 'blocked', reason: 'microphone' });
     const { hook } = setup();

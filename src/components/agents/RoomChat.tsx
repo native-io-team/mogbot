@@ -50,6 +50,7 @@ import { ConversationBar, ConversationBars } from './AgentCard';
 import { tintMentionsIn, useMentionPicker } from './AgentMentions';
 import { useDictation } from './useDictation';
 import { ComposerAttachments } from './AgentAttachments';
+import { ListeningStatus, useFollowDictation } from './AgentComposer';
 import {
   toOutgoing,
   useComposerAttachments,
@@ -790,6 +791,7 @@ function RoomComposer({
   const draft = useComposerDraft(draftKey);
   const setDraft = useCallback((text: string) => setComposerDraft(draftKey, text), [draftKey]);
   const dictating = dictation.phase !== 'idle';
+  useFollowDictation(inputRef, draft, dictating);
   // @ offers the room's members and @everyone, nobody else.
   const mentionable = useMemo(() => [...members, everyoneEntry(members.length)], [members]);
   const mentionPicker = useMentionPicker(mentionable, inputRef, setDraft);
@@ -848,28 +850,18 @@ function RoomComposer({
         aria-label={`Message ${room.name}`}
       />
       <div className="agent-composer__bar">
-        {dictating ? (
-          <span className="agent-composer__listening" role="status">
-            <span className="agent-composer__listening-dot" aria-hidden />
-            {dictation.phase === 'finishing' ? 'Finishing…' : 'Listening'}
-            <span aria-hidden>·</span>
-            <TextButton tabIndex={0} onClick={dictation.cancel}>
-              Cancel
-            </TextButton>
-          </span>
-        ) : (
-          engineReady && (
-            <IconButton
-              tabIndex={0}
-              variant="ghost"
-              className="agent-composer__attach"
-              icon={<PaperclipIcon size={14} />}
-              onClick={pickFiles}
-              aria-label="Attach files"
-              title="Attach files, or paste or drop them here"
-            />
-          )
+        {engineReady && (
+          <IconButton
+            tabIndex={0}
+            variant="ghost"
+            className="agent-composer__attach"
+            icon={<PaperclipIcon size={14} />}
+            onClick={pickFiles}
+            aria-label="Attach files"
+            title="Attach files, or paste or drop them here"
+          />
         )}
+        {dictating && <ListeningStatus phase={dictation.phase} onCancel={dictation.cancel} />}
         {!dictating && (
           <span className="agent-composer__hint agent-room__address" aria-live="polite">
             {toLine ??
