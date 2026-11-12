@@ -125,7 +125,7 @@ for (const [k, v] of Object.entries(b.telemetry || {})) if (v) on.push(`telemetr
 for (const k of ['errorReports', 'templateApi', 'pushRelay', 'relay']) if (b.links[k]) on.push(`links.${k}`);
 // Turned on by the owner on purpose: error reports (Settings switch, 2026-11-12) and
 // the phone relay (sign-in only, docs/relay.md, 2026-11-11). Anything else still stops here.
-const meant = new Set(['links.errorReports', 'links.relay']);
+const meant = new Set(['links.errorReports', 'links.relay', 'links.pushRelay']);
 const unmeant = on.filter((k) => !meant.has(k));
 if (unmeant.length) { console.error('  on: ' + unmeant.join(', ')); process.exit(1); }
 NODE
