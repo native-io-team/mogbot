@@ -266,7 +266,7 @@ impl Notifier for ApnsPush<'_> {
             Err(RelayError::Gone | RelayError::UnknownDevice) => Delivery::TokenGone,
             Err(RelayError::Unauthorized) => Delivery::Forgotten,
             Err(RelayError::Unavailable(why)) => {
-                tracing::debug!("[Companion] push not delivered: {why}");
+                tracing::info!("[Companion] push not delivered: {why}");
                 Delivery::NotReachable
             }
         }
@@ -516,7 +516,7 @@ async fn register(c: &Companion, relay: &dyn Relay, device: &DeviceRecord) -> bo
             false
         }
         Err(e) => {
-            tracing::debug!("[Companion] push registration failed: {e:?}");
+            tracing::info!("[Companion] push registration failed: {e:?}");
             false
         }
     }
@@ -671,7 +671,20 @@ pub async fn deliver_all(c: &Companion, alert: &PushAlert, now: u64) -> Vec<Stri
             relay: relay.as_ref(),
             installation: &i,
         };
-        match notifier.deliver(&device, alert).await {
+        let delivery = notifier.deliver(&device, alert).await;
+        // One line per push (never its token), so a missed notification can be traced.
+        tracing::info!(
+            device = %device.id,
+            kind = ?alert.kind,
+            outcome = match delivery {
+                Delivery::Sent => "sent",
+                Delivery::NotReachable => "push service unreachable",
+                Delivery::TokenGone => "token gone",
+                Delivery::Forgotten => "installation forgotten",
+            },
+            "[Companion] push"
+        );
+        match delivery {
             Delivery::Sent => sent.push(device.id.clone()),
             Delivery::NotReachable => {}
             Delivery::TokenGone => {

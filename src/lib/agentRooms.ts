@@ -19,7 +19,39 @@ export const MIN_ROOM_MEMBERS = 2;
 export const MAX_ROOM_MEMBERS = 6;
 
 /** What a room is, in one line: the sidebar's tooltip and the start of the editor's lead. */
-export const ROOM_WHAT = 'Talk to several agents at once, in one conversation.';
+export const ROOM_WHAT = 'One thread for a job that needs several agents.';
+
+/**
+ * How a room works, said the same way on the room's first screen and in the
+ * editor: three plain answers to "why would I", "how do I use it" and "what
+ * do they know". Each agent's engine session is shared with its own chat
+ * (docs/agents.md, "Rooms"), so the third is literally true both ways.
+ */
+export function roomHowItWorks(leadName: string | undefined, count: number) {
+  return [
+    {
+      title: 'Ask once, everyone hears it',
+      text: leadName
+        ? `${leadName} answers unless you @ someone. @everyone asks all ${count}.`
+        : `@ who should answer, or @everyone to ask all ${count}.`,
+    },
+    {
+      title: 'They pass work to each other',
+      text: 'When one @mentions another, that one picks it up. No relaying for you.',
+    },
+    {
+      title: 'They bring what they already know',
+      text: 'Each one remembers its own chats with you, and takes what’s said here back with it.',
+    },
+  ];
+}
+
+/** Messages to start a room with, put in the composer for everyone (never sent for you). */
+export const ROOM_STARTERS = [
+  '@everyone Where does each of you stand?',
+  '@everyone Make a plan together: who does what, and by when?',
+  '@everyone Is anyone blocked or waiting on someone here?',
+];
 
 /** Mirrors `rooms::RoomView`. */
 export interface Room {

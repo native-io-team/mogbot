@@ -98,7 +98,7 @@ export function roomSuggestions(members: Agent[], query: string | null): AgentRe
  * posted for every member. Never "sees only what's said here".
  */
 export const ROOM_INTRO =
-  'Everything said here is posted for everyone in the room. Each agent keeps its own memory and remembers its own chat when it answers here.';
+  'Ask once and everything is posted for everyone here; they pass work to each other with @. Each agent remembers its own chats with you, and takes what’s said here back with it.';
 
 /** "Finance", "Finance and Ops", "Finance, Ops and Design": as the desk joins names (`listNames`). */
 export function listNames(names: string[]): string {

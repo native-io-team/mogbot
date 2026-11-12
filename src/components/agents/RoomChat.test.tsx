@@ -257,8 +257,8 @@ describe('RoomChat', () => {
       }),
       agents
     );
-    expect(screen.getByText('Close October by Friday')).toBeTruthy();
-    expect(screen.getByText(/^Chief of Staff made this room\. Each agent keeps/)).toBeTruthy();
+    expect(screen.getByText(/^Close October by Friday Chief of Staff made this room\./)).toBeTruthy();
+    expect(screen.getByRole('button', { name: '@everyone Where does each of you stand?' })).toBeTruthy();
     expect(
       screen.getAllByText(/Chief of Staff answers unless you @ someone/).length
     ).toBeGreaterThan(0);
@@ -268,7 +268,9 @@ describe('RoomChat', () => {
     thread = [];
     await open(room());
     expect(screen.queryByText(/made this room/)).toBeNull();
-    expect(screen.getByText(/^Each agent keeps its own memory/)).toBeTruthy();
+    // How it works, including what the agents bring with them.
+    expect(screen.getByText('They bring what they already know')).toBeTruthy();
+    expect(screen.getByText(/remembers its own chats with you/)).toBeTruthy();
   });
 });
 

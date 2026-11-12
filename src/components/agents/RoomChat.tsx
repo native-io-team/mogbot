@@ -87,13 +87,14 @@ import {
   addressed,
   askedLine,
   everyoneEntry,
-  EVERYONE_ID,
   handRevisionTo,
   listNames,
   MIN_ROOM_MEMBERS,
   roomActivity,
   roomKey,
+  roomHowItWorks,
   roomMembers,
+  ROOM_STARTERS,
   sendRoomMessage,
   stopRoom,
   turnsLine,
@@ -589,6 +590,15 @@ export function RoomChat({
                 members={members}
                 madeBy={room.createdBy ? agentsById.get(room.createdBy)?.name : undefined}
                 onPick={(a) => insertMention(a)}
+                onStart={(t) => {
+                  setDraft(t);
+                  requestAnimationFrame(() => {
+                    const el = inputRef.current;
+                    if (!el) return;
+                    el.focus();
+                    el.setSelectionRange(el.value.length, el.value.length);
+                  });
+                }}
               />
             ) : (
               rows
@@ -1234,47 +1244,53 @@ function WhoShouldAnswer({
   );
 }
 
-/** A new room: who's here, and how to talk to them. */
+/** A new room: what it's for, how it works, what they know, and a first message. */
 function RoomEmpty({
   room,
   members,
   madeBy,
   onPick,
+  onStart,
 }: {
   room: Room;
   members: Agent[];
   /** The agent that made it (the Chief's `create_room`), when one did. */
   madeBy?: string;
   onPick: (agent: Agent) => void;
+  /** Put a starter message in the composer (never sends it). */
+  onStart: (text: string) => void;
 }) {
   const lead = members.find((m) => m.id === room.lead);
   return (
     <div className="agent-chat__empty agent-room__empty">
       <RoomAvatars members={members} />
       <p className="agent-chat__empty-name">{room.name}</p>
-      {room.purpose && <p className="agent-chat__empty-role">{room.purpose}</p>}
       <p className="agent-chat__empty-role">
-        {lead
-          ? `Talk to everyone here at once. ${lead.name} answers unless you @ someone; @everyone asks all ${members.length}.`
-          : `Talk to everyone here at once. @ who should answer, or @everyone to ask all ${members.length}.`}
+        {room.purpose ?? `${members.map((m) => m.name).join(', ')}, in one thread.`}
+        {madeBy && ` ${madeBy} made this room.`}
       </p>
-      <p className="agent-chat__empty-hint">
-        {madeBy && `${madeBy} made this room. `}Each agent keeps its own memory, and remembers what
-        it says here in its own chat too.
-      </p>
+      <ol className="agent-room__how">
+        {roomHowItWorks(lead?.name, members.length).map((h) => (
+          <li key={h.title}>
+            <span className="agent-room__how-title">{h.title}</span>
+            <span className="agent-room__how-text">{h.text}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="agent-chat__empty-hint">Start with one of these, or write your own:</p>
+      <div className="agent-room__starters">
+        {ROOM_STARTERS.map((t) => (
+          <Button key={t} tabIndex={0} variant="secondary" onClick={() => onStart(t)}>
+            {t}
+          </Button>
+        ))}
+      </div>
       <div className="agent-chat__starters">
         {members.map((m) => (
-          <Button key={m.id} tabIndex={0} variant="secondary" onClick={() => onPick(m)}>
+          <Button key={m.id} tabIndex={0} variant="ghost" size="compact" onClick={() => onPick(m)}>
             @{m.name}
           </Button>
         ))}
-        <Button
-          tabIndex={0}
-          variant="secondary"
-          onClick={() => onPick({ ...everyoneEntry(members.length), id: EVERYONE_ID })}
-        >
-          @everyone
-        </Button>
       </div>
     </div>
   );

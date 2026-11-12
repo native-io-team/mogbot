@@ -1,5 +1,5 @@
 /**
- * Settings → Agents → "Your Chrome": the switch (off until turned on), then
+ * Settings → Chrome → "Your Chrome": the switch (off until turned on), then
  * the two things it needs, each read back from the Mac: Chrome can reach
  * this app (the native host), and the extension is in Chrome and connected.
  * Until the Web Store listing exists the extension is added unpacked.

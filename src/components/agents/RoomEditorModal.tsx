@@ -59,6 +59,7 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
   );
   const [picked, setPicked] = useState<string[]>(() => room?.members ?? []);
   const [name, setName] = useState(room?.name ?? '');
+  const [purpose, setPurpose] = useState(room?.purpose ?? '');
   const [lead, setLead] = useState<string>(() => room?.lead ?? NOBODY);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,10 +91,14 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
             name: name.trim() || placeholder,
             members: picked,
             lead: leadNow || null,
+            purpose: purpose.trim(),
           })
         : await createRoom(picked, name).then((created) =>
-            leadNow !== (created.lead ?? NOBODY)
-              ? updateRoom(created.id, { lead: leadNow || null })
+            leadNow !== (created.lead ?? NOBODY) || purpose.trim()
+              ? updateRoom(created.id, {
+                  lead: leadNow || null,
+                  ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
+                })
               : created
           );
       onSaved(saved);
@@ -108,7 +113,7 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
     <ModalFrame
       isOpen={isOpen}
       onClose={onClose}
-      title={room ? 'Members and name' : 'New room'}
+      title={room ? 'Room settings' : 'New room'}
       className="agent-room-editor"
     >
       <form
@@ -119,9 +124,19 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
         }}
       >
         <p className="agent-room-editor__lead">
-          {ROOM_WHAT} Two to six agents, each with its own memory; you @ who should answer, or
-          @everyone.
+          {ROOM_WHAT} Like a launch: the site, the numbers and the posts in one place, with the
+          agents talking to each other. Each brings what it knows from its own chats with you.
         </p>
+        <label className="agent-room-editor__label" htmlFor="room-purpose">
+          What’s it for?
+        </label>
+        <TextField
+          id="room-purpose"
+          value={purpose}
+          maxLength={280}
+          placeholder="Launch the new pricing page by Thursday"
+          onChange={(e) => setPurpose(e.target.value)}
+        />
         <label className="agent-room-editor__label" htmlFor="room-name">
           Name
         </label>

@@ -6,11 +6,11 @@ const LINES = {
   connecting: 'Connecting to the app…',
   app_not_running: 'The app isn’t running on this Mac. Open it, and this connects by itself.',
   no_host:
-    'The app hasn’t set this Chrome up yet. In the app, open Settings → Agents → Your Chrome and turn it on.',
+    'The app hasn’t set this Chrome up yet. In the app, open Settings → Chrome → Your Chrome and turn it on.',
   update_needed: 'This extension and the app are different versions. Update the one that’s older.',
   refused:
     'The app and this extension couldn’t confirm each other. Turn Your Chrome off and on in the app.',
-  stopped: 'Turned off in the app (Settings → Agents → Your Chrome).',
+  stopped: 'Turned off in the app (Settings → Chrome → Your Chrome).',
 };
 
 const $ = (id) => document.getElementById(id);
