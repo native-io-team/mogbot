@@ -10,7 +10,32 @@ use std::path::PathBuf;
 
 fn main() {
     generate_brand();
-    tauri_build::build()
+    let mut attributes = tauri_build::Attributes::new();
+    if embed_windows_manifest() {
+        // The manifest is linked into every artifact below instead, so
+        // tauri-build must not add its own (two manifests fail to link).
+        attributes = attributes
+            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
+    }
+    tauri_build::try_build(attributes).expect("tauri-build failed");
+}
+
+/// tauri-build embeds the app manifest (Common Controls v6) through a resource
+/// file that reaches only the app binary. Test executables then load comctl32
+/// v5 and exit with STATUS_ENTRYPOINT_NOT_FOUND before any test runs. Linking
+/// the manifest with `/MANIFEST:EMBED` covers the app and the tests alike.
+fn embed_windows_manifest() -> bool {
+    let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if os != "windows" || env != "msvc" {
+        return false;
+    }
+    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"))
+        .join("windows-app-manifest.xml");
+    println!("cargo:rerun-if-changed={}", manifest.display());
+    println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+    println!("cargo:rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());
+    true
 }
 
 fn generate_brand() {
