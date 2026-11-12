@@ -177,6 +177,19 @@ pub async fn companion_account_sign_out(app: AppHandle) -> Result<(), CommandErr
     Ok(())
 }
 
+/// "Delete my account": the relay removes the account at the sign-in
+/// service (its email and id) and unlinks this Mac. Nothing on this Mac is
+/// deleted: agents, chats and phones stay; phones keep Tailscale if they had it.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn companion_account_delete(app: AppHandle) -> Result<(), CommandError> {
+    crate::companion::relay::delete_account()
+        .await
+        .map_err(CommandError::expected)?;
+    desktop::ensure(&app).backend.changed();
+    Ok(())
+}
+
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn companion_retry_tailscale(app: AppHandle) -> Result<PhoneStatus, CommandError> {

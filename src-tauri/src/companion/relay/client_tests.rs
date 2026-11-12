@@ -509,6 +509,28 @@ async fn a_phone_reaches_the_mac_through_the_relay_end_to_end() {
     relay.heard("unlink").await;
     assert!(link.status().account.is_none());
 
+    // Delete the account: refused when not signed in, then the relay's
+    // answer settles it either way.
+    assert!(link.delete_account().await.is_err(), "not signed in");
+    relay.to_mac(json!({ "t": "account", "account": { "id": "user_2", "email": "k@x.com" } }));
+    until("signed in to delete", || link.status().account.is_some()).await;
+    let failing = {
+        let link = link.clone();
+        tokio::spawn(async move { link.delete_account().await })
+    };
+    relay.heard("deleteAccount").await;
+    relay.to_mac(json!({ "t": "accountDeleted", "ok": false, "error": "clerk_failed" }));
+    assert!(failing.await.unwrap().is_err());
+    assert!(link.status().account.is_some(), "a failed delete keeps the account");
+    let deleting = {
+        let link = link.clone();
+        tokio::spawn(async move { link.delete_account().await })
+    };
+    relay.heard("deleteAccount").await;
+    relay.to_mac(json!({ "t": "accountDeleted", "ok": true }));
+    deleting.await.unwrap().unwrap();
+    assert!(link.status().account.is_none());
+
     // Off.
     stop_tx.send(()).unwrap();
     until("off", || {

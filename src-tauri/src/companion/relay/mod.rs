@@ -187,6 +187,9 @@ pub(crate) enum Command {
     LinkStart(String, oneshot::Sender<bool>),
     /// `{"t":"unlink"}`.
     Unlink(oneshot::Sender<bool>),
+    /// `{"t":"deleteAccount"}`; answered by the relay's `accountDeleted`
+    /// once the account is gone at the sign-in service (or why it isn't).
+    DeleteAccount(oneshot::Sender<Result<(), String>>),
 }
 
 #[derive(Debug)]
@@ -352,7 +355,32 @@ impl Link {
         self.command(Command::Unlink).await?;
         Ok(())
     }
+
+    /// Delete the account this Mac is signed in to: the relay removes it at
+    /// the sign-in service (email and id) and unlinks this Mac. Other Macs
+    /// on the same account are unlinked the next time they connect.
+    pub async fn delete_account(&self) -> Result<(), String> {
+        let tx = {
+            let inner = self.lock();
+            let up = inner.up.as_ref().ok_or_else(|| NOT_CONNECTED.to_string())?;
+            if inner.account.is_none() {
+                return Err("This Mac isn't signed in.".into());
+            }
+            up.commands.clone()
+        };
+        let (done_tx, done) = oneshot::channel();
+        tx.send(Command::DeleteAccount(done_tx))
+            .await
+            .map_err(|_| NOT_CONNECTED.to_string())?;
+        match tokio::time::timeout(DELETE_TIMEOUT, done).await {
+            Ok(Ok(result)) => result,
+            _ => Err("The sign-in service didn't answer. Your account is still there; try again.".into()),
+        }
+    }
 }
+
+/// How long deleting an account may take at the relay and Clerk.
+const DELETE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// A linking code, as the relay reads it (`services/relay/src/link.ts`):
 /// `<fingerprint>.<32 random bytes, base64url>`. The fingerprint finds this
@@ -382,6 +410,11 @@ pub async fn link_start() -> Result<String, &'static str> {
 /// [`Link::unlink`] on the app's link.
 pub async fn unlink() -> Result<(), &'static str> {
     LINK.unlink().await
+}
+
+/// [`Link::delete_account`] on the app's link.
+pub async fn delete_account() -> Result<(), String> {
+    LINK.delete_account().await
 }
 
 #[cfg(test)]

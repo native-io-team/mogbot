@@ -263,6 +263,7 @@ async fn session(
     let mut wake = tokio::time::interval(WAKE_TICK);
     wake.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut wall = SystemTime::now();
+    let mut pending_delete: Option<oneshot::Sender<Result<(), String>>> = None;
 
     let ended = loop {
         tokio::select! {
@@ -278,6 +279,17 @@ async fn session(
                             continue;
                         }
                         let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
+                        if v["t"] == "accountDeleted" {
+                            let ok = v["ok"].as_bool() == Some(true);
+                            tracing::info!(ok, "[Relay] account delete answered");
+                            if ok && link.set_account(None) {
+                                changed(c);
+                            }
+                            if let Some(done) = pending_delete.take() {
+                                let _ = done.send(if ok { Ok(()) } else { Err(delete_error(&v["error"])) });
+                            }
+                            continue;
+                        }
                         if v["t"] == "account" {
                             let account = parse_account(&v["account"]);
                             let linked = account.is_some();
@@ -358,6 +370,16 @@ async fn session(
                 let (frame, ack, unlink) = match cmd {
                     Command::LinkStart(code, ack) => (json!({ "t": "linkStart", "code": code }), ack, false),
                     Command::Unlink(ack) => (json!({ "t": "unlink" }), ack, true),
+                    Command::DeleteAccount(done) => {
+                        let frame = json!({ "t": "deleteAccount" }).to_string();
+                        if ws.send(Message::Text(frame)).await.is_err() {
+                            let _ = done.send(Err(super::NOT_CONNECTED.to_string()));
+                            break Ended::WasUp;
+                        }
+                        // One at a time: a newer ask replaces an older one's wait.
+                        pending_delete = Some(done);
+                        continue;
+                    }
                 };
                 let sent = ws.send(Message::Text(frame.to_string())).await.is_ok();
                 if sent && unlink && link.set_account(None) {
@@ -395,6 +417,17 @@ async fn session(
     // socket handler sees its phone go.
     drop(open);
     ended
+}
+
+/// What the desk says when the relay couldn't delete the account.
+fn delete_error(code: &Value) -> String {
+    match code.as_str() {
+        Some("not_signed_in") => "This Mac isn't signed in.".into(),
+        Some("unavailable") => {
+            "Deleting accounts isn't available right now. Your account is still there; try again later.".into()
+        }
+        _ => "The sign-in service couldn't delete the account. It's still there; try again.".into(),
+    }
 }
 
 fn close_text(ch: u32) -> Message {
