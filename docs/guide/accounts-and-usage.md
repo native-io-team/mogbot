@@ -79,5 +79,7 @@ unlocks anything else with it.
 - **Delete your account:** **Settings → Account → Delete my account**. Your email and account id
   are removed from the sign-in service and the relay, this computer is signed out at once, and any other
   computer signed in to the same account within a day. Nothing on your computer is deleted.
+  Phone notifications aren't part of your account: they belong to this computer and keep working.
+  To remove them from the push service too, turn off **Phone notifications** in **Settings → Phone**.
 
 Your phone doesn't sign in. It uses the relay because the computer it's paired with is signed in.

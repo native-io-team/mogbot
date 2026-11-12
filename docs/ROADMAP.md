@@ -36,8 +36,8 @@ good one exists.
    ([agents.md](agents.md), "When… routines").
 6. **The Watch.** Voice messages, Listen and Talk (a hands-free spoken
    conversation with an agent, [mobile.md](mobile.md)) exist on the phone;
-   Talk is not yet tried on a real phone. An Apple Watch app (Muse, OpenBot,
-   Grok have one) is easier once item 1 lands.
+   Talk is not yet tried on a real phone. An Apple Watch app (Muse and Grok
+   have one; OpenBot doesn't, checked 12 Nov 2026) is easier once item 1 lands.
 7. **More chat front doors.** Telegram, WhatsApp or Discord, once Slack has
    proved out.
 8. **Results, the rest.** A PR straight from a non-copy result, and
