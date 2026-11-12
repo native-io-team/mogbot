@@ -122,10 +122,14 @@ node - <<'NODE' || die "brand.json turns on an outside service; check it is mean
 const b = require('./brand.json');
 const on = [];
 for (const [k, v] of Object.entries(b.telemetry || {})) if (v) on.push(`telemetry.${k}`);
-for (const k of ['errorReports', 'templateApi', 'pushRelay']) if (b.links[k]) on.push(`links.${k}`);
-if (on.length) { console.error('  on: ' + on.join(', ')); process.exit(1); }
+for (const k of ['errorReports', 'templateApi', 'pushRelay', 'relay']) if (b.links[k]) on.push(`links.${k}`);
+// Turned on by the owner on purpose: error reports (Settings switch, 2026-11-12) and
+// the phone relay (sign-in only, docs/relay.md, 2026-11-11). Anything else still stops here.
+const meant = new Set(['links.errorReports', 'links.relay']);
+const unmeant = on.filter((k) => !meant.has(k));
+if (unmeant.length) { console.error('  on: ' + unmeant.join(', ')); process.exit(1); }
 NODE
-ok "telemetry, error reports and template API are off (brand.json)"
+ok "outside services: only the ones meant to be on (brand.json)"
 node scripts/check-brand.mjs >/dev/null || die "brand copies drift from brand.json (node scripts/check-brand.mjs)"
 ok "brand copies match brand.json"
 
