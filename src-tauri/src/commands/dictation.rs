@@ -243,6 +243,8 @@ mod macos {
         /// This segment's latest partial text, in case it ends without a final.
         heard: String,
         capturing: bool,
+        /// The `AVAudioEngineConfigurationChange` observer; removed on teardown.
+        observer: Option<Retained<AnyObject>>,
     }
 
     thread_local! {
@@ -547,73 +549,10 @@ mod macos {
             if input.is_null() {
                 return Err("No microphone found.".into());
             }
-            let format: *mut AnyObject = msg_send![input, outputFormatForBus: 0usize];
-            let sample_rate: f64 = if format.is_null() {
-                0.0
-            } else {
-                msg_send![format, sampleRate]
-            };
-            if sample_rate <= 0.0 {
-                return Err("No microphone found.".into());
-            }
-
-            // Audio I/O thread. Feeds the recognizer and reports loudness.
-            let tap_request = Arc::clone(&slot);
-            let tap_app = app.clone();
-            let frames_per_level = (sample_rate / LEVELS_PER_SECOND) as u64;
-            let frames = Cell::new(0u64);
-            let peak = Cell::new(0f32);
-            let tap = block2::RcBlock::new(move |buffer: *mut AnyObject, _when: *mut AnyObject| {
-                if buffer.is_null() {
-                    return;
-                }
-                let _ = catch_unwind(AssertUnwindSafe(|| {
-                    objc2::rc::autoreleasepool(|_| {
-                        if let Ok(request) = tap_request.lock() {
-                            let _: () = msg_send![&*request.0, appendAudioPCMBuffer: buffer];
-                        }
-                        let len: u32 = msg_send![buffer, frameLength];
-                        let channels: *const *const f32 = msg_send![buffer, floatChannelData];
-                        if channels.is_null() || len == 0 {
-                            return;
-                        }
-                        let samples = std::slice::from_raw_parts(*channels, len as usize);
-                        let rms = (samples.iter().map(|s| s * s).sum::<f32>() / len as f32).sqrt();
-                        peak.set(peak.get().max(level_from_rms(rms)));
-                        frames.set(frames.get() + len as u64);
-                        if frames.get() >= frames_per_level {
-                            emit(
-                                &tap_app,
-                                DictationEvent::Level {
-                                    session: id,
-                                    level: peak.get(),
-                                },
-                            );
-                            frames.set(0);
-                            peak.set(0.0);
-                        }
-                    });
-                }));
-            });
-            let _: () = msg_send![
-                input,
-                installTapOnBus: 0usize,
-                bufferSize: 1024u32,
-                format: format,
-                block: &*tap
-            ];
-            let _: () = msg_send![&*engine, prepare];
-            let mut err: *mut AnyObject = std::ptr::null_mut();
-            let started: bool = msg_send![&*engine, startAndReturnError: &mut err];
-            if !started {
-                let _: () = msg_send![input, removeTapOnBus: 0usize];
-                let desc = if err.is_null() {
-                    None
-                } else {
-                    ns_to_string(msg_send![err, localizedDescription])
-                };
-                return Err(desc.unwrap_or_else(|| "The microphone couldn't start.".into()));
-            }
+            choose_microphone(input);
+            let sample_rate = start_capture(app, &engine, &slot, id)?;
+            tracing::info!(session = id, sample_rate, "[Dictation] listening");
+            let observer = watch_route_changes(app, &engine, id);
 
             // Main queue (set above).
             let task = {
@@ -634,10 +573,160 @@ mod macos {
                     quick_segments: 0,
                     heard: String::new(),
                     capturing: true,
+                    observer,
                 })
             });
         }
         Ok(id)
+    }
+
+    /// Main thread. Point the engine's input at the microphone dictation
+    /// should use (`dictation_mic`): the built-in mic instead of a Bluetooth
+    /// headset's, so music doesn't drop to call quality and capture isn't cut
+    /// off by the headset switching profiles.
+    unsafe fn choose_microphone(input: *mut AnyObject) {
+        let Some(choice) = crate::commands::dictation_mic::core_audio::pick() else {
+            tracing::warn!("[Dictation] no default microphone");
+            return;
+        };
+        if let Some(device) = choice.device {
+            let unit: *mut std::ffi::c_void = msg_send![input, audioUnit];
+            let set = crate::commands::dictation_mic::core_audio::set_device(unit, device);
+            tracing::info!(
+                mic = %choice.name,
+                avoided_bluetooth = choice.avoided_bluetooth,
+                set,
+                "[Dictation] microphone"
+            );
+        } else {
+            tracing::info!(mic = %choice.name, transport = ?choice.transport, "[Dictation] microphone");
+        }
+    }
+
+    /// Main thread. Install the tap on the input's current format and start
+    /// the engine. Also used to recover after a route change, so it removes
+    /// any old tap first. Returns the input's sample rate.
+    unsafe fn start_capture(
+        app: &AppHandle,
+        engine: &AnyObject,
+        slot: &RequestSlot,
+        id: u64,
+    ) -> Result<f64, String> {
+        let input: *mut AnyObject = msg_send![engine, inputNode];
+        if input.is_null() {
+            return Err("No microphone found.".into());
+        }
+        let _: () = msg_send![input, removeTapOnBus: 0usize];
+        let format: *mut AnyObject = msg_send![input, outputFormatForBus: 0usize];
+        let sample_rate: f64 = if format.is_null() {
+            0.0
+        } else {
+            msg_send![format, sampleRate]
+        };
+        if sample_rate <= 0.0 {
+            return Err("No microphone found.".into());
+        }
+
+        // Audio I/O thread. Feeds the recognizer and reports loudness.
+        let tap_request = Arc::clone(slot);
+        let tap_app = app.clone();
+        let frames_per_level = (sample_rate / LEVELS_PER_SECOND) as u64;
+        let frames = Cell::new(0u64);
+        let peak = Cell::new(0f32);
+        let tap = block2::RcBlock::new(move |buffer: *mut AnyObject, _when: *mut AnyObject| {
+            if buffer.is_null() {
+                return;
+            }
+            let _ = catch_unwind(AssertUnwindSafe(|| {
+                objc2::rc::autoreleasepool(|_| {
+                    if let Ok(request) = tap_request.lock() {
+                        let _: () = msg_send![&*request.0, appendAudioPCMBuffer: buffer];
+                    }
+                    let len: u32 = msg_send![buffer, frameLength];
+                    let channels: *const *const f32 = msg_send![buffer, floatChannelData];
+                    if channels.is_null() || len == 0 {
+                        return;
+                    }
+                    let samples = std::slice::from_raw_parts(*channels, len as usize);
+                    let rms = (samples.iter().map(|s| s * s).sum::<f32>() / len as f32).sqrt();
+                    peak.set(peak.get().max(level_from_rms(rms)));
+                    frames.set(frames.get() + len as u64);
+                    if frames.get() >= frames_per_level {
+                        emit(
+                            &tap_app,
+                            DictationEvent::Level {
+                                session: id,
+                                level: peak.get(),
+                            },
+                        );
+                        frames.set(0);
+                        peak.set(0.0);
+                    }
+                });
+            }));
+        });
+        let _: () = msg_send![
+            input,
+            installTapOnBus: 0usize,
+            bufferSize: 1024u32,
+            format: format,
+            block: &*tap
+        ];
+        let _: () = msg_send![engine, prepare];
+        let mut err: *mut AnyObject = std::ptr::null_mut();
+        let started: bool = msg_send![engine, startAndReturnError: &mut err];
+        if !started {
+            let _: () = msg_send![input, removeTapOnBus: 0usize];
+            let desc = if err.is_null() {
+                None
+            } else {
+                ns_to_string(msg_send![err, localizedDescription])
+            };
+            return Err(desc.unwrap_or_else(|| "The microphone couldn't start.".into()));
+        }
+        Ok(sample_rate)
+    }
+
+    /// Main thread. When the audio route changes under a running session
+    /// (headphones plugged in or out, a Bluetooth headset switching
+    /// profiles), AVAudioEngine stops itself. Restart capture on the new
+    /// route so the session keeps hearing instead of going silent.
+    unsafe fn watch_route_changes(
+        app: &AppHandle,
+        engine: &AnyObject,
+        id: u64,
+    ) -> Option<Retained<AnyObject>> {
+        let center: *mut AnyObject = msg_send![class!(NSNotificationCenter), defaultCenter];
+        let queue: *mut AnyObject = msg_send![class!(NSOperationQueue), mainQueue];
+        let name = NSString::from_str("AVAudioEngineConfigurationChangeNotification");
+        let handler_app = app.clone();
+        let block = block2::RcBlock::new(move |_note: *mut AnyObject| {
+            let _ = catch_unwind(AssertUnwindSafe(|| {
+                SESSION.with(|s| {
+                    let mut s = s.borrow_mut();
+                    let Some(session) = s.as_mut().filter(|c| c.id == id && c.capturing) else {
+                        return;
+                    };
+                    let engine = Retained::clone(&session.engine);
+                    let slot = Arc::clone(&session.request);
+                    match start_capture(&handler_app, &engine, &slot, id) {
+                        Ok(rate) => tracing::info!(session = id, rate, "[Dictation] route changed; listening again"),
+                        Err(error) => {
+                            tracing::warn!(session = id, %error, "[Dictation] route changed; couldn't restart");
+                            emit(&handler_app, DictationEvent::Error { session: id, message: error });
+                        }
+                    }
+                });
+            }));
+        });
+        let observer: *mut AnyObject = msg_send![
+            center,
+            addObserverForName: &*name,
+            object: engine,
+            queue: queue,
+            usingBlock: &*block
+        ];
+        Retained::retain(observer)
     }
 
     /// `kAFAssistantErrorDomain` 1110 is "no speech detected"; 216 and
@@ -787,7 +876,12 @@ mod macos {
     /// `cancel` can call the result handler re-entrantly.
     fn teardown(app: &AppHandle, mut session: Session, cancelled: bool) {
         unsafe {
+            if let Some(observer) = session.observer.take() {
+                let center: *mut AnyObject = msg_send![class!(NSNotificationCenter), defaultCenter];
+                let _: () = msg_send![center, removeObserver: &*observer];
+            }
             stop_capture(&mut session);
+            tracing::info!(session = session.id, cancelled, "[Dictation] ended");
             if cancelled {
                 if let Some(task) = &session.task {
                     let _: () = msg_send![&**task, cancel];

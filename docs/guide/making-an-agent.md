@@ -62,6 +62,13 @@ On your own messages you can:
 
 An agent works on one thing at a time. Messages sent while it's busy wait their turn.
 
+## Dictation
+
+Click the microphone in the message box and talk; your words appear as you speak and Enter
+finishes. Speech is recognised on your Mac. If your default microphone is a Bluetooth headset
+(AirPods and the like), dictation listens through your Mac's built-in microphone instead, so your
+headphones keep playing music at full quality rather than switching to call mode.
+
 ## Share an agent as a recipe
 
 A recipe is an agent's definition without anything it knows: its role, briefing, routines (as
