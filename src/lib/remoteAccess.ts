@@ -673,12 +673,12 @@ export function assistantGuides(appName: string): AssistantGuide[] {
       url: 'https://chatgpt.com/',
       urlLabel: 'Open ChatGPT',
       needs:
-        'On the web, with Developer mode (Plus, Pro, Business, Enterprise, Edu; on Business and Enterprise an admin turns it on).',
+        'On chatgpt.com, on a paid plan (on Business and Enterprise an admin may need to allow custom MCP servers).',
       steps: [
-        'Settings → Apps → Advanced settings: switch on Developer mode.',
-        `Back in Apps press Create app. Name it ${appName} and paste the link as the MCP server URL.`,
-        'For authentication choose No authentication, tick that you trust it, and press Create.',
-        'In a chat, press + → Developer mode and pick it.',
+        'Open Plugins in the sidebar, press Add (or +) and pick Add custom MCP server.',
+        `Name it ${appName} and paste the link as the server URL.`,
+        'For authentication choose No authentication, tick “I understand and want to continue”, and press Create.',
+        `In a new chat, type @ and pick ${appName}.`,
       ],
     },
     {

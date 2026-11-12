@@ -73,6 +73,37 @@ describe('pairing links', () => {
     ).not.toBeNull();
   });
 
+  // A phone build from before the relay (TestFlight build 10) read a newer
+  // Mac's relay code as "not a pairing code": it should say to update the phone.
+  it('says to update the phone when a code reaches the Mac a way this build doesn’t know', () => {
+    const relayRoute = {
+      kind: 'relay' as const,
+      url: `wss://relay.example.com/v1/phone/${link.fingerprint}`,
+    };
+    const relayLink = formatPairingLink({ ...link, routes: [relayRoute] });
+    expect(readPairingLink(relayLink, { relayHost: null })).toEqual({
+      ok: false,
+      problem: 'old_phone',
+    });
+    expect(readPairingLink(relayLink, { relayHost: 'relay.example.com' }).ok).toBe(true);
+    // A relay route on someone else's host, while this build knows its relay, is just invalid.
+    expect(readPairingLink(relayLink, { relayHost: 'other.example.com' })).toEqual({
+      ok: false,
+      problem: 'invalid',
+    });
+    const future = formatPairingLink({
+      ...link,
+      routes: [{ kind: 'carrier-pigeon', url: 'x' } as unknown as PairingLink['routes'][0]],
+    });
+    expect(readPairingLink(future)).toEqual({ ok: false, problem: 'old_phone' });
+    // A bad fingerprint is never "update the phone".
+    expect(
+      readPairingLink(formatPairingLink({ ...link, fingerprint: 'short', routes: [relayRoute] }), {
+        relayHost: null,
+      })
+    ).toEqual({ ok: false, problem: 'invalid' });
+  });
+
   it('needs the Mac’s identity fingerprint, and says when the Mac is too old to have one', () => {
     const { fingerprint: _, ...without } = link;
     expect(parsePairingLink(formatPairingLink(without as PairingLink))).toBeNull();

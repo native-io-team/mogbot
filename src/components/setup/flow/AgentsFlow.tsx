@@ -82,7 +82,7 @@ function markStayOnUnderstood() {
 /** The pick list: each assistant in one line, by what people call it. */
 const CHOICES: { id: AssistantId; name: string; hint: string }[] = [
   { id: 'claude', name: 'Claude', hint: 'On claude.ai, any plan' },
-  { id: 'chatgpt', name: 'ChatGPT', hint: 'On chatgpt.com, with Developer mode' },
+  { id: 'chatgpt', name: 'ChatGPT', hint: 'On chatgpt.com, from Plugins' },
   { id: 'grok', name: 'Grok', hint: 'On grok.com' },
   { id: 'other', name: 'Another assistant', hint: 'Anything that adds a custom connector (MCP)' },
 ];
@@ -218,7 +218,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
         step={step}
         onBack={onBack}
         title="Bring your agents from another assistant?"
-        lede="If one of these runs agents for you, they carry on here, each where it left off. Nothing is created until you say so."
+        lede="Your agents here already run on the engine you just set up. This only brings over agents you made in another assistant, each where it left off. Nothing is created until you say so."
       >
         <div className="flow-choices">
           {CHOICES.map((c) => (

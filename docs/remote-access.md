@@ -75,7 +75,7 @@ and needs no sign-in: the token is in the path.
 | Assistant | Where | Auth | Needs |
 | --- | --- | --- | --- |
 | Claude | Customize → Connectors → + Add → Add custom connector; name, remote MCP server URL → Continue | **No sign in** | Any plan (Free: one custom connector); Team/Enterprise: an owner adds it in Organization settings → Connectors. In a chat: + → Connectors, switch it on |
-| ChatGPT | Settings → Apps → Advanced settings → **Developer mode** on; then Apps → Create app; name, MCP server URL | **No authentication**, tick that you trust it | Web only; Plus, Pro, Business, Enterprise, Edu (on Business/Enterprise an admin enables Developer mode). In a chat: + → Developer mode → pick it. OpenAI's help says full write access may be limited to Business/Enterprise/Edu: **unverified** whether Plus/Pro can call our write tools (`message_agent`, `import_conversation`) |
+| ChatGPT | Plugins → **Add** (or +) → **Add custom MCP server**; name, MCP server URL (no Developer mode since OpenAI's Plugins change, help article 12584461) | **No authentication**, tick “I understand and want to continue”, Create | Web only, paid plans. In a chat: type **@** and pick it. OpenAI's help says full MCP (write tools) is Business/Enterprise/Edu and Pro gets read/fetch; a Plus/Pro tester (Pash, 2026-11-12) did get the import running, so `import_conversation` works there at least |
 | Grok | grok.com/connectors → New Connector → Custom; server URL | none | xAI says connectors are on every plan; Business/Enterprise need an admin. Grok Bot adding a custom server: still unconfirmed |
 | Other | wherever it adds a custom/remote MCP server | none | — |
 

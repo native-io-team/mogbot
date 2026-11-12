@@ -88,6 +88,8 @@ export function linkProblem(text: string): string {
       // The Mac runs a copy from before the app's last rename, which still
       // shows its old name: updating it is the fix, not this phone.
       return 'Update the app on your Mac to pair. This code comes from an older copy, from before the app was renamed, so it shows the old name there too. Once it’s updated, make a new code there.';
+    case 'old_phone':
+      return `Update ${brand.name} on this phone to pair: your Mac’s app is newer and reaches the phone a way this version doesn’t know. Get the latest from TestFlight or the App Store, then scan the code again.`;
     case 'other_app':
       return `That code is for a different app’s phone app. In ${brand.name} on your Mac, click ${WHERE_TO_PAIR}, then scan the code it shows.`;
     default:

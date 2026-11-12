@@ -346,7 +346,7 @@ function optionalParts(): Scenario[] {
       'onboarding-agents-connect-chatgpt',
       'agentsConnect',
       '3c. Add the link to ChatGPT',
-      '"Add the link to ChatGPT", its numbered steps (Settings → Apps → Advanced settings → Developer mode; Create app; No authentication; + → Developer mode), "Open ChatGPT ↗", the neutral waiting line, the Developer-mode plan note, a big "Copy the link".',
+      '"Add the link to ChatGPT", its numbered steps (Plugins → Add → Add custom MCP server; name and link; No authentication and the “I understand” tick; @ in a new chat), "Open ChatGPT ↗", the neutral waiting line, the paid-plan note, a big "Copy the link".',
       remote(REMOTE_ON),
       { storage: picked('agentsConnect', 'chatgpt') }
     ),

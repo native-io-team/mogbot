@@ -234,7 +234,7 @@ describe('assistantGuides', () => {
     }
     expect(guides[0].steps.join(' ')).toMatch(/Add custom connector/);
     expect(guides[0].steps.join(' ')).toMatch(/No sign in/);
-    expect(guides[1].steps.join(' ')).toMatch(/Developer mode/);
+    expect(guides[1].steps.join(' ')).toMatch(/Add custom MCP server/);
     expect(guides[1].steps.join(' ')).toMatch(/No authentication/);
     expect(guides[2].url).toBe('https://grok.com/connectors');
   });

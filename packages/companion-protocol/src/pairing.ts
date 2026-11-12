@@ -9,7 +9,7 @@
 import type { DevicePlatform, Route } from './model';
 import type { ProtocolRange } from './version';
 import { PAIRING_SCHEME, PREVIOUS_PAIRING_SCHEME } from './brand.gen';
-import { isRelayUrl } from './relay';
+import { isRelayUrl, RELAY_HOST } from './relay';
 
 // From brand.json, through the generated file both apps build against.
 export { PAIRING_SCHEME, PREVIOUS_PAIRING_SCHEME };
@@ -153,7 +153,13 @@ export type LinkProblem =
    */
   | 'renamed_mac'
   /** A pairing link for the other app's phone app (`OTHER_APP_PAIRING_SCHEME`). */
-  | 'other_app';
+  | 'other_app'
+  /**
+   * A well-formed link from a newer Mac, reached a way this phone build
+   * doesn't know: a kind of route it has never heard of, or the relay when
+   * this build has none. Updating the phone app is the fix, not the Mac.
+   */
+  | 'old_phone';
 
 export type ParsedLink = { ok: true; link: PairingLink } | { ok: false; problem: LinkProblem };
 
@@ -193,7 +199,7 @@ export function readPairingLink(text: string, options: ParseOptions = {}): Parse
             : // A LAN route is only usable with its certificate pin.
               r.url.startsWith('https://') && typeof r.pin === 'string')
     );
-    if (!routesOk) return invalid;
+    if (!routesOk) return newerRoute(link, options) ? { ok: false, problem: 'old_phone' } : invalid;
     // Everything else is right and there's no fingerprint: a Mac from
     // before identity keys. Never paired with, but worth saying why.
     if (link.fingerprint === undefined) return { ok: false, problem: 'old_mac' };
@@ -205,11 +211,30 @@ export function readPairingLink(text: string, options: ParseOptions = {}): Parse
     const relayOk = link.routes.every(
       (r) => r.kind !== 'relay' || isRelayUrl(r.url, fingerprint, options)
     );
-    if (!relayOk) return invalid;
+    if (!relayOk) return newerRoute(link, options) ? { ok: false, problem: 'old_phone' } : invalid;
     return { ok: true, link: link as PairingLink };
   } catch {
     return invalid;
   }
+}
+
+/**
+ * A link that failed only on its route, because the route is newer than
+ * this build: an unknown kind, or a relay route while this build knows no
+ * relay. Anything else wrong with it (a bad fingerprint, a stray host for a
+ * known kind) stays just invalid.
+ */
+function newerRoute(link: Partial<PairingLink>, options: ParseOptions): boolean {
+  const relayHost = options.relayHost === undefined ? RELAY_HOST : options.relayHost;
+  if (typeof link.fingerprint !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(link.fingerprint)) {
+    return false;
+  }
+  return (link.routes ?? []).some(
+    (r) =>
+      typeof r?.url === 'string' &&
+      typeof r.kind === 'string' &&
+      (!['tailscale', 'lan', 'relay'].includes(r.kind) || (r.kind === 'relay' && !relayHost))
+  );
 }
 
 /** `readPairingLink`'s link, or null for anything that can't be paired from. */
