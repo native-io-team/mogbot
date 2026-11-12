@@ -47,14 +47,14 @@ function Row({
   children,
 }: {
   label: string;
-  description: ReactNode;
+  description?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <div className="settings-row">
       <div className="settings-row-info">
         <span className="settings-row-label">{label}</span>
-        <span className="settings-row-description">{description}</span>
+        {description != null && <span className="settings-row-description">{description}</span>}
       </div>
       {children}
     </div>
@@ -96,10 +96,7 @@ function ModelRow({
   }
   const current = choices.find((m) => m.value === value) ?? choices[0];
   return (
-    <Row
-      label={`Model on ${name}`}
-      description={`For new agents on ${name}. Each agent can pick its own in Edit agent.`}
-    >
+    <Row label={`Model on ${name}`}>
       <Dropdown
         align="right"
         menuClassName="agent-defaults-menu"

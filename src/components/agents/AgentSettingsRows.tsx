@@ -61,14 +61,29 @@ export function Row({
   );
 }
 
-/** A titled group of rows: its heading, its rows, a hairline before the next. */
-export function Group({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+/**
+ * A titled group of rows, drawn as the phone draws it: a small label above,
+ * the rows in one rounded card with hairlines between them, and at most one
+ * footnote under it for what the rows themselves don't need to say.
+ */
+export function Group({
+  id,
+  title,
+  footnote,
+  children,
+}: {
+  id: string;
+  title: string;
+  footnote?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="settings-group" aria-labelledby={`settings-group-${id}`}>
       <h3 className="settings-group__title" id={`settings-group-${id}`}>
         {title}
       </h3>
       <div className="settings-section">{children}</div>
+      {footnote != null && <p className="settings-group__footnote">{footnote}</p>}
     </section>
   );
 }

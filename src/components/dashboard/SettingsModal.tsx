@@ -85,7 +85,20 @@ import {
 } from '../../lib/settingsPages';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { isMac } from '../../lib/setup';
-import { MoveToFolderIcon } from '@/components/icons';
+import {
+  ActivityIcon,
+  AgentsIcon,
+  BellIcon,
+  ContrastIcon,
+  FolderIcon,
+  GlobeIcon,
+  LoginIcon,
+  MobileIcon,
+  MoveToFolderIcon,
+  PuzzleIcon,
+  SettingsSlidersIcon,
+  ShieldCheckIcon,
+} from '@/components/icons';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useOpenModal } from '../../contexts/ModalContext';
 import { useKeepDevServersRunning } from '../../hooks/useKeepDevServersRunning';
@@ -111,6 +124,21 @@ interface MovePrompt {
 }
 
 /** The section list: one button per page, the open one marked as the current page. */
+/** Each section's tile in the list, as the phone's Settings rows have. */
+const NAV_ICONS: Record<SettingsPage, React.ReactNode> = {
+  account: <LoginIcon size={14} />,
+  agents: <AgentsIcon size={14} />,
+  independence: <ShieldCheckIcon size={14} />,
+  accounts: <ActivityIcon size={14} />,
+  phone: <MobileIcon size={14} />,
+  notifications: <BellIcon size={14} />,
+  chrome: <GlobeIcon size={14} />,
+  apps: <PuzzleIcon size={14} />,
+  projects: <FolderIcon size={14} />,
+  appearance: <ContrastIcon size={14} />,
+  advanced: <SettingsSlidersIcon size={14} />,
+};
+
 function SettingsNav({
   page,
   onPage,
@@ -147,6 +175,9 @@ function SettingsNav({
             data-selected={p.id === page || undefined}
             onClick={() => onPage(p.id)}
           >
+            <span className="settings-window__nav-tile" aria-hidden="true">
+              {NAV_ICONS[p.id]}
+            </span>
             {p.title}
           </Button>
         </span>

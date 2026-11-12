@@ -30,7 +30,15 @@
   --settings-window-max-width: 960px;
   --settings-window-max-height: 760px;
   --settings-nav-width: 208px;
-  --settings-page-max-width: 680px;
+  /* One readable column, as the phone's Settings: each control sits beside
+     its label, not across the window. */
+  --settings-page-max-width: 560px;
+  /* The phone's grouped look: the page recessed, each group a card on it. */
+  --settings-page-surface: var(--surface-recessed);
+  --settings-card-surface: var(--surface-panel);
+  --settings-card-inset: var(--spacing-lg);
+  --settings-row-min-height: 46px; /* css-ok: one-line row, the phone's row height */
+  --settings-nav-tile: 22px; /* css-ok: the list's icon tile */
 }
 
 .modal-frame-overlay:has(> .settings-window) {
@@ -85,15 +93,38 @@
   color: var(--text-primary);
 }
 
+/* Each section's icon on a small tile, as the phone's Settings rows. */
+.settings-window__nav-item.button {
+  gap: var(--spacing-sm);
+}
+
+.settings-window__nav-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--settings-nav-tile);
+  height: var(--settings-nav-tile);
+  border-radius: var(--radius-control);
+  background: var(--surface-control);
+  color: var(--text-secondary);
+}
+
+.settings-window__nav-item.button[aria-current='page'] .settings-window__nav-tile {
+  color: var(--text-primary);
+}
+
 .settings-window__page {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
   padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-2xl);
+  background: var(--settings-page-surface);
 }
 
 .settings-window__page > * {
   max-width: var(--settings-page-max-width);
+  margin-inline: auto;
 }
 
 .settings-window__page-head {
@@ -105,7 +136,7 @@
 
 .settings-window__page-title {
   margin: 0;
-  font-size: var(--font-size-h3);
+  font-size: var(--font-size-h2);
   font-weight: var(--font-weight-heading);
   letter-spacing: var(--tracking-name);
   color: var(--text-primary);
@@ -266,13 +297,6 @@
    top of it. The section's 16px gap plus 12px of padding each side put 40px
    between two switches on the agents' pages, while the app's pages (no
    group) had 16px; the same window read as two apps. */
-.settings-group .settings-section:not(:has(> :not(.settings-row, .settings-row-steps))) {
-  gap: 0;
-}
-
-.settings-group .settings-row {
-  padding: var(--spacing-md) 0;
-}
 
 /* Small workspace chip next to the "Projects folder" label (multi-workspace). */
 .settings-folder-workspace {
@@ -501,11 +525,10 @@
   font-size: var(--font-size-body-sm);
 }
 
-/* Every Settings page: a few quiet groups, each a heading over its rows, one
-   hairline between groups, inside the page's column. The line used to be
-   each group's own bottom border, pulled 20px past the column on both sides
-   (the old dialog's inset) and drawn under the last group too, so a page
-   could end on a stray rule. */
+/* Every Settings page, drawn as the phone's Settings: groups down one
+   column, each a small muted label, its rows in one rounded card with
+   hairlines between them, and at most one footnote under it. No rule
+   between groups: the air and the cards separate them. */
 .agents-settings {
   display: flex;
   flex-direction: column;
@@ -514,57 +537,104 @@
 .settings-group {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
 }
 
-.agents-settings > .settings-group + .settings-group {
+.agents-settings > .settings-group + .settings-group,
+.agents-settings > * + .settings-group {
   margin-top: var(--spacing-xl);
-  padding-top: var(--spacing-xl);
-  border-top: var(--border-width-default) solid var(--border-subtle);
-}
-
-/* Two runs of rows in one group read as one list: the rows' own padding
-   separates them, not the group's gap on top of it. */
-.settings-group
-  > .settings-section:not(:has(> :not(.settings-row)))
-  + .settings-section:not(:has(> :not(.settings-row))) {
-  margin-top: calc(var(--spacing-md) * -1);
 }
 
 .settings-group__title {
-  margin: 0;
-  /* A section's name, read as one: primary ink, tracked in, a step above
-     the rows' labels. A muted 11px label made a long page read as a log;
-     at the rows' own 13px a heading and its first row read as a pair
-     ("Agents' browser" over "Agents' browser"). */
-  font-size: var(--font-size-subhead);
-  font-weight: var(--font-weight-heading);
-  letter-spacing: var(--tracking-name);
-  color: var(--text-primary);
+  margin: 0 var(--settings-card-inset) var(--spacing-xs);
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
 }
 
-/* A group ends on its last row: the hairline's margin is the air. */
-.agents-settings > .settings-group > .settings-section:last-child > .settings-row:last-child {
-  padding-bottom: 0;
+.settings-group > .settings-section {
+  gap: 0;
+  padding: 0 var(--settings-card-inset);
+  background: var(--settings-card-surface);
+  border-radius: var(--radius-lg);
 }
 
-/* Likewise above: the group's gap is the space under its heading, so the
-   first row doesn't add its own (Usage and Accounts start flush too). */
-.agents-settings
-  > .settings-group
-  > .settings-group__title
-  + .settings-section
-  > .settings-row:first-child {
-  padding-top: 0;
+/* Two runs of rows in one group are one card. */
+.settings-group > .settings-section + .settings-section {
+  margin-top: calc(var(--radius-lg) * -1);
+  padding-top: var(--radius-lg);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.settings-group .settings-row {
+  position: relative;
+  min-height: var(--settings-row-min-height);
+  padding: var(--spacing-sm) 0;
+}
+
+.settings-group .settings-row-info {
+  gap: var(--spacing-3xs);
+}
+
+.settings-group .settings-row-label {
+  font-weight: var(--font-weight-body);
+}
+
+.settings-group .settings-row-description {
+  font-size: var(--font-size-body-md);
+}
+
+/* A hairline between rows, from the words' edge to the card's, as iOS:
+   over every row and every other part of the card but the first, however
+   deep the components nest their rows. */
+.settings-group .settings-row,
+.settings-group .settings-section > * {
+  position: relative;
+}
+
+.settings-group .settings-row::before,
+.settings-group
+  .settings-section
+  > :not(.settings-row, .settings-section, .settings-row-steps)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: calc(var(--settings-card-inset) * -1);
+  height: var(--border-width-default);
+  background: var(--border-subtle);
+}
+
+.settings-group > .settings-section:first-of-type > :first-child::before,
+.settings-group
+  > .settings-section:first-of-type
+  > :first-child
+  > .settings-row:first-child::before {
+  display: none;
+}
+
+/* A component's own section inside the group's card is part of that card. */
+.settings-group .settings-section .settings-section {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+}
+
+/* Something that isn't a row (a slider, a panel, a list) keeps its own
+   room inside the card. */
+.settings-group .settings-section > :not(.settings-row, .settings-row-steps) {
+  padding-block: var(--spacing-md);
+}
+
+.settings-group__footnote {
+  margin: var(--spacing-xs) var(--settings-card-inset) 0;
+  font-size: var(--font-size-body-md);
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 .agents-desktop-settings + .settings-section {
   margin-top: var(--spacing-lg);
-}
-
-/* Inside a group the rows' own padding separates them. */
-.settings-group > .agents-desktop-settings + .settings-section {
-  margin-top: calc(var(--spacing-md) * -1);
 }
 
 /* Accent color. Each swatch is its own accent scope (accentScopeProps), so it
@@ -676,4 +746,35 @@
 /* The dialog's own widths don't apply on the page: it takes the column. */
 .settings-inline-panel:is(.phone-modal, .phone-modal--install) {
   width: auto;
+}
+
+/* Pages built from parts that also live elsewhere (the Usage popover, an
+   agent's own page): on a Settings page they sit in the same cards as every
+   other group, with the same muted label above. */
+.settings-window__page :is(.usage-section, .agents-usage__block, .on-its-own-team > .on-its-own) {
+  padding: var(--spacing-md) var(--settings-card-inset);
+  background: var(--settings-card-surface);
+  border-radius: var(--radius-lg);
+}
+
+.settings-window__page :is(.usage-section, .agents-usage__block) {
+  margin-top: var(--spacing-md);
+}
+
+.settings-window__page :is(.usage-section__title, .agents-usage__heading) {
+  font-weight: var(--font-weight-body);
+}
+
+.settings-window__page .agent-admin-settings__heading {
+  margin: var(--spacing-xl) var(--settings-card-inset) var(--spacing-xs);
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
+}
+
+/* The phone panel and Remote access keep their own layout, on a card. */
+.settings-window__page .settings-group > .settings-inline-panel {
+  padding: var(--spacing-lg) var(--settings-card-inset);
+  background: var(--settings-card-surface);
+  border-radius: var(--radius-lg);
 }

@@ -39,7 +39,7 @@ const WHAT_EACH_SHOWS: Record<SettingsPage, string> = {
 const pageScenario = (page: (typeof SETTINGS_PAGES)[number]): Scenario => ({
   id: `settings-page-${page.id}`,
   title: `Settings — ${page.title}`,
-  looksRightWhen: `A sheet filling the window with a margin. Down the left, a recessed list: Agents, Independence, Accounts & usage, Phone, Notifications, Chrome, Apps, a hairline, then Projects, Appearance, Advanced; “${page.title}” held with the neutral pressed surface (never the accent). On the right, “${page.title}” as the page title, one muted lead line (“${page.lead}”), then: ${WHAT_EACH_SHOWS[page.id]} The page column stops at a readable width; nothing runs under the list; only the page scrolls.`,
+  looksRightWhen: `A sheet filling the window with a margin. Down the left, a recessed list: Agents, Independence, Accounts & usage, Phone, Notifications, Chrome, Apps, a hairline, then Projects, Appearance, Advanced; “${page.title}” held with the neutral pressed surface (never the accent). On the right, “${page.title}” as the page title, one muted lead line (“${page.lead}”), then: ${WHAT_EACH_SHOWS[page.id]} Each section in the list has a small icon tile. The page is one centred 560px column on a recessed surface: every group a small muted label over one rounded card, rows inside with hairlines between them (from the words’ edge), a footnote under a group where it has one, no rule between groups. Nothing runs under the list; only the page scrolls.`,
   command: `settings.page.${page.id}`,
   requires: `[data-settings-page="${page.id}"] .settings-window__page-title`,
   clipSelector: '.settings-window',

@@ -74,12 +74,10 @@ export function AgentsPage({ onImport }: { onImport: () => void }) {
           <SectionBoundary name="defaults">
             <AgentDefaultsSettings />
           </SectionBoundary>
-          <div className="settings-section">
-            <Row
-              label="Routines"
-              description="On Claude Code, routines run on the fastest model unless the agent has its own."
-            />
-          </div>
+          <p className="settings-group__footnote">
+            For new agents: each agent can pick its own model in Edit agent. On Claude Code,
+            routines run on the fastest model unless the agent has its own.
+          </p>
         </section>
       )}
 
