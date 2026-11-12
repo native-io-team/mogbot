@@ -69,6 +69,7 @@ import { loadPrefs } from './prefs';
 import { getApp, setApp, update, useApp } from './store';
 import {
   addPending,
+  closeCard,
   applyEvent,
   type PendingAttachment,
   type PendingSend,

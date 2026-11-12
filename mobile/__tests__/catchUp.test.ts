@@ -243,3 +243,21 @@ describe('a card', () => {
     });
   });
 });
+
+describe('a card the Mac says is already answered', () => {
+  it('closes every cached copy, so Catch up stops showing it', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { closeCard, emptySync } = require('../src/lib/sync') as typeof import('../src/lib/sync');
+    const card = {
+      id: 'm1',
+      agentId: 'a1',
+      kind: 'approval',
+      ts: 1,
+      approval: { requestId: 'r1', status: 'pending' },
+    } as unknown as import('@shipstudio/companion-protocol').AgentMessage;
+    const s = { ...emptySync(), chats: { a1: { messages: [card], more: false, loaded: true } } };
+    const out = closeCard(s, 'r1');
+    expect(out.chats.a1?.messages[0].approval?.status).toBe('expired');
+    expect(closeCard(out, 'r1')).toBe(out);
+  });
+});
