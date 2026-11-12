@@ -186,6 +186,7 @@ async fn sign_in(c: &Companion, base: &str) -> Option<(Ws, String, Option<Accoun
         max_frame_size: Some(MAX_MESSAGE),
         ..Default::default()
     };
+    tls_ready();
     let connect = tokio_tungstenite::connect_async_with_config(&url, Some(config), false);
     let (mut ws, _) = match tokio::time::timeout(STEP_TIMEOUT, connect).await {
         Ok(Ok(ok)) => ok,
@@ -436,3 +437,54 @@ pub fn stop() {
 #[cfg(test)]
 #[path = "client_tests.rs"]
 mod tests;
+
+/// Make sure rustls has a process-wide crypto provider before the first
+/// `wss://` connection. Both `ring` and `aws-lc-rs` are in this build (other
+/// crates bring them), and with two rustls refuses to choose and panics
+/// inside the TLS handshake (1.0.5's relay link died that way on launch).
+/// Installing ring once settles it; if something else already installed a
+/// provider, that one stays.
+pub fn tls_ready() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
+#[cfg(test)]
+mod tls_tests {
+    /// The client config tokio-tungstenite builds for `wss://` must not
+    /// panic for want of a provider (it did, in a release build).
+    #[test]
+    fn a_tls_client_config_can_be_built_after_tls_ready() {
+        super::tls_ready();
+        let roots = rustls::RootCertStore::empty();
+        let config = rustls::ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        assert!(config.alpn_protocols.is_empty());
+    }
+
+    /// A real `wss://` connection the way the client makes one, to a live
+    /// relay (`MOGBOT_RELAY_URL`). Off by default (network); run with
+    /// `cargo test --lib relay_tls_live -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn relay_tls_live_phone_to_an_absent_mac_is_told_offline() {
+        use futures_util::StreamExt;
+        let base = std::env::var("MOGBOT_RELAY_URL").expect("MOGBOT_RELAY_URL");
+        super::tls_ready();
+        let url = format!("{}/v1/phone/AAAAAAAAAAAAAAAAAAAAAA", base.trim_end_matches('/'));
+        let (mut ws, _) = tokio_tungstenite::connect_async_with_config(&url, None, false)
+            .await
+            .expect("TLS connect to the relay");
+        let mut code = None;
+        while let Some(msg) = ws.next().await {
+            if let Ok(tokio_tungstenite::tungstenite::Message::Close(Some(frame))) = msg {
+                code = Some(u16::from(frame.code));
+                break;
+            }
+        }
+        assert_eq!(code, Some(4404));
+    }
+}

@@ -68,6 +68,10 @@ urlencoding = "2"
 hyper = { version = "1", features = ["http1", "server", "client"] }
 # Android mirror bridge: WebSocket server streaming screenrecord H.264 to the webview.
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+# Both ring and aws-lc-rs end up in the build (through other crates), so rustls
+# can't pick one by itself and panics on the first TLS connection; the relay
+# client installs ring as the process default first (`relay::client::tls_ready`).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 futures-util = "0.3"
 # The relay channel hands the companion socket handler a Sink (companion/relay/channel.rs).
 tokio-util = "0.7"
