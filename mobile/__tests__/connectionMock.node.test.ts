@@ -103,7 +103,8 @@ describe('the transport against the mock Mac on hard links', () => {
     const { t, caughtUp } = connect(SlowSocket);
     // Opening (6 s) and the two round trips after (8 s): 14 s, past the old 8 s a try had.
     await until(() => caughtUp() === 1, 30_000);
-    expect(SlowSocket.opened).toBe(1);
+    // The first socket, plus at most the second try started beside it (`SECOND_TRY_MS`), dropped once the first opened.
+    expect(SlowSocket.opened).toBeLessThanOrEqual(2);
     expect(Date.now() - started).toBeLessThan(20_000);
     await t.request('agents.send', {
       agentId: 'site',

@@ -88,15 +88,16 @@ function make(foreground = true) {
  * hello → welcome (two more).
  */
 function slowHandshake(rtt: number) {
+  // The try in flight (a second try may start beside it: `SECOND_TRY_MS`).
   const ws = last();
   tick(3 * rtt);
-  if (ws !== last() || ws.readyState === 3) return false;
+  if (ws.readyState === 3) return false;
   ws.open();
   tick(rtt);
-  if (ws !== last() || ws.readyState === 3) return false;
+  if (ws.readyState === 3) return false;
   ws.prove();
   tick(rtt);
-  if (ws !== last() || ws.readyState === 3) return false;
+  if (ws.readyState === 3) return false;
   ws.welcome();
   return true;
 }
@@ -120,7 +121,8 @@ describe('a slow link (seconds of latency)', () => {
       // Opening is three round trips: 12 s at 4 s, past the old 8 s.
       expect(slowHandshake(rtt)).toBe(true);
       expect(t.state.kind).toBe('connected');
-      expect(FakeSocket.all).toHaveLength(1);
+      // The first socket is the one kept; a second try started beside it was let go.
+      expect(FakeSocket.all.filter((s) => s.readyState !== 3)).toEqual([FakeSocket.all[0]]);
       t.close();
     }
   );
@@ -130,13 +132,15 @@ describe('a slow link (seconds of latency)', () => {
     expect(slowHandshake(4000)).toBe(true);
     // Socket to welcome took 20 s here; a reconnect gets 40 s before opening.
     expect(tryBudgetMs(0, 20_000)).toBe(40_000);
-    last().drop();
+    // The kept socket is the first (the second try beside it was let go).
+    FakeSocket.all[0].drop();
     tick(FOREGROUND_BACKOFF_MS[0]);
-    expect(FakeSocket.all).toHaveLength(2);
-    // Worse now: 30 s to open still isn't given up.
+    expect(FakeSocket.all).toHaveLength(3);
+    // Worse now: 30 s to open still isn't given up (a second try races it from 3 s).
     tick(30_000);
+    expect(FakeSocket.all[2].readyState).toBe(0);
     expect(last().readyState).toBe(0);
-    expect(FakeSocket.all).toHaveLength(2);
+    expect(FakeSocket.all).toHaveLength(4);
     last().open();
     last().prove();
     last().welcome();
@@ -148,7 +152,9 @@ describe('a slow link (seconds of latency)', () => {
     const { t } = make();
     tick(connectTimeoutMs(0));
     tick(FOREGROUND_BACKOFF_MS[0]);
-    expect(FakeSocket.all).toHaveLength(2);
+    // The first try, the second beside it, then the retry.
+    expect(FakeSocket.all).toHaveLength(3);
+    expect(FakeSocket.all.filter((s) => s.readyState !== 3)).toHaveLength(1);
     expect(tryBudgetMs(0, 10 * 60_000)).toBe(60_000);
     t.close();
   });

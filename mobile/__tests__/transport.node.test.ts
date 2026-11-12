@@ -215,3 +215,50 @@ describe('DirectTransport coming back from the background', () => {
     }
   });
 });
+
+describe('DirectTransport when the first try goes nowhere', () => {
+  const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
+  afterAll(() => mock.close());
+
+  it('gets through on a second try a few seconds in, not after the first one times out', async () => {
+    const url = await mock.listen();
+    const { token } = mock.issueToken();
+    let made = 0;
+    // The first socket is one whose packets go nowhere (Tailscale on the
+    // phone still waking): it never opens, closes or errors.
+    class FirstGoesNowhere {
+      constructor(u: string) {
+        made++;
+        if (made === 1) {
+          return {
+            readyState: 0,
+            send() {},
+            close() {},
+            onopen: null,
+            onmessage: null,
+            onclose: null,
+            onerror: null,
+          } as unknown as FirstGoesNowhere;
+        }
+        return new WebSocket(u) as unknown as FirstGoesNowhere;
+      }
+    }
+    const started = Date.now();
+    const t = new DirectTransport({
+      routes: [{ kind: 'tailscale', url }],
+      token,
+      app: { version: '0.1.0', runtimeVersion: 'test' },
+      getResume: () => undefined,
+      foreground: true,
+      WebSocketImpl: FirstGoesNowhere as unknown as typeof globalThis.WebSocket,
+      ...provenBy(mock),
+    });
+    try {
+      await until(() => t.state.kind === 'connected', 10_000);
+      expect(made).toBe(2);
+      expect(Date.now() - started).toBeLessThan(8000);
+    } finally {
+      t.close();
+    }
+  });
+});

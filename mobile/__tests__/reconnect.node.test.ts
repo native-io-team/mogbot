@@ -159,10 +159,12 @@ describe('reconnecting', () => {
     expect(last().url).toContain('mac');
     // The first route never answers (packets dropped, no refusal).
     jest.advanceTimersByTime(connectTimeoutMs(0) - 1);
-    expect(FakeSocket.all.length).toBe(1);
+    // The try and the second one beside it, both on the same route.
+    expect(FakeSocket.all.length).toBe(2);
+    expect(FakeSocket.all[1].url).toContain('mac');
     jest.advanceTimersByTime(1);
     jest.advanceTimersByTime(FOREGROUND_BACKOFF_MS[0]);
-    expect(FakeSocket.all.length).toBe(2);
+    expect(FakeSocket.all.length).toBe(3);
     expect(last().url).toContain('192.168.1.2');
     t.close();
   });

@@ -241,8 +241,22 @@ const TRAIL_SENT = 20;
 /** `retryNow` leaves a try this young alone, so a burst of triggers doesn't churn sockets. */
 const FRESH_TRY_MS = 1500;
 
+/**
+ * In front, a try whose socket hasn't opened in this long gets a second one
+ * beside it, and whichever opens first is kept. Coming back to the phone,
+ * Tailscale on it is often still waking: the first connection's packets go
+ * nowhere and it sat out its whole 16 s+ budget (Julian, 2026-11-11: twelve
+ * minutes away, then "Reconnecting…" with the Mac awake and answering), while
+ * a fresh one a few seconds later goes straight through. A slow link loses
+ * nothing: the first try keeps going.
+ */
+export const SECOND_TRY_MS = 3000;
+
 export class DirectTransport implements Transport {
   private ws: SocketLike | null = null;
+  /** A second socket racing the try in flight (`SECOND_TRY_MS`); the first to open is kept. */
+  private spare: SocketLike | null = null;
+  private spareTimer: ReturnType<typeof setTimeout> | null = null;
   private routeIndex = 0;
   private attempt = 0;
   private everConnected = false;
@@ -534,14 +548,47 @@ export class DirectTransport implements Transport {
         ...(this.macSaid ? { macSaid: this.macSaid } : {}),
       });
     }
-    const Impl = this.opts.WebSocketImpl ?? WebSocket;
     const url = this.route.url.replace(/^http/, 'ws').replace(/\/$/, '') + HTTP.ws;
-    const ws = new Impl(url) as unknown as SocketLike;
+    const ws = this.dial(url);
     this.ws = ws;
     this.triedAt = Date.now();
     this.armConnectTimer(ws, tryBudgetMs(this.attempt, this.handshakeMs));
     this.opened = false;
+    if (this.spareTimer) clearTimeout(this.spareTimer);
+    this.spareTimer = this.foreground
+      ? setTimeout(() => {
+          this.spareTimer = null;
+          if (ws !== this.ws || this.opened || this.spare || this.closed) return;
+          this.note('second try beside a slow first');
+          this.spareAt = Date.now();
+          this.spare = this.dial(url);
+        }, SECOND_TRY_MS)
+      : null;
+  }
+
+  /** When the spare was opened (epoch ms). */
+  private spareAt = 0;
+
+  /** A socket to `url`, wired to this transport; `connect` decides whether it's the try or a spare. */
+  private dial(url: string): SocketLike {
+    const Impl = this.opts.WebSocketImpl ?? WebSocket;
+    const ws = new Impl(url) as unknown as SocketLike;
     ws.onopen = () => {
+      if (ws !== this.ws) {
+        // Only a spare that beat the first try to it is kept; anything else is late.
+        if (ws !== this.spare || this.opened) return this.drop(ws);
+        const slow = this.ws;
+        this.ws = ws;
+        this.spare = null;
+        this.triedAt = this.spareAt;
+        if (slow) this.drop(slow);
+        this.note('second try got through first');
+      } else if (this.spare) {
+        this.drop(this.spare);
+        this.spare = null;
+      }
+      if (this.spareTimer) clearTimeout(this.spareTimer);
+      this.spareTimer = null;
       this.opened = true;
       // The route works: the rest of the handshake is two more round
       // trips, so it's given time by how long opening took, not cut off
@@ -578,7 +625,20 @@ export class DirectTransport implements Transport {
     };
     ws.onerror = () => {};
     ws.onclose = (ev) => {
+      if (ws === this.spare) {
+        this.spare = null;
+        return;
+      }
       if (ws !== this.ws) return;
+      // The first try failed before opening while a spare is still going: that one carries on.
+      if (!this.opened && this.spare) {
+        this.ws = this.spare;
+        this.spare = null;
+        this.triedAt = this.spareAt;
+        this.drop(ws);
+        this.armConnectTimer(this.ws, tryBudgetMs(this.attempt, this.handshakeMs));
+        return;
+      }
       // The Mac's app closing says so; anything else (a drop, a refusal) doesn't.
       if (this.ready && (ev as { code?: number } | null)?.code === CLOSE_MAC_CLOSING) {
         this.macClosing = true;
@@ -586,6 +646,17 @@ export class DirectTransport implements Transport {
       const code = (ev as { code?: number } | null)?.code;
       this.lost(this.ready ? `closed-${code ?? 'no-code'}` : `closed-before-welcome-${code ?? 'no-code'}`);
     };
+    return ws;
+  }
+
+  /** Close a socket this transport no longer wants, without hearing from it again. */
+  private drop(ws: SocketLike) {
+    ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
+    try {
+      ws.close();
+    } catch {
+      // still opening (node's ws throws) or already closed
+    }
   }
 
   private armConnectTimer(ws: SocketLike, ms: number) {
@@ -784,7 +855,10 @@ export class DirectTransport implements Transport {
     if (this.deadTimer) clearTimeout(this.deadTimer);
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (this.connectTimer) clearTimeout(this.connectTimer);
-    this.pingTimer = this.deadTimer = this.retryTimer = this.connectTimer = null;
+    if (this.spareTimer) clearTimeout(this.spareTimer);
+    this.pingTimer = this.deadTimer = this.retryTimer = this.connectTimer = this.spareTimer = null;
+    if (this.spare) this.drop(this.spare);
+    this.spare = null;
     const ws = this.ws;
     this.ws = null;
     if (ws) {
