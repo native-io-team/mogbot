@@ -55,6 +55,9 @@ export default function Connection() {
         mac: macName,
         phoneOnline: state.phoneOnline,
         tailscaleInstalled: installed,
+        // Paired through the relay only: there's no Tailscale here to check.
+        viaTailscale:
+          !state.credentials || state.credentials.routes.some((r) => r.kind === 'tailscale'),
         paired: { kind: 'yes', since: state.credentials?.pairedAt ?? 0 },
         lastSeenAt,
         likelyAsleep: !!power && !power.keepAwake && power.onBattery === 'yes',
@@ -146,7 +149,7 @@ export default function Connection() {
         </Section>
 
         {/* The one fix when the Mac let this phone go: pairing again
-            (Tailscale wouldn't help). A quiet Mac's fixes are in the checklist. */}
+            (Tailscale or signing in wouldn't help). A quiet Mac's fixes are in the checklist. */}
         {pairAgain && (
           <Button
             title="Pair again"

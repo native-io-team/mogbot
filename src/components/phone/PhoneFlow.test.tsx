@@ -39,7 +39,7 @@ import { isPassedOver, nextStep, prevStep } from '../../lib/onboardingFlow';
 import { SCAN_LINE } from '../../../packages/companion-protocol/src/pairWords';
 import { PHONE_APP_TESTFLIGHT_URL } from '../../lib/phoneApp';
 import { overrideRelayForHarness } from '../../lib/brand';
-import { readPhoneRoute } from '../../lib/account';
+import { readPhoneRoute, savePhoneRoute } from '../../lib/account';
 
 // These tests read the Tailscale path (a build with no relay); the relay's own tests opt in.
 beforeEach(() => overrideRelayForHarness(false));
@@ -190,12 +190,21 @@ describe('PhoneFlow in a build with the relay', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(signInAccount).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Use Tailscale instead' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use my own Tailscale instead' }));
     expect(go).toHaveBeenCalledWith('phoneMacTailscale');
     expect(readPhoneRoute()).toBe('tailscale');
     // Tailscale's screens are back, both ways.
     expect(afterGetApp()).toBe('phoneMacTailscale');
     expect(prevPhoneStep('phoneAccess')).toBe('phonePhoneTailscale');
+  });
+
+  it('on Tailscale by choice: signing in is one click away', async () => {
+    savePhoneRoute('tailscale');
+    getPhoneStatus.mockResolvedValue(status({ relay: { state: 'connected', account: null } }));
+    const { go } = show('phoneMacTailscale');
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in instead' }));
+    expect(go).toHaveBeenCalledWith('phoneAccess');
+    expect(readPhoneRoute()).toBe('relay');
   });
 
   it('signed in and connected: phone access is Done', async () => {
@@ -207,6 +216,6 @@ describe('PhoneFlow in a build with the relay', () => {
     );
     show('phoneAccess');
     expect(await screen.findByText(/Phone access is on/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Use Tailscale instead' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use my own Tailscale instead' })).not.toBeInTheDocument();
   });
 });

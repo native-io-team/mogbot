@@ -45,6 +45,7 @@ import {
   type FlowStep,
 } from '../../../lib/onboardingFlow';
 import { initDefaultAgent } from '../../../lib/agent';
+import { phoneRouteLine } from '../../../lib/phoneApp';
 import { withTimeout, TimeoutError } from '../../../lib/withTimeout';
 import { trackEvent, setActiveScreen } from '../../../lib/analytics';
 import { logger } from '../../../lib/logger';
@@ -187,7 +188,7 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
         step={step}
         onBack={back}
         title="Use your agents from your phone?"
-        lede="Chat, answer and approve from anywhere. Your phone talks only to this Mac, through Tailscale on both. About five minutes."
+        lede={`Chat, answer and approve from anywhere. ${phoneRouteLine()} About five minutes.`}
         primary={<Primary onClick={() => go('phoneGetApp')}>Set up my phone</Primary>}
         secondary={<Skip onSkip={() => skip(step)} label="Not now" />}
       />

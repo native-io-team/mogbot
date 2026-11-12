@@ -4,7 +4,8 @@
  *
  * Start at your computer (not set up there yet: where to get it) → Tailscale on
  * this phone, signed in as the Mac is (ticks Done when this phone can see
- * it) → "On your Mac, click Pair your phone" (Scan the code) → the camera
+ * it; passed over in a build with the relay, where the Mac's sign-in is the
+ * way and Tailscale an option) → "On your Mac, click Pair your phone" (Scan the code) → the camera
  * → "Pair with <Mac>?" → "Reaching <Mac>…" while it proves itself → "Click
  * Allow on your Mac" (said only once the code has really gone; ticks by
  * itself) → "Paired with <Mac>", and alerts once if they're undecided.
@@ -64,6 +65,7 @@ import {
   type PairPlan,
 } from '../lib/pairing';
 import {
+  HAS_RELAY,
   nextIntro,
   pairStages,
   prevIntro,
@@ -264,7 +266,7 @@ export default function Pair() {
         testID="pair-reaching"
         busy={<Spinner size={iconSize.body} color={colors.textPrimary} />}
         title={`Reaching ${cleanName(phase.link.name)}…`}
-        line="Finding it over Tailscale and checking it’s the Mac this code came from. Nothing is sent to it until it proves that."
+        line="Finding it and checking it’s the Mac this code came from. Nothing is sent to it until it proves that."
         secondary={<Button title="Cancel" variant="ghost" onPress={toCode} />}
       />
     );
@@ -682,7 +684,7 @@ function failureCopy(failure: PairFailure, mac: string, viaRelay = false): [stri
     case 'sign_in_needed':
       return [
         `${mac} isn’t signed in`,
-        'On your Mac, sign in, or use Tailscale instead. Then try again.',
+        'On your Mac, sign in, or use your own Tailscale instead. Then try again.',
       ];
     case 'no_answer':
       return [
@@ -697,7 +699,9 @@ function failureCopy(failure: PairFailure, mac: string, viaRelay = false): [stri
     case 'lan_only':
       return [
         'This code only offers your local network',
-        `This version of the app connects over Tailscale. Turn on Tailscale on your Mac, then click ${WHERE_TO_PAIR} for a new code.`,
+        HAS_RELAY
+          ? `On your Mac, sign in, or turn on your own Tailscale. Then click ${WHERE_TO_PAIR} for a new code.`
+          : `This version of the app connects over Tailscale. Turn on Tailscale on your Mac, then click ${WHERE_TO_PAIR} for a new code.`,
       ];
     case 'expired':
       return [

@@ -1,7 +1,9 @@
 /**
  * "Can't reach your Mac" as three things to check, each with what the phone
  * can see of it right now and the one fix: the Mac awake with the app open,
- * Tailscale on with the same account on both, and this phone paired. Used by
+ * Tailscale on with the same account on both (or, for a phone that reaches
+ * the Mac only through the relay, this phone online: it has no Tailscale to
+ * check), and this phone paired. Used by
  * a pairing that got no answer (`pair.tsx`) and by a paired phone whose Mac
  * went quiet (`connection.tsx`).
  *
@@ -20,7 +22,7 @@ export type CheckTone = 'ok' | 'problem' | 'unknown';
 export type CheckAction = 'open_tailscale' | 'get_tailscale' | 'pair_again';
 
 export interface ReachCheck {
-  id: 'mac' | 'tailscale' | 'paired';
+  id: 'mac' | 'tailscale' | 'online' | 'paired';
   title: string;
   tone: CheckTone;
   /** What the phone sees of it now, in a few words. */
@@ -37,6 +39,11 @@ export interface ReachInputs {
   phoneOnline: boolean | null;
   /** The Tailscale app is on this phone; null when the OS won't say (Android). */
   tailscaleInstalled: boolean | null;
+  /**
+   * Tailscale is one of the ways to this Mac (default). False for a phone
+   * paired through the relay only: no Tailscale row, just whether it's online.
+   */
+  viaTailscale?: boolean;
   /**
    * What pairing found: the Mac's name didn't resolve, which happens only
    * when Tailscale is off on this phone (`tailscale_off`), or it resolved
@@ -57,7 +64,31 @@ export interface ReachInputs {
 
 export function reachChecklist(input: ReachInputs): ReachCheck[] {
   const now = input.now ?? Date.now();
-  return [macCheck(input, now), tailscaleCheck(input), pairedCheck(input)];
+  const way = input.viaTailscale === false ? onlineCheck(input) : tailscaleCheck(input);
+  return [macCheck(input, now), way, pairedCheck(input)];
+}
+
+/** The relay's way to the Mac: all this phone needs is a network. */
+function onlineCheck({ phoneOnline }: ReachInputs): ReachCheck {
+  const title = 'This phone is online';
+  if (phoneOnline === false) {
+    return {
+      id: 'online',
+      title,
+      tone: 'problem',
+      status: 'No network on this phone.',
+      fix: 'Connect to Wi-Fi or mobile data.',
+      action: null,
+    };
+  }
+  return {
+    id: 'online',
+    title,
+    tone: phoneOnline ? 'ok' : 'unknown',
+    status: phoneOnline ? 'Yes.' : 'Can’t tell from here.',
+    fix: null,
+    action: null,
+  };
 }
 
 function macCheck({ mac, lastSeenAt, likelyAsleep }: ReachInputs, now: number): ReachCheck {

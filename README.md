@@ -68,13 +68,15 @@ chat. Logins use the provider's own sign-in; agents never ask for a password.
   </picture>
 </p>
 
-The companion app pairs by QR code and reaches your Mac over your own
-Tailscale. Chat, answer cards (from the Lock Screen too), review results, start
-agents and routines, send voice messages, step into an agent's browser when it
-hits a sign-in only you can pass. It notifies you while it's connected to the
-Mac; there's no push service yet, so a phone that's been in the background a
-while hears nothing until you open it. The phone won't send a secret until the
-Mac proves it's yours. Nothing passes through our servers.
+The companion app pairs by QR code and reaches your Mac through a free
+sign-in on the Mac (our relay, end to end encrypted) or your own Tailscale,
+whichever you pick. Chat, answer cards (from the Lock Screen too), review
+results, start agents and routines, send voice messages, step into an agent's
+browser when it hits a sign-in only you can pass. It notifies you while it's
+connected to the Mac; there's no push service yet, so a phone that's been in
+the background a while hears nothing until you open it. The phone won't send a
+secret until the Mac proves it's yours. Over Tailscale nothing passes through
+our servers; through the relay, only encrypted bytes do.
 
 ### And
 

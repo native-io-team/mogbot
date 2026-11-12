@@ -69,13 +69,24 @@ interface CodeProps {
   busy: boolean;
   /** This Mac's Tailscale: who the phone signs in as. */
   tailscale: TailscaleState;
+  /** Phones reach this Mac through the relay (signed in): no Tailscale step for the phone. */
+  viaRelay?: boolean;
   /** When a device on the tailnet first reached this Mac with the code out. */
   reachedAt?: number;
   onCopy: () => void;
   onCancel: () => void;
 }
 
-export function PairCode({ code, now, busy, tailscale, reachedAt, onCopy, onCancel }: CodeProps) {
+export function PairCode({
+  code,
+  now,
+  busy,
+  tailscale,
+  viaRelay = false,
+  reachedAt,
+  onCopy,
+  onCancel,
+}: CodeProps) {
   const left = expiresIn(code.expiresAt, now);
   return (
     <div className="phone-code" data-testid="phone-pair-code">
@@ -91,11 +102,13 @@ export function PairCode({ code, now, busy, tailscale, reachedAt, onCopy, onCanc
             <span className="phone-code__step-strong">Get the {BRAND.name} app</span> on your phone,
             from your TestFlight invite.
           </li>
-          <li data-tailscale>
-            <span className="phone-code__step-strong">{phoneTailscaleText(tailscale)}</span> Switch
-            it on: it’s how the phone reaches this Mac.
-            <TailscaleStoreLinks />
-          </li>
+          {!viaRelay && (
+            <li data-tailscale>
+              <span className="phone-code__step-strong">{phoneTailscaleText(tailscale)}</span>{' '}
+              Switch it on: it’s how the phone reaches this Mac.
+              <TailscaleStoreLinks />
+            </li>
+          )}
           {/* The phone's own words: its buttons are "Scan the code", then "Pair". */}
           <li>
             Open {BRAND.name}, tap <span className="phone-code__step-strong">{SCAN_THE_CODE}</span>{' '}

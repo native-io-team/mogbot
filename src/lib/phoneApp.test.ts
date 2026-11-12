@@ -35,8 +35,11 @@ describe('phoneOfferNote', () => {
   it('promises the time each route really takes, and nothing when there is no route', () => {
     expect(phoneOfferNote('store')).toMatch(/App Store/);
     expect(phoneOfferNote('store')).not.toMatch(/no App Store app yet|hour/);
-    expect(phoneOfferNote('testflight')).toBe(
+    expect(phoneOfferNote('testflight', false)).toBe(
       'Chat, answer and approve from anywhere. Get the free beta from TestFlight, then scan a code from this Mac. Your phone talks only to this Mac, through Tailscale on both.'
+    );
+    expect(phoneOfferNote('testflight', true)).toBe(
+      'Chat, answer and approve from anywhere. Get the free beta from TestFlight, then scan a code from this Mac. Your phone reaches this Mac through a free sign-in here, or your own Tailscale.'
     );
     expect(phoneOfferNote('build')).toMatch(/ten minutes to an hour/);
     expect(phoneOfferNote('none')).toBeNull();

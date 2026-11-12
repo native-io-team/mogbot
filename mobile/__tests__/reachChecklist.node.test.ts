@@ -26,6 +26,21 @@ describe('the reach checklist', () => {
     ]);
   });
 
+  it('says nothing of Tailscale to a phone that reaches the Mac only through the relay', () => {
+    const checks = reachChecklist({ ...base, viaTailscale: false, tailscaleInstalled: false });
+    expect(checks.map((c) => c.title)).toEqual([
+      'Studio Mac is awake, with the app open',
+      'This phone is online',
+      'This phone is paired',
+    ]);
+    for (const c of checks) expect(`${c.title} ${c.status} ${c.fix ?? ''}`).not.toMatch(/Tailscale/);
+    expect(checks.every((c) => c.action !== 'get_tailscale' && c.action !== 'open_tailscale')).toBe(
+      true
+    );
+    const offline = byId({ viaTailscale: false, phoneOnline: false }).online;
+    expect(offline.tone).toBe('problem');
+  });
+
   it('never puts an address or a port in a row', () => {
     for (const diagnosis of ['tailscale_off', 'mac_unreachable'] as const) {
       for (const c of reachChecklist({ ...base, diagnosis })) {

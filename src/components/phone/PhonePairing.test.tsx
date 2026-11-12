@@ -70,13 +70,14 @@ describe('PairCode', () => {
     dnsName: 'm.ts.net',
     login: 'julian@example.com',
   } as const;
-  const show = (reachedAt?: number) =>
+  const show = (reachedAt?: number, viaRelay?: boolean) =>
     render(
       <PairCode
         code={code}
         now={Date.now()}
         busy={false}
         tailscale={tailscale}
+        viaRelay={viaRelay}
         reachedAt={reachedAt}
         onCopy={vi.fn()}
         onCancel={vi.fn()}
@@ -94,6 +95,12 @@ describe('PairCode', () => {
     // The phone app is iPhone only (no links.playStore): no Google Play.
     expect(screen.queryByRole('button', { name: /Google Play/ })).toBeNull();
     expect(screen.queryByTestId('phone-code-reached')).toBeNull();
+  });
+
+  it('asks for no Tailscale on the phone when phones come through the relay', () => {
+    show(undefined, true);
+    expect(screen.queryByText(/Install Tailscale/)).toBeNull();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
   });
 
   it('says a device reached this Mac, not that a phone did', () => {

@@ -57,7 +57,7 @@ export const accountScenarios: Scenario[] = [
     id: 'phone-flow-relay-sign-in',
     title: 'Phone panel — phone access by signing in (a build with the relay)',
     looksRightWhen:
-      'The Phone panel’s flow on its phone-access screen: "Sign in so your phone can reach this Mac", one line (anywhere, no Tailscale; this Mac stays on), a quiet note (Google or your email, in your browser; signing in turns on phone access). One big "Sign in", then "Use Tailscale instead" (outline) and "Skip for now".',
+      'The Phone panel’s flow on its phone-access screen: "Sign in so your phone can reach this Mac", one line (free, works from anywhere; this Mac stays on), a quiet note (Google or your email, in your browser; signing in turns on phone access). One big "Sign in", then "Use my own Tailscale instead" (outline) and "Skip for now".',
     relay: true,
     command: 'companion.devices',
     requires: '[data-phone-flow-step="phoneAccess"] [data-phone-use-tailscale]',

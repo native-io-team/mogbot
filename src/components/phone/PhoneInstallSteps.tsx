@@ -71,8 +71,11 @@ export function InstallChecklist({
 interface DoneProps {
   platform: InstallPlatform;
   deviceName: string;
-  /** "Install Tailscale on your phone and sign in as …": the step before pairing. */
-  tailscaleLine: string;
+  /**
+   * "Install Tailscale on your phone and sign in as …": the step before
+   * pairing. Null when the phone reaches this Mac through the relay instead.
+   */
+  tailscaleLine: string | null;
   expiresAt: number | null;
   now: number;
   opening: boolean;
@@ -114,10 +117,14 @@ export function InstallDone({
       ) : (
         <p className="phone-install-done__line">Android builds don’t expire.</p>
       )}
-      <p className="phone-install-done__line" data-tailscale>
-        Before you pair: {tailscaleLine}
-      </p>
-      <TailscaleStoreLinks platform={platform} />
+      {tailscaleLine && (
+        <>
+          <p className="phone-install-done__line" data-tailscale>
+            Before you pair: {tailscaleLine}
+          </p>
+          <TailscaleStoreLinks platform={platform} />
+        </>
+      )}
       <div className="phone-install-done__actions">
         {onOpen && (
           <Button

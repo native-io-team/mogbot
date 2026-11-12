@@ -248,8 +248,13 @@ pub async fn companion_pair_start(app: AppHandle) -> Result<PairingCode, Command
     let c = desktop::ensure(&app);
     let routes = desktop::routes();
     if routes.is_empty() {
+        // With our relay, Tailscale is one of two ways; without it, the only one.
         return Err(CommandError::expected(
-            "Your phone can't reach this Mac yet. Turn on phone access and wait for Tailscale, or sign in.",
+            if crate::companion::relay::relay_url().is_some() {
+                "Your phone can't reach this Mac yet. Turn on phone access, then sign in or use your own Tailscale."
+            } else {
+                "Your phone can't reach this Mac yet. Turn on phone access and wait for Tailscale."
+            },
         ));
     }
     // The phone pins this key for good: only offer it once it's kept where

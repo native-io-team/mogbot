@@ -26,6 +26,9 @@ import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { TAILSCALE_DOWNLOAD_URL } from '../../lib/remoteAccess';
+import { relayOn } from '../../lib/brand';
+import { accountOf, SIGN_IN, type Account } from '../../lib/account';
+import { useSignIn } from '../../hooks/useAccount';
 import {
   cancelPairing,
   COMPANION_CHANGED_EVENT,
@@ -34,6 +37,7 @@ import {
   phoneCapabilities,
   phoneStep,
   PUSH_COPY,
+  relayReady,
   removePhone,
   retryPhoneTailscale,
   setPhoneAccess,
@@ -336,6 +340,7 @@ function PhonePanel({
                 panel is the way to get it; turning access on comes after. */}
           <AccessHeader
             step={phoneStep(s)}
+            account={accountOf(s)}
             busy={busy}
             onEnable={(on) => void run(on ? 'enable' : 'disable', () => setPhoneAccess(on))}
             onRetry={() => void run('retry', retryPhoneTailscale)}
@@ -351,6 +356,7 @@ function PhonePanel({
                   now={now}
                   busy={busy !== null}
                   tailscale={s.tailscale}
+                  viaRelay={relayReady(s.relay)}
                   reachedAt={pairing?.reachedAt}
                   onCopy={() => void copy(code.link)}
                   onCancel={() => void run('cancel', cancelPairing)}
@@ -427,14 +433,17 @@ function PhonePanel({
 
 interface HeaderProps {
   step: PhoneStep;
+  /** The account the relay names for this Mac (a build with the relay only). */
+  account: Account | null;
   busy: string | null;
   onEnable: (on: boolean) => void;
   onRetry: () => void;
 }
 
 /** What phone access needs next, or that it's on. */
-function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
+function AccessHeader({ step, account, busy, onEnable, onRetry }: HeaderProps) {
   const spin = (key: string) => (busy === key ? <Spinner size="sm" /> : undefined);
+  const signIn = useSignIn(account);
   // On the green bar "Turn off" sits beside "Phone access is on". Beside a
   // setup step ("Install Tailscale") a bare "Turn off" read as turning off
   // the thing it asks you to install, so it names what it turns off.
@@ -484,6 +493,65 @@ function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
           <span className="phone-onbar__title">Phone access is on</span>
         </span>
         {turnOff}
+      </div>
+    );
+  }
+
+  // With our relay, Tailscale missing on this Mac isn't a problem: a free
+  // sign-in is the other way, so that leads, and Tailscale is the option.
+  const tailscaleMissing = step.kind === 'installTailscale' || step.kind === 'signInTailscale';
+  if (relayOn() && tailscaleMissing) {
+    if (account) {
+      return (
+        <div className="phone-problem" data-kind="connecting">
+          <div className="phone-problem__head">
+            <Spinner size="sm" />
+            <span className="phone-problem__title">Connecting through your account…</span>
+            {turnOff}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="phone-problem" data-kind="signIn">
+        <div className="phone-problem__head">
+          <span className="phone-problem__title">Sign in so your phone can reach this Mac</span>
+          {turnOff}
+        </div>
+        <p className="phone-problem__detail">
+          {step.kind === 'installTailscale'
+            ? 'It’s free and works from anywhere. Or use your own Tailscale: install it here and on your phone, signed in to the same account.'
+            : 'It’s free and works from anywhere. Or use your own Tailscale: sign in to it on this Mac.'}
+        </p>
+        {signIn.error && <p className="phone-error">{signIn.error}</p>}
+        <div className="phone-problem__actions">
+          <Button
+            variant="primary"
+            disabled={signIn.starting}
+            leftIcon={signIn.starting ? <Spinner size="sm" /> : undefined}
+            onClick={() => void signIn.start()}
+            data-phone-sign-in
+          >
+            {signIn.waiting ? 'Try again' : SIGN_IN}
+          </Button>
+          {step.kind === 'installTailscale' && (
+            <Button
+              variant="secondary"
+              rightIcon={<ExternalLinkIcon size={12} />}
+              onClick={() => void openUrl(TAILSCALE_DOWNLOAD_URL)}
+            >
+              Get Tailscale
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            disabled={busy !== null}
+            leftIcon={spin('retry')}
+            onClick={onRetry}
+          >
+            Check again
+          </Button>
+        </div>
       </div>
     );
   }

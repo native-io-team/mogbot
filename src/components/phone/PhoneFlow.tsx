@@ -1,7 +1,9 @@
 /**
- * Your phone, one screen at a time: get the app → Tailscale on this Mac →
- * Tailscale on your phone, same account → turn on phone access → the code,
- * big and alone → Allow the phone that used it → Paired.
+ * Your phone, one screen at a time: get the app → (with our relay) sign in,
+ * or the user's own Tailscale: Tailscale on this Mac → Tailscale on your
+ * phone, same account → turn on phone access → the code, big and alone →
+ * Allow the phone that used it → Paired. Without a relay (a fork) Tailscale
+ * is the only way, and its screens always show.
  *
  * One question and one big button per screen, said in the words the phone
  * says from its side (`companion-protocol/src/pairWords.ts`). Every tick is
@@ -39,7 +41,7 @@ import { usePolling } from '../../hooks/usePolling';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { BRAND } from '../../lib/brand';
+import { BRAND, relayOn } from '../../lib/brand';
 import {
   accountOf,
   phoneViaRelay,
@@ -115,8 +117,8 @@ export function prevPhoneStep(step: PhoneFlowStep, relay = phoneViaRelay()): Pho
 /**
  * After the phone app: Tailscale on this Mac, or, when phones come through
  * the relay (docs/relay.md), straight to turning phone access on (signing
- * in, there). "Use Tailscale instead" there puts Tailscale's screens back
- * (`savePhoneRoute`).
+ * in, there). "Use my own Tailscale instead" there puts Tailscale's screens
+ * back (`savePhoneRoute`), and "Sign in instead" on them takes them away.
  */
 export function afterGetApp(relay = phoneViaRelay()): PhoneFlowStep {
   return relay ? 'phoneAccess' : 'phoneMacTailscale';
@@ -233,12 +235,15 @@ export function tailscaleMacView({
   onCheck,
   onNext,
   skip,
+  alternative,
 }: {
   tailscale: TailscaleState | undefined;
   checking: boolean;
   onCheck: () => void;
   onNext: () => void;
   skip: ReactNode;
+  /** The other way, beside Skip (the phone's "Sign in instead", in a build with the relay). */
+  alternative?: ReactNode;
 }): StepView {
   const check = tailscaleMacCheck(tailscale);
   const notInstalled = tailscale?.state === 'notInstalled';
@@ -260,7 +265,14 @@ export function tailscaleMacView({
           Get Tailscale for Mac
         </Primary>
       ) : undefined,
-    secondary: skip,
+    secondary: alternative ? (
+      <>
+        {alternative}
+        {skip}
+      </>
+    ) : (
+      skip
+    ),
   };
 }
 
@@ -578,6 +590,20 @@ function useStepView(p: {
         onCheck: () => void p.recheck(),
         onNext: () => go('phonePhoneTailscale'),
         skip,
+        // Tailscale is the user's choice here, never the only way: signing in stays one click off.
+        alternative: relayOn() ? (
+          <Button
+            variant="secondary"
+            size="large"
+            onClick={() => {
+              savePhoneRoute('relay');
+              go('phoneAccess');
+            }}
+            data-phone-sign-in-instead
+          >
+            Sign in instead
+          </Button>
+        ) : undefined,
       });
     case 'phonePhoneTailscale': {
       const check = phoneTailnetCheck(p.phones ?? null, status?.tailscale ?? null, slowTailnet);
@@ -794,16 +820,17 @@ function useStepView(p: {
 }
 
 /**
- * Phone access in a build with the relay, not signed in: signing in is how
- * the phone reaches this Mac (anywhere, no Tailscale), and "Use Tailscale
- * instead" is the open-source way, its own screens put back.
+ * Phone access in a build with the relay, not signed in: a free sign-in is
+ * one way the phone reaches this Mac (anywhere, no VPN), and "Use my own
+ * Tailscale instead" is the other, the open-source way, its own screens put
+ * back. Neither is required.
  */
 function relaySignInView(p: Parameters<typeof useStepView>[0]): StepView {
   const { signIn, go, skip } = p;
   const check = signInCheck({ account: null, ...signIn });
   return {
     title: 'Sign in so your phone can reach this Mac',
-    lede: 'From anywhere, with no Tailscale to set up. This Mac has to stay on while you use it.',
+    lede: 'It’s free and works from anywhere. This Mac has to stay on while you use it.',
     children:
       check && check.state !== 'checking' ? (
         <CheckLine result={check} />
@@ -829,7 +856,7 @@ function relaySignInView(p: Parameters<typeof useStepView>[0]): StepView {
           }}
           data-phone-use-tailscale
         >
-          Use Tailscale instead
+          Use my own Tailscale instead
         </Button>
         {skip}
       </>

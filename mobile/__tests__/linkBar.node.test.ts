@@ -234,7 +234,7 @@ describe('the bar over the relay', () => {
       tone: 'problem',
       title: 'Your Mac isn’t signed in',
     });
-    expect(b?.checks).toEqual(['On your Mac, sign in, or use Tailscale instead.']);
+    expect(b?.checks).toEqual(['On your Mac, sign in, or use your own Tailscale instead.']);
     expect(b?.checks.join(' ')).not.toMatch(tailscaleAdvice);
     expect(pill({ link, phoneOnline: true } as never, now).label).toBe('Mac not signed in');
   });

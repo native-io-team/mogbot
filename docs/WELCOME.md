@@ -11,8 +11,9 @@ the work you hand it, briefs them, delegates and comes back with results. Each
 agent remembers you, keeps its own instructions and routines, and runs on
 Claude Code or Codex on your Mac. Anything that spends money, sends something
 as you, or changes what other people see waits for your **Allow**. A phone app
-lets you chat, approve and review from anywhere, talking only to your own Mac
-over your own Tailscale. Nothing goes through our servers.
+lets you chat, approve and review from anywhere, talking only to your own Mac:
+through a free sign-in on the Mac (our relay, end to end encrypted), or over
+your own Tailscale, where nothing goes through our servers.
 
 ## What to expect
 
@@ -69,9 +70,10 @@ each can be skipped:
   the Chief's first message. No agents yet? Press **I’m starting fresh**.
 - **Your phone**: offered once your first piece of work comes back, and any
   time from **Pair your phone** at the bottom of the sidebar. About ten
-  minutes, with the iPhone app from TestFlight:
-  Tailscale (a free app that lets your phone reach your Mac privately) on
-  both, signed in to the **same account**, the phone app, then scan a code.
+  minutes, with the iPhone app from TestFlight: the phone app, a free
+  sign-in on the Mac (Google or email), then scan a code. Rather not sign
+  in? Use your own Tailscale (a free app that lets your phone reach your Mac
+  privately) on both, signed in to the **same account**.
   The phone app is Expo Go or built with Xcode for now; your setup agent
   installs it (INSTALL.md, Step 13).
 - **Another account**: offered the moment one runs out of usage.

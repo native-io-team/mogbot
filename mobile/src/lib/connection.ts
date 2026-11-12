@@ -258,7 +258,7 @@ export const RELAY_SAID: Record<RelaySaid, { pill: string; title: string; checks
   sign_in_needed: {
     pill: 'Mac not signed in',
     title: 'Your Mac isn’t signed in',
-    checks: ['On your Mac, sign in, or use Tailscale instead.'],
+    checks: ['On your Mac, sign in, or use your own Tailscale instead.'],
   },
 };
 

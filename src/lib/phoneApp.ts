@@ -15,7 +15,7 @@
  * @module lib/phoneApp
  */
 
-import { BRAND_LINKS } from './brand';
+import { BRAND_LINKS, relayOn } from './brand';
 import { COMPANION_INSTALL_ENABLED } from './companionInstall';
 
 export type PhoneAppRoute = 'store' | 'testflight' | 'build' | 'none';
@@ -53,15 +53,27 @@ export const PHONE_APP_ROUTE: PhoneAppRoute = phoneAppRouteFor(
 /** The big button on the "Get the app" screen when the route is TestFlight. */
 export const GET_ON_TESTFLIGHT = 'Get it on TestFlight';
 
+/**
+ * How the phone reaches this Mac, said before anyone starts: with our relay
+ * (`relayOn()`), a free sign-in here or the user's own Tailscale, either one;
+ * without it (a fork), Tailscale on both, the only way.
+ */
+export function phoneRouteLine(relay = relayOn()): string {
+  return relay
+    ? 'Your phone reaches this Mac through a free sign-in here, or your own Tailscale.'
+    : 'Your phone talks only to this Mac, through Tailscale on both.';
+}
+
 /** The Chief's phone card's one line, honest about the time for each route. */
-export function phoneOfferNote(route: PhoneAppRoute): string | null {
+export function phoneOfferNote(route: PhoneAppRoute, relay = relayOn()): string | null {
+  const how = phoneRouteLine(relay);
   switch (route) {
     case 'store':
-      return 'Chat, answer and approve from anywhere. Get the free app from the App Store, then scan a code from this Mac. Your phone talks only to this Mac, through Tailscale on both.';
+      return `Chat, answer and approve from anywhere. Get the free app from the App Store, then scan a code from this Mac. ${how}`;
     case 'testflight':
-      return 'Chat, answer and approve from anywhere. Get the free beta from TestFlight, then scan a code from this Mac. Your phone talks only to this Mac, through Tailscale on both.';
+      return `Chat, answer and approve from anywhere. Get the free beta from TestFlight, then scan a code from this Mac. ${how}`;
     case 'build':
-      return 'Chat, answer and approve from anywhere. Your phone talks only to this Mac, through Tailscale on both. There’s no App Store app yet, so setting it up takes ten minutes to an hour.';
+      return `Chat, answer and approve from anywhere. ${how} There’s no App Store app yet, so setting it up takes ten minutes to an hour.`;
     case 'none':
       return null;
   }

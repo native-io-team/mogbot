@@ -36,11 +36,13 @@ export const PHONE_OFFER_KEY = 'shipstudio.chief.phoneOffer';
  * a minute from the App Store, or built on this Mac (Expo Go in minutes,
  * Xcode up to an hour). With neither, there is no card at all: it opened a
  * panel that said the app isn't available, a dead end as the first-hour
- * next step. The one thing to know before starting is said too: the phone
- * reaches this Mac only through Tailscale, on both. Said here, not as a
- * surprise after a scan that never arrives.
+ * next step. The one thing to know before starting is said too: how the
+ * phone reaches this Mac (a free sign-in or the user's own Tailscale, or
+ * Tailscale on both in a build with no relay; `phoneRouteLine`). Said here,
+ * not as a surprise after a scan that never arrives. Read when the card
+ * draws, since `relayOn()` can change under the harness.
  */
-export const PHONE_OFFER_NOTE = phoneOfferNote(PHONE_APP_ROUTE);
+export const phoneOfferNoteHere = () => phoneOfferNote(PHONE_APP_ROUTE);
 
 /**
  * Whether the conversation has reached its first result: the user has said
@@ -82,7 +84,7 @@ function remember(answer: 'later' | 'setup'): void {
 
 export function ChiefPhoneOffer({
   onSetUp,
-  note = PHONE_OFFER_NOTE,
+  note = phoneOfferNoteHere(),
 }: {
   onSetUp: () => void;
   /** This build's line; null when it can't get the app onto a phone yet. */

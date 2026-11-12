@@ -17,7 +17,7 @@ vi.mock('../../lib/companion', async (importOriginal) => {
 import {
   ChiefPhoneOffer,
   PHONE_OFFER_KEY,
-  PHONE_OFFER_NOTE,
+  phoneOfferNoteHere,
   reachedFirstResult,
 } from './ChiefPhoneOffer';
 import { phoneOfferNote } from '../../lib/phoneApp';
@@ -66,11 +66,16 @@ describe('reachedFirstResult', () => {
 });
 
 describe('ChiefPhoneOffer', () => {
-  it('says up front that it runs through Tailscale, on every route that offers it', () => {
+  it('says up front how the phone reaches this Mac, on every route that offers it', () => {
     for (const route of ['store', 'testflight', 'build'] as const) {
-      expect(phoneOfferNote(route)).toMatch(/Tailscale on both/);
+      // No relay (a fork): Tailscale is the way, on both.
+      expect(phoneOfferNote(route, false)).toMatch(/Tailscale on both/);
+      // With the relay: a free sign-in, or the user's own Tailscale, never required.
+      expect(phoneOfferNote(route, true)).toMatch(/free sign-in here, or your own Tailscale/);
+      expect(phoneOfferNote(route, true)).not.toMatch(/Tailscale on both/);
     }
-    if (PHONE_OFFER_NOTE) expect(PHONE_OFFER_NOTE).toMatch(/Tailscale/);
+    const here = phoneOfferNoteHere();
+    if (here) expect(here).toMatch(/Tailscale/);
   });
 
   beforeEach(() => {

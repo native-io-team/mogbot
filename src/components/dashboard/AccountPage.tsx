@@ -113,7 +113,7 @@ export function AccountPage() {
         ) : connecting && slow ? (
           <Row
             label="Can’t reach the sign-in service"
-            description="This Mac keeps trying. Check its internet connection. Your phone still works over Tailscale."
+            description="This Mac keeps trying. Check its internet connection. If you use your own Tailscale, your phone still works over it."
           >
             <Button variant="secondary" onClick={() => void reload()} data-account-retry>
               Try again

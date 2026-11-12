@@ -141,7 +141,7 @@ describe('first run’s “Sign in?”', () => {
 });
 
 describe('the phone’s way in', () => {
-  it('goes through signing in with the relay, until “Use Tailscale instead”', () => {
+  it('goes through signing in with the relay, until “Use my own Tailscale instead”', () => {
     overrideRelayForHarness(true);
     expect(phoneViaRelay()).toBe(true);
     expect(isPassedOver('phoneMacTailscale')).toBe(true);

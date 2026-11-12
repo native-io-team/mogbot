@@ -103,9 +103,10 @@ export function saveAccountChoice(choice: AccountChoice): void {
 // ============ The phone's way in ============
 
 /**
- * "Use Tailscale instead" on the phone's setup, in a build with the relay:
- * the open-source way stays one click away, and is remembered so the phone
- * screens keep showing Tailscale's steps.
+ * "Use my own Tailscale instead" on the phone's setup, in a build with the
+ * relay: the open-source way stays one click away, and is remembered so the
+ * phone screens keep showing Tailscale's steps ("Sign in instead" there
+ * puts it back).
  */
 export const PHONE_ROUTE_KEY = 'shipstudio.phone.route';
 

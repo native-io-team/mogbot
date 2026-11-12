@@ -45,6 +45,7 @@ import { diagnoseBuildLog, getBuildLog, type BuildDiagnosis } from '../../lib/co
 import { BuildEnded, InstallChecklist, InstallDone } from './PhoneInstallSteps';
 import { TailscaleStoreLinks } from './PhoneTailscale';
 import { phoneTailscaleText, type TailscaleState } from '../../lib/companion';
+import { phoneViaRelay } from '../../lib/account';
 
 const PLATFORMS = [
   { value: 'ios', label: 'iPhone', ariaLabel: 'iPhone' },
@@ -190,8 +191,9 @@ function RouteChoice({ platform, tailscale, onPlatform, onBuild, onBack }: Choic
 }
 
 /**
- * Part of setting the phone up, whichever route the app came by: without
- * Tailscale on it, the phone never reaches this Mac to pair.
+ * Part of setting the phone up, whichever route the app came by, when the
+ * phone reaches this Mac over Tailscale: without it on the phone, it never
+ * reaches this Mac to pair. Not shown when it comes through the relay.
  */
 function PhoneTailscaleRoute({
   platform,
@@ -200,6 +202,7 @@ function PhoneTailscaleRoute({
   platform: InstallPlatform;
   tailscale: TailscaleState | null;
 }) {
+  if (phoneViaRelay()) return null;
   return (
     <div className="phone-route" data-tailscale>
       <div className="phone-route__body">
@@ -347,7 +350,7 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
               <InstallDone
                 platform={platform}
                 deviceName={target.name}
-                tailscaleLine={phoneTailscaleText(tailscale)}
+                tailscaleLine={phoneViaRelay() ? null : phoneTailscaleText(tailscale)}
                 expiresAt={expiresAt}
                 now={now}
                 opening={opening}
