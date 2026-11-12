@@ -3032,7 +3032,7 @@ dependencies = [
 
 [[package]]
 name = "mogbot"
-version = "1.0.5"
+version = "1.0.6"
 dependencies = [
  "arboard",
  "async-trait",
