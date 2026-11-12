@@ -126,7 +126,10 @@ fn raise_open_file_limit() {
     const WANT: libc::rlim_t = 10_240;
     // SAFETY: getrlimit/setrlimit only read and write the struct passed.
     unsafe {
-        let mut lim = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        let mut lim = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
         if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) == 0 && lim.rlim_cur < WANT {
             lim.rlim_cur = WANT.min(lim.rlim_max);
             libc::setrlimit(libc::RLIMIT_NOFILE, &lim);

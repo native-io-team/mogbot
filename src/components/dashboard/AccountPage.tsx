@@ -189,9 +189,9 @@ export function AccountPage() {
           title="Delete your account?"
           body={
             <p>
-              {account.email ?? 'This account'} is removed for good. This Mac is signed out now, and any
-              other Mac on it within a day. Your phone stops reaching this Mac from anywhere; over Tailscale, if you set
-              it up, it keeps working.
+              {account.email ?? 'This account'} is removed for good. This Mac is signed out now, and
+              any other Mac on it within a day. Your phone stops reaching this Mac from anywhere;
+              over Tailscale, if you set it up, it keeps working.
             </p>
           }
           hint="Nothing on this Mac is deleted. You can make a new account any time."
