@@ -471,13 +471,17 @@ describe('the /link page', () => {
       'src="https://clerk.example.test/npm/@clerk/clerk-js@6/dist/clerk.browser.js"'
     );
     expect(html).toContain(`data-clerk-publishable-key="${PUBLISHABLE_KEY}"`);
-    expect(html).toContain('mountSignIn');
+    // Our own form on Clerk's headless API: no Clerk UI bundle, no Clerk box.
+    expect(html).not.toContain('mountSignIn');
+    expect(html).toContain("strategy: 'oauth_google'");
+    expect(html).toContain("strategy: 'email_code'");
+    expect(html).toContain('id="clerk-captcha"');
     expect(html).toContain("'/v1/link'");
     expect(html).toContain('prefers-color-scheme:dark');
     // The page reads the code from its address; it isn't echoed into the HTML.
     expect(html).not.toContain(mac.fingerprint);
     // Signed in already, it still asks before linking (a link someone sent can't link on its own).
-    expect(html).toContain('id="confirm" hidden');
+    expect(html).toContain('id="confirm" class="step" hidden');
     expect(html).toContain("if (Clerk.isSignedIn) return ask();");
     expect(html).not.toContain('if (Clerk.isSignedIn) return link();');
     // The code leaves the address for the tab's own storage before any redirect.

@@ -81,10 +81,10 @@ const PAGE_HEADERS = {
 };
 
 const STYLE = `
-:root{color-scheme:light;--bg:#efebe3;--tray:#ddd6c9;--tray-2:#cfc7b8;--card:#faf8f4;--ink:#1d1c1a;--ink-2:#55524b;--ink-3:#6b675f;
+:root{color-scheme:light;--bg:#efebe3;--tray:#ddd6c9;--tray-2:#cfc7b8;--card:#faf8f4;--field:#ffffff;--ink:#1d1c1a;--ink-2:#55524b;--ink-3:#6b675f;
 --hair:#1d1c1a17;--key-face:#4A4E55;--key-skirt:#34373C;--key-depth:#131417;--key-legend:#F2EEE4;
 --dark-top:#3a3835;--dark-bot:#22201e;--dark-side:#0f0e0d}
-@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#1b1a18;--tray:#141312;--tray-2:#100f0e;--card:#252421;--ink:#f1ece2;--ink-2:#b9b3a7;
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#1b1a18;--tray:#141312;--tray-2:#100f0e;--card:#252421;--field:#1b1a18;--ink:#f1ece2;--ink-2:#b9b3a7;
 --ink-3:#9a948a;--hair:#f1ece21a;--key-face:#F1ECE2;--key-skirt:#D9D1C1;--key-depth:#8F8672;--key-legend:#1d1c1a;
 --dark-top:#f1ece2;--dark-bot:#ddd6c9;--dark-side:#8f8672}}
 *{box-sizing:border-box}
@@ -104,22 +104,42 @@ p{margin:0;color:var(--ink-2);text-wrap:pretty}
 #status{color:var(--ink-3);font-size:15px}
 #status.done{color:var(--ink);font-weight:600;font-size:17px}
 #status.error{color:var(--ink);background:var(--bg);border-radius:12px;padding:12px 16px;box-shadow:inset 0 2px 5px #00000020}
-#sign-in{width:100%;display:flex;justify-content:center}
-#sign-in:empty{display:none}
-#confirm{display:flex;flex-direction:column;gap:18px;align-items:center}
-#confirm[hidden]{display:none}
-#link{font:inherit;font-weight:600;font-size:16px;letter-spacing:-.01em;padding:12px 24px 13px;border:0;border-radius:12px;cursor:pointer;
+.step{width:100%;display:flex;flex-direction:column;gap:12px;align-items:stretch;margin-top:6px}
+.step[hidden],[hidden]{display:none!important}
+#confirm{align-items:center;gap:18px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+label{text-align:left;font-size:14px;font-weight:500;color:var(--ink-2);margin-bottom:-6px}
+input{font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:0;border-radius:12px;padding:12px 14px;width:100%;
+box-shadow:inset 0 0 0 1px var(--hair),inset 0 2px 4px #00000012}
+input:focus{outline:2px solid var(--ink);outline-offset:1px}
+input::placeholder{color:var(--ink-3)}
+.otp{text-align:center;font-size:22px;letter-spacing:.3em;font-variant-numeric:tabular-nums}
+.or{display:flex;align-items:center;gap:12px;color:var(--ink-3);font-size:13px}
+.or:before,.or:after{content:"";flex:1;height:1px;background:var(--hair)}
+.alt{display:flex;align-items:center;justify-content:center;gap:10px;font:inherit;font-weight:600;font-size:16px;color:var(--ink);cursor:pointer;
+background:var(--field);border:0;border-radius:12px;padding:12px 16px;box-shadow:0 0 0 1px var(--hair),0 3px 0 var(--hair),0 8px 14px -8px #00000030;
+transition:transform 70ms cubic-bezier(.3,.7,.4,1),box-shadow 70ms cubic-bezier(.3,.7,.4,1)}
+.alt:active{transform:translateY(2px);box-shadow:0 0 0 1px var(--hair),0 1px 0 var(--hair)}
+.alt svg{width:18px;height:18px}
+.alt:focus-visible,.text:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.text{font:inherit;color:var(--ink-2);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.small{font-size:14px;color:var(--ink-3)}
+button:disabled{opacity:.6;cursor:default}
+.key{font:inherit;font-weight:600;font-size:16px;letter-spacing:-.01em;padding:12px 24px 13px;border:0;border-radius:12px;cursor:pointer;
 color:var(--bg);background:linear-gradient(var(--dark-top),var(--dark-bot));
 box-shadow:inset 0 1px 0 #ffffff26,0 0 0 1px #000,0 5px 0 var(--dark-side),0 14px 22px -6px #00000059;
 transition:transform 70ms cubic-bezier(.3,.7,.4,1),box-shadow 70ms cubic-bezier(.3,.7,.4,1)}
-#link:active{transform:translateY(4px);box-shadow:inset 0 1px 0 #ffffff1a,0 0 0 1px #000,0 1px 0 var(--dark-side),0 4px 8px -4px #00000059}
-#link:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
+.key:active{transform:translateY(4px);box-shadow:inset 0 1px 0 #ffffff1a,0 0 0 1px #000,0 1px 0 var(--dark-side),0 4px 8px -4px #00000059}
+.key:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
 .foot{font-size:13px;color:var(--ink-3)}
 .foot a{color:inherit}
 `;
 
 /** The mark (the m face), as on the site. */
 const MARK = `<span class="mark" aria-hidden="true"><i><svg viewBox="0 0 96 96"><path fill-rule="evenodd" d="M39,12 H57 C75.6,12 87,23.4 87,42 V75 C87,80.58 83.58,84 78,84 H18 C12.42,84 9,80.58 9,75 V42 C9,23.4 20.4,12 39,12 Z M27,75 V39 A6,6 0 0 1 39,39 V75 Z M57,75 V39 A6,6 0 0 1 69,39 V75 Z"/></svg></i></span>`;
+
+/** Google's G, in its own colours (their sign-in button guidelines). */
+const GOOGLE = `<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>`;
 
 function page(body: string, scripts = ''): Response {
   const html = `<!doctype html>
@@ -152,36 +172,74 @@ function notice(title: string, text: string): Response {
 }
 
 /**
- * The script that signs in and sends the code. It reads the code from the
- * address, keeps it in this tab's sessionStorage and takes it out of the
- * address at once, so a sign-in that leaves for Google and comes back never
- * carries it through anyone else's redirects or logs. Signed in, it still
- * waits for a click: a link someone else sent can't bind *their* Mac to a
- * signed-in visitor's account on its own.
+ * The script that signs in and sends the code, with our own form on Clerk's
+ * headless API (no Clerk UI): Continue with Google, or an emailed code. It
+ * reads the code from the address, keeps it in this tab's sessionStorage and
+ * takes it out of the address at once, so a sign-in that leaves for Google and
+ * comes back never carries it through anyone else's redirects or logs. Signed
+ * in, it still waits for a click: a link someone else sent can't bind *their*
+ * Mac to a signed-in visitor's account on its own.
  */
 const LINK_SCRIPT = `
 // In <head>, so wait for the body before looking anything up.
 document.addEventListener('DOMContentLoaded', function () {
   var KEY = 'relay.linkCode';
-  var status = document.getElementById('status');
-  var box = document.getElementById('sign-in');
-  var confirmBox = document.getElementById('confirm');
-  var button = document.getElementById('link');
-  var code = new URLSearchParams(location.search).get('code') || '';
+  function $(id) { return document.getElementById(id); }
+  var status = $('status');
+  var params = new URLSearchParams(location.search);
+  var code = params.get('code') || '';
+  var fromGoogle = params.get('sso') === '1';
   var kept = false;
   try {
     if (code) { sessionStorage.setItem(KEY, code); kept = true; }
     else { code = sessionStorage.getItem(KEY) || ''; kept = !!code; }
   } catch (e) {}
-  if (kept) history.replaceState(null, '', '/link');
-  var back = kept ? location.origin + '/link' : location.href;
-  var sending = false, done = false;
+  if (kept || fromGoogle) history.replaceState(null, '', '/link');
+  var back = location.origin + '/link';
+  var sending = false, done = false, mode = 'in', email = '';
+  var steps = ['choose', 'verify', 'more', 'confirm'];
+  function show(step) {
+    steps.forEach(function (s) { $(s).hidden = s !== step; });
+    var f = step && $(step).querySelector('input:not([hidden])');
+    if (f) f.focus();
+  }
   function say(text, kind) { status.textContent = text; status.className = kind || ''; }
   function forget() { try { sessionStorage.removeItem(KEY); } catch (e) {} }
+  function oops(e, fallback) {
+    var err = e && e.errors && e.errors[0];
+    say((err && (err.longMessage || err.message)) || fallback || 'That didn’t work. Try again.', 'error');
+  }
+  function busy(form, on) {
+    var b = form.querySelector('button[type=submit]');
+    if (b) b.disabled = on;
+  }
+  // Clerk's bot check: invisible for most people; when it wants a challenge,
+  // Clerk's UI shows just that challenge, then the sign-in carries on.
+  async function guard(res) {
+    var needs = res && (res.protectCheck || res.status === 'needs_protect_check' ||
+      (res.missingFields || []).indexOf('protect_check') >= 0);
+    if (!needs || !res.protectCheck) return res;
+    say('One quick check…');
+    await Clerk.__internal_openProtectCheckModal({ resource: res });
+    await res.reload();
+    say('');
+    return res;
+  }
+  async function finish(sessionId) {
+    await Clerk.setActive({ session: sessionId });
+    ask();
+  }
+  function ask() {
+    if (done) return;
+    say('');
+    var who = Clerk.user && Clerk.user.primaryEmailAddress && Clerk.user.primaryEmailAddress.emailAddress;
+    $('who').textContent = who ? 'Signed in as ' + who + '.' : '';
+    show('confirm');
+  }
   async function link() {
     if (sending || done) return;
     sending = true;
-    confirmBox.hidden = true;
+    show(null);
     say('Linking your Mac…');
     try {
       var token = await Clerk.session.getToken();
@@ -194,7 +252,9 @@ document.addEventListener('DOMContentLoaded', function () {
       if (body && body.ok) {
         done = true;
         forget();
-        say('You’re signed in. Go back to the app.', 'done');
+        $('lede').hidden = true;
+        $('title').textContent = 'You’re signed in';
+        say('Go back to the app. You can close this page.', 'done');
       } else {
         if (body && /^code_/.test(body.reason || '')) forget();
         say((body && body.message) || 'That didn’t work. Start again from Sign in on your Mac.', 'error');
@@ -204,13 +264,111 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     sending = false;
   }
-  function ask() {
-    if (done) return;
-    box.hidden = true;
+  async function google() {
     say('');
-    confirmBox.hidden = false;
+    try {
+      await Clerk.client.signIn.authenticateWithRedirect({
+        strategy: 'oauth_google',
+        redirectUrl: back + '?sso=1',
+        redirectUrlComplete: back
+      });
+    } catch (e) { oops(e); }
   }
-  button.addEventListener('click', link);
+  async function sendCode(again) {
+    if (mode === 'in') {
+      var si = Clerk.client.signIn;
+      var factor = (si.supportedFirstFactors || []).filter(function (f) { return f.strategy === 'email_code'; })[0];
+      if (!factor) throw { errors: [{ message: 'This account can’t get a sign-in code. Try Continue with Google.' }] };
+      await si.prepareFirstFactor({ strategy: 'email_code', emailAddressId: factor.emailAddressId });
+    } else {
+      await Clerk.client.signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+    }
+    $('sent').textContent = (again ? 'We sent a new code to ' : 'We sent a code to ') + email + '.';
+  }
+  async function start(e) {
+    e.preventDefault();
+    var form = e.target;
+    email = $('email').value.trim();
+    if (!email) return;
+    busy(form, true);
+    say('');
+    try {
+      try {
+        await guard(await Clerk.client.signIn.create({ identifier: email }));
+        mode = 'in';
+      } catch (err) {
+        var c = err && err.errors && err.errors[0] && err.errors[0].code;
+        if (c !== 'form_identifier_not_found') throw err;
+        await guard(await Clerk.client.signUp.create({ emailAddress: email }));
+        mode = 'up';
+      }
+      await sendCode(false);
+      $('otp').value = '';
+      show('verify');
+    } catch (err) { oops(err); }
+    busy(form, false);
+  }
+  function more(su) {
+    var need = su.missingFields || [];
+    var left = 0;
+    ['username', 'password'].forEach(function (f) {
+      var on = need.indexOf(f) >= 0;
+      $(f).hidden = !on; $(f).required = on; $(f + '-label').hidden = !on;
+      if (on) left++;
+    });
+    if (!left && need.indexOf('protect_check') >= 0) return say('Clerk’s bot check didn’t pass. Reload this page and try again.', 'error');
+    if (!left) return say('Something else is needed to finish signing up. Try Continue with Google.', 'error');
+    show('more');
+  }
+  async function verify(e) {
+    e.preventDefault();
+    var form = e.target;
+    var otp = $('otp').value.replace(/\\s/g, '');
+    if (!otp) return;
+    busy(form, true);
+    say('');
+    try {
+      if (mode === 'in') {
+        var si = await guard(await Clerk.client.signIn.attemptFirstFactor({ strategy: 'email_code', code: otp }));
+        if (si.status === 'complete') await finish(si.createdSessionId);
+        else say('That didn’t finish signing in. Try Continue with Google.', 'error');
+      } else {
+        var su = await guard(await Clerk.client.signUp.attemptEmailAddressVerification({ code: otp }));
+        if (su.status === 'complete') await finish(su.createdSessionId);
+        else more(su);
+      }
+    } catch (err) { oops(err, 'That code didn’t work. Check it and try again.'); }
+    busy(form, false);
+  }
+  async function complete(e) {
+    e.preventDefault();
+    var form = e.target;
+    busy(form, true);
+    say('');
+    try {
+      var fields = {};
+      if (!$('username').hidden) fields.username = $('username').value.trim();
+      if (!$('password').hidden) fields.password = $('password').value;
+      var su = await guard(await Clerk.client.signUp.update(fields));
+      if (su.status === 'complete') await finish(su.createdSessionId);
+      else more(su);
+    } catch (err) { oops(err); }
+    busy(form, false);
+  }
+  $('google').addEventListener('click', google);
+  $('choose').addEventListener('submit', start);
+  $('verify').addEventListener('submit', verify);
+  $('more').addEventListener('submit', complete);
+  $('resend').addEventListener('click', async function () {
+    say('');
+    try { await sendCode(true); } catch (err) { oops(err); }
+  });
+  $('restart').addEventListener('click', function () { say(''); show('choose'); });
+  $('link').addEventListener('click', link);
+  $('switch').addEventListener('click', async function () {
+    try { await Clerk.signOut(); } catch (e) {}
+    show('choose');
+  });
   window.addEventListener('load', async function () {
     if (!/^[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}$/.test(code)) {
       say('This sign-in link isn’t valid. Start again from Sign in on your Mac.', 'error');
@@ -226,34 +384,26 @@ document.addEventListener('DOMContentLoaded', function () {
       say('Couldn’t load sign-in. Reload this page to try again.', 'error');
       return;
     }
+    if (fromGoogle && !Clerk.isSignedIn) {
+      try {
+        await Clerk.handleRedirectCallback({
+          signInForceRedirectUrl: back,
+          signUpForceRedirectUrl: back,
+          continueSignUpUrl: back + '?more=1'
+        });
+      } catch (e) { oops(e, 'Google sign-in didn’t finish. Try again.'); }
+      if (!Clerk.isSignedIn) {
+        var su = Clerk.client && Clerk.client.signUp;
+        say('');
+        if (su && su.status === 'missing_requirements') return more(su);
+        return show('choose');
+      }
+    }
     say('');
     if (Clerk.isSignedIn) return ask();
-    var dark = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
-    Clerk.mountSignIn(box, {
-      withSignUp: true,
-      appearance: {
-        variables: {
-          fontFamily: 'Geist, system-ui, sans-serif',
-          borderRadius: '12px',
-          colorPrimary: dark ? '#f1ece2' : '#1d1c1a',
-          colorText: dark ? '#f1ece2' : '#1d1c1a',
-          colorTextSecondary: dark ? '#b9b3a7' : '#55524b',
-          colorBackground: dark ? '#252421' : '#faf8f4',
-          colorInputBackground: dark ? '#1b1a18' : '#ffffff',
-          colorInputText: dark ? '#f1ece2' : '#1d1c1a'
-        },
-        elements: {
-          rootBox: { width: '100%' },
-          cardBox: { boxShadow: 'none', border: '0', width: '100%' },
-          card: { boxShadow: 'none', background: 'transparent', padding: '8px 0 0' },
-          header: { display: 'none' },
-          footer: { background: 'transparent' }
-        }
-      },
-      forceRedirectUrl: back,
-      signUpForceRedirectUrl: back
-    });
-    Clerk.addListener(function (state) { if (state.session) ask(); });
+    var pending = Clerk.client && Clerk.client.signUp;
+    if (params.get('more') === '1' && pending && pending.status === 'missing_requirements') return more(pending);
+    show('choose');
   });
 });
 `;
@@ -271,18 +421,42 @@ export function linkPage(url: URL, publishableKey: string | undefined, accounts:
   }
   const key = escapeAttr(publishableKey.trim());
   const base = `https://${escapeAttr(host)}/npm`;
-  // Clerk's documented script-tag setup: the UI bundle, then clerk-js with the key.
+  // The form is ours. Clerk's UI bundle is loaded only so its bot check
+  // (protect_check) can run when Clerk asks for one; no Clerk box is mounted.
   const scripts = `<script defer crossorigin="anonymous" src="${base}/@clerk/ui@1/dist/ui.browser.js" type="text/javascript"></script>
 <script defer crossorigin="anonymous" data-clerk-publishable-key="${key}" src="${base}/@clerk/clerk-js@6/dist/clerk.browser.js" type="text/javascript"></script>
 <script>${LINK_SCRIPT}</script>`;
   return page(
-    `<h1>Sign in to Mogbot</h1>
-<p>So your phone reaches your Mac from anywhere. Free, no card.</p>
+    `<h1 id="title">Sign in to Mogbot</h1>
+<p id="lede">So your phone reaches your Mac from anywhere. Free, no card.</p>
 <div id="status">Loading…</div>
-<div id="sign-in"></div>
-<div id="confirm" hidden>
+<form id="choose" class="step" hidden novalidate>
+<button id="google" class="alt" type="button">${GOOGLE}Continue with Google</button>
+<div class="or"><span>or</span></div>
+<label for="email" class="sr">Email</label>
+<input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
+<button class="key" type="submit">Email me a code</button>
+<div id="clerk-captcha"></div>
+</form>
+<form id="verify" class="step" hidden novalidate>
+<p id="sent"></p>
+<label for="otp" class="sr">Code</label>
+<input id="otp" class="otp" type="text" autocomplete="one-time-code" inputmode="numeric" maxlength="8" placeholder="Code" required>
+<button class="key" type="submit">Continue</button>
+<p class="small"><button id="resend" class="text" type="button">Send a new code</button> · <button id="restart" class="text" type="button">Use another email</button></p>
+</form>
+<form id="more" class="step" hidden novalidate>
+<p>One more thing to finish your account.</p>
+<label id="username-label" for="username">Username</label>
+<input id="username" type="text" autocomplete="username" hidden>
+<label id="password-label" for="password">Password</label>
+<input id="password" type="password" autocomplete="new-password" hidden>
+<button class="key" type="submit">Finish</button>
+</form>
+<div id="confirm" class="step" hidden>
 <p>Only continue if you just chose Sign in on your own Mac. If someone sent you this link, close this page.</p>
-<button id="link" type="button">Link my Mac</button>
+<button id="link" class="key" type="button">Link my Mac</button>
+<p class="small"><span id="who"></span> <button id="switch" class="text" type="button">Use another account</button></p>
 </div>`,
     scripts
   );
