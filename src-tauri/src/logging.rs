@@ -69,8 +69,11 @@ pub(crate) fn scrub_string(s: &str) -> String {
 }
 
 fn regex_lite_replace(input: &str, prefix: &str, replacement: &str) -> String {
-    // Replace `<prefix><username>` with `<replacement>` where username runs until
-    // the next path separator or whitespace. Avoids a full regex crate dependency.
+    // Replace `<prefix><username>/<folders…>/<file>` with
+    // `<replacement>/…/<file>`: the user name and every folder under it go
+    // (project and client names live there), the file name stays because
+    // it's what makes a report useful. The path runs to whitespace or a
+    // quote. Avoids a full regex crate dependency.
     let mut out = String::with_capacity(input.len());
     let mut rest = input;
     while let Some(idx) = rest.find(prefix) {
@@ -78,12 +81,50 @@ fn regex_lite_replace(input: &str, prefix: &str, replacement: &str) -> String {
         out.push_str(replacement);
         let after = &rest[idx + prefix.len()..];
         let end = after
-            .find(|c: char| c == '/' || c == '\\' || c.is_whitespace() || c == '"' || c == '\'')
+            .find(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == ')' || c == ',')
             .unwrap_or(after.len());
+        let path = &after[..end];
+        let sep = if prefix.contains('\\') { '\\' } else { '/' };
+        let parts: Vec<&str> = path.split(sep).collect();
+        // parts[0] is the user name; then folders; the last is the file.
+        match parts.len() {
+            0 | 1 => {}
+            2 => {
+                out.push(sep);
+                out.push_str(parts[1]);
+            }
+            n => {
+                out.push(sep);
+                out.push('…');
+                out.push(sep);
+                out.push_str(parts[n - 1]);
+            }
+        }
         rest = &after[end..];
     }
     out.push_str(rest);
     out
+}
+
+#[cfg(test)]
+mod scrub_tests {
+    use super::scrub_string;
+
+    #[test]
+    fn user_names_and_folders_go_the_file_name_stays() {
+        assert_eq!(
+            scrub_string("failed at /Users/julian/ShipStudio/acme-client/src/page.tsx: boom"),
+            "failed at /Users/<redacted>/…/page.tsx: boom"
+        );
+        assert_eq!(scrub_string("in /Users/julian"), "in /Users/<redacted>");
+        assert_eq!(scrub_string("'/Users/julian/notes.md'"), "'/Users/<redacted>/notes.md'");
+        assert_eq!(
+            scrub_string(r"C:\Users\pat\Work\Client\a.txt"),
+            r"C:\Users\<redacted>\…\a.txt"
+        );
+        assert_eq!(scrub_string("/home/pat/x/y (os error 2)"), "/home/<redacted>/…/y (os error 2)");
+        assert_eq!(scrub_string("nothing here"), "nothing here");
+    }
 }
 
 fn scrub_event(event: &mut sentry::protocol::Event<'static>) {
