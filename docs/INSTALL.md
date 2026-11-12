@@ -1,8 +1,12 @@
 # Install: from a fresh Mac to your agents on your phone
 
-There is no download yet (no signed build, no App Store). You build the app on
-your own Mac from this repo. The easiest way is to let an AI coding agent do it
-for you.
+The quickest way in needs none of this: the signed Mac app from
+[mogbot.app/start](https://mogbot.app/start), and the iPhone app from the
+public [TestFlight beta](https://testflight.apple.com/join/fsm64m5E). It runs
+on a Mac for now; Windows and Linux are coming.
+
+This guide is for building the app yourself, on your own Mac, from this repo.
+The easiest way is to let an AI coding agent do it for you.
 
 ## For the human (read this first)
 
@@ -25,16 +29,17 @@ to expect.
    - A Mac (Apple Silicon or Intel) on a recent macOS, an internet connection,
      and **15 GB free** (about **25 GB** if you build the phone app with Xcode).
    - **A paid Claude plan (Pro or Max) for Claude Code, or a paid ChatGPT plan
-     (Plus, Pro, Business…) for Codex**, or both. You can add more than one
+     (Plus, Pro, Business…) for Codex**, or OpenCode. You can add more than one
      account; when one runs out, the app switches to the next.
    - For the phone: an iPhone (or Android phone) and a free **Tailscale**
      account, signed in on the Mac **and** the phone with the same account
      **before** you scan the pairing code.
-4. The phone app comes two ways, and the agent will ask which:
+4. The phone app comes three ways, and the agent will ask which:
+   **TestFlight** (iPhone; minutes; the real app, from the public beta),
    **Expo Go** (minutes; runs inside Expo Go while a terminal on the Mac stays
    open; no dictation or share sheet) or **built with Xcode** (the real app;
    30–60 minutes the first time; with a free Apple ID, re-install every 7
-   days). Neither gets push notifications yet.
+   days). None gets push notifications yet.
 5. Your Mac does the work. Agents stop when the Mac sleeps or the app is closed.
 
 No agent? Follow the same steps by hand: run each **Run** block in Terminal and
@@ -198,12 +203,13 @@ git -C REPO rev-parse --show-toplevel && ls REPO/brand.json
 **Run**
 
 ```bash
-git clone <the repo URL you were given> mogbot && cd mogbot
+git clone https://github.com/native-io-team/mogbot mogbot && cd mogbot
 ```
 
-If it's a private repo and the clone asks for a password, **HUMAN:** *"The
-repo is private. Please sign in to GitHub with `gh auth login` (I can run it
-for you; it opens your browser), or give me the repo as a zip."*
+(Or the URL of the fork you were given.) If the clone asks for a password,
+the repo you were given is private: **HUMAN:** *"That repo is private. Please
+sign in to GitHub with `gh auth login` (I can run it for you; it opens your
+browser), or give me the repo as a zip."*
 
 **Then check the checkout is this app, not a copy from before a rename**
 
@@ -299,18 +305,18 @@ files get checked). If macOS still says it "can't be opened", see
 **HUMAN:** *"The app is open. It walks you through setup one screen at a
 time, with a progress bar at the top and one big button on each screen.
 Every check it runs says **Done** when it passes, or **Not done yet** with
-the one thing to do when it doesn't. First: pick Claude Code or Codex (the
-one you pay for: Claude Pro/Max is Claude Code, ChatGPT Plus/Pro is Codex).
-It installs it, then opens a sign-in page in your browser: sign in there.
-Then one question, how much your agents should do on their own (Use good
-judgement is the default; Skip keeps it). Stop when it asks **'Use your
-agents from your phone?'** and tell me."*
+the one thing to do when it doesn't. First: pick Claude Code, Codex or
+OpenCode (Claude Pro/Max is Claude Code, ChatGPT Plus/Pro is Codex). It
+installs it, then opens a sign-in page in your browser: sign in there. Stop
+when you see your **Chief of Staff's** first message and tell me."*
 
 The app's screens, in order: Welcome → your AI (pick, install, sign in: a
-screen each) → how independent → your phone (optional: Tailscale on the Mac,
-Tailscale on the phone, the phone app, scan and Allow) → "You're ready:
-bring your agents, or start fresh?". Quitting part-way is fine: the app
-reopens on the screen it stopped at.
+screen each) → the Chief of Staff's chat. Under its greeting the Chief asks
+**"Already have agents somewhere else?"** (Grok, ChatGPT, Claude, Somewhere
+else, or **I'm starting fresh**; Step 19). The phone is offered later, as a
+card in the Chief's chat and as **Pair your phone** at the bottom of the
+sidebar (Steps 12–16). Quitting part-way is fine: the app reopens on the
+screen it stopped at.
 
 ### Step 10. The engine is installed and signed in
 
@@ -348,8 +354,8 @@ Codex needs a paid **ChatGPT** plan (Plus, Pro, Business, Edu, Enterprise) or
 an OpenAI API key. The app adds no charge of its own. On a subscription, usage
 counts against the plan's limits; with an API key, it's billed per token.
 
-**Check: the app agrees.** **HUMAN:** *"Does the app show 'Use your agents
-from your phone?'"* If yes, the engine is done. If it still says **Not done
+**Check: the app agrees.** **HUMAN:** *"Does the app show your Chief of
+Staff's chat?"* If yes, the engine is done. If it still says **Not done
 yet** on the sign-in screen, press **Try again**; if it fails twice, quit the
 app (⌘Q), open it again (it reopens on the same screen) and tell me what it
 shows.
@@ -362,12 +368,11 @@ personal one, say).
 **HUMAN:** *"Do you have more than one Claude or ChatGPT plan you'd like the
 agents to use? If one runs out of usage, the app switches to the next one on
 its own. If yes: click the account row at the foot of the Agents sidebar
-(or press ⌘K and type Add an account), click Add account, give it a name
-(Work, say), click Add and sign in, and sign in to the other account in the
-browser page that opens. Tell me when it's listed."*
+(or press ⌘K and choose Add an account…), and sign in to the other account
+in the browser page that opens. Tell me when it's listed."*
 
-**Check:** the human sees the account in the popover (and Settings → Agents →
-Accounts), below this Mac's own sign-in from Step 10, shown by its email.
+**Check:** the human sees the account in the popover (and Settings → Accounts
+& usage), below this Mac's own sign-in from Step 10, shown by its email.
 Accounts are tried in that order ("Use for new work" puts one first); when
 one hits its usage limit the chat shows a quiet note like "Switched to Work:
 sam@example.com is out of usage until 10:00 AM." There is no
@@ -375,9 +380,10 @@ terminal check for this; the list in Settings is the answer.
 
 ### Step 12. Tailscale on the Mac
 
-In the app: **Use your agents from your phone? → Set up my phone**. The
-next screen, **Get Tailscale on this Mac**, checks this for itself and moves
-on when it's done; the checks below are the same ones from the terminal.
+In the app: **Pair your phone** at the bottom of the sidebar (or ⌘K → Pair
+your phone, or Settings → Phone). After the screen about the phone app,
+**Turn on Tailscale on this Mac** checks this for itself and moves on when
+it's done; the checks below are the same ones from the terminal.
 
 The phone reaches the Mac over the human's own Tailscale network. Nothing goes
 through our servers. **Tailscale not being on, or being signed in to a
@@ -409,42 +415,44 @@ personal account is fine. Tell me when the menu bar icon says Connected."*
 **HUMAN** (the tailnet needs HTTPS certificates, once per account): *"In your
 browser, open https://login.tailscale.com/admin/dns. Make sure **MagicDNS** is
 on, then click **Enable HTTPS** under HTTPS Certificates. Tell me when it's
-done."* If you skip this, the app's pairing screen says **"Not done yet.
-HTTPS certificates are off in your Tailscale account."** with an **Open
-Tailscale admin** button and **Check again**, which answers every time it's
-pressed.
+done."* If you skip this, the app's **Turn on phone access** screen waits
+on *"Tailscale asks you to approve HTTPS certificates once, on its own
+page"*, with **Open the Tailscale page** and **Check again**.
 
 ### Step 13. Choose how to get the phone app
 
-There's no App Store or TestFlight build yet, so the phone app is either run
-inside Expo Go or built onto the iPhone with Xcode. Ask; don't pick for them.
+The iPhone app is on a public TestFlight beta (the App Store listing is
+planned for 19 November 2026). Android is in internal testing only, so an
+Android phone uses Expo Go or a self-build. Ask; don't pick for them.
 
-**HUMAN:** *"How do you want the phone app? **1. Expo Go**: a few minutes.
-It runs inside a free app called Expo Go and only works while a terminal on
-this Mac keeps running. No built-in dictation, no 'Send to agent' in the share
-sheet. **2. Built with Xcode** onto your iPhone: the real app, with its own
-icon, dictation and no terminal to keep open. It takes 30–60 minutes the first
-time, needs the full Xcode app (about 25 GB free in total) and your iPhone
-plugged in by cable once. With a free Apple ID it has to be re-installed every
-7 days. Neither one gets push notifications yet: those need the official
-build, which needs a paid Apple Developer account and TestFlight, and doesn't
-exist yet. Until then you're alerted only while the app is open. Which one?"*
+**HUMAN:** *"How do you want the phone app? **1. TestFlight** (iPhone): a few
+minutes. Install TestFlight from the App Store, then open
+https://testflight.apple.com/join/fsm64m5E on the phone (the app's **Get it on
+TestFlight** screen shows that link as a code to scan). **2. Expo Go**: a few
+minutes. It runs inside a free app called Expo Go and only works while a
+terminal on this Mac keeps running. No built-in dictation, no 'Send to agent'
+in the share sheet. **3. Built with Xcode** onto your iPhone: the real app,
+with its own icon, dictation and no terminal to keep open. It takes 30–60
+minutes the first time, needs the full Xcode app (about 25 GB free in total)
+and your iPhone plugged in by cable once. With a free Apple ID it has to be
+re-installed every 7 days. None of them gets push notifications yet, so
+you're alerted only while the app is open. Which one?"*
 
-- **1** → Step 14, then Step 15A.
-- **2** → Step 14, then Step 15B. (Android phone: Step 15A, or the Android
+- **1** → Step 14, then Step 16.
+- **2** → Step 14, then Step 15A.
+- **3** → Step 14, then Step 15B. (Android phone: Step 15A, or the Android
   note at the end of 15B.)
-- Not sure → Expo Go. They can build with Xcode later; pairing again is all
-  it takes.
+- Not sure → TestFlight on an iPhone, Expo Go on Android.
 
 ### Step 14. Tailscale on the phone (before any scanning)
 
-The app's **Get Tailscale on your phone** screen shows a QR code to
-Tailscale on the App Store and ticks **Done** as soon as a phone signed in to
-the Mac's account is on the tailnet with Tailscale switched on. It says which
-one it sees ("signed in, but switched off") when it isn't.
+The app's **Turn on Tailscale on your phone** screen links to Tailscale on
+the App Store and ticks **Done** as soon as a phone signed in to the Mac's
+account is on the tailnet with Tailscale switched on. It says which one it
+sees ("signed in, but switched off") when it isn't.
 
 **HUMAN:** *"On your phone, install **Tailscale** from the App Store (or
-Google Play): scan the code on the Mac's screen with the camera. Open it and sign in with the **same account** as on the Mac:
+Google Play). Open it and sign in with the **same account** as on the Mac:
 `<login from Step 12>`. Then switch it on. Tell me when it says Connected."*
 (If Step 15A is next, add: *"Also install **Expo Go**, a free app from the
 same store."*)
@@ -481,7 +489,7 @@ Expected: `packager-status:running`. Expo prints a QR code.
 **HUMAN:** *"On your phone, open the iPhone **Camera** app (Android: open **Expo
 Go** and tap Scan QR code) and point it at the QR code in the terminal. Tap the
 banner to open it in Expo Go. The first load takes a minute. Tell me when you
-see 'Scan the code on your Mac'."*
+see 'Start at your computer'."*
 
 **If it fails:**
 
@@ -516,12 +524,12 @@ The real app: no Metro, a Home Screen icon, dictation and quick actions work.
 Needs **full Xcode** from the App Store (Expo SDK 58 needs **Xcode 26.4 or
 later**), a free Apple ID, and the iPhone plugged in by cable.
 
-The desktop app's **Pair your phone** flow (foot of the sidebar) does this same build
-with an agent beside it (docs/mobile.md, "Installing the app"), but it is
-**only offered when the app runs from source** (`pnpm tauri dev`). A `.app`
-from Step 8 hides it, because `links.companionSource` in `brand.json` is null,
-so it has no repository to fetch the phone app's source from. From the built
-`.app`, do it by hand as below.
+The desktop app's Phone panel can do this same build with an agent beside it
+(**Build it on this Mac…**, or ⌘K → Get the phone app…; docs/mobile.md,
+"Installing the app"), but it is **only offered when the app runs from
+source** (`pnpm tauri dev`), and the panel offers TestFlight instead while
+`brand.json` names a TestFlight link. From the built `.app`, do it by hand as
+below.
 
 **Check disk space first.** Xcode plus its iOS components and the first build
 take roughly 15–25 GB on top of the desktop build.
@@ -614,7 +622,7 @@ lists the app.
 
 **HUMAN** after it installs: *"On the iPhone, open **Settings → General → VPN &
 Device Management**, tap your Apple ID under Developer App, and tap **Trust**.
-Then open the Mogbot app. Tell me when you see 'Scan the code on your Mac'."*
+Then open the Mogbot app. Tell me when you see 'Start at your computer'."*
 Until then, opening it says "Untrusted Developer". Developer Mode must stay on.
 
 **A free Apple ID's build stops opening after 7 days.** Tell the human: *"With
@@ -633,15 +641,15 @@ doesn't expire. Not verified on Android hardware.
 Step 12's check says `Running`, and Step 14's check shows the phone, not
 `offline`.
 
-**HUMAN:** *"On the Mac, the app's **Get the Mogbot app on your phone**
-screen: press **I already have the app** (we just installed it). The next
-screen, **Scan this code**, turns on phone access by itself and shows a QR
-code. (Skipped the phone earlier? Settings → Agents → Phone → Pair a phone
-shows the same code.) On your phone, in the app: **It's on — next**, then
-**Scan the code** (in Expo Go, use that button, not the Camera app). The
-phone asks 'Pair with …?': tap **Pair**. Then the Mac asks 'Allow … to use
-your agents?': click **Allow**. The Mac says **Done. Paired with …** and
-moves on to the last screen. Tell me what the phone shows."*
+**HUMAN:** *"On the Mac, click **Pair your phone** at the bottom of the
+sidebar. On **Get Mogbot on your phone**, press **I already have the app**
+(we just installed it); the Tailscale screens tick by themselves; on **Turn
+on phone access**, press **Turn on phone access**. The Mac then shows a QR
+code. On your phone, in the app: **My Mac is set up**, then the Tailscale
+screen, then **Scan the code** (in Expo Go, use that button, not the Camera
+app). The phone asks 'Pair with …?': tap **Pair**. Then the Mac asks
+'Allow …?': click **Allow**. Both say they're paired, and the Mac ends on
+**You're all set**. Tell me what the phone shows."*
 
 **Check:** the phone shows the agents list with the Chief of Staff, and the
 Mac's Phone panel lists the phone as paired. **HUMAN:** *"Send the Chief of
@@ -692,34 +700,35 @@ closed, agents report the browser as not connected.
 by default they work on this Mac on their own and ask before anything
 leaves it (sending, posting, spending). You can change it any time by
 telling your Chief ("ask me less", "ask me more") or in Settings →
-Independence. Even at the most independent setting, spending money,
-logins and deleting for good still ask you first. **Your team**: the Chief of Staff
+Independence, on a slider from Careful through Steady (the default) and Bold
+to Unleashed. Even at Unleashed, spending money, logins and deleting for good
+still ask you first. **Your team**: the Chief of Staff
 creates, changes and removes the other agents for you, and you can change an
 agent's instructions or routines just by asking in the chat. The Chief is also
 the team's **admin**: it can OK other agents' everyday local work for you, and
 brings you the rest in one message ('3 things only you can decide'). Keys,
 logins and anything outward still come to you. You can change who's an admin
-in Settings → Agents → Admins."*
+in Settings → Independence."*
 
 There's nothing to check here. Don't change these settings for the human.
 
 ### Step 19. Bring agents from Grok Bot or another assistant (optional)
 
 Only if the human already has agents in Grok Bot (or another assistant that
-can add an MCP connector). Otherwise: **No thanks, start fresh** on the
-card under the Chief's first message. Either way it's asked once; later, import is in ⌘K → Import agents,
-Settings → Agents → Import, or the phone's ⋯ menu.
+can add an MCP connector). Otherwise: **I'm starting fresh** under the
+Chief's first message. Either way it's asked once; later, import is in ⌘K →
+Import agents from another assistant…, Settings → Agents → Import agents, or
+the phone's ⋯ menu.
 
-**HUMAN:** *"The app's last screen asks **'You're ready. Bring your agents
-from Grok, ChatGPT or another assistant, or start fresh?'** To bring them:
-**Bring my agents**, then three screens. **Turn on Remote access** turns it on
-by itself and ticks when the internet can reach this Mac (if Tailscale needs
-Funnel approved, it says so, with the page and Check again). **Add the link
-to your assistant**: press **Copy link**, and in your other assistant add a
-custom connector named Mogbot with that link; it ticks when your assistant
-connects. **Send your assistant this message**: copy it, send it in a new
-chat, and press **Open your Chief of Staff**. The Chief asks you first:
-click **Allow**.
+**HUMAN:** *"Under its greeting, the Chief asks **'Already have agents
+somewhere else?'** To bring them, pick where they are (Grok, ChatGPT, Claude
+or Somewhere else). The Chief then walks you through it one message at a
+time, each with one button, and moves on by itself when a step is done:
+install Tailscale and sign in; turn on your link (if Tailscale wants a
+one-time OK, approve it on the page that opens); add the link to your
+assistant as a custom connector named Mogbot (**Copy my link**); then copy
+the message it shows and send it to your assistant in a new chat. When your
+assistant says hello, the Chief asks you once: click **Allow**.
 Your assistant describes its agents; the Chief plays the plan back to you,
 asks what's missing, and you pick what to keep on one review card.
 Afterwards the app checks what your new agents can already reach on this Mac
@@ -736,7 +745,7 @@ agents are in the sidebar. Imported routines arrive paused.
 
 Done. Tell the human: *"You're set up. Talk to your Chief of Staff on the Mac
 or the phone. Keep the Mac on and the app open for your agents to keep
-working (Settings → Agents → On this Mac can keep it awake)."* On Expo Go add:
+working (Settings → Agents → On this Mac → Keep this Mac awake)."* On Expo Go add:
 *"and keep the Expo terminal open for the phone app."*
 
 ---
@@ -812,7 +821,7 @@ The failures people actually hit, most common first:
 | Phone build fails: Xcode license, "sending 'slot' risks causing data races", or a device id refused | Xcode too old, or its license not accepted after an update; the wrong device id | [Xcode](#xcode-version-license-or-device-id) |
 | `No space left on device`, or a build that dies part-way | Disk full | [Disk full](#disk-full) |
 | An agent says the browser isn't connected, or a card says the Claude in Chrome extension isn't set up | The extension is missing, signed in to another Claude account, or Chrome is closed | [Extension not connected](#chrome-extension-not-connected) |
-| Agents don't answer, or "no engine" | Claude Code or Codex not signed in | [Agents don't answer](#agents-dont-answer--no-engine) |
+| Agents don't answer, or "no engine" | Claude Code, Codex or OpenCode not signed in | [Agents don't answer](#agents-dont-answer--no-engine) |
 
 ### Pairing is stuck or can't reach the Mac
 
@@ -953,8 +962,8 @@ xattr -dr com.apple.quarantine /Applications/Mogbot.app
 
 The engine isn't installed or signed in. Run the Step 10 checks. Sign in again
 with `claude` or `codex login`, then quit and reopen the app. If the human's only
-agent CLI is something else (Opencode, Cursor), Agents shows a "no engine"
-panel: install Claude Code or Codex.
+agent CLI is something else (Cursor, say), Agents shows a "no engine"
+panel: install Claude Code, Codex or OpenCode.
 
 ### "Mogbot wants to use your confidential information stored in … keychain"
 
@@ -966,8 +975,8 @@ Phone panel won't offer a pairing code ("unlock your Mac").
 
 ### Agents stop when I close the lid
 
-The Mac has to be awake. Settings → Agents → keep this Mac on. Closing the
-app stops agents too.
+The Mac has to be awake. Settings → Agents → On this Mac → Keep this Mac
+awake. Closing the app stops agents too.
 
 ### Where the logs are
 

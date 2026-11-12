@@ -1,7 +1,7 @@
 # Agents
 
 Persistent, named agents you chat with, the way Grok Bot works on desktop, but
-every agent is a Claude Code session on your own Mac. One of them, the **Chief
+every agent runs on Claude Code, Codex or OpenCode on your own Mac. One of them, the **Chief
 of Staff**, manages the rest: it creates agents, briefs them, delegates to them,
 keeps track of what they're doing, and deletes them when you say so. You can
 talk only to the Chief and let it run everything else.
@@ -23,8 +23,10 @@ greeting, `prompts::CHIEF_GREETING`, appended by `ensure_main` when it creates
 the Chief: what it can do (create agents, delegate, approvals, projects, the
 phone) and a question. It is stored, not generated, so nothing runs on the
 user's plan until they reply, and `CHIEF_INSTRUCTIONS` tells the Chief it said
-it. Three starters sit under it until the user's first message (see "A
-first real result", below); while the greeting is all there is, it and the
+it. Under it the Chief asks whether the user already has agents somewhere
+else (Grok, ChatGPT, Claude, Somewhere else, or "I'm starting fresh"); once
+that is answered, four starters sit under it until the user's first message
+(see "A first real result", below); while the greeting is all there is, it and the
 starters sit in the middle of the page as an empty state (`data-greeting` on
 the message column), not at the foot of an empty screen.
 
@@ -39,11 +41,11 @@ flight lists it under **Paused**, and in a chat it is a quiet centred line
 with "Retry at 4:45 AM" (and a quiet "Try now", since the limit may have
 lifted early), not a tinted box. There is no
 icon for it: an unlabeled one was three names for one place. Its foot has the Phone row (the companion
-app: pair, or which phone is connected); remote access, for driving the app
+app: "Pair your phone", or which phone is connected); remote access, for driving the app
 from another assistant, appears there only while it is on and is otherwise
 reached from the Phone panel's last line or ⌘K. In a project's workspace
-sidebar, agents bound to that project are listed above its terminal
-Sessions; clicking one opens its chat.
+sidebar, agents bound to that project are listed under **Agents**, above
+**Terminals** and **Dev server**; clicking one opens its chat.
 
 ## A first real result, and ready-made agents (`agents/templates.rs`)
 
@@ -57,31 +59,31 @@ by `lib/chiefIdeas.ts`), so the phone's chips (`ChiefStarters`) type the same
 words. Each types a whole, specific brief with one blank at its end; none sends
 by itself.
 
-The chips are **Brief me every morning…**, **Make me an agent…**, **Research
-it and write it up…** and **Plan a trip…**: four ways in (every morning, an
+The chips are **Brief me every morning**, **Make me an agent**, **Research
+it and write it up** and **Plan a trip**: four ways in (every morning, an
 agent of your own, work written up, something personal), everyday jobs
 someone who isn't a developer recognises, and none needs anything set up, so
 the first result lands in the first minutes (the morning brief and the new
-agent each run their first one now). **Sort my inbox, draft replies…** was a
+agent each run their first one now). **Sort my inbox, draft replies** was a
 chip until 2026-11-10: it needs an email app connected before anything comes
 back, so it waits in the gallery. Ship fixes and client briefs were chips until a
 first-ten-minutes walk-through found them making the first screen read as a
 coding tool that asks for GitHub before showing anything; "Run my launch as
 a team" went for the same reason ("I'm not launching anything").
 
-- **Brief me every morning…**: a researcher reads what's new on the topics
+- **Brief me every morning**: a researcher reads what's new on the topics
   the user names and a writer boils it down to one short brief, every
   weekday at 8am, the first one right away. Needs nothing set up.
-- **Research it and write it up…**: a researcher collects sources and a
+- **Research it and write it up**: a researcher collects sources and a
   writer turns them into a draft with every source linked, then a weekly
   look for anything new. Needs nothing set up.
-- **Make me an agent…**: the user finishes "It should: " and the Chief
+- **Make me an agent**: the user finishes "It should: " and the Chief
   drafts the agent on one card (a `show` of its name, job, routines with
   their times and the apps it needs, with Make it / Change something), makes
   it only on yes, and runs its first job at once (`first_task`).
-- **Plan a trip…**: a researcher and a planner, prices checked again every
+- **Plan a trip**: a researcher and a planner, prices checked again every
   few days. Needs nothing set up; nothing is booked without an Allow.
-- **Run a big project as a team…** (gallery): a planner, a writer and a
+- **Run a big project as a team** (gallery): a planner, a writer and a
   doer, the Chief keeping the plan in a file, and a 9am weekday check-in it
   collects and summarises. The Chief puts the three and itself in a room
   (`create_room`, see "Rooms"), so the user talks to the whole team at once.
@@ -240,8 +242,8 @@ keyboard until a field is tapped.
   in one message is drafted in one short reply (name, role, briefing,
   routines with times, the apps) with "Make it?"; on yes, one `create_agent`
   with `routines`.
-- **Phone.** On a Mac listing `MAC_FEATURES.draft` (`agents.draft`), "What
-  should it do?" takes a sentence or two and **Draft the rest** asks the Mac;
+- **Phone.** On a Mac listing `MAC_FEATURES.draft` (`agents.draft`), "Describe
+  the agent you want" takes a sentence or two and **Draft it** asks the Mac;
   the draft fills the name and colour, and a review below ("What it knows",
   editable; Routines with a switch each; the apps line) feeds
   `agents.create`'s `instructions` and `routines`. A draft counts toward the
@@ -1491,7 +1493,7 @@ numbers, "via connector" or "(import)" in anything a person reads.
 
 **One idea, one name, one control.** Independence is the only answer to "how
 much does it do without asking me": one four-stop slider, titled
-"Independence", everywhere it is set (onboarding, Settings → Independence,
+"Independence", everywhere it is set (Settings → Independence,
 Edit agent, the phone's Settings and agent sheet, Agent controls), with the
 same one line per stop from the protocol's `independence.ts`. There is no
 second scale: the three presets ("I trust my agents", "Balanced", "Locked
@@ -2298,7 +2300,7 @@ manages and approves for your team…"), and the phone's agent sheet
 means on for the Chief of Staff and off for everyone else. Only the user sets
 it: no tool takes it, and `create_agent` / `update_agent` refuse an `admin`
 argument. An existing Chief is told once, in a line in its chat ("I can now
-handle your team's requests — change this in Settings → Agents"); a Chief
+handle your team's requests — change this in Settings → Independence"); a Chief
 made by this build isn't.
 
 **What it may do** (tools served only to an admin, and checked again on every
@@ -3708,7 +3710,7 @@ The backend decides, since it knows when a message is recorded and when a turn e
 - A reply or error off screen notifies with the agent's name and the first line. Inside a turn they are held and posted once when it ends, with the latest text. An approval posts at once, with a sound.
 - Bursts across agents are capped (3 per 20s); the rest stay silent but still count. An approval is never capped, on the desk or a phone: the agent is blocked on it.
 - **Mute** (row context menu) stops OS notifications for that agent; a bell-off mark shows in its row. Unread and the badge still count it.
-- **Phones** hear each alert the desk decides on: over the socket of each connected phone that posts alerts (`companion/alerts.rs`) and through the push relay when it is on. Not while the user is **at the desk** (`at_desk`: one of the app's windows has focus), where the banner here is enough. Mute and quiet hours apply to phones as here (docs/mobile.md, "Notifications").
+- **Phones** hear each alert the desk decides on: over the socket of each connected phone that posts alerts (`companion/alerts.rs`) and through the push relay when it is on (it isn't yet: `links.pushRelay` in `brand.json` is null, so a phone hears alerts only while the app is connected). Not while the user is **at the desk** (`at_desk`: one of the app's windows has focus), where the banner here is enough. Mute and quiet hours apply to phones as here (docs/mobile.md, "Notifications").
 - **Dock badge** = how many agents need you, the same count as the sidebar bell, the review bar in the Chief's chat and the phone's icon badge (the phone's Catch up tab counts its rows instead, see "Needs you: one place per surface") (`needsYouCount`, `packages/companion-protocol/src/attention.ts`; Rust mirrors it in `notify::needs_you`, and both run `attention-cases.json`). The Chief counts like anyone; unread replies and usage limits don't. The mode toggle's badge is on whenever any non-hidden agent is waiting or unread. Approval cards don't add to unread; they count as pending until answered. It is refreshed whenever an agent's state changes, so a failed turn counts the moment it goes idle (its error line lands while it is still working).
 - Clicking a notification focuses a window and emits `agents://open`; the app switches to Agents and opens that agent. Focusing a window clears the unread of the agent it shows.
 - Uses `tauri-plugin-notification` (2.8, click reporting on macOS). Not verified in a real build yet: the dev binary posts under another app's identity, so click-through should be checked in a signed build.
@@ -3846,11 +3848,16 @@ to the user and asks what's missing, then every connector import ends on one
 review card in the Chief's chat, and the user imports what they keep
 (`agents/harvest.rs`, `agents/review.rs`).
 
-**Asked once, then in the background.** Onboarding no longer asks: it
-ends on the Chief's greeting, and under the greeting and its starters one
-card asks "Already have agents in another assistant?" (`ImportChoiceCard`;
-at the top of the chat once there is a conversation), as does the phone's
-home, once. The answer is the Mac's
+**Asked once, then in the background.** Onboarding asks first ("Bring your
+agents from another assistant?": Claude, ChatGPT, Grok, Another assistant, or
+"I'm starting fresh"; `setup/flow/AgentsFlow.tsx`). While the answer is still undecided, it
+comes back in the Chief's chat: under the greeting the Chief asks
+"Already have agents somewhere else?" with Grok, ChatGPT, Claude and
+Somewhere else as replies and a quiet "I'm starting fresh" (`ImportGuideAsk`,
+`agents/guide.rs`; at the top of the chat once there is a conversation); the
+starters come once it is answered ("I'm starting fresh" shows as the user's
+own message and the Chief answers "Okay! What do you want me to do?" with
+them under it). The phone's home asks too, once. The answer is the Mac's
 (`agents::import_choice`, `import-choice.json` beside the agents; carried on
 the overview as `importChoice`, set by `agents_set_import_choice` /
 `agents.setImportChoice`); any import that brings something across sets it
@@ -4072,8 +4079,7 @@ changed), and logins arrive by name only.
 Import agents opens on this path whenever Remote access is off (the
 connector panel's "No Remote access? Use an export or paste a reply" and its
 way back stay one link apart). Also: ⌘K "Import agents from an export
-file…", onboarding's first import screen ("Use an export or paste instead",
-which finishes onboarding into it), the Chief's `bring_agents_over` tool (a
+file…", the Chief's `bring_agents_over` tool (a
 `path` the user named puts the card up; no path opens Import at copy and
 paste), and the phone's Import screen (`agents.import.exportPrompt` /
 `exportPreview` / `exportReview`, a Mac with `import.export`).

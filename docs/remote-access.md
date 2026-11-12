@@ -79,9 +79,10 @@ and needs no sign-in: the token is in the path.
 | Grok | grok.com/connectors → New Connector → Custom; server URL | none | xAI says connectors are on every plan; Business/Enterprise need an admin. Grok Bot adding a custom server: still unconfirmed |
 | Other | wherever it adds a custom/remote MCP server | none | — |
 
-### Failure states (for the onboarding screens)
+### Failure states (for bringing agents over)
 
-Every way step 2 of onboarding (Remote Access, then the import) can fail
+Every way bringing agents over (Remote Access, then the import; the Chief's
+step-by-step guide in its chat, or the onboarding screens) can fail
 ends in **one plain line and one fix**, as data the screens render however
 they like. Nothing here is a raw CLI or serde message unless it is the
 "other" fallback, which quotes Tailscale.
@@ -153,7 +154,7 @@ free it refuses (`funnelPortsInUse`).
 
 | State | How the screens tell | Line | Fix |
 | --- | --- | --- | --- |
-| Not started | the assistant gets `STATUS: not_started` | (in the assistant) press Start in the app | ⌘K → Import agents → Start |
+| Not started | the assistant gets `STATUS: not_started` | (in the assistant) press Start in the app | ⌘K → Import agents from another assistant… → Start |
 | Waiting on the user | `state: awaiting_consent` | needs your OK in the Chief's chat | answer the card |
 | The assistant went quiet | `importQuietMinutes(talk, now)` ≥ 3 (interviewing, not busy) | "Nothing from Grok for 4 min." | "In Grok, say “carry on with the import”." |
 | Ended by silence (30 min) | `state: stopped`, `endedBy: 'idle'`; a line in the Chief's chat (`connector::idle_line`, once, by a timer: it used to end silently and the bar kept saying "Importing") | the import ended, nothing was created | Start again, tell Grok "carry on" |
@@ -208,8 +209,7 @@ request, so it locks out at once even if the Funnel lingers.
 
 **The link leaks.** The UI says so where the link is: "This link is a key to this
 computer — paste it only into your own assistant's connector settings, never
-into a chat, email, screenshot, shared doc or issue." The token never enters the webview. Plugins run JavaScript
-there, so the UI gets a masked link, and **Copy link** writes the real one from
+into a chat, email, screenshot, shared doc or issue." The token never enters the webview: the UI gets a masked link, and **Copy link** writes the real one from
 Rust. It's marked to be excluded from clipboard history (nspasteboard.org
 convention) and cleared after 90 s if it's still on the clipboard. **Replace
 link…** rotates it, the old link dies instantly, and setup starts over. If
@@ -381,8 +381,9 @@ Grok Bot ──HTTPS──▶ Tailscale ──▶ tailscaled Funnel (/<slug>, TL
 `computer_status`, `list_projects`, `create_project`, `open_project`,
 `message_agent`, `wait_for_agent`, `read_agent`, `press_key`, `start_agent`,
 `close_agent`, `show_progress`, `preview_screenshot`, `git_status`,
-`prepare_push`, `confirm_push`, `deploy_status`, and for moving agents in,
-`import_conversation` (and the older one-shot `import_agents`).
+`prepare_push`, `confirm_push`, `deploy_status`; for the Chief of Staff,
+`ask_chief` and `read_chief`; and for moving agents in, `import_conversation`,
+`import_history` (and the older one-shot `import_agents`).
 
 ### Handing the Chief what an assistant knows (`ask_chief` with `handoff`)
 
@@ -412,8 +413,10 @@ assistant (Grok, ChatGPT, Claude…) to move its agents here, *it* drives
 (`agents/connector.rs`). Text from the internet, typed by an assistant that
 can itself be prompt-injected, never reaches anything that matters:
 
-1. **Armed, then asked.** Nothing answers until the user presses **Start** in
-   ⌘K → Import agents (or the card under the Chief’s greeting, or Settings → Agents), which allows one import, until it ends or the app
+1. **Armed, then asked.** Nothing answers until the user arms it: **Start** in
+   ⌘K → Import agents from another assistant… (or Settings → Agents → Import
+   agents), or picking an assistant when the Chief asks "Already have agents
+   somewhere else?" under its greeting. That allows one import, until it ends or the app
    quits (`agents_import_talk_arm`; in memory, so a restart disarms). Before
    that the tool says `STATUS: not_started` and tells the assistant to ask the
    user. The first message then puts an Allow / Deny card in the Chief's chat
@@ -675,7 +678,7 @@ and the shapes are kept as unit tests. Two things moved in recent Claude Code
 versions, and the tests pin both: "esc to interrupt" is in the footer under
 the input box (not on the spinner line), and the finished turn leaves a
 "✻ Cogitated for 4s · done" line, which is dropped from replies. Codex's update
-and sign-in menus classify as decisions. A Codex conversation and Opencode
+and sign-in menus classify as decisions. A Codex conversation and OpenCode
 haven't been recorded.
 
 **Not verified yet:**
@@ -696,6 +699,7 @@ haven't been recorded.
 - `src-tauri/src/remote_access/`:
   - `mod.rs` — config, audit, PIN, lifecycle
   - `server.rs`, `tools.rs`, `screen.rs`, `power.rs`, `tailscale.rs`
+  - `shots.rs` — the screenshot links
   - `agent_state.rs` — working / needs a decision / finished, and the reply
   - `deploy.rs` — `deploy_status`
 - `src-tauri/src/commands/remote_access.rs`

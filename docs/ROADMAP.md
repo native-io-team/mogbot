@@ -2,27 +2,24 @@
 
 Ranked by impact on a knowledge worker × feasibility on our architecture.
 Source: a Grok Bot / Replicas / T3 Code gap analysis (Nov 2026), updated by
-the audits since, most recently
-[internal/competitors-2026-11-10.md](internal/competitors-2026-11-10.md). Read
+the audits since, most recently a competitor scan on 2026-11-10. Read
 [MISSION.md](MISSION.md) first. We never build our own infrastructure where a
 good one exists.
 
 ## Next, ranked
 
-1. **Phone in two taps.** TestFlight / App Store and push through the relay
-   in [push-relay.md](push-relay.md) (built, not deployed); building with
-   Xcode becomes the advanced path. Every competitor in the 11-10 scan
-   installs from a store. **Needs the owner**: an Apple developer account
-   and approval to publish. Until then the install cards say "Not available
-   yet" (see [mobile.md](mobile.md)). The store build, a demo for App Review,
-   the review notes, listing drafts and the owner's remaining steps are ready
-   in [app-store.md](app-store.md).
+1. **Phone in two taps, the rest.** The iPhone app is on a public TestFlight
+   beta and Android is in internal testing; the App Store listing is planned
+   for 19 November 2026 ([app-store.md](app-store.md)), then Google Play.
+   Push through the relay in [push-relay.md](push-relay.md) is built, not
+   deployed: until it is, alerts arrive only while the phone app is open.
+   Every competitor in the 11-10 scan installs from a store.
 2. **Phone: real-device verification.** The share extension, dictation's
    real recognizer, notification click-through, Lock Screen answers, the
    Live Activity, Siri and Shortcuts, Step in from the phone and Android
    hardware have only been tried in tests, the simulator or the web build
    ([mobile.md](mobile.md), "Not built"). Most of it waits on item 1.
-3. **Tonight's features on live accounts.** Built and covered by the
+3. **Recent features on live accounts.** Built and covered by the
    fake-engine suite, not yet run end to end on real engines or data: rewind
    and fork on a real Codex thread, living pages kept by a routine over days,
    `save_skill` judging real effort, Mail and Messages "When…" sources on a
@@ -37,9 +34,10 @@ good one exists.
    only apps configured in Claude Code itself), and connector checks are
    not yet verified on a live Linear or Gmail account
    ([agents.md](agents.md), "When… routines").
-6. **Live voice and the Watch.** Voice messages and Listen exist; a live
-   spoken conversation and an Apple Watch app (Muse, OpenBot, Grok have
-   them) are easier once item 1 lands.
+6. **The Watch.** Voice messages, Listen and Talk (a hands-free spoken
+   conversation with an agent, [mobile.md](mobile.md)) exist on the phone;
+   Talk is not yet tried on a real phone. An Apple Watch app (Muse, OpenBot,
+   Grok have one) is easier once item 1 lands.
 7. **More chat front doors.** Telegram, WhatsApp or Discord, once Slack has
    proved out.
 8. **Results, the rest.** A PR straight from a non-copy result, and
@@ -53,6 +51,16 @@ good one exists.
 Small wins: duplicate an agent; reply to a single message.
 
 ## Done
+
+### 2026-11-11
+
+- **The iPhone app on a public TestFlight beta** — the desk's phone setup
+  offers it first (a code to scan, then "I already have the app"); building
+  with Xcode is for development builds only.
+- **Bringing agents over as a chat with the Chief** — under its greeting
+  "Already have agents somewhere else?"; picking the assistant is the yes,
+  and the Chief walks Remote Access one message at a time, each with one
+  button (`agents/guide.rs`). Onboarding itself asks only for the engine.
 
 ### 2026-11-09 to 11-10
 
@@ -97,8 +105,7 @@ Small wins: duplicate an agent; reply to a single message.
   server and the bridge.
 - **Security review 2026-11-10** — file calls through symlinks judged where
   they land, for every engine; forms in blocks refuse secrets and one-time
-  codes; findings and fixes in
-  [internal/security-review-2026-11-10.md](internal/security-review-2026-11-10.md).
+  codes.
 - **Usage, one story** — one home (Settings → Accounts & usage), the total
   first, one word ("refill") for when a limit comes back, "Ideas for leftover
   usage" for the spare-capacity list, "Where it went"; wallets of several
