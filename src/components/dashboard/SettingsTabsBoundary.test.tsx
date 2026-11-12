@@ -15,7 +15,7 @@ import {
   requestSettingsSectionOnOpen,
   requestSettingsTabOnOpen,
 } from '../../lib/settings';
-import { SETTINGS_PAGES, openingPage } from '../../lib/settingsPages';
+import { SETTINGS_PAGES, openingPage, visibleSettingsPages } from '../../lib/settingsPages';
 
 vi.mock('../agents/AgentsSettings', () => ({
   AgentsPage: () => <p>agents page</p>,
@@ -63,8 +63,10 @@ describe('Settings window', () => {
     open();
     const list = screen.getByRole('navigation', { name: 'Settings sections' });
     expect(Array.from(list.querySelectorAll('button')).map((b) => b.textContent)).toEqual(
-      SETTINGS_PAGES.map((p) => p.title)
+      visibleSettingsPages().map((p) => p.title)
     );
+    // No relay in this build: no Account page.
+    expect(nav('Account')).toBeNull();
     expect(nav('Agents')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('heading', { level: 2, name: 'Agents' })).toBeInTheDocument();
     expect(screen.getByText('agents page')).toBeInTheDocument();

@@ -6,6 +6,7 @@ import { useMigrationCommands } from './useMigrationCommands';
 import { useIssueReportCommands } from './useIssueReportCommands';
 import { useThemeCommands } from './useThemeCommands';
 import { useSettingsPageCommands } from './useSettingsPageCommands';
+import { useAccountCommands } from './useAccountCommands';
 import type { PaletteCtx } from './types';
 import { useOpenModal } from '../contexts/ModalContext';
 import { getDashboardProjects, type DashboardProject, type Project } from '../lib/project';
@@ -103,6 +104,7 @@ export function useAppCommands({
   useIssueReportCommands();
   useThemeCommands();
   useSettingsPageCommands();
+  useAccountCommands();
 
   // IDE availability — fetched once so we can hide commands for tools the
   // user doesn't have installed. A silent failure leaves both enabled

@@ -498,6 +498,38 @@ export const onboardingFlowScenarios: Scenario[] = [
     requires: '[data-flow-step="welcome"]',
     commands: machine(FRESH_ITEMS, true),
   },
+  // "Sign in?", only in a build with our hosted relay (`relay: true`).
+  flow(
+    'onboarding-account',
+    'account',
+    '1a. Sign in? (a build with the relay)',
+    'Back on the left; the first of three segments, part filled, "Welcome" under it. "Sign in?", one line on what it unlocks (the phone reaches this Mac from anywhere, no Tailscale) and one on what works without it. A quiet note: Google or your email, in your browser; signing in also turns on phone access. One big "Sign in" (accent, focused) and a quiet "Use without signing in". No Google or email buttons of their own.',
+    {
+      companion_status: phoneStatus({ relay: { state: 'off', account: null } }),
+      companion_set_enabled: phoneStatus({
+        ...PHONE_ON,
+        relay: { state: 'connected', account: null },
+      }),
+    },
+    { relay: true }
+  ),
+  flow(
+    'onboarding-account-waiting',
+    'account',
+    '1b. Sign in: finishing in the browser',
+    'After Sign in: "Finish signing in in your browser", "This screen goes on by itself once you’re signed in.", a neutral "Waiting for you." check (hollow mark) saying the page is open and to sign in with Google or your email there. One big "Try again", a quiet "Use without signing in". Nothing amber.',
+    {
+      companion_status: phoneStatus({
+        ...PHONE_ON,
+        relay: { state: 'connected', account: null },
+      }),
+    },
+    {
+      relay: true,
+      steps: [{ click: '[data-flow-step="account"] [data-flow-primary]' }],
+      requires: '[data-flow-step="account"] .flow-check[data-state="waiting"]',
+    }
+  ),
   flow(
     'onboarding-engine-pick',
     'engine',

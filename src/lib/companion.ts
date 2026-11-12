@@ -120,10 +120,22 @@ export interface PairingCode {
   expiresAt: number;
 }
 
-export const getPhoneStatus = () => invoke<PhoneStatus>('companion_status');
+/**
+ * The relay as the last status read said, for the ⌘K account commands'
+ * `when` (offer Sign in or Sign out without a call of their own). Null until
+ * a status has been read.
+ */
+let lastRelay: RelayStatus | null = null;
+export const lastKnownRelay = () => lastRelay;
+const remember = (s: PhoneStatus) => {
+  lastRelay = s?.relay ?? null;
+  return s;
+};
+
+export const getPhoneStatus = () => invoke<PhoneStatus>('companion_status').then(remember);
 
 export const setPhoneAccess = (enabled: boolean) =>
-  invoke<PhoneStatus>('companion_set_enabled', { enabled });
+  invoke<PhoneStatus>('companion_set_enabled', { enabled }).then(remember);
 
 export const setPhonePush = (enabled: boolean) =>
   invoke<PhoneStatus>('companion_set_push', { enabled });

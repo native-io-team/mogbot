@@ -4,7 +4,7 @@ import { kbd } from '../lib/shortcuts';
 import { menuOwnsShortcuts, onMenuAction } from '../lib/nativeMenu';
 import { useOpenModal } from '../contexts/ModalContext';
 import { requestSettingsTabOnOpen } from '../lib/settings';
-import { SETTINGS_PAGES } from '../lib/settingsPages';
+import { visibleSettingsPages } from '../lib/settingsPages';
 import { useCommands } from './useCommands';
 
 /**
@@ -42,7 +42,7 @@ export function useSettingsPageCommands() {
         keywords: ['preferences', 'options', 'configure'],
         run: () => openModal('settings'),
       },
-      ...SETTINGS_PAGES.map((page) => ({
+      ...visibleSettingsPages().map((page) => ({
         id: `settings.page.${page.id}`,
         title: `Settings → ${page.title}`,
         icon: <SettingsIcon size={14} />,

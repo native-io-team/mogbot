@@ -90,12 +90,30 @@ export const BRAND: Brand = brandJson as Brand;
 
 export const BRAND_LINKS: BrandLinks = BRAND.links;
 
+let relayOverride: boolean | null = null;
+
 /**
- * Phones reach this Mac through the relay, so setting one up needs no
- * Tailscale: its two Tailscale screens are passed over (Tailscale stays a
- * fallback route once it's on).
+ * This build has our hosted relay (docs/relay.md): signing in to an account
+ * lets phones reach this Mac without Tailscale, so the phone's two Tailscale
+ * screens are passed over (Tailscale stays a fallback route once it's on).
+ * False in a fork or any build with `links.relay` null: no account, no
+ * relay, nothing about either is shown.
+ *
+ * A function rather than a constant so the UI harness, whose brand.json has
+ * no relay, can draw a relay build's screens (`overrideRelayForHarness`).
  */
-export const RELAY_ON = !!BRAND_LINKS.relay;
+export function relayOn(): boolean {
+  return relayOverride ?? !!BRAND_LINKS.relay;
+}
+
+/**
+ * The UI harness only (`src/harness/resetStorage.ts`, a scenario's
+ * `relay: true`): draw this build as one with a relay. Nothing in the app
+ * calls it, so a real build always follows brand.json.
+ */
+export function overrideRelayForHarness(on: boolean | null) {
+  relayOverride = on;
+}
 
 /** A name for something of ours in a shared namespace: `<slug>-<what>`. */
 export function brandScoped(what: string): string {

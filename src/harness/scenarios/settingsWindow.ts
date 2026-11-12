@@ -8,12 +8,14 @@
 
 import type { Scenario } from '../types';
 import { DEFAULTS, ENGINES, overview, TEAM } from './agents';
-import { SETTINGS_PAGES, type SettingsPage } from '../../lib/settingsPages';
+import { SETTINGS_PAGES, visibleSettingsPages, type SettingsPage } from '../../lib/settingsPages';
 
 /** A laptop's window: the sheet fills it with a margin, the page scrolls inside. */
 const VIEWPORT = { width: 1280, height: 860 };
 
 const WHAT_EACH_SHOWS: Record<SettingsPage, string> = {
+  // Only in a build with the relay: its scenarios are `settings-account-*` (account.ts).
+  account: 'Your account: signed in with Sign out…, or Sign in.',
   agents:
     'What agents run on first (New agents start on, a model per engine, the Routines line), then On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, stopped previews, battery), Disk space when it shows, and Bring agents in with Import….',
   independence:
@@ -48,7 +50,8 @@ const pageScenario = (page: (typeof SETTINGS_PAGES)[number]): Scenario => ({
 });
 
 export const settingsWindowScenarios: Scenario[] = [
-  ...SETTINGS_PAGES.map(pageScenario),
+  // No relay in this repo's brand: Account has scenarios of its own (account.ts).
+  ...visibleSettingsPages(false).map(pageScenario),
   {
     id: 'settings-page-keyboard',
     title: 'Settings — moving down the section list with the keyboard',

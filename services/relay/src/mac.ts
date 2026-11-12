@@ -9,6 +9,18 @@ export const AUTH_TIMEOUT_MS = 10_000;
 export const MAX_PHONES = 8;
 /** Largest payload either way, not counting the Mac's 4-byte channel header. */
 export const MAX_PAYLOAD = 256 * 1024;
+/**
+ * Phone sockets from one address (a keyed hash of it, from the Worker) to one
+ * Mac at once, so a single stranger who knows the fingerprint can't hold all
+ * of {@link MAX_PHONES}.
+ */
+export const MAX_PHONES_PER_ADDRESS = 4;
+/**
+ * Mac sockets still to answer the challenge. Past this the oldest is closed,
+ * never the newcomer: a stranger can't keep the real Mac out by holding a
+ * few unanswered sockets open.
+ */
+export const MAX_PENDING_MACS = 4;
 
 /** The account this Mac is signed in to (docs/relay.md, "Accounts"). */
 export type Binding = { id: string; email: string | null; linkedAt: number };
@@ -60,12 +72,25 @@ export class MacRelay extends DurableObject<Env> {
     const [, role, fingerprint] = url.pathname.split('/');
     const accounts = url.searchParams.get('accounts') === '1';
     if (role === 'mac') return this.acceptMac(fingerprint, accounts);
-    if (role === 'phone') return this.acceptPhone(accounts);
+    if (role === 'phone') return this.acceptPhone(accounts, url.searchParams.get('from') ?? '');
     if (role === 'link' && request.method === 'POST') return this.completeLink(request);
     return new Response('not found', { status: 404 });
   }
 
   private async acceptMac(fingerprint: string, accounts: boolean): Promise<Response> {
+    // Strangers' unanswered sockets: the oldest goes, so the newest (perhaps
+    // the real Mac) always gets its challenge.
+    const pending: { ws: WebSocket; deadline: number }[] = [];
+    for (const ws of this.ctx.getWebSockets('mac')) {
+      const s = stateOf(ws);
+      if (ws.readyState === OPEN && s?.role === 'mac' && !s.authed) {
+        pending.push({ ws, deadline: s.deadline });
+      }
+    }
+    pending.sort((a, b) => a.deadline - b.deadline);
+    for (const { ws } of pending.slice(0, Math.max(0, pending.length - MAX_PENDING_MACS + 1))) {
+      closeQuietly(ws, 4401, 'superseded');
+    }
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server, ['mac']);
     const state: MacState = {
@@ -83,17 +108,23 @@ export class MacRelay extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  private async acceptPhone(accounts: boolean): Promise<Response> {
+  private async acceptPhone(accounts: boolean, from: string): Promise<Response> {
     if (!this.currentMac()) return refuse(4404, 'mac_offline');
     // Offline wins: a phone is told its Mac needs to sign in only when the Mac is there.
     if (accounts && !(await this.binding())) return refuse(4402, 'sign_in_needed');
-    if (this.openPhones().length >= MAX_PHONES) return refuse(4429, 'too_many_phones');
+    const phones = this.openPhones();
+    if (phones.length >= MAX_PHONES) return refuse(4429, 'too_many_phones');
+    const fromTag = /^[A-Za-z0-9_-]{1,32}$/.test(from) ? `from:${from}` : null;
+    if (fromTag) {
+      const same = this.ctx.getWebSockets(fromTag).filter((ws) => phones.includes(ws));
+      if (same.length >= MAX_PHONES_PER_ADDRESS) return refuse(4429, 'too_many_phones');
+    }
     const ch = await this.nextChannel();
     // The Mac may have gone while the counter was read.
     const mac = this.currentMac();
     if (!mac) return refuse(4404, 'mac_offline');
     const { 0: client, 1: server } = new WebSocketPair();
-    this.ctx.acceptWebSocket(server, ['phone', channelTag(ch)]);
+    this.ctx.acceptWebSocket(server, ['phone', channelTag(ch), ...(fromTag ? [fromTag] : [])]);
     server.serializeAttachment({ role: 'phone', ch } satisfies PhoneState);
     mac.send(JSON.stringify({ t: 'open', ch }));
     return new Response(null, { status: 101, webSocket: client });
@@ -240,8 +271,11 @@ export class MacRelay extends DurableObject<Env> {
     if (typeof body.code !== 'string' || typeof id !== 'string') {
       return linkError('bad_request', 400);
     }
+    // Hashed before the read: from the read to the writes below there is no
+    // await but storage's own, so two requests with one code can't both pass.
+    const hash = await hashCode(body.code);
     const pending = await this.ctx.storage.get<PendingLink>(PENDING_KEY);
-    if (!pending || !sameHash(await hashCode(body.code), pending.codeHash)) {
+    if (!pending || !sameHash(hash, pending.codeHash)) {
       return linkError('code_unknown', 404);
     }
     if (Date.now() > pending.expiresAt) {

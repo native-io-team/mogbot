@@ -236,6 +236,24 @@ describe('linking', () => {
     expect((await worker.fetch(new Request(`${ORIGIN}/v1/link`), accountsEnv)).status).toBe(404);
   });
 
+  it('lets exactly one of two requests racing with one code link', async () => {
+    const mac = await newMacKey();
+    const macWs = await loginMac(mac, accountsEnv);
+    const code = await startLink(mac, macWs);
+    const [a, b] = await Promise.all([
+      postLink({ code, token: await token(signer, { sub: 'user_a' }) }),
+      postLink({ code, token: await token(signer, { sub: 'user_b' }) }),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 404]);
+    expect((await macWs.json()).t).toBe('account');
+    expect(await macWs.silent()).toBe(true);
+  });
+
+  it('refuses a body over 16 KiB without reading it all', async () => {
+    const res = await postLink(JSON.stringify({ code: 'x', token: 'y'.repeat(20_000) }));
+    expect(res.status).toBe(413);
+  });
+
   it('is off when no JWKS is configured', async () => {
     const res = await SELF.fetch(`${ORIGIN}/v1/link`, {
       method: 'POST',
@@ -385,6 +403,18 @@ describe('the /link page', () => {
     expect(html).toContain('prefers-color-scheme:dark');
     // The page reads the code from its address; it isn't echoed into the HTML.
     expect(html).not.toContain(mac.fingerprint);
+    // Signed in already, it still asks before linking (a link someone sent can't link on its own).
+    expect(html).toContain('id="confirm" hidden');
+    expect(html).toContain("if (Clerk.isSignedIn) return ask();");
+    expect(html).not.toContain('if (Clerk.isSignedIn) return link();');
+    // The code leaves the address for the tab's own storage before any redirect.
+    expect(html).toContain('sessionStorage');
+    expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+  });
+
+  it('serves the page with no code, for a sign-in coming back from Google', async () => {
+    const { html } = await page('/link');
+    expect(html).toContain('clerk.browser.js');
   });
 
   it('says a bad code isn’t valid', async () => {

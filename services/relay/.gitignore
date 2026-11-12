@@ -1,2 +1,4 @@
 node_modules
 .wrangler
+# scripts/deploy.mjs: the values it last deployed with
+.deploy.env

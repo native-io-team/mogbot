@@ -16,6 +16,7 @@
  */
 
 import { findScenario } from './scenarios';
+import { overrideRelayForHarness } from '../lib/brand';
 
 const params = new URLSearchParams(window.location.search);
 const scenario = findScenario(params.get('scenario'));
@@ -26,6 +27,10 @@ try {
 } catch {
   // Private mode or blocked site data. Nothing to clear, nothing to fix.
 }
+
+// A relay build's screens, for a scenario about them. Before any component
+// renders: the app reads `relayOn()` only when it draws.
+overrideRelayForHarness(scenario.relay === true ? true : null);
 
 // ChiefPhoneOffer's PHONE_OFFER_KEY, written out: importing the component here
 // would load app modules (which read storage at module scope) before the wipe.

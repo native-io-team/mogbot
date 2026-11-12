@@ -37,6 +37,9 @@ cost nothing.
 
 You need a Cloudflare account (the free plan runs Durable Objects on SQLite storage).
 
+The hosted relay is deployed with `node scripts/deploy.mjs` (deploy, Clerk vars, smoke test,
+optionally `--brand`); the full launch is [docs/relay-launch.md](../../docs/relay-launch.md).
+
 ```bash
 cd services/relay
 pnpm install

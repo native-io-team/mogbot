@@ -159,7 +159,8 @@ const failed = (r: CheckResult) => {
 
 describe('the line', () => {
   it('walks the engine, then your agents, then your phone; after the last is the Chief’s chat', () => {
-    expect(FLOW_STEPS.slice(0, 3)).toEqual(['welcome', 'engine', 'agentsAsk']);
+    // "Sign in?" (`account`) is passed over in a build with no relay, as this one is.
+    expect(FLOW_STEPS.slice(0, 4)).toEqual(['welcome', 'account', 'engine', 'agentsAsk']);
     expect(nextStep('welcome')).toBe('engine');
     expect(nextStep('engine')).toBe('agentsAsk');
     expect(nextStep('agentsStart')).toBe('phoneAsk');

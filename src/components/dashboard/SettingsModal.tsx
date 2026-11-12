@@ -9,7 +9,8 @@
  * keep the user's place under it; a dialog gives that, plus focus trapping,
  * Esc to go back and stacking under confirms, for free.
  *
- * Pages (`lib/settingsPages.ts`): Agents, Independence, Accounts & usage,
+ * Pages (`lib/settingsPages.ts`): Account (only with our hosted relay,
+ * `AccountPage`), Agents, Independence, Accounts & usage,
  * Phone, Notifications, Chrome, Apps (the agents' pages, in
  * `agents/AgentsSettings.tsx`), then Projects, Appearance and Advanced
  * (analytics and the experimental switches). It opens on the page a command
@@ -32,6 +33,7 @@ import {
   PhonePage,
 } from '../agents/AgentsSettings';
 import { AccentColorSetting } from './AccentColorSetting';
+import { AccountPage } from './AccountPage';
 import { ThemeSetting } from './ThemeSetting';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
@@ -76,8 +78,8 @@ import {
 import { peekAccountsRequest } from '../../lib/agentAccounts';
 import { onAppSettingsChanged } from '../../lib/settingsFromChat';
 import {
-  SETTINGS_PAGES,
   openingPage,
+  visibleSettingsPages,
   settingsPageInfo,
   type SettingsPage,
 } from '../../lib/settingsPages';
@@ -116,12 +118,13 @@ function SettingsNav({
   page: SettingsPage;
   onPage: (page: SettingsPage) => void;
 }) {
+  const pages = visibleSettingsPages();
   const move = (event: React.KeyboardEvent<HTMLElement>) => {
     const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
     if (!step) return;
     event.preventDefault();
-    const i = SETTINGS_PAGES.findIndex((p) => p.id === page);
-    const next = SETTINGS_PAGES[(i + step + SETTINGS_PAGES.length) % SETTINGS_PAGES.length];
+    const i = pages.findIndex((p) => p.id === page);
+    const next = pages[(i + step + pages.length) % pages.length];
     onPage(next.id);
     event.currentTarget
       .querySelector<HTMLElement>(`[data-settings-nav="${next.id}"]`)
@@ -129,7 +132,7 @@ function SettingsNav({
   };
   return (
     <nav className="settings-window__nav" aria-label="Settings sections" onKeyDown={move}>
-      {SETTINGS_PAGES.map((p, i) => (
+      {pages.map((p, i) => (
         <span key={p.id} className="settings-window__nav-entry">
           {/* Agents' pages first, then the app's: one hairline between. */}
           {p.id === 'projects' && i > 0 && (
@@ -521,6 +524,8 @@ export function SettingsModal({
   const pageInfo = settingsPageInfo(page);
   const agentPage = (() => {
     switch (page) {
+      case 'account':
+        return <AccountPage />;
       case 'agents':
         return (
           <AgentsPage

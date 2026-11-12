@@ -37,8 +37,10 @@ ever needed to read or send anything:
   (the fingerprint lets the relay find the Mac's slot; it isn't secret, it's in every pairing QR;
   the random half is), sends `{"t":"linkStart","code":"<code>"}`
   on its authenticated relay socket, and opens `https://<relay host>/link?code=<code>` in the
-  browser. That page signs in with Clerk (Google or email code), then POSTs the session token and
-  the code to `/v1/link`. The relay verifies the Clerk token (JWKS), binds the code's fingerprint
+  browser. The page moves the code from its address into the tab's sessionStorage (so it never rides
+  through Google's or Clerk's redirects), signs in with Clerk (Google or email code), asks for one
+  click ("Link my Mac", even when already signed in), then POSTs the session token and the code to
+  `/v1/link`. The relay verifies the Clerk token (JWKS), binds the code's fingerprint
   to the user, and tells the Mac `{"t":"account","account":{…}}`. Codes live 10 minutes, single use.
 - **Signing out**: the Mac sends `{"t":"unlink"}` on its authenticated socket; the binding goes.
 - **Gating**: a phone reaching a Mac with no account gets 4402 `sign_in_needed` (the phone says to
@@ -82,8 +84,9 @@ ever needed to read or send anything:
 - Binary frames only, each one payload. Text `ping` → `pong` as above.
 - If that Mac isn't connected: the relay accepts and closes at once with **4404** (reason
   `mac_offline`), so the phone can say "Your Mac is offline or asleep" instead of "can't reach".
-- Limits: 8 phone sockets per Mac at once (4429 past it), payloads ≤ 256 KiB (1009 past it), and
-  per-IP connection rate limiting at the Worker.
+- Limits: 8 phone sockets per Mac at once and 4 per client address (4429 past either), payloads
+  ≤ 256 KiB (1009 past it), and per-IP connection rate limiting at the Worker. At most 4 Mac sockets
+  may wait on their challenge; a fifth closes the oldest (4401 `superseded`).
 
 ### The encrypted channel (phone ↔ Mac, end to end)
 
@@ -121,3 +124,83 @@ used by the phone's tests and the Mac's.
 
 Idle sockets hibernate and cost nothing; billing is per message (20 incoming = 1 request). Estimate
 for 10,000 daily users: about $25–50 a month (docs: Cloudflare Durable Objects pricing).
+
+## Threat model
+
+Reviewed 2026-11-11 across the Worker and Durable Object (`services/relay/src`), the Mac's side
+(`src-tauri/src/companion/relay`, its hooks in `server.rs` / `files.rs`) and the phone's
+(`mobile/src/lib/relay*.ts`, `transport.ts`, `packages/companion-protocol/src/{relay,pairing}.ts`).
+
+### What holds
+
+- **Nobody without the Mac's key can be the Mac.** The phone accepts a channel only when the answer
+  is signed by the pinned key over both fresh X25519 keys and the fingerprint; the relay login signs
+  a fresh 32-byte nonce per socket. The four signed messages (`identity:v2`, `pair:v2`, `relay:v1`,
+  `relay-mac:v1`) carry distinct prefixes, and every signed field is validated base64url of a fixed
+  length, so one can't be passed off as another.
+- **No nonce reuse, no replay.** Each channel derives fresh keys (ephemeral X25519 on both sides,
+  so recorded traffic stays sealed even if the identity key leaks later); counters start at 0,
+  move strictly in order, and a failed open or a spent counter closes the channel. A recorded
+  channel replayed to the Mac meets a new ephemeral key and fails its first open.
+- **The relay secret header only comes from the bridge.** `http.rs` now builds the loopback
+  request from an **allow-list** (`authorization`, `content-type`, `accept`, `range`, `if-range`,
+  `if-none-match`, `if-modified-since`, `x-name`), then sets `Host`, the secret and the source itself.
+  A phone can't send `Host`, `Tailscale-User-*`, `X-Forwarded-*`, `Origin`, the secret or the source
+  header (tested against a recording loopback server). Hyper refuses header names or values with
+  CR/LF, and the JSON map can't carry a second copy of a header the bridge sets.
+- **Paths.** Only `/v1/…` of printable ASCII reaches loopback, never `/v1/ws`, and now never a
+  `.`/`..` segment (plain or `%2e`), an encoded slash or backslash, a raw backslash or a `#`. The server's
+  own `resolve` refuses the same, so this is a second wall.
+- **Over the relay a phone reaches only what it reaches over Tailscale**: `/v1/identity` and
+  `/v1/pair` without a token (a pairing code is 128 bits and confirmed on the desk), everything else
+  only with a live device token.
+- **JWTs.** RS256 only (the key is imported as RSASSA-PKCS1-v1_5, so no alg confusion), `kid`
+  required and looked up in Clerk's JWKS, `exp` required, `nbf` honoured, 60 s skew, `iss` and `azp`
+  checked when set (the deploy script always sets both). An unknown `kid` refetches the keys at most
+  every 30 s.
+- **The /link page** echoes nothing from the request: the code is checked against a strict pattern
+  server side and read by the script from the address; there is no redirect parameter (Clerk
+  returns to `/link` on the same origin); `frame-ancestors 'none'`, `no-referrer`, `no-store`.
+
+### Fixed in this review
+
+| Severity | Issue | Fix |
+| --- | --- | --- |
+| Medium | A channel's loop could deadlock: a refused relayed HTTP request (bad path, 429, bad body) awaited a send on the queue that only that same loop drains. With responses streaming in, one bad request froze the channel for good, with its buffers. | `Http::start` returns the refusal and the loop seals it directly (`a_refused_request_is_answered_without_waiting_on_a_full_queue`). |
+| Medium | Memory: each channel could queue 256 payloads of 256 KiB (64 MiB) while blocked, over 16 channels. | A byte budget per channel, 16 MiB (`MAX_QUEUED_BYTES`), past which it closes as stuck. |
+| Medium | Slot squatting: anyone who knows a fingerprint (it's in every pairing QR) could finish the handshake, send nothing, and hold all 8 of that Mac's relay phone slots indefinitely. | The Mac closes a channel that never became an authenticated socket after 30 s with nothing in flight; the relay allows 4 phones per client address per Mac (a keyed hash of the address, never the address). |
+| Medium | Link fixation: `/link` linked automatically when the visitor was already signed in to Clerk, so a link someone else sent bound *their* Mac to the visitor's account, and their Mac learned the visitor's account id and email. | The page always asks for a click ("Only continue if you just chose Sign in on your own Mac…"). |
+| Low | Unanswered Mac sockets were unbounded per Mac. | At most 4 wait; a new one closes the oldest, so strangers can't keep the real Mac out. |
+| Low | `/v1/link` read the whole body before checking its size. | Rejected by `content-length`, and the stream is cut at 16 KiB. |
+| Low | The link code rode in the address through Google's and Clerk's redirects. | Moved to the tab's sessionStorage and removed from the address before sign-in. |
+| Low | A link code's single use relied on no other request running between the read and the delete (the hash was computed in between). | Hashed first; nothing but storage is awaited from the read to the writes. A race test passes before and after, so it wasn't reproducible in workerd. |
+| Low | Bodies whose server stopped reading stayed in the bridge's map. | Reaped with finished requests. |
+| Launch blocker | `brand.gen.ts` never carried `links.relay`, so the phone would reject every relay route even with `links.relay` set. | `scripts/check-brand.mjs --write` now emits `RELAY_URL`. |
+
+### Accepted risks
+
+- **Who can open a channel.** The phone side of the channel is anonymous until its `hello` token;
+  anyone with the fingerprint gets as far as `/v1/identity` and `/v1/pair`, as with Tailscale Funnel.
+- **A device token works from anywhere over the relay.** Over Tailscale a token also needs the
+  tailnet user who paired it; over the relay the token alone is enough. A stolen token is revoked
+  from the desk as before.
+- **Determined slot squatting.** Someone with the fingerprint and many addresses can still keep a
+  Mac's 8 relay slots busy (each channel making a slow request). Tailscale is unaffected. A fix
+  would need the phone to prove a device before the relay counts it, which the relay can't check.
+- **Cost.** There's no per-message limit on a phone socket; a stranger can make the relay's bill
+  bigger, not read or change anything.
+- **What the relay learns:** fingerprints, client addresses (rate limiting only, never stored; the
+  per-address tag is SHA-256 of fingerprint and address, held only on open sockets), timing and
+  sizes.
+- **Accounts gate, they don't protect.** Linking someone else's Mac to your account (with a stolen
+  code: 256 bits, 10 minutes, single use) or getting someone to click "Link my Mac" on your link
+  gives no access to anyone's data: it changes whose account a Mac uses the relay under, and tells
+  that Mac the account's id and email. Anything later that trusts the binding (a phone account for
+  several Macs, push) must not take it as proof of ownership.
+- **Clerk's script** loads from the frontend API named in the publishable key, `@6` / `@1` floating,
+  without SRI, and the page has no `script-src` CSP: Clerk can run code on `/link` (it can mint the
+  tokens anyway). Untested under a CSP, so none was added.
+- **The phone keeps a whole HTTP answer in memory** with no cap; only the authenticated Mac can send
+  those frames.
+- **`Content-Length` isn't relayed**, so an upload over the relay reserves the phone's full staging
+  budget while it runs (a functional gap, not a hole).

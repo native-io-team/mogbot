@@ -1,4 +1,4 @@
-import { FINGERPRINT_RE } from './auth';
+import { FINGERPRINT_RE, toB64url } from './auth';
 import { verifyClerkToken } from './clerk';
 import { accountsOn, type Env } from './env';
 import { linkError, linkPage, parseLinkCode } from './link';
@@ -16,17 +16,68 @@ async function limited(request: Request, env: Env): Promise<boolean> {
   return !success;
 }
 
-/** The Durable Object is told the role and whether accounts are on; never the address. */
-function inner(role: string, fingerprint: string, env: Env, init: RequestInit = {}): Request {
-  const accounts = accountsOn(env) ? '?accounts=1' : '';
-  return new Request(`https://relay/${role}/${fingerprint}${accounts}`, init);
+/**
+ * The Durable Object is told the role, whether accounts are on and, for a
+ * phone, a keyed hash of its address (`from`, to cap phones per address);
+ * never the address itself.
+ */
+function inner(
+  role: string,
+  fingerprint: string,
+  env: Env,
+  init: RequestInit = {},
+  from?: string
+): Request {
+  const q = new URLSearchParams();
+  if (accountsOn(env)) q.set('accounts', '1');
+  if (from) q.set('from', from);
+  const qs = q.toString();
+  return new Request(`https://relay/${role}/${fingerprint}${qs ? `?${qs}` : ''}`, init);
+}
+
+/** 16 bytes of SHA-256 over the Mac's fingerprint and the client's address: the same phone, the same tag, per Mac. */
+async function addressTag(request: Request, fingerprint: string): Promise<string | undefined> {
+  const address = request.headers.get('cf-connecting-ip');
+  if (!address) return undefined;
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`relay-from:v1\n${fingerprint}\n${address}`)
+  );
+  return toB64url(new Uint8Array(digest).subarray(0, 16));
+}
+
+/** The body as text, or null past `max` bytes (read no further than that). */
+async function textUpTo(request: Request, max: number): Promise<string | null> {
+  const declared = Number(request.headers.get('content-length') ?? '0');
+  if (declared > max) return null;
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const parts: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    parts.push(value);
+  }
+  const all = new Uint8Array(total);
+  let at = 0;
+  for (const p of parts) {
+    all.set(p, at);
+    at += p.byteLength;
+  }
+  return new TextDecoder().decode(all);
 }
 
 async function link(request: Request, env: Env): Promise<Response> {
   if (!accountsOn(env)) return linkError('accounts_off', 404);
   if (await limited(request, env)) return linkError('slow_down', 429);
-  const text = await request.text();
-  if (text.length > MAX_LINK_BODY) return linkError('bad_request', 413);
+  const text = await textUpTo(request, MAX_LINK_BODY);
+  if (text === null) return linkError('bad_request', 413);
   let body: { code?: unknown; token?: unknown };
   try {
     body = JSON.parse(text);
@@ -81,6 +132,9 @@ export default {
     }
     if (await limited(request, env)) return new Response('slow down', { status: 429 });
     const stub = env.MAC.get(env.MAC.idFromName(fingerprint));
-    return stub.fetch(inner(route[1], fingerprint, env, { headers: { Upgrade: 'websocket' } }));
+    const from = route[1] === 'phone' ? await addressTag(request, fingerprint) : undefined;
+    return stub.fetch(
+      inner(route[1], fingerprint, env, { headers: { Upgrade: 'websocket' } }, from)
+    );
   },
 } satisfies ExportedHandler<Env>;

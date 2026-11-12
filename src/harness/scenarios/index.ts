@@ -31,6 +31,7 @@ import { agentsPolicyScenarios } from './agentsPolicy';
 import { agentsRecipeScenarios } from './agentsRecipe';
 import { agentsSkillsScenarios } from './agentsSkills';
 import { settingsWindowScenarios } from './settingsWindow';
+import { accountScenarios } from './account';
 import { agentsStepsScenarios } from './agentsSteps';
 import { agentsProbeScenarios } from './agentsProbe';
 import { agentsFailureScenarios } from './agentsFailures';
@@ -94,6 +95,7 @@ export const scenarios: Scenario[] = [
   ...agentsRecipeScenarios,
   ...agentsSkillsScenarios,
   ...settingsWindowScenarios,
+  ...accountScenarios,
   ...agentsStepsScenarios,
   ...agentsProbeScenarios,
   ...agentsFailureScenarios,

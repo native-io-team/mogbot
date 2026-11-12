@@ -93,6 +93,9 @@ p{margin:0;color:var(--muted)}
 #status.done{color:var(--fg);font-weight:600}
 #status.error{color:var(--err);border:1px solid var(--line);border-radius:8px;padding:12px 16px}
 #sign-in{width:100%;display:flex;justify-content:center}
+#confirm{display:flex;flex-direction:column;gap:16px;align-items:center}
+#confirm[hidden]{display:none}
+#link{font:inherit;font-weight:600;padding:10px 20px;border-radius:8px;border:1px solid var(--line);background:var(--fg);color:var(--bg);cursor:pointer}
 `;
 
 function page(body: string, scripts = ''): Response {
@@ -120,19 +123,37 @@ function notice(title: string, text: string): Response {
   return page(`<h1>${title}</h1>\n<p>${text}</p>`);
 }
 
-/** The script that signs in and sends the code. It reads the code from the address itself. */
+/**
+ * The script that signs in and sends the code. It reads the code from the
+ * address, keeps it in this tab's sessionStorage and takes it out of the
+ * address at once, so a sign-in that leaves for Google and comes back never
+ * carries it through anyone else's redirects or logs. Signed in, it still
+ * waits for a click: a link someone else sent can't bind *their* Mac to a
+ * signed-in visitor's account on its own.
+ */
 const LINK_SCRIPT = `
 (function () {
+  var KEY = 'relay.linkCode';
   var status = document.getElementById('status');
   var box = document.getElementById('sign-in');
+  var confirmBox = document.getElementById('confirm');
+  var button = document.getElementById('link');
   var code = new URLSearchParams(location.search).get('code') || '';
+  var kept = false;
+  try {
+    if (code) { sessionStorage.setItem(KEY, code); kept = true; }
+    else { code = sessionStorage.getItem(KEY) || ''; kept = !!code; }
+  } catch (e) {}
+  if (kept) history.replaceState(null, '', '/link');
+  var back = kept ? location.origin + '/link' : location.href;
   var sending = false, done = false;
   function say(text, kind) { status.textContent = text; status.className = kind || ''; }
+  function forget() { try { sessionStorage.removeItem(KEY); } catch (e) {} }
   async function link() {
     if (sending || done) return;
     sending = true;
-    box.hidden = true;
-    say('Signing you in…');
+    confirmBox.hidden = true;
+    say('Linking your Mac…');
     try {
       var token = await Clerk.session.getToken();
       var res = await fetch('/v1/link', {
@@ -143,9 +164,10 @@ const LINK_SCRIPT = `
       var body = await res.json().catch(function () { return null; });
       if (body && body.ok) {
         done = true;
+        forget();
         say('You’re signed in. Go back to the app.', 'done');
-        history.replaceState(null, '', '/link');
       } else {
+        if (body && /^code_/.test(body.reason || '')) forget();
         say((body && body.message) || 'That didn’t work. Start again from Sign in on your Mac.', 'error');
       }
     } catch (e) {
@@ -153,7 +175,18 @@ const LINK_SCRIPT = `
     }
     sending = false;
   }
+  function ask() {
+    if (done) return;
+    box.hidden = true;
+    say('');
+    confirmBox.hidden = false;
+  }
+  button.addEventListener('click', link);
   window.addEventListener('load', async function () {
+    if (!/^[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}$/.test(code)) {
+      say('This sign-in link isn’t valid. Start again from Sign in on your Mac.', 'error');
+      return;
+    }
     if (typeof Clerk === 'undefined') {
       say('Couldn’t load sign-in. Check your connection and reload this page.', 'error');
       return;
@@ -165,13 +198,13 @@ const LINK_SCRIPT = `
       return;
     }
     say('');
-    if (Clerk.isSignedIn) return link();
+    if (Clerk.isSignedIn) return ask();
     Clerk.mountSignIn(box, {
       withSignUp: true,
-      forceRedirectUrl: location.href,
-      signUpForceRedirectUrl: location.href
+      forceRedirectUrl: back,
+      signUpForceRedirectUrl: back
     });
-    Clerk.addListener(function (state) { if (state.session) link(); });
+    Clerk.addListener(function (state) { if (state.session) ask(); });
   });
 })();
 `;
@@ -182,7 +215,9 @@ export function linkPage(url: URL, publishableKey: string | undefined, accounts:
   if (!accounts || !host || !publishableKey) {
     return notice('Accounts aren’t set up', 'This relay doesn’t have accounts turned on.');
   }
-  if (!parseLinkCode(url.searchParams.get('code'))) {
+  // No code: a sign-in coming back from Google, its code kept in the tab.
+  const given = url.searchParams.get('code');
+  if (given !== null && !parseLinkCode(given)) {
     return notice('This link isn’t valid', 'Start again from Sign in on your Mac.');
   }
   const key = escapeAttr(publishableKey.trim());
@@ -195,7 +230,11 @@ export function linkPage(url: URL, publishableKey: string | undefined, accounts:
     `<h1>Sign in to use the relay</h1>
 <p>This links your Mac to your account.</p>
 <div id="status">Loading…</div>
-<div id="sign-in"></div>`,
+<div id="sign-in"></div>
+<div id="confirm" hidden>
+<p>Only continue if you just chose Sign in on your own Mac. If someone sent you this link, close this page.</p>
+<button id="link" type="button">Link my Mac</button>
+</div>`,
     scripts
   );
 }

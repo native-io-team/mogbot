@@ -3,7 +3,7 @@
  * code gets its own screen, and a phone's request takes over whichever
  * screen is up, answered with a neutral Allow.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PhoneStatus } from '../../lib/companion';
 
@@ -13,9 +13,18 @@ const startPairing = vi.hoisted(() => vi.fn());
 const decidePairing = vi.hoisted(() => vi.fn());
 const getLinkQr = vi.hoisted(() => vi.fn());
 const openUrl = vi.hoisted(() => vi.fn());
+const signInAccount = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/companion', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/companion')>();
-  return { ...actual, getPhoneStatus, getTailnetPhones, startPairing, decidePairing, getLinkQr };
+  return {
+    ...actual,
+    getPhoneStatus,
+    getTailnetPhones,
+    startPairing,
+    decidePairing,
+    getLinkQr,
+    signInAccount,
+  };
 });
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl }));
 
@@ -29,6 +38,8 @@ import {
 import { isPassedOver, nextStep, prevStep } from '../../lib/onboardingFlow';
 import { SCAN_LINE } from '../../../packages/companion-protocol/src/pairWords';
 import { PHONE_APP_TESTFLIGHT_URL } from '../../lib/phoneApp';
+import { overrideRelayForHarness } from '../../lib/brand';
+import { readPhoneRoute } from '../../lib/account';
 
 const status = (over: Partial<PhoneStatus> = {}): PhoneStatus => ({
   enabled: true,
@@ -147,7 +158,51 @@ describe('PhoneFlow', () => {
     expect(isPassedOver('phoneMacTailscale', true)).toBe(true);
     expect(isPassedOver('agentsTailscale', true)).toBe(false);
     // The onboarding list reads the build's own brand: no relay in it yet.
-    expect(nextStep('phoneGetApp')).toBe(isPassedOver('phoneMacTailscale') ? 'phoneAccess' : 'phoneMacTailscale');
-    expect(prevStep('phoneAccess')).toBe(isPassedOver('phonePhoneTailscale') ? 'phoneGetApp' : 'phonePhoneTailscale');
+    expect(nextStep('phoneGetApp')).toBe(
+      isPassedOver('phoneMacTailscale') ? 'phoneAccess' : 'phoneMacTailscale'
+    );
+    expect(prevStep('phoneAccess')).toBe(
+      isPassedOver('phonePhoneTailscale') ? 'phoneGetApp' : 'phonePhoneTailscale'
+    );
+  });
+});
+
+describe('PhoneFlow in a build with the relay', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    overrideRelayForHarness(true);
+    getPhoneStatus.mockReset();
+    getTailnetPhones.mockReset().mockResolvedValue([]);
+    signInAccount.mockReset().mockResolvedValue(undefined);
+  });
+  afterEach(() => overrideRelayForHarness(null));
+
+  it('not signed in: phone access is signing in, or Tailscale instead', async () => {
+    getPhoneStatus.mockResolvedValue(status({ relay: { state: 'connected', account: null } }));
+    const { go } = show('phoneAccess');
+    expect(
+      await screen.findByRole('heading', { name: 'Sign in so your phone can reach this Mac' })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(signInAccount).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Use Tailscale instead' }));
+    expect(go).toHaveBeenCalledWith('phoneMacTailscale');
+    expect(readPhoneRoute()).toBe('tailscale');
+    // Tailscale's screens are back, both ways.
+    expect(afterGetApp()).toBe('phoneMacTailscale');
+    expect(prevPhoneStep('phoneAccess')).toBe('phonePhoneTailscale');
+  });
+
+  it('signed in and connected: phone access is Done', async () => {
+    getPhoneStatus.mockResolvedValue(
+      status({
+        serve: { state: 'off' },
+        relay: { state: 'connected', account: { id: 'u', email: 'sam@example.com' } },
+      })
+    );
+    show('phoneAccess');
+    expect(await screen.findByText(/Phone access is on/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use Tailscale instead' })).not.toBeInTheDocument();
   });
 });

@@ -2,7 +2,9 @@
  * Onboarding as one straight line: one screen, one question, one big
  * button. "Do this. Done. Next."
  *
- * 1. Welcome — what this is, in a line.
+ * 1. Welcome — what this is, in a line. Then, only in a build with our
+ *    hosted relay, "Sign in?" (`account`): Sign in, or Use without signing
+ *    in, asked once (`lib/account.ts`).
  * 2. Engine — Claude Code, Codex or OpenCode, then each install / sign-in
  *    as its own screen, ticked by the app's own checks. Required.
  * 3. Your agents — "Bring your agents from another assistant?" is answered
@@ -50,7 +52,8 @@
 
 import type { GuideStepId } from '../../packages/companion-protocol/src/blocks';
 import { SETUP_DEPENDENCIES, type SetupItem } from './setup';
-import { RELAY_ON } from './brand';
+import { relayOn } from './brand';
+import { phoneViaRelay, readAccountChoice } from './account';
 import { describeFailure, type InstallFailure } from './installProgress';
 import {
   assistantName,
@@ -72,6 +75,8 @@ import {
  */
 export const FLOW_STEPS = [
   'welcome',
+  // Only with the relay, and only until it's answered (`isPassedOver`).
+  'account',
   'engine',
   // Your agents, from another assistant (Remote Access, then the interview).
   'agentsAsk',
@@ -91,9 +96,22 @@ export const FLOW_STEPS = [
 ] as const;
 export type FlowStep = (typeof FLOW_STEPS)[number];
 
-/** Screens passed over: Tailscale's, when phones come through the relay (docs/relay.md). */
-export const isPassedOver = (step: FlowStep, relay = RELAY_ON) =>
-  relay && (step === 'phoneMacTailscale' || step === 'phonePhoneTailscale');
+/**
+ * Screens passed over: "Sign in?" in a build with no relay, or once it's
+ * been answered; Tailscale's, when phones come through the relay
+ * (docs/relay.md).
+ */
+export function isPassedOver(
+  step: FlowStep,
+  relay = phoneViaRelay(),
+  account: { relay: boolean; answered: boolean } = {
+    relay: relayOn(),
+    answered: readAccountChoice() !== null,
+  }
+): boolean {
+  if (step === 'account') return !account.relay || account.answered;
+  return relay && (step === 'phoneMacTailscale' || step === 'phonePhoneTailscale');
+}
 
 /** The screens shown, in order. */
 const shown = (): FlowStep[] => FLOW_STEPS.filter((s) => !isPassedOver(s));
@@ -121,6 +139,8 @@ export const SECTION_LABEL: Record<FlowSection, string> = {
 };
 
 export function sectionOf(step: FlowStep): FlowSection {
+  // "Sign in?" is the welcome's second screen, not a part of its own.
+  if (step === 'account') return 'welcome';
   if (step === 'welcome' || step === 'engine') return step;
   return step.startsWith('agents') ? 'agents' : 'phone';
 }
@@ -254,6 +274,8 @@ export function resumeStep(saved: FlowProgress | null): FlowStep {
   // Saved on a screen first run no longer shows: the engine, which goes on
   // by itself when it's ready, then the Chief's chat.
   if (saved.step.startsWith('agents') || saved.step.startsWith('phone')) return 'engine';
+  // "Sign in?" answered since (or this build has no relay): the screen after it.
+  if (isPassedOver(saved.step)) return nextStep(saved.step) ?? 'engine';
   return saved.step;
 }
 

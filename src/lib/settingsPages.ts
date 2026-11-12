@@ -10,8 +10,10 @@
  */
 
 import type { SettingsSectionRequest, SettingsTabRequest } from './settings';
+import { relayOn } from './brand';
 
 export type SettingsPage =
+  | 'account'
   | 'agents'
   | 'independence'
   | 'accounts'
@@ -30,10 +32,19 @@ export interface SettingsPageInfo {
   lead: string;
   /** Extra words ⌘K matches the page on. */
   keywords: string[];
+  /** Only in a build with our hosted relay (`relayOn()`): elsewhere it isn't listed. */
+  relayOnly?: true;
 }
 
 /** In the order the section list shows them: agents' pages, then the app's. */
 export const SETTINGS_PAGES: readonly SettingsPageInfo[] = [
+  {
+    id: 'account',
+    title: 'Account',
+    lead: 'Signing in, and what it lets your phone do.',
+    keywords: ['sign in', 'sign out', 'log in', 'log out', 'google', 'email', 'relay'],
+    relayOnly: true,
+  },
   {
     id: 'agents',
     title: 'Agents',
@@ -181,12 +192,20 @@ export const SETTINGS_PAGES: readonly SettingsPageInfo[] = [
 
 export const DEFAULT_SETTINGS_PAGE: SettingsPage = 'agents';
 
+/** The pages this build lists: Account only with the relay. */
+export function visibleSettingsPages(relay = relayOn()): readonly SettingsPageInfo[] {
+  return SETTINGS_PAGES.filter((p) => relay || !p.relayOnly);
+}
+
 export function settingsPageInfo(page: SettingsPage): SettingsPageInfo {
-  return SETTINGS_PAGES.find((p) => p.id === page) ?? SETTINGS_PAGES[0];
+  return (
+    visibleSettingsPages().find((p) => p.id === page) ??
+    SETTINGS_PAGES.find((p) => p.id === DEFAULT_SETTINGS_PAGE)!
+  );
 }
 
 export function isSettingsPage(value: unknown): value is SettingsPage {
-  return typeof value === 'string' && SETTINGS_PAGES.some((p) => p.id === value);
+  return typeof value === 'string' && visibleSettingsPages().some((p) => p.id === value);
 }
 
 /** The page each part of Settings that a command can scroll to lives on. */
@@ -224,6 +243,10 @@ export function openingPage(asked: {
   if (asked.accounts) return 'accounts';
   // "agents" is what every agent setting used to ask for alongside its part;
   // alone it is still the Agents page.
-  if (asked.tab) return pageForTab(asked.tab);
+  if (asked.tab) {
+    const page = pageForTab(asked.tab);
+    // Account in a build with no relay: there is no such page here.
+    return visibleSettingsPages().some((p) => p.id === page) ? page : DEFAULT_SETTINGS_PAGE;
+  }
   return DEFAULT_SETTINGS_PAGE;
 }

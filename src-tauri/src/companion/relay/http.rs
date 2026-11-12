@@ -57,39 +57,42 @@ pub struct HttpBody {
     pub more: bool,
 }
 
-/// What a phone may not set: the loopback server's own host, anything
-/// hop-by-hop, a tailnet login (only `tailscale serve` may say that), and
-/// the relay's own headers.
-fn dropped(name: &str) -> bool {
-    let n = name.to_ascii_lowercase();
+/// The only request headers a phone's request carries to the loopback
+/// server: what the app's HTTP calls set (the device token, a file's type
+/// and name, a range) and nothing else. An allow-list, so nothing only a
+/// proxy may say (`Host`, `Tailscale-User-Login`, `X-Forwarded-*`, the
+/// relay's own secret and source) and no header the server learns to trust
+/// later can ever come from a phone.
+fn allowed(name: &str) -> bool {
     matches!(
-        n.as_str(),
-        "host"
-            | "connection"
-            | "keep-alive"
-            | "upgrade"
-            | "transfer-encoding"
-            | "te"
-            | "trailer"
-            | "proxy-authorization"
-            | "proxy-connection"
-            | "content-length"
-            | "origin"
-            | "forwarded"
-    ) || n.starts_with("tailscale-")
-        || n.starts_with("x-forwarded-")
-        || n == super::SECRET_HEADER.as_str()
-        || n == super::SOURCE_HEADER.as_str()
+        name.to_ascii_lowercase().as_str(),
+        "authorization"
+            | "content-type"
+            | "accept"
+            | "range"
+            | "if-range"
+            | "if-none-match"
+            | "if-modified-since"
+            | "x-name"
+    )
 }
 
 /// Paths the loopback server serves over HTTP, nothing else: never the
 /// socket (`/v1/ws`), which a channel speaks directly.
 fn usable_path(path: &str) -> bool {
+    let route = path.split_once('?').map_or(path, |(p, _)| p);
     path.starts_with("/v1/")
         && path.len() <= 2048
-        && path != "/v1/ws"
-        && !path.starts_with("/v1/ws?")
-        && path.bytes().all(|b| b.is_ascii_graphic())
+        && route != "/v1/ws"
+        && path.bytes().all(|b| b.is_ascii_graphic() && b != b'\\' && b != b'#')
+        // No dot segments, plain or encoded: the server refuses them too,
+        // and a path the phone never sends needn't reach it.
+        && !route.split('/').any(|seg| {
+            let seg = seg.to_ascii_lowercase().replace("%2e", ".");
+            seg == "." || seg == ".."
+        })
+        && !route.to_ascii_lowercase().contains("%2f")
+        && !route.to_ascii_lowercase().contains("%5c")
 }
 
 fn usable_method(m: &str) -> Option<hyper::Method> {
@@ -162,31 +165,36 @@ impl Http {
         }
     }
 
-    /// Reap finished requests.
+    /// Reap finished requests, and the bodies nobody reads any more.
     pub fn reap(&mut self) {
         while self.work.try_join_next().is_some() {}
+        self.bodies.retain(|_, tx| !tx.is_closed());
     }
 
-    /// `{"t":"http"}`: start it.
-    pub async fn start(&mut self, req: HttpRequest) {
+    /// Requests still running or still sending their bodies.
+    pub fn in_flight(&mut self) -> usize {
+        self.reap();
+        self.work.len() + self.bodies.len()
+    }
+
+    /// `{"t":"http"}`: start it. A request the Mac won't make is answered at
+    /// once, by the frame this returns, which the caller seals itself: the
+    /// channel's own loop drains `out`, so waiting on it here could wait forever.
+    #[must_use]
+    pub fn start(&mut self, req: HttpRequest) -> Option<String> {
         self.reap();
         let id = req.id;
         let method = usable_method(&req.method);
         let Some(method) = method.filter(|_| usable_path(&req.path)) else {
-            let _ = self.out.send(bare(id, 404)).await;
-            return;
+            return Some(bare(id, 404));
         };
         if self.work.len() >= MAX_IN_FLIGHT || self.bodies.contains_key(&id) {
-            let _ = self.out.send(bare(id, 429)).await;
-            return;
+            return Some(bare(id, 429));
         }
         let first = match req.body.as_deref().map(|b| B64.decode(b)) {
             None => Vec::new(),
             Some(Ok(b)) => b,
-            Some(Err(_)) => {
-                let _ = self.out.send(bare(id, 400)).await;
-                return;
-            }
+            Some(Err(_)) => return Some(bare(id, 400)),
         };
         let body = if req.more {
             let (tx, rx) = mpsc::channel::<Piece>(16);
@@ -222,15 +230,14 @@ impl Http {
             .header(super::SECRET_HEADER.as_str(), super::secret())
             .header(super::SOURCE_HEADER.as_str(), self.source.as_str());
         for (k, v) in &req.headers {
-            if dropped(k) {
+            if !allowed(k) {
                 continue;
             }
             builder = builder.header(k.as_str(), v.as_str());
         }
         let Ok(request) = builder.body(body) else {
             self.bodies.remove(&id);
-            let _ = self.out.send(bare(id, 400)).await;
-            return;
+            return Some(bare(id, 400));
         };
         let (port, out) = (self.port, self.out.clone());
         self.work.spawn(async move {
@@ -244,6 +251,7 @@ impl Http {
                 Err(_) => tracing::warn!("[Relay] a relayed request ran out of time"),
             }
         });
+        None
     }
 
     /// `{"t":"httpBody"}`: the next piece of a request's body.
@@ -363,16 +371,125 @@ mod tests {
         for h in [
             "Host",
             "Tailscale-User-Login",
+            "tailscale-user-name",
             "X-Forwarded-For",
+            "X-Forwarded-Host",
+            "X-Real-IP",
+            "Forwarded",
+            "Origin",
+            "Cookie",
             "Content-Length",
+            "Transfer-Encoding",
+            "Connection",
             super::super::SECRET_HEADER.as_str(),
             super::super::SOURCE_HEADER.as_str(),
+            &super::super::SECRET_HEADER.to_ascii_uppercase(),
         ] {
-            assert!(dropped(h), "{h}");
+            assert!(!allowed(h), "{h}");
         }
-        assert!(!dropped("Authorization"));
-        assert!(!dropped("X-Name"));
-        assert!(!dropped("Content-Type"));
+        for h in ["Authorization", "X-Name", "Content-Type", "range"] {
+            assert!(allowed(h), "{h}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_relayed_request_carries_only_allowed_headers_and_the_bridges_own() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        // A loopback "server" that records the request head it got.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (head_tx, head_rx) = tokio::sync::oneshot::channel::<String>();
+        tokio::spawn(async move {
+            let (mut s, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 8192];
+            let mut got = Vec::new();
+            while !got.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = s.read(&mut buf).await.unwrap();
+                if n == 0 {
+                    break;
+                }
+                got.extend_from_slice(&buf[..n]);
+            }
+            let _ = head_tx.send(String::from_utf8_lossy(&got).to_string());
+            let _ = s
+                .write_all(b"HTTP/1.1 204 No Content\r\ncontent-length: 0\r\n\r\n")
+                .await;
+        });
+        let (out_tx, mut out_rx) = mpsc::channel(4);
+        let mut http = Http::new(port, 9, out_tx);
+        let mut headers = HashMap::new();
+        for (k, v) in [
+            ("Authorization", "Bearer t"),
+            ("Host", "evil.example"),
+            ("Tailscale-User-Login", "someone@x.com"),
+            ("X-Forwarded-For", "1.2.3.4"),
+            (super::super::SECRET_HEADER.as_str(), "guess"),
+            (super::super::SOURCE_HEADER.as_str(), "relay:1"),
+            ("X-Anything", "x"),
+        ] {
+            headers.insert(k.to_string(), v.to_string());
+        }
+        let req = HttpRequest {
+            id: 1,
+            method: "GET".into(),
+            path: "/v1/identity".into(),
+            headers,
+            body: None,
+            more: false,
+        };
+        assert!(http.start(req).is_none());
+        let head = head_rx.await.unwrap().to_ascii_lowercase();
+        assert!(head.contains("authorization: bearer t"), "{head}");
+        assert!(head.contains("host: 127.0.0.1:"), "{head}");
+        assert!(
+            head.contains(&format!(
+                "{}: relay:9",
+                super::super::SOURCE_HEADER.as_str()
+            )),
+            "{head}"
+        );
+        let secret = format!(
+            "{}: {}",
+            super::super::SECRET_HEADER.as_str(),
+            super::super::secret()
+        );
+        assert!(head.contains(&secret), "{head}");
+        for bad in [
+            "evil.example",
+            "someone@x.com",
+            "1.2.3.4",
+            "guess",
+            "x-anything",
+            "relay:1\r",
+        ] {
+            assert!(!head.contains(bad), "{bad} reached the server: {head}");
+        }
+        let res: Value = serde_json::from_str(&out_rx.recv().await.unwrap()).unwrap();
+        assert_eq!(res["status"], 204);
+    }
+
+    #[tokio::test]
+    async fn a_refused_request_is_answered_without_waiting_on_a_full_queue() {
+        // The queue back to the phone is full and nobody drains it (the
+        // channel's loop is the one calling): the answer still comes back.
+        let (out_tx, _out_rx) = mpsc::channel(1);
+        out_tx.try_send("filler".to_string()).unwrap();
+        let mut http = Http::new(1, 1, out_tx);
+        let req = |path: &str| HttpRequest {
+            id: 5,
+            method: "GET".into(),
+            path: path.into(),
+            headers: HashMap::new(),
+            body: None,
+            more: false,
+        };
+        let answer =
+            tokio::time::timeout(Duration::from_secs(1), async { http.start(req("/v1/ws")) })
+                .await
+                .expect("no wait")
+                .expect("an answer");
+        let v: Value = serde_json::from_str(&answer).unwrap();
+        assert_eq!(v["status"], 404);
     }
 
     #[test]
@@ -383,6 +500,23 @@ mod tests {
         assert!(!usable_path("/"));
         assert!(!usable_path("/v1/a b"));
         assert!(!usable_path("http://elsewhere/v1/identity"));
+        assert!(!usable_path("/v1/ws?x=1"));
+        for traversal in [
+            "/v1/agents/../identity",
+            "/v1/agents/a/attachments/../../x",
+            "/v1/agents/%2e%2e/attachments/x",
+            "/v1/agents/a/attachments/%2E%2e/x",
+            "/v1/agents/a/attachments/.",
+            "/v1/agents/a%2fb/attachments/x",
+            "/v1/agents/a\\b",
+            "/v1/blobs/x#y",
+        ] {
+            assert!(!usable_path(traversal), "{traversal}");
+        }
+        // A dot inside a name, or a query that mentions one, is fine.
+        assert!(usable_path(
+            "/v1/agents/a/attachments/m1/photo.v2.png?w=300"
+        ));
         assert!(usable_method("DELETE").is_none());
     }
 

@@ -9,6 +9,7 @@
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::{mpsc, oneshot};
@@ -215,6 +216,22 @@ async fn sign_in(c: &Companion, base: &str) -> Option<(Ws, String, Option<Accoun
 struct Open {
     tx: mpsc::Sender<Vec<u8>>,
     generation: u64,
+    /// Bytes queued for the channel and not yet taken.
+    queued: Arc<AtomicUsize>,
+}
+
+impl Open {
+    /// Queue one payload for the channel; false when it's stuck (its queue
+    /// full, or [`channel::MAX_QUEUED_BYTES`] already waiting).
+    fn offer(&self, payload: Vec<u8>) -> bool {
+        let n = payload.len();
+        let before = self.queued.fetch_add(n, Ordering::SeqCst);
+        if before + n > channel::MAX_QUEUED_BYTES || self.tx.try_send(payload).is_err() {
+            self.queued.fetch_sub(n, Ordering::SeqCst);
+            return false;
+        }
+        true
+    }
 }
 
 async fn session(
@@ -278,9 +295,11 @@ async fn session(
                                 }
                                 generation += 1;
                                 let (tx, rx) = mpsc::channel::<Vec<u8>>(CHANNEL_QUEUE);
+                                let queued = Arc::new(AtomicUsize::new(0));
+                                let inbound = channel::Inbound::new(rx, queued.clone());
                                 // A number reused: the old one is gone.
-                                open.insert(ch, Open { tx, generation });
-                                tokio::spawn(channel::run(c.clone(), ch, generation, cfg.port, rx, out_tx.clone()));
+                                open.insert(ch, Open { tx, generation, queued });
+                                tokio::spawn(channel::run(c.clone(), ch, generation, cfg.port, inbound, out_tx.clone()));
                             }
                             Some("close") => {
                                 open.remove(&ch);
@@ -294,7 +313,7 @@ async fn session(
                         }
                         let ch = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
                         let Some(o) = open.get(&ch) else { continue };
-                        if o.tx.try_send(data[4..].to_vec()).is_err() {
+                        if !o.offer(data[4..].to_vec()) {
                             // A phone sending faster than its channel is served.
                             open.remove(&ch);
                             let _ = ws.send(close_text(ch)).await;

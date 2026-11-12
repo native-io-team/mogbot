@@ -2,10 +2,16 @@ import { SELF, env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare
 import { describe, expect, it } from 'vitest';
 import worker from '../src/index';
 import { PAIRING_SCHEME, macLoginMessage, verifyMacLogin } from '../src/auth';
-import { MAX_PAYLOAD, MAX_PHONES, type MacRelay } from '../src/mac';
+import {
+  MAX_PAYLOAD,
+  MAX_PENDING_MACS,
+  MAX_PHONES,
+  MAX_PHONES_PER_ADDRESS,
+  type MacRelay,
+} from '../src/mac';
 import { PAIRING_SCHEME as BRAND_SCHEME } from '../../../packages/companion-protocol/src/brand.gen';
 import vectors from '../../../packages/companion-protocol/src/relayVectors.json';
-import { framed, loginMac, newMacKey, open, openPhone, sign } from './helpers';
+import { Client, framed, loginMac, newMacKey, open, openPhone, sign } from './helpers';
 
 describe('routes', () => {
   it('answers health and refuses the rest', async () => {
@@ -236,5 +242,41 @@ describe('phones', () => {
     macWs.ws.send(framed(ch, new Uint8Array(MAX_PAYLOAD + 1)));
     expect((await phone.closed).code).toBe(1009);
     expect(await macWs.json()).toEqual({ t: 'close', ch });
+  });
+});
+
+describe('strangers', () => {
+  it(`keeps at most ${MAX_PENDING_MACS} unanswered Mac sockets, closing the oldest, so the real Mac still logs in`, async () => {
+    const mac = await newMacKey();
+    const strangers = [];
+    for (let i = 0; i < MAX_PENDING_MACS; i++) {
+      const s = await open(`/v1/mac/${mac.fingerprint}`);
+      await s.json();
+      strangers.push(s);
+    }
+    const ws = await loginMac(mac);
+    expect(await strangers[0].closed).toEqual({ code: 4401, reason: 'superseded' });
+    // The real Mac is in: a phone reaches it.
+    await openPhone(mac, ws);
+  });
+
+  it(`allows ${MAX_PHONES_PER_ADDRESS} phones from one address per Mac`, async () => {
+    const mac = await newMacKey();
+    const macWs = await loginMac(mac);
+    const from = (ip: string) =>
+      SELF.fetch(`https://relay.test/v1/phone/${mac.fingerprint}`, {
+        headers: { Upgrade: 'websocket', 'cf-connecting-ip': ip },
+      });
+    const kept = [];
+    for (let i = 0; i < MAX_PHONES_PER_ADDRESS; i++) {
+      const res = await from('198.51.100.7');
+      kept.push(new Client(res.webSocket!));
+      expect((await macWs.json()).t).toBe('open');
+    }
+    const extra = new Client((await from('198.51.100.7')).webSocket!);
+    expect((await extra.closed).code).toBe(4429);
+    // Another address still gets in.
+    new Client((await from('198.51.100.8')).webSocket!);
+    expect((await macWs.json()).t).toBe('open');
   });
 });

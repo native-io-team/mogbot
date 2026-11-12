@@ -25,3 +25,9 @@ export const SOURCE_URL: string | null = "https://github.com/native-io-team/mogb
 
 /** Where someone with only the phone gets the Mac app, or null when nowhere public. */
 export const MAC_DOWNLOAD_URL: string | null = "https://mogbot.app/start";
+
+/**
+ * The phone relay (`links.relay`, `wss://<host>`), or null for Tailscale only.
+ * The phone accepts a relay route only on this host (docs/relay.md).
+ */
+export const RELAY_URL: string | null = null;

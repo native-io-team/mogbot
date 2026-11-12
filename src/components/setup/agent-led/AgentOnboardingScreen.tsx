@@ -2,7 +2,7 @@
  * Onboarding: from nothing to talking with the Chief of Staff, as one
  * straight line of one-question screens (`lib/onboardingFlow`).
  *
- * Welcome → the engine (pick, then install and sign in, a screen each) →
+ * Welcome → (with our hosted relay only) "Sign in?" → the engine (pick, then install and sign in, a screen each) →
  * "Bring your agents from another assistant?" (Remote Access a screen per
  * step, then the import) → "Use your agents from your phone?" (a screen per
  * step, ending on Paired) → the Chief's chat. Only the engine is required;
@@ -22,6 +22,7 @@ import { Spinner } from '../../primitives/Spinner';
 import { CheckLine } from '../flow/FlowParts';
 import { EngineStep } from '../flow/EngineStep';
 import { WelcomeStep } from '../flow/SimpleSteps';
+import { AccountStep } from '../flow/AccountStep';
 import { AgentsFlow, type AgentsStep } from '../flow/AgentsFlow';
 import { FlowShell } from '../flow/FlowParts';
 import { PhoneFlow, Primary, Skip, type PhoneFlowStep } from '../../phone/PhoneFlow';
@@ -177,6 +178,8 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
   const screen =
     step === 'welcome' ? (
       <WelcomeStep onNext={() => go(nextStep(step))} />
+    ) : step === 'account' ? (
+      <AccountStep onNext={() => go(nextStep(step))} onBack={back} />
     ) : step.startsWith('agents') ? (
       <AgentsFlow step={step as AgentsStep} go={go} onSkip={() => skip(step)} onBack={back} />
     ) : step === 'phoneAsk' ? (

@@ -39,7 +39,16 @@ import { usePolling } from '../../hooks/usePolling';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { BRAND, RELAY_ON } from '../../lib/brand';
+import { BRAND } from '../../lib/brand';
+import {
+  accountOf,
+  phoneViaRelay,
+  savePhoneRoute,
+  SIGN_IN,
+  signedInLine,
+  signInCheck,
+} from '../../lib/account';
+import { useSignIn } from '../../hooks/useAccount';
 import { TAILSCALE_DOWNLOAD_URL } from '../../lib/remoteAccess';
 import {
   GET_ON_TESTFLIGHT,
@@ -97,7 +106,7 @@ export const PHONE_FLOW_STEPS = [
 export type PhoneFlowStep = (typeof PHONE_FLOW_STEPS)[number];
 
 /** Back: the screen before; Allow and Paired go back to the code. */
-export function prevPhoneStep(step: PhoneFlowStep, relay = RELAY_ON): PhoneFlowStep | null {
+export function prevPhoneStep(step: PhoneFlowStep, relay = phoneViaRelay()): PhoneFlowStep | null {
   if (step === 'phoneAllow' || step === 'phonePaired') return 'phoneScan';
   if (relay && step === 'phoneAccess') return 'phoneGetApp';
   return PHONE_FLOW_STEPS[PHONE_FLOW_STEPS.indexOf(step) - 1] ?? null;
@@ -105,9 +114,11 @@ export function prevPhoneStep(step: PhoneFlowStep, relay = RELAY_ON): PhoneFlowS
 
 /**
  * After the phone app: Tailscale on this Mac, or, when phones come through
- * the relay (docs/relay.md), straight to turning phone access on.
+ * the relay (docs/relay.md), straight to turning phone access on (signing
+ * in, there). "Use Tailscale instead" there puts Tailscale's screens back
+ * (`savePhoneRoute`).
  */
-export function afterGetApp(relay = RELAY_ON): PhoneFlowStep {
+export function afterGetApp(relay = phoneViaRelay()): PhoneFlowStep {
   return relay ? 'phoneAccess' : 'phoneMacTailscale';
 }
 
@@ -361,6 +372,7 @@ export function PhoneFlow({
 
   const ready = status ? phoneStep(status).kind === 'ready' : false;
   const request = status?.pairing.request;
+  const signIn = useSignIn(accountOf(status));
 
   // The code: made on arrival once phone access is ready, and again after it
   // ran out, was used, or a request was denied.
@@ -432,6 +444,7 @@ export function PhoneFlow({
     issue,
     decide,
     enable: () => void run('enable', () => setPhoneAccess(true)),
+    signIn,
   });
   return <>{render(step, view)}</>;
 }
@@ -455,12 +468,14 @@ function useStepView(p: {
   issue: () => Promise<void>;
   decide: (allow: boolean, replace: string[]) => void;
   enable: () => void;
+  signIn: ReturnType<typeof useSignIn>;
 }): StepView {
   const { step, status, skip, go } = p;
   const access = status ? phoneStep(status) : null;
   const onPhone = p.phones?.find((ph) => ph.online) ?? null;
   // A saved step from before the relay: its Tailscale screens are passed over now.
-  const passedOver = RELAY_ON && (step === 'phoneMacTailscale' || step === 'phonePhoneTailscale');
+  const viaRelay = phoneViaRelay();
+  const passedOver = viaRelay && (step === 'phoneMacTailscale' || step === 'phonePhoneTailscale');
   useEffect(() => {
     if (passedOver) go('phoneAccess');
   }, [passedOver, go]);
@@ -602,6 +617,8 @@ function useStepView(p: {
       };
     }
     case 'phoneAccess': {
+      if (viaRelay && status && !accountOf(status)) return relaySignInView(p);
+      if (viaRelay && status && access?.kind !== 'ready') return relayAccessView(p);
       const check: CheckResult | null = !access
         ? { state: 'checking', line: 'Checking phone access…' }
         : access.kind === 'ready'
@@ -774,6 +791,67 @@ function useStepView(p: {
         primary: <Primary onClick={p.onDone}>{p.doneLabel}</Primary>,
       };
   }
+}
+
+/**
+ * Phone access in a build with the relay, not signed in: signing in is how
+ * the phone reaches this Mac (anywhere, no Tailscale), and "Use Tailscale
+ * instead" is the open-source way, its own screens put back.
+ */
+function relaySignInView(p: Parameters<typeof useStepView>[0]): StepView {
+  const { signIn, go, skip } = p;
+  const check = signInCheck({ account: null, ...signIn });
+  return {
+    title: 'Sign in so your phone can reach this Mac',
+    lede: 'From anywhere, with no Tailscale to set up. This Mac has to stay on while you use it.',
+    children:
+      check && check.state !== 'checking' ? (
+        <CheckLine result={check} />
+      ) : (
+        <p className="flow-note">
+          With Google or your email, in your browser.
+          {p.status && !p.status.enabled && ' Signing in also turns on phone access on this Mac.'}
+        </p>
+      ),
+    primary: (
+      <Primary busy={signIn.starting} onClick={() => void signIn.start()}>
+        {signIn.waiting ? 'Try again' : SIGN_IN}
+      </Primary>
+    ),
+    secondary: (
+      <>
+        <Button
+          variant="secondary"
+          size="large"
+          onClick={() => {
+            savePhoneRoute('tailscale');
+            go('phoneMacTailscale');
+          }}
+          data-phone-use-tailscale
+        >
+          Use Tailscale instead
+        </Button>
+        {skip}
+      </>
+    ),
+  };
+}
+
+/** Signed in, phone access off or the relay still connecting. */
+function relayAccessView(p: Parameters<typeof useStepView>[0]): StepView {
+  const account = accountOf(p.status);
+  const off = !p.status?.enabled;
+  return {
+    title: PHONE_ACCESS_TITLE,
+    lede: `${account ? signedInLine(account) + ' ' : ''}Your phone reaches this Mac through your account, so this Mac has to stay on while you use it.`,
+    children: !off && <CheckLine result={{ state: 'checking', line: 'Connecting…' }} />,
+    primary: off ? (
+      <Primary busy={p.busy === 'enable'} onClick={p.enable}>
+        Turn on phone access
+      </Primary>
+    ) : undefined,
+    secondary: p.skip,
+  };
 }
 
 /** The last screen's title: the person is done, not just the pairing. */

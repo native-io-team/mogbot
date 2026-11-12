@@ -669,6 +669,9 @@ export const baseCommands: CommandMap = {
   get_remote_audit: [],
   // Phone access off, nothing paired: the first-run state.
   companion_status: phoneStatus(),
+  // Signing in at the relay (a build with one): opens the browser, answers nothing.
+  companion_account_sign_in: null,
+  companion_account_sign_out: null,
   // Onboarding's phone checks: no phone on the tailnet yet; a store link's
   // QR code drawn from a fixed module matrix (the pairing fixture's).
   companion_tailnet_phones: [],

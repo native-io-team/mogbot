@@ -129,6 +129,12 @@ export interface Scenario {
    */
   phoneOffer?: true;
   /**
+   * Draw a build with our hosted relay (`brand.json`'s `links.relay`, null
+   * in this repo): sign-in screens, Settings → Account, the phone through an
+   * account. Applied before the app renders (`resetStorage.ts`).
+   */
+  relay?: true;
+  /**
    * A selector that must be present for this capture to mean anything.
    *
    * A scenario is a claim about a surface. When that surface stops rendering —

@@ -11,9 +11,10 @@
 use futures_util::{Sink, Stream};
 use serde_json::Value;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::{self, Message};
 use tokio_util::sync::PollSender;
@@ -29,6 +30,40 @@ const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 const QUEUE: usize = 64;
 /// The relay drops a payload past this (docs/relay.md, 256 KiB).
 pub const MAX_PAYLOAD: usize = 256 * 1024;
+/// Bytes from the phone waiting for this channel to take them. Past it the
+/// channel is closed as stuck (`client`), so a phone that sends faster than
+/// it's served holds at most this much of the Mac's memory, not its queue's
+/// 256 payloads of 256 KiB each.
+pub const MAX_QUEUED_BYTES: usize = 16 * 1024 * 1024;
+/// A channel that never became an authenticated socket (HTTP only, or
+/// nothing at all after the handshake) closes after this long with no
+/// request in flight and nothing either way, so strangers who know the
+/// fingerprint can't sit on the relay's few phone slots for this Mac. The
+/// phone's HTTP uses one channel per request and closes it when answered.
+const IDLE: Duration = if cfg!(test) {
+    Duration::from_millis(600)
+} else {
+    Duration::from_secs(30)
+};
+
+/// What the relay link hands one channel: the phone's payloads, with the
+/// bytes still queued counted (see [`MAX_QUEUED_BYTES`]).
+pub struct Inbound {
+    rx: mpsc::Receiver<Vec<u8>>,
+    queued: Arc<AtomicUsize>,
+}
+
+impl Inbound {
+    pub fn new(rx: mpsc::Receiver<Vec<u8>>, queued: Arc<AtomicUsize>) -> Self {
+        Inbound { rx, queued }
+    }
+
+    async fn recv(&mut self) -> Option<Vec<u8>> {
+        let payload = self.rx.recv().await?;
+        self.queued.fetch_sub(payload.len(), Ordering::SeqCst);
+        Some(payload)
+    }
+}
 
 /// What a channel sends the relay.
 #[derive(Debug)]
@@ -96,7 +131,7 @@ pub async fn run(
     ch: u32,
     generation: u64,
     port: Option<u16>,
-    mut inbound: mpsc::Receiver<Vec<u8>>,
+    mut inbound: Inbound,
     out: mpsc::Sender<Out>,
 ) {
     serve(&c, ch, port, &mut inbound, &out).await;
@@ -107,7 +142,7 @@ async fn serve(
     c: &Arc<Companion>,
     ch: u32,
     port: Option<u16>,
-    inbound: &mut mpsc::Receiver<Vec<u8>>,
+    inbound: &mut Inbound,
     out: &mpsc::Sender<Out>,
 ) {
     let Ok(Some(hello)) = tokio::time::timeout(HELLO_TIMEOUT, inbound.recv()).await else {
@@ -134,12 +169,22 @@ async fn serve(
     let mut to_handler: Option<mpsc::Sender<Message>> = None;
     let (from_tx, mut from_handler) = mpsc::channel::<Message>(QUEUE);
     let mut from_tx = Some(from_tx);
+    let mut heard = Instant::now();
+    let mut idle_check = tokio::time::interval(IDLE / 3);
 
     loop {
         tokio::select! {
+            _ = idle_check.tick() => {
+                let busy = http.as_mut().map_or(0, Http::in_flight) > 0;
+                if to_handler.is_none() && !busy && heard.elapsed() >= IDLE {
+                    tracing::debug!("[Relay] a channel with nothing going on closed");
+                    return;
+                }
+            }
             payload = inbound.recv() => {
                 // None: the relay closed it, or the link went.
                 let Some(payload) = payload else { return };
+                heard = Instant::now();
                 let Some(plain) = keys.incoming.open(&payload) else {
                     tracing::debug!("[Relay] a payload didn't open; closing the channel");
                     return;
@@ -151,7 +196,11 @@ async fn serve(
                 match kind.as_deref() {
                     Some("http") => {
                         let (Some(http), Ok(req)) = (http.as_mut(), serde_json::from_str::<HttpRequest>(&text)) else { continue };
-                        http.start(req).await;
+                        if let Some(answer) = http.start(req) {
+                            if !seal_out(&mut keys, ch, out, answer.as_bytes()).await {
+                                return;
+                            }
+                        }
                     }
                     Some("httpBody") => {
                         let (Some(http), Ok(piece)) = (http.as_mut(), serde_json::from_str::<HttpBody>(&text)) else { continue };
@@ -190,6 +239,7 @@ async fn serve(
                 Some(_) => {}
             },
             Some(text) = plain_rx.recv() => {
+                heard = Instant::now();
                 if !seal_out(&mut keys, ch, out, text.as_bytes()).await {
                     return;
                 }

@@ -548,3 +548,53 @@ fn backoff_is_jittered_within_half_to_all() {
     }
     assert!(PING_EVERY < DEAD_AFTER);
 }
+
+#[tokio::test]
+async fn a_stranger_who_only_shakes_hands_is_closed_once_idle() {
+    let (c, _stub) = Stub::companion();
+    let fingerprint = c.registry.identity().unwrap().fingerprint();
+    let port = loopback(c.clone()).await;
+    let mut relay = fake_relay(json!({ "id": "user_1", "email": null })).await;
+    let link = Arc::new(Link::default());
+    let (stop_tx, stop_rx) = oneshot::channel();
+    let cfg = Config {
+        base: relay.base(),
+        port: Some(port),
+    };
+    tokio::spawn(run(c.clone(), cfg, link.clone(), stop_rx));
+    until("the link", || link.route().is_some()).await;
+    let url = link.route().unwrap().url;
+
+    // The handshake, one quick HTTP answer, then nothing: the Mac lets the
+    // relay slot go instead of holding it for whoever opened it.
+    let mut stranger = Phone::connect(&url, &fingerprint).await;
+    stranger
+        .send(json!({ "t": "http", "id": 1, "method": "GET", "path": "/v1/nope" }))
+        .await;
+    assert_eq!(stranger.next_of("httpRes").await["status"], 404);
+    let closed = relay.heard("close").await;
+    assert!(closed["ch"].as_u64().is_some());
+    assert_eq!(stranger.next().await["t"], "closed");
+    stop_tx.send(()).unwrap();
+}
+
+#[test]
+fn a_channel_holds_at_most_its_byte_budget() {
+    let (tx, rx) = mpsc::channel::<Vec<u8>>(CHANNEL_QUEUE);
+    let queued = Arc::new(AtomicUsize::new(0));
+    let o = Open {
+        tx,
+        generation: 1,
+        queued: queued.clone(),
+    };
+    let piece = channel::MAX_PAYLOAD;
+    let fits = channel::MAX_QUEUED_BYTES / piece;
+    for _ in 0..fits {
+        assert!(o.offer(vec![0; piece]));
+    }
+    assert!(!o.offer(vec![0; piece]), "over the budget: stuck");
+    assert_eq!(queued.load(Ordering::SeqCst), fits * piece);
+    drop(rx);
+    assert!(!o.offer(vec![0; 1]), "nobody reading");
+    assert_eq!(queued.load(Ordering::SeqCst), fits * piece);
+}
