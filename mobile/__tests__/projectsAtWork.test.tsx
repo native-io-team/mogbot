@@ -13,6 +13,7 @@ import { agent } from './helpers';
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn(), replace: jest.fn() }),
+  useFocusEffect: () => undefined,
   Stack: { Screen: () => null },
 }));
 jest.mock('react-native-reanimated', () => {

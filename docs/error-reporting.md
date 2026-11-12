@@ -1,8 +1,8 @@
 # Automatic Error Reporting (Admin Agent)
 
-Ship Studio can automatically send uncaught errors from production builds to
-the Ship Studio admin agent — an AI pipeline that investigates reports against
-the `ship-studio/ship-studio` codebase and may file deduplicated GitHub issues
+The app can automatically send uncaught errors from production builds to
+its admin agent (the private repo `native-io-team/mogbot-admin-agent`, on Vercel) — an AI pipeline that investigates reports against
+the `native-io-team/mogbot` codebase and may file deduplicated GitHub issues
 or open draft fix PRs (it cannot merge). A successful send confirms that the
 endpoint accepted a report; it does not confirm that an investigation finished
 or that an issue was filed. This is separate from Sentry, which handles
@@ -11,14 +11,16 @@ aggregation and alerting.
 ## The endpoint
 
 ```
-POST https://shipstudio-admin-agent.vercel.app/report
+POST https://mogbot-admin-agent.vercel.app/report
 Authorization: Bearer <BUG_REPORT_SECRET>
 Content-Type: application/json
 ```
 
 Body fields: `message` (required), `stack`, `source`, `appVersion`,
-`fingerprint`, `context` (JSON object). Get `BUG_REPORT_SECRET` from Julian —
-never commit it.
+`fingerprint`, `context` (JSON object). The endpoint comes from `links.errorReports` in `brand.json`. `BUG_REPORT_SECRET`
+lives in the release Mac's Keychain (`mogbot-bug-report-secret`, read by
+`scripts/release-mac.sh`) and as the repo secret of the same name (CI) — never
+commit it.
 
 The client records a delivery receipt only when the endpoint returns a 2xx
 response containing `{ "ok": true }`. A returned issue URL is retained only
@@ -143,8 +145,8 @@ remain `error`.
 `BUG_REPORT_SECRET` is compiled into the Rust binary at build time via
 `option_env!("BUG_REPORT_SECRET")` — it never appears in source or in the JS
 bundle. Builds without it (local builds, forks, CI without the secret) are a
-silent no-op. Release CI injects it from the `BUG_REPORT_SECRET` repo secret
-(both macOS and Windows workflows).
+silent no-op. `scripts/release-mac.sh` reads it from the Keychain and
+`build-installers.yml` from the `BUG_REPORT_SECRET` repo secret.
 
 Desktop binaries can be reverse-engineered, so treat the secret as
 rotate-friendly, not as a hard boundary: worst case is spam reports, and
@@ -184,7 +186,7 @@ must be more than 5s apart or incident collapse will suppress the second one.
 Or send a raw test report:
 
 ```bash
-curl -s -X POST https://shipstudio-admin-agent.vercel.app/report \
+curl -s -X POST https://mogbot-admin-agent.vercel.app/report \
   -H "Authorization: Bearer $BUG_REPORT_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"message":"Integration test","source":"integration-test","context":{"note":"testing the pipeline, do not file an issue"}}'

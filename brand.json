@@ -23,7 +23,7 @@
     "discussions": null,
     "community": null,
     "website": null,
-    "errorReports": null,
+    "errorReports": "https://mogbot-admin-agent.vercel.app/report",
     "releases": "https://github.com/native-io-team/mogbot-releases/releases",
     "updates": "https://github.com/native-io-team/mogbot-releases/releases/latest/download/latest.json",
     "templateApi": null,

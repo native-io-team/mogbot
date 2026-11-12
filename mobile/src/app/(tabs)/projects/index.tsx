@@ -22,8 +22,8 @@ import {
   type ProjectSummary,
   type SessionSummary,
 } from '@shipstudio/companion-protocol';
-import { Stack, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Spinner } from '../../../components/agent';
@@ -39,13 +39,15 @@ import { canCall, describeError, previewScreenshot, refreshProjects } from '../.
 import { useApp } from '../../../lib/store';
 import { largeTitle } from '../../../lib/navigation';
 import { useRefresh } from '../../../lib/refresh';
+import { steadyOrder } from '../../../lib/steadyOrder';
 import { RefreshStatus } from '../../../components/RefreshStatus';
 import { keySize, iconSize, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
 /** Waiting on you first, then where an agent is at work, then the most recently active. */
+const asking = (p: ProjectSummary) => p.sessions.some((s) => s.state === 'needs_decision');
+
 function order(projects: ProjectSummary[], agents: readonly Agent[] = []): ProjectSummary[] {
-  const asking = (p: ProjectSummary) => p.sessions.some((s) => s.state === 'needs_decision');
   const busy = (p: ProjectSummary) => agentsAtWork(agents, p.path).length > 0;
   const last = (p: ProjectSummary) => Math.max(0, ...p.sessions.map((s) => s.lastOutputAt));
   return [...projects].sort(
@@ -67,11 +69,38 @@ export default function Projects() {
   const [error, setError] = useState<string | null>(null);
 
   const agents = useApp((s) => s.overview?.agents);
-  const sorted = useMemo(() => order(projects ?? [], agents ?? []), [projects, agents]);
+  const ranked = useMemo(() => order(projects ?? [], agents ?? []), [projects, agents]);
+  // Hold the cards still while agents work: re-rank only on coming back to the
+  // screen, a pull, or something new waiting on you (lib/steadyOrder.ts).
+  // Kept in state and adjusted while rendering, as React's "information from
+  // previous renders" pattern.
+  const [placed, setPlaced] = useState<{
+    keys: string[];
+    urgent: ReadonlySet<string>;
+    fresh: boolean;
+    from: ProjectSummary[] | null;
+  }>({ keys: [], urgent: new Set(), fresh: true, from: null });
+  const freshen = useCallback(() => setPlaced((p) => ({ ...p, fresh: true, from: null })), []);
+  useFocusEffect(freshen);
+  let keys = placed.keys;
+  if (placed.from !== ranked) {
+    const urgent = new Set(ranked.filter(asking).map((p) => p.path));
+    keys = steadyOrder(
+      placed.keys,
+      ranked.map((p) => p.path),
+      { fresh: placed.fresh, urgent, wasUrgent: placed.urgent }
+    );
+    setPlaced({ keys, urgent, fresh: false, from: ranked });
+  }
+  const byPath = new Map(ranked.map((p) => [p.path, p]));
+  const sorted = keys.flatMap((k) => byPath.get(k) ?? []);
   // A pull says whether it reached the Mac, so a failure is rethrown after it's shown.
   const { refreshing, onRefresh, outcome, dismiss } = useRefresh(() =>
     refreshProjects().then(
-      () => setError(null),
+      () => {
+        setError(null);
+        freshen();
+      },
       (e: unknown) => {
         setError(describeError(e));
         throw e;
@@ -185,7 +214,7 @@ function ProjectCard({
     ? `${project.dirtyFiles} file${project.dirtyFiles === 1 ? '' : 's'} changed`
     : null;
   return (
-    <Animated.View layout={LinearTransition.springify().damping(20)} style={styles.card}>
+    <Animated.View layout={LinearTransition} style={styles.card}>
       <View style={styles.cardHead}>
         <Icon name="folder.fill" size={iconSize.body} color={colors.textMuted} />
         <T variant="headline" color={colors.textStrong} numberOfLines={1} style={{ flexShrink: 1 }}>
