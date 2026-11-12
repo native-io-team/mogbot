@@ -280,8 +280,7 @@ function PhonePanel({
           setInstall(null);
           const ready = !!s && phoneStep(s).kind === 'ready';
           // The first phone: on into the flow, on the code when it can be shown.
-          if (flow || (s && s.devices.length === 0))
-            goFlow(ready ? 'phoneScan' : afterGetApp());
+          if (flow || (s && s.devices.length === 0)) goFlow(ready ? 'phoneScan' : afterGetApp());
           else if (ready) void pair();
         }}
       />
