@@ -44,7 +44,17 @@ good one exists.
    recordings.
 9. **An always-on host.** Agents stop when the Mac sleeps. A Mac mini or a
    cloud Mac works today; anything more must not block the Mac-only path
-   (MISSION).
+   (MISSION). Next step: the same app headless on your own Linux box or in
+   Docker, paired to your desk and phone like any computer (your box, not
+   ours: docs/OPEN-AND-HOSTED.md). Needs Windows/Linux parity first.
+11. **Windows and Linux at parity.** Both ship (1.0.8), but secrets have no
+    store off macOS yet (logins, keys, phone pairing), remote access is
+    Mac-only, and neither updates itself. Secret stores are being built
+    (Credential Manager, Secret Service); then remote access, then updates.
+12. **More engines.** Gemini through its own CLI (Google AI Pro/Ultra plans),
+    and any agent that speaks ACP (OpenCode already runs over ACP), so Grok,
+    Cursor, Copilot and others plug in without one-off code. Then a local
+    model (Ollama, LM Studio) through OpenCode.
 10. **Calling a business for you.** Needs a telephony and speech provider on
     the user's own account; a spike only after the above.
 
