@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/link", "destination": "https://mogbot-relay.mogbot-relay.workers.dev/account/link" },
+    { "source": "/v1/link", "destination": "https://mogbot-relay.mogbot-relay.workers.dev/v1/link" }
+  ],
+  "redirects": [
+    { "source": "/", "destination": "https://mogbot.app", "permanent": false }
+  ]
+}

@@ -17,7 +17,8 @@
     "CLERK_PUBLISHABLE_KEY": "",
     "CLERK_JWKS_URL": "",
     "CLERK_ISSUER": "",
-    "CLERK_AUTHORIZED_PARTIES": ""
+    "CLERK_AUTHORIZED_PARTIES": "",
+    "LINK_ORIGIN": ""
   },
   // New connections per client address (Mac or phone). Optional: the Worker
   // runs without it. A phone reconnecting on every app open stays well under.

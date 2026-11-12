@@ -81,22 +81,45 @@ const PAGE_HEADERS = {
 };
 
 const STYLE = `
-:root{color-scheme:light dark;--bg:#fff;--fg:#111;--muted:#666;--line:#e5e5e5;--err:#111}
-@media (prefers-color-scheme:dark){:root{--bg:#111;--fg:#f2f2f2;--muted:#9a9a9a;--line:#2a2a2a;--err:#f2f2f2}}
+:root{color-scheme:light;--bg:#efebe3;--tray:#ddd6c9;--tray-2:#cfc7b8;--card:#faf8f4;--ink:#1d1c1a;--ink-2:#55524b;--ink-3:#6b675f;
+--hair:#1d1c1a17;--key-face:#4A4E55;--key-skirt:#34373C;--key-depth:#131417;--key-legend:#F2EEE4;
+--dark-top:#3a3835;--dark-bot:#22201e;--dark-side:#0f0e0d}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#1b1a18;--tray:#141312;--tray-2:#100f0e;--card:#252421;--ink:#f1ece2;--ink-2:#b9b3a7;
+--ink-3:#9a948a;--hair:#f1ece21a;--key-face:#F1ECE2;--key-skirt:#D9D1C1;--key-depth:#8F8672;--key-legend:#1d1c1a;
+--dark-top:#f1ece2;--dark-bot:#ddd6c9;--dark-side:#8f8672}}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;padding:24px 16px}
-main{width:100%;max-width:420px;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center}
-h1{font-size:20px;font-weight:600;margin:0}
-p{margin:0;color:var(--muted)}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;
+background:var(--bg);color:var(--ink);font:16px/1.5 Geist,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;padding:32px 16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:18px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}
+.mark{position:relative;width:32px;height:32px;border-radius:7px;background:linear-gradient(180deg,var(--key-skirt),var(--key-skirt));
+box-shadow:0 2px 0 var(--key-depth),0 6px 10px -4px #00000040}
+.mark i{position:absolute;inset:2px 2px 4px;border-radius:5px;background:var(--key-face);display:grid;place-items:center}
+.mark svg{width:20px;height:20px;fill:var(--key-legend)}
+main{width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;
+background:var(--card);border-radius:22px;padding:32px 24px 28px;
+box-shadow:0 0 0 1px var(--hair),0 24px 40px -22px #00000050,0 6px 12px -8px #00000026}
+h1{font-size:26px;line-height:1.1;font-weight:600;letter-spacing:-.045em;margin:0;text-wrap:balance}
+p{margin:0;color:var(--ink-2);text-wrap:pretty}
 #status:empty{display:none}
-#status.done{color:var(--fg);font-weight:600}
-#status.error{color:var(--err);border:1px solid var(--line);border-radius:8px;padding:12px 16px}
+#status{color:var(--ink-3);font-size:15px}
+#status.done{color:var(--ink);font-weight:600;font-size:17px}
+#status.error{color:var(--ink);background:var(--bg);border-radius:12px;padding:12px 16px;box-shadow:inset 0 2px 5px #00000020}
 #sign-in{width:100%;display:flex;justify-content:center}
-#confirm{display:flex;flex-direction:column;gap:16px;align-items:center}
+#sign-in:empty{display:none}
+#confirm{display:flex;flex-direction:column;gap:18px;align-items:center}
 #confirm[hidden]{display:none}
-#link{font:inherit;font-weight:600;padding:10px 20px;border-radius:8px;border:1px solid var(--line);background:var(--fg);color:var(--bg);cursor:pointer}
+#link{font:inherit;font-weight:600;font-size:16px;letter-spacing:-.01em;padding:12px 24px 13px;border:0;border-radius:12px;cursor:pointer;
+color:var(--bg);background:linear-gradient(var(--dark-top),var(--dark-bot));
+box-shadow:inset 0 1px 0 #ffffff26,0 0 0 1px #000,0 5px 0 var(--dark-side),0 14px 22px -6px #00000059;
+transition:transform 70ms cubic-bezier(.3,.7,.4,1),box-shadow 70ms cubic-bezier(.3,.7,.4,1)}
+#link:active{transform:translateY(4px);box-shadow:inset 0 1px 0 #ffffff1a,0 0 0 1px #000,0 1px 0 var(--dark-side),0 4px 8px -4px #00000059}
+#link:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
+.foot{font-size:13px;color:var(--ink-3)}
+.foot a{color:inherit}
 `;
+
+/** The mark (the m face), as on the site. */
+const MARK = `<span class="mark" aria-hidden="true"><i><svg viewBox="0 0 96 96"><path fill-rule="evenodd" d="M39,12 H57 C75.6,12 87,23.4 87,42 V75 C87,80.58 83.58,84 78,84 H18 C12.42,84 9,80.58 9,75 V42 C9,23.4 20.4,12 39,12 Z M27,75 V39 A6,6 0 0 1 39,39 V75 Z M57,75 V39 A6,6 0 0 1 69,39 V75 Z"/></svg></i></span>`;
 
 function page(body: string, scripts = ''): Response {
   const html = `<!doctype html>
@@ -105,14 +128,19 @@ function page(body: string, scripts = ''): Response {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>Sign in</title>
+<title>Sign in · Mogbot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
 <style>${STYLE}</style>
 ${scripts}
 </head>
 <body>
+<a class="brand" href="https://mogbot.app">${MARK}Mogbot</a>
 <main>
 ${body}
 </main>
+<p class="foot"><a href="https://mogbot.app/privacy">Privacy</a> · <a href="https://mogbot.app/terms">Terms</a></p>
 </body>
 </html>`;
   return new Response(html, { headers: PAGE_HEADERS });
@@ -200,8 +228,28 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     say('');
     if (Clerk.isSignedIn) return ask();
+    var dark = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
     Clerk.mountSignIn(box, {
       withSignUp: true,
+      appearance: {
+        variables: {
+          fontFamily: 'Geist, system-ui, sans-serif',
+          borderRadius: '12px',
+          colorPrimary: dark ? '#f1ece2' : '#1d1c1a',
+          colorText: dark ? '#f1ece2' : '#1d1c1a',
+          colorTextSecondary: dark ? '#b9b3a7' : '#55524b',
+          colorBackground: dark ? '#252421' : '#faf8f4',
+          colorInputBackground: dark ? '#1b1a18' : '#ffffff',
+          colorInputText: dark ? '#f1ece2' : '#1d1c1a'
+        },
+        elements: {
+          rootBox: { width: '100%' },
+          cardBox: { boxShadow: 'none', border: '0', width: '100%' },
+          card: { boxShadow: 'none', background: 'transparent', padding: '8px 0 0' },
+          header: { display: 'none' },
+          footer: { background: 'transparent' }
+        }
+      },
       forceRedirectUrl: back,
       signUpForceRedirectUrl: back
     });
@@ -228,8 +276,8 @@ export function linkPage(url: URL, publishableKey: string | undefined, accounts:
 <script defer crossorigin="anonymous" data-clerk-publishable-key="${key}" src="${base}/@clerk/clerk-js@6/dist/clerk.browser.js" type="text/javascript"></script>
 <script>${LINK_SCRIPT}</script>`;
   return page(
-    `<h1>Sign in to use the relay</h1>
-<p>This links your Mac to your account.</p>
+    `<h1>Sign in to Mogbot</h1>
+<p>So your phone reaches your Mac from anywhere. Free, no card.</p>
 <div id="status">Loading…</div>
 <div id="sign-in"></div>
 <div id="confirm" hidden>

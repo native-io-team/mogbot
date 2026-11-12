@@ -14,6 +14,7 @@
 //   --jwks-url        / CLERK_JWKS_URL           default <frontend API>/.well-known/jwks.json
 //   --issuer          / CLERK_ISSUER             default https://<frontend API>
 //   --authorized-parties / CLERK_AUTHORIZED_PARTIES  default the relay's own origin
+//   --link-origin     / LINK_ORIGIN              where the sign-in page lives (e.g. https://account.mogbot.app)
 //   --accounts-off    clears all four (a relay for yourself)
 //
 // Always deploy through this script: a bare `wrangler deploy` uses the empty
@@ -29,12 +30,13 @@ import { smoke } from './smoke.mjs';
 const relayDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = join(relayDir, '../..');
 const SAVED = join(relayDir, '.deploy.env');
-const KEYS = ['CLERK_PUBLISHABLE_KEY', 'CLERK_JWKS_URL', 'CLERK_ISSUER', 'CLERK_AUTHORIZED_PARTIES'];
+const KEYS = ['CLERK_PUBLISHABLE_KEY', 'CLERK_JWKS_URL', 'CLERK_ISSUER', 'CLERK_AUTHORIZED_PARTIES', 'LINK_ORIGIN'];
 const FLAGS = {
   '--publishable-key': 'CLERK_PUBLISHABLE_KEY',
   '--jwks-url': 'CLERK_JWKS_URL',
   '--issuer': 'CLERK_ISSUER',
   '--authorized-parties': 'CLERK_AUTHORIZED_PARTIES',
+  '--link-origin': 'LINK_ORIGIN',
 };
 
 function die(message) {

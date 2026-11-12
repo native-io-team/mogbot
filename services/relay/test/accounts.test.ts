@@ -510,4 +510,21 @@ describe('the /link page', () => {
     const res = await SELF.fetch(`${ORIGIN}/link?code=${newCode(mac)}`);
     expect(await res.text()).toContain('Accounts aren’t set up');
   });
+
+  it('sends /link to LINK_ORIGIN with the code, and serves the page there at /account/link', async () => {
+    const mac = await newMacKey();
+    const code = newCode(mac);
+    const e = { ...accountsEnv, LINK_ORIGIN: 'https://account.example.test/' };
+    const { res } = await page(`/link?code=${code}`, e);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(`https://account.example.test/link?code=${code}`);
+    const proxied = await page(`/account/link?code=${code}`, e);
+    expect(proxied.res.status).toBe(200);
+    expect(proxied.html).toContain('clerk.browser.js');
+    // Without LINK_ORIGIN there is no /account/link, and /link is the page itself.
+    expect((await page(`/account/link?code=${code}`)).res.status).toBe(404);
+    expect((await page(`/link?code=${code}`)).res.status).toBe(200);
+    // Only an https origin counts.
+    expect((await page(`/link?code=${code}`, { ...accountsEnv, LINK_ORIGIN: 'http://x.test' })).res.status).toBe(200);
+  });
 });

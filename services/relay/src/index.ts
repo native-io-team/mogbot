@@ -9,6 +9,18 @@ const ROUTE = /^\/v1\/(mac|phone)\/([^/]+)$/;
 /** A `/v1/link` body is a code and a session token: nothing near this. */
 const MAX_LINK_BODY = 16 * 1024;
 
+/** LINK_ORIGIN as a bare https origin, or null. */
+export function linkOrigin(env: Env): string | null {
+  const v = env.LINK_ORIGIN?.trim();
+  if (!v) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 async function limited(request: Request, env: Env): Promise<boolean> {
   if (!env.RATE_LIMITER) return false;
   const address = request.headers.get('cf-connecting-ip') ?? 'unknown';
@@ -117,6 +129,12 @@ export default {
       return new Response('ok');
     }
     if (url.pathname === '/link' && request.method === 'GET') {
+      const home = linkOrigin(env);
+      if (home) return Response.redirect(`${home}/link${url.search}`, 302);
+      return linkPage(url, env.CLERK_PUBLISHABLE_KEY, accountsOn(env));
+    }
+    // The page, served for the proxy at LINK_ORIGIN (which shows it as its own /link).
+    if (url.pathname === '/account/link' && request.method === 'GET' && linkOrigin(env)) {
       return linkPage(url, env.CLERK_PUBLISHABLE_KEY, accountsOn(env));
     }
     if (url.pathname === '/v1/link') {

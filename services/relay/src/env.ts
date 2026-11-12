@@ -24,6 +24,13 @@ export interface Env {
    * Absent: deleting answers `unavailable`.
    */
   CLERK_SECRET_KEY?: string;
+  /**
+   * Where the sign-in page lives when it isn't this Worker (e.g.
+   * `https://account.mogbot.app`, a proxy that serves `/account/link` here as
+   * its `/link`). Set: `GET /link` redirects there, so Clerk runs on the
+   * product's own domain. Empty: this Worker serves `/link` itself.
+   */
+  LINK_ORIGIN?: string;
   /** Clerk's Backend API. Tests point it elsewhere. */
   CLERK_API_URL?: string;
 }
