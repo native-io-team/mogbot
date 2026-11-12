@@ -16,7 +16,7 @@ import { File } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
-import { fromBase64Url } from './identity';
+import { fromBase64Url, standardToUrl } from './identity';
 import type { HttpAdapter, LocalFiles } from './transport';
 
 /** A file chosen on the phone, before it is uploaded. */
@@ -162,7 +162,9 @@ export const localFiles: LocalFiles = {
     const b64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    const bytes = fromBase64Url(b64);
+    // expo-file-system writes standard base64 (`+`, `/`, padding, sometimes
+    // line breaks); the decoder takes the URL-safe alphabet only.
+    const bytes = fromBase64Url(standardToUrl(b64));
     if (!bytes) throw new Error('That file couldn’t be read.');
     return bytes;
   },

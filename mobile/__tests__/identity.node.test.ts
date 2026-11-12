@@ -491,3 +491,15 @@ describe('pairing', () => {
     expect(parsePairingLink(text)?.routes).toHaveLength(1);
   });
 });
+
+describe('a picked photo read as standard base64', () => {
+  it('decodes, whatever bytes it holds (+, / and padding included)', () => {
+    const { fromBase64Url, standardToUrl } = require('../src/lib/identity');
+    const bytes = Uint8Array.from({ length: 4099 }, (_, i) => (i * 37 + 251) % 256);
+    const b64 = Buffer.from(bytes).toString('base64');
+    expect(b64).toMatch(/[+/=]/);
+    expect(fromBase64Url(b64)).toBeNull(); // what every relayed photo hit
+    const wrapped = b64.replace(/(.{76})/g, '$1\n');
+    expect(Array.from(fromBase64Url(standardToUrl(wrapped))!)).toEqual(Array.from(bytes));
+  });
+});

@@ -94,11 +94,24 @@ function Thumb({
   const [ratio, setRatio] = useState(square ? 1 : 4 / 3);
   // A file the Mac couldn't send (gone, or not reachable) says so with its
   // name, never an empty box.
-  const [failed, setFailed] = useState(false);
+  // Kept by the address that failed, so a picture fetched again over the
+  // relay (a new file) gets its chance instead of staying a box.
+  const [failedUri, setFailedUri] = useState<string | null>(null);
   useAttachmentSources();
   const source = file.localUri
     ? { uri: file.localUri }
     : attachmentSource(agentId, file.path, width);
+  const failed = !!source?.uri && failedUri === source.uri;
+  if (source && !source.uri) {
+    // Over the relay the picture is still coming: a quiet box of its size,
+    // never an Image with no address (expo-image calls that an error).
+    return (
+      <View
+        accessibilityLabel={`${file.name}, image loading`}
+        style={[styles.thumb, styles.missing, { width, aspectRatio: ratio }]}
+      />
+    );
+  }
   if (failed || !source) {
     return (
       <View
@@ -146,7 +159,7 @@ function Thumb({
         // memory, already decoded, instead of reading and decoding them again.
         cachePolicy="memory-disk"
         recyclingKey={file.path || file.localUri}
-        onError={() => setFailed(true)}
+        onError={() => setFailedUri(source.uri ?? null)}
         onLoad={(e) => {
           if (square) return;
           const { width: w, height: h } = e.source;

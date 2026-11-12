@@ -36,6 +36,10 @@ export function fromBase64Url(text: string): Uint8Array | null {
   }
 }
 
+/** Standard base64 (as expo-file-system reads a file) to the URL-safe alphabet. */
+export const standardToUrl = (b64: string) =>
+  b64.replace(/\s+/g, '').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+
 /** The first 16 bytes of SHA-256 over the raw key, base64url: `identity::fingerprint_of`. */
 export function fingerprintOf(publicKey: Uint8Array): string {
   return toBase64Url(sha256(publicKey).slice(0, 16));

@@ -85,13 +85,19 @@ export default function Viewer() {
         },
       ];
     }
-    return images.map((image) => ({
-      key: image.key,
-      source: attachmentSource(image.agentId, image.file.path),
-      placeholder: attachmentSource(image.agentId, image.file.path, 232),
-      label: image.caption ?? image.file.name,
-      onError: () => setError(`${IMAGE_UNAVAILABLE}: ${image.file.name}`),
-    }));
+    return images.map((image) => {
+      const source = attachmentSource(image.agentId, image.file.path);
+      return {
+        key: image.key,
+        source,
+        placeholder: attachmentSource(image.agentId, image.file.path, 232),
+        label: image.caption ?? image.file.name,
+        // Over the relay a picture with no address yet is still coming, not broken.
+        onError: () => {
+          if (source?.uri) setError(`${IMAGE_UNAVAILABLE}: ${image.file.name}`);
+        },
+      };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `fetched` is the redraw
   }, [uri, name, images, fetched]);
 
