@@ -102,8 +102,8 @@ export async function registerPush(
   if (!isOfficialBuild()) return setApp({ push: 'self_build' });
   // An official Android build without Firebase has no token to give.
   if (!canReceivePush()) return;
-  // Simulators have no APNs token.
-  if (!Device.isDevice) return;
+  // iOS simulators have no APNs token; Android emulators with Google Play do get FCM ones.
+  if (Platform.OS === 'ios' && !Device.isDevice) return;
   const { granted } = await Notifications.getPermissionsAsync();
   if (!granted) return;
   const env = await environment();
