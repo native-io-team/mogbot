@@ -113,6 +113,16 @@ input{font:inherit;font-size:16px;color:var(--ink);background:var(--field);borde
 box-shadow:inset 0 0 0 1px var(--hair),inset 0 2px 4px #00000012}
 input:focus{outline:2px solid var(--ink);outline-offset:1px}
 input::placeholder{color:var(--ink-3)}
+.handle{display:flex;align-items:center;background:var(--field);border-radius:12px;padding-left:14px;box-shadow:inset 0 0 0 1px var(--hair),inset 0 2px 4px #00000012}
+.handle:focus-within{outline:2px solid var(--ink);outline-offset:1px}
+.handle span{font-size:20px;font-weight:600;color:var(--ink-3)}
+.handle input{font-size:20px;font-weight:600;letter-spacing:-.02em;padding-left:2px;background:none;box-shadow:none;border:0;border-radius:0 12px 12px 0}
+.handle input:focus{outline:0}
+.ideas{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.idea{font:inherit;font-size:14px;font-weight:500;color:var(--ink-2);background:none;border:0;border-radius:999px;padding:6px 12px;
+cursor:pointer;box-shadow:0 0 0 1px var(--hair)}
+.idea:hover{color:var(--ink)}
+.idea:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .otp{text-align:center;font-size:22px;letter-spacing:.3em;font-variant-numeric:tabular-nums}
 .or{display:flex;align-items:center;gap:12px;color:var(--ink-3);font-size:13px}
 .or:before,.or:after{content:"";flex:1;height:1px;background:var(--hair)}
@@ -232,8 +242,11 @@ document.addEventListener('DOMContentLoaded', function () {
   function ask() {
     if (done) return;
     say('');
-    var who = Clerk.user && Clerk.user.primaryEmailAddress && Clerk.user.primaryEmailAddress.emailAddress;
+    var u = Clerk.user;
+    var who = u && (u.username ? '@' + u.username : u.primaryEmailAddress && u.primaryEmailAddress.emailAddress);
     $('who').textContent = who ? 'Signed in as ' + who + '.' : '';
+    $('title').textContent = u && u.username ? 'Hey, @' + u.username : 'Sign in to Mogbot';
+    $('lede').textContent = 'One last step: link this account to your Mac.';
     show('confirm');
   }
   async function link() {
@@ -253,7 +266,8 @@ document.addEventListener('DOMContentLoaded', function () {
         done = true;
         forget();
         $('lede').hidden = true;
-        $('title').textContent = 'You’re signed in';
+        var name = Clerk.user && Clerk.user.username;
+        $('title').textContent = name ? 'You’re in, @' + name : 'You’re signed in';
         say('Go back to the app. You can close this page.', 'done');
       } else {
         if (body && /^code_/.test(body.reason || '')) forget();
@@ -308,16 +322,54 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (err) { oops(err); }
     busy(form, false);
   }
-  function more(su) {
-    var need = su.missingFields || [];
-    var left = 0;
-    ['username', 'password'].forEach(function (f) {
-      var on = need.indexOf(f) >= 0;
-      $(f).hidden = !on; $(f).required = on; $(f + '-label').hidden = !on;
-      if (on) left++;
+  // The @handle: lower case, letters, digits, _ and -, as Clerk takes them.
+  function handle(v) { return (v || '').toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_-]/g, ''); }
+  var taken = [];
+  function ideas(su) {
+    var local = (su.emailAddress || email || '').split('@')[0].split(/[._+-]/);
+    var first = handle(su.firstName) || handle(local[0]);
+    var full = handle((su.firstName || '') + (su.lastName || '')) || handle(local.join(''));
+    if (!first) return [];
+    var all = [first, full, first + 'bot', 'the' + first, first + 'hq', full + 'bot'];
+    return all.filter(function (h, i) {
+      return h.length >= 4 && h.length <= 32 && all.indexOf(h) === i && taken.indexOf(h) < 0;
+    }).slice(0, 4);
+  }
+  function drawIdeas(su) {
+    var box = $('ideas');
+    box.textContent = '';
+    ideas(su).forEach(function (h) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'idea';
+      b.textContent = '@' + h;
+      b.addEventListener('click', function () { $('username').value = h; $('username').focus(); });
+      box.appendChild(b);
     });
-    if (!left && need.indexOf('protect_check') >= 0) return say('Clerk’s bot check didn’t pass. Reload this page and try again.', 'error');
-    if (!left) return say('Something else is needed to finish signing up. Try Continue with Google.', 'error');
+    box.hidden = !box.firstChild;
+  }
+  var pendingSignUp = null;
+  function more(su) {
+    pendingSignUp = su;
+    var need = su.missingFields || [];
+    var wantsName = need.indexOf('username') >= 0, wantsPass = need.indexOf('password') >= 0;
+    $('handle').hidden = !wantsName; $('username').required = wantsName; $('username-label').hidden = !wantsName;
+    $('password').hidden = !wantsPass; $('password').required = wantsPass; $('password-label').hidden = !wantsPass;
+    if (!wantsName && !wantsPass && need.indexOf('protect_check') >= 0) return say('Clerk’s bot check didn’t pass. Reload this page and try again.', 'error');
+    if (!wantsName && !wantsPass) return say('Something else is needed to finish signing up. Try Continue with Google.', 'error');
+    if (wantsName) {
+      $('title').textContent = 'Claim your @handle';
+      $('lede').textContent = 'First come, first served. Pick a good one.';
+      $('password-label').textContent = 'And a password';
+      $('finish').textContent = 'Claim it';
+      drawIdeas(su);
+    } else {
+      $('title').textContent = 'One more thing';
+      $('lede').textContent = 'Pick a password to finish your account.';
+      $('password-label').textContent = 'Password';
+      $('finish').textContent = 'Finish';
+      $('ideas').hidden = true;
+    }
     show('more');
   }
   async function verify(e) {
@@ -347,18 +399,35 @@ document.addEventListener('DOMContentLoaded', function () {
     say('');
     try {
       var fields = {};
-      if (!$('username').hidden) fields.username = $('username').value.trim();
+      if (!$('handle').hidden) {
+        fields.username = handle($('username').value);
+        if (fields.username.length < 4) {
+          busy(form, false);
+          return say('At least 4 letters or numbers.', 'error');
+        }
+      }
       if (!$('password').hidden) fields.password = $('password').value;
       var su = await guard(await Clerk.client.signUp.update(fields));
       if (su.status === 'complete') await finish(su.createdSessionId);
       else more(su);
-    } catch (err) { oops(err); }
+    } catch (err) {
+      var c = err && err.errors && err.errors[0] && err.errors[0].code;
+      if (c === 'form_identifier_exists' && fields.username) {
+        taken.push(fields.username);
+        if (pendingSignUp) drawIdeas(pendingSignUp);
+        say('@' + fields.username + ' is taken. Try another.', 'error');
+      } else oops(err);
+    }
     busy(form, false);
   }
   $('google').addEventListener('click', google);
   $('choose').addEventListener('submit', start);
   $('verify').addEventListener('submit', verify);
   $('more').addEventListener('submit', complete);
+  $('username').addEventListener('input', function () {
+    var v = handle(this.value);
+    if (v !== this.value) this.value = v;
+  });
   $('resend').addEventListener('click', async function () {
     say('');
     try { await sendCode(true); } catch (err) { oops(err); }
@@ -446,12 +515,12 @@ export function linkPage(url: URL, publishableKey: string | undefined, accounts:
 <p class="small"><button id="resend" class="text" type="button">Send a new code</button> · <button id="restart" class="text" type="button">Use another email</button></p>
 </form>
 <form id="more" class="step" hidden novalidate>
-<p>One more thing to finish your account.</p>
-<label id="username-label" for="username">Username</label>
-<input id="username" type="text" autocomplete="username" hidden>
+<label id="username-label" for="username" class="sr">Your @handle</label>
+<div id="handle" class="handle" hidden><span aria-hidden="true">@</span><input id="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="32" placeholder="yourname"></div>
+<div id="ideas" class="ideas" hidden></div>
 <label id="password-label" for="password">Password</label>
 <input id="password" type="password" autocomplete="new-password" hidden>
-<button class="key" type="submit">Finish</button>
+<button id="finish" class="key" type="submit">Finish</button>
 </form>
 <div id="confirm" class="step" hidden>
 <p>Only continue if you just chose Sign in on your own Mac. If someone sent you this link, close this page.</p>

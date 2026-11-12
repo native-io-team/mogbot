@@ -5,8 +5,12 @@ import { LINK_TTL_MS, hashCode, linkError, parseLinkCode, sameHash } from './lin
 
 /** The Mac must answer the challenge within this. */
 export const AUTH_TIMEOUT_MS = 10_000;
-/** Phone sockets one Mac may have open at once. */
-export const MAX_PHONES = 8;
+/**
+ * Phone sockets one Mac may have open at once. Each picture or file a phone
+ * moves opens a short socket of its own beside its chat socket, so 8 (and 4
+ * per address) left a chat with a few images empty boxes.
+ */
+export const MAX_PHONES = 24;
 /** Largest payload either way, not counting the Mac's 4-byte channel header. */
 export const MAX_PAYLOAD = 256 * 1024;
 /**
@@ -14,7 +18,7 @@ export const MAX_PAYLOAD = 256 * 1024;
  * Mac at once, so a single stranger who knows the fingerprint can't hold all
  * of {@link MAX_PHONES}.
  */
-export const MAX_PHONES_PER_ADDRESS = 4;
+export const MAX_PHONES_PER_ADDRESS = 12;
 /**
  * Mac sockets still to answer the challenge. Past this the oldest is closed,
  * never the newcomer: a stranger can't keep the real Mac out by holding a

@@ -36,7 +36,7 @@ import {
   type WireError,
 } from '@shipstudio/companion-protocol';
 import { checkMac, MAC_RESET, NOT_YOUR_MAC, UPDATE_MAC, type Pinned } from './identity';
-import { relayRequest, type RelayHttpAnswer } from './relayHttp';
+import { queuedRelayRequest, relayRequest, type RelayHttpAnswer } from './relayHttp';
 import { RELAY_NOT_YOUR_MAC, RelaySocket } from './relaySocket';
 
 /**
@@ -499,7 +499,7 @@ export class DirectTransport implements Transport {
 
   /** One request over the relay route in use, on a channel of its own. */
   private relayHttp(init: Parameters<typeof relayRequest>[2]): Promise<RelayHttpAnswer> {
-    return relayRequest(
+    return queuedRelayRequest(
       this.route.url,
       {
         fingerprint: this.opts.pinned.fingerprint,

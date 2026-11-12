@@ -476,6 +476,10 @@ describe('the /link page', () => {
     expect(html).toContain("strategy: 'oauth_google'");
     expect(html).toContain("strategy: 'email_code'");
     expect(html).toContain('id="clerk-captcha"');
+    // The username Clerk asks for is an @handle, with ideas, and a taken one says so.
+    expect(html).toContain('id="handle" class="handle" hidden');
+    expect(html).toContain('Claim your @handle');
+    expect(html).toContain('form_identifier_exists');
     expect(html).toContain("'/v1/link'");
     expect(html).toContain('prefers-color-scheme:dark');
     // The page reads the code from its address; it isn't echoed into the HTML.

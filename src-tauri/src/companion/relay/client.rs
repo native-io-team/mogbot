@@ -33,8 +33,8 @@ const BACKOFF_MAX: Duration = Duration::from_secs(60);
 /// apart they must drift to mean the Mac slept.
 const WAKE_TICK: Duration = Duration::from_secs(5);
 const WOKE_AFTER: Duration = Duration::from_secs(15);
-/// Phones at once (the relay allows 8; a few to spare for ones closing).
-const MAX_CHANNELS: usize = 16;
+/// Channels at once (the relay allows 24; a few to spare for ones closing).
+const MAX_CHANNELS: usize = 32;
 /// Payloads queued for one channel before it's taken as stuck and closed.
 const CHANNEL_QUEUE: usize = 256;
 /// The largest message from the relay (a phone payload is at most 256 KiB).

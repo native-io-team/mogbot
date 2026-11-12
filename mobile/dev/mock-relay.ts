@@ -68,6 +68,8 @@ export function createMockRelay(opts: MockRelayOptions) {
   /** Sockets taken and left unanswered (`stallNext`), destroyed on close. */
   const stalled = new Set<{ destroy(): void }>();
   let opened = 0;
+  /** Phone sockets at once before 4429, as the real relay caps them (none by default). */
+  let cap = Infinity;
 
   const server = http.createServer((_req, res) => res.writeHead(404).end());
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
@@ -88,6 +90,7 @@ export function createMockRelay(opts: MockRelayOptions) {
     opened++;
     if (mac === 'offline') return phone.close(RELAY_CLOSE_MAC_OFFLINE, 'mac_offline');
     if (mac === 'sign_in_needed') return phone.close(RELAY_CLOSE_SIGN_IN_NEEDED, 'sign_in_needed');
+    if (phones.size >= cap) return phone.close(4429, 'too_many_phones');
     phones.add(phone);
     let channel: { send: Cipher; receive: Cipher } | null = null;
     let loopback: WebSocket | null = null;
@@ -268,6 +271,10 @@ export function createMockRelay(opts: MockRelayOptions) {
     setDown(next: boolean) {
       down = next;
       if (next) phones.forEach((p) => p.terminate());
+    },
+    /** At most `n` phone sockets at once, the rest closed 4429 (`Infinity`: no cap). */
+    setCap(n: number) {
+      cap = n;
     },
     /** The next `n` phone connections are taken and never answered. */
     stallNext(n: number) {

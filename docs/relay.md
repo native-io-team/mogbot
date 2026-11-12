@@ -96,8 +96,11 @@ clear 404 unlinks it (`checkStillThere`; any other answer keeps it).
 - Binary frames only, each one payload. Text `ping` → `pong` as above.
 - If that Mac isn't connected: the relay accepts and closes at once with **4404** (reason
   `mac_offline`), so the phone can say "Your Mac is offline or asleep" instead of "can't reach".
-- Limits: 8 phone sockets per Mac at once and 4 per client address (4429 past either), payloads
-  ≤ 256 KiB (1009 past it), and per-IP connection rate limiting at the Worker. At most 4 Mac sockets
+- Limits: 24 phone sockets per Mac at once and 12 per client address (4429 past either; each
+  relayed picture or file is a short socket of its own, and the phone keeps at most 3 of those
+  open and tries a 4429 again), payloads
+  ≤ 256 KiB (1009 past it), and per-IP connection rate limiting at the Worker (300 a minute: every relayed picture is
+  a connection). At most 4 Mac sockets
   may wait on their challenge; a fifth closes the oldest (4401 `superseded`).
 
 ### The encrypted channel (phone ↔ Mac, end to end)

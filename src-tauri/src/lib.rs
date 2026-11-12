@@ -120,8 +120,29 @@ pub(crate) fn main_webview_url() -> Result<tauri::WebviewUrl, String> {
     Ok(tauri::WebviewUrl::App("index.html".into()))
 }
 
+/// The soft open-file limit up to 10,240 (or the hard limit, if lower).
+#[cfg(unix)]
+fn raise_open_file_limit() {
+    const WANT: libc::rlim_t = 10_240;
+    // SAFETY: getrlimit/setrlimit only read and write the struct passed.
+    unsafe {
+        let mut lim = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) == 0 && lim.rlim_cur < WANT {
+            lim.rlim_cur = WANT.min(lim.rlim_max);
+            libc::setrlimit(libc::RLIMIT_NOFILE, &lim);
+        }
+    }
+}
+#[cfg(not(unix))]
+fn raise_open_file_limit() {}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // A Mac app launched from Finder gets 256 open files. Agents' turns, the
+    // phone's sockets and a git status per project at once ran past that
+    // (a phone pairing logged hundreds of "Too many open files"): raise it.
+    raise_open_file_limit();
+
     // Before anything reads or creates a folder of ours (the log folder
     // included): carry state over from the app's previous name, once
     // (`brand.json` `previous`). Logged below, once logging is up.

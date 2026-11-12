@@ -99,6 +99,7 @@ describe('over the relay', () => {
   afterEach(() => {
     relay().setMac('online');
     relay().setDown(false);
+    relay().setCap(Infinity);
     mock.setDirect(true);
   });
 
@@ -161,6 +162,25 @@ describe('over the relay', () => {
       { method: 'GET', path: `/v1/blobs/${ref.blobId}` }
     );
     expect(res.status).toBe(401);
+    t.close();
+  });
+
+  it('a chat full of pictures under the relay’s socket cap: every one arrives', async () => {
+    const { token } = mock.issueToken();
+    const files = memoryFiles();
+    const { t } = open(mock, routes(), token, files);
+    await until(() => t.state.kind === 'connected');
+    const refs = [];
+    for (let i = 0; i < 8; i++) {
+      files.read = () => Promise.resolve(new Uint8Array(2000).fill(i));
+      refs.push(await t.upload({ uri: `file:///pick/${i}.png`, name: `${i}.png`, mime: 'image/png' }));
+    }
+    // The chat socket plus at most three requests at once: a cap of 4 (the
+    // relay's old per-address one, where every image beyond it was a box).
+    relay().setCap(4);
+    const uris = await Promise.all(refs.map((r) => t.download({ blobId: r.blobId })));
+    expect(uris).toHaveLength(8);
+    refs.forEach((r, i) => expect(files.kept.get(`blob/${r.blobId}`)![0]).toBe(i));
     t.close();
   });
 

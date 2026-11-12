@@ -171,6 +171,55 @@ export function relayRequest(
   });
 }
 
+/** Relayed requests a phone keeps open at once, beside its chat socket. */
+export const RELAY_HTTP_AT_ONCE = 3;
+/** Tries for a request the relay turned away as one socket too many (4429). */
+const RELAY_BUSY_TRIES = 4;
+const RELAY_BUSY_WAIT_MS = 700;
+
+let running = 0;
+const queue: (() => void)[] = [];
+const slot = () =>
+  new Promise<void>((go) => {
+    if (running < RELAY_HTTP_AT_ONCE) {
+      running++;
+      go();
+    } else queue.push(go);
+  });
+const free = () => {
+  const next = queue.shift();
+  if (next) next();
+  else running--;
+};
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * `relayRequest`, at most {@link RELAY_HTTP_AT_ONCE} at a time: each is a
+ * socket of its own and the relay caps how many one phone holds, so a chat
+ * full of pictures used to have most of them turned away (4429) and drawn as
+ * empty boxes. One turned away anyway waits and goes again.
+ */
+export async function queuedRelayRequest(
+  url: string,
+  deps: RelayHttpDeps,
+  init: RelayHttpInit
+): Promise<RelayHttpAnswer> {
+  await slot();
+  try {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await relayRequest(url, deps, init);
+      } catch (e) {
+        const busy = e instanceof RelayClosed && e.code === 4429;
+        if (!busy || attempt >= RELAY_BUSY_TRIES || init.signal?.aborted) throw e;
+        await pause(RELAY_BUSY_WAIT_MS * attempt);
+      }
+    }
+  } finally {
+    free();
+  }
+}
+
 /** Hermes has no DOMException; an abort still reads as one by its name. */
 class DOMExceptionLike extends Error {
   constructor(
