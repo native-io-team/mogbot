@@ -512,6 +512,8 @@ export function ChatView({
   // its answers come into view (inverted list: viewPosition 0 puts the card's
   // bottom edge, Deny · Allow, at the bottom of the pane).
   const distance = useRef(0);
+  /** Where the last scroll to a row wanted it: a retry (row not measured yet) keeps it. */
+  const wantedPosition = useRef(0.5);
   const itemsRef = useRef(items);
   useLayoutEffect(() => {
     itemsRef.current = items;
@@ -526,22 +528,25 @@ export function ChatView({
     const before = seenCards.current;
     seenCards.current = seeCards(before, waitingKey ? waitingKey.split(' ') : []);
     if (at || !revealsCard(before, cardId, distance.current)) return;
-    const index = itemsRef.current.findIndex((i) => i.key === cardId);
-    if (index < 0) return;
-    const timer = setTimeout(
-      () => list.current?.scrollToIndex({ index, viewPosition: 0, animated: true }),
-      80
-    );
+    if (!itemsRef.current.some((i) => i.key === cardId)) return;
+    // Found again when it fires: a row above it (the working line) can come
+    // or go in between, and a stale index scrolled to the wrong row.
+    const timer = setTimeout(() => {
+      const index = itemsRef.current.findIndex((i) => i.key === cardId);
+      if (index < 0) return;
+      wantedPosition.current = 0;
+      list.current?.scrollToIndex({ index, viewPosition: 0, animated: true });
+    }, 80);
     return () => clearTimeout(timer);
   }, [cardId, loaded, at, waitingKey]);
 
   const targetIndex = target ? items.findIndex((i) => isRowFor(i, target)) : -1;
   useEffect(() => {
     if (targetIndex < 0) return;
-    const timer = setTimeout(
-      () => list.current?.scrollToIndex({ index: targetIndex, viewPosition: 0.5, animated: true }),
-      60
-    );
+    const timer = setTimeout(() => {
+      wantedPosition.current = 0.5;
+      list.current?.scrollToIndex({ index: targetIndex, viewPosition: 0.5, animated: true });
+    }, 60);
     return () => clearTimeout(timer);
   }, [targetIndex]);
 
@@ -782,8 +787,9 @@ export function ChatView({
             onPress={() => {
               const index = items.findIndex((i) => i.key === card.id);
               // The card's bottom edge to the bottom of the pane: its answers in reach.
-              if (index >= 0)
-                list.current?.scrollToIndex({ index, viewPosition: 0, animated: true });
+              if (index < 0) return;
+              wantedPosition.current = 0;
+              list.current?.scrollToIndex({ index, viewPosition: 0, animated: true });
             }}
           />
         )}
@@ -823,7 +829,10 @@ export function ChatView({
                     />
                   )}
                   onScrollToIndexFailed={(info) => {
-                    // Not measured yet: get near it, then try again once it's laid out.
+                    // Not measured yet: get near it, then try again once it's laid out,
+                    // where it was wanted. Always centring here put a tall card's
+                    // Deny · Allow below the pane: the chat "scrolled above the card".
+                    const viewPosition = wantedPosition.current;
                     list.current?.scrollToOffset({
                       offset: info.averageItemLength * info.index,
                       animated: false,
@@ -832,7 +841,7 @@ export function ChatView({
                       () =>
                         list.current?.scrollToIndex({
                           index: info.index,
-                          viewPosition: 0.5,
+                          viewPosition,
                           animated: true,
                         }),
                       120

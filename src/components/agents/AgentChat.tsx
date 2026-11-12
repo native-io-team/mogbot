@@ -1180,6 +1180,37 @@ export const AgentChat = memo(function AgentChat({
     if (atBottomRef.current) follow(newestArrivedRef.current && isNew);
   }, [lastKey, follow]);
 
+  // A new card that asks, landing while you're near the newest line but not
+  // on it (reading a little way up): bring its answers into view, once per
+  // card. On the newest line the follow above already does; far up, it never
+  // yanks you away from what you went back to read.
+  const waitingCards = (messages ?? [])
+    .filter((m) => m.approval?.status === 'pending')
+    .map((m) => m.id)
+    .join(' ');
+  const seenCardsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (messages === undefined) return;
+    const ids = waitingCards ? waitingCards.split(' ') : [];
+    const seen = seenCardsRef.current;
+    seenCardsRef.current = new Set([...(seen ?? []), ...ids]);
+    // The cards already waiting when the chat opened aren't new.
+    if (!seen) return;
+    const fresh = ids.filter((id) => !seen.has(id));
+    const id = fresh[fresh.length - 1];
+    const el = scrollRef.current;
+    if (!id || !el || atBottomRef.current) return;
+    const away = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (away > el.clientHeight * 1.5) return;
+    const frame = requestAnimationFrame(() => {
+      const row = messagesRef.current?.querySelector<HTMLElement>(
+        `[data-message-ids~="${CSS.escape(id)}"]`
+      );
+      row?.scrollIntoView({ block: 'end', behavior: scrollMotion() });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [waitingCards, messages]);
+
   // Older lines load above as you near the top. The line that was first stays
   // exactly where it was on screen: its offset in the content is taken before
   // the load and the scroll moved by however far it was pushed down.
@@ -1334,7 +1365,11 @@ export const AgentChat = memo(function AgentChat({
     }
     // The scroll handler settles `atBottom`; until then, don't follow new lines.
     atBottomRef.current = false;
-    target.scrollIntoView({ block: 'center', behavior: scrollMotion() });
+    // A tall row (a card) centred puts its answers below the fold: its bottom
+    // edge goes to the bottom of the view instead.
+    const view = scrollRef.current?.clientHeight ?? 0;
+    const tall = view > 0 && target.offsetHeight > view * 0.6;
+    target.scrollIntoView({ block: tall ? 'end' : 'center', behavior: scrollMotion() });
     // Restart the flash if it's already running (the same hit, clicked twice).
     target.removeAttribute('data-flash');
     void target.offsetWidth;
