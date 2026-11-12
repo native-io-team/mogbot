@@ -1,23 +1,26 @@
 /**
- * Create a new agent, or edit one. Creating opens on "Describe the agent you
- * want" (`AgentDescribe`): a few sentences and Draft it fill every field
- * below, plus the routines to keep, for one review before Create. Or "Start from": blank,
- * or a ready-made agent (`lib/agentTemplates`) that fills in the fields below
- * with its briefing, which stays editable. Up front: a name, what it should do and
- * what it should know; the avatar beside the name opens its look (shape,
- * face, colour). What it runs on (a choice only once two
- * engines are installed; otherwise a quiet "Also use …" at the foot), model,
- * project and apps sit under Advanced, because most agents are created by
- * the Chief of Staff and briefed in conversation.
+ * Create a new agent, or edit one, as one sheet in the Settings kit: its bar
+ * (Cancel · title · Done), a contact card (its key big, its name, "Change
+ * look · on Claude Code · Steady"), then grouped rows. Editing has three
+ * tabs, Agent, Memory and Usage. Rows that hold more than a value
+ * (Independence, Beyond its level, Apps and access, Skills, Project) open
+ * their page in place, with "‹ Edit agent" to come back; nothing hides under
+ * an "Advanced". Switches and lists apply as they change; the words (name,
+ * its line, what it should know) and its engine, model and project save on
+ * Done.
+ *
+ * Creating opens on "Describe the agent you want" (`AgentDescribe`): a few
+ * sentences and Draft it fill every row, plus the routines to keep, for one
+ * review before Create. Or "Start from": blank, or a ready-made agent
+ * (`lib/agentTemplates`) that fills the rows with its briefing.
  *
  * @module components/agents/AgentEditorModal
  */
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { CloseIcon, ErrorIcon } from '@/components/icons';
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { ErrorIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
-import { TextArea, TextField } from '../primitives/TextField';
 import { TextButton } from '../primitives/TextButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
@@ -36,43 +39,48 @@ import {
 import { AgentReach } from './AgentReach';
 import { AgentPolicy } from './AgentPolicy';
 import { AgentLevelPicker } from './AgentLevelPicker';
-import { AgentEngineField, AgentEngineMore, AgentEngineProtections } from './AgentEngine';
-import { useQuotaLines } from './AgentsQuota';
-import { ChevronRightIcon } from '@/components/icons';
+import { AgentEngineProtections, engineReason, showsEnginePicker } from './AgentEngine';
+import { Group, Row } from './AgentSettingsRows';
 import {
-  COST_BASIS_NOTE,
+  CanDo,
+  DeleteRow,
+  FieldRow,
+  MenuRow,
+  NavRow,
+  Permissions,
+  SheetBar,
+  SheetCard,
+  UsagePage,
+} from './AgentEditorParts';
+import {
   type AgentEngine,
   createAgent,
   discardCopy,
   ENGINE_LABEL,
+  engineUnavailable,
   folderName,
   keepCopy,
   newAgentEngine,
   newAgentModel,
-  formatContext,
-  formatUsage,
   getAgentInstructions,
   getAgentUsage,
   keptRoutines,
   openingOf,
   modelChoices,
-  onClaudePlan,
-  revokePermission,
-  routineWeekLine,
-  SCOPE_KIND_LABEL,
-  sumTotals,
   updateAgent,
   type Agent,
   type AgentDraft,
-  type PermissionRule,
   type UsageSummary,
-  type UsageTotals,
 } from '../../lib/agents';
+import { INDEPENDENCE_SHORT, effectiveIndependence } from '../../lib/agentIndependence';
+import { agentReach } from '../../lib/agentLogins';
+import { agentSkills } from '../../lib/agentSkills';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { getAgentsSnapshot, useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { AccentScope } from '../../contexts/AccentScopeContext';
-import { AdminSwitch } from './AgentAdmin';
+import { AdminRow } from './AgentAdmin';
+import { ADMIN_DETAIL } from '../../lib/agentAdmin';
 import { AgentSkills } from './AgentSkills';
 import {
   findTemplate,
@@ -82,125 +90,6 @@ import {
   type RoleTemplate,
 } from '../../lib/agentTemplates';
 import { AgentDescribe, AgentDrafted, AgentDraftRoutines } from './AgentDescribe';
-
-/**
- * This week and all time, as its engine reported them; nothing before any
- * turn. Then how full its conversation is, only when the engine said.
- */
-function UsageLines({ usage, agent }: { usage: UsageSummary | null; agent: Agent | null }) {
-  // On a Claude plan a dollar figure is a list price, not the bill: tokens instead.
-  const onPlan = onClaudePlan(useQuotaLines());
-  const week = usage && formatUsage(usage.week, onPlan);
-  const allTime = usage && formatUsage(usage.allTime, onPlan);
-  const routines = routineWeekLine(sumTotals((usage?.routines ?? []).map((r) => r.week)), onPlan);
-  const context = agent && formatContext(agent);
-  if (!allTime && !context) return null;
-  const priced = (t: UsageTotals | undefined) =>
-    !onPlan && t && t.pricedTurns + (t.pricedChecks ?? 0) > 0 ? COST_BASIS_NOTE : undefined;
-  return (
-    <dl className="agent-editor__usage">
-      {allTime && (
-        <>
-          <dt>This week</dt>
-          <dd title={priced(usage?.week)}>{week ?? 'Nothing run yet'}</dd>
-          {routines && (
-            <>
-              <dt>Its routines</dt>
-              <dd>{routines}</dd>
-            </>
-          )}
-          <dt>All time</dt>
-          <dd title={priced(usage?.allTime)}>{allTime}</dd>
-        </>
-      )}
-      {context && (
-        <>
-          <dt>Conversation</dt>
-          <dd>{context}</dd>
-        </>
-      )}
-    </dl>
-  );
-}
-
-/**
- * What it can use, as its engine listed it for its last turn
- * (`agents/capabilities.rs`). Nothing is claimed before a turn has said.
- */
-function CanDo({ agent }: { agent: Agent }) {
-  const lines = agent.capabilities?.lines ?? [];
-  return (
-    <div className="agent-editor__label" role="group" aria-label={`What ${agent.name} can do`}>
-      What {agent.name} can do
-      {lines.length === 0 ? (
-        <p className="agent-editor__hint">
-          Shown after its first reply, from what {ENGINE_LABEL[agent.engine]} says it can use.
-        </p>
-      ) : (
-        <dl className="agent-editor__usage agent-editor__can-do">
-          {lines.map((line) => (
-            <Fragment key={line.what}>
-              <dt>{line.what}</dt>
-              <dd>{line.detail}</dd>
-            </Fragment>
-          ))}
-        </dl>
-      )}
-    </div>
-  );
-}
-
-/**
- * What this agent may do without asking, each with Revoke. Revoking is
- * immediate, not part of Save: it's a permission, not a draft.
- */
-function Permissions({ agent }: { agent: Agent }) {
-  const [rules, setRules] = useState<PermissionRule[]>(agent.permissions ?? []);
-  const [error, setError] = useState<string | null>(null);
-  const revoke = async (rule: PermissionRule) => {
-    setError(null);
-    try {
-      await revokePermission(agent.id, rule.id);
-      setRules((list) => list.filter((r) => r.id !== rule.id));
-    } catch (err) {
-      setError(formatCommandError(asCommandError(err)));
-    }
-  };
-  return (
-    <div className="agent-editor__label" role="group" aria-label="Permissions">
-      Permissions
-      {rules.length === 0 ? (
-        <p className="agent-editor__hint">
-          Nothing is always allowed. Choose “Always allow” on a request in the chat to add one.
-        </p>
-      ) : (
-        <ul className="agent-permissions">
-          {rules.map((rule) => (
-            <li key={rule.id} className="agent-permissions__rule">
-              <span className="agent-permissions__what">
-                {SCOPE_KIND_LABEL[rule.kind] && `${SCOPE_KIND_LABEL[rule.kind]} `}
-                {rule.kind.startsWith('command') ? <code>{rule.label}</code> : rule.label}
-              </span>
-              <TextButton
-                tabIndex={0}
-                className="agent-permissions__revoke"
-                onClick={() => void revoke(rule)}
-              >
-                Revoke
-              </TextButton>
-            </li>
-          ))}
-        </ul>
-      )}
-      {error && (
-        <p className="agent-editor__error" role="alert">
-          <ErrorIcon size={12} className="inline-error-icon" />
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
 
 interface AgentEditorModalProps {
   isOpen: boolean;
@@ -213,9 +102,9 @@ interface AgentEditorModalProps {
   takenColors?: string[];
   /** Open "Apps your agents can use" over the editor. */
   onOpenApps?: () => void;
-  /** Editing: open on its memory rather than its settings. */
+  /** Editing: open on its memory or usage rather than its settings. */
   initialTab?: EditorTab;
-  /** Editing: bring this section into view on opening ("Skills", "What it can reach"). */
+  /** Editing: open this page in place ("Skills", "What it can reach"). */
   initialFocus?: 'skills' | 'reach';
   /** Install or sign in to an engine that isn't ready, over the editor. */
   onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;
@@ -227,7 +116,25 @@ interface AgentEditorModalProps {
   initialTemplate?: string | null;
 }
 
-export type EditorTab = 'agent' | 'memory';
+export type EditorTab = 'agent' | 'memory' | 'usage';
+
+/** A page that opened in place, over the sheet's rows. */
+type Page = 'independence' | 'beyond' | 'access' | 'skills' | 'project';
+
+const PAGE_TITLE: Record<Page, string> = {
+  independence: 'Independence',
+  beyond: 'Beyond its level',
+  access: 'Apps and access',
+  skills: 'Skills',
+  project: 'Project',
+};
+
+/** "Slack, GitHub +2": the apps it holds, as a row's value. */
+function appsValue(titles: string[]): string {
+  if (titles.length === 0) return 'None yet';
+  const shown = titles.slice(0, 2).join(', ');
+  return titles.length > 2 ? `${shown} +${titles.length - 2}` : shown;
+}
 
 /** A template's own colour, unless another agent already wears it. */
 function templateColor(template: RoleTemplate | null, taken: string[] = []): string | null {
@@ -281,7 +188,8 @@ export function AgentEditorModal({
   };
   const [pickedIcon, setIcon] = useState<string | null>(saved?.icon ?? null);
   const [pickedKey, setBoundKey] = useState<string | null>(saved?.boundKey ?? null);
-  const [showLook, setShowLook] = useState(!agent);
+  // Folded to the key in the contact card, which opens it.
+  const [showLook, setShowLook] = useState(false);
   // Opened by hand (not a new agent's, open from the start): its icon search takes focus.
   const [lookByHand, setLookByHand] = useState(false);
   const [role, setRole] = useState(agent?.role ?? first?.role ?? '');
@@ -368,19 +276,12 @@ export function AgentEditorModal({
   const [project, setProject] = useState(agent?.project ?? '');
   const [workDirectly, setWorkDirectly] = useState(agent?.workDirectly ?? false);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   // New agent opens on "Describe the agent you want" alone; the form shows
   // once there's a draft, a template, or "fill it in yourself". Editing (or
   // opening on a template) starts on the form. While describing, the form's
   // fields are hidden by the stylesheet (`[data-describing]`), not unmounted.
   const [manual, setManual] = useState(editing || Boolean(first));
   const describing = !editing && !draft && !manual;
-  // Advanced opens below the fold: bring what it opened into view rather
-  // than leaving it half under the dialog's footer.
-  const advancedRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (showAdvanced) advancedRef.current?.scrollIntoView?.({ block: 'nearest' });
-  }, [showAdvanced]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -480,79 +381,161 @@ export function AgentEditorModal({
   const canSave = name.trim().length > 0 && !save.isLoading && !settle.isLoading;
   const copyProject = openCopy ? folderName(openCopy.project) : '';
   const destination = project ? folderName(project) : 'no project';
+  const submit = () => {
+    if (canSave) void save.execute();
+  };
 
-  const form = (
-    <form
-      className="agent-editor__body"
-      data-describing={describing || undefined}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (canSave) void save.execute();
-      }}
-      // ⌘Enter saves from anywhere in it, the instructions included (as comments do).
-      onKeyDown={(e) => {
-        if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
-        e.preventDefault();
-        e.currentTarget.requestSubmit();
-      }}
-    >
-      {!editing &&
-        (draft ? (
-          <AgentDrafted onStartOver={startOver} />
-        ) : (
-          !manual && <AgentDescribe autoFocus={!first} onDrafted={(d) => takeDraft(d)} />
-        ))}
-      {describing && (
-        // The other ways in, quiet: describing is the one this dialog leads with.
-        <p className="agent-editor__hint agent-editor__other-ways">
-          Or{' '}
-          <TextButton
-            tabIndex={0}
-            className="agent-editor__fill-in"
-            onClick={() => setManual(true)}
-          >
-            fill it in yourself
-          </TextButton>
-          , start from{' '}
-          {ROLE_TEMPLATES.map((t, i) => (
-            <Fragment key={t.id}>
-              {i > 0 && (i === ROLE_TEMPLATES.length - 1 ? ' or ' : ', ')}
-              <TextButton
-                tabIndex={0}
-                title={t.title}
-                onClick={() => {
-                  startFrom(t.id);
-                  setManual(true);
-                }}
-              >
-                {t.name}
-              </TextButton>
-            </Fragment>
-          ))}
-          {onAskChief && (
-            <>
-              , or{' '}
-              <TextButton tabIndex={0} onClick={onAskChief}>
-                ask your Chief of Staff
-              </TextButton>
-            </>
-          )}
-          .
-        </p>
+  // A page that opened in place; Skills and "What it can reach" can be asked for on opening.
+  const [page, setPage] = useState<Page | null>(
+    agent && initialFocus ? (initialFocus === 'skills' ? 'skills' : 'access') : null
+  );
+  const live = useAgentsSelector((s) => s.agents?.find((a) => a.id === agent?.id)) ?? agent;
+  // The values its rows show: read once per open, and again on coming back from a page.
+  const [apps, setApps] = useState<string[] | null>(null);
+  const [skillCount, setSkillCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!agent || page) return;
+    let on = true;
+    agentReach(agent.id)
+      .then((r) => on && setApps(r.connections.map((c) => c.title)))
+      .catch(() => undefined);
+    agentSkills(agent.id)
+      .then((v) => on && setSkillCount(v.skills.length))
+      .catch(() => undefined);
+    return () => {
+      on = false;
+    };
+  }, [agent, page]);
+
+  // Engine: a menu once two can run, else what it's on; why one can't run, never hidden.
+  const picker = showsEnginePicker(engines);
+  const shownEngines = engines.filter(
+    (e) => e.installed || e.id === engine || e.id === agent?.engine
+  );
+  const blocked = (picker ? shownEngines : shownEngines.filter((e) => e.id === engine)).flatMap(
+    (info) => {
+      const need = engineUnavailable(info);
+      return need ? [{ info, need }] : [];
+    }
+  );
+  const addable = picker ? [] : engines.filter((e) => !e.installed && e.id !== engine);
+  const models = modelChoices(engine, engines);
+  const pickEngine = (next: AgentEngine) => {
+    setEngine(next);
+    // Models don't cross engines: an agent being made takes the new
+    // engine's default model, one that exists goes to its engine's own.
+    setModel(agent ? (next === agent.engine ? (agent.model ?? '') : '') : null);
+  };
+  const runsOnNote = (
+    <>
+      {switching && (
+        <span className="agent-sheet__note">
+          Its next message starts fresh on {ENGINE_LABEL[engine]}, handed the recent conversation.
+          Instructions and memory carry over.
+        </span>
       )}
-      {!editing && !draft && manual && (
-        <div className="agent-editor__label" role="group" aria-label="Start from">
-          Start from
-          <SegmentedControl
-            value={template?.id ?? ''}
-            options={[
-              { value: '', label: 'Blank' },
-              ...ROLE_TEMPLATES.map((t) => ({ value: t.id, label: t.name, title: t.title })),
-            ]}
-            onValueChange={startFrom}
-            aria-label="Start from"
-            className="agent-editor__templates"
+      {blocked.map(({ info, need }) => (
+        <span key={info.id} className="agent-sheet__note">
+          {engineReason(info, need)}{' '}
+          {onSetUpEngine && (
+            <TextButton tabIndex={0} onClick={() => onSetUpEngine(info.id, need)}>
+              {need === 'install' ? `Set up ${info.label}` : `Sign in to ${info.label}`}
+            </TextButton>
+          )}
+        </span>
+      ))}
+      {onSetUpEngine &&
+        addable.map((info) => (
+          <span key={info.id} className="agent-sheet__note">
+            <TextButton tabIndex={0} onClick={() => onSetUpEngine(info.id, 'install')}>
+              Also use {info.label}
+            </TextButton>
+          </span>
+        ))}
+    </>
+  );
+  const hasRunsOnNote = switching || blocked.length > 0 || addable.length > 0;
+
+  const level = effectiveIndependence({ independence: live?.independence ?? null }, teamLevel);
+  const levelValue = `${INDEPENDENCE_SHORT[level]}${live?.independence ? '' : ' · same as team'}`;
+  const ruleCount = live?.permissions?.length ?? 0;
+
+  // Enter in a row's field and ⌘Enter anywhere (the instructions included) save.
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    const inField = (e.target as HTMLElement).classList.contains('agent-sheet__field');
+    if (!(e.metaKey || e.ctrlKey) && !inField) return;
+    e.preventDefault();
+    submit();
+  };
+
+  const contactCard = (
+    <div className="agent-sheet__contact">
+      {/* The key opens its own picker: shape, face and colour. */}
+      <button
+        type="button"
+        className="agent-sheet__key"
+        aria-label={showLook ? 'Done changing how it looks' : 'Change how it looks'}
+        title={showLook ? 'Done changing how it looks' : 'Change how it looks'}
+        aria-expanded={showLook}
+        onClick={() => {
+          setLookByHand(true);
+          setShowLook((open) => !open);
+        }}
+      >
+        <AgentKey name={name || 'New agent'} colorway={colorway} icon={icon} size="xl" />
+      </button>
+      <p className="agent-sheet__name">{name.trim() || (editing ? agent?.name : 'New agent')}</p>
+      <p className="agent-sheet__meta">
+        <TextButton
+          tabIndex={0}
+          className="agent-sheet__look"
+          aria-expanded={showLook}
+          onClick={() => {
+            setLookByHand(true);
+            setShowLook((open) => !open);
+          }}
+        >
+          {showLook ? 'Done with its look' : 'Change look'}
+        </TextButton>
+        {engines.length > 0 && <span> · on {ENGINE_LABEL[engine]}</span>}
+        {live && <span> · {INDEPENDENCE_SHORT[level]}</span>}
+      </p>
+      {showLook && (
+        <SheetCard>
+          <AgentKeyPicker
+            name={name}
+            colorway={colorway}
+            icon={icon}
+            boundKey={boundKey}
+            level={agent?.independence ?? teamLevel}
+            taken={taken}
+            onColorwayChange={setColorway}
+            onIconChange={setIcon}
+            onBoundKeyChange={setBoundKey}
+            autoFocusSearch={lookByHand}
           />
+        </SheetCard>
+      )}
+    </div>
+  );
+
+  const startFromCard = !editing && !draft && manual && (
+    <Group
+      id="agent-start"
+      title="Start from"
+      footnote={
+        <>
+          {template && needsLine(template, engine) && (
+            <span className="agent-sheet__note">
+              {needsLine(template, engine)}{' '}
+              {engine === 'claude' && onOpenApps && (
+                <TextButton tabIndex={0} onClick={onOpenApps}>
+                  Connect an app…
+                </TextButton>
+              )}
+            </span>
+          )}
           {/* The way back to the one box (what's typed here stays, for a draft to replace). */}
           <TextButton
             tabIndex={0}
@@ -561,82 +544,72 @@ export function AgentEditorModal({
           >
             Or describe it instead
           </TextButton>
-          {template && needsLine(template, engine) && (
-            <div className="agent-editor__apps agent-editor__needs">
-              <p className="agent-editor__hint">{needsLine(template, engine)}</p>
-              {engine === 'claude' && onOpenApps && (
-                <Button variant="secondary" size="compact" onClick={onOpenApps}>
-                  Connect an app…
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+        </>
+      }
+    >
+      <div className="agent-sheet__segmented">
+        <SegmentedControl
+          value={template?.id ?? ''}
+          options={[
+            { value: '', label: 'Blank' },
+            ...ROLE_TEMPLATES.map((t) => ({ value: t.id, label: t.name, title: t.title })),
+          ]}
+          onValueChange={startFrom}
+          aria-label="Start from"
+          className="agent-editor__templates"
+        />
+      </div>
+    </Group>
+  );
 
-      <div className="agent-editor__identity">
-        {/* The avatar opens its own picker: shape, face and colour. */}
-        <button
-          type="button"
-          className="agent-editor__look-toggle"
-          aria-label={showLook ? 'Done changing how it looks' : 'Change how it looks'}
-          title={showLook ? 'Done changing how it looks' : 'Change how it looks'}
-          aria-expanded={showLook}
-          data-open={showLook || undefined}
-          onClick={() => {
-            setLookByHand(true);
-            setShowLook((open) => !open);
-          }}
-        >
-          {/* Open, the picker's big key is the key: this one would be it twice, 40px apart. */}
-          {showLook ? (
-            <CloseIcon size={14} />
-          ) : (
-            <AgentKey name={name} colorway={colorway} icon={icon} size="md" />
-          )}
-        </button>
-        <TextField
-          placeholder="Name"
+  const rows = (
+    <div className="agent-sheet__groups">
+      <Group id="agent-what" title="What it does">
+        <FieldRow
+          label="Name"
+          ariaLabel="Agent name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          aria-label="Agent name"
+          onChange={setName}
+          placeholder="Name it"
           maxLength={40}
           autoFocus={editing || !!first}
         />
-      </div>
-      {showLook && (
-        <AgentKeyPicker
-          name={name}
-          colorway={colorway}
-          icon={icon}
-          boundKey={boundKey}
-          level={agent?.independence ?? teamLevel}
-          taken={taken}
-          onColorwayChange={setColorway}
-          onIconChange={setIcon}
-          onBoundKeyChange={setBoundKey}
-          autoFocusSearch={lookByHand}
-        />
-      )}
-
-      <label className="agent-editor__label">
-        What should it do?
-        <TextField
-          placeholder="Keeps my inbox down to what matters"
+        <FieldRow
+          label="In one line"
+          ariaLabel="What should it do?"
           value={role}
-          onChange={(e) => setRole(e.target.value)}
+          onChange={setRole}
+          placeholder="Keeps my inbox down to what matters"
           disabled={agent?.isMain}
         />
-      </label>
-      <label className="agent-editor__label">
-        What should it know?
-        <TextArea
-          rows={editing ? 6 : 4}
+      </Group>
+
+      <Group
+        id="agent-know"
+        title="What it should know"
+        footnote={
+          editing ? (
+            'Its memory is under Memory and isn’t changed here.'
+          ) : onAskChief && !draft ? (
+            <>
+              Not sure what to write?{' '}
+              <TextButton tabIndex={0} onClick={onAskChief}>
+                Ask your Chief of Staff to set it up
+              </TextButton>
+            </>
+          ) : undefined
+        }
+      >
+        <textarea
+          className="agent-sheet__textarea"
+          rows={5}
+          aria-label="What should it know?"
           placeholder="Brief it like a new hire: context, standing rules, who's who, where things live."
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
         />
-      </label>
+      </Group>
+
       {!editing && draft && (
         <AgentDraftRoutines
           draft={draft}
@@ -644,126 +617,78 @@ export function AgentEditorModal({
           onKept={(i, on) => setKept((k) => k.map((v, j) => (j === i ? on : v)))}
         />
       )}
-      {editing ? (
-        <p className="agent-editor__hint agent-editor__caption">
-          Its memory lives under Memory and isn&apos;t changed here.
-        </p>
-      ) : (
-        onAskChief &&
-        !draft &&
-        manual && (
-          <p className="agent-editor__hint agent-editor__ask-chief">
-            Not sure what to write?{' '}
-            <TextButton tabIndex={0} onClick={onAskChief}>
-              Ask your Chief of Staff to set it up
-            </TextButton>
-          </p>
-        )
-      )}
 
-      {/* Out of Advanced: it shows only a choice (two engines installed) or why
-          the engine it would use can't run yet, and neither may be hidden. */}
-      <AgentEngineField
-        engines={engines}
-        value={engine}
-        current={agent?.engine}
-        onChange={(next) => {
-          setEngine(next);
-          // Models don't cross engines: an agent being made takes the new
-          // engine's default model, one that exists goes to its engine's own.
-          setModel(agent ? (next === agent.engine ? (agent.model ?? '') : '') : null);
-        }}
-        onSetUp={onSetUpEngine}
-        note={
-          switching &&
-          `Its next message starts fresh on ${ENGINE_LABEL[engine]}, handed the recent conversation. Instructions and memory carry over.`
-        }
-      />
-
-      <div className="agent-editor__advanced" ref={advancedRef}>
-        <TextButton
-          className="agent-editor__more"
-          aria-expanded={showAdvanced}
-          leftIcon={
-            <ChevronRightIcon
-              size={10}
-              className="agent-editor__more-chevron"
-              data-open={showAdvanced || undefined}
-            />
-          }
-          onClick={() => setShowAdvanced((open) => !open)}
+      {engines.length > 0 && (
+        <Group
+          id="agent-runs-on"
+          title="How it runs"
+          footnote={hasRunsOnNote ? runsOnNote : undefined}
         >
-          Advanced
-        </TextButton>
-        {showAdvanced && (
-          <div className="agent-editor__advanced-body">
-            <div className="agent-editor__label" role="group" aria-label="Model">
-              Model
-              <SegmentedControl
-                value={model}
-                options={modelChoices(engine, engines)}
-                onValueChange={setModel}
-                aria-label="Model"
-              />
-              {/* The engine's own name for it, small: what you'd tell someone who asks. */}
-              {modelChoices(engine, engines).find((m) => m.value === model)?.detail && (
-                <span className="agent-editor__model-detail">
-                  Uses {modelChoices(engine, engines).find((m) => m.value === model)?.detail}
-                </span>
-              )}
-            </div>
-
-            <AgentProjectField
-              value={project}
-              onChange={setProject}
-              direct={workDirectly}
-              onDirectChange={setWorkDirectly}
+          {picker ? (
+            <MenuRow
+              label="Runs on"
+              value={engine}
+              choices={shownEngines.map((info) => ({
+                value: info.id,
+                label: info.label,
+                disabled: info.id !== agent?.engine && Boolean(engineUnavailable(info)),
+              }))}
+              onChange={pickEngine}
             />
-
-            {onOpenApps && (
-              <div
-                className="agent-editor__label"
-                role="group"
-                aria-label="Apps this agent can use"
-              >
-                Apps this agent can use
-                <div className="agent-editor__apps">
-                  <p className="agent-editor__hint">
-                    {engine === 'codex'
-                      ? 'This agent can use the apps you’ve connected in Codex.'
-                      : 'This agent can use the apps you’ve connected.'}
-                  </p>
-                  {engine === 'claude' && (
-                    <Button variant="secondary" size="compact" onClick={onOpenApps}>
-                      Manage apps…
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <AgentEngineProtections engines={engines} value={engine} />
-          </div>
-        )}
-      </div>
-
-      {agent && (
-        <div className="agent-editor__briefing">
-          <UsageLines usage={usage} agent={agent} />
-          <CanDo agent={agent} />
-          {/* Everything from here on is saved the moment it changes, unlike
-              the draft above it: said once, where the two meet. */}
-          <p className="agent-editor__instant">These apply as you change them, without Save.</p>
-          <AgentLevelPicker agent={agent} />
-          <AdminSwitch agent={agent} />
-          <Permissions agent={agent} />
-          <AgentPolicy agent={agent} onAskInChat={onAskInChat} />
-          <AgentReach agent={agent} onOpenApps={onOpenApps} focus={initialFocus === 'reach'} />
-          <AgentSkills agent={agent} focus={initialFocus === 'skills'} />
-        </div>
+          ) : (
+            <Row label="Runs on">
+              <span className="agent-sheet__value">{ENGINE_LABEL[engine]}</span>
+            </Row>
+          )}
+          {models.length > 1 ? (
+            <MenuRow label="Model" value={model} choices={models} onChange={setModel} />
+          ) : (
+            <Row label="Model">
+              <span className="agent-sheet__value">Default</span>
+            </Row>
+          )}
+          <NavRow
+            label="Project"
+            value={project ? folderName(project) : 'None'}
+            onOpen={() => setPage('project')}
+          />
+        </Group>
       )}
-      {/* With one engine there's no "Runs on": the way to add another lives down here. */}
-      <AgentEngineMore engines={engines} value={engine} onSetUp={onSetUpEngine} />
+
+      {live && (
+        <Group id="agent-own" title="On its own" footnote={ADMIN_DETAIL}>
+          <NavRow label="Independence" value={levelValue} onOpen={() => setPage('independence')} />
+          <NavRow
+            label="Beyond its level"
+            value={
+              ruleCount === 0 ? 'Nothing' : ruleCount === 1 ? '1 thing' : `${ruleCount} things`
+            }
+            onOpen={() => setPage('beyond')}
+          />
+          <AdminRow agent={live} />
+        </Group>
+      )}
+
+      {live && (
+        <Group
+          id="agent-use"
+          title="What it can use"
+          footnote="Independence, admin, apps and skills change at once. Everything else saves on Done."
+        >
+          <NavRow
+            label="Apps and access"
+            value={apps === null ? undefined : appsValue(apps)}
+            onOpen={() => setPage('access')}
+          />
+          <NavRow
+            label="Skills"
+            value={
+              skillCount === null ? undefined : skillCount === 0 ? 'None yet' : String(skillCount)
+            }
+            onOpen={() => setPage('skills')}
+          />
+        </Group>
+      )}
 
       {error && (
         <p className="agent-editor__error" role="alert">
@@ -810,53 +735,184 @@ export function AgentEditorModal({
         </div>
       )}
 
-      <div className="agent-editor__actions">
-        {editing && agent && !agent.isMain && onDelete && (
-          <Button variant="danger" className="agent-editor__delete" onClick={() => onDelete(agent)}>
-            Delete
-          </Button>
-        )}
-        <Button variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
-        {/* Neutral: inside an agent's own dialog the accent is the colour being picked. */}
-        {!describing && (
-          <Button variant="strong" type="submit" disabled={!canSave}>
-            {editing ? 'Save' : 'Create'}
-          </Button>
-        )}
-      </div>
-    </form>
+      {editing && agent && !agent.isMain && onDelete && (
+        <DeleteRow label="Delete agent" onDelete={() => onDelete(agent)} />
+      )}
+    </div>
   );
 
-  // The modal is portalled out of the chat, so it is scoped here — to the
-  // colour being picked, which makes Save preview it.
-  return (
-    <AccentScope color={color}>
-      <ModalFrame
-        isOpen={isOpen}
-        onClose={onClose}
-        title={editing ? `Edit ${agent?.name}` : 'New agent'}
-        className={agent ? 'agent-editor agent-editor--existing' : 'agent-editor'}
-      >
+  const describe = !editing && (
+    <>
+      {draft ? (
+        <AgentDrafted onStartOver={startOver} />
+      ) : (
+        !manual && <AgentDescribe autoFocus={!first} onDrafted={(d) => takeDraft(d)} />
+      )}
+      {describing && (
+        // The other ways in, quiet: describing is the one this sheet leads with.
+        <p className="agent-editor__hint agent-editor__other-ways">
+          Or{' '}
+          <TextButton
+            tabIndex={0}
+            className="agent-editor__fill-in"
+            onClick={() => setManual(true)}
+          >
+            fill it in yourself
+          </TextButton>
+          , start from{' '}
+          {ROLE_TEMPLATES.map((t, i) => (
+            <Fragment key={t.id}>
+              {i > 0 && (i === ROLE_TEMPLATES.length - 1 ? ' or ' : ', ')}
+              <TextButton
+                tabIndex={0}
+                title={t.title}
+                onClick={() => {
+                  startFrom(t.id);
+                  setManual(true);
+                }}
+              >
+                {t.name}
+              </TextButton>
+            </Fragment>
+          ))}
+          {onAskChief && (
+            <>
+              , or{' '}
+              <TextButton tabIndex={0} onClick={onAskChief}>
+                ask your Chief of Staff
+              </TextButton>
+            </>
+          )}
+          .
+        </p>
+      )}
+    </>
+  );
+
+  const answer = !describing && (
+    <Button variant="strong" size="compact" disabled={!canSave} onClick={submit}>
+      {editing ? 'Done' : 'Create'}
+    </Button>
+  );
+
+  const pageBody = live && page && (
+    <div className="agent-sheet__groups">
+      {page === 'independence' && (
+        <>
+          <SheetCard>
+            <AgentLevelPicker agent={live} />
+          </SheetCard>
+          <div className="settings-group__footnote agent-sheet__card-note">
+            <AgentEngineProtections engines={engines} value={engine} />
+          </div>
+        </>
+      )}
+      {page === 'beyond' && <Permissions agent={live} />}
+      {page === 'access' && (
+        <>
+          <SheetCard>
+            <AgentPolicy agent={live} onAskInChat={onAskInChat} />
+            <AgentReach agent={live} onOpenApps={onOpenApps} />
+          </SheetCard>
+          <CanDo agent={live} />
+          {onOpenApps && engine === 'claude' && (
+            <Group id="agent-apps" title="Apps you’ve connected">
+              <NavRow label="Manage apps" onOpen={onOpenApps} />
+            </Group>
+          )}
+        </>
+      )}
+      {page === 'skills' && (
+        <SheetCard>
+          <AgentSkills agent={live} />
+        </SheetCard>
+      )}
+      {page === 'project' && (
+        <SheetCard>
+          <AgentProjectField
+            value={project}
+            onChange={setProject}
+            direct={workDirectly}
+            onDirectChange={setWorkDirectly}
+          />
+        </SheetCard>
+      )}
+    </div>
+  );
+
+  // The project page is the one a new agent has too (no agent yet, no `live`).
+  const projectOnly = !live && page === 'project' && (
+    <div className="agent-sheet__groups">
+      <SheetCard>
+        <AgentProjectField
+          value={project}
+          onChange={setProject}
+          direct={workDirectly}
+          onDirectChange={setWorkDirectly}
+        />
+      </SheetCard>
+    </div>
+  );
+
+  const title = editing ? 'Edit agent' : 'New agent';
+  const sheet = page ? (
+    <div className="agent-sheet" data-page={page}>
+      <SheetBar title={PAGE_TITLE[page]} onBack={() => setPage(null)} backLabel={title} />
+      <div className="agent-sheet__scroll">{pageBody || projectOnly}</div>
+    </div>
+  ) : (
+    <div className="agent-sheet" onKeyDown={onKeyDown}>
+      <SheetBar title={title} onCancel={onClose} done={answer} />
+      <div className="agent-sheet__scroll" data-describing={describing || undefined}>
+        {describe}
+        {!describing && startFromCard && <div className="agent-sheet__start">{startFromCard}</div>}
+        {!describing && contactCard}
         {agent ? (
           <Tabs value={tab} onValueChange={(v) => setTab(v as EditorTab)}>
-            <TabsList className="agent-editor__tabs" aria-label="Edit">
+            <TabsList className="agent-sheet__tabs" aria-label="Edit">
               <TabsTab value="agent" width="fill">
                 Agent
               </TabsTab>
               <TabsTab value="memory" width="fill">
                 Memory
               </TabsTab>
+              <TabsTab value="usage" width="fill">
+                Usage
+              </TabsTab>
             </TabsList>
-            <TabsPanel value="agent">{form}</TabsPanel>
+            <TabsPanel value="agent">{rows}</TabsPanel>
             <TabsPanel value="memory">
-              {tab === 'memory' && <AgentMemory agent={agent} />}
+              {tab === 'memory' && (
+                <SheetCard>
+                  <AgentMemory agent={agent} />
+                </SheetCard>
+              )}
+            </TabsPanel>
+            <TabsPanel value="usage">
+              {tab === 'usage' && <UsagePage usage={usage} agent={live ?? agent} />}
             </TabsPanel>
           </Tabs>
         ) : (
-          form
+          // Mounted while describing too: Runs on stays (the draft is made
+          // on it); the rest waits out of sight and out of the Tab order.
+          rows
         )}
+      </div>
+    </div>
+  );
+
+  // The modal is portalled out of the chat, so it is scoped here — to the
+  // colour being picked, which makes Done preview it.
+  return (
+    <AccentScope color={color}>
+      <ModalFrame
+        isOpen={isOpen}
+        onClose={onClose}
+        ariaLabel={editing ? `Edit ${agent?.name}` : 'New agent'}
+        showCloseButton={false}
+        className="agent-editor agent-editor--sheet"
+      >
+        {sheet}
       </ModalFrame>
     </AccentScope>
   );

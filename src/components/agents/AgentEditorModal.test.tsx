@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { ModalProvider } from '../../contexts/ModalContext';
 import { AgentEditorModal } from './AgentEditorModal';
@@ -74,13 +74,7 @@ describe('AgentEditorModal: what a new agent runs on', () => {
   it('puts a new agent on the engine that can run it, not one that isn’t installed', async () => {
     const { created } = open([{ ...CLAUDE, installed: false, signedIn: false }, CODEX]);
     // One engine installed: nothing to choose, and nothing greyed out.
-    expect(screen.queryByRole('group', { name: 'Runs on' })).not.toBeInTheDocument();
-    // What the engine holds to is under Advanced, not on the review.
-    expect(screen.queryByTestId('agent-engine-protections')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
-    expect(screen.getByTestId('agent-engine-protections')).toHaveTextContent(
-      /can't reach the internet/
-    );
+    expect(screen.queryByRole('button', { name: /^Runs on:/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Also use Claude Code' })).toBeInTheDocument();
     await create();
     await waitFor(() => expect(created).toHaveLength(1));
@@ -92,7 +86,7 @@ describe('AgentEditorModal: what a new agent runs on', () => {
       CLAUDE,
       { ...CODEX, installed: false, signedIn: false },
     ]);
-    expect(screen.queryByRole('group', { name: 'Runs on' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Runs on:/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/isn't set up/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Also use Codex' }));
     expect(onSetUpEngine).toHaveBeenCalledWith('codex', 'install');
@@ -102,12 +96,9 @@ describe('AgentEditorModal: what a new agent runs on', () => {
 
   it('shows the picker once both are installed, with the reason one can’t be chosen', () => {
     open([CLAUDE, { ...CODEX, signedIn: false }]);
-    expect(screen.getAllByRole('group', { name: 'Runs on' }).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Codex' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Claude Code' })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Runs on: Claude Code' }));
+    expect(screen.getByRole('menuitem', { name: /Codex/ })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: /Claude Code/ })).not.toBeDisabled();
     expect(screen.getByText(/Codex isn't signed in\./)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in to Codex' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Also use/ })).not.toBeInTheDocument();
@@ -173,11 +164,13 @@ describe('AgentEditorModal: moving an agent that has a copy open', () => {
 
   async function moveToNoProjectAndSave() {
     await act(() => Promise.resolve());
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+    // Project opens its page in place; back on the sheet, Done saves.
+    fireEvent.click(screen.getByRole('button', { name: /^Project/ }));
     fireEvent.click(screen.getByRole('button', { name: /Works in:/ }));
     fireEvent.click(screen.getByText('No project'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit agent' }));
     await act(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
       return Promise.resolve();
     });
   }
@@ -216,8 +209,8 @@ describe('AgentEditorModal: moving an agent that has a copy open', () => {
   it('Cancel leaves everything as it was', async () => {
     const calls = edit();
     await moveToNoProjectAndSave();
-    // The rebind panel's Cancel comes first; the form's own is the footer's.
-    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[0]);
+    // The rebind panel's own Cancel, not the sheet's.
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByText(/has a copy of acme-site open/)).toBeNull();
     expect(calls.some((c) => c.cmd.startsWith('agents_copy') || c.cmd === 'agents_update')).toBe(
       false

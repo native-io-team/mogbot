@@ -244,6 +244,8 @@ function AgentSheet() {
           </Animated.View>
         )}
 
+        {/* The same groups, in the same words, as Edit agent on the desk. */}
+        <SectionTitle title="What it should know" style={styles.sectionTitle} />
         <View style={styles.list}>
           {canCall('agents.instructions', welcome) && (
             <Row
@@ -252,6 +254,7 @@ function AgentSheet() {
                 <Icon name="text.alignleft" size={iconSize.body} color={colors.textSecondary} />
               }
               onPress={() => router.push({ pathname: '/instructions', params: { id } })}
+              last={!canCall('agents.memory', welcome) && !canCall('agents.files', welcome)}
             />
           )}
           {canCall('agents.memory', welcome) && (
@@ -259,15 +262,7 @@ function AgentSheet() {
               label="Memory"
               leading={<Icon name="brain" size={iconSize.body} color={colors.textSecondary} />}
               onPress={() => router.push({ pathname: '/memory', params: { id } })}
-            />
-          )}
-          {canCall('agents.onItsOwn', welcome) && (
-            <Row
-              label={ON_ITS_OWN_STANDING}
-              leading={
-                <Icon name="checkmark.shield" size={iconSize.body} color={colors.textSecondary} />
-              }
-              onPress={() => router.push({ pathname: '/on-its-own', params: { id } })}
+              last={!canCall('agents.files', welcome)}
             />
           )}
           {canCall('agents.files', welcome) && (
@@ -275,8 +270,50 @@ function AgentSheet() {
               label="Files"
               leading={<Icon name="doc.on.doc" size={iconSize.body} color={colors.textSecondary} />}
               onPress={() => router.push({ pathname: '/files/[id]', params: { id } })}
+              last
             />
           )}
+        </View>
+
+        {(canCall('agents.setAgentIndependence', welcome) ||
+          canCall('agents.onItsOwn', welcome) ||
+          canCall('agents.setAdmin', welcome)) && (
+          <>
+            <SectionTitle title="On its own" style={styles.sectionTitle} />
+            <View style={styles.list}>
+              {canCall('agents.setAgentIndependence', welcome) && (
+                <AgentLevelRow
+                  agent={agent}
+                  enabled={live}
+                  onError={setError}
+                  last={
+                    !canCall('agents.onItsOwn', welcome) && !canCall('agents.setAdmin', welcome)
+                  }
+                />
+              )}
+              {canCall('agents.onItsOwn', welcome) && (
+                <Row
+                  label={ON_ITS_OWN_STANDING}
+                  leading={
+                    <Icon
+                      name="checkmark.shield"
+                      size={iconSize.body}
+                      color={colors.textSecondary}
+                    />
+                  }
+                  onPress={() => router.push({ pathname: '/on-its-own', params: { id } })}
+                  last={!canCall('agents.setAdmin', welcome)}
+                />
+              )}
+              {canCall('agents.setAdmin', welcome) && (
+                <AdminToggle agent={agent} enabled={live} onError={setError} />
+              )}
+            </View>
+          </>
+        )}
+
+        <SectionTitle title="In your list" style={styles.sectionTitle} />
+        <View style={styles.list}>
           <Toggle
             agent={agent}
             field="pinned"
@@ -307,18 +344,6 @@ function AgentSheet() {
           )}
         </View>
 
-        {canCall('agents.setAgentIndependence', welcome) && (
-          <View style={styles.list}>
-            <AgentLevelRow agent={agent} enabled={live} onError={setError} last />
-          </View>
-        )}
-
-        {canCall('agents.setAdmin', welcome) && (
-          <View style={styles.list}>
-            <AdminToggle agent={agent} enabled={live} onError={setError} />
-          </View>
-        )}
-
         <Conversation
           agent={agent}
           canFresh={canCall('agents.startFresh', welcome)}
@@ -328,10 +353,13 @@ function AgentSheet() {
 
         {!!agent.engine && (
           // Read-only here: switching engines starts a new session, a choice for the desk.
-          <View style={styles.list}>
-            <Row label="Runs on" value={engineName(agent)} />
-            <Row label="Model" value={modelName(agent, engines)} last />
-          </View>
+          <>
+            <SectionTitle title="How it runs" style={styles.sectionTitle} />
+            <View style={styles.list}>
+              <Row label="Runs on" value={engineName(agent)} />
+              <Row label="Model" value={modelName(agent, engines)} last />
+            </View>
+          </>
         )}
         {!!cantAsk && (
           <T variant="small" color={colors.textMuted} style={styles.note}>

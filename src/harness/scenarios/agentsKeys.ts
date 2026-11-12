@@ -131,14 +131,15 @@ export const agentsKeysScenarios: Scenario[] = [
     title: 'Agents — a new agent’s key: colourway, legend and shortcut key',
     looksRightWhen:
       'New agent. Under the name, the key at 112px on a quiet band (its legend read from the name as you type, the first free letter as its sublegend), then Colour (fourteen small keys), Icon (a search box, the category filters, “2,052 icons” and the grid: the featured legends first as small keys in the chosen colourway, the app’s filled mark leading, then the pack), and Shortcut key: a field showing the letter, with the line “Press <letter> anywhere outside a text box to open this agent.” The pick sits pressed down with a small neutral check on its corner, never a box round it and never the accent; the rest are slightly quieter.',
-    requires: '.agent-look__preview .agent-key--xl',
+    requires: '.agent-sheet__key .agent-key--xl',
     steps: [
       { click: '.agents-list__new' },
       // New agent opens describe-first; the form (and its key) is hidden by
       // the stylesheet until "fill it in yourself", so a step into it would
       // still "find" its control.
       { click: '.agent-editor__fill-in' },
-      { fill: '.agent-editor__identity input', value: 'Bookings' },
+      { fill: '.agent-sheet__field[aria-label="Agent name"]', value: 'Bookings' },
+    { click: '.agent-sheet__key' },
     ],
     commands,
   },
@@ -148,11 +149,11 @@ export const agentsKeysScenarios: Scenario[] = [
     looksRightWhen:
       'Edit agent with its look open. In Colour and Icon the picked key sits pressed down, its own colour lit softly under it, with a small neutral check disc on its top-right corner (never a box round it, never the accent); the other keys are slightly quieter. Readable in both themes.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-look__preview .agent-key--xl',
+    requires: '.agent-sheet__key .agent-key--xl',
     steps: [
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
-      { click: '.agent-editor__look-toggle' },
+      { click: '.agent-sheet__key' },
     ],
     clipSelector: '.agent-look',
     commands: { ...commands, agents_instructions: 'Keep the team moving.' },
@@ -166,7 +167,8 @@ export const agentsKeysScenarios: Scenario[] = [
     steps: [
       { click: '.agents-list__new' },
       { click: '.agent-editor__fill-in' },
-      { fill: '.agent-editor__identity input', value: 'Bookkeeper' },
+      { fill: '.agent-sheet__field[aria-label="Agent name"]', value: 'Bookkeeper' },
+      { click: '.agent-sheet__key' },
       { fill: '.agent-icons input', value: 'money' },
       { click: '.agent-icons .agent-look__choice[data-value="lucide:wallet"]' },
     ],
@@ -177,11 +179,12 @@ export const agentsKeysScenarios: Scenario[] = [
     title: 'Agents — the fourteen colourways on a new agent',
     looksRightWhen:
       'New agent, the key picker open: Colour shows fourteen small keys: the eight from before, then Brick, Plum, Navy, Forest, Sky and Lilac, which differ in lightness as well as hue (Navy and Forest deep, Sky and Lilac pale). Each legend reads on its face. Navy is picked: the 112px key is navy with a warm off-white legend.',
-    requires: '.agent-look__preview .agent-key[data-colorway="navy"]',
+    requires: '.agent-sheet__key .agent-key[data-colorway="navy"]',
     steps: [
       { click: '.agents-list__new' },
       { click: '.agent-editor__fill-in' },
-      { fill: '.agent-editor__identity input', value: 'Ledger' },
+      { fill: '.agent-sheet__field[aria-label="Agent name"]', value: 'Ledger' },
+      { click: '.agent-sheet__key' },
       { click: '.agent-look__choice[data-value="navy"]' },
     ],
     commands,
@@ -195,6 +198,7 @@ export const agentsKeysScenarios: Scenario[] = [
     steps: [
       { click: '.agents-list__new' },
       { click: '.agent-editor__fill-in' },
+      { click: '.agent-sheet__key' },
       { focus: '.agent-look__bind-field' },
       { key: 'Enter' },
       { key: 'f' },

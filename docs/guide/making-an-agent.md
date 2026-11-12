@@ -10,8 +10,8 @@ the rest of your team: it creates agents, briefs them, hands them work, keeps tr
 they're doing, and deletes them when you say so. You can talk only to the Chief and let it run
 everything else.
 
-Each agent runs on Claude Code, Codex or OpenCode on your Mac, on your own accounts. You choose the
-engine per agent once you have more than one set up.
+Each agent runs on Claude Code, Codex or OpenCode on your Mac, on your own accounts. You choose which
+one per agent once you have more than one set up.
 
 ## Describe the agent you want
 
@@ -37,6 +37,28 @@ There are also ready-made agents to start from (Research assistant, Inbox triage
 An agent's briefing is what it's told to do and how. Change it in the agent's editor (**Edit
 agent**), or tell the Chief what to change. A new agent opens with a short welcome in its
 own voice and three things you can tap to start.
+
+## Edit agent
+
+**Edit agent** is one sheet, laid out like Settings. At the top is the agent's key (click it to
+change its colour, icon and shortcut key), its name, and what it runs on. Three tabs sit under
+it: **Agent**, **Memory** and **Usage**.
+
+On **Agent**, the rows are grouped:
+
+- **What it does**: its name and its one line.
+- **What it should know**: its briefing.
+- **How it runs**: Claude Code, Codex or OpenCode (a choice once two are set up), the model, and
+  the project it works in.
+- **On its own**: its independence, what it may always do beyond its level, and the Admin switch.
+- **What it can use**: its apps and access, and its skills.
+
+A row with a › opens its own page in place; **‹ Edit agent** comes back. Independence, Admin,
+apps and skills change the moment you change them. The name, line, briefing, model and project
+save when you press **Done**; **Cancel** leaves them as they were. **Delete agent** is the red row
+at the bottom.
+
+The phone's agent sheet uses the same groups and words.
 
 ## Memory
 

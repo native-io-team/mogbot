@@ -76,7 +76,7 @@ export function AgentEngineField({
   });
   const reasons = blocked.map(({ info, need }) => (
     <p key={info.id} className="agent-editor__hint">
-      {reason(info, need)}{' '}
+      {engineReason(info, need)}{' '}
       {onSetUp && (
         <TextButton tabIndex={0} onClick={() => onSetUp(info.id, need)}>
           {need === 'install' ? `Set up ${info.label}` : `Sign in to ${info.label}`}
@@ -102,7 +102,7 @@ export function AgentEngineField({
             value: info.id,
             label: info.label,
             disabled: Boolean(need),
-            title: need ? reason(info, need) : undefined,
+            title: need ? engineReason(info, need) : undefined,
           };
         })}
         onValueChange={onChange}
@@ -162,6 +162,7 @@ export function AgentEngineMore({
   );
 }
 
-function reason(info: EngineInfo, need: 'install' | 'sign-in'): string {
+/** Why an engine can't be chosen yet, in one line. */
+export function engineReason(info: EngineInfo, need: 'install' | 'sign-in'): string {
   return need === 'install' ? `${info.label} isn't set up yet.` : `${info.label} isn't signed in.`;
 }

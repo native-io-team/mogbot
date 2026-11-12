@@ -59,6 +59,24 @@ function useAdminSwitch() {
   return { saving, change };
 }
 
+/**
+ * Edit agent's row: the same switch, saved at once. What it lets an admin do
+ * is the On its own group's footnote.
+ */
+export function AdminRow({ agent }: { agent: Agent }) {
+  const live = useAgentsSelector((s) => s.agents?.find((a) => a.id === agent.id)) ?? agent;
+  const { saving, change } = useAdminSwitch();
+  return (
+    <Row label="Admin">
+      <Toggle
+        on={isAdmin(live)}
+        label="Admin — can manage and approve for other agents"
+        onChange={(on) => saving === null && void change(live, on)}
+      />
+    </Row>
+  );
+}
+
 /** The editor's switch: saved at once, not with the draft. */
 export function AdminSwitch({ agent }: { agent: Agent }) {
   const live = useAgentsSelector((s) => s.agents?.find((a) => a.id === agent.id)) ?? agent;

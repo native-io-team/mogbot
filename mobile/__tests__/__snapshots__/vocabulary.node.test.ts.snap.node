@@ -257,6 +257,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "Update the app on your Mac to pair. This code comes from an older copy, from before the app was renamed, so it shows the old name there too. Once it’s updated, make a new code there.",
   "Update the app on your Mac to pair. This code comes from an older version that can’t prove it’s your Mac; once it’s updated, make a new code there.",
   "Update the app on your Mac to search your conversations from here.",
+  "Update … on this phone to pair: your Mac’s app is newer and reaches the phone a way this version doesn’t know. Get the latest from TestFlight or the App Store, then scan the code again.",
   "Uses your Chrome on your Mac. It asks before anything it sends.",
   "Waiting for the app on your Mac",
   "Waiting for you on your Mac",

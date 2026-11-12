@@ -2871,10 +2871,11 @@ export const agentsScenarios: Scenario[] = [
     looksRightWhen:
       'The editor shows a Default / Opus / Sonnet / Haiku control with Sonnet chosen, and under it quiet This week / Its routines / All time lines: cost (“$3.81 at API prices”, said as what it is, since Claude reported no plan), tokens, turns and time, as reported; Its routines reads “$0.84 at API prices this week”.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-editor__usage',
+    requires: '[aria-labelledby="settings-group-agent-usage"]',
     steps: [
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
+      { click: '.agent-sheet__tabs [data-tab-value="usage"]' },
     ],
     commands: {
       agents_overview: overview(
@@ -2900,7 +2901,7 @@ export const agentsScenarios: Scenario[] = [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
-      { click: '.agent-editor__tabs [data-tab-value="memory"]' },
+      { click: '.agent-sheet__tabs [data-tab-value="memory"]' },
       { hover: '.agent-memory__item:nth-child(2)' },
     ],
     commands: {
@@ -2922,7 +2923,7 @@ export const agentsScenarios: Scenario[] = [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
-      { click: '.agent-editor__tabs [data-tab-value="memory"]' },
+      { click: '.agent-sheet__tabs [data-tab-value="memory"]' },
       { click: '.agent-memory__item:nth-child(2) [aria-label^="Edit"]' },
     ],
     commands: {
@@ -2988,15 +2989,15 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-engine-picker',
     title: 'Agents — moving an agent to Codex in the editor',
     looksRightWhen:
-      'Editing the Chief of Staff: a “Runs on” control (Claude Code | Codex) above Model, with Codex chosen; under it one muted line saying its next message starts fresh on Codex, handed the recent conversation, instructions and memory carried over, then one saying its commands go ahead without asking but can only change files in your projects and its own folder and can’t reach the internet, going further asks first, and apps connected to Codex aren’t limited by this. Model now offers Default / GPT-5.6-Sol / GPT-5.5 with Default chosen. The Apps hint says a Codex agent uses the MCP servers set up in Codex, with no Manage apps button.',
+      'Editing the Chief of Staff: the How it runs card reads Runs on · Codex, Model · Default, Project; under the card one muted footnote saying its next message starts fresh on Codex, handed the recent conversation, instructions and memory carried over.',
     openSelector: AGENTS_TAB,
-    requires: '[aria-label="Runs on"] [aria-pressed="true"]',
+    requires: '.agent-sheet__note',
     clipSelector: '.agent-editor',
     steps: [
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
-      { click: '.agent-editor__more' },
-      { click: '[aria-label="Runs on"] button:nth-child(2)' },
+      { click: '.agent-sheet__menu[aria-label^="Runs on"]' },
+      { click: '[role="menuitem"]', text: 'Codex' },
     ],
     commands: {
       agents_overview: overview(),
@@ -3011,7 +3012,7 @@ export const agentsScenarios: Scenario[] = [
     looksRightWhen:
       'The New agent dialog: “Runs on” shows Claude Code chosen and Codex greyed out (not clickable). Under it, one muted line on what protects a Claude Code agent (edits in your projects and its tools in this app go ahead; anything else asks first unless already allowed), then “Codex isn’t signed in.” with a “Sign in to Codex” text button. Nothing claims Codex is ready.',
     openSelector: AGENTS_TAB,
-    requires: '[aria-label="Runs on"] button[disabled]',
+    requires: '.agent-sheet__menu[aria-label^="Runs on"]',
     clipSelector: '.agent-editor',
     steps: [{ click: '.agents-list__new' }],
     commands: {
@@ -3028,13 +3029,9 @@ export const agentsScenarios: Scenario[] = [
     looksRightWhen:
       'The New agent dialog has no “Runs on” control at all: name, colour, then “Add a role and instructions”, and Advanced, opened: Model, project, apps, then one muted line in plain words, “It changes files in its project and its own folder without asking. For anything else, its Independence setting decides whether it asks you first.” (no “enforces”, no engine name in it). At the foot a quiet “Also use Codex” text button. No greyed-out Codex, no jargon.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-editor [data-testid="agent-engine-protections"]',
+    requires: '.agent-sheet [aria-labelledby="settings-group-agent-runs-on"]',
     clipSelector: '.agent-editor',
-    steps: [
-      { click: '.agents-list__new' },
-      { click: '.agent-editor__fill-in' },
-      { click: '.agent-editor__advanced > .agent-editor__more' },
-    ],
+    steps: [{ click: '.agents-list__new' }, { click: '.agent-editor__fill-in' }],
     commands: {
       agents_overview: {
         ...overview(),
@@ -3126,12 +3123,8 @@ export const agentsScenarios: Scenario[] = [
     looksRightWhen:
       'After “fill it in yourself”: Start from (Blank pressed), Name, the brief, then Advanced open under it: Runs on, Model (Default / Opus / Sonnet / Haiku), Works in, Apps, scrolled so Apps sits whole above the footer, not cut in half by it. (Colour is with the shape and face, behind the avatar beside Name.)',
     // Steps run before a scenario's command, so the dialog is opened by its button.
-    steps: [
-      { click: '.agents-list__new' },
-      { click: '.agent-editor__fill-in' },
-      { click: '.agent-editor__more' },
-    ],
-    requires: '.agent-editor__advanced-body',
+    steps: [{ click: '.agents-list__new' }, { click: '.agent-editor__fill-in' }],
+    requires: '.agent-sheet__menu',
     commands: {},
   },
   {
@@ -4097,14 +4090,15 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-fresh-meter',
     title: 'Agents — how full the conversation is, in the editor',
     looksRightWhen:
-      'Editing Acme Site: under This week / All time, a third quiet line “Conversation · 11% full · 21k of 200k tokens”. It is there only because the engine reported both numbers.',
+      'Editing Acme Site, on its Usage tab: under the Usage card (This week, All time), a “This conversation” card with one row, Conversation · 11% full · 21k of 200k tokens. It is there only because the engine reported both numbers.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-editor__usage',
-    clipSelector: '.agent-editor__usage',
+    requires: '[aria-labelledby="settings-group-agent-context"]',
+    clipSelector: '.agent-sheet__groups',
     steps: [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
+      { click: '.agent-sheet__tabs [data-tab-value="usage"]' },
     ],
     commands: {
       agents_overview: acmeWith(ACME_FRESH),

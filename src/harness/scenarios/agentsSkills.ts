@@ -109,7 +109,7 @@ export const agentsSkillsScenarios: Scenario[] = [
     id: 'agents-editor-skills',
     title: 'Agents — Edit agent: Save new skills, and Skills',
     looksRightWhen:
-      'At the end of Finance’s editor: “Save new skills” with a three-way control (Automatically, Ask me, Off) on Ask me, the line “After a hard task it offers to save how it did it, on a card. Anything that read outside content asks first.”, then “Skills” listing “Reconcile Stripe payouts” with when to use it muted under it, and quiet Edit and Remove at the right.',
+      'Finance’s Skills page, opened in place from Edit agent (‹ Edit agent in the bar): “Save new skills” with a three-way control (Automatically, Ask me, Off) on Ask me, the line “After a hard task it offers to save how it did it, on a card. Anything that read outside content asks first.”, then “Skills” listing “Reconcile Stripe payouts” with when to use it muted under it, and quiet Edit and Remove at the right.',
     openSelector: AGENTS_TAB,
     requires: '.agent-skills__skill',
     clipSelector: '.agent-skills',
@@ -117,6 +117,7 @@ export const agentsSkillsScenarios: Scenario[] = [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
+      { click: '.agent-sheet__nav-row', text: 'Skills' },
     ],
     commands: {
       agents_overview: overview(TEAM),

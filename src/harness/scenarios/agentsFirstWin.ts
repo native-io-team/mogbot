@@ -303,7 +303,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
       { click: '.agent-chat__starters > [data-idea="more"]' },
       { click: '.agents-ideas__foot button', text: 'Ready-made agents' },
     ],
-    requires: '.agent-editor__templates',
+    requires: '.agent-sheet .agent-editor__templates',
     commands: {},
   },
   {
@@ -337,7 +337,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     looksRightWhen:
       'Inbox pressed under “Start from”, and directly under the choices one muted line, “It reads your email through an app you connect, such as Gmail.”, with a “Connect an app…” button beside it. It doesn’t claim anything is or isn’t connected. Name Inbox on a teal badge, its role and briefing filled in.',
     command: 'agents.template.inbox',
-    requires: '.agent-editor__needs',
+    requires: '.agent-sheet__start .agent-sheet__note',
     commands: {},
   },
   {

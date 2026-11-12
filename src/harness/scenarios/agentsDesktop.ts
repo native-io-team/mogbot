@@ -531,9 +531,8 @@ export const agentsDesktopScenarios: Scenario[] = [
     steps: [
       { click: '.agents-list__new' },
       { click: '.agent-editor__fill-in' },
-      { click: '.agent-editor__more' },
     ],
-    requires: '.agent-editor__advanced-body',
+    requires: '.agent-sheet__menu',
     clipSelector: '.agent-editor',
     commands: {
       agents_overview: overview(TEAM, true, CHOSEN),

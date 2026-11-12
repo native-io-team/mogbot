@@ -137,6 +137,7 @@
 @import './features/agents-guide.css';
 @import './features/agents-composer.css';
 @import './features/agents-dialogs.css';
+@import './features/agents-editor-sheet.css';
 @import './features/agents-menus.css';
 @import './features/agents-team.css';
 @import './features/agents-routines.css';

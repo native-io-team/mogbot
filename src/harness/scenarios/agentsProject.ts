@@ -722,7 +722,7 @@ export const agentsProjectScenarios: Scenario[] = [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
-      { click: '.agent-editor__more' },
+      { click: '.agent-sheet__nav-row', text: 'Project' },
       { click: '.agent-editor__project' },
     ],
     commands: {
@@ -818,12 +818,13 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-capabilities',
     title: 'Agents — what an agent can do, in its editor',
     looksRightWhen:
-      'Editing the Chief of Staff: a quiet “What Chief of Staff can do” group, label column on the left (Projects, The team, Chrome, On this Mac, Connectors, Needs sign-in) and plain sentences on the right, above Permissions. No computer use is claimed.',
+      'Editing the Chief of Staff, on its Apps and access page: a “What Chief of Staff can do” card, one row each (Projects, The team, Chrome, On this Mac, Connectors, Needs sign-in) with its plain sentence under the label. No computer use is claimed.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-editor__can-do',
+    requires: '[aria-labelledby="settings-group-agent-can-do"]',
     steps: [
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
+      { click: '.agent-sheet__nav-row', text: 'Apps and access' },
     ],
     commands: {
       agents_overview: overview(

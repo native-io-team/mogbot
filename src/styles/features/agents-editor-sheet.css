@@ -1,0 +1,446 @@
+/* Edit agent and New agent as one sheet in the Settings kit
+ * (AgentEditorModal, AgentEditorParts): a bar that stays put, a contact card,
+ * grouped cards on the recessed page, pages that open in place. The cards,
+ * rows, hairlines and footnotes are settings.css's `.settings-group` rules;
+ * only what a sheet adds lives here. */
+
+:root {
+  --agent-sheet-width: 600px; /* css-ok: the settings column (560) plus the sheet's inset */
+  --agent-sheet-inset: var(--spacing-xl);
+  --agent-sheet-key: calc(var(--spacing-lg) * 4.5);
+  --agent-sheet-field-width: 60%;
+}
+
+/* ---------------------------------------------------------------- frame */
+
+.modal-frame-content.agent-editor--sheet {
+  width: min(var(--agent-sheet-width), calc(100vw - var(--spacing-xl) * 2));
+  max-width: none;
+  height: min(860px, calc(100vh - var(--spacing-xl) * 2)); /* css-ok: sheet height cap */
+  max-height: none;
+  overflow: hidden;
+  background: var(--settings-page-surface);
+}
+
+/* The dialog's error boundary sits between the frame and the sheet. */
+.agent-editor--sheet > * {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.agent-sheet {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.agent-sheet__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--spacing-lg) var(--agent-sheet-inset) var(--spacing-2xl);
+}
+
+/* ------------------------------------------------------------------ bar */
+
+.agent-sheet__bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--spacing-md);
+  min-height: calc(var(--spacing-lg) * 3);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  background: var(--settings-page-surface);
+}
+
+.agent-sheet__bar-side {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.agent-sheet__bar-side--end {
+  justify-content: flex-end;
+}
+
+.agent-sheet__title {
+  margin: 0;
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-sheet__cancel.button,
+.agent-sheet__back.button {
+  gap: var(--spacing-3xs);
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-lg);
+  text-decoration-line: none;
+}
+
+.agent-sheet__cancel.button:hover:not(:disabled),
+.agent-sheet__back.button:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.agent-sheet__back-chevron {
+  transform: rotate(180deg);
+}
+
+/* --------------------------------------------------------- contact card */
+
+.agent-sheet__contact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-xl);
+  text-align: center;
+}
+
+.agent-sheet__key {
+  --agent-key-size-xl: var(--agent-sheet-key);
+  display: inline-flex;
+  margin-bottom: var(--spacing-sm);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: transform var(--transition-interaction);
+}
+
+.agent-sheet__key:hover {
+  transform: translateY(-1px);
+}
+
+.agent-sheet__key:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--spacing-3xs);
+}
+
+.agent-sheet__name {
+  margin: 0;
+  max-width: 100%;
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-sheet__meta {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  color: var(--text-muted);
+}
+
+.agent-sheet__look.button {
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+  text-decoration-line: none;
+}
+
+.agent-sheet__look.button:hover:not(:disabled) {
+  text-decoration-line: underline;
+}
+
+.agent-sheet__contact .agent-sheet__card {
+  align-self: stretch;
+  margin-top: var(--spacing-md);
+  text-align: left;
+}
+
+/* ----------------------------------------------------------------- tabs */
+
+.agent-sheet__tabs.tabs__list {
+  display: flex;
+  width: 100%;
+  margin-bottom: var(--spacing-xl);
+}
+
+.agent-sheet__tabs .tabs__tab {
+  flex: 1;
+}
+
+/* ------------------------------------------------------------- groups */
+
+.agent-sheet__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+/* A page's own card: a component that isn't rows. */
+.agent-sheet__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg) var(--settings-card-inset);
+  background: var(--settings-card-surface);
+  border-radius: var(--radius-lg);
+}
+
+/* Several footnote lines (why an engine can't run, Also use…) stack. */
+.agent-sheet__note {
+  display: block;
+}
+
+.agent-sheet__note + .agent-sheet__note,
+.agent-sheet__note + .button {
+  margin-top: var(--spacing-3xs);
+}
+
+.settings-group__footnote .text-button.button {
+  font-size: inherit;
+}
+
+/* A row's value, right of its label: muted, one line. */
+.agent-sheet__value {
+  min-width: 0;
+  max-width: var(--agent-sheet-field-width);
+  font-size: var(--font-size-body-lg);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A long reading (usage) wraps under itself rather than losing its end. */
+.agent-sheet__value--wrap {
+  max-width: 70%;
+  white-space: normal;
+  text-align: right;
+  line-height: 1.4;
+}
+
+/* A row that opens a page: the whole row is the button. */
+.agent-sheet__nav-row {
+  width: 100%;
+  margin: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-sheet__nav-row::after {
+  content: '';
+  position: absolute;
+  inset: 0 calc(var(--settings-card-inset) * -1);
+  border-radius: inherit;
+  pointer-events: none;
+  transition: background var(--transition-interaction);
+}
+
+.agent-sheet__nav-row:hover::after {
+  background: var(--surface-control-hover);
+}
+
+.agent-sheet__nav-row:focus-visible {
+  outline: none;
+}
+
+.agent-sheet__nav-row:focus-visible::after {
+  box-shadow: inset 0 0 0 2px var(--focus-ring); /* css-ok: inset focus ring */
+}
+
+.agent-sheet__nav-row .settings-row-info {
+  flex: 1 1 auto;
+}
+
+.agent-sheet__chevron {
+  flex: none;
+  margin-left: calc(var(--spacing-md) * -0.5);
+  color: var(--text-muted);
+}
+
+/* A menu's trigger reads as a value, not a button. */
+.agent-sheet__menu .agent-sheet__value {
+  max-width: none;
+}
+
+.agent-sheet__menu.button {
+  flex: none;
+  margin-right: calc(var(--spacing-sm) * -1);
+  gap: var(--spacing-xs);
+  color: var(--text-muted);
+}
+
+.agent-sheet__menu.button:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+/* A text field set into its row: no box, the words right-aligned. */
+.agent-sheet__field-row {
+  cursor: text;
+}
+
+.agent-sheet__field-row .settings-row-label {
+  flex: none;
+}
+
+.agent-sheet__field {
+  flex: 1;
+  min-width: 0;
+  padding: var(--spacing-xs) 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-body-lg);
+  color: var(--text-primary);
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.agent-sheet__field::placeholder {
+  color: var(--text-muted);
+}
+
+.agent-sheet__field:focus {
+  outline: none;
+}
+
+.agent-sheet__field:disabled {
+  color: var(--text-muted);
+}
+
+/* What it should know: the card is the field. */
+.settings-group .settings-section > .agent-sheet__textarea {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--spacing-lg) * 5);
+  padding: var(--spacing-md) 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-body-lg);
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.agent-sheet__textarea:focus {
+  outline: none;
+}
+
+.agent-sheet__textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.settings-group .settings-section:has(> .agent-sheet__textarea:focus-visible) {
+  box-shadow: 0 0 0 2px var(--focus-ring); /* css-ok: field focus ring */
+}
+
+/* Start from: first on a new agent's sheet, the control filling its card. */
+.agent-sheet__start {
+  margin-bottom: var(--spacing-xl);
+}
+
+.agent-sheet__segmented .segmented-control {
+  display: flex;
+  width: 100%;
+}
+
+.agent-sheet__segmented .segmented-control > .button {
+  flex: 1;
+}
+
+/* The look picker under the contact card: the card's key is the preview. */
+.agent-sheet__contact .agent-look__preview {
+  display: none;
+}
+
+/* Independence's page: the bar says its name, so the card doesn't again. */
+.agent-sheet__card .agent-level-picker__row > span:first-child {
+  display: none;
+}
+
+.agent-sheet__card .agent-level-picker__row {
+  justify-content: flex-start;
+}
+
+.agent-sheet__textarea {
+  resize: none;
+}
+
+/* The red row at the foot. */
+.agent-sheet__delete.button {
+  height: auto;
+  min-height: var(--settings-row-min-height);
+  background: var(--settings-card-surface);
+  border-radius: var(--radius-lg);
+  color: var(--text-error);
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-body);
+}
+
+.agent-sheet__delete.button:hover:not(:disabled) {
+  background: var(--settings-card-surface);
+  color: var(--accent-error);
+  filter: brightness(1.08);
+}
+
+.agent-sheet__page-action.button {
+  align-self: flex-start;
+}
+
+.agent-sheet__empty {
+  margin: var(--spacing-xl) var(--settings-card-inset);
+  font-size: var(--font-size-body-lg);
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Describing alone (New agent's first look): calm, at the sheet's width,
+   with only Runs on under it, since the draft is made on that engine. */
+.agent-sheet__scroll[data-describing] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.agent-sheet__scroll[data-describing]
+  .agent-sheet__groups
+  > :not([aria-labelledby='settings-group-agent-runs-on']) {
+  display: none;
+}
+
+.agent-sheet__scroll[data-describing] .agent-sheet__groups {
+  margin-top: var(--spacing-md);
+}
+
+/* ------------------------------------------------------------- narrow */
+
+@media (max-width: 560px) {
+  :root {
+    --agent-sheet-inset: var(--spacing-lg);
+  }
+
+  .modal-frame-content.agent-editor--sheet {
+    width: calc(100vw - var(--spacing-md) * 2);
+    height: calc(100vh - var(--spacing-md) * 2);
+  }
+}
+
+/* A footnote under a page's card belongs to it, not to the gap between groups. */
+.agent-sheet__groups > .agent-sheet__card-note {
+  margin-top: calc(var(--spacing-xl) * -1 + var(--spacing-xs));
+}
+
+.agent-sheet__card-note p {
+  margin: 0;
+  font-size: inherit;
+  color: inherit;
+}
