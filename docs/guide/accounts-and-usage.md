@@ -76,5 +76,8 @@ unlocks anything else with it.
   is end to end encrypted and the relay can't read it.
 - **Sign out:** **Settings → Account → Sign out**. Your Mac is unlinked from the relay. If you set
   up Tailscale, your phone keeps working over it.
+- **Delete your account:** **Settings → Account → Delete my account**. Your email and account id
+  are removed from the sign-in service and the relay, this Mac is signed out at once, and any other
+  Mac signed in to the same account within a day. Nothing on your Mac is deleted.
 
 Your phone doesn't sign in. It uses the relay because the Mac it's paired with is signed in.

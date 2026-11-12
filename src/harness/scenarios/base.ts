@@ -672,6 +672,7 @@ export const baseCommands: CommandMap = {
   // Signing in at the relay (a build with one): opens the browser, answers nothing.
   companion_account_sign_in: null,
   companion_account_sign_out: null,
+  companion_account_delete: null,
   // Onboarding's phone checks: no phone on the tailnet yet; a store link's
   // QR code drawn from a fixed module matrix (the pairing fixture's).
   companion_tailnet_phones: [],

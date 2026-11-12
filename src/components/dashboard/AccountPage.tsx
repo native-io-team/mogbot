@@ -1,7 +1,8 @@
 /**
  * Settings → Account, only in a build with our hosted relay (docs/relay.md,
  * "Accounts"): who this Mac is signed in as, with Sign out (after a
- * confirm), or Sign in with the one line on what it unlocks.
+ * confirm) and Delete my account (after a confirm that names what goes),
+ * or Sign in with the one line on what it unlocks.
  *
  * Only what the relay said is shown. It answers over this Mac's own relay
  * connection, which is up only while phone access is on, so with phone
@@ -31,7 +32,7 @@ import {
   peekAccountOnOpen,
   takeAccountOnOpen,
 } from '../../lib/account';
-import { setPhoneAccess, signOutAccount } from '../../lib/companion';
+import { deleteAccount, setPhoneAccess, signOutAccount } from '../../lib/companion';
 
 export function AccountPage() {
   const { showToast } = useOptionalToast();
@@ -44,6 +45,12 @@ export function AccountPage() {
 
   const signOut = useAsyncState(async () => {
     await signOutAccount();
+    await reload();
+    return true;
+  });
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const remove = useAsyncState(async () => {
+    await deleteAccount();
     await reload();
     return true;
   });
@@ -70,7 +77,18 @@ export function AccountPage() {
     if (done) showToast('Signed out', 'success');
   };
 
-  const error = signIn.error ?? signOut.error?.message ?? turnOn.error?.message ?? null;
+  const confirmDelete = async () => {
+    const done = await remove.execute();
+    setConfirmingDelete(false);
+    if (done) showToast('Account deleted', 'success');
+  };
+
+  const error =
+    signIn.error ??
+    signOut.error?.message ??
+    remove.error?.message ??
+    turnOn.error?.message ??
+    null;
   // Never a spinner forever: past `SLOW_MS` connecting, say so with Try again.
   const connecting = !!status && status.relay.state === 'connecting' && !signIn.waiting;
   const slow = useSlow(connecting);
@@ -149,6 +167,42 @@ export function AccountPage() {
           </p>
         )}
       </Group>
+      {account && (
+        <Group id="account-delete" title="Delete account">
+          <Row
+            label="Delete my account"
+            description="Removes your email and account from the sign-in service and signs this Mac out. Your agents, chats and files stay on this Mac."
+          >
+            <Button
+              variant="danger"
+              onClick={() => setConfirmingDelete(true)}
+              disabled={remove.isLoading}
+              data-account-delete
+            >
+              Delete my account…
+            </Button>
+          </Row>
+        </Group>
+      )}
+      {confirmingDelete && account && (
+        <ProjectActionConfirmModal
+          title="Delete your account?"
+          body={
+            <p>
+              {account.email ?? 'This account'} is removed for good. This Mac is signed out now, and any
+              other Mac on it within a day. Your phone stops reaching this Mac from anywhere; over Tailscale, if you set
+              it up, it keeps working.
+            </p>
+          }
+          hint="Nothing on this Mac is deleted. You can make a new account any time."
+          loading={remove.isLoading}
+          confirmLabel="Delete account"
+          loadingLabel="Deleting…"
+          confirmVariant="danger"
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={() => void confirmDelete()}
+        />
+      )}
       {showConfirm && (
         <ProjectActionConfirmModal
           title="Sign out?"

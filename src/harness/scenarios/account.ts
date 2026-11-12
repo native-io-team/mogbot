@@ -39,10 +39,21 @@ const settings = (
 });
 
 export const accountScenarios: Scenario[] = [
+  {
+    ...settings(
+      'settings-account-delete-confirm',
+      'Settings — Account, Delete my account confirm',
+      'A confirm over the Account page: "Delete your account?", "sam@example.com is removed for good. This Mac is signed out now, and any other Mac on it within a day. …", the hint that nothing on this Mac is deleted, Cancel and a red "Delete account".',
+      { state: 'connected', account: ACCOUNT },
+      '[data-account-delete]'
+    ),
+    afterCommand: [{ click: '[data-account-delete]' }],
+    clipSelector: undefined,
+  },
   settings(
     'settings-account-signed-in',
     'Settings — Account, signed in',
-    'Account first in the section list and held. The page: "Account", its lead, then Your account: "sam@example.com" with "Signed in. Your phone can reach this Mac from anywhere, with no Tailscale." and a neutral "Sign out…" on the right. No accent anywhere on the page.',
+    'Account first in the section list and held. The page: "Account", its lead, then Your account: "sam@example.com" with "Signed in. Your phone can reach this Mac from anywhere, with no Tailscale." and a neutral "Sign out…" on the right. Below, Delete account: "Delete my account" with one line (email and account removed, this Mac signed out, agents and files stay) and a red "Delete my account…". No accent anywhere on the page.',
     { state: 'connected', account: ACCOUNT },
     '[data-account-sign-out]'
   ),

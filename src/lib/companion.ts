@@ -148,6 +148,9 @@ export const signInAccount = () => invoke<void>('companion_account_sign_in');
 /** "Sign out": unlinks this Mac from its account at the relay. */
 export const signOutAccount = () => invoke<void>('companion_account_sign_out');
 
+/** "Delete my account": gone at the sign-in service, and this Mac unlinked. */
+export const deleteAccount = () => invoke<void>('companion_account_delete');
+
 /** A phone signed in to this Mac's Tailscale account (`tailscale::TailnetPhone`). */
 export interface TailnetPhone {
   name: string;

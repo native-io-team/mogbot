@@ -51,6 +51,17 @@ ever needed to read or send anything:
 - The account provider is Clerk: Google and email codes, its free tier up to 10,000 monthly users.
   The relay only verifies Clerk's signed session tokens (public keys); no Clerk secret on the Mac or phone.
 
+
+### Deleting an account
+
+Settings → Account → **Delete my account** sends `{"t":"deleteAccount"}` on the Mac's signed-in
+socket. The Mac's Durable Object deletes the user at Clerk (`DELETE /v1/users/<id>` with the
+`CLERK_SECRET_KEY` Worker secret; 404 counts as done), then unlinks exactly as on sign-out, and
+answers `{"t":"accountDeleted","ok":true}` (or `ok:false` with `not_signed_in`, `unavailable` or
+`clerk_failed`, keeping everything). Other Macs on the same account hold the email only until
+their next login: once a day a Mac's login asks Clerk whether its account still exists, and a
+clear 404 unlinks it (`checkStillThere`; any other answer keeps it).
+
 ## Routes and fallback
 
 `Route.kind` gains `'relay'`: `{ kind: 'relay', url: 'wss://<relay host>/v1/phone/<fingerprint>' }`.

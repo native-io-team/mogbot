@@ -18,6 +18,14 @@ export interface Env {
   CLERK_ISSUER?: string;
   /** When set (comma list of origins), a session token's `azp` must be one of them. */
   CLERK_AUTHORIZED_PARTIES?: string;
+  /**
+   * Clerk's secret key (a Worker secret, never a var): deleting an account
+   * ("Delete my account" on the Mac) and noticing one deleted elsewhere.
+   * Absent: deleting answers `unavailable`.
+   */
+  CLERK_SECRET_KEY?: string;
+  /** Clerk's Backend API. Tests point it elsewhere. */
+  CLERK_API_URL?: string;
 }
 
 export function accountsOn(env: Env): boolean {

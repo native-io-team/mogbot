@@ -23,7 +23,20 @@ export const MAX_PHONES_PER_ADDRESS = 4;
 export const MAX_PENDING_MACS = 4;
 
 /** The account this Mac is signed in to (docs/relay.md, "Accounts"). */
-export type Binding = { id: string; email: string | null; linkedAt: number };
+export type Binding = {
+  id: string;
+  email: string | null;
+  linkedAt: number;
+  /** When Clerk last said the account exists (see `checkStillThere`). */
+  checkedAt?: number;
+};
+
+/** How often a Mac's login re-checks that its account still exists. */
+export const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
+
+function clerkApi(env: Env): string {
+  return (env.CLERK_API_URL?.trim() || 'https://api.clerk.com').replace(/\/$/, '');
+}
 /** The one link code waiting, by its SHA-256. */
 export type PendingLink = { codeHash: string; expiresAt: number };
 
@@ -172,7 +185,7 @@ export class MacRelay extends DurableObject<Env> {
       frame.signature
     );
     if (!ok || ws.readyState !== OPEN) return closeQuietly(ws, 4401, 'unauthorized');
-    const account = publicAccount(await this.binding());
+    const account = publicAccount(await this.checkStillThere(await this.binding()));
     if (ws.readyState !== OPEN) return;
     // No await from here on, so two Macs logging in at once still leave exactly one.
     for (const other of this.ctx.getWebSockets('mac')) {
@@ -197,6 +210,8 @@ export class MacRelay extends DurableObject<Env> {
         await this.startLink(state, frame.code);
       } else if (frame?.t === 'unlink') {
         await this.unlink(state);
+      } else if (frame?.t === 'deleteAccount') {
+        await this.deleteAccount(state);
       }
       return;
     }
@@ -256,6 +271,63 @@ export class MacRelay extends DurableObject<Env> {
       // Its channel table stays exact: each phone that went is closed as usual.
       if (s?.role === 'phone') mac?.send(JSON.stringify({ t: 'close', ch: s.ch }));
     }
+  }
+
+  /**
+   * "Delete my account": the account goes at Clerk (its email and id), then
+   * this Mac is unlinked as on sign-out. Other Macs on the account notice on
+   * their next login ({@link checkStillThere}). Already gone at Clerk counts
+   * as done.
+   */
+  private async deleteAccount(state: MacState) {
+    const answer = (v: Record<string, unknown>) =>
+      this.currentMac()?.send(JSON.stringify({ t: 'accountDeleted', ...v }));
+    const binding = await this.binding();
+    if (!binding) return answer({ ok: false, error: 'not_signed_in' });
+    const key = this.env.CLERK_SECRET_KEY?.trim();
+    if (!key) return answer({ ok: false, error: 'unavailable' });
+    let status = 0;
+    try {
+      const res = await fetch(`${clerkApi(this.env)}/v1/users/${encodeURIComponent(binding.id)}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${key}` },
+      });
+      status = res.status;
+    } catch {
+      status = 0;
+    }
+    if (status !== 200 && status !== 404) return answer({ ok: false, error: 'clerk_failed' });
+    await this.unlink(state);
+    answer({ ok: true });
+  }
+
+  /**
+   * On a Mac's login with an account: once a day, ask Clerk whether the
+   * account still exists, so one deleted from another Mac leaves no email
+   * here. Only a clear 404 unlinks; any other answer keeps it.
+   */
+  private async checkStillThere(binding: Binding | undefined): Promise<Binding | undefined> {
+    const key = this.env.CLERK_SECRET_KEY?.trim();
+    if (!binding || !key) return binding;
+    const now = Date.now();
+    if (binding.checkedAt && now - binding.checkedAt < CHECK_EVERY_MS) return binding;
+    try {
+      const res = await fetch(`${clerkApi(this.env)}/v1/users/${encodeURIComponent(binding.id)}`, {
+        headers: { authorization: `Bearer ${key}` },
+      });
+      if (res.status === 404) {
+        await this.ctx.storage.delete([ACCOUNT_KEY, PENDING_KEY]);
+        return undefined;
+      }
+      if (res.ok) {
+        const next = { ...binding, checkedAt: now };
+        await this.ctx.storage.put(ACCOUNT_KEY, next);
+        return next;
+      }
+    } catch {
+      // Unreachable: keep the account; the next login asks again.
+    }
+    return binding;
   }
 
   /** From the Worker, after it verified the Clerk token: the code must be this Mac's pending one. */

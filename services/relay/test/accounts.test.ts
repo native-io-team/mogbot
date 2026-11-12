@@ -60,10 +60,15 @@ async function token(
 
 let jwksCounter = 0;
 let signer: Signer;
+/** The fake Clerk Backend API: each user's status, and what was asked. */
+let clerkUsers: Map<string, number>;
+let clerkCalls: string[];
 let accountsEnv: Env;
 
 beforeEach(async () => {
   signer = await newSigner('key-1');
+  clerkUsers = new Map([['user_123', 200]]);
+  clerkCalls = [];
   // A fresh JWKS address per test, so the in-memory key cache never carries over.
   const jwksUrl = `${ISSUER}/.well-known/jwks-${++jwksCounter}.json`;
   const realFetch = globalThis.fetch;
@@ -71,6 +76,16 @@ beforeEach(async () => {
     const url = input instanceof Request ? input.url : String(input);
     if (url === jwksUrl) {
       return Response.json({ keys: [{ ...signer.jwk, kid: signer.kid, use: 'sig', alg: 'RS256' }] });
+    }
+    const user = /^https:\/\/clerk-api\.test\/v1\/users\/(.+)$/.exec(url)?.[1];
+    if (user !== undefined) {
+      const method = (input instanceof Request ? input.method : init?.method) ?? 'GET';
+      const auth = new Headers(input instanceof Request ? input.headers : init?.headers).get('authorization');
+      clerkCalls.push(`${method} ${user}`);
+      if (auth !== 'Bearer sk_test_fake') return new Response('no', { status: 401 });
+      const status = clerkUsers.get(user) ?? 404;
+      if (method === 'DELETE' && status === 200) clerkUsers.set(user, 404);
+      return new Response(status === 200 ? '{}' : 'not found', { status });
     }
     return realFetch(input, init);
   });
@@ -377,6 +392,64 @@ describe('gating phones', () => {
     expect((await late.closed).code).toBe(4402);
     macWs.ws.close(1000);
     await loginMac(mac, accountsEnv, null);
+  });
+});
+
+describe('deleting the account', () => {
+  it('deletes it at Clerk, unlinks this Mac and closes its phones', async () => {
+    const { mac, macWs } = await linkedMac();
+    const a = await openPhone(mac, macWs, accountsEnv);
+    macWs.ws.send(JSON.stringify({ t: 'deleteAccount' }));
+    expect(await macWs.json()).toEqual({ t: 'account', account: null });
+    expect(await a.phone.closed).toEqual({ code: 4402, reason: 'sign_in_needed' });
+    expect(await macWs.json()).toEqual({ t: 'close', ch: a.ch });
+    expect(await macWs.json()).toEqual({ t: 'accountDeleted', ok: true });
+    expect(clerkCalls).toContain('DELETE user_123');
+    expect(clerkUsers.get('user_123')).toBe(404);
+    macWs.ws.close(1000);
+    await loginMac(mac, accountsEnv, null);
+  });
+
+  it('keeps everything when Clerk refuses, and says so', async () => {
+    const { mac, macWs } = await linkedMac();
+    clerkUsers.set('user_123', 500);
+    macWs.ws.send(JSON.stringify({ t: 'deleteAccount' }));
+    expect(await macWs.json()).toEqual({ t: 'accountDeleted', ok: false, error: 'clerk_failed' });
+    macWs.ws.close(1000);
+    clerkUsers.set('user_123', 200);
+    await loginMac(mac, accountsEnv, { id: 'user_123', email: 'me@example.com' });
+  });
+
+  it('says not signed in with no account', async () => {
+    const mac = await newMacKey();
+    const macWs = await loginMac(mac, accountsEnv);
+    macWs.ws.send(JSON.stringify({ t: 'deleteAccount' }));
+    expect(await macWs.json()).toEqual({ t: 'accountDeleted', ok: false, error: 'not_signed_in' });
+    expect(clerkCalls.filter((c) => c.startsWith('DELETE'))).toEqual([]);
+  });
+
+  it('another Mac on a deleted account is unlinked at its next login', async () => {
+    const { mac, macWs } = await linkedMac();
+    macWs.ws.close(1000);
+    // Deleted from another Mac; this binding was never checked, so this login asks.
+    clerkUsers.set('user_123', 404);
+    await loginMac(mac, accountsEnv, null);
+  });
+
+  it('checks at most once a day, and keeps the account when Clerk is down', async () => {
+    const { mac, macWs } = await linkedMac();
+    macWs.ws.close(1000);
+    clerkUsers.set('user_123', 503);
+    const again = await loginMac(mac, accountsEnv, { id: 'user_123', email: 'me@example.com' });
+    again.ws.close(1000);
+    clerkUsers.set('user_123', 200);
+    const third = await loginMac(mac, accountsEnv, { id: 'user_123', email: 'me@example.com' });
+    third.ws.close(1000);
+    const gets = clerkCalls.filter((c) => c === 'GET user_123').length;
+    clerkUsers.set('user_123', 404);
+    // Checked fine just now: no ask for a day, so the account stays.
+    await loginMac(mac, accountsEnv, { id: 'user_123', email: 'me@example.com' });
+    expect(clerkCalls.filter((c) => c === 'GET user_123').length).toBe(gets);
   });
 });
 
