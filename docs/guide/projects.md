@@ -15,7 +15,7 @@ From Projects you can:
 
 - start from a template (web and mobile starters),
 - import a repository from GitHub,
-- add a folder that's already on your Mac.
+- add a folder that's already on your computer.
 
 Projects need Node and Git. If either is missing, the app lists what's needed and has your engine
 install it while a checklist ticks off each one. GitHub sign-in is optional.
@@ -77,7 +77,7 @@ Good to know:
   overwriting anything.
 - Files that look like secrets (like `.env` files) and very large files are never included, and
   the card lists what was left out.
-- Up to 4 open copies per project, and a copy needs at least 2 GB free on your Mac.
+- Up to 4 open copies per project, and a copy needs at least 2 GB free on your computer.
 - To have an agent work straight in your folder instead, turn on **Work directly in the project**
   in its editor.
-- On the phone you can Keep or Discard. Preview and pull requests are on the Mac.
+- On the phone you can Keep or Discard. Preview and pull requests are on the computer.

@@ -18,6 +18,7 @@ import { ToggleButton } from '../primitives/ToggleButton';
 import { TextButton } from '../primitives/TextButton';
 import { CheckIcon } from '../icons';
 import { useStayOn } from '../../hooks/useStayOn';
+import { HOST_COMPUTER, THIS_COMPUTER } from '../../lib/computer';
 
 /** The first-run note: where agents run, and the three things that help. */
 export function AgentsStayOnNote() {
@@ -28,8 +29,8 @@ export function AgentsStayOnNote() {
     <div className="agents-stay-on">
       <p className="agents-stay-on__line">
         {state.keepRunning
-          ? 'Agents run on this Mac. Closing the window keeps them going; quitting stops them, and sleep pauses them.'
-          : 'Agents run on this Mac. Quitting the app stops them, and sleep pauses them.'}
+          ? `Agents run on ${THIS_COMPUTER}. Closing the window keeps them going; quitting stops them, and sleep pauses them.`
+          : `Agents run on ${THIS_COMPUTER}. Quitting the app stops them, and sleep pauses them.`}
       </p>
       <div className="agents-stay-on__actions">
         <ToggleButton
@@ -39,7 +40,7 @@ export function AgentsStayOnNote() {
           leftIcon={tick(state.keepAwake)}
           onClick={() => void change({ keepAwake: !state.keepAwake })}
         >
-          Keep this Mac awake
+          Keep {THIS_COMPUTER} awake
         </ToggleButton>
         <ToggleButton
           variant="ghost"
@@ -65,7 +66,9 @@ export function AgentsStayOnNote() {
         )}
       </div>
       <p className="agents-stay-on__line agents-stay-on__line--quiet">
-        Around the clock? Run it on a Mac that never sleeps, like a Mac mini or a cloud Mac.
+        {HOST_COMPUTER === 'mac'
+          ? 'Around the clock? Run it on a Mac that never sleeps, like a Mac mini or a cloud Mac.'
+          : 'Around the clock? Run it on a computer that never sleeps, like a desktop that stays on or a cloud machine.'}
       </p>
     </div>
   );
@@ -79,7 +82,7 @@ export function KeepAwakeLink() {
     <>
       {' '}
       <TextButton tabIndex={0} onClick={() => void change({ keepAwake: true })}>
-        Keep this Mac awake
+        Keep {THIS_COMPUTER} awake
       </TextButton>
     </>
   );

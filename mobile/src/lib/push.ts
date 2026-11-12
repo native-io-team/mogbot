@@ -19,10 +19,11 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { targetOf } from './notify';
 import { getApp, setApp } from './store';
+import { pairedComputer } from './computer';
 
 /** How alerts work without push: Settings and the after-pairing card say the same. */
-export const ALERTS_WHILE_OPEN =
-  'Notifications arrive while this app is open on your phone. While you’re using your Mac, only your Mac notifies.';
+export const alertsWhileOpen = (your: string = pairedComputer().your) =>
+  `Notifications arrive while this app is open on your phone. While you’re using ${your}, only ${your} notifies.`;
 
 /** The App Store build (or an official EAS build): `extra.official` in app.config.ts. */
 export const isOfficialBuild = () => Boolean(Constants.expoConfig?.extra?.official);
@@ -44,13 +45,14 @@ export function pushLine(
   official: boolean,
   os: string = Platform.OS
 ): { value: string; footer: string } | null {
+  const comp = pairedComputer();
   if (!official || status === 'self_build') {
     return {
       value: 'Needs the official build',
       footer:
         os === 'android'
-          ? 'With the app closed, notifications need the Google Play app. This copy was built on your Mac.'
-          : 'With the app closed, notifications need the App Store app. This copy was built on your Mac, and Apple doesn’t let it receive them.',
+          ? `With the app closed, notifications need the Google Play app. This copy was built on ${comp.your}.`
+          : `With the app closed, notifications need the App Store app. This copy was built on ${comp.your}, and Apple doesn’t let it receive them.`,
     };
   }
   switch (status) {
@@ -58,24 +60,24 @@ export function pushLine(
       return {
         value: 'On',
         footer:
-          'Your Mac can wake this phone through the notification service. Notifications say only that an agent needs you or finished, never what it said. While you’re using your Mac, only your Mac notifies.',
+          `${comp.yourCap} can wake this phone through the notification service. Notifications say only that an agent needs you or finished, never what it said. While you’re using ${comp.your}, only ${comp.your} notifies.`,
       };
     case 'pending':
       return {
         value: 'Connecting',
         footer:
-          'Your Mac couldn’t reach the notification service yet. It tries again with the next one.',
+          `${comp.yourCap} couldn’t reach the notification service yet. It tries again with the next one.`,
       };
     case 'off':
       return {
-        value: 'Off on your Mac',
-        footer: 'Turn on phone notifications on your Mac, in Settings → Phone.',
+        value: `Off on ${comp.your}`,
+        footer: `Turn on phone notifications on ${comp.your}, in Settings → Phone.`,
       };
     case 'unavailable':
       return {
-        value: 'Not on this Mac',
+        value: `Not on ${comp.this}`,
         footer:
-          'The app on your Mac has no notification service. Notifications arrive while this app is open.',
+          `The app on ${comp.your} has no notification service. Notifications arrive while this app is open.`,
       };
     default:
       return null;

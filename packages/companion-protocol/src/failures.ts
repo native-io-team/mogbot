@@ -8,6 +8,7 @@
 
 import type { Failure } from './model';
 import { resetPhrase } from './quota';
+import { yourComputer, type ComputerKind } from './computer';
 
 export type FailureKind = Failure['kind'];
 
@@ -121,12 +122,16 @@ export function failureFixLabel(fix: FailureFix, engine: string): string {
  * can't install or sign an engine in from here). `null` where the phone
  * has the button itself.
  */
-export function failureFixAtMac(fix: FailureFix, engine: string): string | null {
+export function failureFixAtMac(
+  fix: FailureFix,
+  engine: string,
+  computer?: ComputerKind | null
+): string | null {
   switch (fix) {
     case 'sign-in':
-      return `Sign in to ${engine} on your Mac, then send it again.`;
+      return `Sign in to ${engine} on ${yourComputer(computer)}, then send it again.`;
     case 'install':
-      return `Install ${engine} on your Mac, then send it again.`;
+      return `Install ${engine} on ${yourComputer(computer)}, then send it again.`;
     default:
       return null;
   }

@@ -94,6 +94,7 @@ import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import { refreshAgents } from '../../lib/agentsStore';
 import { runsOnRows } from '../../../packages/companion-protocol/src/usageGlance';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
 
@@ -566,7 +567,7 @@ export function UsagePanel({
           {inventory && inventory.local.length > 0 && (
             <section className="usage-section" aria-labelledby="usage-local">
               <h3 className="usage-section__title" id="usage-local">
-                Other compute on this Mac
+                Other compute on {THIS_COMPUTER}
               </h3>
               <p className="usage-section__muted">
                 Detected here, with no plan limits to read. Agents can run on OpenCode; they reach

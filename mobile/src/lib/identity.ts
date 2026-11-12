@@ -23,6 +23,7 @@ import {
   type IdentityProof,
   type MacIdentity,
 } from '@shipstudio/companion-protocol';
+import { pairedComputer } from './computer';
 
 /** base64url (padded or not) to bytes, or null for anything else. */
 export function fromBase64Url(text: string): Uint8Array | null {
@@ -133,17 +134,17 @@ export function checkPairAnswer(
   );
 }
 
-export const NOT_YOUR_MAC =
-  'The server at this address couldn’t prove it’s the Mac you paired with, so this phone sent it nothing private: not its pairing, not your messages. If you set this Mac up again, pair again from it.';
+export const notYourMac = (c = pairedComputer()) =>
+  `The server at this address couldn’t prove it’s ${c.the} you paired with, so this phone sent it nothing private: not its pairing, not your messages. If you set ${c.this} up again, pair again from it.`;
 
-export const MAC_RESET =
-  'The Mac at this address has a different identity from the one this phone paired with, so this phone sent it nothing private. That happens when the app on your Mac lost its key and started over, which removes every paired phone. Pair again from your Mac.';
+export const macReset = (c = pairedComputer()) =>
+  `${c.theCap} at this address has a different identity from the one this phone paired with, so this phone sent it nothing private. That happens when the app on ${c.your} lost its key and started over, which removes every paired phone. Pair again from ${c.your}.`;
 
-export const PAIR_AGAIN =
-  'This pairing was made before the app checked your Mac’s identity, so it can’t be trusted any more. Pair again: on your Mac, click the phone line at the bottom of the sidebar, then “Pair your phone”.';
+export const pairAgain = (c = pairedComputer()) =>
+  `This pairing was made before the app checked ${c.yours} identity, so it can’t be trusted any more. Pair again: on ${c.your}, click the phone line at the bottom of the sidebar, then “Pair your phone”.`;
 
-export const PAIRING_LOST =
-  'This phone’s pairing couldn’t be read, so it was removed. Your agents and their chats are still on your Mac. Pair again: on your Mac, click the phone line at the bottom of the sidebar, then “Pair your phone”.';
+export const pairingLost = (c = pairedComputer()) =>
+  `This phone’s pairing couldn’t be read, so it was removed. Your agents and their chats are still on ${c.your}. Pair again: on ${c.your}, click the phone line at the bottom of the sidebar, then “Pair your phone”.`;
 
-export const UPDATE_MAC =
-  'The app on your Mac is too old for this phone. Update it on the Mac, then try again.';
+export const updateMac = (c = pairedComputer()) =>
+  `The app on ${c.your} is too old for this phone. Update it on ${c.the}, then try again.`;

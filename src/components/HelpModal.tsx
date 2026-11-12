@@ -19,6 +19,7 @@ import { useModal } from '../contexts/ModalContext';
 import { asCommandError, formatCommandError } from '../lib/errors';
 import { getDesktopSettings } from '../lib/agentsDesktop';
 import { MODE_TOGGLE_SHORTCUT } from './workspace/ModeToggle';
+import { THIS_COMPUTER } from '../lib/computer';
 
 interface HelpModalProps {
   /** Optional project path to include project-level skills */
@@ -108,7 +109,7 @@ function getAgentShortcuts(quickMessage: string | null): HelpShortcut[] {
           {
             id: 'agents-quick-message',
             label: 'Quick message',
-            description: 'Message an agent from anywhere on this Mac',
+            description: `Message an agent from anywhere on ${THIS_COMPUTER}`,
             keys: [quickMessage],
           },
         ]

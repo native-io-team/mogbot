@@ -44,6 +44,7 @@ import {
   type RemoteAccessStatus,
   type RemoteProblem,
 } from '../../lib/remoteAccess';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 export const errMsg = (err: unknown) => formatCommandError(asCommandError(err));
 
@@ -230,8 +231,8 @@ export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
       return (
         <>
           <p className="remote-note">
-            Tailscale (free) gives this Mac a private web address on <em>your</em> account. Your
-            assistant talks to it directly — nothing passes through servers we run.
+            Tailscale (free) gives {THIS_COMPUTER} a private web address on <em>your</em> account.
+            Your assistant talks to it directly — nothing passes through servers we run.
           </p>
           <div className="remote-actions">
             <Button
@@ -280,7 +281,7 @@ export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
       return (
         <>
           <p className="remote-note">
-            Turning this on keeps this Mac awake and gives it a link only you have.
+            Turning this on keeps {THIS_COMPUTER} awake and gives it a link only you have.
           </p>
           {offerLid && (
             <label className="remote-toggle">
@@ -418,7 +419,7 @@ export function RemoteOnBar({ ctl }: { ctl: RemoteCtl }) {
     <div className="remote-onbar" data-testid="remote-onbar">
       <span className="remote-onbar__dot" aria-hidden />
       <span className="remote-onbar__text">
-        Remote access is on — this Mac is being kept awake.
+        Remote access is on — {THIS_COMPUTER} is being kept awake.
       </span>
       <Button
         variant="secondary"
@@ -472,7 +473,7 @@ export function LinkRow({ ctl, allowReset = false }: { ctl: RemoteCtl; allowRese
       <div className="remote-keynote" role="note">
         <WarningIcon size={16} />
         <span>
-          <strong>This link is a key to this Mac.</strong> Paste it only into your own AI
+          <strong>This link is a key to {THIS_COMPUTER}.</strong> Paste it only into your own AI
           assistant’s connector settings — never into a chat message, email, screenshot, shared doc
           or issue. If it might have leaked, replace it
           {allowReset ? ' below' : ' from Remote access'}.

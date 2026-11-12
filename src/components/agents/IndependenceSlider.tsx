@@ -20,15 +20,16 @@
 import { useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import {
   INDEPENDENCE_ALWAYS_ASKS,
-  INDEPENDENCE_DETAIL,
   INDEPENDENCE_ENDS,
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
   INDEPENDENCE_TITLE,
+  independenceDetail,
   independenceStep,
   independenceValueText,
   type AgentIndependence,
 } from '../../lib/agentIndependence';
+import { HOST_COMPUTER } from '../../lib/computer';
 
 const LAST = INDEPENDENCE_LEVELS.length - 1;
 
@@ -117,7 +118,7 @@ export function IndependenceSlider({
         aria-valuemin={0}
         aria-valuemax={LAST}
         aria-valuenow={index}
-        aria-valuetext={independenceValueText(shown)}
+        aria-valuetext={independenceValueText(shown, HOST_COMPUTER)}
         aria-disabled={disabled || undefined}
         aria-orientation="horizontal"
         onKeyDown={onKeyDown}
@@ -158,7 +159,7 @@ export function IndependenceSlider({
         ))}
       </div>
       <p className="independence-slider__detail" id={detailId} aria-live="polite">
-        {INDEPENDENCE_DETAIL[shown]}
+        {independenceDetail(shown, HOST_COMPUTER)}
       </p>
       <p className="independence-slider__always">{INDEPENDENCE_ALWAYS_ASKS}</p>
     </div>

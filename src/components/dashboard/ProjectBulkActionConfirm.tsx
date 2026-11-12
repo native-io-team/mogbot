@@ -11,6 +11,7 @@ import {
   type BulkProjectActionConfirm,
 } from '../../hooks/useProjectBulkActions';
 import type { DashboardProject } from '../../lib/project';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 interface ProjectBulkActionConfirmProps<T extends DashboardProject> {
   confirm: BulkProjectActionConfirm<T>;
@@ -36,12 +37,14 @@ export function ProjectBulkActionConfirm<T extends DashboardProject>({
   return (
     <ProjectActionConfirmModal
       title={
-        isDelete ? 'Delete the selected files from this Mac?' : 'Remove the selected projects?'
+        isDelete
+          ? `Delete the selected files from ${THIS_COMPUTER}?`
+          : 'Remove the selected projects?'
       }
       body={
         isDelete ? (
           <>
-            Permanently delete <strong>{countLabel}</strong> from this Mac?
+            Permanently delete <strong>{countLabel}</strong> from {THIS_COMPUTER}?
           </>
         ) : (
           <>
@@ -52,7 +55,7 @@ export function ProjectBulkActionConfirm<T extends DashboardProject>({
       hint={
         isDelete
           ? `${selection} will be removed from disk. This cannot be undone.`
-          : `${selection} will stay on this Mac. To bring ${confirm.projects.length === 1 ? 'it' : 'them'} back: Import, then Local folder.`
+          : `${selection} will stay on ${THIS_COMPUTER}. To bring ${confirm.projects.length === 1 ? 'it' : 'them'} back: Import, then Local folder.`
       }
       loading={loading}
       confirmLabel={isDelete ? 'Delete files' : 'Remove from projects'}

@@ -8,6 +8,7 @@ import { Button } from '../../primitives/Button';
 import { AgentKey } from '../../agents/AgentKey';
 import { FlowShell } from './FlowParts';
 import { CHIEF_COLORWAY, CHIEF_ICON } from '../../../../packages/companion-protocol/src/agentKeys';
+import { THIS_COMPUTER } from '../../../lib/computer';
 
 export function WelcomeStep({ onNext }: { onNext: () => void }) {
   return (
@@ -23,7 +24,7 @@ export function WelcomeStep({ onNext }: { onNext: () => void }) {
         />
       }
       title="Your own team of AI agents"
-      lede="They run on this Mac, on your own Claude or ChatGPT plan. You talk to one, your Chief of Staff, and anything risky waits for your OK."
+      lede={`They run on ${THIS_COMPUTER}, on your own Claude or ChatGPT plan. You talk to one, your Chief of Staff, and anything risky waits for your OK.`}
       primary={
         <Button variant="primary" size="large" onClick={onNext} autoFocus data-flow-primary>
           Get started
@@ -31,7 +32,7 @@ export function WelcomeStep({ onNext }: { onNext: () => void }) {
       }
     >
       <p className="flow-note">
-        About five minutes, all here on this Mac. Your phone comes after, if you want it.
+        About five minutes, all here on {THIS_COMPUTER}. Your phone comes after, if you want it.
       </p>
     </FlowShell>
   );

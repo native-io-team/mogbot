@@ -25,16 +25,15 @@ import {
   type PhoneStatus,
   type RelayStatus,
 } from './companion';
+import { THIS_COMPUTER } from './computer';
 
 export type Account = NonNullable<RelayStatus['account']>;
 
 /** One line on what signing in gets you, wherever Sign in is offered. */
-export const ACCOUNT_UNLOCKS =
-  'Signing in lets your phone reach this Mac from anywhere, with no Tailscale to set up.';
+export const ACCOUNT_UNLOCKS = `Signing in lets your phone reach ${THIS_COMPUTER} from anywhere, with no Tailscale to set up.`;
 
 /** And what you keep without it. */
-export const WITHOUT_ACCOUNT =
-  'Without it, everything on this Mac works the same, and your phone can use your own Tailscale.';
+export const WITHOUT_ACCOUNT = `Without it, everything on ${THIS_COMPUTER} works the same, and your phone can use your own Tailscale.`;
 
 export const SIGN_IN = 'Sign in';
 export const USE_WITHOUT_SIGNING_IN = 'Use without signing in';
@@ -164,7 +163,7 @@ export async function beginSignIn(deps: SignInDeps = DEFAULT_DEPS): Promise<true
   while (s.relay.state !== 'connected') {
     if (deps.now() >= until) {
       throw new Error(
-        'Couldn’t reach the sign-in service. Check this Mac is online, then try again.'
+        `Couldn’t reach the sign-in service. Check ${THIS_COMPUTER} is online, then try again.`
       );
     }
     await deps.sleep(500);

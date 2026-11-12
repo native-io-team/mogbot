@@ -34,6 +34,7 @@ import {
   takePendingProjectAction,
 } from '../../lib/projectTools';
 import { getAgentById } from '../../lib/agent';
+import { THIS_COMPUTER, THIS_COMPUTER_CAP } from '../../lib/computer';
 
 /** Plain names for the list; the checklist keeps the tools' own names. */
 const PLAIN_NAMES: Record<string, string> = {
@@ -115,7 +116,11 @@ export function ProjectToolsModal({ isOpen, onClose }: ProjectToolsModalProps) {
       <div className="settings-modal-body project-tools">
         {!status.data ? (
           <div className="project-tools__loading">
-            {status.error ? <p>Couldn’t check this Mac. Close and try again.</p> : <Spinner />}
+            {status.error ? (
+              <p>Couldn’t check {THIS_COMPUTER}. Close and try again.</p>
+            ) : (
+              <Spinner />
+            )}
           </div>
         ) : running && engine ? (
           <GuidedSetupPhase
@@ -129,7 +134,7 @@ export function ProjectToolsModal({ isOpen, onClose }: ProjectToolsModalProps) {
         ) : required.length > 0 ? (
           <>
             <p className="project-tools__lede">
-              Projects (a site, an app) are built on this Mac. It needs these first:
+              Projects (a site, an app) are built on {THIS_COMPUTER}. It needs these first:
             </p>
             <ul className="project-tools__list">
               {required.map((item) => (
@@ -199,8 +204,8 @@ export function ProjectToolsModal({ isOpen, onClose }: ProjectToolsModalProps) {
 function EngineNote({ engineName }: { engineName: string | null }) {
   return engineName ? (
     <p className="project-tools__note">
-      {engineName} installs them in a terminal and explains each step. This Mac checks each one
-      itself, and you carry on when they’re all there.
+      {engineName} installs them in a terminal and explains each step. {THIS_COMPUTER_CAP} checks
+      each one itself, and you carry on when they’re all there.
     </p>
   ) : (
     <p className="project-tools__note">

@@ -77,6 +77,7 @@ import {
   space,
   type,
 } from '../lib/theme';
+import { useComputer } from '../lib/computer';
 
 /** How long a card's chats get to load before the queue starts without them. */
 const LOAD_WAIT_MS = 5000;
@@ -243,6 +244,7 @@ function Shown({
   onChat: (at?: string) => void;
   bottom: number;
 }) {
+  const comp = useComputer();
   const styles = useStyles();
   const colors = useColors();
   const { width } = useWindowDimensions();
@@ -409,7 +411,7 @@ function Shown({
         )}
         {pending && !connected && (
           <T variant="small" color={colors.textSecondary}>
-            Answer it once your Mac is back. It stays open until then.
+            Answer it once {comp.your} is back. It stays open until then.
           </T>
         )}
         <View style={styles.quiet}>

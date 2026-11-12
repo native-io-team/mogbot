@@ -109,7 +109,7 @@ pub(super) fn record_as(
     alert: bool,
     tag: Tag,
 ) -> Result<AgentMessage, CommandError> {
-    let mut message = super::secrets::redact_message(message);
+    let mut message = store::localized(super::secrets::redact_message(message));
     tag_room(&mut message, tag);
     // Which conversation it was said in, so the UI that's told places it
     // where the log does (`conversations::stamped`).

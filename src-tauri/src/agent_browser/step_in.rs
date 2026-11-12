@@ -284,7 +284,11 @@ pub fn begin_for_phone_on(
 }
 
 /// The phone asked while the person is in the tab at the Mac.
-pub const AT_THE_MAC: &str = "You're in its browser on your Mac. Hand it back there first.";
+pub const AT_THE_MAC: &str = concat!(
+    "You're in its browser on your ",
+    crate::computer::noun!(),
+    ". Hand it back there first."
+);
 
 /// Someone is in the tab with Chrome target `target_id`: its screencast
 /// belongs to them (the chat's live picture lets it be).

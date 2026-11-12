@@ -5,7 +5,7 @@ order: 5
 
 A routine is work an agent does without you starting it: at a time, or when something happens.
 
-**Routines run only while the app is open and your Mac is awake.** A routine missed while the app
+**Routines run only while the app is open and your computer is awake.** A routine missed while the app
 was closed runs once when you reopen it, marked late. It never runs once per missed time.
 
 ## On a schedule
@@ -50,7 +50,7 @@ Steps are for scheduled routines only.
 
 ## "When…" routines
 
-A routine can start when something happens. The app checks from your Mac every few minutes:
+A routine can start when something happens. The app checks from your computer every few minutes:
 
 - Someone mentions you on GitHub.
 - An issue or pull request is assigned to you on GitHub.
@@ -85,7 +85,7 @@ records, so it doesn't use any of your plan.
 - On by default at 8:00 AM. Change the time or turn it off by telling the Chief ("brief me at
   7:30", "stop the morning brief"), in **Settings → Notifications**, or on the phone.
 - If there's nothing to say, nothing is posted, unless you turn on **Post on quiet days too**.
-- If your Mac was asleep or the app was closed for more than 3 hours past the time, that day's
+- If your computer was asleep or the app was closed for more than 3 hours past the time, that day's
   brief is skipped.
 - You can add up to four of your own checks, like today's calendar events, through apps you've
   connected. These checks do use a small model call each.

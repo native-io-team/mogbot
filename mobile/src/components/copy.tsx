@@ -27,8 +27,9 @@ import { CARD_TITLE_SCALE, space } from '../lib/theme';
 import { useColors } from '../lib/appearance';
 import { folderName } from '../lib/agents';
 import { drivenLine } from '../lib/bars';
-import { Card, OFFLINE_NOTE, useActionShare } from './surfaces';
+import { Card, offlineNote, useActionShare } from './surfaces';
 import { Button, T } from './ui';
+import { pairedComputer } from '../lib/computer';
 
 /**
  * What Keep leaves behind, in the Mac's words (`task::left_out_line`).
@@ -56,7 +57,12 @@ export function leftOutLine(items: LeftOut[] | undefined): string | null {
 }
 
 /** What Keep's answer says, in the chat's words. Exported for tests. */
-export function keptLine(project: string, agentName: string, kept: KeptCopy): string {
+export function keptLine(
+  project: string,
+  agentName: string,
+  kept: KeptCopy,
+  your: string = pairedComputer().your
+): string {
   const withLeftOut = (line: string, left?: LeftOut[]) => {
     const more = leftOutLine(left);
     return more ? `${line} · ${more}` : line;
@@ -69,11 +75,11 @@ export function keptLine(project: string, agentName: string, kept: KeptCopy): st
     case 'conflict':
       return `Some of these changes overlap with edits made in ${project} since (${kept.files
         .slice(0, 3)
-        .join(', ')}). Choose which to keep on your Mac, or ask ${agentName} to sort it out.`;
+        .join(', ')}). Choose which to keep on ${your}, or ask ${agentName} to sort it out.`;
     case 'markers':
       return `Some files still have conflict markers in them (${kept.files
         .slice(0, 3)
-        .join(', ')}). Nothing was kept. Finish choosing on your Mac, or ask ${agentName} to.`;
+        .join(', ')}). Nothing was kept. Finish choosing on ${your}, or ask ${agentName} to.`;
     case 'otherBranch':
       return `${project} has moved on to another version since. Nothing was kept.`;
   }
@@ -202,7 +208,7 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
   const wait = driven
     ? `${drivenLine(agent.name)}: hand it back first.`
     : !connected
-      ? OFFLINE_NOTE
+      ? offlineNote()
       : null;
 
   const muted = (text: string) => (

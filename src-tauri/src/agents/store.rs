@@ -1890,7 +1890,46 @@ pub(crate) fn append_line<T: Serialize>(path: &Path, value: &T) -> Result<(), Co
         .map_err(|e| super::err_io(e.to_string()))
 }
 
+/// The app's own lines and cards name this build's computer (`computer`):
+/// copy across the app says "this Mac", which on a PC reads "this PC". Only
+/// what the app wrote: never the user's or an agent's words, nor a card's
+/// exact tool call (`input`, and `detail` when it is that call). A no-op on a Mac.
+pub fn localized(message: AgentMessage) -> AgentMessage {
+    if crate::computer::NOUN == "Mac"
+        || !matches!(
+            message.kind,
+            MessageKind::Note | MessageKind::Error | MessageKind::Approval
+        )
+    {
+        return message;
+    }
+    let mut message = message;
+    message.text = crate::computer::localize(&message.text).into_owned();
+    if let Some(approval) = message.approval.take() {
+        let skip: &[&str] = if approval.tool.is_some() {
+            &["input", "detail", "tool"]
+        } else {
+            &["input", "tool"]
+        };
+        let localized = serde_json::to_value(&approval).ok().and_then(|mut v| {
+            crate::computer::localize_json(&mut v, skip);
+            serde_json::from_value(v).ok()
+        });
+        message.approval = Some(localized.unwrap_or(approval));
+    }
+    message
+}
+
 pub fn append_message(message: &AgentMessage) -> Result<(), CommandError> {
+    // The app's own lines name this build's computer, whichever path wrote
+    // them (`localized`; `runner::record` localizes before it announces).
+    let localized_copy;
+    let message = if crate::computer::NOUN != "Mac" {
+        localized_copy = localized(message.clone());
+        &localized_copy
+    } else {
+        message
+    };
     // A line that doesn't say which conversation it was said in is the
     // conversation its agent's engine has loaded (`conversations::stamped`).
     // Read before the log's lock: the registry has a lock of its own.

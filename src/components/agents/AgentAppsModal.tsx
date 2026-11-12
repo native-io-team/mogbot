@@ -33,6 +33,7 @@ import { OnboardingTerminal } from '../terminal/lazyTerminals';
 import { SignInHelp } from './SignInHelp';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { scrollMotion } from '../../lib/motion';
+import { HOST_COMPUTER } from '../../lib/computer';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { deleteConnection, flowLine, type Access, type Connection } from '../../lib/agentLogins';
 import {
@@ -494,7 +495,7 @@ function ConnectionRow({
   const [access, setAccess] = useState<Access>(() => pickerAccess(c.grants));
   const account = connectionAccount(c);
   const justNow = flow?.connected?.connectionId === c.id ? flow.connected.line : null;
-  const kept = keptWhere(c.kind.type);
+  const kept = keptWhere(c.kind.type, HOST_COMPUTER);
 
   const save = () => {
     onError(null);

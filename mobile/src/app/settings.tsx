@@ -19,7 +19,7 @@ import { useUsageRows } from '../lib/usagePlan';
 import { appInfo } from '../lib/pairing';
 import { isDemo } from '../lib/demo';
 import { setPref } from '../lib/prefs';
-import { ALERTS_WHILE_OPEN, canReceivePush, isOfficialBuild, pushLine } from '../lib/push';
+import { alertsWhileOpen, canReceivePush, isOfficialBuild, pushLine } from '../lib/push';
 import { canCall, enableAlerts, unpair } from '../lib/session';
 import { MAC_FEATURES, ON_ITS_OWN_TEAM_TITLE } from '@shipstudio/companion-protocol';
 import { useApp, useServed, type AppearancePref } from '../lib/store';
@@ -36,6 +36,7 @@ import {
   TEXT_SIZES,
   type TextSize,
 } from '../lib/theme';
+import { useComputer } from '../lib/computer';
 
 /** The phone's own appearance, or the system's. Named as people say it, not "System". */
 const APPEARANCE: { value: AppearancePref; label: string }[] = [
@@ -52,8 +53,8 @@ const TEXT_SIZE_LABELS: Record<TextSize, string> = {
   largest: 'Largest',
 };
 
-const USAGE_FOOTER =
-  'Change it on the Mac in Settings → Accounts & usage, or ask your Chief of Staff. Estimates come from your past runs.';
+const usageFooter = (the: string) =>
+  `Change it on ${the} in Settings → Accounts & usage, or ask your Chief of Staff. Estimates come from your past runs.`;
 
 type UpdateState =
   | { kind: 'idle' }
@@ -63,6 +64,7 @@ type UpdateState =
   | { kind: 'failed'; message: string };
 
 export default function Settings() {
+  const comp = useComputer();
   const accent = useAccent();
   const colors = useColors();
   const router = useRouter();
@@ -118,16 +120,16 @@ export default function Settings() {
     }
   };
 
-  const macName = credentials?.name ?? 'your Mac';
+  const macName = credentials?.name ?? comp.your;
   // Offline, the Mac can't be told now: say so, and that it's told later.
   const confirmUnpair = () =>
     Alert.alert(
-      `Forget ${credentials?.name ?? 'this Mac'}?`,
+      `Forget ${credentials?.name ?? comp.this}?`,
       connected
-        ? 'This phone stops reaching your agents, and the Mac removes it from its paired devices. You can pair again any time.'
+        ? `This phone stops reaching your agents, and ${comp.the} removes it from its paired devices. You can pair again any time.`
         : !credentials?.fingerprint
-          ? `This phone stops reaching your agents now. This pairing is from before the app checked your Mac’s identity, so this phone won’t contact ${macName} to remove it: remove it on the Mac, in Settings → Phone.`
-          : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it on the Mac, in Settings → Phone.`,
+          ? `This phone stops reaching your agents now. This pairing is from before the app checked ${comp.yours} identity, so this phone won’t contact ${macName} to remove it: remove it on ${comp.the}, in Settings → Phone.`
+          : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks ${comp.the} to remove it. You can also remove it on ${comp.the}, in Settings → Phone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -138,7 +140,7 @@ export default function Settings() {
             if (result === 'queued' && connected) {
               Alert.alert(
                 'Forgotten on this phone',
-                `${macName} didn’t answer, so it still lists this phone. It’s asked again the next time this phone reaches it; or remove it on the Mac, in Settings → Phone.`
+                `${macName} didn’t answer, so it still lists this phone. It’s asked again the next time this phone reaches it; or remove it on ${comp.the}, in Settings → Phone.`
               );
             }
             router.replace('/pair');
@@ -172,16 +174,16 @@ export default function Settings() {
       {demo ? (
         <Section
           title="Demo"
-          footer="Sample agents with made-up work. Nothing here reaches a Mac, and nothing is kept."
+          footer={`Sample agents with made-up work. Nothing here reaches a ${comp.noun}, and nothing is kept.`}
         >
           <Row
-            label="Leave the demo and pair your Mac"
+            label={`Leave the demo and pair ${comp.your}`}
             onPress={() => void unpair().then(() => router.replace('/pair'))}
             last
           />
         </Section>
       ) : (
-        <Section title="Paired Mac">
+        <Section title={`Paired ${comp.noun}`}>
           <Row
             label={credentials?.name ?? 'None'}
             // The state, not the route: which network it goes over is on Connection details.
@@ -189,7 +191,7 @@ export default function Settings() {
           />
           {credentials && <Row label="Paired" value={formatDate(credentials.pairedAt)} />}
           <Row label="Connection details" onPress={() => router.push('/connection')} />
-          <Row label="Forget this Mac" destructive onPress={confirmUnpair} last />
+          <Row label={`Forget ${comp.this}`} destructive onPress={confirmUnpair} last />
         </Section>
       )}
 
@@ -203,7 +205,7 @@ export default function Settings() {
           <AccountsSections state={accounts} />
 
           {usage.length > 0 && (
-            <Section title="Usage" footer={USAGE_FOOTER}>
+            <Section title="Usage" footer={usageFooter(comp.the)}>
               {usage.map((row, i) => (
                 <Row
                   key={row.key}
@@ -232,7 +234,7 @@ export default function Settings() {
       {(servesTeam || servesApps) && (
         <Section
           title="Logins"
-          footer="The apps your agents asked for, one row each, and every app connected with who can use it. Sign in from here, or on your Mac."
+          footer={`The apps your agents asked for, one row each, and every app connected with who can use it. Sign in from here, or on ${comp.your}.`}
         >
           {servesTeam && (
             <Row
@@ -257,7 +259,7 @@ export default function Settings() {
         footer={
           pushInfo && alerts === Notifications.PermissionStatus.GRANTED
             ? pushInfo.footer
-            : ALERTS_WHILE_OPEN
+            : alertsWhileOpen(comp.your)
         }
       >
         <Row
@@ -414,7 +416,7 @@ export default function Settings() {
         footer={
           Updates.isEnabled
             ? 'Updates download in the background and apply the next time the app starts.'
-            : 'Over-the-air updates are off in this build (a development or self-built app). Reinstall it from your Mac to update.'
+            : `Over-the-air updates are off in this build (a development or self-built app). Reinstall it from ${comp.your} to update.`
         }
       >
         {/* One row: the build's details are for a bug report, a tap away. */}

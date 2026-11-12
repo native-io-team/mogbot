@@ -29,6 +29,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { createTerminalOptions, followAppTheme } from '../terminal/terminalTheme';
 import { stripTerminalControls } from '../../lib/terminalPrompt';
 import '@xterm/xterm/css/xterm.css';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /**
  * Maximum characters of raw PTY output retained for exit diagnostics.
@@ -332,7 +333,7 @@ export function OnboardingTerminal({
           }
           if (!mounted) return;
           if (resolved === null) {
-            const message = `${command}: not found — it doesn't appear to be installed on this Mac.`;
+            const message = `${command}: not found — it doesn't appear to be installed on ${THIS_COMPUTER}.`;
             logger.warn('[OnboardingTerminal] Binary not found — skipping spawn', { command });
             terminalRef.current?.write(
               `\r\n\x1b[31m${message}\x1b[0m\r\n` +

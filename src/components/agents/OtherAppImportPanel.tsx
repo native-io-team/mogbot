@@ -42,6 +42,7 @@ import {
   type ImportChipKind,
 } from './ImportParts';
 import type { ImportResult } from './ImportPastePanel';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /** Which of its agents an import would bring (new ones, and the Chief's merge). */
 export const arriving = (preview: OtherAppPreview | null) =>
@@ -169,7 +170,7 @@ function Detail({
             </>
           ) : (
             <p className="agents-import-agent__none">
-              Its project folder isn’t on this Mac any more; it works on its own.
+              Its project folder isn’t on {THIS_COMPUTER} any more; it works on its own.
             </p>
           )}
         </ImportSection>
@@ -352,8 +353,8 @@ export function OtherAppImportPanel({ preview, onCancel, onDone }: OtherAppImpor
     <>
       <div className="agents-import__body">
         <p className="agents-import__lede">
-          Your {appName} team is on this Mac. Each agent brings its instructions, memory, files and
-          chat history, and picks up from its latest messages
+          Your {appName} team is on {THIS_COMPUTER}. Each agent brings its instructions, memory,
+          files and chat history, and picks up from its latest messages
           {merging ? ` (${mainName} from a recap of the other Chief’s)` : ''}. {appName} keeps its
           own copy, untouched.
         </p>

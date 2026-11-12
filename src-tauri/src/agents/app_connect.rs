@@ -575,7 +575,11 @@ pub async fn phone_begin(
         Ok(p) => p,
         Err(e) => {
             let said = format!(
-                "{} {} won't sign in from a phone, so connect it on your Mac.",
+                concat!(
+                    "{} {} won't sign in from a phone, so connect it on your ",
+                    crate::computer::noun!(),
+                    "."
+                ),
                 e, svc.title
             );
             set(app, svc.id, flow(FlowState::Failed, Some(said.clone())));

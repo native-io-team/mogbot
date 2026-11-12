@@ -39,7 +39,9 @@ import {
   routineWhenOf,
   routineWhenPhrase,
   ROUTINE_MODES,
-  ROUTINES_NEED_THE_MAC,
+  routinesNeedTheComputer,
+  computerTime,
+  type ComputerKind,
   zoneDiffers,
   type RoutineMode,
   type CheckInRun,
@@ -84,6 +86,7 @@ import {
 } from '../lib/routine';
 import { chromeScale, fonts, lineHeight, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { useComputer } from '../lib/computer';
 
 type Reading =
   | { kind: 'reading' }
@@ -91,15 +94,21 @@ type Reading =
   | { kind: 'bad'; reason: string };
 
 /** The Mac's reading: "First run tomorrow at 9:00 AM" (the desk's words), on the clock the echo uses. */
-function firstRun(p: SchedulePreview, now = Date.now(), timeZone?: string): string {
+function firstRun(
+  p: SchedulePreview,
+  now: number,
+  timeZone: string | undefined,
+  kind: ComputerKind | undefined
+): string {
   const when = formatWhenInlineIn(p.nextAt, now, timeZone);
-  const zone = zoneDiffers(timeZone, now) ? ' Mac time' : '';
+  const zone = zoneDiffers(timeZone, now) ? ` ${computerTime(kind)}` : '';
   return p.repeat ? `First run ${when}${zone}` : `Runs ${when}${zone}`;
 }
 
 export default withAgentAccent(Schedule, 'agentId');
 
 function Schedule() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -234,7 +243,7 @@ function Schedule() {
   // Both kinds of routine run only while the app is open on an awake Mac.
   const needsTheMac = (
     <T variant="caption" color={colors.textMuted}>
-      {ROUTINES_NEED_THE_MAC}
+      {routinesNeedTheComputer(comp.kind)}
     </T>
   );
 
@@ -373,7 +382,7 @@ function Schedule() {
             <View style={styles.echo} accessibilityLiveRegion="polite">
               {when && (
                 <T variant="subhead" color={colors.textStrong} maxFontSizeMultiplier={2}>
-                  {routineEcho(when, note, now, timeZone)}
+                  {routineEcho(when, note, now, timeZone, comp.kind)}
                 </T>
               )}
               {steps.length > 0 && (
@@ -384,7 +393,7 @@ function Schedule() {
               {reading.kind === 'ok' ? (
                 <Animated.View entering={FadeIn.duration(150)}>
                   <T variant="caption" color={colors.textSecondary}>
-                    {firstRun(reading.preview, now, timeZone)}
+                    {firstRun(reading.preview, now, timeZone, comp.kind)}
                     {!note.trim() && ` · now say what ${agent?.name ?? 'it'} should do`}
                   </T>
                 </Animated.View>
@@ -394,7 +403,7 @@ function Schedule() {
                 </T>
               ) : (
                 <T variant="caption" color={colors.textMuted}>
-                  Checking with the Mac…
+                  Checking with {comp.the}…
                 </T>
               )}
             </View>
@@ -449,6 +458,7 @@ function TimeRow({
   themeVariant: 'light' | 'dark';
   tint: string;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const value = useMemo(() => new Date(2000, 0, 1, hour, minute), [hour, minute]);
@@ -459,7 +469,7 @@ function TimeRow({
   return (
     <View style={styles.timeRow}>
       <T variant="subhead" color={colors.textPrimary} maxFontSizeMultiplier={chromeScale}>
-        {macClock ? 'At, Mac time' : 'At'}
+        {macClock ? `At, ${computerTime(comp.kind)}` : 'At'}
       </T>
       {Platform.OS === 'ios' ? (
         <DateTimePicker
@@ -470,7 +480,7 @@ function TimeRow({
           onChange={picked}
           themeVariant={themeVariant}
           accentColor={tint}
-          accessibilityLabel={`Time, ${clock}${macClock ? ' Mac time' : ''}`}
+          accessibilityLabel={`Time, ${clock}${macClock ? ` ${computerTime(comp.kind)}` : ''}`}
         />
       ) : (
         <Button
@@ -479,7 +489,7 @@ function TimeRow({
           onPress={() =>
             DateTimePickerAndroid.open({ value, mode: 'time', onChange: picked, is24Hour: false })
           }
-          accessibilityLabel={`Time, ${clock}${macClock ? ' Mac time' : ''}. Change`}
+          accessibilityLabel={`Time, ${clock}${macClock ? ` ${computerTime(comp.kind)}` : ''}. Change`}
         />
       )}
     </View>

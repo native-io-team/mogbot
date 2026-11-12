@@ -31,6 +31,7 @@ import {
   getRemoteAccessBrief,
   type RemoteAccessBrief,
 } from '../../lib/remoteAccess';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 type Tone = 'off' | 'ok' | 'warn' | 'down';
 
@@ -42,15 +43,14 @@ export function indicatorState(
     return {
       tone: 'off',
       line: 'Remote access off',
-      detail:
-        'Let another assistant drive your agents on this Mac — click to set up remote access.',
+      detail: `Let another assistant drive your agents on ${THIS_COMPUTER} — click to set up remote access.`,
     };
   }
   if (!brief.serverRunning) {
     return {
       tone: 'down',
       line: 'Remote access stopped',
-      detail: 'Your assistant can’t reach this Mac. Open Remote access to restart it.',
+      detail: `Your assistant can’t reach ${THIS_COMPUTER}. Open Remote access to restart it.`,
     };
   }
   if (brief.power.onAc === false) {
@@ -70,7 +70,7 @@ export function indicatorState(
             brief.activity.lastClient ? assistantName(brief.activity.lastClient) : 'used'
           } ${agoText(last, now)}`
         : 'Remote on',
-    detail: 'Your assistant can reach this Mac while it stays on, awake and online.',
+    detail: `Your assistant can reach ${THIS_COMPUTER} while it stays on, awake and online.`,
   };
 }
 

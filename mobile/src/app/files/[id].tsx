@@ -25,12 +25,14 @@ import { useRemembered } from '../../lib/remembered';
 import { withAgentAccent } from '../../lib/accentScreen';
 import { iconSize, radius, space, type } from '../../lib/theme';
 import { makeStyles, useColors } from '../../lib/appearance';
+import { useComputer } from '../../lib/computer';
 
 type Filter = 'all' | 'user' | 'agent';
 
 export default withAgentAccent(Files);
 
 function Files() {
+  const comp = useComputer();
   useAttachmentSources();
   const colors = useColors();
   const styles = useStyles();
@@ -43,7 +45,7 @@ function Files() {
   const [opening, setOpening] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const live = useApp((s) => s.link.kind === 'connected');
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
 
   const load = useCallback(() => {
     setLoading(true);

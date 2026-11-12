@@ -24,6 +24,7 @@ import type {
 import { QUOTA_WARN_PERCENT, resetPhrase } from './quota';
 import { isPlaceName, planLabel, type UsageTone } from './usage';
 import { awayRoom, type AwayState } from './crossover';
+import { thisComputer, yourComputer, type ComputerKind } from './computer';
 
 export const ACCOUNT_ENGINE_LABEL: Record<AgentEngine, string> = {
   claude: 'Claude Code',
@@ -57,7 +58,14 @@ export const ADD_ACCOUNT_WHY =
   'When one account runs out of usage, agents carry on with the next, so nothing stops.';
 
 /** Where the phone sends anything it can't do itself. */
-export const ADD_ON_MAC = 'Add or sign in to accounts on your Mac: Agents → Usage.';
+export const addOnComputer = (kind?: ComputerKind | null) =>
+  `Add or sign in to accounts on ${yourComputer(kind)}: Agents → Usage.`;
+
+/** The same line, worded for a Mac. */
+export const ADD_ON_MAC = addOnComputer('mac');
+
+/** "this Mac’s own sign-in": an account signed in on the computer itself. */
+export const ownSignIn = (kind?: ComputerKind | null) => `${thisComputer(kind)}’s own sign-in`;
 
 /** A Claude organization named after its owner by default ("Sam’s Organization") says nothing new. */
 const DEFAULT_ORG = /['’]s Organization$/;
@@ -97,10 +105,13 @@ export function accountLabel(
  * The account an agent's last turn ran on (`Agent.ranOn`), named as its
  * key is: the Mac sends its name for it, which may be a place.
  */
-export function ranOnName(agent: { engine?: AgentEngine; ranOn?: { name: string } }): string {
+export function ranOnName(
+  agent: { engine?: AgentEngine; ranOn?: { name: string } },
+  computer?: ComputerKind | null
+): string {
   if (!agent.ranOn) return '';
   if (agent.engine) return accountLabel({ engine: agent.engine, name: agent.ranOn.name });
-  return isPlaceName(agent.ranOn.name) ? 'this Mac’s own sign-in' : agent.ranOn.name;
+  return isPlaceName(agent.ranOn.name) ? ownSignIn(computer) : agent.ranOn.name;
 }
 
 /** One limit's room, said as what is used: "38% used", with its reset. */
@@ -203,13 +214,13 @@ function stateOf(
   return { state: inUse ? 'In use' : 'Ready', tone: 'ok' };
 }
 
-function detailOf(a: UsageAccount, name: string): string[] {
+function detailOf(a: UsageAccount, name: string, computer?: ComputerKind | null): string[] {
   const out: string[] = [];
   // The name is the email or the plan when nobody named it: never twice.
   if (a.email && a.email !== name) out.push(a.email);
   if (a.plan && !name.endsWith(` ${capital(a.plan)}`)) out.push(planLabel(a.plan));
   // Where it is signed in: a detail, never its name.
-  if (a.thisMac) out.push('this Mac’s own sign-in');
+  if (a.thisMac) out.push(ownSignIn(computer));
   return out;
 }
 
@@ -227,6 +238,8 @@ export function switcherView(
     engines?: AgentEngine[];
     /** Agents set to one account: their names, by `engine:id`. */
     pins?: { engine: AgentEngine; account: string; name: string }[];
+    /** What to call the computer (`computer.ts`); absent says "computer". */
+    computer?: ComputerKind | null;
   } = {}
 ): SwitcherEngine[] {
   const now = opts.now ?? Date.now();
@@ -246,7 +259,7 @@ export function switcherView(
           engine,
           id: a.id,
           name,
-          detail: detailOf(a, name),
+          detail: detailOf(a, name, opts.computer),
           inUse,
           state,
           tone,

@@ -66,8 +66,9 @@ import { CARD_TITLE_SCALE, fonts, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { Receipt, useArmed, useCardStyles } from './ApprovalCard';
 import { DeclineReceiptLine, useDeclineReceipt, useRecheckWhenBack } from './loginExtras';
-import { ACTION, Card, CardActions, OFFLINE_NOTE, TextAction, useActionShare } from './surfaces';
+import { ACTION, Card, CardActions, offlineNote, TextAction, useActionShare } from './surfaces';
 import { Button, T } from './ui';
+import { useComputer } from '../lib/computer';
 
 export function LoginCard({
   message,
@@ -82,6 +83,7 @@ export function LoginCard({
   agent: Agent;
   onError: (text: string) => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const cardStyles = useCardStyles();
@@ -313,8 +315,8 @@ export function LoginCard({
         )}
         <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
           {flow?.onPhone
-            ? 'Your Mac keeps the sign-in; this phone keeps nothing.'
-            : 'The sign-in and its token stay on your Mac.'}
+            ? `${comp.yourCap} keeps the sign-in; this phone keeps nothing.`
+            : `The sign-in and its token stay on ${comp.your}.`}
         </T>
         {errorLine}
         <CardActions>
@@ -469,13 +471,13 @@ export function LoginCard({
       title={title}
       source={source}
       testID="login-card"
-      note={!connected ? OFFLINE_NOTE : undefined}
+      note={!connected ? offlineNote() : undefined}
     >
       {why}
       {abilities}
       {failed && (
         <T variant="small" color={colors.accentErrorLight} testID="login-failed">
-          {login.flow?.message || 'That didn’t finish on your Mac.'}
+          {login.flow?.message || `That didn’t finish on ${comp.your}.`}
         </T>
       )}
       {lead && (

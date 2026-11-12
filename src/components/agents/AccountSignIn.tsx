@@ -39,6 +39,7 @@ import {
   checkNewAccount,
 } from '../../lib/agentsUsage';
 import { ENGINE_ICON } from './UsageStack';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /**
  * `checking`, `done`, `same` and `failed` are one status card each, drawn
@@ -99,8 +100,8 @@ export function AccountSignIn({
     return (
       <ModalFrame isOpen onClose={onDone} title={`Sign in to ${label}`}>
         <p className="connect-modal-instructions">
-          This is {label}’s own sign-in on this Mac. Sign in from its row in Agents, or add another
-          account here.
+          This is {label}’s own sign-in on {THIS_COMPUTER}. Sign in from its row in Agents, or add
+          another account here.
         </p>
         <div className="connect-modal-actions">
           <Button variant="secondary" onClick={onDone}>

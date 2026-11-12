@@ -1060,7 +1060,9 @@ fn known(program: &str, args: &[String], depth: u8) -> Option<Phrase> {
             None => p(CHECK, "a tool is installed"),
         },
         "env" | "printenv" => p(READ, "the environment"),
-        "uname" | "sw_vers" | "system_profiler" | "sysctl" => p(CHECK, "this Mac"),
+        "uname" | "sw_vers" | "system_profiler" | "sysctl" => {
+            p(CHECK, concat!("this ", crate::computer::noun!()))
+        }
         "df" => p(CHECK, "disk space"),
         "defaults" => p(READ, "a setting"),
         "osascript" => p(RUN, "an AppleScript"),

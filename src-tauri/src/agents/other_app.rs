@@ -799,9 +799,11 @@ fn note_text(routines: usize, secrets: &[String], project_missing: bool) -> Stri
     text.push_str(&routines_line(routines));
     text.push_str(&secrets_line(secrets));
     if project_missing {
-        text.push_str(
-            " The project it worked in isn't on this Mac any more, so it works in its own folder.",
-        );
+        text.push_str(concat!(
+            " The project it worked in isn't on this ",
+            crate::computer::noun!(),
+            " any more, so it works in its own folder."
+        ));
     }
     text
 }
@@ -1383,8 +1385,9 @@ pub fn import_from(
         if let Some(free) = free_space(&ours) {
             if !needs_space(needed, Some(free), false) {
                 return Err(CommandError::expected(format!(
-                    "There isn't room to bring your {OTHER_APP_NAME} team over: it needs {} and this Mac has {} free. Free up some space, then try again.",
+                    "There isn't room to bring your {OTHER_APP_NAME} team over: it needs {} and {} has {} free. Free up some space, then try again.",
                     human_bytes(needed.saturating_add(SPACE_MARGIN)),
+                    crate::computer::THIS,
                     human_bytes(free)
                 )));
             }

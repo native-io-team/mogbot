@@ -328,8 +328,11 @@ pub fn stop_step(agent_id: &str) -> Result<String, String> {
     let needle = step_needle(agent_id).ok_or("It isn't running a command right now.")?;
     let root =
         crate::agents::procs::pid_of(agent_id).ok_or("It isn't running a command right now.")?;
-    let rows =
-        crate::agents::procs::snapshot().ok_or("Couldn't look at what's running on this Mac.")?;
+    let rows = crate::agents::procs::snapshot().ok_or(concat!(
+        "Couldn't look at what's running on this ",
+        crate::computer::noun!(),
+        "."
+    ))?;
     let procs = step_procs(&rows, root, &needle);
     let roots: Vec<u32> = step_roots(&procs).iter().map(|r| r.pid).collect();
     if roots.is_empty() {

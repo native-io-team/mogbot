@@ -94,6 +94,7 @@ import {
   type ResultItem,
   type ResultRef,
 } from '../../lib/agents';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /**
  * Cards that already opened the preview by themselves: once per result,
@@ -323,7 +324,7 @@ function PreviewPanel({
       <span className="agent-result__preview-text">
         <span className="agent-result__preview-title">Live preview</span>
         <span className="agent-result__preview-meta">
-          {projectName(project)} · runs on this Mac
+          {projectName(project)} · runs on {THIS_COMPUTER}
         </span>
       </span>
       <span className="agent-result__preview-actions">

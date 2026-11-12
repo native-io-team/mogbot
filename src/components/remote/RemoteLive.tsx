@@ -32,6 +32,7 @@ import {
   ReadinessList,
   type RemoteCtl,
 } from './parts';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 interface Props {
   ctl: RemoteCtl;
@@ -56,11 +57,11 @@ export function RemoteLive({ ctl, projects, onProjectChange, activity }: Props) 
       ? (lastRequest ?? 'Waiting for your assistant’s next message')
       : state === 'down'
         ? !status.serverRunning
-          ? 'Remote access is on, but nothing on this Mac is answering the link.'
+          ? `Remote access is on, but nothing on ${THIS_COMPUTER} is answering the link.`
           : status.reachability?.state === 'noPublicDns'
-            ? 'Tailscale is still publishing this Mac’s address.'
-            : 'Remote access is on, but the internet can’t reach this Mac right now.'
-        : 'Your assistant can’t reach this Mac.';
+            ? `Tailscale is still publishing ${THIS_COMPUTER}’s address.`
+            : `Remote access is on, but the internet can’t reach ${THIS_COMPUTER} right now.`
+        : `Your assistant can’t reach ${THIS_COMPUTER}.`;
 
   return (
     <div className="remote-live">
@@ -148,7 +149,7 @@ export function RemoteLive({ ctl, projects, onProjectChange, activity }: Props) 
 
       <p className="remote-footnote">
         Lost a device with your assistant on it, or something looks wrong? Turn off here, or remove
-        this Mac in{' '}
+        {THIS_COMPUTER} in{' '}
         <TextButton onClick={() => void openUrl(TAILSCALE_MACHINES_URL)}>
           Tailscale’s admin console
         </TextButton>{' '}

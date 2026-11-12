@@ -247,7 +247,12 @@ impl SigninWindow {
             return Err("That sign-in has ended.".into());
         };
         if plain.exited() {
-            return Err("The sign-in window was closed on the Mac.".into());
+            return Err(concat!(
+                "The sign-in window was closed on the ",
+                crate::computer::noun!(),
+                "."
+            )
+            .into());
         }
         let (jpeg, w, h) = plain.frame(service::FRAME_MAX_WIDTH)?;
         *seq += 1;

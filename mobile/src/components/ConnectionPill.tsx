@@ -22,6 +22,7 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { TextAction } from './surfaces';
 import { Button, Dot, Icon, T } from './ui';
+import { pairedComputer, useComputer } from '../lib/computer';
 
 /** Lives with `useShowing` now; still reachable from here, where the screens import it. */
 export { useNow } from '../lib/moving';
@@ -111,7 +112,7 @@ export function useLinkBar(): { bar: LinkBar | null; back: boolean } {
       // Every tab has a bar: said once, not once per tab.
       if (Date.now() - lastBackSaid > BACK_MS) {
         lastBackSaid = Date.now();
-        announce('Back in touch with your Mac');
+        announce(`Back in touch with ${pairedComputer().your}`);
       }
     }, 0);
     const off = setTimeout(() => setBack(false), BACK_MS);
@@ -138,6 +139,7 @@ let lastBarSaid: string | null = null;
  * Coming back, one quiet "Back in touch", then nothing.
  */
 export function ConnectionBar({ style }: { style?: StyleProp<ViewStyle> }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
@@ -159,7 +161,7 @@ export function ConnectionBar({ style }: { style?: StyleProp<ViewStyle> }) {
             <Icon name="checkmark" size={iconSize.inline} color={colors.accentSuccess} />
           </View>
           <T variant="small" color={colors.textPrimary} style={styles.grow}>
-            Back in touch with your Mac
+            Back in touch with {comp.your}
           </T>
         </View>
       </Animated.View>

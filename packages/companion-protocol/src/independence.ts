@@ -11,6 +11,7 @@
  */
 
 import type { AgentIndependence } from './model';
+import { thisComputer, type ComputerKind } from './computer';
 
 /** Strictest first, as they're offered. */
 export const INDEPENDENCE_LEVELS: readonly AgentIndependence[] = [
@@ -51,6 +52,11 @@ export const INDEPENDENCE_DETAIL: Record<AgentIndependence, string> = {
     'Sends, posts and pushes too; only stops for money, logins, deleting for good or going live.',
 };
 
+/** A stop's line, naming the computer the agents run on (`computer.ts`). */
+export function independenceDetail(level: AgentIndependence, kind?: ComputerKind | null): string {
+  return INDEPENDENCE_DETAIL[level].replace('this Mac', thisComputer(kind));
+}
+
 /** Always under the slider: true at every stop. */
 export const INDEPENDENCE_ALWAYS_ASKS =
   'Always asks before spending money, using your passwords, or deleting for good.';
@@ -71,8 +77,8 @@ export function independenceStep(level: AgentIndependence, delta: number): Agent
 }
 
 /** What a screen reader says for a stop: its name, then its line. */
-export function independenceValueText(level: AgentIndependence): string {
-  return `${INDEPENDENCE_LABEL[level]}. ${INDEPENDENCE_DETAIL[level]}`;
+export function independenceValueText(level: AgentIndependence, kind?: ComputerKind | null): string {
+  return `${INDEPENDENCE_LABEL[level]}. ${independenceDetail(level, kind)}`;
 }
 
 /** A level from a Mac, or the default when it sends none (an older Mac). */

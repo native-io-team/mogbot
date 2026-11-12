@@ -456,7 +456,7 @@ export const needsYouHere = (agent: Agent, messages: AgentMessage[] | undefined)
   needsYou(agent) && !waitingOnMac(agent, messages);
 
 /** Said wherever "Needs your OK" would be, for a card only the Mac can answer. */
-export const ON_MAC_LINE = 'Waiting for you on your Mac';
+export const onMacLine = () => `Waiting for you on ${pairedComputer().your}`;
 
 /**
  * The row's second line for an agent waiting on you: what it's asking, when
@@ -464,7 +464,7 @@ export const ON_MAC_LINE = 'Waiting for you on your Mac';
  * the Mac can answer, that it's waiting there.
  */
 export function needsLine(agent: Agent, messages: AgentMessage[] | undefined): string {
-  if (waitingOnMac(agent, messages)) return `${ON_MAC_LINE} · an import to review`;
+  if (waitingOnMac(agent, messages)) return `${onMacLine()} · an import to review`;
   const asking = pendingApproval(messages)?.approval;
   return asking ? `Needs your OK · ${askingLine(asking)}` : subtitle(agent);
 }
@@ -517,7 +517,7 @@ const PROGRAMS: Record<string, string> = {
   chown: 'change file ownership',
   kill: 'stop a process',
   pkill: 'stop a process',
-  open: 'open something on your Mac',
+  open: 'open something on your computer',
   node: 'run a script',
   python: 'run a script',
   python3: 'run a script',
@@ -746,11 +746,12 @@ const EXPIRY_OUTCOME = {
 /** An answered card in a line, as the desk words it (with the option picked on a session's question). */
 /** A step-in card on the phone: Step in happens at the Mac (worded once, with the desk). */
 export {
-  STEP_IN_AT_MAC,
+  stepInAtComputer,
   STEP_IN_FROM_HERE,
-  STEP_IN_ON_YOUR_MAC,
+  stepInOnYourComputer,
   stepInOnPhone,
 } from '@shipstudio/companion-protocol';
+import { pairedComputer } from './computer';
 
 export function cardOutcome(approval: Approval): string {
   // Nobody answered: what the desk's receipt says.

@@ -162,7 +162,7 @@ fn on_disk(p: &str) -> bool {
 
 /// What follows a foreign path the first time a field names it.
 pub fn note(source: &str) -> String {
-    format!("(from {source} — not on this Mac)")
+    format!("(from {source} — not on {})", crate::computer::THIS)
 }
 
 /// `text` with the first mention of each foreign path that isn't on this Mac
@@ -382,7 +382,9 @@ pub fn section_text(raw: &str) -> Option<String> {
 /// else just above `## Instructions` (or `## Memory`, or at the end).
 /// Nothing outside the app's section moves or changes.
 fn put(raw: &str, preamble: &str) -> String {
-    let block = format!("{}\n\n", preamble.trim_end());
+    // In this build's words for the computer (`computer`): the engine reads
+    // this file itself, so it never passes through the system prompt.
+    let block = format!("{}\n\n", crate::computer::localize(preamble.trim_end()));
     if let Some((s, e)) = section(raw) {
         return format!("{}{block}{}", &raw[..s], &raw[e..]);
     }

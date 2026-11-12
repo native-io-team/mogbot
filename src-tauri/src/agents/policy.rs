@@ -1356,7 +1356,7 @@ pub fn describe(eff: &Effective, project: Option<&str>) -> Vec<Line> {
         },
         Line {
             key: "folders",
-            label: "Folders on this Mac",
+            label: concat!("Folders on this ", crate::computer::noun!()),
             value: folders_words(&eff.folders),
             enforced: "app",
             team: own("folders"),

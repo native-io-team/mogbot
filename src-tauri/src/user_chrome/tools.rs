@@ -977,7 +977,12 @@ pub async fn dispatch(
     let id = message.get("id").cloned().unwrap_or(Value::Null);
     let method = message.get("method").and_then(Value::as_str).unwrap_or("");
     let params = message.get("params");
-    let ok = |result: Value| json!({ "jsonrpc": "2.0", "id": id, "result": result });
+    // Descriptions, instructions and results name this build's computer
+    // ("this PC" on Windows; `computer`). A tool call's `input` stays exact.
+    let ok = |mut result: Value| {
+        crate::computer::localize_json(&mut result, &["input"]);
+        json!({ "jsonrpc": "2.0", "id": id, "result": result })
+    };
     let fail = |code: i64, msg: &str| json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": msg } });
     match method {
         "initialize" => ok(initialize_result(params)),

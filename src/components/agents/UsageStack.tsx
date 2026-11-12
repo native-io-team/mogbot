@@ -63,6 +63,7 @@ import {
 } from '../../../packages/companion-protocol/src/usageGlance';
 import { pinnedLine } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { AgentKey } from './AgentKey';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 export const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
   claude: ClaudeIcon,
@@ -592,7 +593,9 @@ export function AccountDetail({
 
       {confirming && (
         <div className="usage-bar" role="alertdialog" aria-label="Remove this account">
-          <p className="usage-bar__text">Remove {k.name}’s sign-in from this Mac?</p>
+          <p className="usage-bar__text">
+            Remove {k.name}’s sign-in from {THIS_COMPUTER}?
+          </p>
           <div className="usage-bar__actions">
             <Button variant="ghost" onClick={() => setConfirming(false)}>
               Keep

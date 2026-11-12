@@ -14,7 +14,7 @@ import {
   needsLine,
   needsYouHere,
   nextNeedsYou,
-  ON_MAC_LINE,
+  onMacLine,
   pendingApproval,
   taskName,
   subtitle,
@@ -77,7 +77,7 @@ describe('a card only the Mac can answer', () => {
     const messages = [review('r')];
     expect(waitingOnMac(a, messages)).toBe(true);
     expect(needsYouHere(a, messages)).toBe(false);
-    expect(needsLine(a, messages)).toMatch(new RegExp(`^${ON_MAC_LINE}`));
+    expect(needsLine(a, messages)).toMatch(new RegExp(`^${onMacLine()}`));
     // Still counted: every count is the one rule (the desk says so too); the row says where.
     expect(attentionCounts([a]).needYou).toBe(1);
     expect(nextNeedsYou([a], { chief: { messages } })).toBeNull();

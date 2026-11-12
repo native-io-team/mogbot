@@ -189,7 +189,14 @@ mod mac {
         AboutMetadata {
             name: Some(brand::NAME.to_string()),
             version: Some(app.package_info().version.to_string()),
-            comments: Some("Your own team of AI agents, on this Mac.".to_string()),
+            comments: Some(
+                concat!(
+                    "Your own team of AI agents, on this ",
+                    crate::computer::noun!(),
+                    "."
+                )
+                .to_string(),
+            ),
             website: brand::links::WEBSITE.map(str::to_string),
             ..Default::default()
         }

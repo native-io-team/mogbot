@@ -46,6 +46,7 @@ import {
 import { useModal } from '../../contexts/ModalContext';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { AgentCard } from './AgentCard';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 export function SetupReach({
   step,
@@ -181,7 +182,7 @@ export function SetupReach({
             aria-expanded={showReached}
             onClick={() => setShowReached((v) => !v)}
           >
-            {reached.length} reached on this Mac
+            {reached.length} reached on {THIS_COMPUTER}
           </TextButton>
         )}
         <TextButton
@@ -355,7 +356,7 @@ export function BrowserSetupCard({
         </ol>
       ) : (
         <p className="team-setup__check">
-          <Spinner size="sm" /> Checking this Mac…
+          <Spinner size="sm" /> Checking {THIS_COMPUTER}…
         </p>
       )}
     </AgentCard>

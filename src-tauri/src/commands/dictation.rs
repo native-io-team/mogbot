@@ -340,7 +340,14 @@ mod macos {
         let Some(rec) = recognizer() else {
             return DictationStatus {
                 supported: false,
-                reason: Some("Speech recognition doesn't support this Mac's language.".into()),
+                reason: Some(
+                    concat!(
+                        "Speech recognition doesn't support this ",
+                        crate::computer::noun!(),
+                        "'s language."
+                    )
+                    .into(),
+                ),
                 microphone,
                 speech_recognition,
                 on_device: false,
@@ -470,8 +477,12 @@ mod macos {
     /// Main thread. A request configured for dictation.
     fn new_request(rec: &AnyObject, contextual: &[String]) -> Result<Retained<AnyObject>, String> {
         unsafe {
-            let request_cls = AnyClass::get("SFSpeechAudioBufferRecognitionRequest")
-                .ok_or("Speech recognition isn't available on this Mac.")?;
+            let request_cls =
+                AnyClass::get("SFSpeechAudioBufferRecognitionRequest").ok_or(concat!(
+                    "Speech recognition isn't available on this ",
+                    crate::computer::noun!(),
+                    "."
+                ))?;
             let request: Retained<AnyObject> = Retained::from_raw(msg_send![request_cls, new])
                 .ok_or("Couldn't create a request")?;
             let _: () = msg_send![&*request, setShouldReportPartialResults: true];
@@ -531,7 +542,11 @@ mod macos {
             teardown(app, old, true);
         }
 
-        let rec = recognizer().ok_or("Speech recognition doesn't support this Mac's language.")?;
+        let rec = recognizer().ok_or(concat!(
+            "Speech recognition doesn't support this ",
+            crate::computer::noun!(),
+            "'s language."
+        ))?;
         let id = NEXT_SESSION.fetch_add(1, Ordering::Relaxed);
 
         unsafe {

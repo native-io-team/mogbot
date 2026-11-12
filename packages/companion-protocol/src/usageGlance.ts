@@ -39,7 +39,8 @@ import { QUOTA_WARN_PERCENT, resetPhrase } from './quota';
 import { RUNS_ON_ANY, RUNS_ON_ANY_DETAIL, runsOnDetail } from './cardWords';
 import { planLabel } from './usage';
 import { roughWhen } from './usageSheet';
-import { accountLabel, switcherView, type SwitcherRow } from './accountSwitcher';
+import { accountLabel, ownSignIn, switcherView, type SwitcherRow } from './accountSwitcher';
+import { thisComputer, type ComputerKind } from './computer';
 import {
   maybeSameAccountNote,
   sameAccountLine,
@@ -808,7 +809,12 @@ export function changeLines(
   });
 }
 
-function detailOf(a: UsageAccount, line: UsageAccountLine | undefined, name: string): string[] {
+function detailOf(
+  a: UsageAccount,
+  line: UsageAccountLine | undefined,
+  name: string,
+  computer?: ComputerKind | null
+): string[] {
   const out: string[] = [];
   const plan = a.plan ?? line?.plan;
   // Each detail once, and never what the name already says ("Claude Max").
@@ -823,7 +829,7 @@ function detailOf(a: UsageAccount, line: UsageAccountLine | undefined, name: str
     out.push(line.orgName);
   }
   if (a.email && a.email !== name) out.push(a.email);
-  if (a.thisMac) out.push('this Mac’s own sign-in');
+  if (a.thisMac) out.push(ownSignIn(computer));
   return out;
 }
 
@@ -845,7 +851,8 @@ function keyOf(
   nextId: string | undefined,
   now: number,
   /** The account it's a second sign-in of, by the name its own key shows. */
-  same: string | undefined
+  same: string | undefined,
+  computer?: ComputerKind | null
 ): StackKey {
   const limits = limitsOf(line, now);
   // The limits that stop every turn; a per-model one stops only its model.
@@ -920,7 +927,7 @@ function keyOf(
     id: row.id,
     name: accountDisplayName(row.name, a.email),
     position,
-    detail: detailOf(a, line, accountDisplayName(row.name, a.email)),
+    detail: detailOf(a, line, accountDisplayName(row.name, a.email), computer),
     state,
     stateLabel,
     sameAs: same ?? null,
@@ -1171,6 +1178,8 @@ export function usageGlance(
     now?: number;
     engines?: AgentEngine[];
     pins?: { engine: AgentEngine; account: string; name: string }[];
+    /** What to call the computer (`computer.ts`); absent says "computer". */
+    computer?: ComputerKind | null;
   } = {}
 ): UsageGlance {
   const now = opts.now ?? Date.now();
@@ -1179,7 +1188,12 @@ export function usageGlance(
   const engines0 = opts.engines ?? [
     ...new Set(accounts.filter((a) => a.signedIn).map((a) => a.engine)),
   ];
-  const view = switcherView(accounts, inventory, { now, engines: engines0, pins: opts.pins });
+  const view = switcherView(accounts, inventory, {
+    now,
+    engines: engines0,
+    pins: opts.pins,
+    computer: opts.computer,
+  });
   const engines: StackEngine[] = view.map((e) => {
     const lines = (id: string) =>
       inventory?.accounts.find((l) => l.engine === e.engine && l.id === id);
@@ -1207,7 +1221,8 @@ export function usageGlance(
         lines(row.id),
         next?.id,
         now,
-        sameName(row.id)
+        sameName(row.id),
+        opts.computer
       )
     );
     return { engine: e.engine, label: e.label, keys: distinct(keys) };
@@ -1341,7 +1356,7 @@ export function usageGlance(
   );
   const macName =
     keys.find((k) => change && k.engine === change.engine && k.thisMac)?.name ??
-    'this Mac’s sign-in';
+    `${thisComputer(opts.computer)}’s sign-in`;
 
   return {
     engines,
@@ -1368,7 +1383,7 @@ export function usageGlance(
         })
       ),
     signInChanged: change
-      ? { engine: change.engine, key: change.key, text: signInChangedText(change, macName) }
+      ? { engine: change.engine, key: change.key, text: signInChangedText(change, macName, opts.computer) }
       : null,
     headline,
     unread: counted.length > 0 && read.length === 0,

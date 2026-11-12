@@ -10,6 +10,7 @@
 
 import { GitHubIcon, FolderIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 interface ImportTypePickerProps {
   /** Callback when user selects GitHub import */
@@ -49,7 +50,7 @@ export function ImportTypePicker({
           <div className="import-picker-text">
             <span className="import-picker-title">Local folder</span>
             <span className="import-picker-subtitle">
-              Open a project that's already on this Mac
+              Open a project that's already on {THIS_COMPUTER}
             </span>
           </div>
         </button>

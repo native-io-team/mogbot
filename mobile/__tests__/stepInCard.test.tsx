@@ -11,9 +11,9 @@ import type { AgentMessage, Approval } from '@shipstudio/companion-protocol';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { ARM_MS, ApprovalCard } from '../src/components/ApprovalCard';
 import {
-  STEP_IN_AT_MAC,
+  stepInAtComputer,
   STEP_IN_FROM_HERE,
-  STEP_IN_ON_YOUR_MAC,
+  stepInOnYourComputer,
   cardOutcome,
   stepInOnPhone,
 } from '../src/lib/agents';
@@ -138,7 +138,7 @@ it('offers Not now and says Step in is on the Mac; never an Allow', async () => 
     />
   );
   await act(() => jest.advanceTimersByTime(ARM_MS + 50));
-  expect(screen.getByText(STEP_IN_ON_YOUR_MAC)).toBeTruthy();
+  expect(screen.getByText(stepInOnYourComputer())).toBeTruthy();
   // Where, as the desk's card says it; the Mac's "opens on this Mac" detail isn't repeated.
   expect(screen.getByText('portal.northwind.example')).toBeTruthy();
   expect(screen.queryByText('The portal asks for a code sent to your phone.')).toBeNull();
@@ -159,7 +159,7 @@ it('while the user is in the tab at the Mac, it offers nothing and says so', asy
     />
   );
   await act(() => jest.advanceTimersByTime(ARM_MS + 50));
-  expect(screen.getByText(STEP_IN_AT_MAC)).toBeTruthy();
+  expect(screen.getByText(stepInAtComputer())).toBeTruthy();
   expect(screen.queryByText('Not now')).toBeNull();
 });
 

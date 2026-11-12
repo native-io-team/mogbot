@@ -16,10 +16,12 @@ import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
 import { fonts, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { useComputer } from '../lib/computer';
 
 export default withAgentAccent(Remember);
 
 function Remember() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -90,7 +92,7 @@ function Remember() {
         </T>
         {!connected && (
           <T variant="small" color={colors.textMuted}>
-            Remembering it needs your Mac.
+            Remembering it needs {comp.your}.
           </T>
         )}
         {error && (

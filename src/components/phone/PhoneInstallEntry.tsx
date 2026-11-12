@@ -16,6 +16,7 @@ import {
   remindIfDue,
   type InstallPlatform,
 } from '../../lib/companionInstall';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 interface EntryProps {
   now: number;
@@ -34,7 +35,7 @@ export function PhoneInstallEntry({ now, onInstall, onReinstall }: EntryProps) {
       </span>
       <div className="phone-offer__body">
         <span className="phone-offer__title">
-          {record ? `Built on this Mac for ${record.deviceName}` : 'Get the phone app'}
+          {record ? `Built on ${THIS_COMPUTER} for ${record.deviceName}` : 'Get the phone app'}
         </span>
         <span className="phone-offer__detail">
           {record

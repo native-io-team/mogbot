@@ -767,8 +767,11 @@ pub fn fold_cards() -> Result<usize, CommandError> {
 }
 
 /// The line on a card folded into the checklist.
-pub const FOLDED_LINE: &str =
-    "Moved to \"Setting up your team\": checked there first, and only asked if this Mac can't reach it.";
+pub const FOLDED_LINE: &str = concat!(
+    "Moved to \"Setting up your team\": checked there first, and only asked if this ",
+    crate::computer::noun!(),
+    " can't reach it."
+);
 
 fn routines_of(agent: &store::Agent) -> Vec<RoutineItem> {
     agent
@@ -1025,7 +1028,11 @@ pub fn chief_context() -> Option<String> {
         .iter()
         .filter(|s| s.state == StepState::Open)
         .map(|s| match s.id {
-            StepId::Logins => "the few logins this Mac couldn't reach",
+            StepId::Logins => concat!(
+                "the few logins this ",
+                crate::computer::noun!(),
+                " couldn't reach"
+            ),
             StepId::Routines => "switching routines on",
             StepId::Missing => "what some agents said they're missing",
             StepId::Hello => "saying hi to each agent",

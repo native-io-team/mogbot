@@ -18,6 +18,7 @@ import { canCall, describeError, search } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
 import { keySize, fonts, iconSize, space } from '../../../lib/theme';
 import { useColors } from '../../../lib/appearance';
+import { useComputer } from '../../../lib/computer';
 
 interface Group {
   key: string;
@@ -59,6 +60,7 @@ const WHO: Partial<Record<SearchHit['kind'], string>> = {
 };
 
 export default function Search() {
+  const comp = useComputer();
   const colors = useColors();
   const router = useRouter();
   const served = useApp((s) => canCall('agents.search', s.welcome));
@@ -189,7 +191,7 @@ export default function Search() {
             {!served ? (
               <EmptyNote
                 title="Search needs an update"
-                body="Update the app on your Mac to search your conversations from here."
+                body={`Update the app on ${comp.your} to search your conversations from here.`}
               />
             ) : busy && !hits ? (
               <Spinner />

@@ -65,7 +65,7 @@ pub fn host_manifest_path(user_data_dir: &Path) -> PathBuf {
 pub fn host_manifest(exe: &Path) -> Value {
     json!({
         "name": host_name(),
-        "description": format!("{}: lets your agents use this Chrome, through the app on this Mac", crate::brand::NAME),
+        "description": format!(concat!("{}: lets your agents use this Chrome, through the app on this ", crate::computer::noun!()), crate::brand::NAME),
         "path": exe.to_string_lossy(),
         "type": "stdio",
         "allowed_origins": auth::origins(),

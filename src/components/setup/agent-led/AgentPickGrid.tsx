@@ -16,6 +16,7 @@ import { ReactNode } from 'react';
 import { SetupItem } from '../../../lib/setup';
 import { isEnginePairReady, type AgentsEngineBinaryId } from '../../../lib/agentOnboarding';
 import { ClaudeIcon, CodexIcon, OpencodeIcon, ArrowRightIcon } from '@/components/icons';
+import { THIS_COMPUTER } from '../../../lib/computer';
 
 /** Card key: the engine's setup binary id. */
 export type AgentCardKey = AgentsEngineBinaryId;
@@ -52,7 +53,7 @@ const CARDS: CardDef[] = [
   {
     key: 'opencode',
     name: 'OpenCode',
-    description: 'Open source. Runs on the AI providers you set up in it, or models on this Mac.',
+    description: `Open source. Runs on the AI providers you set up in it, or models on ${THIS_COMPUTER}.`,
     account: 'Uses a provider you sign in to in OpenCode',
     ifInstalled: true,
     icon: <OpencodeIcon size={28} />,

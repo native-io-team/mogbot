@@ -13,6 +13,7 @@
  */
 
 import { kbd } from './shortcuts';
+import { THIS_COMPUTER } from './computer';
 
 export interface EducationItem {
   /** Short title displayed in the tooltip header */
@@ -58,7 +59,7 @@ export const educationContent: Record<string, EducationItem> = {
       'Customize your dashboard — show or hide the home screen header, activity calendar, and community banner, and manage analytics preferences.',
   },
   'machine-tools': {
-    title: 'Tools on this Mac',
+    title: `Tools on ${THIS_COMPUTER}`,
     description:
       'The tools installed once on your machine and shared by every workspace — Homebrew, Node, Git, and the agent CLIs. Click to expand and check what is installed.',
   },

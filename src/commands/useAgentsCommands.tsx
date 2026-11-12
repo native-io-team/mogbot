@@ -57,6 +57,7 @@ import {
   SETUP_TITLE,
   useResumableTeamSetup,
 } from '../lib/teamSetup';
+import { THIS_COMPUTER, THIS_COMPUTER_CAP } from '../lib/computer';
 
 type AgentsIntent =
   | { kind: 'new'; template?: string }
@@ -159,15 +160,15 @@ const sameNames = (a: AgentsState['agents'], b: AgentsState['agents']) =>
 const STAY_ON_COMMANDS: { id: string; title: string; change: StayOnChange; done: string }[] = [
   {
     id: 'awakeOn',
-    title: 'Keep this Mac awake for agents',
+    title: `Keep ${THIS_COMPUTER} awake for agents`,
     change: { keepAwake: true },
-    done: 'This Mac stays awake while the app is open',
+    done: `${THIS_COMPUTER_CAP} stays awake while the app is open`,
   },
   {
     id: 'awakeOff',
-    title: 'Let this Mac sleep again',
+    title: `Let ${THIS_COMPUTER} sleep again`,
     change: { keepAwake: false },
-    done: 'This Mac can sleep again; agents pause while it sleeps',
+    done: `${THIS_COMPUTER_CAP} can sleep again; agents pause while it sleeps`,
   },
   {
     id: 'runningOn',

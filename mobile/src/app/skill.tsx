@@ -20,10 +20,12 @@ import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
 import { fonts, lineHeight, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { useComputer } from '../lib/computer';
 
 export default withAgentAccent(SkillPage);
 
 function SkillPage() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -114,14 +116,14 @@ function SkillPage() {
             {connected ? (
               <Spinner />
             ) : (
-              <T color={colors.textSecondary}>Reading it needs your Mac.</T>
+              <T color={colors.textSecondary}>Reading it needs {comp.your}.</T>
             )}
           </View>
         ) : reading.kind === 'failed' ? (
           <T color={colors.textSecondary}>
             {connected
               ? `Couldn’t read it: ${reading.reason}`
-              : 'Reading it needs your Mac.'}
+              : `Reading it needs ${comp.your}.`}
           </T>
         ) : reading.kind === 'gone' ? (
           <T color={colors.textSecondary}>That skill isn’t there any more.</T>
@@ -129,14 +131,14 @@ function SkillPage() {
           <>
             {!connected && (
               <T variant="small" color={colors.textMuted}>
-                As it was last read. Changing it needs your Mac.
+                As it was last read. Changing it needs {comp.your}.
               </T>
             )}
             {field(name, setName, 'Name')}
             {field(when, setWhen, 'When to use it')}
             {field(steps, setSteps, 'Steps', true)}
             <T variant="caption" color={colors.textMuted}>
-              Saved on your Mac with personal details and secrets taken out.
+              Saved on {comp.your} with personal details and secrets taken out.
             </T>
           </>
         )}

@@ -33,6 +33,7 @@ import {
 } from '../../lib/agents';
 import { useAgentsList } from '../../lib/agentsStore';
 import { ImportStep, listOf, MessageCard, plural } from './ImportParts';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 const CLOSED: ImportGate = { armed: false, talk: null };
 
@@ -83,7 +84,7 @@ export function talkLine(talk: ImportTalk, chief: string): string {
         return `${talk.source} went quiet for 30 minutes, so the import ended. Nothing was created. Press Start and tell ${talk.source} “carry on with the import”`;
       }
       if (talk.endedBy === 'unavailable') {
-        return 'Importing from another assistant needs Claude Code on this Mac. Install it, or use an export or paste a reply';
+        return `Importing from another assistant needs Claude Code on ${THIS_COMPUTER}. Install it, or use an export or paste a reply`;
       }
       return `You stopped the import from ${talk.source}. Nothing was created`;
   }

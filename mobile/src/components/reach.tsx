@@ -20,8 +20,10 @@ import { useRemembered } from '../lib/remembered';
 import { iconSize, space } from '../lib/theme';
 import { TextAction } from './surfaces';
 import { Icon, Row, SectionTitle, T, groupSurface, pageRhythm } from './ui';
+import { useComputer } from '../lib/computer';
 
 export function WhatItCanReach({ agentId }: { agentId: string }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const served = useServed('agents.reach', MAC_FEATURES.logins);
@@ -121,13 +123,13 @@ export function WhatItCanReach({ agentId }: { agentId: string }) {
           />
           {(!!reach.browser?.on || reach.secrets.length > 0) && (
             <T variant="caption" color={colors.textMuted}>
-              Its browser and keys change on your Mac.
+              Its browser and keys change on {comp.your}.
             </T>
           )}
         </View>
       ) : (
         <T variant="caption" color={colors.textMuted} style={styles.note}>
-          Change this on your Mac.
+          Change this on {comp.your}.
         </T>
       )}
     </>

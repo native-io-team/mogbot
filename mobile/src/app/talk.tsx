@@ -40,6 +40,7 @@ import {
   type TalkState,
 } from '../lib/talk';
 import { keySize, radius, space } from '../lib/theme';
+import { useComputer } from '../lib/computer';
 
 const NONE: never[] = [];
 /** The clock's step while it listens or counts down. */
@@ -58,6 +59,7 @@ export default function Talk() {
 }
 
 function TalkScreen({ id }: { id: string }) {
+  const comp = useComputer();
   const styles = useStyles();
   const colors = useColors();
   const accent = useAccent();
@@ -67,7 +69,7 @@ function TalkScreen({ id }: { id: string }) {
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === id));
   const messages = useApp((s) => s.chats[id]?.messages);
   const team = useApp((s) => s.overview?.agents ?? NONE);
-  const macName = useApp((s) => s.mac?.name ?? 'your Mac');
+  const macName = useApp((s) => s.mac?.name) ?? comp.your;
   const name = agent?.name ?? 'The agent';
   const card = pendingApproval(messages);
   const waitingOnYou = Boolean(card) || (agent ? needsYou(agent) : false);

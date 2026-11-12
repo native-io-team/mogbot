@@ -18,7 +18,7 @@ vi.mock('./logger', () => ({
 }));
 vi.mock('./analytics', () => ({ trackError: vi.fn() }));
 vi.mock('@tauri-apps/api/path', () => ({ homeDir: vi.fn(() => Promise.resolve('/Users/test/')) }));
-vi.mock('./setup', () => ({ isWindows: () => false }));
+vi.mock('./setup', () => ({ isWindows: () => false, isMac: () => true }));
 vi.mock('./github', () => ({ detectPackageManager: vi.fn(() => Promise.resolve('npm')) }));
 vi.mock('./code', () => ({
   readProjectFile: vi.fn(() => Promise.resolve(JSON.stringify({ scripts: { dev: 'next dev' } }))),

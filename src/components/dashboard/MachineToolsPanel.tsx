@@ -22,6 +22,7 @@ import { DashboardCardDisclosure } from './DashboardCardDisclosure';
 import { getFullSetupStatus, SetupItem, SETUP_ITEM_ORDER, MACHINE_ITEM_IDS } from '../../lib/setup';
 import { logger } from '../../lib/logger';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 export function MachineToolsPanel() {
   const [setupItems, setSetupItems] = useState<SetupItem[]>([]);
@@ -88,7 +89,7 @@ export function MachineToolsPanel() {
   return (
     <DashboardCardDisclosure
       storageKey="shipstudio.dashboard.machineToolsExpanded"
-      title="Tools on this Mac"
+      title={`Tools on ${THIS_COMPUTER}`}
       className="integration-bar"
       educationId="machine-tools"
       subtitle={

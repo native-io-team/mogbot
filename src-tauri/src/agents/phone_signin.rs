@@ -405,7 +405,11 @@ impl Refusal {
             Refusal::Gone => "That sign-in has ended.",
             Refusal::NotYours => "That sign-in was started on another phone.",
             Refusal::TimedOut => "That sign-in sat idle for five minutes, so it was closed.",
-            Refusal::Busy => "Another phone is signing in on this Mac right now.",
+            Refusal::Busy => concat!(
+                "Another phone is signing in on this ",
+                crate::computer::noun!(),
+                " right now."
+            ),
         }
     }
 }
@@ -872,15 +876,28 @@ pub fn choose(
 }
 
 /// A step-in is the agent's own tab: there's no plain window to move it to.
-pub const STEP_IN_NO_FALLBACK: &str =
-    "This is the agent's own tab, so there's no other way in from here. Step in on your Mac for this one.";
-pub const NO_AGENTS_BROWSER: &str = "The agents' browser isn't on on this Mac (Settings → Agents), or Google Chrome isn't installed there.";
+pub const STEP_IN_NO_FALLBACK: &str = concat!(
+    "This is the agent's own tab, so there's no other way in from here. Step in on your ",
+    crate::computer::noun!(),
+    " for this one."
+);
+pub const NO_AGENTS_BROWSER: &str = concat!(
+    "The agents' browser isn't on on this ",
+    crate::computer::noun!(),
+    " (Settings → Agents), or Google Chrome isn't installed there."
+);
 const NOT_FROM_HERE: &str = "This card isn't one you can sign in to from here.";
 /// The Mac's reasons when opening it failed or took too long.
-pub const CHROME_SLOW: &str =
-    "Chrome on your Mac isn't answering. It needs to be open there with Claude in Chrome on.";
-pub const AGENTS_SLOW: &str =
-    "The agents' browser on your Mac didn't open the page in time. Try again.";
+pub const CHROME_SLOW: &str = concat!(
+    "Chrome on your ",
+    crate::computer::noun!(),
+    " isn't answering. It needs to be open there with Claude in Chrome on."
+);
+pub const AGENTS_SLOW: &str = concat!(
+    "The agents' browser on your ",
+    crate::computer::noun!(),
+    " didn't open the page in time. Try again."
+);
 
 /// Start a session for a login card: its site's sign-in page in a window
 /// of the agents' browser (or, for a card without that, a tab of the
@@ -1087,7 +1104,11 @@ pub async fn begin_connect(
     run.opened(
         &url,
         format!(
-            "{}'s sign-in is open on your phone, in a window on this Mac.",
+            concat!(
+                "{}'s sign-in is open on your phone, in a window on this ",
+                crate::computer::noun!(),
+                "."
+            ),
             r.title
         ),
     );
@@ -1241,7 +1262,13 @@ pub async fn end_step_in(app: &AppHandle, request_id: &str) {
         t.take(&id)
     });
     if let Some(l) = live {
-        end(app, l, "handed back on the Mac", true).await;
+        end(
+            app,
+            l,
+            concat!("handed back on the ", crate::computer::noun!()),
+            true,
+        )
+        .await;
     }
 }
 
@@ -1348,7 +1375,11 @@ async fn open_chrome(
     let claude = super::engine::binary(super::engine::Engine::Claude)
         .await
         .ok_or_else(|| {
-            CommandError::expected("Claude Code isn't on this Mac, so its Chrome can't be reached.")
+            CommandError::expected(concat!(
+                "Claude Code isn't on this ",
+                crate::computer::noun!(),
+                ", so its Chrome can't be reached."
+            ))
         })?;
     tracing::info!("[Agents] phone sign-in: starting Claude in Chrome");
     let mut mcp = ChromeMcp::start(&claude).await.map_err(|e| {
@@ -1384,8 +1415,13 @@ async fn open_chrome(
         Some(t) => t,
         None => {
             let created = mcp.call("tabs_create_mcp", json!({})).await?;
-            super::browser::find_tab(&created)
-                .ok_or_else(|| CommandError::expected("Chrome on your Mac didn't open a tab."))?
+            super::browser::find_tab(&created).ok_or_else(|| {
+                CommandError::expected(concat!(
+                    "Chrome on your ",
+                    crate::computer::noun!(),
+                    " didn't open a tab."
+                ))
+            })?
         }
     };
     let nav = mcp
@@ -1398,7 +1434,11 @@ async fn open_chrome(
             mac_prompt(&scope.domain)
         } else {
             CommandError::expected(format!(
-                "Chrome on your Mac couldn't open {}.",
+                concat!(
+                    "Chrome on your ",
+                    crate::computer::noun!(),
+                    " couldn't open {}."
+                ),
                 scope.domain
             ))
         });
@@ -1563,7 +1603,11 @@ async fn chrome_frame(b: &mut ChromeTab, scope: &Scope) -> Result<Frame, Command
         return Err(if waiting_on_mac(&text) {
             mac_prompt(&scope.domain)
         } else {
-            CommandError::expected("Chrome on your Mac didn't send a picture of the page.")
+            CommandError::expected(concat!(
+                "Chrome on your ",
+                crate::computer::noun!(),
+                " didn't send a picture of the page."
+            ))
         });
     }
     let (jpeg, geom) = scale_frame(&shot)?;
@@ -1594,7 +1638,11 @@ pub fn scale_frame(result: &Value) -> Result<(Vec<u8>, FrameGeom), CommandError>
         })
         .and_then(|p| p.get("data").and_then(Value::as_str))
         .ok_or_else(|| {
-            CommandError::expected("Chrome on your Mac didn't send a picture of the page.")
+            CommandError::expected(concat!(
+                "Chrome on your ",
+                crate::computer::noun!(),
+                " didn't send a picture of the page."
+            ))
         })?;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data)
@@ -1695,8 +1743,14 @@ pub async fn input(device_id: &str, id: &str, input: Input) -> Result<(), Comman
                         }
                     }
                 }
-                agents_input(&w, &i)
-                    .map_err(|_| "That didn't reach the page on your Mac.".to_string())
+                agents_input(&w, &i).map_err(|_| {
+                    concat!(
+                        "That didn't reach the page on your ",
+                        crate::computer::noun!(),
+                        "."
+                    )
+                    .to_string()
+                })
             })
             .await
             .map_err(super::err_other)?;
@@ -1719,9 +1773,11 @@ async fn chrome_input(b: &mut ChromeTab, scope: &Scope, input: Input) -> Result<
     match b.mcp.call_checked(tool, args).await {
         Ok(_) => Ok(()),
         Err(text) if waiting_on_mac(&text) => Err(mac_prompt(&scope.domain)),
-        Err(_) => Err(CommandError::expected(
-            "That didn't reach Chrome on your Mac.",
-        )),
+        Err(_) => Err(CommandError::expected(concat!(
+            "That didn't reach Chrome on your ",
+            crate::computer::noun!(),
+            "."
+        ))),
     }
 }
 
@@ -1870,7 +1926,12 @@ pub async fn fallback(app: &AppHandle, device_id: &str, id: &str) -> Result<Begu
     .map_err(super::err_other)?;
     drop(d);
     if let Err(e) = r {
-        audit(&started, &scope.domain, "needs the Mac", false);
+        audit(
+            &started,
+            &scope.domain,
+            concat!("needs the ", crate::computer::noun!()),
+            false,
+        );
         return Err(CommandError::expected(e));
     }
     set_via(id, Via::MacWindow);
@@ -1906,7 +1967,13 @@ pub async fn stop(app: &AppHandle, device_id: &str, id: &str) -> Result<(), Comm
 /// Stop from the desk's bar: whatever is live.
 pub async fn stop_from_desk(app: &AppHandle) {
     if let Some(l) = with_table(Table::take_any) {
-        finish_live(app, l, "stopped on the Mac", How::HandedBack).await;
+        finish_live(
+            app,
+            l,
+            concat!("stopped on the ", crate::computer::noun!()),
+            How::HandedBack,
+        )
+        .await;
     }
 }
 

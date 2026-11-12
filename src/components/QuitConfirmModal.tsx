@@ -3,6 +3,7 @@ import { Button } from './primitives/Button';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { getRemoteAccessBrief } from '../lib/remoteAccess';
 import { quitPrompt, type QuitCheck } from '../lib/agentsDesktop';
+import { THIS_COMPUTER } from '../lib/computer';
 
 interface QuitConfirmModalProps {
   onCancel: () => void;
@@ -40,8 +41,8 @@ export function QuitConfirmModal({
   });
   const remoteLine = remoteOn && (
     <p className="quit-confirm-remote">
-      Remote access is on. Quitting stops your assistant reaching this Mac until the app is open
-      again.
+      Remote access is on. Quitting stops your assistant reaching {THIS_COMPUTER} until the app is
+      open again.
     </p>
   );
 

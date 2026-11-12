@@ -310,6 +310,7 @@ pub fn messages() -> Vec<AgentMessage> {
 pub fn mac_status() -> MacStatus {
     MacStatus {
         name: "Julian’s MacBook Pro".into(),
+        computer: crate::computer::HOST,
         app_version: "1.7.0".into(),
         power: PowerInfo {
             keep_awake: true,

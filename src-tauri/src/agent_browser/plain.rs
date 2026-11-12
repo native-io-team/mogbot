@@ -37,13 +37,16 @@ pub struct Plain {
 }
 
 /// Why the phone can't drive it.
-pub const AT_THE_MAC: &str = "Google needs one sign-in at the Mac: it won't sign in to a browser the app drives, and showing a plain window on your phone needs Screen Recording and Accessibility for this app, which aren't on. Sign in at the Mac once (the card there opens the window), or turn both on in System Settings → Privacy & Security, then try again from here.";
+pub const AT_THE_MAC: &str = concat!("Google needs one sign-in at the ", crate::computer::noun!(), ": it won't sign in to a browser the app drives, and showing a plain window on your phone needs Screen Recording and Accessibility for this app, which aren't on. Sign in at the ", crate::computer::noun!(), " once (the card there opens the window), or turn both on in System Settings → Privacy & Security, then try again from here.");
 
 impl Plain {
     /// Close the agents' Chrome and open the profile plainly at `url`.
     pub fn open(url: &str) -> Result<Plain, String> {
-        let chrome =
-            super::chrome::find_chrome().ok_or("Google Chrome isn't installed on this Mac.")?;
+        let chrome = super::chrome::find_chrome().ok_or(concat!(
+            "Google Chrome isn't installed on this ",
+            crate::computer::noun!(),
+            "."
+        ))?;
         let profile = service::profile_dir();
         if !super::chrome::profile_is_ours(&profile, &service::profile_root()) {
             return Err("That profile isn't the app's own.".into());
@@ -108,9 +111,11 @@ impl Plain {
 
     /// One picture of the window, for the phone.
     pub fn frame(&mut self, max_width: u32) -> Result<(Vec<u8>, u32, u32), String> {
-        let w = self
-            .window()
-            .ok_or("The sign-in window isn't on screen yet. Unlock your Mac if it's locked.")?;
+        let w = self.window().ok_or(concat!(
+            "The sign-in window isn't on screen yet. Unlock your ",
+            crate::computer::noun!(),
+            " if it's locked."
+        ))?;
         let (jpeg, fw, fh) = macos::capture(w.id, &self.scratch, max_width)?;
         self.frame = (fw, fh);
         Ok((jpeg, fw, fh))

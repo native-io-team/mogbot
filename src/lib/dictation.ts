@@ -8,6 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { BRAND } from '../lib/brand';
+import { THIS_COMPUTER } from './computer';
 
 export const DICTATION_EVENT = 'dictation://event';
 
@@ -71,7 +72,7 @@ export function blockedCopy(reason: DictationBlock): { message: string; settings
     case 'missingUsageDescription':
       return { message: 'This build can’t ask for microphone access.' };
     case 'unavailable':
-      return { message: 'Speech recognition isn’t available on this Mac right now.' };
+      return { message: `Speech recognition isn’t available on ${THIS_COMPUTER} right now.` };
   }
 }
 

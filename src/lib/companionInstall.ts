@@ -18,6 +18,7 @@ import { agentPromptArgs, getActiveAgent } from './agent';
 import { failedBuildNote, loggedCommand } from './companionBuildLog';
 import type { TerminalCommand } from './setup';
 import { BRAND, BRAND_LINKS } from './brand';
+import { THIS_COMPUTER } from './computer';
 
 export type InstallPlatform = 'ios' | 'android';
 
@@ -527,7 +528,7 @@ export function buildAndroidInstallPrompt(s: AndroidInstallStatus): string {
   const phone = pickAndroidPhone(s);
   const target = phone ? phone.serial : '<the serial from `adb devices`>';
   return (
-    `You are installing the ${BRAND.name} companion app on the user’s Android phone, built from source on this Mac. ` +
+    `You are installing the ${BRAND.name} companion app on the user’s Android phone, built from source on ${THIS_COMPUTER}. ` +
     'Be brief and plain: before each step, say in one sentence what you are about to do. ' +
     `${BRAND.name} shows a checklist beside this terminal and verifies every item with its own checks, so do not claim success; tell the user to look at the checklist. ` +
     'Check first: `adb version` (if missing, `brew install --cask android-platform-tools`), Java 17 (`/usr/libexec/java_home -v 17`; if missing, `brew install --cask zulu@17`), and the Android SDK at $ANDROID_HOME or ~/Library/Android/sdk (if missing, `brew install --cask android-commandlinetools`, then `sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"`). Export JAVA_HOME and ANDROID_HOME for the build. ' +

@@ -37,6 +37,7 @@ import { answerApproval, describeError, loadLatest, setOpenChat } from '../lib/s
 import { highRisk } from '../lib/needsYou';
 import { useApp } from '../lib/store';
 import { keySize, iconSize, space } from '../lib/theme';
+import { useComputer } from '../lib/computer';
 
 /** The big answer buttons: taller than a large button, for the thumb. */
 const BIG = space['2xl'] + space.xl;
@@ -122,6 +123,7 @@ function Shown({
   onClose: () => void;
   bottom: number;
 }) {
+  const comp = useComputer();
   const styles = useStyles();
   const colors = useColors();
   const router = useRouter();
@@ -241,7 +243,7 @@ function Shown({
         )}
         {pending && !connected && (
           <T variant="small" color={colors.textSecondary}>
-            Answer it once your Mac is back. It stays open until then.
+            Answer it once {comp.your} is back. It stays open until then.
           </T>
         )}
         {pending && action.kind === 'answer' ? (

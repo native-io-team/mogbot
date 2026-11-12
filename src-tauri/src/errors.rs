@@ -116,7 +116,10 @@ impl Serialize for CommandError {
                 exit_code,
                 stderr,
             },
-            CommandError::Validation { field, reason } => Mirror::Validation { field, reason },
+            CommandError::Validation { field, reason } => Mirror::Validation {
+                field,
+                reason: &crate::computer::localize(reason),
+            },
             CommandError::NotAuthenticated { service } => Mirror::NotAuthenticated { service },
             CommandError::Io { message } => Mirror::Io { message },
             CommandError::MergeConflict { pr_number, stderr } => {
@@ -124,12 +127,13 @@ impl Serialize for CommandError {
             }
             // Expected is a backend-only distinction (reporting intent);
             // the frontend renders it exactly like Other.
+            // The app's own words name this build's computer (`computer`).
             CommandError::Expected { message } => Mirror::Other {
-                message,
+                message: &crate::computer::localize(message),
                 expected: Some(true),
             },
             CommandError::Other { message } => Mirror::Other {
-                message,
+                message: &crate::computer::localize(message),
                 expected: None,
             },
         };

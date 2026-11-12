@@ -29,6 +29,7 @@ import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
 import { fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { useComputer } from '../lib/computer';
 
 const MAX = 2_000;
 const clip = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s);
@@ -36,6 +37,7 @@ const clip = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s);
 export default withAgentAccent(Memory);
 
 function Memory() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -171,7 +173,7 @@ function Memory() {
         )}
         {entries !== null && !connected && (
           <T variant="small" color={colors.textMuted}>
-            As it was last read. Changing it needs your Mac.
+            As it was last read. Changing it needs {comp.your}.
           </T>
         )}
         {entries === null
@@ -180,7 +182,7 @@ function Memory() {
                 {connected ? (
                   <Spinner />
                 ) : (
-                  <T color={colors.textSecondary}>Reading it needs your Mac.</T>
+                  <T color={colors.textSecondary}>Reading it needs {comp.your}.</T>
                 )}
               </View>
             )

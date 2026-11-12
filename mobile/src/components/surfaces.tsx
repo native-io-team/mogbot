@@ -50,6 +50,8 @@ import {
 } from '../lib/theme';
 import type { SFName } from '../lib/icons';
 import { DISABLED_OPACITY, Dot, Icon, T, tap, useRipple } from './ui';
+import { yourComputer, type ComputerKind } from '@shipstudio/companion-protocol';
+import { pairedKind } from '../lib/computer';
 
 /**
  * A card glides to its new size as it folds. Not on the web (QA only):
@@ -253,7 +255,8 @@ export function useActionShare(titles: readonly string[], reserve = 0): ViewStyl
  * The one sentence every card offline carries in its note slot, with its
  * answers still drawn and disabled: a card keeps its shape when the Mac goes.
  */
-export const OFFLINE_NOTE = 'Answer it once your Mac is back. It stays open until then.';
+export const offlineNote = (kind: ComputerKind | undefined = pairedKind()) =>
+  `Answer it once ${yourComputer(kind)} is back. It stays open until then.`;
 
 /**
  * One quiet centred sentence: a note, where a new conversation began, a time

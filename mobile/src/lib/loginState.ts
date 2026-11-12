@@ -16,6 +16,7 @@ import {
   secretTitle,
 } from '@shipstudio/companion-protocol';
 import { formatAgo } from './agents';
+import { pairedComputer } from './computer';
 
 /** The Mac says it serves login cards (`welcome.features`), and the methods to answer them. */
 export const servesLogins = (
@@ -61,9 +62,10 @@ export const loginTitle = (approval: Approval, login: LoginRequest, agentName: s
 
 /** What a sign-in under way says on the phone: where it is, and how it's going. */
 export function onMacLine(login: LoginRequest): string {
+  const comp = pairedComputer();
   const live = login.flow?.message;
   if (login.flow?.onPhone) return live ?? `Signing in to ${login.title} here.`;
-  const lead = 'Finish signing in on your Mac — it’s open there.';
+  const lead = `Finish signing in on ${comp.your} — it’s open there.`;
   return live ? `${lead} ${live}` : lead;
 }
 
@@ -115,17 +117,18 @@ export function phoneWay(
 
 /** What a way in means when it's done from this phone, honestly. */
 export function phoneDetail(option: LoginOption, way: PhoneWay, title: string): string {
+  const comp = pairedComputer();
   switch (way) {
     case 'sheet':
-      return `Signs in to ${title} here, on its own page. Your Mac makes the token and keeps it in its Keychain; this phone keeps nothing.`;
+      return `Signs in to ${title} here, on its own page. ${comp.yourCap} makes the token and keeps it in its Keychain; this phone keeps nothing.`;
     case 'device':
-      return 'Shows a one-time code to type at github.com/login/device, here or anywhere. GitHub’s sign-in stays on your Mac.';
+      return `Shows a one-time code to type at github.com/login/device, here or anywhere. GitHub’s sign-in stays on ${comp.your}.`;
     case 'web':
-      return `Opens claude.ai here to add ${title} to your Claude account (the one your Mac uses). claude.ai holds that sign-in, not your Mac.`;
+      return `Opens claude.ai here to add ${title} to your Claude account (the one ${comp.your} uses). claude.ai holds that sign-in, not ${comp.your}.`;
     case 'here':
-      return `${title}’s sign-in opens in the agents’ own Chrome on your Mac and shows here: you sign in by touch, and nothing you type is kept. Your agents then use it signed in.`;
+      return `${title}’s sign-in opens in the agents’ own Chrome on ${comp.your} and shows here: you sign in by touch, and nothing you type is kept. Your agents then use it signed in.`;
     case 'mac':
-      return `${option.detail} Finish on your Mac.`;
+      return `${option.detail} Finish on ${comp.your}.`;
     default:
       return option.detail;
   }
@@ -137,20 +140,21 @@ export function phoneDetail(option: LoginOption, way: PhoneWay, title: string): 
  * stays with the other ways, behind "Other ways".
  */
 export function phoneLine(option: LoginOption, way: PhoneWay, title: string): string {
+  const comp = pairedComputer();
   switch (way) {
     case 'sheet':
-      return `Sign in to ${title} here. The token stays on your Mac.`;
+      return `Sign in to ${title} here. The token stays on ${comp.your}.`;
     case 'device':
-      return 'Gives you a one-time code. The sign-in stays on your Mac.';
+      return `Gives you a one-time code. The sign-in stays on ${comp.your}.`;
     case 'web':
       return `Adds ${title} to your Claude account on claude.ai.`;
     case 'here':
       return `Sign in by touch here. Nothing you type is kept.`;
     case 'mac':
-      return 'Finish on your Mac.';
+      return `Finish on ${comp.your}.`;
     case 'tap':
       return option.method === 'browser'
-        ? 'Uses your Chrome on your Mac. It asks before anything it sends.'
+        ? `Uses your Chrome on ${comp.your}. It asks before anything it sends.`
         : `Uses the ${title} you already connected.`;
     default:
       return option.detail;
@@ -191,6 +195,7 @@ export function reachRows(
   reach: AgentReach
 ): { key: string; label: string; detail: string; warning?: boolean }[] {
   const rows: { key: string; label: string; detail: string; warning?: boolean }[] = [];
+  const comp = pairedComputer();
   for (const c of reach.connections) {
     rows.push({
       key: `c:${c.connectionId}`,
@@ -207,7 +212,7 @@ export function reachRows(
       key: 'browser',
       label: 'Your browser',
       detail: reach.browser.on
-        ? `Your own Chrome on your Mac, through Claude in Chrome. It asks before every click, post or send.${sites}${reach.browser.helperInstalled ? '' : ' The extension isn’t set up on your Mac yet.'}`
+        ? `Your own Chrome on ${comp.your}, through Claude in Chrome. It asks before every click, post or send.${sites}${reach.browser.helperInstalled ? '' : ` The extension isn’t set up on ${comp.your} yet.`}`
         : 'Off for this agent',
     });
   }
@@ -231,6 +236,7 @@ export const signingIn = (c: Pick<TeamCard, 'flow'>) =>
 
 /** What one agent's line on a team row says. */
 export function teamCardLine(c: TeamCard): string {
+  const comp = pairedComputer();
   const wants = c.abilities.some((a) => a.id === 'write') ? 'read and send' : 'read';
   switch (c.state) {
     case 'connected':
@@ -241,7 +247,7 @@ export function teamCardLine(c: TeamCard): string {
       return `${c.agentName} · Covered`;
     default:
       if (signingIn(c))
-        return `${c.agentName} · ${c.flow?.onPhone ? 'Signing in on your phone…' : 'Signing in on your Mac…'}`;
+        return `${c.agentName} · ${c.flow?.onPhone ? 'Signing in on your phone…' : `Signing in on ${comp.your}…`}`;
       if (c.flow?.state === 'failed')
         return `${c.agentName} · ${c.flow.message ?? 'Didn’t finish'}`;
       return `${c.agentName} · to ${wants} ${c.title}`;

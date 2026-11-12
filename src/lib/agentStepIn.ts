@@ -14,6 +14,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { StepInCard } from '../../packages/companion-protocol/src/model';
 import type { AgentMessage, Approval } from './agents';
+import { THIS_COMPUTER } from './computer';
 
 export type { StepInCard };
 
@@ -69,5 +70,4 @@ export function stepInNowNote(onPhone?: string, barShown = false): string {
 }
 
 /** What the card says about where it opens, and what the agent sees. */
-export const STEP_IN_NOTE =
-  'Its tab opens in a window on this Mac. Do it there, then Hand back here. It never sees what you type, only where the page ends up.';
+export const STEP_IN_NOTE = `Its tab opens in a window on ${THIS_COMPUTER}. Do it there, then Hand back here. It never sees what you type, only where the page ends up.`;

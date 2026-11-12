@@ -2479,7 +2479,11 @@ pub async fn agents_other_app_import(
     let result = tokio::task::spawn_blocking(move || {
         let root = agents::other_app::find_source().ok_or_else(|| {
             CommandError::expected(format!(
-                "There are no {} agents on this Mac to import.",
+                concat!(
+                    "There are no {} agents on this ",
+                    crate::computer::noun!(),
+                    " to import."
+                ),
                 agents::other_app::OTHER_APP_NAME
             ))
         })?;
@@ -3765,7 +3769,7 @@ pub async fn agents_user_chrome_open_profile(dir: Option<String>) -> Result<Stri
                     ))
                 }
                 Some(_) if managed::valid_dir(&d) => d,
-                _ => return Err(CommandError::expected("That Chrome profile isn't on this Mac.")),
+                _ => return Err(CommandError::expected(concat!("That Chrome profile isn't on this ", crate::computer::noun!(), "."))),
             }
         }
         None => managed::new_profile_dir(&profiles),
@@ -3891,8 +3895,13 @@ pub async fn agents_agent_browser_permission(
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_browser_open_install() -> Result<(), CommandError> {
-    tauri_plugin_opener::open_url(agents::browser::INSTALL_URL, None::<&str>)
-        .map_err(|_| CommandError::expected("Couldn't open this Mac's browser."))
+    tauri_plugin_opener::open_url(agents::browser::INSTALL_URL, None::<&str>).map_err(|_| {
+        CommandError::expected(concat!(
+            "Couldn't open this ",
+            crate::computer::noun!(),
+            "'s browser."
+        ))
+    })
 }
 
 /// "Checking what your team can already reach": run it now. Returns how

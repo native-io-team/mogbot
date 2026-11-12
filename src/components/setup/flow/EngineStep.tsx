@@ -24,6 +24,7 @@ import { FullSetupStatus, getBlockingDependencies, type SetupItem } from '../../
 import { isEnginePairReady, readyAgentsEngine } from '../../../lib/agentOnboarding';
 import { engineItemCheck, engineItemCopy, engineScreens } from '../../../lib/onboardingFlow';
 import type { MockFailure } from '../../../lib/installProgress';
+import { THIS_COMPUTER } from '../../../lib/computer';
 
 const ENGINES: Record<AgentCardKey, { binaryId: string; name: string; account: string }> = {
   claude: { binaryId: 'claude', name: 'Claude Code', account: 'Claude Pro or Max' },
@@ -161,7 +162,7 @@ export function EngineStep({
       <FlowShell
         step="engine"
         title={`${ENGINES[ready].name} is connected`}
-        lede="Your agents run on it, on this Mac, with your own account."
+        lede={`Your agents run on it, on ${THIS_COMPUTER}, with your own account.`}
         onBack={onBack}
         primary={
           <Button

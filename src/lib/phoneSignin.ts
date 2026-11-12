@@ -8,6 +8,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { THIS_COMPUTER } from './computer';
 
 /** What the bar shows while a phone is signing in. */
 export interface PhoneSignin {
@@ -34,10 +35,10 @@ export function phoneSigninTitle(s: PhoneSignin): string {
 export function phoneSigninDetail(s: PhoneSignin): string {
   switch (s.via) {
     case 'agents_browser':
-      return 'It’s using a window of the agents’ own browser on this Mac. What’s typed there isn’t kept, and the agent it’s for waits until it’s done.';
+      return `It’s using a window of the agents’ own browser on ${THIS_COMPUTER}. What’s typed there isn’t kept, and the agent it’s for waits until it’s done.`;
     case 'mac_window':
-      return 'It’s using a plain Chrome window on this Mac, shown on the phone. What’s typed there isn’t kept; the agents’ browser is closed until it’s done.';
+      return `It’s using a plain Chrome window on ${THIS_COMPUTER}, shown on the phone. What’s typed there isn’t kept; the agents’ browser is closed until it’s done.`;
     default:
-      return 'It’s using a tab of its own in Chrome on this Mac. What’s typed there isn’t kept, and agents stay out of Chrome until it’s done.';
+      return `It’s using a tab of its own in Chrome on ${THIS_COMPUTER}. What’s typed there isn’t kept, and agents stay out of Chrome until it’s done.`;
   }
 }

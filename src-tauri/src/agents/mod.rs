@@ -231,7 +231,7 @@ pub(crate) fn err_io(e: impl std::fmt::Display) -> CommandError {
 }
 
 /// The sentence for a write that failed because this Mac's disk is full.
-pub(crate) const DISK_FULL_LINE: &str = "This Mac is out of disk space, so the app couldn't save that. Free up some space (Settings → Agents shows the largest agent folders), then try again.";
+pub(crate) const DISK_FULL_LINE: &str = concat!("This ", crate::computer::noun!(), " is out of disk space, so the app couldn't save that. Free up some space (Settings → Agents shows the largest agent folders), then try again.");
 
 pub(crate) fn is_disk_full(message: &str) -> bool {
     let lower = message.to_lowercase();

@@ -106,7 +106,7 @@ import {
   type UsageSummary,
   type WatchCheckOutcome,
   describeWatchCheck,
-  ROUTINES_NEED_THE_MAC,
+  ROUTINES_NEED_THE_COMPUTER,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
 // "At a time / When…", in the phone's words too.
@@ -130,6 +130,7 @@ import {
 import { routineCanKeepPageLine, routinePageLine, useConversationPage } from '../../lib/agentPage';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /** A Validation error's reason, without the examples meant for an agent. */
 function reasonOf(err: unknown): string {
@@ -362,13 +363,13 @@ function ScheduleBody({
         <p className="agent-schedule__foot">
           {mode === 'when' ? (
             <>
-              Checks run only while the app is open and this Mac is awake; what arrives meanwhile is
-              found by the next check.
+              Checks run only while the app is open and {THIS_COMPUTER} is awake; what arrives
+              meanwhile is found by the next check.
               <KeepAwakeLink />
             </>
           ) : (
             <>
-              {ROUTINES_NEED_THE_MAC}
+              {ROUTINES_NEED_THE_COMPUTER}
               <KeepAwakeLink />
             </>
           )}
@@ -441,7 +442,7 @@ function ScheduleBody({
       </div>
 
       <p className="agent-schedule__foot">
-        {ROUTINES_NEED_THE_MAC}
+        {ROUTINES_NEED_THE_COMPUTER}
         <KeepAwakeLink />
       </p>
     </div>

@@ -15,10 +15,12 @@ import {
   type UsageAccount,
   type UsageGlance,
   type UsageInventory,
+  type ComputerKind,
 } from '@shipstudio/companion-protocol';
 import { useMemo } from 'react';
 import { useAccounts } from './accounts';
 import { useApp } from './store';
+import { pairedKind } from './computer';
 
 /**
  * The glance with the engines the desk shows (`AccountSwitcher.shownEngines`):
@@ -29,7 +31,8 @@ export function glanceFor(
   accounts: UsageAccount[],
   inventory: UsageInventory | null | undefined,
   agents: Pick<Agent, 'engine' | 'account' | 'name'>[] | undefined,
-  now?: number
+  now?: number,
+  computer: ComputerKind | undefined = pairedKind()
 ): UsageGlance {
   const all = agents ?? [];
   const engines = [...new Set(accounts.map((a) => a.engine))].filter(
@@ -42,6 +45,7 @@ export function glanceFor(
     now,
     engines: engines.length > 0 ? engines : undefined,
     pins,
+    computer,
   });
 }
 

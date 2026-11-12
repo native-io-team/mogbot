@@ -138,6 +138,7 @@ import {
 import { kbd } from '../../lib/shortcuts';
 import { needsYouCount as countNeedsYou } from '../../../packages/companion-protocol/src/attention';
 import { useResumableTeamSetup, useTeamSetup, withoutHeldLogins } from '../../lib/teamSetup';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
 
@@ -1416,8 +1417,8 @@ function NoEngine({
             names were said twice, above three buttons that say them again. */}
         <h2 className="agents-no-engine__title">Agents need Claude Code, Codex or OpenCode</h2>
         <p className="agents-no-engine__body">
-          One of them, on this Mac with your own account. Set it up and your Chief of Staff is ready
-          to talk. Your projects work without it.
+          One of them, on {THIS_COMPUTER} with your own account. Set it up and your Chief of Staff
+          is ready to talk. Your projects work without it.
         </p>
         <div className="agents-no-engine__actions">
           <Button variant="primary" onClick={() => onSetUp('claude')}>

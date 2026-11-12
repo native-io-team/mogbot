@@ -26,9 +26,9 @@ import {
 } from '@shipstudio/companion-protocol';
 import { router } from 'expo-router';
 import {
-  STEP_IN_AT_MAC,
+  stepInAtComputer,
   STEP_IN_FROM_HERE,
-  STEP_IN_ON_YOUR_MAC,
+  stepInOnYourComputer,
   stepInOnPhone,
 } from '../lib/agents';
 import { highRisk } from '../lib/needsYou';
@@ -72,8 +72,9 @@ import { GateBody } from './gateBody';
 import { SkillCardBody } from './skills';
 import { ShowAll } from './ShowAll';
 import { SideScroll } from './SideScroll';
-import { Card, Line, OFFLINE_NOTE, TextAction, useActionShare } from './surfaces';
+import { Card, Line, offlineNote, TextAction, useActionShare } from './surfaces';
 import { Button, Icon, T } from './ui';
+import { useComputer } from '../lib/computer';
 
 /**
  * How long a new card's answers stay inert: the desktop's anti-misclick
@@ -242,6 +243,7 @@ export function ApprovalCard({
    */
   full?: boolean;
 }) {
+  const comp = useComputer();
   const cardStyles = useCardStyles();
   const colors = useColors();
   const appearance = useAppearance();
@@ -406,7 +408,7 @@ export function ApprovalCard({
             disabled={off}
             focusable={armed}
             onPress={() => void answer(true, true)}
-            accessibilityHint="Carry on with the other AI app (Claude Code or Codex) whenever this happens. Change it on your Mac in Settings → Accounts & usage."
+            accessibilityHint={`Carry on with the other AI app (Claude Code or Codex) whenever this happens. Change it on ${comp.your} in Settings → Accounts & usage.`}
             style={share}
           />
         </>
@@ -421,7 +423,7 @@ export function ApprovalCard({
             haptic.select();
             stepInFromHere();
           }}
-          accessibilityHint="Its tab on your Mac shows here, and you do it by touch."
+          accessibilityHint={`Its tab on ${comp.your} shows here, and you do it by touch.`}
           testID="step-in-here"
           style={share}
         />
@@ -481,15 +483,15 @@ export function ApprovalCard({
       onHeadLayout={fit.onHeadLayout}
       note={
         !connected
-          ? OFFLINE_NOTE
+          ? offlineNote()
           : stepIn
             ? stepIn.inSince
               ? stepIn.onPhone
-                ? stepInOnPhone(stepIn.onPhone)
-                : STEP_IN_AT_MAC
+                ? stepInOnPhone(stepIn.onPhone, comp.kind)
+                : stepInAtComputer(comp.kind)
               : stepInHere
                 ? STEP_IN_FROM_HERE
-                : STEP_IN_ON_YOUR_MAC
+                : stepInOnYourComputer(comp.kind)
             : gate
               ? 'It waits for you, and closes if the routine runs again first.'
               : skill
@@ -697,7 +699,7 @@ export function PlaybackCard({
       icon="square.and.arrow.down"
       title={approval.title}
       source={source ? `From ${source} · nothing is created yet` : undefined}
-      note={!connected ? OFFLINE_NOTE : 'Is there anything I’m missing?'}
+      note={!connected ? offlineNote() : 'Is there anything I’m missing?'}
       actions={
         <Animated.View
           entering={FadeIn.duration(ARM_MS)}
@@ -786,6 +788,7 @@ export function PhoneReviewCard({
   chiefName: string;
   onError: (text: string) => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const cardStyles = useCardStyles();
   const [busy, setBusy] = useState<null | 'import' | 'no'>(null);
@@ -879,8 +882,8 @@ export function PhoneReviewCard({
       source={source ? `From ${source} · nothing is created until you import` : undefined}
       note={
         !connected
-          ? OFFLINE_NOTE
-          : 'Routines arrive paused and logins are asked for securely. Replacing one of your agents is done on your Mac.'
+          ? offlineNote()
+          : `Routines arrive paused and logins are asked for securely. Replacing one of your agents is done on ${comp.your}.`
       }
       actions={
         <Animated.View
@@ -937,6 +940,7 @@ export function PhoneReviewCard({
  * one only says who they are and to go there. No Allow: the Mac refuses one.
  */
 export function ReviewOnMacCard({ approval }: { approval: Approval }) {
+  const comp = useComputer();
   const colors = useColors();
   const proposals = approval.connector?.review?.proposals ?? [];
   const agents = reviewLines(proposals);
@@ -957,8 +961,8 @@ export function ReviewOnMacCard({ approval }: { approval: Approval }) {
       icon="square.and.arrow.down"
       title={approval.title}
       // Not "Needs your OK" here: there's nothing to do on this phone.
-      source={source ? `From ${source} · on your Mac` : 'On your Mac'}
-      note="Each agent’s instructions are shown on your Mac before anything is created."
+      source={source ? `From ${source} · on ${comp.your}` : `On ${comp.your}`}
+      note={`Each agent’s instructions are shown on ${comp.your} before anything is created.`}
     >
       {agents.length > 0 && (
         <View style={{ gap: space['2xs'] }}>

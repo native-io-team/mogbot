@@ -379,12 +379,14 @@ fn rpc_error(id: Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
-fn rpc_ok(id: Value, result: Value) -> Value {
+fn rpc_ok(id: Value, mut result: Value) -> Value {
+    // Instructions and results name this build's computer (`computer`).
+    crate::computer::localize_json(&mut result, &["input"]);
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
 
 pub(crate) const INSTRUCTIONS: &str = concat!(
-    "These tools control the user's agent app on the user's OWN computer (a Mac at their home or office), where coding agents (Claude Code, Codex, …) run in terminal tabs. The user is away from it, on their phone, and is using you to keep their work going. Agents take minutes, not seconds.\n\n",
+    "These tools control the user's agent app on the user's OWN computer (at their home or office), where coding agents (Claude Code, Codex, …) run in terminal tabs. The user is away from it, on their phone, and is using you to keep their work going. Agents take minutes, not seconds.\n\n",
     "THE LOOP — do this for every request:\n",
     "1. list_projects first (once per conversation, or when unsure). It also says which agents are waiting on the user.\n",
     "2. message_agent with what the user asked, in their words. It continues the conversation already running in that project and waits for the reply. If the agent is busy, still use message_agent; never start another agent because one is busy. start_agent is ONLY for when the user explicitly asks for a separate, parallel agent.\n",

@@ -673,7 +673,11 @@ pub fn playback_text(agents: &[PlaybackAgent]) -> String {
         }
         out.push('\n');
     }
-    out.push_str("Is there anything I'm missing? Answer on your Mac.");
+    out.push_str(concat!(
+        "Is there anything I'm missing? Answer on your ",
+        crate::computer::noun!(),
+        "."
+    ));
     out
 }
 

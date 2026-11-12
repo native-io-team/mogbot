@@ -69,6 +69,7 @@ import {
   takeInstallOnOpen,
   type InstallPlatform,
 } from '../../lib/companionInstall';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 const errMsg = (err: unknown) => formatCommandError(asCommandError(err));
 
@@ -280,8 +281,7 @@ function PhonePanel({
           setInstall(null);
           const ready = !!s && phoneStep(s).kind === 'ready';
           // The first phone: on into the flow, on the code when it can be shown.
-          if (flow || (s && s.devices.length === 0))
-            goFlow(ready ? 'phoneScan' : afterGetApp());
+          if (flow || (s && s.devices.length === 0)) goFlow(ready ? 'phoneScan' : afterGetApp());
           else if (ready) void pair();
         }}
       />
@@ -336,7 +336,7 @@ function PhonePanel({
       ) : (
         <>
           {/* The app comes first: there's nothing to connect until it's on a
-                phone. Off, with no phone paired and no build from this Mac, the
+                phone. Off, with no phone paired and no build from {THIS_COMPUTER}, the
                 panel is the way to get it; turning access on comes after. */}
           <AccessHeader
             step={phoneStep(s)}
@@ -463,8 +463,8 @@ function AccessHeader({ step, account, busy, onEnable, onRetry }: HeaderProps) {
     return (
       <div className="phone-intro">
         <p className="phone-lede">
-          Talk to your agents from your phone. It connects straight to this Mac, so this Mac has to
-          stay on.
+          Talk to your agents from your phone. It connects straight to {THIS_COMPUTER}, so{' '}
+          {THIS_COMPUTER} has to stay on.
         </p>
         <Button
           variant="primary"
@@ -486,8 +486,8 @@ function AccessHeader({ step, account, busy, onEnable, onRetry }: HeaderProps) {
           className="phone-onbar__text"
           title={
             step.url
-              ? `Phones reach this Mac at ${shortUrl(step.url)}`
-              : 'Phones reach this Mac through the relay'
+              ? `Phones reach ${THIS_COMPUTER} at ${shortUrl(step.url)}`
+              : `Phones reach ${THIS_COMPUTER} through the relay`
           }
         >
           <span className="phone-onbar__title">Phone access is on</span>
@@ -515,13 +515,15 @@ function AccessHeader({ step, account, busy, onEnable, onRetry }: HeaderProps) {
     return (
       <div className="phone-problem" data-kind="signIn">
         <div className="phone-problem__head">
-          <span className="phone-problem__title">Sign in so your phone can reach this Mac</span>
+          <span className="phone-problem__title">
+            Sign in so your phone can reach {THIS_COMPUTER}
+          </span>
           {turnOff}
         </div>
         <p className="phone-problem__detail">
           {step.kind === 'installTailscale'
             ? 'It’s free and works from anywhere. Or use your own Tailscale: install it here and on your phone, signed in to the same account.'
-            : 'It’s free and works from anywhere. Or use your own Tailscale: sign in to it on this Mac.'}
+            : `It’s free and works from anywhere. Or use your own Tailscale: sign in to it on ${THIS_COMPUTER}.`}
         </p>
         {signIn.error && <p className="phone-error">{signIn.error}</p>}
         <div className="phone-problem__actions">
@@ -562,16 +564,15 @@ function AccessHeader({ step, account, busy, onEnable, onRetry }: HeaderProps) {
   > = {
     installTailscale: {
       title: 'Install Tailscale',
-      detail:
-        'Your phone reaches this Mac through it. Install it here and on your phone, signed in to the same account.',
+      detail: `Your phone reaches ${THIS_COMPUTER} through it. Install it here and on your phone, signed in to the same account.`,
     },
     signInTailscale: {
       title: 'Sign in to Tailscale',
-      detail: 'Tailscale is installed on this Mac but not signed in.',
+      detail: `Tailscale is installed on ${THIS_COMPUTER} but not signed in.`,
     },
     approveHttps: {
       title: 'Switch on HTTPS in Tailscale',
-      detail: 'A one-time switch in Tailscale, so your phone can trust this Mac.',
+      detail: `A one-time switch in Tailscale, so your phone can trust ${THIS_COMPUTER}.`,
     },
     failed: { title: 'Tailscale didn’t start phone access', detail: '' },
     starting: { title: 'Starting phone access…', detail: '' },

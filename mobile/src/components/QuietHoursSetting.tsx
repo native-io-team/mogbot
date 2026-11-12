@@ -21,11 +21,13 @@ import { Row, Section, tap } from './ui';
 import { haptic } from '../lib/haptics';
 import { call, describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
+import { useComputer } from '../lib/computer';
 
 const same = (a: QuietWindow | null, b: QuietWindow | null) =>
   a === b || (!!a && !!b && a.start === b.start && a.end === b.end);
 
 export function QuietHoursSetting() {
+  const comp = useComputer();
   const canRead = useServed('agents.quietHours');
   const canSet = useServed('agents.setQuietHours');
   // `undefined` until the Mac answers: nothing is shown that wasn't read.
@@ -72,7 +74,7 @@ export function QuietHoursSetting() {
         ...QUIET_PRESETS.map((w) => ({ label: quietLabel(w), run: () => void set(w) })),
         ...(quiet ? [{ label: 'Turn off', destructive: true, run: () => void set(null) }] : []),
       ],
-      'Other times: ask your Chief of Staff, or set them on your Mac.'
+      `Other times: ask your Chief of Staff, or set them on ${comp.your}.`
     );
   };
 

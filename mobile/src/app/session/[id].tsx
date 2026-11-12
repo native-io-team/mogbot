@@ -54,8 +54,10 @@ import {
 } from '../../lib/theme';
 import { ComposerField, RoundButton } from '../../components/Composer';
 import { makeStyles, useColors } from '../../lib/appearance';
+import { useComputer } from '../../lib/computer';
 
 export default function Session() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const accent = useAccent();
@@ -202,7 +204,7 @@ export default function Session() {
           {gone && (
             <Animated.View entering={FadeIn} style={styles.card}>
               <T variant="headline" color={colors.textStrong}>
-                This task isn’t open on your Mac any more
+                This task isn’t open on {comp.your} any more
               </T>
               <T variant="small" color={colors.textSecondary}>
                 {gone}
@@ -272,7 +274,7 @@ export default function Session() {
                         ))}
                       </View>
                       <T variant="caption" color={colors.textMuted}>
-                        Answer it on your Mac.
+                        Answer it on {comp.your}.
                       </T>
                     </>
                   )}
@@ -288,7 +290,7 @@ export default function Session() {
               <View style={styles.terminalToggle}>
                 <TextAction
                   label={showTerminal ? 'Hide terminal' : 'Show terminal'}
-                  hint="Shows the task’s own screen, as your Mac has it"
+                  hint={`Shows the task’s own screen, as ${comp.your} has it`}
                   onPress={() => setTerminalChoice(!showTerminal)}
                 />
               </View>

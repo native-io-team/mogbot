@@ -189,9 +189,10 @@ pub fn classify_in(
         super::autoallow::Class::Read | super::autoallow::Class::Change => (Kind::Local, ""),
         super::autoallow::Class::Ask => (
             Kind::Yours,
-            narrow
-                .err()
-                .unwrap_or("it reaches past local work on this Mac"),
+            narrow.err().unwrap_or(concat!(
+                "it reaches past local work on this ",
+                crate::computer::noun!()
+            )),
         ),
     }
 }
@@ -256,7 +257,10 @@ fn local_call(tool: &str, input: &Value) -> Result<(), &'static str> {
         "WebFetch" | "WebSearch" => Err("it reaches the internet"),
         "Bash" => local_command(field("command")),
         t if t.starts_with("mcp__") => Err("it uses one of your connected apps as you"),
-        _ => Err("this app can't tell that it stays on this Mac"),
+        _ => Err(concat!(
+            "this app can't tell that it stays on this ",
+            crate::computer::noun!()
+        )),
     }
 }
 
@@ -279,11 +283,16 @@ fn local_command(command: &str) -> Result<(), &'static str> {
         "git" if words.get(1).is_some_and(|s| GIT_READS.contains(s)) => Ok(()),
         "git" if words.get(1) == Some(&"push") => Err("it pushes code"),
         "gh" => Err("it acts on GitHub as you"),
-        "curl" | "wget" | "ssh" | "scp" | "rsync" | "nc" | "ftp" => {
-            Err("it reaches outside this Mac")
-        }
+        "curl" | "wget" | "ssh" | "scp" | "rsync" | "nc" | "ftp" => Err(concat!(
+            "it reaches outside this ",
+            crate::computer::noun!()
+        )),
         "rm" | "rmdir" | "trash" | "shred" => Err("it deletes files"),
-        "sudo" | "doas" | "su" => Err("it runs as the Mac's administrator"),
+        "sudo" | "doas" | "su" => Err(concat!(
+            "it runs as the ",
+            crate::computer::noun!(),
+            "'s administrator"
+        )),
         "security" => Err("it touches the Keychain"),
         _ if words.iter().any(|w| *w == "publish" || *w == "deploy") => Err("it publishes"),
         _ => Err("it runs a program this app can't check is local and safe"),
@@ -528,7 +537,7 @@ fn step(words: &[String], cwd: Option<&str>) -> String {
         },
         "kill" | "pkill" | "killall" => "Stop a running program".into(),
         "sudo" if words.len() > 1 => format!(
-            "As the Mac's administrator: {}",
+            concat!("As the ", crate::computer::noun!(), "'s administrator: {}"),
             lower_first(&step(&words[1..], cwd))
         ),
         _ if !flags && args.is_empty() => format!("Run the {} command", quoted(program)),

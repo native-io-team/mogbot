@@ -43,6 +43,7 @@ import { steadyOrder } from '../../../lib/steadyOrder';
 import { RefreshStatus } from '../../../components/RefreshStatus';
 import { keySize, iconSize, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
+import { useComputer } from '../../../lib/computer';
 
 /** Waiting on you first, then where an agent is at work, then the most recently active. */
 const asking = (p: ProjectSummary) => p.sessions.some((s) => s.state === 'needs_decision');
@@ -60,12 +61,13 @@ function order(projects: ProjectSummary[], agents: readonly Agent[] = []): Proje
 }
 
 export default function Projects() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const projects = useApp((s) => s.projects);
   const live = useApp((s) => s.link.kind === 'connected');
   const served = useApp((s) => canCall('projects.list', s.welcome));
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
   const [error, setError] = useState<string | null>(null);
 
   const agents = useApp((s) => s.overview?.agents);

@@ -9,6 +9,7 @@ import {
   type PendingDevServerConsent,
 } from '../../lib/devServerConsent';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { YOUR_COMPUTER } from '../../lib/computer';
 
 interface Props {
   projectPath: string;
@@ -51,8 +52,8 @@ export function DevServerConsentPrompt({ projectPath, pending }: Props) {
       <h3>{changed ? 'This project changed — Start dev server?' : 'Start the dev server?'}</h3>
       <p className="text-style-hint">
         {changed
-          ? 'Its commands or config changed since you last started it. Starting it runs them on your computer.'
-          : 'Starting it runs this project’s own commands on your computer. Only start projects you trust.'}
+          ? `Its commands or config changed since you last started it. Starting it runs them on ${YOUR_COMPUTER}.`
+          : `Starting it runs this project’s own commands on ${YOUR_COMPUTER}. Only start projects you trust.`}
       </p>
       {consent.installScriptsPending && (
         <p className="text-style-hint">

@@ -17,6 +17,7 @@ pub mod agent_bridge;
 pub mod agent_browser;
 pub mod agents;
 pub mod app_menu;
+pub mod computer;
 pub mod brand;
 pub mod brand_migration;
 pub mod cache;

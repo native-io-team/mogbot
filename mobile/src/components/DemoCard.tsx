@@ -11,9 +11,11 @@ import { useApp } from '../lib/store';
 import { space } from '../lib/theme';
 import { Card } from './surfaces';
 import { Button } from './ui';
+import { useComputer } from '../lib/computer';
 
 /** `style` replaces its margins, for a screen that already pads its content. */
 export function DemoCard({ style }: { style?: StyleProp<ViewStyle> } = {}) {
+  const comp = useComputer();
   const router = useRouter();
   const demo = useApp((s) => isDemo(s.credentials));
   if (!demo) return null;
@@ -22,11 +24,11 @@ export function DemoCard({ style }: { style?: StyleProp<ViewStyle> } = {}) {
       icon="info.circle"
       title="This is the demo"
       testID="demo-card"
-      note="Sample agents with made-up work, so you can look around. Nothing here reaches a Mac or anyone else, and nothing is kept."
+      note={`Sample agents with made-up work, so you can look around. Nothing here reaches a ${comp.noun} or anyone else, and nothing is kept.`}
       style={style ?? styles.card}
       actions={
         <Button
-          title="Pair your Mac"
+          title={`Pair ${comp.your}`}
           variant="outline"
           onPress={() => void unpair().then(() => router.replace('/pair'))}
         />

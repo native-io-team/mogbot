@@ -10,7 +10,7 @@
  */
 
 import {
-  INDEPENDENCE_DETAIL,
+  independenceDetail,
   INDEPENDENCE_ENDS,
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
@@ -24,6 +24,7 @@ import { PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import { PRESSED, chromeScale, fonts, levelSlider, space } from '../lib/theme';
 import { T } from './ui';
+import { useComputer } from '../lib/computer';
 
 const LAST = INDEPENDENCE_LEVELS.length - 1;
 
@@ -36,6 +37,7 @@ export function IndependenceSlider({
   onChange: (level: AgentIndependence) => void;
   disabled?: boolean;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const [width, setWidth] = useState(0);
@@ -104,7 +106,7 @@ export function IndependenceSlider({
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel={INDEPENDENCE_TITLE}
-        accessibilityValue={{ min: 0, max: LAST, now: index, text: independenceValueText(shown) }}
+        accessibilityValue={{ min: 0, max: LAST, now: index, text: independenceValueText(shown, comp.kind) }}
         accessibilityState={{ disabled }}
         accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
         onAccessibilityAction={(e) => {
@@ -170,7 +172,7 @@ export function IndependenceSlider({
           })}
       </View>
       <T variant="body" color={colors.textPrimary} style={styles.detail}>
-        {INDEPENDENCE_DETAIL[shown]}
+        {independenceDetail(shown, comp.kind)}
       </T>
     </View>
   );

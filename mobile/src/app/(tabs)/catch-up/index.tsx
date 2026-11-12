@@ -90,6 +90,7 @@ import {
   radius,
   space,
 } from '../../../lib/theme';
+import { pairedComputer } from '../../../lib/computer';
 
 /** Every row comes and goes on these: still under Reduce Motion. */
 const ENTER = FadeIn.duration(200).reduceMotion(ReduceMotion.System);
@@ -396,7 +397,7 @@ function rowWords(
       return card?.approval
         ? [
             card.approval.title,
-            item.kind === 'mac' ? 'Review it on your Mac' : askingLine(card.approval),
+            item.kind === 'mac' ? `Review it on ${pairedComputer().your}` : askingLine(card.approval),
           ]
         : ['Needs your OK', ''];
     case 'keep': {

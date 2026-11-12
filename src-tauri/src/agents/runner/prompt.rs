@@ -11,8 +11,10 @@ pub(super) fn compose(batch: &[Inbound], onward: &HashMap<String, Vec<AgentRef>>
         // asked: the request itself is already in the conversation.
         .filter(|m| m.resume == 0 || !m.text.is_empty())
         .map(|m| match &m.from {
-            _ if m.resume > 0 => m.text.clone(),
-            From::User | From::App => m.text.clone(),
+            // The app's own words name this build's computer (`computer`).
+            _ if m.resume > 0 => crate::computer::localize(&m.text).into_owned(),
+            From::App => crate::computer::localize(&m.text).into_owned(),
+            From::User => m.text.clone(),
             From::Agent { sender, .. } => {
                 let back_to: Vec<String> = match m.reply {
                     true => onward

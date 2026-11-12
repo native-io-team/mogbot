@@ -14,6 +14,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { THIS_COMPUTER_CAP } from './computer';
 
 /** The end of the last Reinstall's output; null when there's no log. */
 export const getBuildLog = () => invoke<string | null>('companion_install_build_log');
@@ -97,7 +98,7 @@ const RULES: Array<{ kind: BuildFailure; who: 'you' | 'agent'; match: RegExp; fi
     kind: 'diskFull',
     who: 'you',
     match: /No space left on device/i,
-    fix: 'This Mac ran out of disk space during the build. Free up some space, then Reinstall.',
+    fix: `${THIS_COMPUTER_CAP} ran out of disk space during the build. Free up some space, then Reinstall.`,
   },
   {
     kind: 'noProfile',

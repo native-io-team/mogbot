@@ -496,6 +496,7 @@ pub(crate) fn audit_as(
 /// What a paired phone did (`companion`), in the companion's own log.
 pub(crate) fn companion_audit(actor: &str, tool: &str, detail: String, ok: bool) {
     if let Some(path) = companion_audit_path() {
+        let detail = crate::computer::localize(&detail).into_owned();
         write_entry(&path, Some(actor), tool, None, detail, ok);
     }
 }

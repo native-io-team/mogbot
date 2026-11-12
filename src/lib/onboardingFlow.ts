@@ -62,6 +62,7 @@ import {
   type RemoteAccessStatus,
   type RemoteProblem,
 } from './remoteAccess';
+import { THIS_COMPUTER, YOUR_COMPUTER } from './computer';
 
 // ============ Steps ============
 
@@ -515,7 +516,7 @@ export function engineItemCopy(
   if (itemId === engine.binaryId) {
     return {
       title: `Install ${engine.name}`,
-      lede: 'It downloads and installs on this Mac, usually in a minute or two.',
+      lede: `It downloads and installs on ${THIS_COMPUTER}, usually in a minute or two.`,
       action: `Install ${engine.name}`,
     };
   }
@@ -534,9 +535,9 @@ export function engineItemCopy(
     };
   }
   return {
-    title: `Get your Mac ready for ${engine.name}`,
+    title: `Get ${YOUR_COMPUTER} ready for ${engine.name}`,
     // Named, because a password box for a tool nobody mentioned is the scary moment.
-    lede: `${engine.name} runs on two free tools, Homebrew and Node.js. The app installs them for you in a few minutes, and may ask for your Mac password.`,
+    lede: `${engine.name} runs on two free tools, Homebrew and Node.js. The app installs them for you in a few minutes, and may ask for ${YOUR_COMPUTER} password.`,
     action: 'Get it ready',
   };
 }
@@ -557,7 +558,7 @@ export function engineItemCheck(
    */
   failure?: InstallFailure
 ): CheckResult | null {
-  if (!item) return { state: 'checking', line: 'Checking this Mac…' };
+  if (!item) return { state: 'checking', line: `Checking ${THIS_COMPUTER}…` };
   switch (item.status) {
     case 'ready':
       return {

@@ -433,7 +433,11 @@ pub enum FunnelProblem {
 }
 
 /// What [`enable_funnel`] says when every Funnel port is in use.
-pub const PORTS_IN_USE_DETAIL: &str = "Every port Funnel allows (443, 8443, 10000) already serves something else on this Mac, privately. Turning the link on would make that public too.";
+pub const PORTS_IN_USE_DETAIL: &str = concat!(
+    "Every port Funnel allows (443, 8443, 10000) already serves something else on this ",
+    crate::computer::noun!(),
+    ", privately. Turning the link on would make that public too."
+);
 
 /// Sort the CLI's failure text (or ours) into a [`FunnelProblem`]. Matches
 /// the messages in Tailscale's `cmd/tailscale/cli` and `ipn` packages.

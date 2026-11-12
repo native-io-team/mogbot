@@ -110,9 +110,13 @@ pub fn refuse_unoffered_folder(source: &Source, offered: &[Folder]) -> Result<()
     if let Source::NewFile { folder } = source {
         let folder = folder.trim().trim_end_matches('/');
         if !offered.iter().any(|f| f.path == folder) {
-            return Err(CommandError::expected(
-                "Pick one of the folders your Mac offers. For another, set it up on your Mac.",
-            ));
+            return Err(CommandError::expected(concat!(
+                "Pick one of the folders your ",
+                crate::computer::noun!(),
+                " offers. For another, set it up on your ",
+                crate::computer::noun!(),
+                "."
+            )));
         }
     }
     Ok(())

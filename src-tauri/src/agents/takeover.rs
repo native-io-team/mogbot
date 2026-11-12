@@ -462,6 +462,7 @@ async fn open(
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&reach.prompt);
     }
+    let system_prompt = crate::computer::localize(&system_prompt).into_owned();
     // The terminal drives the session on the account its turns last ran on.
     // Held while the terminal is open: removing the account waits for it.
     let (account, held) = {

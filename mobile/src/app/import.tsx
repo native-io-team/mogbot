@@ -36,6 +36,7 @@ import { space, typingDot } from '../lib/theme';
 import { TypingDots } from '../components/TypingDots';
 import { importedHere, phoneImportStep, phoneTalkHeading } from '../lib/importChoice';
 import { ImportPaste } from '../components/ImportPaste';
+import { useComputer } from '../lib/computer';
 
 /** How often the screen asks the Mac where the import has got to. */
 const POLL_MS = 3000;
@@ -84,13 +85,14 @@ const live = (t: ImportTalk | null) =>
   !!t && ['awaiting_consent', 'interviewing', 'playback', 'review'].includes(t.state);
 
 export default function ImportScreen() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
   const connected = useApp((s) => s.link.kind === 'connected');
   const servesTeam = useServed('agents.loginsTeam', MAC_FEATURES.logins);
   const servesPaste = useServed('agents.import.exportReview', MAC_FEATURES.importExport);
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
   const team = useApp((s) => s.overview?.agents ?? NO_AGENTS);
   const chief = team.find((a) => a.isMain);
   const chiefName = chief?.name ?? 'Chief of Staff';
@@ -151,7 +153,7 @@ export default function ImportScreen() {
           <View style={styles.step}>
             <T variant="headline" color={colors.textStrong}>
               {!status
-                ? 'Checking your Mac…'
+                ? `Checking ${comp.your}…`
                 : !step.reachable
                   ? `Turn on Remote access at ${macName}`
                   : 'Add the link to your assistant'}

@@ -30,6 +30,7 @@ import {
   type PhoneStatus,
 } from '../../lib/companion';
 import { PAIR_YOUR_PHONE } from '../../../packages/companion-protocol/src/pairWords';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 type Tone = 'off' | 'ok';
 
@@ -52,7 +53,7 @@ export function phoneIndicatorState(
     return {
       tone: 'ok',
       line: `${connected.name} connected`,
-      detail: 'Your phone is connected to this Mac.',
+      detail: `Your phone is connected to ${THIS_COMPUTER}.`,
       pair: false,
     };
   }

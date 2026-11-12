@@ -6,6 +6,7 @@
  */
 
 import { formatClock } from './clock';
+import { computerNoun, thisComputer, type ComputerKind } from './computer';
 import type { CheckIn, CheckInRun, MonthDay, Repeat, Watch, WatchSource } from './model';
 
 /**
@@ -13,8 +14,11 @@ import type { CheckIn, CheckInRun, MonthDay, Repeat, Watch, WatchSource } from '
  * picker, desk and phone, and under the Chief's starters once one that
  * repeats is picked): the same sentence everywhere.
  */
-export const ROUTINES_NEED_THE_MAC =
-  'Routines run only while the app is open and this Mac is awake. One that was missed runs once when it’s back.';
+export const routinesNeedTheComputer = (kind?: ComputerKind | null) =>
+  `Routines run only while the app is open and ${thisComputer(kind)} is awake. One that was missed runs once when it’s back.`;
+
+/** The same sentence, worded for a Mac. */
+export const ROUTINES_NEED_THE_MAC = routinesNeedTheComputer('mac');
 
 /** What a scheduled run came to, in a few words. */
 export function describeRun(run: CheckInRun, now = Date.now()): string {
@@ -397,8 +401,11 @@ export function zoneDiffers(timeZone: string | undefined, ts = Date.now()): bool
 }
 
 /** " Mac time" after a time when the Mac's clock isn't this device's. */
-const zoneNote = (timeZone: string | undefined, ts: number) =>
-  zoneDiffers(timeZone, ts) ? ' Mac time' : '';
+const zoneNote = (timeZone: string | undefined, ts: number, kind?: ComputerKind | null) =>
+  zoneDiffers(timeZone, ts) ? ` ${computerTime(kind)}` : '';
+
+/** "Mac time", "PC time", "computer time": the paired computer's clock. */
+export const computerTime = (kind?: ComputerKind | null) => `${computerNoun(kind)} time`;
 
 /** A local date as `YYYY-MM-DD`, the way the grammar writes one, in `timeZone`. */
 export function localDate(ts: number, timeZone?: string): string {
@@ -483,9 +490,14 @@ export function routineWhenOf(
  * "Every weekday at 9:00 AM", "Every 2 hours", "Once, tomorrow at 9:00 AM",
  * with "Mac time" after the time when the Mac's clock isn't this phone's.
  */
-export function describeRoutineWhen(w: RoutineWhen, now = Date.now(), timeZone?: string): string {
+export function describeRoutineWhen(
+  w: RoutineWhen,
+  now = Date.now(),
+  timeZone?: string,
+  kind?: ComputerKind | null
+): string {
   if (w.kind === 'every') return describeRepeat(w);
-  const note = zoneNote(timeZone, now);
+  const note = zoneNote(timeZone, now, kind);
   if (w.kind === 'monthly') return `${describeMonthly(w)}${note}`;
   if (w.kind === 'once') {
     const ts = localTs(w.date, w.hour, w.minute, timeZone);
@@ -495,9 +507,15 @@ export function describeRoutineWhen(w: RoutineWhen, now = Date.now(), timeZone?:
 }
 
 /** The picker's echo, the check-in in one line: "Every weekday at 9:00 AM — Draft my day". */
-export function routineEcho(w: RoutineWhen, note: string, now = Date.now(), timeZone?: string) {
+export function routineEcho(
+  w: RoutineWhen,
+  note: string,
+  now = Date.now(),
+  timeZone?: string,
+  kind?: ComputerKind | null
+) {
   const what = note.trim().replace(/\s+/g, ' ');
-  const when = describeRoutineWhen(w, now, timeZone);
+  const when = describeRoutineWhen(w, now, timeZone, kind);
   return what ? `${when} — ${what}` : when;
 }
 

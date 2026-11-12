@@ -11,6 +11,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { COMPUTER, THIS_COMPUTER } from './computer';
 
 export interface AgentsBrowserPermissions {
   screenRecording: boolean;
@@ -120,9 +121,9 @@ export const AGENTS_BROWSER_TITLE = 'Agents’ browser';
 /** The switch's line. */
 export function agentsBrowserLine(s: AgentsBrowserStatus | null): string {
   if (s && !s.chromeInstalled)
-    return 'Needs Google Chrome on this Mac. Agents use their own profile in it, not yours.';
+    return `Needs Google Chrome on ${THIS_COMPUTER}. Agents use their own profile in it, not yours.`;
   if (s && !s.enabled) return 'Off. Agents use only your own Chrome, through Claude in Chrome.';
-  return 'A Chrome of the team’s own on this Mac, not your personal one. You sign in to sites for them from your phone.';
+  return `A Chrome of the team’s own on ${THIS_COMPUTER}, not your personal one. You sign in to sites for them from your phone.`;
 }
 
 /** The permission rows: what each is for, in one line. */
@@ -146,5 +147,5 @@ export const PERMISSION_ROWS: {
 /** The heading line over the permission rows. */
 export function permissionsLine(p: AgentsBrowserPermissions): string {
   if (p.screenRecording && p.accessibility) return 'Google sign-ins work from your phone too.';
-  return 'Google won’t sign in to a browser the app drives, so its sign-in uses a plain window. To do that from your phone, allow both once; otherwise Google needs one sign-in at the Mac.';
+  return `Google won’t sign in to a browser the app drives, so its sign-in uses a plain window. To do that from your phone, allow both once; otherwise Google needs one sign-in at the ${COMPUTER}.`;
 }

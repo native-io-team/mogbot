@@ -38,9 +38,9 @@ pub fn level_line(level: Level) -> &'static str {
     match level {
         Level::Often => "Reads and looks around; asks before bigger changes.",
         Level::Judgement => {
-            "Reads and edits; asks before running changes or anything leaving this Mac."
+            concat!("Reads and edits; asks before running changes or anything leaving this ", crate::computer::noun!(), ".")
         }
-        Level::GoHard => "Does local work on this Mac; asks before anything leaves it.",
+        Level::GoHard => concat!("Does local work on this ", crate::computer::noun!(), "; asks before anything leaves it."),
         Level::FullSend => {
             "Sends, posts and pushes too; only stops for money, logins, deleting for good or going live."
         }

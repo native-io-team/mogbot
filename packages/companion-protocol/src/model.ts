@@ -2363,6 +2363,11 @@ export type Known = 'yes' | 'no' | 'unknown';
 export interface MacStatus {
   /** The Mac's name, as the user sees it in System Settings. */
   name: string;
+  /**
+   * What to call it ("Mac", "PC", "computer"; `computer.ts`). Absent from a
+   * computer older than this field: the phone then says "your computer".
+   */
+  computer?: import('./computer').ComputerKind;
   appVersion: string;
   /** Mirrors `remote_access::power`: what keeps it awake, and its battery. */
   power: {

@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { COMPUTER, HOST_COMPUTER, THIS_COMPUTER, THIS_COMPUTER_CAP } from '../../lib/computer';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
@@ -91,8 +92,8 @@ import {
   SCAN_LINE,
   SKIP_FOR_NOW,
   TAILSCALE_ACCOUNT_LINE,
-  TAILSCALE_LINE,
-  TAILSCALE_MAC_TITLE,
+  tailscaleLine,
+  tailscaleHereTitle,
   TAILSCALE_YOUR_PHONE_TITLE,
 } from '../../../packages/companion-protocol/src/pairWords';
 
@@ -202,7 +203,7 @@ export function Skip({ onSkip, label = SKIP_FOR_NOW }: { onSkip: () => void; lab
  * by bringing agents over Remote Access.
  */
 export function tailscaleMacCheck(t: TailscaleState | undefined): CheckResult {
-  if (!t) return { state: 'checking', line: 'Checking Tailscale on this Mac…' };
+  if (!t) return { state: 'checking', line: `Checking Tailscale on ${THIS_COMPUTER}…` };
   switch (t.state) {
     case 'connected':
       return {
@@ -220,11 +221,11 @@ export function tailscaleMacCheck(t: TailscaleState | undefined): CheckResult {
     case 'notInstalled':
       return {
         state: 'waiting',
-        line: 'Tailscale isn’t on this Mac yet.',
+        line: `Tailscale isn’t on ${THIS_COMPUTER} yet.`,
         fix: 'Download it, open it, sign in (or make a free account) and switch it on. It asks to add a VPN configuration: click Allow. This ticks by itself.',
       };
     case 'unknown':
-      return { state: 'fail', line: 'Couldn’t read Tailscale on this Mac.', fix: t.detail };
+      return { state: 'fail', line: `Couldn’t read Tailscale on ${THIS_COMPUTER}.`, fix: t.detail };
   }
 }
 
@@ -248,8 +249,8 @@ export function tailscaleMacView({
   const check = tailscaleMacCheck(tailscale);
   const notInstalled = tailscale?.state === 'notInstalled';
   return {
-    title: TAILSCALE_MAC_TITLE,
-    lede: `${TAILSCALE_LINE} ${TAILSCALE_ACCOUNT_LINE}`,
+    title: tailscaleHereTitle(HOST_COMPUTER),
+    lede: `${tailscaleLine(HOST_COMPUTER)} ${TAILSCALE_ACCOUNT_LINE}`,
     children: (
       <CheckLine
         result={check}
@@ -262,7 +263,7 @@ export function tailscaleMacView({
         <Primary onClick={onNext}>Continue</Primary>
       ) : notInstalled ? (
         <Primary external onClick={() => void openUrl(TAILSCALE_DOWNLOAD_URL)}>
-          Get Tailscale for Mac
+          {HOST_COMPUTER === 'computer' ? 'Get Tailscale' : `Get Tailscale for ${COMPUTER}`}
         </Primary>
       ) : undefined,
     secondary: alternative ? (
@@ -574,7 +575,7 @@ function useStepView(p: {
             )}
             {!store && p.onInstall && (
               <Button variant="secondary" onClick={p.onInstall} data-install-open>
-                Build it on this Mac…
+                Build it on {THIS_COMPUTER}…
               </Button>
             )}
           </div>
@@ -609,7 +610,7 @@ function useStepView(p: {
       const check = phoneTailnetCheck(p.phones ?? null, status?.tailscale ?? null, slowTailnet);
       return {
         title: TAILSCALE_YOUR_PHONE_TITLE,
-        lede: `Install Tailscale on your phone, ${phoneTailscaleSignIn(status?.tailscale ?? null)}, and switch it on. It asks to add a VPN configuration: tap Allow. This Mac sees your phone a few seconds after it says Connected.`,
+        lede: `Install Tailscale on your phone, ${phoneTailscaleSignIn(status?.tailscale ?? null)}, and switch it on. It asks to add a VPN configuration: tap Allow. ${THIS_COMPUTER_CAP} sees your phone a few seconds after it says Connected.`,
         children: (
           <>
             <CheckLine result={check} />
@@ -655,7 +656,7 @@ function useStepView(p: {
               ? {
                   state: 'waiting',
                   line: 'Tailscale asks you to approve HTTPS certificates once, on its own page.',
-                  fix: 'It lets your phone trust this Mac. Approve it there, then come back.',
+                  fix: `It lets your phone trust ${THIS_COMPUTER}. Approve it there, then come back.`,
                   action: { label: 'Open the Tailscale page', url: access.url },
                 }
               : access.kind === 'failed'
@@ -667,13 +668,13 @@ function useStepView(p: {
                 : access.kind === 'installTailscale' || access.kind === 'signInTailscale'
                   ? {
                       state: 'fail',
-                      line: 'Tailscale on this Mac isn’t ready.',
+                      line: `Tailscale on ${THIS_COMPUTER} isn’t ready.`,
                       fix: 'Go back one step and finish it.',
                     }
                   : null;
       return {
         title: PHONE_ACCESS_TITLE,
-        lede: 'Lets your phone reach this Mac over Tailscale, so this Mac has to stay on while you use it.',
+        lede: `Lets your phone reach ${THIS_COMPUTER} over Tailscale, so ${THIS_COMPUTER} has to stay on while you use it.`,
         children: check && (
           <CheckLine
             result={check}
@@ -719,8 +720,8 @@ function useStepView(p: {
               <p className="flow-facts">This code ran out.</p>
             ) : reachedAt !== undefined ? (
               <span className="flow-qr__meta" role="status" data-testid="phone-code-reached">
-                <Spinner size="sm" /> A device reached this Mac at {formatClock(reachedAt)}. Waiting
-                for it to send the code…
+                <Spinner size="sm" /> A device reached {THIS_COMPUTER} at {formatClock(reachedAt)}.
+                Waiting for it to send the code…
               </span>
             ) : (
               left && <span className="flow-qr__meta">Works once, for {left}</span>
@@ -802,8 +803,8 @@ function useStepView(p: {
         ),
         title: ALL_SET_TITLE,
         lede: p.paired
-          ? `${p.paired} is paired with this Mac. Your agents go where you go.`
-          : 'Your phone is paired with this Mac. Your agents go where you go.',
+          ? `${p.paired} is paired with ${THIS_COMPUTER}. Your agents go where you go.`
+          : `Your phone is paired with ${THIS_COMPUTER}. Your agents go where you go.`,
         children: (
           <ul className="flow-paired__can" aria-label="What your phone can do now">
             {PHONE_CAN.map(({ icon, text }) => (
@@ -829,15 +830,17 @@ function relaySignInView(p: Parameters<typeof useStepView>[0]): StepView {
   const { signIn, go, skip } = p;
   const check = signInCheck({ account: null, ...signIn });
   return {
-    title: 'Sign in so your phone can reach this Mac',
-    lede: 'It’s free and works from anywhere. This Mac has to stay on while you use it.',
+    title: `Sign in so your phone can reach ${THIS_COMPUTER}`,
+    lede: `It’s free and works from anywhere. ${THIS_COMPUTER_CAP} has to stay on while you use it.`,
     children:
       check && check.state !== 'checking' ? (
         <CheckLine result={check} />
       ) : (
         <p className="flow-note">
           With Google or your email, in your browser.
-          {p.status && !p.status.enabled && ' Signing in also turns on phone access on this Mac.'}
+          {p.status &&
+            !p.status.enabled &&
+            ` Signing in also turns on phone access on ${THIS_COMPUTER}.`}
         </p>
       ),
     primary: (
@@ -870,7 +873,7 @@ function relayAccessView(p: Parameters<typeof useStepView>[0]): StepView {
   const off = !p.status?.enabled;
   return {
     title: PHONE_ACCESS_TITLE,
-    lede: `${account ? signedInLine(account) + ' ' : ''}Your phone reaches this Mac through your account, so this Mac has to stay on while you use it.`,
+    lede: `${account ? signedInLine(account) + ' ' : ''}Your phone reaches ${THIS_COMPUTER} through your account, so ${THIS_COMPUTER} has to stay on while you use it.`,
     children: !off && <CheckLine result={{ state: 'checking', line: 'Connecting…' }} />,
     primary: off ? (
       <Primary busy={p.busy === 'enable'} onClick={p.enable}>

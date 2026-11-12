@@ -39,6 +39,7 @@ import {
   type SlackStatus,
 } from '../../lib/slack';
 import type { Agent } from '../../lib/agents';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 type Act =
   | { kind: 'read' }
@@ -263,7 +264,7 @@ function Connected({ status, run, busy }: { status: SlackStatus; run: Run; busy:
       />
       <Row
         label="Disconnect"
-        description="Signs the token out with Slack and removes it from this Mac. Slack keeps the app."
+        description={`Signs the token out with Slack and removes it from ${THIS_COMPUTER}. Slack keeps the app.`}
       >
         <Button variant="secondary" onClick={() => void disconnect()}>
           Disconnect

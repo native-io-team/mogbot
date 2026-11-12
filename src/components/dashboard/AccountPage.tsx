@@ -33,6 +33,7 @@ import {
   takeAccountOnOpen,
 } from '../../lib/account';
 import { deleteAccount, setPhoneAccess, signOutAccount } from '../../lib/companion';
+import { THIS_COMPUTER, THIS_COMPUTER_CAP } from '../../lib/computer';
 
 export function AccountPage() {
   const { showToast } = useOptionalToast();
@@ -103,7 +104,7 @@ export function AccountPage() {
         ) : account ? (
           <Row
             label={account.email ?? 'Signed in'}
-            description="Signed in. Your phone can reach this Mac from anywhere, with no Tailscale."
+            description={`Signed in. Your phone can reach ${THIS_COMPUTER} from anywhere, with no Tailscale.`}
           >
             <Button
               variant="secondary"
@@ -117,7 +118,7 @@ export function AccountPage() {
         ) : status.relay.state === 'off' ? (
           <Row
             label="Phone access is off"
-            description="This Mac checks your account through phone access. Turn it on to see whether you’re signed in."
+            description={`${THIS_COMPUTER_CAP} checks your account through phone access. Turn it on to see whether you’re signed in.`}
           >
             <Button
               variant="secondary"
@@ -131,7 +132,7 @@ export function AccountPage() {
         ) : connecting && slow ? (
           <Row
             label="Can’t reach the sign-in service"
-            description="This Mac keeps trying. Check its internet connection. If you use your own Tailscale, your phone still works over it."
+            description={`${THIS_COMPUTER_CAP} keeps trying. Check its internet connection. If you use your own Tailscale, your phone still works over it.`}
           >
             <Button variant="secondary" onClick={() => void reload()} data-account-retry>
               Try again
@@ -171,7 +172,7 @@ export function AccountPage() {
         <Group id="account-delete" title="Delete account">
           <Row
             label="Delete my account"
-            description="Removes your email and account from the sign-in service and signs this Mac out. Your agents, chats and files stay on this Mac."
+            description={`Removes your email and account from the sign-in service and signs ${THIS_COMPUTER} out. Your agents, chats and files stay on ${THIS_COMPUTER}.`}
           >
             <Button
               variant="danger"
@@ -189,12 +190,12 @@ export function AccountPage() {
           title="Delete your account?"
           body={
             <p>
-              {account.email ?? 'This account'} is removed for good. This Mac is signed out now, and any
-              other Mac on it within a day. Your phone stops reaching this Mac from anywhere; over Tailscale, if you set
-              it up, it keeps working.
+              {account.email ?? 'This account'} is removed for good. {THIS_COMPUTER_CAP} is signed
+              out now, and any other computer on it within a day. Your phone stops reaching{' '}
+              {THIS_COMPUTER} from anywhere; over Tailscale, if you set it up, it keeps working.
             </p>
           }
-          hint="Nothing on this Mac is deleted. You can make a new account any time."
+          hint={`Nothing on ${THIS_COMPUTER} is deleted. You can make a new account any time.`}
           loading={remove.isLoading}
           confirmLabel="Delete account"
           loadingLabel="Deleting…"
@@ -208,8 +209,8 @@ export function AccountPage() {
           title="Sign out?"
           body={
             <p>
-              Your phone stops reaching this Mac through your account. Over Tailscale, if you set it
-              up, it keeps working.
+              Your phone stops reaching {THIS_COMPUTER} through your account. Over Tailscale, if you
+              set it up, it keeps working.
             </p>
           }
           hint="You can sign in again any time."

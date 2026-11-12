@@ -9,7 +9,7 @@
 import {
   CHIEF_CHIPS,
   ideaRepeats,
-  ROUTINES_NEED_THE_MAC,
+  routinesNeedTheComputer,
   type ChiefIdea,
 } from '@shipstudio/companion-protocol';
 import { useState } from 'react';
@@ -17,6 +17,7 @@ import { StyleSheet, View } from 'react-native';
 import { useColors } from '../lib/appearance';
 import { space } from '../lib/theme';
 import { Button, T } from './ui';
+import { pairedKind } from '../lib/computer';
 
 export function ChiefStarters({ onPick }: { onPick: (idea: ChiefIdea) => void }) {
   const colors = useColors();
@@ -41,7 +42,7 @@ export function ChiefStarters({ onPick }: { onPick: (idea: ChiefIdea) => void })
       ))}
       {picked && ideaRepeats(picked) && (
         <T variant="caption" color={colors.textMuted} style={styles.note}>
-          {ROUTINES_NEED_THE_MAC}
+          {routinesNeedTheComputer(pairedKind())}
         </T>
       )}
     </View>

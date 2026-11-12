@@ -9,7 +9,7 @@ import type { AgentMessage, Approval } from '@shipstudio/companion-protocol';
 import {
   ACTION,
   CATEGORY,
-  UNREACHABLE,
+  unreachable,
   answerFromAlert,
   answerOf,
   approvalNotice,
@@ -259,7 +259,7 @@ describe('answering from a notification', () => {
   it('says so when the Mac can’t be reached, and sends nothing', async () => {
     const { d, calls } = deps({ waitLive: () => Promise.resolve(false) });
     await expect(answerFromAlert(target, true, d)).resolves.toBe('unreachable');
-    expect(calls).toEqual([`tell site m1 ${UNREACHABLE}`]);
+    expect(calls).toEqual([`tell site m1 ${unreachable()}`]);
   });
 
   it('never answers without the request id', async () => {

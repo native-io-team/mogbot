@@ -19,10 +19,12 @@ import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
 import { fonts, lineHeight, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { useComputer } from '../lib/computer';
 
 export default withAgentAccent(Instructions);
 
 function Instructions() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -118,7 +120,7 @@ function Instructions() {
         )}
         {saved !== null && !connected && (
           <T variant="small" color={colors.textMuted}>
-            As they were last read. Changing them needs your Mac.
+            As they were last read. Changing them needs {comp.your}.
           </T>
         )}
         {saved === null ? (
@@ -127,7 +129,7 @@ function Instructions() {
               {connected ? (
                 <Spinner />
               ) : (
-                <T color={colors.textSecondary}>Reading them needs your Mac.</T>
+                <T color={colors.textSecondary}>Reading them needs {comp.your}.</T>
               )}
             </View>
           )

@@ -68,6 +68,7 @@ import {
   space,
 } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
+import { useComputer } from '../../../lib/computer';
 
 type Row =
   | { kind: 'header'; key: string; title: string }
@@ -107,6 +108,7 @@ function tabBarClearance(insetBottom: number): number {
 }
 
 export default function Agents() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const ripple = useRipple();
@@ -117,7 +119,7 @@ export default function Agents() {
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const split = width >= SPLIT_AT && height >= SPLIT_MIN_HEIGHT;
   const overview = useApp((s) => s.overview);
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
   const live = useApp((s) => s.link.kind === 'connected');
   const removed = useApp(
     (s) =>
@@ -511,12 +513,13 @@ function SectionHeader({
 
 /** The Mac said no for good: removed, or one side needs updating. */
 function Refused() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
   const link = useApp((s) => s.link);
   const refusal = useApp((s) => s.refusal);
-  const name = useApp((s) => s.credentials?.name ?? 'Your Mac');
+  const name = useApp((s) => s.credentials?.name) ?? comp.yourCap;
   if (link.kind !== 'refused') return null;
   const removed = link.reason === 'revoked' || link.reason === 'unauthorized';
   const impostor = link.reason === 'not_your_mac';
@@ -530,7 +533,7 @@ function Refused() {
     <Animated.View entering={FadeIn.duration(200)} style={styles.refused}>
       <T variant="headline" color={impostor ? colors.accentErrorLight : colors.textStrong}>
         {impostor
-          ? 'This isn’t your Mac'
+          ? `This isn’t ${comp.your}`
           : repair
             ? `Pair again with ${name}`
             : removed
@@ -541,8 +544,8 @@ function Refused() {
       </T>
       {removed ? (
         <T color={colors.textSecondary}>
-          That happens when this phone is removed on the Mac, or its pairings are reset. Your agents
-          and their chats are still on the Mac: pair again to pick up where you left off.
+          That happens when this phone is removed on {comp.the}, or its pairings are reset. Your agents
+          and their chats are still on {comp.the}: pair again to pick up where you left off.
         </T>
       ) : refusal?.message ? (
         <T color={colors.textSecondary}>{refusal.message}</T>

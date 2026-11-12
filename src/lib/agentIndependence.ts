@@ -31,6 +31,7 @@ export {
   INDEPENDENCE_STILL_ASKS,
   INDEPENDENCE_TITLE,
   effectiveIndependence,
+  independenceDetail,
   independenceOf,
   independenceRowLabel,
   independenceStep,

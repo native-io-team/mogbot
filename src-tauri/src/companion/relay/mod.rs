@@ -220,7 +220,7 @@ pub struct Link {
 const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 const NOT_CONNECTED: &str =
-    "This Mac isn't connected to the relay right now. Check the internet connection and try again in a moment.";
+    concat!("This ", crate::computer::noun!(), " isn't connected to the relay right now. Check the internet connection and try again in a moment.");
 
 impl Link {
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -342,8 +342,11 @@ impl Link {
             let inner = self.lock();
             inner.up.as_ref().ok_or(NOT_CONNECTED)?.fingerprint.clone()
         };
-        let code = new_link_code(&fingerprint)
-            .ok_or("This Mac couldn't make a sign-in code. Try again.")?;
+        let code = new_link_code(&fingerprint).ok_or(concat!(
+            "This ",
+            crate::computer::noun!(),
+            " couldn't make a sign-in code. Try again."
+        ))?;
         let base = self
             .command(|ack| Command::LinkStart(code.clone(), ack))
             .await?;
@@ -364,7 +367,7 @@ impl Link {
             let inner = self.lock();
             let up = inner.up.as_ref().ok_or_else(|| NOT_CONNECTED.to_string())?;
             if inner.account.is_none() {
-                return Err("This Mac isn't signed in.".into());
+                return Err(concat!("This ", crate::computer::noun!(), " isn't signed in.").into());
             }
             up.commands.clone()
         };

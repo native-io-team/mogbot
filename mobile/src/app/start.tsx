@@ -16,8 +16,10 @@ import { useApp } from '../lib/store';
 import { useAccent } from '../lib/accent';
 import { fonts, lineHeight, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { useComputer } from '../lib/computer';
 
 export default function Start() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -25,7 +27,7 @@ export default function Start() {
   const { project, name } = useLocalSearchParams<{ project: string; name: string }>();
   const router = useRouter();
   const connected = useApp((s) => s.link.kind === 'connected');
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

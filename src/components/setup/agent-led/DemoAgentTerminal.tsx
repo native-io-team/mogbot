@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { mockMarkSetupItemReady } from '../../../lib/agentOnboarding';
 import { logger } from '../../../lib/logger';
+import { THIS_COMPUTER } from '../../../lib/computer';
 
 interface DemoLine {
   /** Styling: agent prose, executed command, command output, success note. */
@@ -24,7 +25,7 @@ interface DemoLine {
 const SCRIPT: DemoLine[] = [
   {
     kind: 'agent',
-    text: "Hi! I'm your AI agent. I'll get this Mac ready for your first project — sit back, I'll explain each step as I go.",
+    text: `Hi! I'm your AI agent. I'll get ${THIS_COMPUTER} ready for your first project — sit back, I'll explain each step as I go.`,
     delayMs: 600,
   },
   { kind: 'agent', text: 'First, checking what’s already installed…', delayMs: 1600 },

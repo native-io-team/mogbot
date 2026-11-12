@@ -61,7 +61,11 @@ pub struct StepIn {
 /// A turn answering outside text.
 pub const OUTSIDE: &str = "You can't ask the user to step in while you answer text from outside (a routine's items, or a message that carried them). Do this from the user's own request.";
 /// The phone, or an older client's plain Allow.
-pub const ON_YOUR_MAC: &str = "Step in on your Mac: press Step in on the card there.";
+pub const ON_YOUR_MAC: &str = concat!(
+    "Step in on your ",
+    crate::computer::noun!(),
+    ": press Step in on the card there."
+);
 /// What a card's receipt says when it was handed back for the user: 15
 /// minutes at the desk, or a phone left idle.
 pub fn timed_out_aside(minutes: i64) -> String {

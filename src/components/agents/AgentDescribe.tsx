@@ -33,6 +33,7 @@ import {
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { ROUTINES_MEANS } from '../../../packages/companion-protocol/src/cardWords';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /** The one prompt, and Draft it. */
 export function AgentDescribe({
@@ -147,8 +148,8 @@ export function AgentDraftRoutines({
             ))}
           </ul>
           <p className="agent-editor__hint">
-            Routines run while the app is open and this Mac is awake. A step after your OK waits on
-            a card in its chat, here or on your phone.
+            Routines run while the app is open and {THIS_COMPUTER} is awake. A step after your OK
+            waits on a card in its chat, here or on your phone.
           </p>
         </>
       )}

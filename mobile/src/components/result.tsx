@@ -46,9 +46,10 @@ import { useApp, useServed } from '../lib/store';
 import { Attachments } from './attachments';
 import { Compare } from './compare';
 import { useCopyParts, type CopyProps } from './copy';
-import { Card, Line, OFFLINE_NOTE, TextAction } from './surfaces';
+import { Card, Line, offlineNote, TextAction } from './surfaces';
 import { Icon, T } from './ui';
 import type { SFName } from '../lib/icons';
+import { useComputer } from '../lib/computer';
 
 /** The Mac takes `revises` on a send: only then is "Ask for changes" offered. */
 export const useCanRevise = () => useServed('agents.send', MAC_FEATURES.reviseResults);
@@ -306,6 +307,7 @@ export function ResultCardView({
   copy?: CopyProps;
   onError: (t: string) => void;
 }) {
+  const comp = useComputer();
   const [opened, setOpened] = useState(false);
   const parts = useCopyParts(copy ?? null);
   const connected = useApp((s) => s.link.kind === 'connected');
@@ -340,7 +342,7 @@ export function ResultCardView({
   const watch = newest && canWatch && Boolean(card.project || copy) && (
     <TextAction
       label={opening ? 'Opening…' : 'Watch live'}
-      hint="Opens the site running on your Mac, read-only"
+      hint={`Opens the site running on ${comp.your}, read-only`}
       disabled={!connected || opening}
       onPress={() => {
         haptic.light();
@@ -363,7 +365,7 @@ export function ResultCardView({
       }
       // Offline the answers stay, disabled, with the one note every card uses
       // (a copy's own note already says it).
-      note={parts?.note ?? (ask && !connected ? OFFLINE_NOTE : undefined)}
+      note={parts?.note ?? (ask && !connected ? offlineNote() : undefined)}
       actions={
         ask || watch || parts ? (
           <>

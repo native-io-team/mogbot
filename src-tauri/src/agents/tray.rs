@@ -421,9 +421,12 @@ fn build_menu(app: &AppHandle, model: &TrayModel) -> tauri::Result<tauri::menu::
     if let Some(stay) = stay.filter(|s| s.supported) {
         menu = menu
             .item(
-                &CheckMenuItemBuilder::with_id("awake", "Keep this Mac awake")
-                    .checked(stay.keep_awake)
-                    .build(app)?,
+                &CheckMenuItemBuilder::with_id(
+                    "awake",
+                    concat!("Keep this ", crate::computer::noun!(), " awake"),
+                )
+                .checked(stay.keep_awake)
+                .build(app)?,
             )
             .item(
                 &CheckMenuItemBuilder::with_id("keep", "Keep running when closed")

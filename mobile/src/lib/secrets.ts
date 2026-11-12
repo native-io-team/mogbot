@@ -11,6 +11,7 @@
 
 import type { AgentSecret, LinkState, Route } from '@shipstudio/companion-protocol';
 import type { DirectTransport } from './transport';
+import { pairedComputer } from './computer';
 
 /**
  * Why a secret can't go over this connection, or null when it can. The token
@@ -23,12 +24,13 @@ export function secretRouteProblem(
   route: Pick<Route, 'kind' | 'url'> | null,
   identityVerified: boolean
 ): string | null {
-  if (!route) return 'Saving a secret needs your Mac. It stays here until then.';
+  const comp = pairedComputer();
+  if (!route) return `Saving a secret needs ${comp.your}. It stays here until then.`;
   if (route.kind !== 'tailscale' || !/^https:\/\//i.test(route.url)) {
-    return 'A key only travels to your Mac over Tailscale’s private link, and this connection isn’t one. Save it on your Mac: the same card is waiting there.';
+    return `A key only travels to ${comp.your} over Tailscale’s private link, and this connection isn’t one. Save it on ${comp.your}: the same card is waiting there.`;
   }
   if (!identityVerified) {
-    return 'This connection hasn’t proved it’s the Mac you paired with, so secrets stay here. Save it at your desk instead.';
+    return `This connection hasn’t proved it’s ${comp.the} you paired with, so secrets stay here. Save it at your desk instead.`;
   }
   return null;
 }

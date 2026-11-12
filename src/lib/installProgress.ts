@@ -30,6 +30,7 @@ import {
   toVisibleLines,
 } from './terminalDiagnostics';
 import { alreadySignedInMessage } from '../components/setup/setupFailureMessages';
+import { COMPUTER, THIS_COMPUTER, THIS_COMPUTER_CAP, YOUR_COMPUTER_CAP } from './computer';
 
 // ============ Steps ============
 
@@ -289,21 +290,21 @@ export function describeFailure(
   if (PASSWORD_GAVE_UP.test(text)) {
     return {
       kind: 'password',
-      line: 'The Mac password wasn’t accepted.',
-      fix: 'Press Try again, and use the password you log in to this Mac with.',
+      line: `The ${COMPUTER} password wasn’t accepted.`,
+      fix: `Press Try again, and use the password you log in to ${THIS_COMPUTER} with.`,
     };
   }
   if (NOT_ADMIN.test(text)) {
     return {
       kind: 'admin',
-      line: 'Your Mac account isn’t allowed to install apps.',
-      fix: 'Sign in to an administrator account on this Mac, or ask whoever manages it to make yours one (System Settings → Users & Groups), then press Try again.',
+      line: `${YOUR_COMPUTER_CAP} account isn’t allowed to install apps.`,
+      fix: `Sign in to an administrator account on ${THIS_COMPUTER}, or ask whoever manages it to make yours one (System Settings → Users & Groups), then press Try again.`,
     };
   }
   if (DISK_FULL.test(text)) {
     return {
       kind: 'disk',
-      line: 'This Mac is out of disk space.',
+      line: `${THIS_COMPUTER_CAP} is out of disk space.`,
       fix: 'Free up at least 1 GB (empty the Bin, or delete large downloads), then press Try again.',
     };
   }
@@ -324,32 +325,32 @@ export function describeFailure(
   if (isNodeMissingError(text)) {
     return {
       kind: 'node',
-      line: `Node.js isn’t on this Mac, and ${name} needs it.`,
+      line: `Node.js isn’t on ${THIS_COMPUTER}, and ${name} needs it.`,
       fix: 'Press Try again: it installs Node.js first.',
     };
   }
   if (BAD_PASSWORD.test(text)) {
     return {
       kind: 'password',
-      line: 'The Mac password wasn’t accepted.',
-      fix: 'Press Try again, and use the password you log in to this Mac with.',
+      line: `The ${COMPUTER} password wasn’t accepted.`,
+      fix: `Press Try again, and use the password you log in to ${THIS_COMPUTER} with.`,
     };
   }
   if (NO_PERMISSION.test(text)) {
     return {
       kind: 'permission',
-      line: 'This Mac didn’t let the install write the files it needs.',
+      line: `${THIS_COMPUTER_CAP} didn’t let the install write the files it needs.`,
       fix:
         itemId === 'codex'
-          ? 'Press Try again. If it happens twice, this Mac needs an administrator to allow it; Claude Code installs without one.'
-          : 'Press Try again. If it happens twice, ask whoever manages this Mac to allow installs.',
+          ? `Press Try again. If it happens twice, ${THIS_COMPUTER} needs an administrator to allow it; Claude Code installs without one.`
+          : `Press Try again. If it happens twice, ask whoever manages ${THIS_COMPUTER} to allow installs.`,
     };
   }
   if (isNetworkError(text) || NETWORKISH.test(text)) {
     return {
       kind: 'network',
       line: auth ? 'Couldn’t reach the sign-in server.' : 'Couldn’t reach the download server.',
-      fix: 'Check this Mac is online (open any website), then press Try again.',
+      fix: `Check ${THIS_COMPUTER} is online (open any website), then press Try again.`,
     };
   }
   if (auth) {
@@ -371,8 +372,8 @@ export function describeFailure(
     return {
       kind: 'unverified',
       line: auth
-        ? 'Sign-in finished, but this Mac doesn’t show you signed in.'
-        : `It finished, but ${name} isn’t showing up on this Mac.`,
+        ? `Sign-in finished, but ${THIS_COMPUTER} doesn’t show you signed in.`
+        : `It finished, but ${name} isn’t showing up on ${THIS_COMPUTER}.`,
       fix: 'Press Try again. If it happens twice, quit and reopen the app, then try once more.',
     };
   }

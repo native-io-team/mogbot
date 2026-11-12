@@ -68,11 +68,11 @@ const NAME_MAX: usize = 40;
 
 /// What this Mac's own sign-in is called until the user names it. It is
 /// never shown as such: "This Mac" read as a place, not an account.
-pub const DEFAULT_NAME: &str = "This Mac";
+pub const DEFAULT_NAME: &str = concat!("This ", crate::computer::noun!());
 
 /// This Mac's own sign-in, unnamed, when its engine doesn't record who it
 /// is signed in as: said as what it is, never a guessed identity.
-pub const UNNAMED: &str = "Signed in on this Mac";
+pub const UNNAMED: &str = concat!("Signed in on this ", crate::computer::noun!());
 
 /// What an added account's folder links to in this Mac's own one.
 const SHARED: &[(Engine, &[&str])] = &[
@@ -204,7 +204,7 @@ pub fn shown_name(account: &Account, email: Option<&str>) -> String {
 /// The name inside a sentence: [`UNNAMED`] reads "this Mac's own sign-in".
 pub fn line_name(name: &str) -> String {
     if name == UNNAMED {
-        "this Mac's own sign-in".to_string()
+        concat!("this ", crate::computer::noun!(), "'s own sign-in").to_string()
     } else {
         name.to_string()
     }

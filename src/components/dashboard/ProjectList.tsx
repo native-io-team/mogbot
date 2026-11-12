@@ -79,6 +79,7 @@ import { openAgentChat, useAgentsAtWork } from '../workspace/useProjectAgents';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { composerDraft, setComposerDraft } from '../../lib/composerDraft';
 import type { AgentsState } from '../../lib/agentsStore';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /** The Chief's id and name, or null before the team is read. */
 const selectChief = (s: AgentsState) => {
@@ -752,10 +753,10 @@ export function ProjectList({
         {/* Delete Project Confirmation Modal */}
         {deleteConfirm && (
           <ProjectActionConfirmModal
-            title="Delete files from this Mac?"
+            title={`Delete files from ${THIS_COMPUTER}?`}
             body={
               <>
-                Permanently delete <strong>{deleteConfirm.name}</strong> from this Mac?
+                Permanently delete <strong>{deleteConfirm.name}</strong> from {THIS_COMPUTER}?
               </>
             }
             hint="This removes the local project folder and its files. Use Remove from projects if you only want to hide it from the app."
@@ -777,7 +778,7 @@ export function ProjectList({
                 Remove <strong>{removeConfirm.name}</strong> from your projects?
               </>
             }
-            hint="Its folder and files stay on this Mac. To bring it back: Import, then Local folder."
+            hint={`Its folder and files stay on ${THIS_COMPUTER}. To bring it back: Import, then Local folder.`}
             loading={removing}
             confirmLabel="Remove from projects"
             loadingLabel="Removing…"

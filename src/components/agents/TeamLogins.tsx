@@ -52,6 +52,7 @@ import {
   type TeamLogins as Team,
   type TeamNeed,
 } from '../../lib/agentLogins';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 export interface TeamLoginsProps {
   /** Unix ms: rows answered since then stay on the list, for progress. */
@@ -257,7 +258,7 @@ function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void })
           )}
           {waiting.length > 0 && need.options.length === 0 && (
             <p className="team-logins__note">
-              Nothing on this Mac can sign these agents in. Answer each in its own chat.
+              Nothing on {THIS_COMPUTER} can sign these agents in. Answer each in its own chat.
             </p>
           )}
           {waiting.length > 0 && need.options.length === 0 && (
@@ -293,7 +294,7 @@ function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void })
                   disabled={busy || signingIn || included.length === 0}
                   onClick={() => void connect(primary)}
                 >
-                  {signingIn ? 'Signing in on this Mac…' : primary.label}
+                  {signingIn ? `Signing in on ${THIS_COMPUTER}…` : primary.label}
                   {included.length > 1 && !signingIn ? ` for ${included.length}` : ''}
                 </Button>
               )}
@@ -341,8 +342,9 @@ export function TeamLoginsModal() {
     >
       <div className="team-logins-modal__body">
         <p className="team-logins__lede">
-          Each app your agents asked for, once. Connecting signs in on this Mac; no agent ever sees
-          a password, and you can take any of it back from the agent’s “What it can reach”.
+          Each app your agents asked for, once. Connecting signs in on {THIS_COMPUTER}; no agent
+          ever sees a password, and you can take any of it back from the agent’s “What it can
+          reach”.
         </p>
         {modal.isOpen && <TeamLogins since={since} />}
       </div>

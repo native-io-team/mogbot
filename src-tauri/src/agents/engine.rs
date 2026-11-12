@@ -286,7 +286,7 @@ pub async fn require_ready(engine: Engine) -> Result<(), CommandError> {
     let info = info(engine).await;
     if !info.installed {
         return Err(CommandError::expected(format!(
-            "{} isn't installed on this Mac.",
+            concat!("{} isn't installed on this ", crate::computer::noun!(), "."),
             engine.label()
         )));
     }

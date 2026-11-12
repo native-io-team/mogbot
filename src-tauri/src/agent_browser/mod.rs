@@ -47,7 +47,7 @@ pub mod viewer;
 pub const COMPILED: bool = !cfg!(feature = "no-agent-browser") && cfg!(target_os = "macos");
 
 /// Every agent's browser call while the profile is open in a plain window.
-pub const BUSY_PLAIN: &str = "The user is signing in to a site in a plain Chrome window on this Mac, so the agents' browser is closed for a few minutes. Carry on with what doesn't need it, or try again shortly.";
+pub const BUSY_PLAIN: &str = concat!("The user is signing in to a site in a plain Chrome window on this ", crate::computer::noun!(), ", so the agents' browser is closed for a few minutes. Carry on with what doesn't need it, or try again shortly.");
 
 /// The agents' browser can be offered now: switched on and Chrome is here.
 pub fn available() -> bool {

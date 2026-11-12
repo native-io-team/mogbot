@@ -23,18 +23,18 @@ import {
   CHIEF_ICON,
   CLICK_ALLOW_TITLE,
   CLICK_PAIR_TITLE,
-  GET_MAC_LINE,
-  GET_MAC_TITLE,
-  HAVE_MAC_LINE,
-  HAVE_MAC_TITLE,
-  MAC_NOT_YET,
-  MAC_READY,
+  GET_COMPUTER_LINE,
+  GET_COMPUTER_TITLE,
+  HAVE_COMPUTER_LINE,
+  HAVE_COMPUTER_TITLE,
+  COMPUTER_NOT_YET,
+  COMPUTER_READY,
   I_DID_IT,
   PAIR_BUTTON,
   PAIRED_TITLE,
   PAIRING_SCHEME,
   SCAN_THE_CODE,
-  TAILSCALE_LINE,
+  tailscaleLine,
   TAILSCALE_PHONE_TITLE,
   type PairingLink,
 } from '@shipstudio/companion-protocol';
@@ -48,7 +48,7 @@ import { Spinner } from '../components/agent';
 import { AgentKey } from '../components/AgentKey';
 import { DoneLine, StepScreen } from '../components/StepScreen';
 import { Button, Icon, T } from '../components/ui';
-import { ALERTS_WHILE_OPEN } from '../lib/push';
+import { alertsWhileOpen } from '../lib/push';
 import {
   cleanName,
   linkHost,
@@ -80,11 +80,12 @@ import { reachChecklist, reachDetail } from '../lib/reachChecklist';
 import { ReachChecklist, useTailscaleInstalled } from '../components/ReachChecklist';
 import { adopt, enableAlerts } from '../lib/session';
 import { isDemo } from '../lib/demo';
-import { PAIRING_LOST } from '../lib/identity';
+import { pairingLost as pairingLostLine } from '../lib/identity';
 import { useApp } from '../lib/store';
 import { haptic } from '../lib/haptics';
 import { iconSize, keySize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
+import { pairedComputer, useComputer } from '../lib/computer';
 
 type Phase =
   | { kind: 'start'; error?: string }
@@ -101,6 +102,7 @@ type Phase =
 const PAIRED_MS = 2400;
 
 export default function Pair() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
@@ -229,7 +231,7 @@ export default function Pair() {
                 <T variant="headline" color={colors.textStrong}>
                   Pair again
                 </T>
-                <T color={colors.textSecondary}>{PAIRING_LOST}</T>
+                <T color={colors.textSecondary}>{pairingLostLine(comp)}</T>
               </View>
             )}
             {error && intro === 'code' && (
@@ -266,7 +268,7 @@ export default function Pair() {
         testID="pair-reaching"
         busy={<Spinner size={iconSize.body} color={colors.textPrimary} />}
         title={`Reaching ${cleanName(phase.link.name)}…`}
-        line="Finding it and checking it’s the Mac this code came from. Nothing is sent to it until it proves that."
+        line={`Finding it and checking it’s ${comp.the} this code came from. Nothing is sent to it until it proves that.`}
         secondary={<Button title="Cancel" variant="ghost" onPress={toCode} />}
       />
     );
@@ -353,7 +355,7 @@ export default function Pair() {
       title={`${PAIRED_TITLE} with ${phase.mac}`}
       line={
         phase.askAlerts
-          ? `Want a tap on the shoulder when an agent needs you or finishes? ${ALERTS_WHILE_OPEN}`
+          ? `Want a tap on the shoulder when an agent needs you or finishes? ${alertsWhileOpen(comp.your)}`
           : 'Opening your agents…'
       }
       primary={
@@ -375,7 +377,7 @@ export default function Pair() {
     >
       {phase.askAlerts && (
         <T variant="small" color={colors.textMuted}>
-          With the official app, your Mac can also wake this phone through the push service. It
+          With the official app, {comp.your} can also wake this phone through the push service. It
           sends only that an agent needs you or finished, never what it said.
         </T>
       )}
@@ -402,6 +404,7 @@ function IntroScreen({
   onScan: () => void;
   onPaste: () => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const installed = useTailscaleInstalled();
@@ -431,10 +434,10 @@ function IntroScreen({
               />
             </View>
           }
-          title={HAVE_MAC_TITLE}
-          line={HAVE_MAC_LINE}
-          primary={<Button title={MAC_READY} variant="primary" size="large" onPress={next} />}
-          secondary={<Button title={MAC_NOT_YET} variant="ghost" onPress={() => go('getMac')} />}
+          title={HAVE_COMPUTER_TITLE}
+          line={HAVE_COMPUTER_LINE}
+          primary={<Button title={COMPUTER_READY} variant="primary" size="large" onPress={next} />}
+          secondary={<Button title={COMPUTER_NOT_YET} variant="ghost" onPress={() => go('getMac')} />}
           footer={<TryDemo />}
         />
       );
@@ -442,12 +445,12 @@ function IntroScreen({
       return (
         <StepScreen
           {...common}
-          title={GET_MAC_TITLE}
-          line={GET_MAC_LINE}
+          title={GET_COMPUTER_TITLE}
+          line={GET_COMPUTER_LINE}
           primary={
             MAC_DOWNLOAD_URL ? (
               <Button
-                title="Send the link to my Mac"
+                title={`Send the link to my ${comp.noun}`}
                 variant="primary"
                 size="large"
                 icon="square.and.arrow.up"
@@ -470,7 +473,7 @@ function IntroScreen({
           {MAC_DOWNLOAD_URL && (
             <View style={styles.address} testID="mac-download">
               <T variant="small" color={colors.textMuted}>
-                On your Mac, go to
+                On {comp.your}, go to
               </T>
               <T color={colors.textStrong} selectable>
                 {MAC_DOWNLOAD_URL.replace(/^https?:\/\//, '')}
@@ -486,8 +489,8 @@ function IntroScreen({
           title={TAILSCALE_PHONE_TITLE}
           line={
             installed
-              ? `${TAILSCALE_LINE} Open it, sign in with the same account you used on your Mac, and switch it on.`
-              : `${TAILSCALE_LINE} Install it, sign in with the same account you used on your Mac, and switch it on. When it asks to add a VPN configuration, tap Allow.`
+              ? `${tailscaleLine()} Open it, sign in with the same account you used on your computer, and switch it on.`
+              : `${tailscaleLine()} Install it, sign in with the same account you used on your computer, and switch it on. When it asks to add a VPN configuration, tap Allow.`
           }
           primary={
             installed ? (
@@ -523,7 +526,7 @@ function IntroScreen({
         <StepScreen
           {...common}
           title={CLICK_PAIR_TITLE}
-          line="Already looking at a code on your Mac? Scan it now. The first time, this phone asks to use the camera."
+          line={`Already looking at a code on ${comp.your}? Scan it now. The first time, this phone asks to use the camera.`}
           primary={
             <Button
               title={SCAN_THE_CODE}
@@ -564,6 +567,7 @@ function Confirm({
   onPair: () => void;
   onCancel: () => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const name = cleanName(link.name);
@@ -573,8 +577,8 @@ function Confirm({
         stepKey="impostor"
         {...progressOf('pair')}
         onBack={onCancel}
-        title="This isn’t your Mac"
-        line={`This link says it’s ${cleanName(plan.current)}, but it carries a different identity than the Mac this phone is paired with. Nothing was sent. If you set that Mac up again, forget it in Settings first, then pair from it.`}
+        title={`This isn’t ${comp.your}`}
+        line={`This link says it’s ${cleanName(plan.current)}, but it carries a different identity than ${comp.the} this phone is paired with. Nothing was sent. If you set that ${comp.noun} up again, forget it in Settings first, then pair from it.`}
         primary={<Button title="Back" variant="primary" size="large" onPress={onCancel} />}
       />
     );
@@ -592,7 +596,7 @@ function Confirm({
           <T color={colors.textStrong} style={styles.mono}>
             {codeEnd(link)}
           </T>
-          . Only go on if you just made this code on your own Mac.
+          . Only go on if you just made this code on your own {comp.noun}.
         </>
       }
       primary={<Button title={PAIR_BUTTON} variant="primary" size="large" onPress={onPair} />}
@@ -621,6 +625,7 @@ function Confirm({
  * Mac is paired.
  */
 function TryDemo() {
+  const comp = useComputer();
   const colors = useColors();
   const router = useRouter();
   const paired = useApp((s) => !!s.credentials && !isDemo(s.credentials));
@@ -629,7 +634,7 @@ function TryDemo() {
     <View style={{ gap: space.xs, marginTop: space.md }} testID="pair-demo">
       <Button title="Try the demo" variant="ghost" onPress={() => router.replace('/demo')} />
       <T variant="small" color={colors.textMuted} style={{ textAlign: 'center' }}>
-        No Mac nearby? Look around with sample agents. Nothing is sent anywhere.
+        No {comp.noun} nearby? Look around with sample agents. Nothing is sent anywhere.
       </T>
     </View>
   );
@@ -666,6 +671,7 @@ function Unreachable({
 
 /** A failure's title and its one line. */
 function failureCopy(failure: PairFailure, mac: string, viaRelay = false): [string, string] {
+  const comp = pairedComputer();
   switch (failure.kind) {
     // A checklist follows (`Unreachable`): no address in the first line.
     case 'tailscale_off':
@@ -673,47 +679,47 @@ function failureCopy(failure: PairFailure, mac: string, viaRelay = false): [stri
       return [
         `Can’t reach ${mac}`,
         viaRelay
-          ? 'Check this phone is online and your Mac is awake with the app open, then try again.'
+          ? `Check this phone is online and ${comp.your} is awake with the app open, then try again.`
           : 'Check these, then try again.',
       ];
     case 'mac_offline':
       return [
         `${mac} is offline or asleep`,
-        'Wake your Mac, with the app open on it, then try again.',
+        `Wake ${comp.your}, with the app open on it, then try again.`,
       ];
     case 'sign_in_needed':
       return [
         `${mac} isn’t signed in`,
-        'On your Mac, sign in, or use your own Tailscale instead. Then try again.',
+        `On ${comp.your}, sign in, or use your own Tailscale instead. Then try again.`,
       ];
     case 'no_answer':
       return [
         `No answer from ${mac}`,
-        `The Mac had the request, but nothing came back within two minutes. If you clicked Allow, open ${PHONE_SETTINGS} on the Mac to check this phone is listed; otherwise click ${WHERE_TO_PAIR} for a new code and scan it.`,
+        `${comp.theCap} had the request, but nothing came back within two minutes. If you clicked Allow, open ${PHONE_SETTINGS} on ${comp.the} to check this phone is listed; otherwise click ${WHERE_TO_PAIR} for a new code and scan it.`,
       ];
     case 'not_your_mac':
       return [
-        'This isn’t your Mac',
-        `The server at this address couldn’t prove it’s ${mac}, so this phone didn’t send it your code or anything else. On your Mac, click ${WHERE_TO_PAIR} for a new code and scan that.`,
+        `This isn’t ${comp.your}`,
+        `The server at this address couldn’t prove it’s ${mac}, so this phone didn’t send it your code or anything else. On ${comp.your}, click ${WHERE_TO_PAIR} for a new code and scan that.`,
       ];
     case 'lan_only':
       return [
         'This code only offers your local network',
         HAS_RELAY
-          ? `On your Mac, sign in, or turn on your own Tailscale. Then click ${WHERE_TO_PAIR} for a new code.`
-          : `This version of the app connects over Tailscale. Turn on Tailscale on your Mac, then click ${WHERE_TO_PAIR} for a new code.`,
+          ? `On ${comp.your}, sign in, or turn on your own Tailscale. Then click ${WHERE_TO_PAIR} for a new code.`
+          : `This version of the app connects over Tailscale. Turn on Tailscale on ${comp.your}, then click ${WHERE_TO_PAIR} for a new code.`,
       ];
     case 'expired':
       return [
         'This code has expired',
-        `A code works once and for five minutes. On your Mac, click ${WHERE_TO_PAIR} for a new one, then scan it.`,
+        `A code works once and for five minutes. On ${comp.your}, click ${WHERE_TO_PAIR} for a new one, then scan it.`,
       ];
     case 'refused':
       return [
         failure.reason === 'denied'
           ? `${mac} said no`
           : failure.reason === 'timeout'
-            ? 'Nobody answered on the Mac'
+            ? `Nobody answered on ${comp.the}`
             : failure.reason === 'update_mac'
               ? `Update the app on ${mac} to pair`
               : failure.reason === 'update_app'

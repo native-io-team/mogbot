@@ -300,7 +300,7 @@ async fn identity(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
         json_response(&IdentityResponse::Refused {
             ok: false,
             reason,
-            message,
+            message: crate::computer::localize(&message).into_owned(),
         })
     };
     let protocol = match wire::negotiate(request.protocol, wire::SUPPORTED) {
@@ -779,6 +779,7 @@ async fn snapshot_status(c: &Arc<Companion>, deadline: Duration) -> wire::MacSta
             );
             c.last_status().unwrap_or_else(|| wire::MacStatus {
                 name: c.backend.server_name(),
+                computer: crate::computer::HOST,
                 app_version: c.backend.app_version(),
                 power: wire::PowerInfo {
                     keep_awake: false,
@@ -835,7 +836,7 @@ where
         ws,
         &ServerFrame::Refused {
             reason,
-            message: message.into(),
+            message: crate::computer::localize(&message.into()).into_owned(),
         },
     )
     .await;

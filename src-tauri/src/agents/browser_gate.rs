@@ -49,7 +49,7 @@ pub enum Gate {
 pub const SERVER: &str = "mcp__claude-in-chrome__";
 
 /// Every browser call while the user signs in from their phone.
-pub const PHONE_SIGNIN_REFUSAL: &str = "The user is signing in to a site in this Mac's Chrome from their phone right now. Don't use the browser until they're done: carry on with what doesn't need it, or wait a few minutes and try again.";
+pub const PHONE_SIGNIN_REFUSAL: &str = concat!("The user is signing in to a site in this ", crate::computer::noun!(), "'s Chrome from their phone right now. Don't use the browser until they're done: carry on with what doesn't need it, or wait a few minutes and try again.");
 
 /// Tools that only look: they change nothing on a page or a site.
 const LOOKS: &[&str] = &[
@@ -1627,7 +1627,12 @@ pub fn describe(tool: &str, input: &Value, page: &Page) -> (String, String) {
         ),
         "file_upload" | "upload_image" => (
             format!("Upload a file {}", on(&site)),
-            "This puts a file from this Mac on the page.".into(),
+            concat!(
+                "This puts a file from this ",
+                crate::computer::noun!(),
+                " on the page."
+            )
+            .into(),
         ),
         "shortcuts_execute" => (
             "Run a Chrome shortcut".into(),

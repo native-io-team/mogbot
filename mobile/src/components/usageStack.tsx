@@ -20,7 +20,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import {
-  ADD_ON_MAC,
+  addOnComputer,
   glanceUsed,
   NEW_WORK_HERE,
   NEW_WORK_PILL,
@@ -43,6 +43,7 @@ import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import { depthOf, iconSize, keySize, meter, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { AgentKey } from './AgentKey';
 import { Button, Icon, IconButton, Segmented, StatusPill, T } from './ui';
+import { useComputer } from '../lib/computer';
 
 /** A bar's ink by what it has used: the warning role from 80% (`usedTone`), never accent. */
 const fillOf = (colors: Palette, tone: StackKey['tone']) =>
@@ -258,6 +259,7 @@ export function TotalCard({
   /** "Give agents something to do" is on this screen (a Mac that takes it from the phone). */
   spendHere?: boolean;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   // At accessibility sizes: "across 2 Max accounts" its own line (nested, it took
@@ -332,7 +334,7 @@ export function TotalCard({
             {glance.signInChanged.text}
           </T>
           <T variant="caption" color={colors.textMuted}>
-            {ADD_ON_MAC}
+            {addOnComputer(comp.kind)}
           </T>
         </View>
       )}
@@ -340,7 +342,7 @@ export function TotalCard({
         <View style={styles.low}>
           <T variant="small" color={colors.textPrimary}>
             {glance.low.text}
-            {glance.low.waitUntil ? ` ${glance.low.waitUntil}, or add an account on your Mac.` : ''}
+            {glance.low.waitUntil ? ` ${glance.low.waitUntil}, or add an account on ${comp.your}.` : ''}
           </T>
         </View>
       )}
@@ -358,7 +360,7 @@ export function TotalCard({
             <T variant="caption" color={colors.textMuted}>
               {spendHere
                 ? 'Ask your Chief of Staff to start it, or press Give agents something to do below.'
-                : 'Ask your Chief of Staff to start it, or press Give agents something to do on your Mac.'}
+                : `Ask your Chief of Staff to start it, or press Give agents something to do on ${comp.your}.`}
             </T>
           )}
         </View>
@@ -611,6 +613,7 @@ export function KeyCard({
   /** Every account listed, so its place names its engine when both are there ("Claude 2"). */
   all?: readonly StackKey[];
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const [view, setView] = useState<'limits' | 'tokens'>('limits');
@@ -678,8 +681,8 @@ export function KeyCard({
           </T>
           <T variant="caption" color={colors.textMuted}>
             {k.fix.action === 'sign_in_other'
-              ? `${SIGN_IN_DIFFERENT}${k.thisMac ? '' : ', or remove it,'} on your Mac: Agents → Usage.`
-              : 'On your Mac: Agents → Usage.'}
+              ? `${SIGN_IN_DIFFERENT}${k.thisMac ? '' : ', or remove it,'} on ${comp.your}: Agents → Usage.`
+              : `On ${comp.your}: Agents → Usage.`}
           </T>
         </View>
       )}

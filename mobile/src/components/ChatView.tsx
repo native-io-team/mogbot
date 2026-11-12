@@ -155,6 +155,7 @@ import { SelectSheet } from './SelectSheet';
 import { Starters } from './Starters';
 import { ChiefStarters, chiefGreetingOnly } from './ChiefStarters';
 import { Button, Dot, Icon, IconButton, useRipple, T } from './ui';
+import { useComputer } from '../lib/computer';
 
 const NONE: never[] = [];
 /** The header's buttons are the system's own bar buttons (round glass on iOS 26). */
@@ -242,6 +243,7 @@ export function ChatView({
   compose?: boolean;
   embedded?: boolean;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const ripple = useRipple();
@@ -266,7 +268,7 @@ export function ChatView({
   const draft = elsewhere ? undefined : liveDraft;
   const pending = useApp((s) => s.pending[id] ?? NONE);
   const connected = useApp((s) => s.link.kind === 'connected');
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
   const list = useRef<FlatList<Item>>(null);
   // Following the newest line, or let go to read back (lib/follow.ts).
   const [follow, setFollow] = useState<Follow>(FOLLOWING);

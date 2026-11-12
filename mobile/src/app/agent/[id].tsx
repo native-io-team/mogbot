@@ -93,6 +93,7 @@ import { useSwitchColors } from '../../lib/accent';
 import { withAgentAccent } from '../../lib/accentScreen';
 import { iconSize, keySize, space } from '../../lib/theme';
 import { makeStyles, useColors } from '../../lib/appearance';
+import { useComputer } from '../../lib/computer';
 
 // Its key (colourway, which also moves its chat's accent, legend and bound key)
 // changes here only on a Mac that keeps keys (MAC_FEATURES.agentKeys); an older one
@@ -100,6 +101,7 @@ import { makeStyles, useColors } from '../../lib/appearance';
 export default withAgentAccent(AgentSheet);
 
 function AgentSheet() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -458,7 +460,7 @@ function AgentSheet() {
             </View>
             {!canWhen && (
               <T variant="caption" color={colors.textMuted} style={styles.note}>
-                Set up and changed on your Mac.
+                Set up and changed on {comp.your}.
               </T>
             )}
           </>
@@ -869,6 +871,7 @@ function Conversation({
   live: boolean;
   onError: (text: string | null) => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const [busy, setBusy] = useState(false);
@@ -885,7 +888,7 @@ function Conversation({
   const unavailable = !idle
     ? `Available once ${agent.name} is done`
     : !live
-      ? 'Available once your Mac is connected'
+      ? `Available once ${comp.your} is connected`
       : undefined;
   const startNew = () => {
     setBusy(true);

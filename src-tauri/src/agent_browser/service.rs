@@ -806,8 +806,11 @@ pub fn ensure() -> Result<Arc<Service>, String> {
     if !super::settings::enabled() {
         return Err("The agents' browser is off in Settings → Agents.".into());
     }
-    let chrome = chrome::find_chrome()
-        .ok_or("Google Chrome isn't installed on this Mac, so agents have no browser of their own. Install it from google.com/chrome.")?;
+    let chrome = chrome::find_chrome().ok_or(concat!(
+        "Google Chrome isn't installed on this ",
+        crate::computer::noun!(),
+        ", so agents have no browser of their own. Install it from google.com/chrome."
+    ))?;
     let svc = launch_at(&chrome, &profile_dir(), &profile_root())?;
     *g = Some(svc.clone());
     spawn_reaper();

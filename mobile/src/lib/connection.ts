@@ -13,6 +13,7 @@ import type {
   RelaySaid,
 } from '@shipstudio/companion-protocol';
 import { formatAgo } from './agents';
+import { computerWords, type ComputerWords } from './computer';
 import type { AppState } from './store';
 
 export type Tone = 'ok' | 'problem' | 'unknown' | 'busy';
@@ -87,15 +88,15 @@ type RefusedReason = Extract<AppState['link'], { kind: 'refused' }>['reason'];
  * `unauthorized` mean the Mac let this phone go; an identity that didn't
  * check out is not a removal, and neither is a Mac that's too old.
  */
-const REFUSED_LABEL: Record<RefusedReason, string> = {
+const refusedLabel = (c: ComputerWords): Record<RefusedReason, string> => ({
   revoked: 'Not paired any more',
   unauthorized: 'Not paired any more',
-  not_your_mac: 'Not your Mac',
+  not_your_mac: `Not ${c.your}`,
   mac_reset: 'Pair again',
   pair_again: 'Pair again',
   update_app: 'Update needed',
   update_mac: 'Update needed',
-};
+});
 
 /**
  * The Mac let this phone go, or asks it to pair again: Pair again is the
@@ -112,12 +113,17 @@ export function needsPairing(link: AppState['link']): boolean {
  * reason: "once it answers" only where it might (a refusal is final until
  * someone does something). `what` is what's missing ("Your agents").
  */
-export function problemBody(link: AppState['link'], macName: string, what: string): string {
+export function problemBody(
+  link: AppState['link'],
+  macName: string,
+  what: string,
+  c: ComputerWords = computerWords()
+): string {
   if (link.kind !== 'refused')
     return `${what} are on ${macName}. Once it answers, they’ll be here.`;
   switch (link.reason) {
     case 'not_your_mac':
-      return `${what} are still on ${macName}. The server at this address couldn’t prove it’s that Mac, so nothing private was sent to it.`;
+      return `${what} are still on ${macName}. The server at this address couldn’t prove it’s that ${c.noun}, so nothing private was sent to it.`;
     case 'mac_reset':
     case 'pair_again':
     case 'revoked':
@@ -132,18 +138,19 @@ export function problemBody(link: AppState['link'], macName: string, what: strin
 
 export function pill(s: Inputs, now = Date.now()): Pill {
   const { link } = s;
-  if (link.kind === 'refused') return { tone: 'problem', label: REFUSED_LABEL[link.reason] };
+  const c = computerWords(s.mac?.computer);
+  if (link.kind === 'refused') return { tone: 'problem', label: refusedLabel(c)[link.reason] };
   if (link.kind === 'connected') {
-    if (link.stuck) return { tone: 'problem', label: 'Mac not responding' };
+    if (link.stuck) return { tone: 'problem', label: `${capNoun(c)} not responding` };
     const out = engineHealth(s).find(signedOut);
     return out
       ? { tone: 'problem', label: `${out.label} signed out` }
       : { tone: 'ok', label: 'Connected' };
   }
-  if (s.phoneOnline === false) return { tone: 'problem', label: 'Can’t reach Mac' };
+  if (s.phoneOnline === false) return { tone: 'problem', label: `Can’t reach ${c.your}` };
   // The Mac answered and said why: that, at once, whatever the calm.
   if (link.macSaid && !(link.kind === 'reconnecting' && link.macClosing)) {
-    return { tone: 'problem', label: MAC_SAID[link.macSaid].pill };
+    return { tone: 'problem', label: macSaid(c)[link.macSaid].pill };
   }
   // The first moments of trying read as calm: the phone tries every few
   // seconds with the app in front, and the Mac is usually back by then.
@@ -152,24 +159,24 @@ export function pill(s: Inputs, now = Date.now()): Pill {
   // pass by itself); offline once the calm is over (a Mac waking reconnects).
   if (link.relaySaid && !(link.kind === 'reconnecting' && link.macClosing)) {
     if (link.relaySaid === 'sign_in_needed')
-      return { tone: 'problem', label: RELAY_SAID.sign_in_needed.pill };
-    if (!calm) return { tone: 'problem', label: RELAY_SAID.mac_offline.pill };
+      return { tone: 'problem', label: relaySaid(c).sign_in_needed.pill };
+    if (!calm) return { tone: 'problem', label: relaySaid(c).mac_offline.pill };
   }
   if (link.kind === 'reconnecting') {
     // The Mac's app said it was closing (a quit, an update's restart): waiting for it isn't a fault.
     if (link.macClosing && now - link.lastSeenAt < MAC_CLOSING_WAIT_MS) {
-      return { tone: 'busy', label: 'Waiting for the app on your Mac' };
+      return { tone: 'busy', label: `Waiting for the app on ${c.your}` };
     }
     if (calm) return { tone: 'busy', label: 'Reconnecting…' };
     // A short blip reads as calm; a long one says plainly that it's not there.
     return now - link.lastSeenAt > 2 * 60_000
-      ? { tone: 'problem', label: 'Can’t reach Mac' }
+      ? { tone: 'problem', label: `Can’t reach ${c.your}` }
       : { tone: 'busy', label: `Reconnecting · last seen ${formatAgo(link.lastSeenAt, now)}` };
   }
   if (calm) return { tone: 'busy', label: 'Connecting…' };
   // A link state from before `since` existed: the old rule, by tries.
   return link.since != null || link.attempt >= 3
-    ? { tone: 'problem', label: 'Can’t reach Mac' }
+    ? { tone: 'problem', label: `Can’t reach ${c.your}` }
     : { tone: 'busy', label: 'Connecting…' };
 }
 
@@ -178,31 +185,39 @@ export function pill(s: Inputs, now = Date.now()): Pill {
  * the pill's words and the bar's: each with its one fix, none of them
  * "pair again", and each one the phone keeps trying through.
  */
-export const MAC_SAID: Record<MacSaid, { pill: string; title: string; checks: string[] }> = {
+export const macSaid = (
+  c: ComputerWords
+): Record<MacSaid, { pill: string; title: string; checks: string[] }> => ({
   other_account: {
     pill: 'Other Tailscale account',
     title: 'Tailscale on this phone is on another account',
     checks: [
-      'Open Tailscale on this phone and switch to the account it was paired on, the same account as your Mac. It reconnects by itself.',
+      `Open Tailscale on this phone and switch to the account it was paired on, the same account as ${c.your}. It reconnects by itself.`,
     ],
   },
   unavailable: {
-    pill: 'Mac’s Keychain locked',
-    title: 'Your Mac can’t open its Keychain right now',
+    pill: `${capNoun(c)}’s Keychain locked`,
+    title: `${c.yourCap} can’t open its Keychain right now`,
     checks: [
-      'Log in on your Mac: the app there needs its Keychain to prove it’s your Mac. It reconnects by itself.',
-      'If you’re logged in, quit the app on your Mac and open it again: your agents and chats are kept.',
+      `Log in on ${c.your}: the app there needs its Keychain to prove it’s ${c.your}. It reconnects by itself.`,
+      `If you’re logged in, quit the app on ${c.your} and open it again: your agents and chats are kept.`,
     ],
   },
   too_many_connections: {
-    pill: 'Mac turning phones away',
-    title: 'Your Mac has too many connections open',
+    pill: `${capNoun(c)} turning phones away`,
+    title: `${c.yourCap} has too many connections open`,
     checks: [
-      'Close the app on another phone or iPad paired with your Mac. It reconnects by itself.',
-      'If that’s not it, quit the app on your Mac and open it again: your agents and chats are kept.',
+      `Close the app on another phone or iPad paired with ${c.your}. It reconnects by itself.`,
+      `If that’s not it, quit the app on ${c.your} and open it again: your agents and chats are kept.`,
     ],
   },
-};
+});
+
+/** "Mac", "PC", "Computer": the noun at the start of a pill. */
+const capNoun = (c: ComputerWords) => c.noun.charAt(0).toUpperCase() + c.noun.slice(1);
+
+/** What the computer said, worded for a computer that hasn't said what it is. */
+export const MAC_SAID = macSaid(computerWords());
 
 /** How long trying reads as "Reconnecting…" before it may say it can't reach the Mac. */
 export const CALM_MS = 15_000;
@@ -246,38 +261,45 @@ const SAVED = ' · showing what was saved';
  * so no Tailscale advice. `sign_in_needed`: it's there but signed out, and
  * the relay carries phones only to a signed-in Mac (docs/relay.md, "Accounts").
  */
-export const RELAY_SAID: Record<RelaySaid, { pill: string; title: string; checks: string[] }> = {
+export const relaySaid = (
+  c: ComputerWords
+): Record<RelaySaid, { pill: string; title: string; checks: string[] }> => ({
   mac_offline: {
-    pill: 'Mac offline',
-    title: 'Your Mac is offline or asleep',
+    pill: `${capNoun(c)} offline`,
+    title: `${c.yourCap} is offline or asleep`,
     checks: [
-      'Wake your Mac, with the app open on it.',
-      'If your Mac is awake, check it’s online. It reconnects by itself.',
+      `Wake ${c.your}, with the app open on it.`,
+      `If ${c.your} is awake, check it’s online. It reconnects by itself.`,
     ],
   },
   sign_in_needed: {
-    pill: 'Mac not signed in',
-    title: 'Your Mac isn’t signed in',
-    checks: ['On your Mac, sign in, or use your own Tailscale instead.'],
+    pill: `${capNoun(c)} not signed in`,
+    title: `${c.yourCap} isn’t signed in`,
+    checks: [`On ${c.your}, sign in, or use your own Tailscale instead.`],
   },
-};
+});
 
-export const STUCK_CHECKS = [
-  'The app on your Mac may be stuck. Quit it and open it again: your agents and chats are kept.',
+export const stuckChecks = (c: ComputerWords) => [
+  `The app on ${c.your} may be stuck. Quit it and open it again: your agents and chats are kept.`,
   'If it’s in the middle of something big, it may catch up by itself in a minute.',
 ];
 
+/** The checks for a stuck app, worded for a computer that hasn't said what it is. */
+export const STUCK_CHECKS = stuckChecks(computerWords());
+
 export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
   const { link } = s;
+  const c = computerWords(s.mac?.computer);
+  const STUCK = stuckChecks(c);
   if (link.kind === 'refused') return null;
   if (link.kind === 'connected') {
     if (!link.stuck) return null;
     return {
       kind: 'stuck',
       tone: 'problem',
-      title: 'The app on your Mac isn’t responding',
-      detail: `Your Mac is connected, but nothing has come back since ${formatAgo(link.stuck, now)}`,
-      checks: STUCK_CHECKS,
+      title: `The app on ${c.your} isn’t responding`,
+      detail: `${c.yourCap} is connected, but nothing has come back since ${formatAgo(link.stuck, now)}`,
+      checks: STUCK,
     };
   }
   const lastSeen = link.kind === 'reconnecting' ? link.lastSeenAt : s.syncedAt || 0;
@@ -295,21 +317,21 @@ export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
   // phone that reaches it only through the relay has nothing of it to check.
   const viaTailscale = !s.credentials || s.credentials.routes.some((r) => r.kind === 'tailscale');
   const unreachable = [
-    'Your Mac may be asleep or shut. Wake it, with the app open on it.',
+    `${c.yourCap} may be asleep or shut. Wake it, with the app open on it.`,
     ...(viaTailscale
       ? [
-          'Tailscale may be off on this phone or on your Mac. Open Tailscale and check it’s on, with the same account on both.',
+          `Tailscale may be off on this phone or on ${c.your}. Open Tailscale and check it’s on, with the same account on both.`,
           // MagicDNS off on the phone: the Mac's *.ts.net name doesn't resolve,
           // which looks exactly like Tailscale being off.
-          'If Tailscale is on here, check “Use Tailscale DNS” is on in its settings: your Mac’s address is a Tailscale name.',
+          `If Tailscale is on here, check “Use Tailscale DNS” is on in its settings: ${c.yours} address is a Tailscale name.`,
         ]
       : ['This phone may not be online. Check Wi-Fi or mobile data.']),
-    'If the app on your Mac is stuck, quit it and open it again.',
+    `If the app on ${c.your} is stuck, quit it and open it again.`,
   ];
   const mac = s.mac;
   if (mac && !mac.power.keepAwake && mac.power.onBattery === 'yes') {
     const pct = mac.power.batteryPercent != null ? ` at ${mac.power.batteryPercent}%` : '';
-    unreachable[0] = `Your Mac was on battery${pct} with keep-awake off, so it may be asleep. Wake it, with the app open on it.`;
+    unreachable[0] = `${c.yourCap} was on battery${pct} with keep-awake off, so it may be asleep. Wake it, with the app open on it.`;
   }
   const stuck = !!link.appStuck;
   const p = pill(s, now);
@@ -317,23 +339,23 @@ export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
     return {
       kind: 'closing',
       tone: 'busy',
-      title: 'Waiting for the app on your Mac',
+      title: `Waiting for the app on ${c.your}`,
       detail: `It said it was closing, for an update or a restart · ${heard(lastSeen, now).toLowerCase()}`,
-      checks: ['If it isn’t back in a minute or two, open the app on your Mac.'],
+      checks: [`If it isn’t back in a minute or two, open the app on ${c.your}.`],
     };
   }
   if (link.macSaid && p.tone === 'problem') {
-    const said = MAC_SAID[link.macSaid];
+    const said = macSaid(c)[link.macSaid];
     return {
       kind: link.macSaid,
       tone: 'problem',
       title: said.title,
-      detail: `Your Mac answered · ${heard(lastSeen, now).toLowerCase()}${lastSeen ? SAVED : ''}`,
+      detail: `${c.yourCap} answered · ${heard(lastSeen, now).toLowerCase()}${lastSeen ? SAVED : ''}`,
       checks: said.checks,
     };
   }
   if (link.relaySaid && p.tone === 'problem') {
-    const said = RELAY_SAID[link.relaySaid];
+    const said = relaySaid(c)[link.relaySaid];
     return {
       kind: link.relaySaid,
       tone: 'problem',
@@ -349,24 +371,24 @@ export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
     return {
       kind: 'connecting',
       tone: 'busy',
-      title: lastSeen ? 'Reconnecting to your Mac…' : 'Connecting to your Mac…',
+      title: lastSeen ? `Reconnecting to ${c.your}…` : `Connecting to ${c.your}…`,
       detail: since,
-      checks: stuck ? STUCK_CHECKS : unreachable,
+      checks: stuck ? STUCK : unreachable,
     };
   }
   if (stuck) {
     return {
       kind: 'stuck',
       tone: 'problem',
-      title: 'The app on your Mac isn’t responding',
-      detail: `Your Mac is reachable · ${heard(lastSeen, now).toLowerCase()}${lastSeen ? SAVED : ''}`,
-      checks: STUCK_CHECKS,
+      title: `The app on ${c.your} isn’t responding`,
+      detail: `${c.yourCap} is reachable · ${heard(lastSeen, now).toLowerCase()}${lastSeen ? SAVED : ''}`,
+      checks: STUCK,
     };
   }
   return {
     kind: 'unreachable',
     tone: 'problem',
-    title: 'Can’t reach your Mac',
+    title: `Can’t reach ${c.your}`,
     detail: since,
     checks: unreachable,
   };
@@ -387,8 +409,9 @@ export function layers(
   now = Date.now()
 ): Layer[] {
   const connected = s.link.kind === 'connected';
-  const name = s.credentials?.name ?? 'your Mac';
   const mac = s.mac;
+  const c = computerWords(mac?.computer);
+  const name = s.credentials?.name ?? c.your;
   const out: Layer[] = [];
   // The link remembers only this run; after a cold start the saved copy's
   // sync time is the last the phone heard, and the agents list says so too.
@@ -404,7 +427,7 @@ export function layers(
     const route = s.link.kind === 'connected' ? s.link.route : null;
     const via = route === 'tailscale' ? 'Tailscale' : route === 'relay' ? 'the relay' : 'LAN';
     out.push({
-      title: 'Mac reachable',
+      title: `${capNoun(c)} reachable`,
       tone: 'ok',
       detail: `Over ${via}${extra.latencyMs != null ? ` · ${extra.latencyMs} ms` : ''}`,
     });
@@ -413,20 +436,20 @@ export function layers(
     // We can't know why from here; list the likely causes from the last status we had.
     const causes =
       'relaySaid' in s.link && s.link.relaySaid === 'sign_in_needed'
-        ? ['Your Mac isn’t signed in, so the relay can’t reach it']
+        ? [`${c.yourCap} isn’t signed in, so the relay can’t reach it`]
         : 'relaySaid' in s.link && s.link.relaySaid === 'mac_offline'
           ? [
-              'The relay says your Mac isn’t connected: it may be asleep, offline, or the app closed',
+              `The relay says ${c.your} isn’t connected: it may be asleep, offline, or the app closed`,
             ]
           : s.credentials && !s.credentials.routes.some((r) => r.kind === 'tailscale')
             ? ['It may be asleep, or this phone offline']
-            : ['Tailscale may be off on this phone or on the Mac'];
+            : [`Tailscale may be off on this phone or on ${c.the}`];
     if (mac && !mac.power.keepAwake && mac.power.onBattery === 'yes') {
       const pct = mac.power.batteryPercent != null ? ` at ${mac.power.batteryPercent}%` : '';
       causes.unshift(`It was on battery${pct} with keep-awake off: it may be asleep`);
     }
     out.push({
-      title: 'Mac reachable',
+      title: `${capNoun(c)} reachable`,
       tone: s.link.kind === 'connecting' && s.link.attempt < 3 ? 'unknown' : 'problem',
       detail: `${seen}. ${causes.join('. ')}.`,
     });
@@ -435,7 +458,7 @@ export function layers(
   out.push(
     mac && connected
       ? {
-          title: 'Mac awake',
+          title: `${capNoun(c)} awake`,
           tone: 'ok',
           detail: [
             mac.power.keepAwake ? 'Keep-awake on' : 'Keep-awake off',
@@ -449,11 +472,11 @@ export function layers(
             .filter(Boolean)
             .join(' · '),
         }
-      : { title: 'Mac awake', tone: 'unknown', detail: 'Unknown until it answers' }
+      : { title: `${capNoun(c)} awake`, tone: 'unknown', detail: 'Unknown until it answers' }
   );
 
   out.push({
-    title: 'App open on your Mac',
+    title: `App open on ${c.your}`,
     tone: connected ? 'ok' : 'unknown',
     detail: connected
       ? `Yes${mac ? ` · ${mac.appVersion}` : ''}`
@@ -508,6 +531,7 @@ export function engineLayers(
 
 function engineLayersLive(s: Pick<Inputs, 'mac' | 'overview'>): Layer[] {
   const engines = engineHealth(s);
+  const c = computerWords(s.mac?.computer);
   if (!engines.length) return [{ title: 'What agents run on', tone: 'unknown', detail: 'Unknown' }];
   const shown = engines.filter((e) => e.installed || e.used > 0);
   if (!shown.length) {
@@ -515,7 +539,7 @@ function engineLayersLive(s: Pick<Inputs, 'mac' | 'overview'>): Layer[] {
       {
         title: 'What agents run on',
         tone: 'problem',
-        detail: `None installed on the Mac. Install ${engines.map((e) => e.label).join(' or ')} there`,
+        detail: `None installed on ${c.the}. Install ${engines.map((e) => e.label).join(' or ')} there`,
       },
     ];
   }
@@ -524,14 +548,14 @@ function engineLayersLive(s: Pick<Inputs, 'mac' | 'overview'>): Layer[] {
       return {
         title: e.label,
         tone: 'problem',
-        detail: `Not installed on the Mac. ${plural(e.used)} can’t run until it is`,
+        detail: `Not installed on ${c.the}. ${plural(e.used)} can’t run until it is`,
       };
     }
     if (signedOut(e)) {
       return {
         title: e.label,
         tone: 'problem',
-        detail: 'Signed out. Sign in on your Mac to keep your agents working',
+        detail: `Signed out. Sign in on ${c.your} to keep your agents working`,
       };
     }
     return {

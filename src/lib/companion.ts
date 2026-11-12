@@ -10,6 +10,7 @@
 import type { CheckResult } from './onboardingFlow';
 import { invoke } from '@tauri-apps/api/core';
 import type { Device, DevicePlatform } from '../../packages/companion-protocol/src/model';
+import { THIS_COMPUTER, THIS_COMPUTER_CAP } from './computer';
 
 export type { Device };
 
@@ -242,7 +243,7 @@ export function deviceLine(
   const what = d.model ?? (d.platform === 'ios' ? 'iPhone' : 'Android phone');
   const parts = what === d.name ? [] : [what];
   parts.push(`app ${d.appVersion}`);
-  if (d.build === 'self') parts.push('built on this Mac');
+  if (d.build === 'self') parts.push(`built on ${THIS_COMPUTER}`);
   return parts.join(' · ');
 }
 
@@ -286,7 +287,7 @@ export const TAILSCALE_ANDROID_URL =
 export function phoneTailscaleSignIn(t: TailscaleState | null): string {
   return t?.state === 'connected' && t.login
     ? `sign in as ${t.login}`
-    : 'sign in with the same account as this Mac';
+    : `sign in with the same account as ${THIS_COMPUTER}`;
 }
 
 /** "Install Tailscale on your phone and sign in as julian@…." */
@@ -310,7 +311,7 @@ const DID: Record<string, string> = {
   'agents.schedule.update': 'Edited a routine',
   'agents.schedule.cancel': 'Cancelled a routine',
   'agents.schedule.runNow': 'Ran a routine now',
-  'devices.unpairSelf': 'Forgot this Mac',
+  'devices.unpairSelf': `Forgot ${THIS_COMPUTER}`,
 };
 
 /** "Sent a message · 3 min ago"; "Allowed a request", "Paused a routine". */
@@ -390,7 +391,7 @@ export function phoneTailnetCheck(
   if (!slow) return { state: 'checking', line: 'Looking for your phone on your Tailscale…' };
   return {
     state: 'waiting',
-    line: 'This Mac can’t see your phone on its Tailscale yet.',
+    line: `${THIS_COMPUTER_CAP} can’t see your phone on its Tailscale yet.`,
     fix: account
       ? `Usually the phone is signed in to another Tailscale account. It should show ${account}. “Not working?” lists what to check.`
       : 'Usually the phone is signed in to another Tailscale account. “Not working?” lists what to check.',
@@ -406,12 +407,12 @@ export function phoneTailnetTroubleSteps(t: TailscaleState | null): string[] {
   const account = t?.state === 'connected' && t.login ? t.login : null;
   return [
     account
-      ? `Same account on both. This Mac is signed in to Tailscale as ${account}. On the phone, open Tailscale and tap the account at the top: it must say ${account} too. Sign in with Apple, Google or an email each make a separate account, so sign out and sign back in as ${account} if it doesn’t match.`
-      : 'Same account on both. On the phone, open Tailscale and tap the account at the top: it must be the account this Mac is signed in with. Sign in with Apple, Google or an email each make a separate account.',
+      ? `Same account on both. ${THIS_COMPUTER_CAP} is signed in to Tailscale as ${account}. On the phone, open Tailscale and tap the account at the top: it must say ${account} too. Sign in with Apple, Google or an email each make a separate account, so sign out and sign back in as ${account} if it doesn’t match.`
+      : `Same account on both. On the phone, open Tailscale and tap the account at the top: it must be the account ${THIS_COMPUTER} is signed in with. Sign in with Apple, Google or an email each make a separate account.`,
     'Switched on. On the phone, Tailscale’s switch is on and it says Connected. If it asked to add a VPN configuration, you tapped Allow (Settings → VPN shows Tailscale as connected).',
-    'On on this Mac too. Tailscale’s icon in the menu bar says Connected.',
-    'Switch it off and on. On the phone, turn Tailscale off and back on, then give this Mac a few seconds to notice.',
-    'Look for it in Tailscale. On login.tailscale.com, under Machines, your phone should be listed with this Mac. If it isn’t there, the phone is on another account.',
+    `On on ${THIS_COMPUTER} too. Tailscale’s icon in the menu bar says Connected.`,
+    `Switch it off and on. On the phone, turn Tailscale off and back on, then give ${THIS_COMPUTER} a few seconds to notice.`,
+    `Look for it in Tailscale. On login.tailscale.com, under Machines, your phone should be listed with ${THIS_COMPUTER}. If it isn’t there, the phone is on another account.`,
     'The same Wi-Fi isn’t needed. Tailscale connects them over any network, at home or away.',
   ];
 }

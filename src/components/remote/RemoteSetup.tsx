@@ -35,6 +35,7 @@ import {
   ReadinessList,
   type RemoteCtl,
 } from './parts';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 interface Props {
   ctl: RemoteCtl;
@@ -65,8 +66,8 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
     stayOn: (
       <>
         <p className="remote-lede">
-          Your assistant doesn’t run your agents — this Mac does. If it sleeps, shuts down, loses
-          Wi-Fi, or the app quits, your assistant can’t reach it, and{' '}
+          Your assistant doesn’t run your agents — {THIS_COMPUTER} does. If it sleeps, shuts down,
+          loses Wi-Fi, or the app quits, your assistant can’t reach it, and{' '}
           <strong>nothing can wake it up from your phone</strong>.
         </p>
         <ReadinessList ctl={ctl} />
@@ -120,7 +121,7 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
               setReopened(null);
             }}
           >
-            Skip, I’ll push from this Mac
+            Skip, I’ll push from {THIS_COMPUTER}
           </Button>
         </div>
       </>

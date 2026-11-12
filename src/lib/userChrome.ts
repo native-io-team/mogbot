@@ -12,6 +12,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { THIS_COMPUTER } from './computer';
 
 export type HostState = 'missing' | 'stale' | 'current';
 
@@ -193,7 +194,7 @@ export function setupSteps(s: UserChromeStatus): SetupStep[] {
       id: 'chrome',
       title: 'Install Google Chrome',
       done: false,
-      line: 'Not done yet. Install Google Chrome on this Mac, then come back here.',
+      line: `Not done yet. Install Google Chrome on ${THIS_COMPUTER}, then come back here.`,
     });
   }
   steps.push({
@@ -315,7 +316,7 @@ export function routeWhy(now: ChromeRouteNow, agentName: string): string {
 const BLOCK_WORDS: Record<ChromeBlock, string> = {
   developer_mode: 'Developer mode',
   install: 'adding extensions like this one',
-  native_host: 'extensions talking to apps on this Mac',
+  native_host: `extensions talking to apps on ${THIS_COMPUTER}`,
 };
 
 /** What to say when Chrome's policy keeps the extension out, if it does. */
@@ -341,7 +342,7 @@ export function managedAdvice(s: UserChromeStatus, reported = false): ManagedAdv
   if (m.machine.length > 0) {
     const what = m.machine.map((b) => BLOCK_WORDS[b]).join(' and ');
     return {
-      line: `Chrome on this Mac is managed by your work, and its policy turns off ${what} in every profile, so the app’s extension can’t be added here. Ask whoever manages this Mac to allow it; until then agents use Claude in Chrome or their own browser.`,
+      line: `Chrome on ${THIS_COMPUTER} is managed by your work, and its policy turns off ${what} in every profile, so the app’s extension can’t be added here. Ask whoever manages ${THIS_COMPUTER} to allow it; until then agents use Claude in Chrome or their own browser.`,
       everyProfile: true,
     };
   }

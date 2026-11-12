@@ -5,6 +5,7 @@ import { relayOn } from '../lib/brand';
 import { lastKnownRelay } from '../lib/companion';
 import { requestSettingsTabOnOpen } from '../lib/settings';
 import { useCommands } from './useCommands';
+import { THIS_COMPUTER } from '../lib/computer';
 
 /**
  * Sign in / Sign out from ⌘K, only in a build with our hosted relay. Both
@@ -25,7 +26,7 @@ export function useAccountCommands() {
       {
         id: 'account.signIn',
         title: 'Sign in',
-        subtitle: 'Your phone reaches this Mac from anywhere',
+        subtitle: `Your phone reaches ${THIS_COMPUTER} from anywhere`,
         icon: <LoginIcon size={14} />,
         category: 'settings' as const,
         keywords: ['account', 'log in', 'google', 'email', 'relay'],

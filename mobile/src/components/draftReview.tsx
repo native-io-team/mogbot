@@ -19,6 +19,7 @@ import { useAccent, useSwitchColors } from '../lib/accent';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { fonts, lineHeight, radius, space, type } from '../lib/theme';
 import { T } from './ui';
+import { useComputer } from '../lib/computer';
 
 export function DraftReview({
   draft,
@@ -33,6 +34,7 @@ export function DraftReview({
   kept: boolean[];
   onKept: (index: number, on: boolean) => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const accent = useAccent();
@@ -76,8 +78,8 @@ export function DraftReview({
             ))}
           </View>
           <T variant="caption" color={colors.textMuted}>
-            Routines run while the app is open on your Mac. A step after your OK waits for you on
-            a card, here or on the Mac.
+            Routines run while the app is open on {comp.your}. A step after your OK waits for you on
+            a card, here or on {comp.the}.
           </T>
         </View>
       )}

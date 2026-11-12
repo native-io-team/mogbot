@@ -13,6 +13,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { formatClock } from '../../packages/companion-protocol/src/clock';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { THIS_COMPUTER_CAP } from './computer';
 
 export const SLACK_EVENT = 'agents-slack';
 
@@ -76,7 +77,7 @@ export const SLACK_TITLE = 'Slack';
 /** The line under the switch. */
 export function slackLine(s: SlackStatus | null, now = Date.now()): string {
   if (!s?.connected) {
-    return 'Start your agents from a Slack message and get the answer in the thread. This Mac reads Slack; nothing runs on a server.';
+    return `Start your agents from a Slack message and get the answer in the thread. ${THIS_COMPUTER_CAP} reads Slack; nothing runs on a server.`;
   }
   const who = [s.team, s.user].filter(Boolean).join(' as ');
   if (s.needsSignIn) {

@@ -20,8 +20,10 @@ import { currentTransport, deviceSelf, unpair } from '../lib/session';
 import { useRouter } from 'expo-router';
 import { space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
+import { useComputer } from '../lib/computer';
 
 export default function Connection() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const toneColor = useToneColor();
@@ -42,7 +44,7 @@ export default function Connection() {
   );
   const failures = (state.overview?.agents ?? []).filter((a) => a.failure);
   const router = useRouter();
-  const macName = state.credentials?.name ?? 'your Mac';
+  const macName = state.credentials?.name ?? comp.your;
   const pairAgain = needsPairing(state.link);
   // The Mac is quiet (not a refusal): the checklist first, the layers folded.
   const unreachable = !connected && state.link.kind !== 'refused';
@@ -69,7 +71,7 @@ export default function Connection() {
     <SheetPage>
       <ScrollView contentContainerStyle={styles.page}>
         <View style={styles.head}>
-          <SheetTitle>{state.credentials?.name ?? 'Your Mac'}</SheetTitle>
+          <SheetTitle>{state.credentials?.name ?? comp.yourCap}</SheetTitle>
           <View style={styles.headLine}>
             <Dot color={toneColor[p.tone]} />
             <T variant="small" color={colors.textSecondary}>

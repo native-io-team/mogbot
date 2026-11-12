@@ -64,6 +64,7 @@ import {
   type CheckResult,
   type FlowStep,
 } from '../../../lib/onboardingFlow';
+import { COMPUTER, THIS_COMPUTER } from '../../../lib/computer';
 
 export type AgentsStep = Extract<FlowStep, `agents${string}`>;
 
@@ -274,7 +275,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
         step={step}
         onBack={onBack}
         title={view.title}
-        lede={`A free app that gives this Mac a private address on your own account. ${Who} reaches your agents through it.`}
+        lede={`A free app that gives ${THIS_COMPUTER} a private address on your own account. ${Who} reaches your agents through it.`}
         primary={view.primary}
         secondary={view.secondary}
       >
@@ -313,8 +314,8 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
           title="Approve it in Tailscale"
           lede={
             opened
-              ? 'Tailscale opened its page in your browser. One OK there, once, and your assistant can reach this Mac.'
-              : 'One OK on Tailscale’s own page, once, and your assistant can reach this Mac.'
+              ? `Tailscale opened its page in your browser. One OK there, once, and your assistant can reach ${THIS_COMPUTER}.`
+              : `One OK on Tailscale’s own page, once, and your assistant can reach ${THIS_COMPUTER}.`
           }
           primary={
             <Primary
@@ -345,7 +346,7 @@ export function AgentsFlow({ step, go, onSkip, onBack }: Props) {
         step={step}
         onBack={onBack}
         title="Turn on remote access"
-        lede="It lets your assistant reach your agents on this Mac. The Mac stays awake while it’s on, so keep it plugged in while you’re away."
+        lede={`It lets your assistant reach your agents on ${THIS_COMPUTER}. The ${COMPUTER} stays awake while it’s on, so keep it plugged in while you’re away.`}
         primary={
           link.kind === 'off' ? (
             <Primary busy={busy === 'enable'} onClick={turnOn}>

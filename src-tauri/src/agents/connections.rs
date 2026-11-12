@@ -133,11 +133,19 @@ impl Connection {
     /// Where its sign-in is kept, in the UI's words.
     pub fn kept(&self) -> &'static str {
         match self.kind {
-            Kind::Oauth { .. } => "Signed in on this Mac; the token is in its Keychain",
+            Kind::Oauth { .. } => concat!(
+                "Signed in on this ",
+                crate::computer::noun!(),
+                "; the token is in its Keychain"
+            ),
             Kind::ClaudeAi { .. } => "Connected on claude.ai; the sign-in is held there",
-            Kind::Gh => "GitHub CLI sign-in on this Mac",
+            Kind::Gh => concat!("GitHub CLI sign-in on this ", crate::computer::noun!()),
             Kind::MacApp => {
-                "This Mac's own app; macOS asks once, in System Settings → Privacy & Security"
+                concat!(
+                    "This ",
+                    crate::computer::noun!(),
+                    "'s own app; macOS asks once, in System Settings → Privacy & Security"
+                )
             }
         }
     }
@@ -767,7 +775,7 @@ pub fn agents_browser_for_turn(agent: &store::Agent, outside: bool) -> bool {
     why.is_none()
 }
 
-const UNAVAILABLE: &str = "not available on this Mac";
+const UNAVAILABLE: &str = concat!("not available on this ", crate::computer::noun!());
 
 /// Why a turn goes without the agents' browser, or `None` when it gets it.
 fn agents_browser_refusal(

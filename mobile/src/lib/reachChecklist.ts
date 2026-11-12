@@ -15,6 +15,7 @@
  */
 
 import { formatAgo } from './agents';
+import { pairedComputer } from './computer';
 
 export type CheckTone = 'ok' | 'problem' | 'unknown';
 
@@ -92,6 +93,7 @@ function onlineCheck({ phoneOnline }: ReachInputs): ReachCheck {
 }
 
 function macCheck({ mac, lastSeenAt, likelyAsleep }: ReachInputs, now: number): ReachCheck {
+  const comp = pairedComputer();
   const seen = lastSeenAt ? `Last heard from ${formatAgo(lastSeenAt, now)}. ` : '';
   return {
     id: 'mac',
@@ -100,12 +102,13 @@ function macCheck({ mac, lastSeenAt, likelyAsleep }: ReachInputs, now: number): 
     status: likelyAsleep
       ? `${seen}It was on battery and allowed to sleep, so it probably is.`
       : `${seen}Can’t tell from here: asleep and closed look the same.`,
-    fix: 'Wake the Mac and open the app on it. “Keep this Mac awake” in its Settings → Agents stops it sleeping.',
+    fix: `Wake ${comp.the} and open the app on it. “Keep ${comp.this} awake” in its Settings → Agents stops it sleeping.`,
     action: null,
   };
 }
 
 function tailscaleCheck({ phoneOnline, tailscaleInstalled, diagnosis }: ReachInputs): ReachCheck {
+  const comp = pairedComputer();
   const title = 'Tailscale is on, same account on both';
   if (phoneOnline === false) {
     return {
@@ -123,7 +126,7 @@ function tailscaleCheck({ phoneOnline, tailscaleInstalled, diagnosis }: ReachInp
       title,
       tone: 'problem',
       status: 'Tailscale isn’t on this phone.',
-      fix: 'Get Tailscale, sign in with the same account as your Mac and switch it on.',
+      fix: `Get Tailscale, sign in with the same account as ${comp.your} and switch it on.`,
       action: 'get_tailscale',
     };
   }
@@ -133,7 +136,7 @@ function tailscaleCheck({ phoneOnline, tailscaleInstalled, diagnosis }: ReachInp
       title,
       tone: 'problem',
       status: 'Off on this phone, or signed in to another account.',
-      fix: 'Open Tailscale, switch it on, and check it’s the same account as your Mac.',
+      fix: `Open Tailscale, switch it on, and check it’s the same account as ${comp.your}.`,
       action: 'open_tailscale',
     };
   }
@@ -142,12 +145,13 @@ function tailscaleCheck({ phoneOnline, tailscaleInstalled, diagnosis }: ReachInp
     title,
     tone: 'unknown',
     status: 'Can’t see from here whether it’s switched on.',
-    fix: 'Open Tailscale and check it’s on, with the same account as your Mac. It needs to be on there too. If Tailscale says “Could not sign device”, your network has Tailnet Lock: sign this phone from a device you already trust, or use your Mogbot account instead of Tailscale.',
+    fix: `Open Tailscale and check it’s on, with the same account as ${comp.your}. It needs to be on there too. If Tailscale says “Could not sign device”, your network has Tailnet Lock: sign this phone from a device you already trust, or use your Mogbot account instead of Tailscale.`,
     action: 'open_tailscale',
   };
 }
 
 function pairedCheck({ mac, paired }: ReachInputs): ReachCheck {
+  const comp = pairedComputer();
   const title = 'This phone is paired';
   switch (paired.kind) {
     case 'yes':
@@ -165,7 +169,7 @@ function pairedCheck({ mac, paired }: ReachInputs): ReachCheck {
         title,
         tone: 'problem',
         status: `${mac} doesn’t know this phone any more.`,
-        fix: 'Pair again: scan a new code from the Mac.',
+        fix: `Pair again: scan a new code from ${comp.the}.`,
         action: 'pair_again',
       };
     case 'not_yet':
@@ -173,7 +177,7 @@ function pairedCheck({ mac, paired }: ReachInputs): ReachCheck {
         id: 'paired',
         title,
         tone: 'unknown',
-        status: 'Not yet: it happens once the Mac answers.',
+        status: `Not yet: it happens once ${comp.the} answers.`,
         fix: null,
         action: null,
       };

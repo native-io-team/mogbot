@@ -34,6 +34,7 @@ import {
 import { errMsg, RemoteOnBar, type RemoteCtl } from './parts';
 import { RemoteSetup } from './RemoteSetup';
 import { RemoteLive } from './RemoteLive';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 const CHOICES_KEY = 'shipstudio.remoteAccess.setup';
 const NO_CHOICES: SetupChoices = {
@@ -183,7 +184,7 @@ function RemoteAccessPanel({
   const intro = (
     <p className="remote-intro" data-testid="remote-intro">
       Let another AI assistant (Grok, ChatGPT, Claude, or any that takes custom connectors) drive
-      your agents on this Mac through a private link.{' '}
+      your agents on {THIS_COMPUTER} through a private link.{' '}
       {inline ? (
         'On your phone, the phone app above is simpler.'
       ) : (

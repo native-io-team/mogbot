@@ -16,6 +16,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { humanise } from '../../packages/companion-protocol/src/loginNames';
 import { AGENT_EVENTS, failedTurn, type Agent, type AgentMessage, type ChatItem } from './agents';
 import { scrollMotion } from './motion';
+import { THIS_COMPUTER } from './computer';
 
 export type SetupStepId = 'logins' | 'routines' | 'missing' | 'hello';
 export type SetupStepState = 'open' | 'done' | 'skipped';
@@ -399,8 +400,7 @@ export function stepWords(
     case 'logins':
       return {
         title: 'Logins',
-        detail:
-          'Checked against this Mac first: connected apps, its own sign-ins and your browser. Only what’s left is asked.',
+        detail: `Checked against ${THIS_COMPUTER} first: connected apps, its own sign-ins and your browser. Only what’s left is asked.`,
         done: 'Logins sorted',
       };
     case 'routines':
@@ -457,8 +457,9 @@ export function residueLine(later: SetupLater[]): string {
   const n = openLater(later).length;
   if (n === 0 && laterLater(later).length > 0)
     return 'Your team is ready. Nothing to sign in to now.';
-  if (n === 0) return 'Your team is ready. Everything it mentioned is reachable on this Mac.';
-  return `Your team is ready. ${n} thing${n === 1 ? '' : 's'} I couldn’t reach on this Mac:`;
+  if (n === 0)
+    return `Your team is ready. Everything it mentioned is reachable on ${THIS_COMPUTER}.`;
+  return `Your team is ready. ${n} thing${n === 1 ? '' : 's'} I couldn’t reach on ${THIS_COMPUTER}:`;
 }
 
 /** The head over the keys left for later. */

@@ -34,6 +34,7 @@ export {
   keptWhere,
   pickerAccess,
 } from '@shipstudio/companion-protocol';
+import { pairedComputer } from './computer';
 
 /* ------------------------------------------------------------- calls */
 
@@ -73,8 +74,9 @@ export async function connectAppHere(
   grants: AppGrant[],
   again?: string
 ): Promise<'sent' | 'cancelled'> {
+  const comp = pairedComputer();
   const wb = webBrowserModule();
-  if (!wb) throw new Error('This version of the app can’t sign in here. Connect it on your Mac.');
+  if (!wb) throw new Error(`This version of the app can’t sign in here. Connect it on ${comp.your}.`);
   const t = guardedTransport();
   const begun = await t.request('agents.appsPhoneBegin', {
     service,
@@ -115,13 +117,14 @@ export const appSigningIn = (live?: AppConnectFlow) =>
 
 /** The line a connect under way says, on the phone. */
 export function appFlowLine(live: AppConnectFlow, title: string): string {
+  const comp = pairedComputer();
   const flow = live.flow;
   if (!flow) return '';
   if (flow.state === 'starting') return `Getting ${title}’s sign-in ready…`;
   if (flow.state === 'waiting') {
     return flow.onPhone
       ? (flow.message ?? `${title}’s sign-in is open on your phone.`)
-      : 'Finish signing in on your Mac — it’s open there.';
+      : `Finish signing in on ${comp.your} — it’s open there.`;
   }
   if (flow.state === 'failed') return flow.message ?? 'That didn’t work. Try again.';
   return flow.message ?? 'Stopped.';

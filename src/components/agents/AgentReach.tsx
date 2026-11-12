@@ -29,6 +29,7 @@ import {
 } from '../../lib/agentLogins';
 import type { Agent } from '../../lib/agents';
 import { routeName, routeWhy } from '../../lib/userChrome';
+import { THIS_COMPUTER, THIS_COMPUTER_CAP } from '../../lib/computer';
 
 export function AgentReach({
   agent,
@@ -93,7 +94,7 @@ export function AgentReach({
       {empty && (
         <p className="agent-editor__hint">
           Nothing connected yet. When {agent.name} needs an app, it asks on a sign-in card in the
-          chat: you connect it on this Mac and it never sees a password.
+          chat: you connect it on {THIS_COMPUTER} and it never sees a password.
         </p>
       )}
       {reach && reach.connections.length > 0 && (
@@ -146,7 +147,8 @@ export function AgentReach({
           </ul>
           {reach.connections.some((c) => c.macApp) && (
             <p className="agent-editor__hint">
-              This Mac’s own apps: macOS asks once, in System Settings → Privacy &amp; Security.
+              {THIS_COMPUTER_CAP}’s own apps: macOS asks once, in System Settings → Privacy &amp;
+              Security.
             </p>
           )}
         </section>
@@ -195,7 +197,7 @@ export function AgentReach({
                   reach.browser.route?.route !== 'your_chrome' &&
                   !reach.browser.helperInstalled && (
                     <span className="agent-secrets__meta agent-reach__warn">
-                      The Claude in Chrome extension isn’t set up on this Mac yet.
+                      The Claude in Chrome extension isn’t set up on {THIS_COMPUTER} yet.
                     </span>
                   )}
               </span>

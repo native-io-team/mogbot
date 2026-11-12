@@ -15,7 +15,7 @@
 
 import {
   ADD_ACCOUNT_WHY,
-  ADD_ON_MAC,
+  addOnComputer,
   awayLine,
   awayStateOf,
   pinnedLine,
@@ -29,6 +29,7 @@ import type { AccountsState } from '../lib/accounts';
 import { useApp } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { Button, Icon, IconButton, InsetDivider, Section, StatusPill, T } from './ui';
+import { pairedKind } from '../lib/computer';
 
 /** Its room, after the state pill: "5-hour 38% used, refills 2:07 AM". */
 function roomLine(r: SwitcherRow): string {
@@ -65,7 +66,7 @@ export function AccountsSections({ state }: { state: AccountsState }) {
         <Section
           key={e.engine}
           title={several ? `${e.label} accounts` : 'Accounts'}
-          footer={ei === engines.length - 1 ? `${ADD_ACCOUNT_WHY} ${ADD_ON_MAC}` : undefined}
+          footer={ei === engines.length - 1 ? `${ADD_ACCOUNT_WHY} ${addOnComputer(pairedKind())}` : undefined}
         >
           {(() => {
             // Every account out and its agents carrying on with the other engine.

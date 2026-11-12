@@ -346,7 +346,11 @@ pub async fn begin(
         Ok(p) => p,
         Err(e) => {
             let said = format!(
-                "{} {} won't sign in from a phone, so finish on your Mac.",
+                concat!(
+                    "{} {} won't sign in from a phone, so finish on your ",
+                    crate::computer::noun!(),
+                    "."
+                ),
                 e, request.title
             );
             run.fail(said.clone());
@@ -475,9 +479,11 @@ pub(crate) async fn gh_device(run: &Run) -> Result<String, CommandError> {
     .stderr(std::process::Stdio::piped())
     .kill_on_drop(true);
     let mut child = cmd.spawn().map_err(|_| {
-        CommandError::expected(
-            "The GitHub CLI isn't installed on this Mac. ⌘K → Connect GitHub account sets it up.",
-        )
+        CommandError::expected(concat!(
+            "The GitHub CLI isn't installed on this ",
+            crate::computer::noun!(),
+            ". ⌘K → Connect GitHub account sets it up."
+        ))
     })?;
     let stderr = child.stderr.take();
     let stdout = child.stdout.take();
@@ -510,7 +516,12 @@ pub(crate) async fn gh_device(run: &Run) -> Result<String, CommandError> {
         Some(if run.origin.on_phone {
             "Type this code at github.com/login/device, on your phone or anywhere.".into()
         } else {
-            "Type this code at github.com/login/device. It's open in this Mac's browser.".into()
+            concat!(
+                "Type this code at github.com/login/device. It's open in this ",
+                crate::computer::noun!(),
+                "'s browser."
+            )
+            .into()
         }),
     );
     flow.user_code = Some(code);

@@ -26,6 +26,7 @@ import {
 } from '../../../lib/installProgress';
 import { toVisibleLines } from '../../../lib/terminalDiagnostics';
 import { stripTerminalControls } from '../../../lib/terminalPrompt';
+import { THIS_COMPUTER, YOUR_COMPUTER } from '../../../lib/computer';
 
 /** How many of the last lines the folded log keeps. */
 const LOG_LINES = 200;
@@ -171,14 +172,14 @@ export function InstallProgress({
         <form className="install-ask" onSubmit={submit} data-install-ask={prompt}>
           <label className="install-ask__label" htmlFor={fieldId}>
             {prompt === 'password'
-              ? `${name}’s installer needs your Mac password`
+              ? `${name}’s installer needs ${YOUR_COMPUTER} password`
               : 'Browser showing a code? Paste it here'}
           </label>
           {prompt === 'password' && (
             <p className="install-ask__hint">
               {itemId === 'homebrew'
                 ? 'Homebrew is a free, widely used tool that installs what Codex runs on. Like any installer, it asks for the password you log in to this Mac with. It goes straight to the installer; the app doesn’t keep it.'
-                : 'The one you log in to this Mac with. It goes straight to the installer; the app doesn’t keep it.'}
+                : `The one you log in to ${THIS_COMPUTER} with. It goes straight to the installer; the app doesn’t keep it.`}
             </p>
           )}
           <div className="install-ask__row">

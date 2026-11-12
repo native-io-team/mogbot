@@ -54,6 +54,7 @@ import { describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
 import { iconSize, radius, space } from '../lib/theme';
 import type { AppsOverview } from '@shipstudio/companion-protocol';
+import { useComputer } from '../lib/computer';
 
 /** How often the list is read again while a sign-in runs on the Mac. */
 const LIVE_MS = 2500;
@@ -61,6 +62,7 @@ const LIVE_MS = 2500;
 type Access = 'read' | 'full';
 
 export default function Apps() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const { agentId } = useLocalSearchParams<{ agentId?: string }>();
@@ -104,7 +106,7 @@ export default function Apps() {
         <SheetTitle>Apps your agents can use</SheetTitle>
         <T color={colors.textSecondary}>
           Connect an app once and choose which agents can use it. You sign in here when the app
-          allows it, or on your Mac; the sign-in stays in your Mac’s Keychain.
+          allows it, or on {comp.your}; the sign-in stays in your Mac’s Keychain.
         </T>
 
         {!sections && !error && (
@@ -113,7 +115,7 @@ export default function Apps() {
               <ActivityIndicator color={colors.textMuted} />
             ) : (
               <T variant="small" color={colors.textMuted}>
-                Needs your Mac.
+                Needs {comp.your}.
               </T>
             )}
           </View>
@@ -364,6 +366,7 @@ function ConnectRow({
   last: boolean;
   onChanged: () => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const [choosing, setChoosing] = useState(false);
   const [picked, setPicked] = useState<string[]>(initial);
@@ -415,8 +418,8 @@ function ConnectRow({
               />
               <T variant="small" color={colors.textMuted}>
                 {way === 'sheet'
-                  ? `${app.title}’s sign-in opens here. The sign-in stays on your Mac.`
-                  : `${app.title}’s sign-in opens on your Mac. Finish there.`}
+                  ? `${app.title}’s sign-in opens here. The sign-in stays on ${comp.your}.`
+                  : `${app.title}’s sign-in opens on ${comp.your}. Finish there.`}
               </T>
               <CardActions>
                 <Button
@@ -472,6 +475,7 @@ function ConnectionRow({
   last: boolean;
   onChanged: () => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const [editing, setEditing] = useState(false);
   const [picked, setPicked] = useState<string[]>(() => c.grants.map((g) => g.agentId));
@@ -513,7 +517,7 @@ function ConnectionRow({
         },
       ],
       c.kind === 'oauth'
-        ? 'No agent can use it any more, and its sign-in leaves your Mac’s Keychain.'
+        ? `No agent can use it any more, and its sign-in leaves your Mac’s Keychain.`
         : 'No agent can use it any more. It stays connected where it was signed in.'
     );
 
@@ -546,7 +550,7 @@ function ConnectionRow({
     <NeedRow
       last={last}
       title={account ? `${c.title} · ${account}` : c.title}
-      subtitle={`${keptWhere(c.kind)} · ${grantsLine(c, names)}`}
+      subtitle={`${keptWhere(c.kind, comp.kind)} · ${grantsLine(c, names)}`}
       testID={`connection-${c.connectionId}`}
       detail={
         <>

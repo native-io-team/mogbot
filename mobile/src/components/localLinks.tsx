@@ -17,6 +17,7 @@ import { useApp, useServed } from '../lib/store';
 import { iconSize, radius, space } from '../lib/theme';
 import { TextAction } from './surfaces';
 import { Icon, T } from './ui';
+import { useComputer } from '../lib/computer';
 
 /** The Mac hands out Watch live links for a reply's own links. */
 export const useCanWatchLinks = () => useServed('agents.watchLive', MAC_FEATURES.watchLinks);
@@ -45,6 +46,7 @@ function Chip({
   canWatch: boolean;
   onError: (text: string) => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const connected = useApp((s) => s.link.kind === 'connected');
@@ -58,7 +60,7 @@ function Chip({
       testID={`local-link-${index}`}
       accessible={!watchable}
       accessibilityLabel={
-        watchable ? undefined : `${named ? `${named}, ` : ''}running on your Mac at ${where}`
+        watchable ? undefined : `${named ? `${named}, ` : ''}running on ${comp.your} at ${where}`
       }
     >
       <Icon name="desktopcomputer" size={iconSize.body} color={colors.textMuted} />
@@ -69,13 +71,13 @@ function Chip({
           </T>
         )}
         <T variant="caption" color={colors.textMuted} numberOfLines={1}>
-          {`Running on your Mac · ${where}`}
+          {`Running on ${comp.your} · ${where}`}
         </T>
       </View>
       {watchable && (
         <TextAction
           label={opening ? 'Opening…' : 'Watch live'}
-          hint="Opens the site running on your Mac, read-only"
+          hint={`Opens the site running on ${comp.your}, read-only`}
           disabled={!connected || opening}
           onPress={() => {
             haptic.light();

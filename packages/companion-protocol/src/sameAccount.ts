@@ -16,6 +16,7 @@
 
 import type { AgentEngine, SignInChange } from './model';
 import { ACCOUNT_ENGINE_LABEL } from './accountSwitcher';
+import { capFirst, thisComputer, type ComputerKind } from './computer';
 
 /** The account's kind, as people call it: "a Claude account", "a ChatGPT account". */
 export const ACCOUNT_KIND: Record<AgentEngine, string> = {
@@ -86,7 +87,12 @@ export function weeklySchedule(at: number): string {
 }
 
 /** The notice, from what was recorded. `macName` names this Mac's sign-in when no email or organization was. */
-export function signInChangedText(change: SignInChange, macName: string): string {
+export function signInChangedText(
+  change: SignInChange,
+  macName: string,
+  computer?: ComputerKind | null
+): string {
+  const its = `${capFirst(thisComputer(computer))}’s`;
   const engine = ACCOUNT_ENGINE_LABEL[change.engine];
   const kind = ACCOUNT_KIND[change.engine];
   const now = change.nowEmail ?? change.nowOrgName ?? macName;
@@ -96,8 +102,8 @@ export function signInChangedText(change: SignInChange, macName: string): string
     const is = change.nowWeeklyReset
       ? `, whose week refills ${weeklySchedule(change.nowWeeklyReset)}`
       : '';
-    return `This Mac’s ${engine} is now signed in as ${now}${is}. It used to refill ${was}, so that was another ${kind} account, and it isn’t connected anymore — add it to keep stacking.`;
+    return `${its} ${engine} is now signed in as ${now}${is}. It used to refill ${was}, so that was another ${kind} account, and it isn’t connected anymore — add it to keep stacking.`;
   }
   const about = [before, was ? `refills ${was}` : null].filter(Boolean).join(', ');
-  return `This Mac’s ${engine} is now signed in as ${now}. Your previous account${about ? ` (${about})` : ''} isn’t connected anymore — add it to keep stacking.`;
+  return `${its} ${engine} is now signed in as ${now}. Your previous account${about ? ` (${about})` : ''} isn’t connected anymore — add it to keep stacking.`;
 }

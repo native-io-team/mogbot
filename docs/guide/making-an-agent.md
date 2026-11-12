@@ -10,7 +10,7 @@ the rest of your team: it creates agents, briefs them, hands them work, keeps tr
 they're doing, and deletes them when you say so. You can talk only to the Chief and let it run
 everything else.
 
-Each agent runs on Claude Code, Codex or OpenCode on your Mac, on your own accounts. You choose which
+Each agent runs on Claude Code, Codex or OpenCode on your computer, on your own accounts. You choose which
 one per agent once you have more than one set up.
 
 ## Describe the agent you want
@@ -87,8 +87,8 @@ An agent works on one thing at a time. Messages sent while it's busy wait their 
 ## Dictation
 
 Click the microphone in the message box and talk; your words appear as you speak and Enter
-finishes. Speech is recognised on your Mac. If your default microphone is a Bluetooth headset
-(AirPods and the like), dictation listens through your Mac's built-in microphone instead, so your
+finishes. Speech is recognised on your computer. If your default microphone is a Bluetooth headset
+(AirPods and the like), dictation listens through your computer's built-in microphone instead, so your
 headphones keep playing music at full quality rather than switching to call mode.
 
 ## Share an agent as a recipe

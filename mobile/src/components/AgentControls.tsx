@@ -26,7 +26,7 @@
 
 import {
   AGENT_INDEPENDENCE_TITLE,
-  INDEPENDENCE_DETAIL,
+  independenceDetail,
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
   INDEPENDENCE_STILL_ASKS,
@@ -62,8 +62,10 @@ import { choose } from './menu';
 import { IndependenceSlider } from './IndependenceSlider';
 import { SheetTitle } from './SheetTitle';
 import { Icon, Row, Section, T } from './ui';
+import { useComputer } from '../lib/computer';
 
 export function AgentControls({ agentId }: { agentId: string }) {
+  const comp = useComputer();
   const styles = useStyles();
   const colors = useColors();
   const router = useRouter();
@@ -196,7 +198,7 @@ export function AgentControls({ agentId }: { agentId: string }) {
           label="Usage"
           detail={
             mode
-              ? `${USAGE_MODE_LABEL[mode]}, for the whole team. Change it on the Mac or ask your Chief of Staff.`
+              ? `${USAGE_MODE_LABEL[mode]}, for the whole team. Change it on ${comp.the} or ask your Chief of Staff.`
               : undefined
           }
           onPress={() => router.push({ pathname: '/usage', params: { id: agent.id } })}
@@ -338,6 +340,7 @@ function LevelChoices({
   disabled: boolean;
   onError: (text: string | null) => void;
 }) {
+  const comp = useComputer();
   const styles = useStyles();
   const own = agent.independence ?? null;
   const effective = effectiveIndependence(agent, team);
@@ -354,7 +357,7 @@ function LevelChoices({
     if (level !== 'team' && rank(level) > rank(team) && rank(level) > rank(effective)) {
       Alert.alert(
         `Let ${agent.name} do more than the team?`,
-        `${INDEPENDENCE_DETAIL[level]} ${INDEPENDENCE_STILL_ASKS[level]}`,
+        `${independenceDetail(level, comp.kind)} ${INDEPENDENCE_STILL_ASKS[level]}`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: INDEPENDENCE_LABEL[level], onPress: () => apply(level) },

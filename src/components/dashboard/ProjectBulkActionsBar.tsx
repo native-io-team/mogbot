@@ -7,6 +7,7 @@
 import { Button } from '../primitives/Button';
 import { CloseIcon, TrashIcon } from '@/components/icons';
 import { projectCountLabel } from '../../hooks/useProjectBulkActions';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 interface ProjectBulkActionsBarProps {
   selectedCount: number;
@@ -57,7 +58,7 @@ export function ProjectBulkActionsBar({
           title={
             selectedIncludesExternalProject
               ? 'External projects can only be removed from your projects, not deleted'
-              : 'Delete selected project folders from this Mac'
+              : `Delete selected project folders from ${THIS_COMPUTER}`
           }
           onClick={onDelete}
         >

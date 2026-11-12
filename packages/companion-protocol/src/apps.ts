@@ -4,6 +4,8 @@
  * (`mobile/src/app/apps.tsx`) share, so the two say the same thing.
  */
 
+import { capFirst, thisComputer, type ComputerKind } from './computer';
+
 /** The two ways an agent can use an app, as both pickers label them. */
 export const ACCESS_CHOICES = [
   { value: 'read', label: 'Read only' },
@@ -20,10 +22,10 @@ export function grantNote(access: 'read' | 'full', nobody: boolean): string {
 }
 
 /** Where a connection's sign-in is kept, by its kind (`oauth`, `gh`, `claude_ai`). */
-export function keptWhere(kind: string): string {
-  if (kind === 'oauth') return 'Signed in on this Mac';
-  if (kind === 'gh') return 'GitHub CLI on this Mac';
-  if (kind === 'mac_app') return 'This Mac’s own app';
+export function keptWhere(kind: string, computer?: ComputerKind | null): string {
+  if (kind === 'oauth') return `Signed in on ${thisComputer(computer)}`;
+  if (kind === 'gh') return `GitHub CLI on ${thisComputer(computer)}`;
+  if (kind === 'mac_app') return `${capFirst(thisComputer(computer))}’s own app`;
   return 'Connected on claude.ai';
 }
 

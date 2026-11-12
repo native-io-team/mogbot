@@ -52,6 +52,7 @@ import { RemoteAccessSettingsPanel } from '../remote/RemoteAccessModal';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
+import { COMPUTER, THIS_COMPUTER } from '../../lib/computer';
 
 const selectEngines = (s: { engines: EngineInfo[] }) => s.engines;
 
@@ -83,17 +84,20 @@ export function AgentsPage({ onImport }: { onImport: () => void }) {
 
       <section className="settings-group" aria-labelledby="agents-settings-mac">
         <h3 className="settings-group__title" id="agents-settings-mac">
-          On this Mac
+          On {THIS_COMPUTER}
         </h3>
         <SectionBoundary name="desktop">
           <AgentsDesktopSettings />
         </SectionBoundary>
         {stayOn?.supported && (
           <div className="settings-section">
-            <Row label="Keep this Mac awake" description="Agents pause while the Mac sleeps.">
+            <Row
+              label={`Keep ${THIS_COMPUTER} awake`}
+              description={`Agents pause while the ${COMPUTER} sleeps.`}
+            >
               <Toggle
                 on={stayOn.keepAwake}
-                label="Keep this Mac awake"
+                label={`Keep ${THIS_COMPUTER} awake`}
                 onChange={(on) => void change({ keepAwake: on })}
               />
             </Row>
@@ -189,7 +193,7 @@ export function AccountsPage() {
       )}
       {loaded && !any && (
         <p className="settings-row-description">
-          Accounts and usage show here once Claude Code or Codex is set up on this Mac.
+          Accounts and usage show here once Claude Code or Codex is set up on {THIS_COMPUTER}.
         </p>
       )}
     </div>
@@ -258,7 +262,7 @@ export function NotificationsPage() {
           />
           <Row
             label="Your phone"
-            description="While you’re using this Mac, only this Mac notifies. Away from it, a paired phone gets the same ones."
+            description={`While you’re using ${THIS_COMPUTER}, only ${THIS_COMPUTER} notifies. Away from it, a paired phone gets the same ones.`}
           />
           <Row
             label="Dock badge"

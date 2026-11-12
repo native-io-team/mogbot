@@ -32,7 +32,7 @@ import { useApp } from '../lib/store';
 import { CARD_TITLE_SCALE, fonts, space } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { ARM_MS, Receipt, useCardStyles, useArmed } from './ApprovalCard';
-import { ACTION, Card, CardActions, OFFLINE_NOTE } from './surfaces';
+import { ACTION, Card, CardActions, offlineNote } from './surfaces';
 import { Button, T } from './ui';
 
 /** `$STRIPE_KEY`, or `$BANK_USERNAME, $BANK_PASSWORD`: what the agent gets. */
@@ -164,7 +164,7 @@ export function SecretCard({
         icon="lock.fill"
         title={`${agent.name} needs your ${secretTitle(request.name)}`}
         source={project ? `In ${project}` : undefined}
-        note={connected ? problem : OFFLINE_NOTE}
+        note={connected ? problem : offlineNote()}
         actions={
           <Button
             title="Deny"

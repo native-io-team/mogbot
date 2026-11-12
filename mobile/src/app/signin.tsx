@@ -44,7 +44,7 @@ import {
   KEYS,
   reduce,
   retryWays,
-  BEGIN_TIMEOUT_MESSAGE,
+  beginTimeoutMessage,
   BEGIN_TIMEOUT_MS,
   withTimeout,
   shownHeight,
@@ -66,8 +66,10 @@ import { describeError } from '../lib/session';
 import { iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import type { SigninInput, SigninVia } from '@shipstudio/companion-protocol';
+import { useComputer } from '../lib/computer';
 
 export default function SignInFromPhone() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -118,13 +120,13 @@ export default function SignInFromPhone() {
       },
       () => {}
     );
-    withTimeout(begin, BEGIN_TIMEOUT_MS, BEGIN_TIMEOUT_MESSAGE)
+    withTimeout(begin, BEGIN_TIMEOUT_MS, beginTimeoutMessage())
       .then((begun) => {
         if (!gone) dispatch({ t: 'begun', begun });
       })
       .catch((e) => {
         if (gone) return;
-        if ((e as Error)?.message === BEGIN_TIMEOUT_MESSAGE) gone = true;
+        if ((e as Error)?.message === beginTimeoutMessage()) gone = true;
         dispatch({ t: 'end', reason: 'failed', message: describeError(e) });
       });
     return () => {
@@ -264,7 +266,7 @@ export default function SignInFromPhone() {
   };
   const stop = async () => {
     if (session) await signinStop(session).catch(() => {});
-    dispatch({ t: 'end', reason: 'stopped', message: 'Stopped. The tab on your Mac is closed.' });
+    dispatch({ t: 'end', reason: 'stopped', message: `Stopped. The tab on ${comp.your} is closed.` });
     router.back();
   };
 
@@ -316,7 +318,7 @@ export default function SignInFromPhone() {
               onPress={onTap}
               disabled={!live}
               accessibilityRole="imagebutton"
-              accessibilityLabel="The page on your Mac"
+              accessibilityLabel={`The page on ${comp.your}`}
               accessibilityState={{ disabled: !live }}
             >
               <Image

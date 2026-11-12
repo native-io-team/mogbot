@@ -2099,7 +2099,12 @@ pub async fn handle_rpc(
         .cloned()
         .unwrap_or(serde_json::Value::Null);
     let method = message.get("method").and_then(|m| m.as_str()).unwrap_or("");
-    let ok = |result: serde_json::Value| json!({ "jsonrpc": "2.0", "id": id, "result": result });
+    // Descriptions, instructions and results name this build's computer
+    // ("this PC" on Windows; `computer`). A tool call's `input` stays exact.
+    let ok = |mut result: serde_json::Value| {
+        crate::computer::localize_json(&mut result, &["input"]);
+        json!({ "jsonrpc": "2.0", "id": id, "result": result })
+    };
     let live = lock()
         .talk
         .as_ref()

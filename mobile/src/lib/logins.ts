@@ -18,6 +18,7 @@ import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { secretRouteProblem } from './secrets';
 import { call, currentTransport, describeError } from './session';
+import { pairedComputer } from './computer';
 
 export * from './loginState';
 
@@ -129,8 +130,9 @@ export async function signInWithSheet(
   target: SheetTarget,
   optionId: string
 ): Promise<'sent' | 'cancelled'> {
+  const comp = pairedComputer();
   const wb = webBrowser();
-  if (!wb) throw new Error('This version of the app can’t sign in here. Finish on your Mac.');
+  if (!wb) throw new Error(`This version of the app can’t sign in here. Finish on ${comp.your}.`);
   const t = currentTransport();
   if (!t) throw new Error('Not paired');
   const problem = secretRouteProblem(

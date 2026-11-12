@@ -41,8 +41,10 @@ import { setApp, useApp } from '../lib/store';
 import { iconSize, keySize, space } from '../lib/theme';
 import { usePolling } from '../lib/usePolling';
 import { accountBlocks, computeView, contextMeter, usageSheet } from '../lib/usageSheet';
+import { useComputer } from '../lib/computer';
 
 export default function Usage() {
+  const comp = useComputer();
   const { id } = useLocalSearchParams<{ id: string }>();
   const styles = useStyles();
   const colors = useColors();
@@ -295,7 +297,7 @@ export default function Usage() {
           <T color={colors.textSecondary}>
             {connected
               ? 'Nothing yet. It shows after an agent’s first reply.'
-              : 'Your Mac is away. Usage shows once it’s back.'}
+              : `${comp.yourCap} is away. Usage shows once it’s back.`}
           </T>
         )}
         {!nothing && (

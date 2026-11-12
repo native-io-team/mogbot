@@ -118,6 +118,8 @@ pub struct ClaudeInfo {
 #[serde(rename_all = "camelCase")]
 pub struct MacStatus {
     pub name: String,
+    /// What to call it: "Mac", "PC" or "computer" (`crate::computer`).
+    pub computer: crate::computer::ComputerKind,
     pub app_version: String,
     pub power: PowerInfo,
     pub claude: ClaudeInfo,
@@ -287,7 +289,8 @@ impl PairResponse {
         PairResponse::Refused {
             ok: false,
             reason,
-            message: message.into(),
+            // Named for this build's computer: "this PC" on Windows (`computer`).
+            message: crate::computer::localize(&message.into()).into_owned(),
         }
     }
 }
@@ -544,7 +547,7 @@ impl WireError {
     pub fn protocol(code: ProtocolCode, message: impl Into<String>) -> Self {
         WireError::Protocol {
             code,
-            message: message.into(),
+            message: crate::computer::localize(&message.into()).into_owned(),
         }
     }
 

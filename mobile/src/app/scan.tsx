@@ -11,8 +11,10 @@ import { haptic } from '../lib/haptics';
 import { radius, space } from '../lib/theme';
 import { StatusBar } from 'expo-status-bar';
 import { makeStyles, useColors } from '../lib/appearance';
+import { useComputer } from '../lib/computer';
 
 export default function Scan() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
@@ -51,10 +53,10 @@ export default function Scan() {
       ) : (
         <View style={styles.ask}>
           <T variant="title" color={colors.textStrong} accessibilityRole="header">
-            Scan the code on your Mac
+            Scan the code on {comp.your}
           </T>
           <T color={colors.textSecondary}>
-            The camera is only used to read the code your Mac shows after you click {WHERE_TO_PAIR}.
+            The camera is only used to read the code {comp.your} shows after you click {WHERE_TO_PAIR}.
             Nothing is recorded.
           </T>
           {permission && !permission.canAskAgain ? (
@@ -72,7 +74,7 @@ export default function Scan() {
         <View pointerEvents="none" style={styles.frameWrap}>
           <View style={styles.frame} />
           <T color={colors.onMedia} style={styles.caption}>
-            {wrong ?? `Point at the code your Mac shows after you click ${WHERE_TO_PAIR}`}
+            {wrong ?? `Point at the code ${comp.your} shows after you click ${WHERE_TO_PAIR}`}
           </T>
         </View>
       )}

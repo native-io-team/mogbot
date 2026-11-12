@@ -23,6 +23,7 @@ import * as Crypto from 'expo-crypto';
 import * as Device from 'expo-device';
 import * as SecureStore from 'expo-secure-store';
 import { Linking, Platform } from 'react-native';
+import { pairedComputer } from './computer';
 
 /** Where the desk keeps the phone (its Settings section, `lib/settingsPages.ts`). */
 export const PHONE_SETTINGS = 'Settings → Phone';
@@ -78,20 +79,21 @@ export function parseLink(text: string): PairingLink | null {
 
 /** What to say about text that isn't a link this app can pair from. */
 export function linkProblem(text: string): string {
+  const comp = pairedComputer();
   const read = readLink(text);
-  const notCode = `That isn’t a pairing code. On your Mac, click ${WHERE_TO_PAIR}, then scan the code it shows.`;
+  const notCode = `That isn’t a pairing code. On ${comp.your}, click ${WHERE_TO_PAIR}, then scan the code it shows.`;
   if (read.ok) return notCode;
   switch (read.problem) {
     case 'old_mac':
-      return 'Update the app on your Mac to pair. This code comes from an older version that can’t prove it’s your Mac; once it’s updated, make a new code there.';
+      return `Update the app on ${comp.your} to pair. This code comes from an older version that can’t prove it’s ${comp.your}; once it’s updated, make a new code there.`;
     case 'renamed_mac':
       // The Mac runs a copy from before the app's last rename, which still
       // shows its old name: updating it is the fix, not this phone.
-      return 'Update the app on your Mac to pair. This code comes from an older copy, from before the app was renamed, so it shows the old name there too. Once it’s updated, make a new code there.';
+      return `Update the app on ${comp.your} to pair. This code comes from an older copy, from before the app was renamed, so it shows the old name there too. Once it’s updated, make a new code there.`;
     case 'old_phone':
-      return `Update ${brand.name} on this phone to pair: your Mac’s app is newer and reaches the phone a way this version doesn’t know. Get the latest from TestFlight or the App Store, then scan the code again.`;
+      return `Update ${brand.name} on this phone to pair: ${comp.yours} app is newer and reaches the phone a way this version doesn’t know. Get the latest from TestFlight or the App Store, then scan the code again.`;
     case 'other_app':
-      return `That code is for a different app’s phone app. In ${brand.name} on your Mac, click ${WHERE_TO_PAIR}, then scan the code it shows.`;
+      return `That code is for a different app’s phone app. In ${brand.name} on ${comp.your}, click ${WHERE_TO_PAIR}, then scan the code it shows.`;
     default:
       return notCode;
   }
@@ -103,6 +105,7 @@ export function linkProblem(text: string): string {
  * read as something it isn't, one line, at most 60 characters.
  */
 export function cleanName(raw: string): string {
+  const comp = pairedComputer();
   const clean = raw
     .replace(/\s+/g, ' ')
     // Cc, and the Cf characters that reorder or hide text.
@@ -114,7 +117,7 @@ export function cleanName(raw: string): string {
     .trim()
     .slice(0, 60)
     .trim();
-  return clean || 'your Mac';
+  return clean || comp.your;
 }
 
 /** What pairing from `link` would do to the Mac this phone has now. */
@@ -166,6 +169,7 @@ const filled = (v: unknown): v is string => typeof v === 'string' && v.length > 
  * isn't one is left out; with none left there's nothing to reach.
  */
 export function asCredentials(v: unknown): Credentials | null {
+  const comp = pairedComputer();
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
   const c = v as Record<string, unknown>;
   if (!filled(c.serverId) || !filled(c.deviceId) || !filled(c.token)) return null;
@@ -178,7 +182,7 @@ export function asCredentials(v: unknown): Credentials | null {
   if (c.fingerprint != null && typeof c.fingerprint !== 'string') return null;
   return {
     ...(c as unknown as Credentials),
-    name: filled(c.name) ? c.name : 'Your Mac',
+    name: filled(c.name) ? c.name : comp.yourCap,
     routes,
     secretKey: typeof c.secretKey === 'string' ? c.secretKey : '',
     pairedAt: typeof c.pairedAt === 'number' && Number.isFinite(c.pairedAt) ? c.pairedAt : 0,

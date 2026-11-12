@@ -10,8 +10,10 @@ import { TeamLoginsList } from '../components/teamLogins';
 import { SheetPage, T } from '../components/ui';
 import { makeStyles, useColors } from '../lib/appearance';
 import { space } from '../lib/theme';
+import { useComputer } from '../lib/computer';
 
 export default function Logins() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -20,7 +22,7 @@ export default function Logins() {
         <SheetTitle>What your team needs</SheetTitle>
         <T color={colors.textSecondary}>
           Each app once, for every agent that asked. Connect signs in from here when the app
-          allows it, or opens it on your Mac. The sign-in stays on your Mac; no password goes
+          allows it, or opens it on {comp.your}. The sign-in stays on {comp.your}; no password goes
           through a chat.
         </T>
         <TeamLoginsList />

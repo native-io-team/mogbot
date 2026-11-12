@@ -18,7 +18,7 @@ import {
   frameGap,
   FRAME_GAP_MS,
   viaLabel,
-  BEGIN_TIMEOUT_MESSAGE,
+  beginTimeoutMessage,
   BEGIN_TIMEOUT_MS,
   retryWays,
   withTimeout,
@@ -151,9 +151,9 @@ describe('the sign-in screen', () => {
     jest.useFakeTimers();
     try {
       const never = new Promise<never>(() => {});
-      const p = withTimeout(never, BEGIN_TIMEOUT_MS, BEGIN_TIMEOUT_MESSAGE);
+      const p = withTimeout(never, BEGIN_TIMEOUT_MS, beginTimeoutMessage());
       jest.advanceTimersByTime(BEGIN_TIMEOUT_MS);
-      await expect(p).rejects.toThrow(BEGIN_TIMEOUT_MESSAGE);
+      await expect(p).rejects.toThrow(beginTimeoutMessage());
       // Inside the socket's 30s, after the Mac's own 20s.
       expect(BEGIN_TIMEOUT_MS).toBeGreaterThan(20_000);
       expect(BEGIN_TIMEOUT_MS).toBeLessThan(30_000);

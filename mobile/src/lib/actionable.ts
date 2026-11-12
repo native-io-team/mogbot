@@ -38,6 +38,7 @@ import { Platform } from 'react-native';
 import { askingLine } from './agents';
 import { answersInPlace } from './needsYou';
 import type { Target } from './notify';
+import { pairedComputer } from './computer';
 
 /** Action ids, as the response hands them back. */
 export const ACTION = { allow: 'allow', deny: 'deny', review: 'review', reply: 'reply' } as const;
@@ -301,7 +302,8 @@ export interface AnswerDeps {
 export type AnswerOutcome = 'answered' | 'refused' | 'unreachable';
 
 /** Not answered: the Mac couldn't be reached in time. */
-export const UNREACHABLE = 'Your Mac didn’t answer, so nothing was sent. Open to answer it.';
+export const unreachable = () =>
+  `${pairedComputer().yourCap} didn’t answer, so nothing was sent. Open to answer it.`;
 
 /**
  * Allow or Deny from a notification. The Mac re-checks everything: the
@@ -318,11 +320,11 @@ export async function answerFromAlert(
     kind: 'approval',
   };
   if (!target.requestId) {
-    await deps.tell(back, UNREACHABLE);
+    await deps.tell(back, unreachable());
     return 'unreachable';
   }
   if (!(await deps.waitLive())) {
-    await deps.tell(back, UNREACHABLE);
+    await deps.tell(back, unreachable());
     return 'unreachable';
   }
   try {

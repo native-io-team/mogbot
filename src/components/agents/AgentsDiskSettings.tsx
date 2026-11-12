@@ -22,10 +22,11 @@ import {
   homeLine,
   type DiskOverview,
 } from '../../lib/agentsDisk';
+import { THIS_COMPUTER, THIS_COMPUTER_CAP } from '../../lib/computer';
 
 function freeLine(d: DiskOverview): string | null {
   if (d.freeBytes === null || d.level === 'fine') return null;
-  const free = `This Mac has ${formatBytes(d.freeBytes)} free.`;
+  const free = `${THIS_COMPUTER_CAP} has ${formatBytes(d.freeBytes)} free.`;
   return d.level === 'floor'
     ? `${free} Agents ask before installing packages or cloning.`
     : `${free} Agents are told to clean up before installing.`;
@@ -34,7 +35,9 @@ function freeLine(d: DiskOverview): string | null {
 /** Disk is fine and no home is large: said only when someone asked. */
 function fineLine(d: DiskOverview): string {
   const none = 'No agent’s folder is 1 GB or more.';
-  return d.freeBytes === null ? none : `This Mac has ${formatBytes(d.freeBytes)} free. ${none}`;
+  return d.freeBytes === null
+    ? none
+    : `${THIS_COMPUTER_CAP} has ${formatBytes(d.freeBytes)} free. ${none}`;
 }
 
 export function AgentsDiskSettings() {
@@ -84,7 +87,7 @@ export function AgentsDiskSettings() {
         {line && (
           <div className="settings-row" data-disk-level={data.level}>
             <div className="settings-row-info">
-              <span className="settings-row-label">On this Mac</span>
+              <span className="settings-row-label">On {THIS_COMPUTER}</span>
               <span className="settings-row-description">{line}</span>
             </div>
           </div>

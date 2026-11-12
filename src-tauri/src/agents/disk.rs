@@ -260,7 +260,11 @@ pub fn card_line() -> String {
 
 fn card_line_for(free: Option<u64>) -> String {
     format!(
-        "This Mac has {} free, under the {} floor, so installs and clones ask first.",
+        concat!(
+            "This ",
+            crate::computer::noun!(),
+            " has {} free, under the {} floor, so installs and clones ask first."
+        ),
         free.map(gb).unwrap_or_else(|| "little space".to_string()),
         gb(FLOOR_BYTES)
     )
@@ -351,11 +355,11 @@ pub fn step(said: &mut Said, free: u64, now: i64) -> Option<Crossing> {
 pub fn chief_line(c: Crossing, free: u64) -> String {
     match c {
         Crossing::Low => format!(
-            "This Mac is low on disk space: {} free. Agents are told to clean up before installing anything.",
+            concat!("This ", crate::computer::noun!(), " is low on disk space: {} free. Agents are told to clean up before installing anything."),
             gb(free)
         ),
         Crossing::Floor => format!(
-            "This Mac is nearly out of disk space: {} free. Agents now ask before installing packages or cloning. Settings → Agents shows the largest agent folders.",
+            concat!("This ", crate::computer::noun!(), " is nearly out of disk space: {} free. Agents now ask before installing packages or cloning. Settings → Agents shows the largest agent folders."),
             gb(free)
         ),
     }

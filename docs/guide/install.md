@@ -10,7 +10,7 @@ order: 1
 - One AI engine for your agents to run on. Pick at least one:
   - **Claude Code**, with a paid Claude plan (Pro or Max).
   - **Codex**, with a paid ChatGPT plan.
-  - **OpenCode**, with any provider you set up in it: an API key, or a model running on your Mac.
+  - **OpenCode**, with any provider you set up in it: an API key, or a model running on your computer.
 - For the phone app (optional): an iPhone.
 
 You don't need to install the engine first. The app does it for you.
@@ -33,14 +33,14 @@ Setup is a few short screens, one question each. You can go back at any point, a
 halfway, the app reopens where you stopped.
 
 1. **Welcome.** One line on what the app is.
-2. **Sign in?** Optional. A free account lets your phone reach your Mac from anywhere without
-   setting up Tailscale. Choose **Use without signing in** to skip it; everything on your Mac
+2. **Sign in?** Optional. A free account lets your phone reach your computer from anywhere without
+   setting up Tailscale. Choose **Use without signing in** to skip it; everything on your computer
    works the same. See [Accounts and usage](accounts-and-usage.md).
 3. **Your AI.** Pick Claude Code, Codex or OpenCode. The app installs it and walks you through
    signing in, each as its own screen. Every step ticks **Done** when the app has checked it.
    If something goes wrong, the screen says what and the one thing to do about it.
-   - The install may ask for your Mac password.
-   - Codex on a fresh Mac first installs what it needs (a package manager and Node.js).
+   - The install may ask for your computer's password.
+   - Codex on a fresh computer first installs what it needs (a package manager and Node.js).
    - Signing in opens your browser.
 
 That's the only required part. When your engine is installed and signed in, you land in a chat

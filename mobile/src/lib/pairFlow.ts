@@ -25,9 +25,10 @@ import {
   type PairingLink,
   type Route,
 } from '@shipstudio/companion-protocol';
-import { checkMac, checkPairAnswer, newChallenge, UPDATE_MAC } from './identity';
+import { checkMac, checkPairAnswer, newChallenge, updateMac } from './identity';
 import { RelayClosed, relayFetch } from './relayHttp';
 import { RELAY_NOT_YOUR_MAC } from './relaySocket';
+import { pairedComputer } from './computer';
 
 export type PairFailure =
   | { kind: 'lan_only' }
@@ -175,6 +176,7 @@ const unreachable = async (deps: PairDeps, route: Route, error?: unknown) => {
  * No answer within `IDENTITY_TIMEOUT_MS` is the same as no route: diagnosed.
  */
 export async function proveMac(link: PairingLink, route: Route, deps: PairDeps): Promise<void> {
+  const comp = pairedComputer();
   const challenge = newChallenge(deps.random);
   let res!: Answer;
   let answer: IdentityResponse | null = null;
@@ -203,9 +205,9 @@ export async function proveMac(link: PairingLink, route: Route, deps: PairDeps):
   }
   // Every Mac that can prove itself has this route; a bare 404 is one that can't.
   if (res.status === 404) {
-    throw new PairError({ kind: 'refused', reason: 'update_mac', message: UPDATE_MAC });
+    throw new PairError({ kind: 'refused', reason: 'update_mac', message: updateMac() });
   }
-  if (!res.ok) throw new PairError({ kind: 'other', message: `The Mac answered ${res.status}.` });
+  if (!res.ok) throw new PairError({ kind: 'other', message: `${comp.theCap} answered ${res.status}.` });
   if (answer && answer.ok === false) {
     throw new PairError({ kind: 'refused', reason: answer.reason, message: answer.message });
   }
@@ -222,6 +224,7 @@ export async function proveMac(link: PairingLink, route: Route, deps: PairDeps):
  * and is given up a little after that, so it can never wait forever.
  */
 export async function pairWith(link: PairingLink, deps: PairDeps): Promise<Paired> {
+  const comp = pairedComputer();
   const route = link.routes.find((r) => r.kind === 'tailscale' || r.kind === 'relay');
   if (!route) throw new PairError({ kind: 'lan_only' });
   deps.onStep?.('reaching');
@@ -254,9 +257,9 @@ export async function pairWith(link: PairingLink, deps: PairDeps): Promise<Paire
   }
   // A wrong, used or expired code is a bare 404 (the Mac says nothing more).
   if (res.status === 404) throw new PairError({ kind: 'expired' });
-  if (!res.ok) throw new PairError({ kind: 'other', message: `The Mac answered ${res.status}.` });
+  if (!res.ok) throw new PairError({ kind: 'other', message: `${comp.theCap} answered ${res.status}.` });
   if (!answer)
-    throw new PairError({ kind: 'other', message: 'The Mac’s answer couldn’t be read.' });
+    throw new PairError({ kind: 'other', message: `${comp.theCap}’s answer couldn’t be read.` });
   if (!answer.ok) {
     throw new PairError({ kind: 'refused', reason: answer.reason, message: answer.message });
   }

@@ -16,6 +16,7 @@ import {
   THEME_PREFERENCES,
   useThemePreference,
 } from '../../lib/theme';
+import { YOUR_COMPUTER } from '../../lib/computer';
 
 const OPTIONS = THEME_PREFERENCES.map((value) => ({ value, label: THEME_LABELS[value] }));
 
@@ -28,7 +29,7 @@ export function ThemeSetting() {
       <div className="settings-row-info">
         <span className="settings-row-label">Theme</span>
         <span className="settings-row-description">
-          System follows your Mac&apos;s appearance, switching when it does.
+          System follows {YOUR_COMPUTER}&apos;s appearance, switching when it does.
         </span>
       </div>
       <SegmentedControl

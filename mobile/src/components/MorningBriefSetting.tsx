@@ -21,8 +21,10 @@ import { Row, Section, tap } from './ui';
 import { haptic } from '../lib/haptics';
 import { call, describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
+import { useComputer } from '../lib/computer';
 
 export function MorningBriefSetting() {
+  const comp = useComputer();
   const canRead = useServed('agents.morningBrief');
   const canSet = useServed('agents.setMorningBrief');
   // `undefined` until the Mac answers: nothing is shown that wasn't read.
@@ -73,7 +75,7 @@ export function MorningBriefSetting() {
           ? [{ label: 'Turn off', destructive: true, run: () => void set(false, brief.at) }]
           : []),
       ],
-      'Other times: ask your Chief of Staff, or set it on your Mac.'
+      `Other times: ask your Chief of Staff, or set it on ${comp.your}.`
     );
   };
 

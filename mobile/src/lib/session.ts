@@ -92,8 +92,9 @@ import { asMessage, asOverview, asProjects, asRooms } from './wellFormed';
 // A frame the phone couldn't handle is skipped (transport.ts) and logged here.
 setTransportFaultReporter((e) => void recordCrash(e, 'js', false).catch(() => {}));
 import { DemoTransport, demoCredentials, isDemo } from './demo';
-import { newChallenge, PAIR_AGAIN } from './identity';
+import { newChallenge, pairAgain } from './identity';
 import { forgetSettledBy, readForgets, withForget, withoutForget } from './forgets';
+import { pairedComputer } from './computer';
 
 const PAGE = 50;
 let transport: DirectTransport | DemoTransport | null = null;
@@ -139,7 +140,7 @@ export async function boot() {
 function refuseUnpinned() {
   setApp({
     link: { kind: 'refused', reason: 'pair_again' },
-    refusal: { t: 'refused', reason: 'pair_again', message: PAIR_AGAIN },
+    refusal: { t: 'refused', reason: 'pair_again', message: pairAgain() },
   });
 }
 
@@ -1500,6 +1501,7 @@ function watchAttention() {
 
 /** One sentence for a failed action, in the desktop's voice. */
 export function describeError(error: unknown): string {
+  const comp = pairedComputer();
   if (!(error instanceof WireFailure)) {
     return error instanceof Error ? error.message : 'Something went wrong.';
   }
@@ -1508,14 +1510,14 @@ export function describeError(error: unknown): string {
     case 'Protocol':
       return e.message;
     case 'Timeout':
-      return 'Your Mac didn’t answer in time.';
+      return `${comp.yourCap} didn’t answer in time.`;
     case 'Validation':
       return e.reason;
     case 'NotAuthenticated':
-      return `${e.service} is signed out on your Mac.`;
+      return `${e.service} is signed out on ${comp.your}.`;
     case 'Process':
     case 'MergeConflict':
-      return 'A command on your Mac failed.';
+      return `A command on ${comp.your} failed.`;
     case 'Io':
     case 'Other':
       return e.message;

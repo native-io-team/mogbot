@@ -2142,11 +2142,14 @@ export {
   routineInPast,
   routineWhenOf,
   routineWhenPhrase,
-  ROUTINES_NEED_THE_MAC,
   scheduleWhenPhrase,
   sortCheckIns,
   splitScheduleInput,
 } from '../../packages/companion-protocol/src/schedule';
+import { routinesNeedTheComputer } from '../../packages/companion-protocol/src/schedule';
+import { HOST_COMPUTER } from './computer';
+/** "Routines run only while the app is open and this Mac/PC/computer is awake…" */
+export const ROUTINES_NEED_THE_COMPUTER = routinesNeedTheComputer(HOST_COMPUTER);
 // The routine picker, shared with the phone's schedule sheet.
 export {
   CADENCES,

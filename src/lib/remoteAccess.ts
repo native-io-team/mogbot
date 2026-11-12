@@ -22,6 +22,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { HOST_COMPUTER, THIS_COMPUTER, THIS_COMPUTER_CAP } from './computer';
 
 export type TailscaleState =
   | { state: 'notInstalled' }
@@ -124,7 +125,13 @@ export interface AuditEntry {
   ok: boolean;
 }
 
-export const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download/mac';
+/** Tailscale's download page for this desk's own system. */
+export const TAILSCALE_DOWNLOAD_URL =
+  HOST_COMPUTER === 'mac'
+    ? 'https://tailscale.com/download/mac'
+    : HOST_COMPUTER === 'pc'
+      ? 'https://tailscale.com/download/windows'
+      : 'https://tailscale.com/download/linux';
 export const TAILSCALE_MACHINES_URL = 'https://login.tailscale.com/admin/machines';
 /** Admin console → DNS, where "HTTPS Certificates" is switched on. */
 export const TAILSCALE_DNS_URL = 'https://login.tailscale.com/admin/dns';
@@ -209,7 +216,7 @@ export function readinessItems(s: ReadinessInput): ReadinessItem[] {
       id: 'power',
       state: 'warn',
       title: 'Power unknown',
-      detail: 'Couldn’t tell whether this Mac is plugged in. Make sure it is.',
+      detail: `Couldn’t tell whether ${THIS_COMPUTER} is plugged in. Make sure it is.`,
     });
   }
 
@@ -447,7 +454,7 @@ export function remoteProblem(s: RemoteAccessStatus, now: number = 0): RemotePro
     case 'installTailscale':
       return {
         id: 'tailscaleMissing',
-        line: 'Tailscale isn’t on this Mac yet. It gives this Mac its private link.',
+        line: `Tailscale isn’t on ${THIS_COMPUTER} yet. It gives ${THIS_COMPUTER} its private link.`,
         fix: 'Install Tailscale (free), open it, and sign in.',
         action: { kind: 'openUrl', label: 'Get Tailscale', url: TAILSCALE_DOWNLOAD_URL },
       };
@@ -483,7 +490,7 @@ export function remoteProblem(s: RemoteAccessStatus, now: number = 0): RemotePro
       return {
         id: 'remoteOff',
         line: 'Remote access is off.',
-        fix: 'Turn it on to give this Mac its link.',
+        fix: `Turn it on to give ${THIS_COMPUTER} its link.`,
         action: { kind: 'turnOn', label: 'Turn on remote access' },
       };
     case 'serverStopped':
@@ -503,7 +510,7 @@ export function remoteProblem(s: RemoteAccessStatus, now: number = 0): RemotePro
           }
         : {
             id: 'funnelNeedsApproval',
-            line: 'Tailscale needs your OK, once, to make this Mac’s link reachable (it calls this Funnel).',
+            line: `Tailscale needs your OK, once, to make ${THIS_COMPUTER}’s link reachable (it calls this Funnel).`,
             fix: 'Open the page, allow it, then come back. If it says only an admin can, ask whoever runs your Tailscale.',
             action: { kind: 'openUrl', label: 'Allow in Tailscale', url: step.url },
           };
@@ -519,8 +526,8 @@ export function remoteProblem(s: RemoteAccessStatus, now: number = 0): RemotePro
         case 'funnelNotAllowed':
           return {
             id: 'funnelNotAllowed',
-            line: 'Your Tailscale account doesn’t allow Funnel for this Mac.',
-            fix: 'In Access controls, add the “funnel” attribute for this Mac (an admin has to), then try again.',
+            line: `Your Tailscale account doesn’t allow Funnel for ${THIS_COMPUTER}.`,
+            fix: `In Access controls, add the “funnel” attribute for ${THIS_COMPUTER} (an admin has to), then try again.`,
             action: { kind: 'openUrl', label: 'Open Access controls', url: TAILSCALE_ACLS_URL },
           };
         case 'portNotAllowed':
@@ -533,7 +540,7 @@ export function remoteProblem(s: RemoteAccessStatus, now: number = 0): RemotePro
         case 'portsInUse':
           return {
             id: 'funnelPortsInUse',
-            line: 'Something else on this Mac is shared privately on Tailscale, and turning the link on would make it public.',
+            line: `Something else on ${THIS_COMPUTER} is shared privately on Tailscale, and turning the link on would make it public.`,
             fix: 'Stop that other share (tailscale serve) on port 443, 8443 or 10000, then try again.',
             action: { kind: 'turnOn', label: 'Try again' },
           };
@@ -587,15 +594,15 @@ export function remoteProblem(s: RemoteAccessStatus, now: number = 0): RemotePro
       if (/^public DNS lookup failed/i.test(d)) {
         return {
           id: 'cantCheckFromHere',
-          line: 'The app couldn’t check the link: this Mac couldn’t reach the internet.',
-          fix: 'Check this Mac is online, then check again.',
+          line: `The app couldn’t check the link: ${THIS_COMPUTER} couldn’t reach the internet.`,
+          fix: `Check ${THIS_COMPUTER} is online, then check again.`,
           action: recheck,
         };
       }
       if (/not this app/i.test(d)) {
         return {
           id: 'notThisApp',
-          line: 'Something else answers at this Mac’s public address.',
+          line: `Something else answers at ${THIS_COMPUTER}’s public address.`,
           fix: 'Ask Tailscale again so the link points here.',
           action: { kind: 'republish', label: 'Ask Tailscale again' },
         };
@@ -727,8 +734,8 @@ export interface SetupStep {
 }
 
 const STEP_TITLES: Record<SetupStepId, string> = {
-  stayOn: 'This Mac has to stay on',
-  connect: 'Give this Mac a private link',
+  stayOn: `${THIS_COMPUTER_CAP} has to stay on`,
+  connect: `Give ${THIS_COMPUTER} a private link`,
   projects: 'Choose what your assistant can reach',
   pushing: 'Pushing from your assistant',
   assistant: 'Connect your AI assistant',

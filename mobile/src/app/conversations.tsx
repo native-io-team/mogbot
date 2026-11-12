@@ -33,6 +33,7 @@ import { withAgentAccent } from '../lib/accentScreen';
 import { formatAgo } from '../lib/agents';
 import { fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { useComputer } from '../lib/computer';
 
 export default withAgentAccent(ConversationsSheet);
 
@@ -43,6 +44,7 @@ export default withAgentAccent(ConversationsSheet);
 const FIND_FROM = 7;
 
 function ConversationsSheet() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -121,7 +123,7 @@ function ConversationsSheet() {
             trailing={<View />}
             onPress={() => run(() => newConversation(id))}
             disabled={!connected || busy}
-            detail={connected ? undefined : 'Available once your Mac is connected'}
+            detail={connected ? undefined : `Available once ${comp.your} is connected`}
             last
           />
         </View>

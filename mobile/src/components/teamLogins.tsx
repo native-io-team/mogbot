@@ -50,6 +50,7 @@ import { CARD_TITLE_SCALE, fonts, lineHeight, space, type } from '../lib/theme';
 import { ACTION_ROW, CardActions, Line, TextAction } from './surfaces';
 import { DeclineReceiptLine, useDeclineReceipt, useRecheckWhenBack } from './loginExtras';
 import { Button, T, groupSurface } from './ui';
+import { useComputer } from '../lib/computer';
 
 /** How often the list is read again while a sign-in runs on the Mac. */
 const LIVE_MS = 2500;
@@ -70,6 +71,7 @@ export function TeamLoginsList({
   /** Inside another card: no "nothing waiting" line of its own, and no group around the rows. */
   embedded?: boolean;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const live = useApp((s) => s.link.kind === 'connected');
@@ -137,7 +139,7 @@ export function TeamLoginsList({
           <ActivityIndicator color={colors.textMuted} />
         ) : (
           <T variant="small" color={colors.textMuted}>
-            Needs your Mac.
+            Needs {comp.your}.
           </T>
         )}
       </View>
@@ -243,6 +245,7 @@ function Need({
   /** The app, declined for the whole team (a Mac that serves it). */
   onNotNeeded?: () => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const waiting = need.cards.filter((c) => c.state === 'waiting');
@@ -317,7 +320,7 @@ function Need({
             <T variant="small" color={colors.textMuted}>
               {first
                 ? phoneDetail(first, way(first), need.title)
-                : 'Nothing on your Mac can connect this. Open each agent’s card to enter a key, or mark it Not needed.'}
+                : `Nothing on ${comp.your} can connect this. Open each agent’s card to enter a key, or mark it Not needed.`}
             </T>
           </>
         )
@@ -438,13 +441,14 @@ export function NeedRow({
 
 /** A row signing in: on the Mac, or here (GitHub's code, claude.ai). */
 function RunningLine({ card }: { card?: TeamCard }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const flow = card?.flow;
   if (!flow?.onPhone) {
     return (
       <T variant="small" color={colors.textBody} testID="need-on-mac">
-        Finish signing in on your Mac — it’s open there. Everyone on this row gets it when it’s
+        Finish signing in on {comp.your} — it’s open there. Everyone on this row gets it when it’s
         done.
       </T>
     );

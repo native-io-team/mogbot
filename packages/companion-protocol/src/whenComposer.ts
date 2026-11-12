@@ -53,7 +53,7 @@ export interface WhenSourceChoice {
  * The sources, in plain words. `mac` is where it's said from: "this Mac" on
  * the desk, "your Mac" on the phone.
  */
-export function whenSources(mac: 'this Mac' | 'your Mac' = 'this Mac'): WhenSourceChoice[] {
+export function whenSources(mac: string = 'this Mac'): WhenSourceChoice[] {
   // Everyday things first (mail, texts, a folder, anything else), then the
   // ones for people who work on GitHub or Linear.
   return [
@@ -300,7 +300,7 @@ export function whenApps(
 /** The sources offered: Linear only when this agent can read a Linear app. */
 export function whenSourceChoices(
   hasLinear: boolean,
-  mac: 'this Mac' | 'your Mac' = 'this Mac'
+  mac: string = 'this Mac'
 ): WhenSourceChoice[] {
   return whenSources(mac).filter((s) => s.kind !== 'linear_assigned' || hasLinear);
 }

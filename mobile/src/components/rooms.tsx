@@ -72,6 +72,7 @@ import { RoomBars } from './ConversationBars';
 import { Icon, T, useRipple } from './ui';
 import { StackedKeys } from './RoomRow';
 import { GalleryContext, chatGallery } from '../lib/gallery';
+import { useComputer } from '../lib/computer';
 
 const NONE: never[] = [];
 
@@ -115,6 +116,7 @@ export function RoomScreen({ id }: { id: string }) {
 }
 
 function RoomChat({ id }: { id: string }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
@@ -125,7 +127,7 @@ function RoomChat({ id }: { id: string }) {
   const chat = useApp((s) => s.chats[key]);
   const pending = useApp((s) => s.pending[key] ?? NONE);
   const connected = useApp((s) => s.link.kind === 'connected');
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
   const members = useMemo(() => (room ? membersOf(room, agents) : NONE), [room, agents]);
   const drafts = useApp(
     useShallow((s) => Object.fromEntries(members.map((m) => [m.id, s.drafts[m.id]])))

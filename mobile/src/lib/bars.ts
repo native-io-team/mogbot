@@ -10,6 +10,7 @@ import {
   type AgentMessage,
   type ResultRef,
 } from '@shipstudio/companion-protocol';
+import { pairedComputer } from './computer';
 
 /**
  * The fixed order, top to bottom. The demo above everything: a sample chat
@@ -49,7 +50,7 @@ export interface BarText {
 }
 
 /** Driven by hand on the Mac (desktop Take over): the row's words, and the bar's. */
-export const drivenLine = (name: string) => `You’re driving ${name} on your Mac`;
+export const drivenLine = (name: string) => `You’re driving ${name} on ${pairedComputer().your}`;
 
 /** What a message sent while it's driven does: the desk's words. */
 export const drivenWait = (name: string) => `sends when you hand ${name} back`;
@@ -84,6 +85,7 @@ export function importBar(
   messages: AgentMessage[] | undefined,
   reviewHere = false
 ): BarText | null {
+  const comp = pairedComputer();
   for (let i = (messages?.length ?? 0) - 1; i >= 0; i--) {
     const approval = messages![i].approval;
     const connector = approval?.connector;
@@ -103,7 +105,7 @@ export function importBar(
     // The review card above says what happens; the bar only says the state.
     return reviewHere
       ? { tone: 'waiting', title: `Import from ${connector.source} · ready to review` }
-      : { tone: 'waiting', title: `Import from ${connector.source} · waiting on your Mac` };
+      : { tone: 'waiting', title: `Import from ${connector.source} · waiting on ${comp.your}` };
   }
   const going = agent.status.state !== 'idle' && IMPORTING.exec(agent.status.activity ?? '');
   if (!going) return null;

@@ -34,7 +34,7 @@ a turn moves on to the next account when one runs out.
 - Signing in opens your browser, and it signs in as whoever is already logged in to claude.ai or
   chatgpt.com there. Sign out first, or use a private window, to add a different account. If you
   add one that's already there, the app tells you and offers to try again.
-- The account you signed in with on this Mac is always first in the list. You can rename it and
+- The account you signed in with on this computer is always first in the list. You can rename it and
   move it down, but not remove it.
 - With two or more accounts, you can pick which one new work starts on, and pin an agent to one
   account.
@@ -63,21 +63,21 @@ You also get one warning per limit window when the account in use passes 90%.
 
 ## Your free Mogbot account (optional)
 
-You don't need an account to use the app. Everything on your Mac and your phone works without one.
+You don't need an account to use the app. Everything on your computer and your phone works without one.
 
-A free Mogbot account does one thing today: it lets your paired phone reach your Mac through our
+A free Mogbot account does one thing today: it lets your paired phone reach your computer through our
 hosted phone relay, from anywhere, without Tailscale. Nothing in the app checks the account or
 unlocks anything else with it.
 
 - **Sign in:** during setup, or later in **Settings → Account**. Your browser opens; sign in with
   Google or an email code, then click **Link my Mac**.
-- **What we keep:** your email and an account id, linked to your Mac's key. For the relay itself:
-  which Mac, when, the IP address and how many bytes. Never what's in them: your phone's traffic
+- **What we keep:** your email and an account id, linked to your computer's key. For the relay itself:
+  which computer, when, the IP address and how many bytes. Never what's in them: your phone's traffic
   is end to end encrypted and the relay can't read it.
-- **Sign out:** **Settings → Account → Sign out**. Your Mac is unlinked from the relay. If you set
+- **Sign out:** **Settings → Account → Sign out**. Your computer is unlinked from the relay. If you set
   up Tailscale, your phone keeps working over it.
 - **Delete your account:** **Settings → Account → Delete my account**. Your email and account id
-  are removed from the sign-in service and the relay, this Mac is signed out at once, and any other
-  Mac signed in to the same account within a day. Nothing on your Mac is deleted.
+  are removed from the sign-in service and the relay, this computer is signed out at once, and any other
+  computer signed in to the same account within a day. Nothing on your computer is deleted.
 
-Your phone doesn't sign in. It uses the relay because the Mac it's paired with is signed in.
+Your phone doesn't sign in. It uses the relay because the computer it's paired with is signed in.

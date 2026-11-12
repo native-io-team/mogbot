@@ -34,6 +34,7 @@ import {
 } from '../lib/theme';
 import { SideScroll } from './SideScroll';
 import { T } from './ui';
+import { useComputer } from '../lib/computer';
 
 /** Opens a path written in a reply; absent where paths can't be opened. */
 export const PathContext = createContext<((path: string) => void) | null>(null);
@@ -160,6 +161,7 @@ export function looksLikePath(s: string): boolean {
 }
 
 function PathText({ path, children }: { path: string; children: ReactNode }) {
+  const comp = useComputer();
   const styles = useStyles();
   const open = useContext(PathContext);
   if (!open) return <>{children}</>;
@@ -168,7 +170,7 @@ function PathText({ path, children }: { path: string; children: ReactNode }) {
       style={styles.path}
       onPress={() => open(path)}
       accessibilityRole="link"
-      accessibilityHint="Opens the file from your Mac"
+      accessibilityHint={`Opens the file from ${comp.your}`}
     >
       {children}
     </Text>

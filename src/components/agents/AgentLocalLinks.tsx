@@ -15,6 +15,7 @@ import { useAgentPreview } from './AgentPreviewContext';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { folderName, type AgentMessage, type LocalLink } from '../../lib/agents';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /** "localhost:3400": where an unknown server is, never more than that. */
 export function localWhere(link: LocalLink): string {
@@ -35,7 +36,7 @@ export function LocalLinks({ message }: { message: AgentMessage }) {
       .then(() => openUrl(url))
       .catch((error: unknown) => showToast(formatCommandError(asCommandError(error)), 'error'));
   return (
-    <ul className="agent-local-links" aria-label="Running on this Mac">
+    <ul className="agent-local-links" aria-label={`Running on ${THIS_COMPUTER}`}>
       {links.map((link, i) => {
         const known = Boolean(link.path) && preview;
         const where = link.project
@@ -54,8 +55,8 @@ export function LocalLinks({ message }: { message: AgentMessage }) {
                 {known && where
                   ? where
                   : link.label === localWhere(link)
-                    ? 'Running on this Mac'
-                    : `Running on this Mac · ${localWhere(link)}`}
+                    ? `Running on ${THIS_COMPUTER}`
+                    : `Running on ${THIS_COMPUTER} · ${localWhere(link)}`}
               </span>
             </span>
             {known ? (

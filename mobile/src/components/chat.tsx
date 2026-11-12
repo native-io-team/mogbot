@@ -69,6 +69,8 @@ import { CopyCard } from './copy';
 import { ResultCardView, useCanRevise } from './result';
 import { setComposer } from '../lib/drafts';
 import { getApp, useApp, useServed } from '../lib/store';
+import { useComputer } from '../lib/computer';
+import { pairedKind } from '../lib/computer';
 
 /**
  * "Sending…" only once a send is slow. On a quick link the Mac answers
@@ -603,7 +605,7 @@ function FailureCard({
   // The one fix, by kind, in the desk's words (`failures.ts`).
   const fix = failureFix(message.failure?.kind);
   const engine = engineName(agent);
-  const atMac = failureFixAtMac(fix, engine);
+  const atMac = failureFixAtMac(fix, engine, pairedKind());
   const project = agent.project ? folderName(agent.project) : null;
   // What Retry sends again: the words before this line, when they were
   // only words (files can't be sent again from here).
@@ -729,9 +731,10 @@ function PeerRow({ message }: { message: AgentMessage }) {
 }
 
 export function PendingRow({ pending }: { pending: PendingSend }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
   const dim = pending.failed || pending.waiting;
   const slow = useSlow(pending.ts);
   return (

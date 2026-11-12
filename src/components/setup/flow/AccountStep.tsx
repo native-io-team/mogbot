@@ -32,6 +32,7 @@ import {
   signInCheck,
   type AccountChoice,
 } from '../../../lib/account';
+import { THIS_COMPUTER } from '../../../lib/computer';
 
 export function AccountStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const { status } = useAccountStatus();
@@ -57,7 +58,7 @@ export function AccountStep({ onNext, onBack }: { onNext: () => void; onBack: ()
         step="account"
         onBack={onBack}
         title="You’re signed in"
-        lede="Your phone can reach this Mac from anywhere once it’s paired."
+        lede={`Your phone can reach ${THIS_COMPUTER} from anywhere once it’s paired.`}
         primary={<Primary onClick={() => answer('signedIn')}>Continue</Primary>}
       >
         {check && <CheckLine result={check} />}
@@ -102,7 +103,9 @@ export function AccountStep({ onNext, onBack }: { onNext: () => void; onBack: ()
       ) : (
         <p className="flow-note">
           With Google or your email, in your browser.
-          {status && !status.enabled && ' Signing in also turns on phone access on this Mac.'}
+          {status &&
+            !status.enabled &&
+            ` Signing in also turns on phone access on ${THIS_COMPUTER}.`}
         </p>
       )}
     </FlowShell>

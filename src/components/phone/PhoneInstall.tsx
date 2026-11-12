@@ -46,6 +46,7 @@ import { BuildEnded, InstallChecklist, InstallDone } from './PhoneInstallSteps';
 import { TailscaleStoreLinks } from './PhoneTailscale';
 import { phoneTailscaleText, type TailscaleState } from '../../lib/companion';
 import { phoneViaRelay } from '../../lib/account';
+import { THIS_COMPUTER, YOUR_COMPUTER } from '../../lib/computer';
 
 const PLATFORMS = [
   { value: 'ios', label: 'iPhone', ariaLabel: 'iPhone' },
@@ -136,7 +137,7 @@ function RouteChoice({ platform, tailscale, onPlatform, onBuild, onBack }: Choic
   const buildRoute = (
     <div className="phone-route">
       <div className="phone-route__body">
-        <span className="phone-route__title">Build it on this Mac</span>
+        <span className="phone-route__title">Build it on {THIS_COMPUTER}</span>
         <span className="phone-route__detail">
           Your agent builds the app and installs it over a cable, and this app checks each step.
         </span>
@@ -208,8 +209,8 @@ function PhoneTailscaleRoute({
       <div className="phone-route__body">
         <span className="phone-route__title">And Tailscale on the {NAME[platform]}</span>
         <span className="phone-route__detail">
-          {phoneTailscaleText(tailscale)} It’s how the phone reaches this Mac, so pairing waits for
-          it.
+          {phoneTailscaleText(tailscale)} It’s how the phone reaches {THIS_COMPUTER}, so pairing
+          waits for it.
         </span>
         <TailscaleStoreLinks platform={platform} />
       </div>
@@ -329,7 +330,7 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
           {reinstall ? 'Phone' : 'Other ways'}
         </TextButton>
         <span className="phone-install__where">
-          {reinstall ? 'Reinstall' : 'Build it on this Mac'} · {NAME[platform]}
+          {reinstall ? 'Reinstall' : `Build it on ${THIS_COMPUTER}`} · {NAME[platform]}
         </span>
       </div>
 
@@ -387,8 +388,8 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
                 </h3>
                 <p className="phone-install-start__text">
                   It checks what’s missing, installs it, and builds the app, stopping to tell you
-                  when something needs your hands: a tap on the phone, or your Mac password. The
-                  checklist turns green only when this app’s own checks pass.
+                  when something needs your hands: a tap on the phone, or {YOUR_COMPUTER} password.
+                  The checklist turns green only when this app’s own checks pass.
                 </p>
                 <p className="phone-install-start__note">
                   {platform !== 'ios'

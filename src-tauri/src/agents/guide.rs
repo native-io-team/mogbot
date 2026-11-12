@@ -196,11 +196,26 @@ pub fn start(app: &AppHandle, assistant: &str, record_pick: bool) -> Result<Guid
 pub fn where_line(step: Step, assistant: &str) -> String {
     let a = assistant_name(assistant);
     match step {
-        Step::Tailscale => "On your Mac: install Tailscale and sign in.".to_string(),
-        Step::Link => "On your Mac: turn on your link.".to_string(),
-        Step::Approve => "On your Mac: approve the link in Tailscale.".to_string(),
-        Step::Connect => format!("On your Mac: add your link to {a}."),
-        Step::Send => format!("On your Mac: copy the message and send it to {a}."),
+        Step::Tailscale => concat!(
+            "On your ",
+            crate::computer::noun!(),
+            ": install Tailscale and sign in."
+        )
+        .to_string(),
+        Step::Link => {
+            concat!("On your ", crate::computer::noun!(), ": turn on your link.").to_string()
+        }
+        Step::Approve => concat!(
+            "On your ",
+            crate::computer::noun!(),
+            ": approve the link in Tailscale."
+        )
+        .to_string(),
+        Step::Connect => format!("On {}: add your link to {a}.", crate::computer::YOUR),
+        Step::Send => format!(
+            "On {}: copy the message and send it to {a}.",
+            crate::computer::YOUR
+        ),
         Step::Talking => format!("{} is talking to me.", capital(a)),
     }
 }
@@ -294,7 +309,7 @@ pub fn briefing_line() -> Option<String> {
         .posted
         .last()
         .map(|s| match s {
-            Step::Tailscale => "installing Tailscale on this Mac",
+            Step::Tailscale => concat!("installing Tailscale on this ", crate::computer::noun!()),
             Step::Link => "turning on the private link (Remote Access)",
             Step::Approve => "approving the link in Tailscale",
             Step::Connect => "adding the link to the assistant as a connector",

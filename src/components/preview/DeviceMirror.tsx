@@ -57,6 +57,7 @@ import {
   usePendingDevServerConsent,
 } from '../../lib/devServerConsent';
 import { asCommandError, formatCommandError, isExpectedCommandError } from '../../lib/errors';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 interface DeviceMirrorProps {
   /** Project name, for guidance copy. */
@@ -116,8 +117,8 @@ const MOBILE_SETUP: Record<Platform, { need: string; prompt: string }> = {
   android: {
     need: 'Previewing Android apps needs the Android SDK, a JDK, and an emulator (AVD).',
     prompt:
-      "I want to preview Android apps on this Mac, but the Android toolchain isn't set " +
-      'up on this Mac. Please do the heavy lifting end-to-end without making me fiddle with ' +
+      `I want to preview Android apps on ${THIS_COMPUTER}, but the Android toolchain isn't set ` +
+      `up on ${THIS_COMPUTER}. Please do the heavy lifting end-to-end without making me fiddle with ` +
       'config: install the Android SDK command line tools (sdkmanager, platform-tools/adb, ' +
       'emulator), a recent system image, and a JDK 17 for Gradle; create an emulator (AVD); ' +
       'and set ANDROID_HOME. If Homebrew is owned by another user, install to my home ' +

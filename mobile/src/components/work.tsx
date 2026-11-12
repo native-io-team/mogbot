@@ -41,6 +41,7 @@ import { Attachments } from './attachments';
 import { Shimmer } from './Shimmer';
 import { TypingDots } from './TypingDots';
 import { Icon, T } from './ui';
+import { useComputer } from '../lib/computer';
 
 /** The chevron and its words: the same control folded and open. */
 function Toggle({
@@ -424,6 +425,7 @@ export function LiveStep({
   activity?: string | null;
   onError?: (text: string) => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const [openAt, setOpenAt] = useState<number | null>(null);
@@ -561,7 +563,7 @@ export function LiveStep({
           {quiet && canCheck && (
             <TextAction
               title="Check on it"
-              hint="Asks the Mac what it’s doing, without stopping it"
+              hint={`Asks ${comp.the} what it’s doing, without stopping it`}
               busy={busy === 'check'}
               onPress={() => void ask('check', 'agents.checkOn')}
             />

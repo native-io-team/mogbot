@@ -162,7 +162,7 @@ import {
   roleWithoutPath,
   showsStarters,
   agentKeyState,
-  ROUTINES_NEED_THE_MAC,
+  ROUTINES_NEED_THE_COMPUTER,
 } from '../../lib/agents';
 import { AgentStarters } from './AgentStarters';
 import { BlockReplyContext, type BlockReply } from './blocks/blockReply';
@@ -207,6 +207,7 @@ import { guardRow, useGuardedRows } from './AgentsErrorBoundary';
 import { AreaBoundary } from '../primitives/AreaBoundary';
 import { isRecipeFile, looksLikeRecipe } from '../../lib/agentRecipe';
 import { scrollMotion } from '../../lib/motion';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /**
  * The Chief's first open: three workflows that run without the user
@@ -246,7 +247,7 @@ function ChiefStarters({
       )}
       {picked && ideaRepeats(picked) && (
         <p className="agent-chat__starters-note">
-          {ROUTINES_NEED_THE_MAC}
+          {ROUTINES_NEED_THE_COMPUTER}
           <KeepAwakeLink />
         </p>
       )}
@@ -2336,8 +2337,8 @@ export const AgentChat = memo(function AgentChat({
                     <InfoIcon size={14} className="agent-composer__blocked-icon" />
                     <span className="agent-composer__blocked-text">
                       {engineInstalled
-                        ? `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which is signed out on this Mac.`
-                        : `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which isn’t installed on this Mac yet.`}
+                        ? `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which is signed out on ${THIS_COMPUTER}.`
+                        : `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which isn’t installed on ${THIS_COMPUTER} yet.`}
                     </span>
                     <Button tabIndex={0} variant="primary" onClick={onSetUpEngine}>
                       {engineInstalled ? 'Sign in' : `Set up ${ENGINE_LABEL[agent.engine]}`}

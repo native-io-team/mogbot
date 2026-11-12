@@ -39,6 +39,7 @@ import { StatusMark } from './agent';
 import { AgentKey } from './AgentKey';
 import { showActions } from './menu';
 import { Icon, StatusPill, useRipple, T } from './ui';
+import { useComputer } from '../lib/computer';
 
 /** How far a row's words follow Dynamic Type: past this they'd outgrow the title above them. */
 const NAME_SCALE = 2;
@@ -71,6 +72,7 @@ export const AgentRow = memo(function AgentRow({
   onPress?: () => void;
   onAction: (agent: Agent, action: AgentAction) => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const swipe = useRef<SwipeableMethods>(null);
@@ -126,7 +128,7 @@ export const AgentRow = memo(function AgentRow({
             ))
           ) : (
             <Link.MenuAction disabled onPress={() => {}}>
-              {live ? 'Nothing to change from this phone' : 'Not connected to your Mac right now.'}
+              {live ? 'Nothing to change from this phone' : `Not connected to ${comp.your} right now.`}
             </Link.MenuAction>
           )}
         </Link.Menu>

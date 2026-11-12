@@ -400,6 +400,8 @@ pub(super) async fn run_turn(
         system_prompt.push_str("\n\n");
         system_prompt.push_str(note);
     }
+    // Said in this build's words for the computer: "this PC" on Windows (`computer`).
+    let system_prompt = crate::computer::localize(&system_prompt).into_owned();
     // What it was told, for the desk's read-only "What it was told". A bound
     // agent's CLAUDE.md is in the prompt already; an unbound one's engine
     // reads it from its home.
@@ -566,7 +568,11 @@ pub(super) async fn run_turn(
         // folder it runs in went), which installing wouldn't fix.
         if std::path::Path::new(&binary).exists() {
             CommandError::expected(format!(
-                "{} couldn't start on this Mac. Retry; if it happens again, restart the app.",
+                concat!(
+                    "{} couldn't start on this ",
+                    crate::computer::noun!(),
+                    ". Retry; if it happens again, restart the app."
+                ),
                 engine.label()
             ))
         } else {

@@ -40,6 +40,7 @@ import {
   type UsageAccount,
 } from '../../lib/agentAccounts';
 import { usageGlance, type UsageGlance } from '../../lib/agentsUsage';
+import { HOST_COMPUTER } from '../../lib/computer';
 import { glanceUsed } from '../../../packages/companion-protocol/src/usageGlance';
 import {
   ranOnName,
@@ -113,6 +114,7 @@ export function useUsageGlance({ look }: { look: boolean }) {
         now,
         engines: shownEngines(engines, agents, all),
         pins: pinsOf(agents),
+        computer: HOST_COMPUTER,
       }),
     [all, inventory, now, engines, agents]
   );
@@ -208,7 +210,7 @@ export function AgentAccountChip({ agent }: { agent: Agent }) {
   if (!agent.ranOn) return null;
   const only = agent.account === agent.ranOn.id;
   // As its key is named in Usage: never "This Mac".
-  const name = ranOnName(agent);
+  const name = ranOnName(agent, HOST_COMPUTER);
   const Icon = ENGINE_ICON[agent.engine];
   const tip = only
     ? `${agent.name} runs only on ${name}. Change it in Runs on, in the … menu.`

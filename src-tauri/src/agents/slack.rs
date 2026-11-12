@@ -1576,13 +1576,17 @@ pub fn update(p: Patch) -> Result<Status, CommandError> {
 pub const REVOKE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Disconnect's line when Slack signed the token out.
-pub const REVOKED: &str = "Disconnected. Slack signed the token out, and it's gone from this Mac.";
+pub const REVOKED: &str = concat!(
+    "Disconnected. Slack signed the token out, and it's gone from this ",
+    crate::computer::noun!(),
+    "."
+);
 
 /// Disconnect's line when Slack couldn't sign it out (`why`, in the UI's
 /// words): it's gone from here all the same.
 pub fn not_revoked(why: &str) -> String {
     format!(
-        "Disconnected on this Mac, but Slack couldn't sign the token out ({}). Remove the app in Slack to be sure it's off.",
+        concat!("Disconnected on this ", crate::computer::noun!(), ", but Slack couldn't sign the token out ({}). Remove the app in Slack to be sure it's off."),
         why.trim_end_matches('.')
     )
 }
@@ -1594,7 +1598,11 @@ pub async fn sign_out(api: Option<&dyn Api>, wait: std::time::Duration) -> Optio
     Some(
         match tokio::time::timeout(wait, slack_api::revoke(api)).await {
             Ok(Ok(())) => REVOKED.to_string(),
-            Ok(Err(ApiError::Network(_))) => not_revoked("this Mac couldn't reach it"),
+            Ok(Err(ApiError::Network(_))) => not_revoked(concat!(
+                "this ",
+                crate::computer::noun!(),
+                " couldn't reach it"
+            )),
             Ok(Err(ApiError::RateLimited(_))) => not_revoked("it asked to wait"),
             Ok(Err(ApiError::Scope(s) | ApiError::Slack(s))) => {
                 not_revoked(&format!("it said “{s}”"))

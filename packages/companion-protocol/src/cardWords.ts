@@ -6,6 +6,7 @@
 
 import type { Approval, CheckInMark, StepInCard, UsageAccount } from './model';
 import { formatWhenInline } from './schedule';
+import { yourComputer, type ComputerKind } from './computer';
 
 // --- Step in (`agents/step_in.rs`) ---------------------------------------
 
@@ -15,18 +16,26 @@ export const STEP_IN_NOT_NOW = 'Not now';
 export const STEP_IN_HAND_BACK = 'Hand back';
 
 /** The phone's note on a step-in card: Step in happens at the Mac. */
-export const STEP_IN_ON_YOUR_MAC = 'Step in on your Mac: its tab opens there.';
+export const stepInOnYourComputer = (kind?: ComputerKind | null) =>
+  `Step in on ${yourComputer(kind)}: its tab opens there.`;
+
+/** The same note, worded for a Mac (the desk's older callers). */
+export const STEP_IN_ON_YOUR_MAC = stepInOnYourComputer('mac');
 
 /** The phone's note while the user is in the agent's tab at the Mac. */
-export const STEP_IN_AT_MAC = 'You’re in its browser on your Mac. Hand back there.';
+export const stepInAtComputer = (kind?: ComputerKind | null) =>
+  `You’re in its browser on ${yourComputer(kind)}. Hand back there.`;
+
+/** The same note, worded for a Mac. */
+export const STEP_IN_AT_MAC = stepInAtComputer('mac');
 
 /** The phone's note on a step-in card when this Mac lets the phone step in. */
 export const STEP_IN_FROM_HERE =
   'Its tab shows here and you do it by touch. It never sees what you type, only where the page ends up.';
 
 /** The phone's note while some phone is in the agent's tab. */
-export const stepInOnPhone = (device: string) =>
-  `${device} is in its browser. Hand back there, or on your Mac.`;
+export const stepInOnPhone = (device: string, kind?: ComputerKind | null) =>
+  `${device} is in its browser. Hand back there, or on ${yourComputer(kind)}.`;
 
 /** "You're in Research's browser", or from which phone. */
 export function stepInBarTitle(agentName: string, onPhone?: string): string {

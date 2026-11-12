@@ -33,8 +33,10 @@ import {
 } from '../lib/share';
 import { getApp, useApp } from '../lib/store';
 import { keySize, radius, space } from '../lib/theme';
+import { useComputer } from '../lib/computer';
 
 export default function Share() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
@@ -46,7 +48,7 @@ export default function Share() {
   const overview = useApp((s) => s.overview);
   const connected = useApp((s) => s.link.kind === 'connected');
   const canAttach = useApp((s) => canCall('agents.files', s.welcome));
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
   const [busy, setBusy] = useState<{ agentId: string; note: string } | null>(null);
   // Synchronous, unlike `busy`: a second tap in the same frame, on this row
   // or another, never adds the quote twice.

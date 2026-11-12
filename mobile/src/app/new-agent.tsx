@@ -65,8 +65,10 @@ import {
 import { call, canCall, createAgent, describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
 import { keySize, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { useComputer } from '../lib/computer';
 
 export default function NewAgent() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -76,7 +78,7 @@ export default function NewAgent() {
   const engines = useApp((s) => s.overview?.engines);
   const defaults = useApp((s) => s.overview?.defaults ?? null);
   const connected = useApp((s) => s.link.kind === 'connected');
-  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const macName = useApp((s) => s.credentials?.name) ?? comp.your;
   const canCreate = useApp((s) => canCall('agents.create', s.welcome));
   // The Mac's last answer while it's away; they're fetched once it's back.
   const servesTemplates = useServed('agents.templates');
@@ -413,7 +415,7 @@ export default function NewAgent() {
               <T variant="caption" color={colors.textMuted}>
                 Runs on {engine} on {macName}
                 {why ? ` (${why})` : ''}, like one made there. You can edit its instructions from
-                its agent sheet here; its model and project are set on the Mac.
+                its agent sheet here; its model and project are set on {comp.the}.
               </T>
             )}
           </>

@@ -61,7 +61,8 @@ export async function sendInOrder(
  * landed: it's no refusal, and "Not sent" would be wrong, and an edited
  * resend (a new `clientId`) a duplicate.
  */
-const MAC_DIDNT_FINISH = /^(Your Mac is busy|This Mac stopped answering|This Mac hit a fault)/;
+const MAC_DIDNT_FINISH =
+  /^(Your (Mac|PC|computer) is busy|This (Mac|PC|computer) stopped answering|This (Mac|PC|computer) hit a fault)/;
 
 /**
  * The send may not have reached the Mac (no link, no answer in time, the

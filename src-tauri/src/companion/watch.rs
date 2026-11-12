@@ -254,7 +254,11 @@ fn plain(status: StatusCode, text: &'static str) -> Response<Body> {
         .status(status)
         .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
         .header(header::CACHE_CONTROL, "no-store")
-        .body(Full::new(Bytes::from(text)).map_err(|n| match n {}).boxed())
+        .body(
+            Full::new(Bytes::from(crate::computer::localize(text).into_owned()))
+                .map_err(|n| match n {})
+                .boxed(),
+        )
         .unwrap_or_else(|_| Response::new(Full::new(Bytes::new()).map_err(|n| match n {}).boxed()))
 }
 

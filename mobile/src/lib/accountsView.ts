@@ -10,6 +10,7 @@ import {
   type AgentEngine,
   type UsageAccount,
 } from '@shipstudio/companion-protocol';
+import { pairedKind } from './computer';
 
 /** `accounts` with one engine's put in the order of `ids`; the other engine's untouched. */
 export function reordered(
@@ -49,7 +50,7 @@ type Subtitled = Pick<Agent, 'role' | 'ranOn'> & { engine?: AgentEngine };
 
 export function headerSubtitle(agent: Subtitled): string {
   // Named as its key is in Usage (`ranOnName`), never "This Mac".
-  const on = agent.ranOn ? `on ${ranOnName(agent)}` : '';
+  const on = agent.ranOn ? `on ${ranOnName(agent, pairedKind())}` : '';
   if (!agent.role) return on ? on.charAt(0).toUpperCase() + on.slice(1) : '';
   return on ? `${agent.role} · ${on}` : agent.role;
 }
@@ -66,7 +67,7 @@ export function headerSubtitleParts(agent: Subtitled): {
   if (!agent.ranOn || !agent.role)
     return { role: agent.ranOn ? '' : whole, on: agent.ranOn ? whole : '' };
   // A no-break space: a leading plain one is dropped where the two parts meet.
-  const on = `\u00a0· on ${ranOnName(agent)}`;
+  const on = `\u00a0· on ${ranOnName(agent, pairedKind())}`;
   return { role: agent.role, on };
 }
 

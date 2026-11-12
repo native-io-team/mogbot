@@ -19,24 +19,27 @@ import type {
   SigninOutcome,
   SigninVia,
 } from '@shipstudio/companion-protocol';
+import { pairedComputer } from './computer';
 
 /** The login card's line under "Sign in from here". */
 export function signinHereLine(title: string): string {
-  return `When ${title} isn’t signed in on your Mac’s Chrome: its sign-in opens there and shows here, and you sign in by touch. Nothing you type is kept.`;
+  const comp = pairedComputer();
+  return `When ${title} isn’t signed in on ${comp.yours} Chrome: its sign-in opens there and shows here, and you sign in by touch. Nothing you type is kept.`;
 }
 
 /** Where the picture comes from, under the screen's title. */
 export function viaLabel(via: SigninVia | undefined): string {
+  const comp = pairedComputer();
   switch (via) {
     case 'agents_browser':
-      return 'The agents’ browser on your Mac';
+      return `The agents’ browser on ${comp.your}`;
     case 'mac_window':
-      return 'A Chrome window on your Mac';
+      return `A Chrome window on ${comp.your}`;
     case 'chrome':
-      return 'Chrome on your Mac';
+      return `Chrome on ${comp.your}`;
     default:
       // Still opening: the Mac hasn't said which browser yet.
-      return 'Your Mac';
+      return comp.yourCap;
   }
 }
 
@@ -46,7 +49,8 @@ export function viaLabel(via: SigninVia | undefined): string {
  * answers at all, inside the socket's own 30s.
  */
 export const BEGIN_TIMEOUT_MS = 25_000;
-export const BEGIN_TIMEOUT_MESSAGE = 'Your Mac didn’t open the sign-in in time.';
+export const beginTimeoutMessage = () =>
+  `${pairedComputer().yourCap} didn’t open the sign-in in time.`;
 
 /** `p`, or a rejection with `message` after `ms`. */
 export function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
@@ -91,11 +95,12 @@ export function signinRouteProblem(
   secretProblem: string | null,
   route: { kind: string } | null
 ): string | null {
+  const comp = pairedComputer();
   if (!secretProblem) return null;
-  if (!route) return 'Your Mac isn’t connected right now. Try again when it is.';
+  if (!route) return `${comp.yourCap} isn’t connected right now. Try again when it is.`;
   if (route.kind !== 'tailscale')
-    return 'Signing in from here only works over Tailscale, which encrypts it all the way to your Mac.';
-  return 'This connection hasn’t proved it’s the Mac you paired with, so nothing you type goes to it.';
+    return `Signing in from here only works over Tailscale, which encrypts it all the way to ${comp.your}.`;
+  return `This connection hasn’t proved it’s ${comp.the} you paired with, so nothing you type goes to it.`;
 }
 
 /** How the screen ended. */
@@ -231,17 +236,18 @@ export function reduce(view: SigninView, e: SigninEvent): SigninView {
 
 /** The line under the picture, or null. */
 export function statusLine(view: SigninView): string | null {
-  if (view.phase === 'starting') return 'Opening it on your Mac…';
+  const comp = pairedComputer();
+  if (view.phase === 'starting') return `Opening it on ${comp.your}…`;
   if (view.phase === 'ended') return view.message;
   if (view.check === 'checking')
-    return view.begun.stepIn ? 'Handing it back…' : 'Checking on your Mac…';
-  if (view.switching) return 'Opening it in a plain Chrome window on your Mac…';
+    return view.begun.stepIn ? 'Handing it back…' : `Checking on ${comp.your}…`;
+  if (view.switching) return `Opening it in a plain Chrome window on ${comp.your}…`;
   if (view.frame?.state === 'blocked')
     return `${view.frame.blocked ?? 'This site won’t sign in to this window.'} Sign in another way below.`;
   if (view.check === 'signed_out')
     return 'It’s still asking you to sign in. Finish here, then Done.';
   if (view.check === 'unknown')
-    return 'Your Mac couldn’t tell whether you’re signed in. If you are, hand it over anyway.';
+    return `${comp.yourCap} couldn’t tell whether you’re signed in. If you are, hand it over anyway.`;
   if (view.frame?.state === 'outside' && view.begun.stepIn)
     return `That’s outside this step${view.frame.host ? ` (${view.frame.host})` : ''}, so it isn’t shown. Go back, or Hand back if you’re done.`;
   if (view.frame?.state === 'outside')

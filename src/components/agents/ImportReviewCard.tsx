@@ -45,6 +45,7 @@ import {
 import { ImportAgentRow, ImportSection, plural } from './ImportParts';
 import { AgentCard } from './AgentCard';
 import { INDEPENDENCE_LABEL } from '../../lib/agentIndependence';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 /** Past this, a line diff isn't drawn: both texts are shown whole instead. */
 const MAX_DIFF_CHARS = 40_000;
@@ -410,7 +411,7 @@ function ProposalRow({
           )}
           {foreignPaths.length > 0 && (
             <ImportSection
-              title={`Paths from ${source} that aren’t on this Mac · marked in its text`}
+              title={`Paths from ${source} that aren’t on ${THIS_COMPUTER} · marked in its text`}
             >
               <ul className="agents-import-agent__memory">
                 {foreignPaths.map((path) => (

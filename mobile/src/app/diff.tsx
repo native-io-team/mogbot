@@ -33,6 +33,7 @@ import { loadReviewed, setReviewed, useReviewed } from '../lib/reviewed';
 import { changeDiff, describeError } from '../lib/session';
 import { getApp, useApp } from '../lib/store';
 import { iconSize, radius, space } from '../lib/theme';
+import { useComputer } from '../lib/computer';
 
 type Loaded = { diff: FileDiff } | { error: string } | 'loading';
 type Tab = 'overview' | 'files';
@@ -62,6 +63,7 @@ export function saidBefore(messages: AgentMessage[], cardId: string): string | n
 }
 
 export default function Diff() {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
@@ -257,7 +259,7 @@ export default function Diff() {
         <View key={`b-${f.path}`} style={styles.fileBody}>
           {reviewed.has(f.path) ? null : !connected && !state ? (
             <T variant="small" color={colors.textSecondary}>
-              Opening a file’s diff needs your Mac.
+              Opening a file’s diff needs {comp.your}.
             </T>
           ) : !state || state === 'loading' ? (
             <View style={styles.pad}>

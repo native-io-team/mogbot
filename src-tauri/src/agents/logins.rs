@@ -378,9 +378,11 @@ pub(crate) fn open_in_browser(url: &str) -> Result<(), CommandError> {
         }
         Err(e) => {
             tracing::warn!(%host, error = %e, "the OS couldn't open the default browser for a sign-in");
-            Err(CommandError::expected(
-                "Couldn't open this Mac's browser. Copy the link and open it yourself.",
-            ))
+            Err(CommandError::expected(concat!(
+                "Couldn't open this ",
+                crate::computer::noun!(),
+                "'s browser. Copy the link and open it yourself."
+            )))
         }
     }
 }
@@ -883,6 +885,13 @@ fn set_flow(
     flow: Flow,
     task: Option<tokio::task::AbortHandle>,
 ) {
+    // The card's live line names this build's computer (`computer`).
+    let mut flow = flow;
+    if let Some(m) = flow.message.as_mut() {
+        if let std::borrow::Cow::Owned(o) = crate::computer::localize(m) {
+            *m = o;
+        }
+    }
     {
         let mut flows = FLOWS.lock().unwrap_or_else(|e| e.into_inner());
         let entry = flows.entry(request_id.to_string()).or_insert(Live {
@@ -1435,7 +1444,11 @@ fn mark_starting(
         return Err(CommandError::expected(if origin.from_phone {
             "It's already signing in."
         } else {
-            "It's already signing in on your Mac."
+            concat!(
+                "It's already signing in on your ",
+                crate::computer::noun!(),
+                "."
+            )
         }));
     }
     match option.method {
@@ -1748,10 +1761,13 @@ pub fn reopen(app: &AppHandle, agent_id: &str, request_id: &str) -> Result<(), C
     let flow = flow_of(request_id)
         .filter(|f| f.state == FlowState::Waiting)
         .ok_or_else(|| CommandError::expected("Nothing is waiting to sign in on this card."))?;
-    let url = flow
-        .url
-        .clone()
-        .ok_or_else(|| CommandError::expected("This sign-in isn't in this Mac's browser."))?;
+    let url = flow.url.clone().ok_or_else(|| {
+        CommandError::expected(concat!(
+            "This sign-in isn't in this ",
+            crate::computer::noun!(),
+            "'s browser."
+        ))
+    })?;
     let opened = open_in_browser(&url);
     let mut next = flow;
     next.opened_at = Some(store::now_ms());
@@ -1890,9 +1906,11 @@ pub async fn allow_from_old_client(
             )
             .await
         }
-        None => Err(CommandError::expected(
-            "This card needs a key typed in. Open it on your Mac, or update the app on your phone.",
-        )),
+        None => Err(CommandError::expected(concat!(
+            "This card needs a key typed in. Open it on your ",
+            crate::computer::noun!(),
+            ", or update the app on your phone."
+        ))),
     }
 }
 

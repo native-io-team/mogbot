@@ -15,6 +15,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ChromeRouteNow } from './userChrome';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
+import { THIS_COMPUTER } from './computer';
 
 /** `agent_browser`: the agents' own Chrome on this Mac, signed in by the person (here or from the phone). */
 export type LoginMethod =
@@ -371,12 +372,12 @@ export function flowLine(flow: LoginFlow, title: string): string {
   if (flow.state === 'starting')
     return flow.onPhone
       ? `Getting ${title}’s sign-in ready for your phone…`
-      : `Getting ${title}’s sign-in ready on this Mac…`;
+      : `Getting ${title}’s sign-in ready on ${THIS_COMPUTER}…`;
   return (
     flow.message ??
     (flow.onPhone
       ? `Signing in to ${title} on your phone.`
-      : `${title}’s sign-in is open in this Mac’s browser.`)
+      : `${title}’s sign-in is open in ${THIS_COMPUTER}’s browser.`)
   );
 }
 
@@ -389,15 +390,15 @@ export function flowLine(flow: LoginFlow, title: string): string {
 export function wayLine(option: LoginOption, title: string): string {
   switch (option.method) {
     case 'browser':
-      return 'Uses your Chrome on this Mac. It asks before anything it sends.';
+      return `Uses your Chrome on ${THIS_COMPUTER}. It asks before anything it sends.`;
     case 'agent_browser':
       return `You sign in to ${title} in the agents’ own Chrome here. It never sees your password.`;
     case 'oauth':
-      return `Opens ${title}’s sign-in in your browser. The token stays on this Mac.`;
+      return `Opens ${title}’s sign-in in your browser. The token stays on ${THIS_COMPUTER}.`;
     case 'claude_ai':
       return `Adds ${title} to your Claude account on claude.ai.`;
     case 'gh':
-      return 'Uses the GitHub sign-in on this Mac. Anything that changes GitHub asks first.';
+      return `Uses the GitHub sign-in on ${THIS_COMPUTER}. Anything that changes GitHub asks first.`;
     case 'existing':
       return 'Already connected. It gets its own permission, which you can take back.';
     case 'key':
@@ -471,7 +472,7 @@ export function teamCardLine(card: TeamCard): string {
       return card.outcome ?? 'Covered';
     default:
       if (card.flow?.state === 'waiting' || card.flow?.state === 'starting')
-        return card.flow.onPhone ? 'Signing in on your phone…' : 'Signing in on this Mac…';
+        return card.flow.onPhone ? 'Signing in on your phone…' : `Signing in on ${THIS_COMPUTER}…`;
       if (card.flow?.state === 'failed') return card.flow.message ?? 'Didn’t connect';
       return card.abilities.map((a) => a.label).join(' · ');
   }

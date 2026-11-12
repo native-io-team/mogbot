@@ -120,7 +120,12 @@ pub fn lines(engine: Engine, tools: &[&str], servers: &[Server]) -> Vec<Line> {
     match server(&is_computer_use) {
         Some(s) if s.connected => push(
             "Computer use",
-            "See and control this Mac's screen and apps.".into(),
+            concat!(
+                "See and control this ",
+                crate::computer::noun!(),
+                "'s screen and apps."
+            )
+            .into(),
         ),
         Some(_) => push("Computer use", "Not connected.".into()),
         None => {}
@@ -150,7 +155,10 @@ pub fn lines(engine: Engine, tools: &[&str], servers: &[Server]) -> Vec<Line> {
             // Codex's sandbox, as Ship Studio starts it (see `codex`).
             detail.push_str(", in Codex's sandbox: your projects and its own folder, with no network for commands");
         }
-        push("On this Mac", format!("{detail}."));
+        push(
+            concat!("On this ", crate::computer::noun!()),
+            format!("{detail}."),
+        );
     }
     let others = |connected: bool| -> Vec<&str> {
         servers
@@ -241,7 +249,7 @@ mod tests {
                 "Projects",
                 "The team",
                 "Chrome",
-                "On this Mac",
+                concat!("On this ", crate::computer::noun!()),
                 "Connectors",
                 "Needs sign-in"
             ]
@@ -257,7 +265,7 @@ mod tests {
         assert_eq!(detail("Connectors"), "Gmail and Sanity");
         assert!(detail("Needs sign-in").starts_with("webflow."));
         assert_eq!(
-            detail("On this Mac"),
+            detail(concat!("On this ", crate::computer::noun!())),
             "Run commands, read and edit files, use the web and send you files."
         );
         // Nothing listed, nothing claimed: no computer use here.

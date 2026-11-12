@@ -167,9 +167,11 @@ pub async fn discover(server_url: &str) -> Result<Discovered, CommandError> {
         }
     }
     let unreachable = || {
-        CommandError::expected(
-            "Couldn't reach that app's sign-in. Check this Mac is online and try again.",
-        )
+        CommandError::expected(concat!(
+            "Couldn't reach that app's sign-in. Check this ",
+            crate::computer::noun!(),
+            " is online and try again."
+        ))
     };
     let resource = resource.ok_or_else(unreachable)?;
     let issuer = resource

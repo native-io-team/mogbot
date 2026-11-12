@@ -29,6 +29,7 @@ import {
   PAIR_YOUR_PHONE,
   SCAN_THE_CODE,
 } from '../../../packages/companion-protocol/src/pairWords';
+import { THIS_COMPUTER } from '../../lib/computer';
 
 interface OfferProps {
   busy: boolean;
@@ -105,7 +106,7 @@ export function PairCode({
           {!viaRelay && (
             <li data-tailscale>
               <span className="phone-code__step-strong">{phoneTailscaleText(tailscale)}</span>{' '}
-              Switch it on: it’s how the phone reaches this Mac.
+              Switch it on: it’s how the phone reaches {THIS_COMPUTER}.
               <TailscaleStoreLinks />
             </li>
           )}
@@ -121,8 +122,8 @@ export function PairCode({
         </ol>
         {reachedAt !== undefined && (
           <span className="phone-code__reached" role="status" data-testid="phone-code-reached">
-            <Spinner size="sm" />A device reached this Mac at {timeOf(reachedAt)}. Waiting for it to
-            send the code…
+            <Spinner size="sm" />A device reached {THIS_COMPUTER} at {timeOf(reachedAt)}. Waiting
+            for it to send the code…
           </span>
         )}
         <span className="phone-code__expiry">{left ? `Works once, for ${left}` : 'Expired'}</span>

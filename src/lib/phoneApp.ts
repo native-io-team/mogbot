@@ -17,6 +17,7 @@
 
 import { BRAND_LINKS, relayOn } from './brand';
 import { COMPANION_INSTALL_ENABLED } from './companionInstall';
+import { THIS_COMPUTER } from './computer';
 
 export type PhoneAppRoute = 'store' | 'testflight' | 'build' | 'none';
 
@@ -60,8 +61,8 @@ export const GET_ON_TESTFLIGHT = 'Get it on TestFlight';
  */
 export function phoneRouteLine(relay = relayOn()): string {
   return relay
-    ? 'Your phone reaches this Mac through a free sign-in here, or your own Tailscale.'
-    : 'Your phone talks only to this Mac, through Tailscale on both.';
+    ? `Your phone reaches ${THIS_COMPUTER} through a free sign-in here, or your own Tailscale.`
+    : `Your phone talks only to ${THIS_COMPUTER}, through Tailscale on both.`;
 }
 
 /** The Chief's phone card's one line, honest about the time for each route. */
@@ -69,9 +70,9 @@ export function phoneOfferNote(route: PhoneAppRoute, relay = relayOn()): string 
   const how = phoneRouteLine(relay);
   switch (route) {
     case 'store':
-      return `Chat, answer and approve from anywhere. Get the free app from the App Store, then scan a code from this Mac. ${how}`;
+      return `Chat, answer and approve from anywhere. Get the free app from the App Store, then scan a code from ${THIS_COMPUTER}. ${how}`;
     case 'testflight':
-      return `Chat, answer and approve from anywhere. Get the free beta from TestFlight, then scan a code from this Mac. ${how}`;
+      return `Chat, answer and approve from anywhere. Get the free beta from TestFlight, then scan a code from ${THIS_COMPUTER}. ${how}`;
     case 'build':
       return `Chat, answer and approve from anywhere. ${how} There’s no App Store app yet, so setting it up takes ten minutes to an hour.`;
     case 'none':

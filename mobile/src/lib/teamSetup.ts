@@ -17,6 +17,7 @@ import type {
   TeamSetupView,
 } from '@shipstudio/companion-protocol';
 import { humanise } from '@shipstudio/companion-protocol';
+import { pairedComputer } from './computer';
 
 export const SETUP_TITLE = 'Setting up your team';
 
@@ -31,13 +32,14 @@ export const stepTitle = (id: TeamSetupStepId) => TITLES[id];
 
 /** The line under an open step's title: what it is, and that it's in hand. */
 export function stepHint(step: TeamSetupStep, chief: string): string {
+  const comp = pairedComputer();
   switch (step.id) {
     case 'logins':
       return step.later?.length
-        ? 'Your Mac checked what your team can already reach. Only the rest is here.'
-        : 'Each one goes into the Keychain on your Mac, never the chat.';
+        ? `${comp.yourCap} checked what your team can already reach. Only the rest is here.`
+        : `Each one goes into the Keychain on ${comp.your}, never the chat.`;
     case 'routines':
-      return 'They arrived paused. Switch on the ones you want; they run while your Mac is awake.';
+      return `They arrived paused. Switch on the ones you want; they run while ${comp.your} is awake.`;
     case 'missing':
       return `Things your agents said they don’t know yet. ${chief} can sort most of them.`;
     case 'hello':
@@ -112,8 +114,9 @@ export const receipt = (r: { title: string; via: string }) => `${r.title}: ${r.v
 
 /** The residue's head line. */
 export function residueLine(open: number): string {
+  const comp = pairedComputer();
   if (open === 0) return 'Your team is ready.';
-  return `Your team is ready. ${open} thing${open === 1 ? '' : 's'} I couldn’t reach on this Mac:`;
+  return `Your team is ready. ${open} thing${open === 1 ? '' : 's'} I couldn’t reach on ${comp.this}:`;
 }
 
 /** "3 reached", the receipts' toggle. */

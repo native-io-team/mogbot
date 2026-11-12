@@ -422,7 +422,7 @@ async fn session(
 /// What the desk says when the relay couldn't delete the account.
 fn delete_error(code: &Value) -> String {
     match code.as_str() {
-        Some("not_signed_in") => "This Mac isn't signed in.".into(),
+        Some("not_signed_in") => concat!("This ", crate::computer::noun!(), " isn't signed in.").into(),
         Some("unavailable") => {
             "Deleting accounts isn't available right now. Your account is still there; try again later.".into()
         }

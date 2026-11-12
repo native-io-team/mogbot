@@ -35,9 +35,10 @@ import {
   type RelaySaid,
   type WireError,
 } from '@shipstudio/companion-protocol';
-import { checkMac, MAC_RESET, NOT_YOUR_MAC, UPDATE_MAC, type Pinned } from './identity';
+import { checkMac, macReset, notYourMac, updateMac, type Pinned } from './identity';
 import { queuedRelayRequest, relayRequest, type RelayHttpAnswer } from './relayHttp';
 import { RELAY_NOT_YOUR_MAC, RelaySocket } from './relaySocket';
+import { pairedComputer } from './computer';
 
 /**
  * Where a frame this phone couldn't handle is reported (the session sends it
@@ -76,13 +77,14 @@ const notConnected = () =>
   new WireFailure({
     type: 'Protocol',
     code: 'not_connected',
-    message: 'Not connected to your Mac right now.',
+    message: `Not connected to ${pairedComputer().your} right now.`,
   });
 
 const MB = 1024 * 1024;
 
 /** An HTTP status from a file route, as the sentence the user sees. */
 function httpFailure(status: number, name?: string): WireFailure {
+  const comp = pairedComputer();
   const protocol = (code: 'too_large' | 'refused' | 'bad_params', message: string) =>
     new WireFailure({ type: 'Protocol', code, message });
   if (status === 413) {
@@ -91,9 +93,9 @@ function httpFailure(status: number, name?: string): WireFailure {
       `${name ?? 'That file'} is too big. Files can be up to ${MAX_ATTACHMENT_BYTES / MB} MB.`
     );
   }
-  if (status === 401) return protocol('refused', 'Your Mac didn’t accept this phone. Pair again.');
-  if (status === 404) return protocol('bad_params', 'That file isn’t on your Mac any more.');
-  return new WireFailure({ type: 'Other', message: `Your Mac answered ${status}.` });
+  if (status === 401) return protocol('refused', `${comp.yourCap} didn’t accept this phone. Pair again.`);
+  if (status === 404) return protocol('bad_params', `That file isn’t on ${comp.your} any more.`);
+  return new WireFailure({ type: 'Other', message: `${comp.yourCap} answered ${status}.` });
 }
 
 export interface DirectTransportOptions {
@@ -357,7 +359,7 @@ export class DirectTransport implements Transport {
 
   constructor(private readonly opts: DirectTransportOptions) {
     this.foreground = opts.foreground;
-    if (!opts.routes.length) throw new Error('No route to the Mac');
+    if (!opts.routes.length) throw new Error(`No route to ${pairedComputer().the}`);
     this.routes = [...opts.routes];
     this.connect();
   }
@@ -738,7 +740,7 @@ export class DirectTransport implements Transport {
       // Whatever answered at the relay couldn't sign for the pinned key.
       if (code === RELAY_NOT_YOUR_MAC) {
         this.note(`not your Mac via ${this.route.kind}`);
-        this.refuseLocally('not_your_mac', NOT_YOUR_MAC);
+        this.refuseLocally('not_your_mac', notYourMac());
         return;
       }
       // The relay says whether the Mac is connected to it, and signed in; only it can.
@@ -794,7 +796,7 @@ export class DirectTransport implements Transport {
     if (this.identityVerified) return;
     const verdict = checkMac(frame, this.opts.pinned, this.challenge, this.route.url);
     if (verdict !== 'ok') {
-      this.refuseLocally(verdict, verdict === 'mac_reset' ? MAC_RESET : NOT_YOUR_MAC);
+      this.refuseLocally(verdict, verdict === 'mac_reset' ? macReset() : notYourMac());
       return;
     }
     this.identityVerified = true;
@@ -962,7 +964,7 @@ export class DirectTransport implements Transport {
         }).then((r) => r.status));
     const status = await probe(url).catch(() => null);
     if (status === 404 && !this.closed && !this.refused && !this.ready) {
-      this.refuseLocally('update_mac', UPDATE_MAC);
+      this.refuseLocally('update_mac', updateMac());
     }
   }
 

@@ -18,6 +18,7 @@ import {
 } from '@shipstudio/companion-protocol';
 import { fromBase64Url } from './identity';
 import { RelaySocket, type RelaySocketOptions } from './relaySocket';
+import { pairedComputer } from './computer';
 
 /** The relay socket closed before the answer was whole; `code` says why (`RELAY_CLOSE_MAC_OFFLINE`…). */
 export class RelayClosed extends Error {
@@ -106,6 +107,7 @@ export function relayRequest(
   deps: RelayHttpDeps,
   init: RelayHttpInit
 ): Promise<RelayHttpAnswer> {
+  const comp = pairedComputer();
   return new Promise((resolve, reject) => {
     const id = 1;
     const socket = new RelaySocket(url, deps);
@@ -128,7 +130,7 @@ export function relayRequest(
     const touch = () => {
       if (!init.idleMs) return;
       if (idle) clearTimeout(idle);
-      idle = setTimeout(() => end(new Error('The Mac stopped answering.')), init.idleMs);
+      idle = setTimeout(() => end(new Error(`${comp.theCap} stopped answering.`)), init.idleMs);
     };
     const onAbort = () => end(new DOMExceptionLike('Aborted', 'AbortError'));
     if (init.signal?.aborted) return onAbort();
@@ -161,7 +163,7 @@ export function relayRequest(
       }
       if (typeof frame.body === 'string' && frame.body) {
         const bytes = fromBase64Url(frame.body);
-        if (!bytes) return end(new Error('The Mac’s answer couldn’t be read.'));
+        if (!bytes) return end(new Error(`${comp.theCap}’s answer couldn’t be read.`));
         parts.push(bytes);
       }
       if (!frame.more)

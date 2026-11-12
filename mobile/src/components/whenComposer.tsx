@@ -50,6 +50,7 @@ import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { fonts, iconSize, lineHeight, radius, space, type } from '../lib/theme';
 import { Chip, ChipRow } from './pickers';
 import { Button, Icon, Row, T } from './ui';
+import { useComputer } from '../lib/computer';
 
 /** A Validation error's reason; anything else as the app words it. */
 function reasonOf(e: unknown): string {
@@ -71,6 +72,7 @@ export function WhenComposer({
   onDone: () => void;
   onCancel: () => void;
 }) {
+  const comp = useComputer();
   const colors = useColors();
   const styles = useStyles();
   const appearance = useAppearance();
@@ -114,7 +116,7 @@ export function WhenComposer({
   };
 
   const found = whenApps(agent.id, options?.connections ?? [], options?.claudeApps ?? []);
-  const choices = whenSourceChoices(found.linear || startKind === 'linear_assigned', 'your Mac');
+  const choices = whenSourceChoices(found.linear || startKind === 'linear_assigned', comp.your);
   const intervals = whenIntervalChoices(kind, every);
   const source = whenSourceOf(kind, folder.trim(), check.trim(), app, filter);
   const access = whenAccess(kind, options?.mac);
@@ -192,10 +194,10 @@ export function WhenComposer({
             ) : null}
             <T variant="caption" color={colors.textMuted}>
               {options === null
-                ? 'Asking your Mac for its folders…'
+                ? `Asking ${comp.your} for its folders…`
                 : folders.length > 0
-                  ? 'Folders your Mac offers. For another, set it up on your Mac.'
-                  : 'Your Mac offered no folders. Set this one up on your Mac.'}
+                  ? `Folders ${comp.your} offers. For another, set it up on ${comp.your}.`
+                  : `${comp.yourCap} offered no folders. Set this one up on ${comp.your}.`}
             </T>
           </Animated.View>
         )}

@@ -43,15 +43,15 @@ export const DEMO_MAC_NAME = 'Demo Mac';
 
 /** What a sample agent says when asked for real work. */
 export const DEMO_REPLY =
-  'This is the demo, so I can’t do real work. Pair this phone with your Mac and your own agents answer here.';
+  'This is the demo, so I can’t do real work. Pair this phone with your computer and your own agents answer here.';
 
 /** What anything the demo doesn't offer answers. */
-export const NOT_IN_DEMO = 'That isn’t in the demo. Pair this phone with your Mac to use it.';
+export const NOT_IN_DEMO = 'That isn’t in the demo. Pair this phone with your computer to use it.';
 
 /** The bar over every demo chat. */
 export const DEMO_BAR = {
   title: 'Demo · sample agents',
-  detail: 'Nothing you send reaches a Mac or anyone else',
+  detail: 'Nothing you send reaches a computer or anyone else',
 };
 
 export const isDemo = (c: Pick<Credentials, 'serverId'> | null | undefined) =>
@@ -505,7 +505,7 @@ export class DemoTransport {
     const a = this.agent(agentId);
     if (a) a.pendingApprovals = Math.max(0, a.pendingApprovals - 1);
     const reply = allow
-      ? 'In the demo nothing is sent. On your Mac, Inbox would send it now and say so here.'
+      ? 'In the demo nothing is sent. On your computer, Inbox would send it now and say so here.'
       : 'OK, I won’t send it.';
     this.later(600, () => {
       this.put({ id: `${card.id}_answer`, agentId, ts: this.now(), kind: 'agent', text: reply });

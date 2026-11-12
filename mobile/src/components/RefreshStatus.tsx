@@ -17,6 +17,7 @@ import { useApp } from '../lib/store';
 import type { RefreshOutcome } from '../lib/refresh';
 import { duration } from '../lib/theme';
 import { Line } from './surfaces';
+import { useComputer } from '../lib/computer';
 
 export function RefreshStatus({
   outcome: given,
@@ -27,6 +28,7 @@ export function RefreshStatus({
   onRetry: () => void;
   onDismiss: () => void;
 }) {
+  const comp = useComputer();
   // With the link down (or the Mac's app not answering) the connection bar
   // already says it, with its own Try again: a failed pull adds nothing.
   const linkDown = useApp((s) => s.link.kind !== 'connected' || s.link.stuck != null);
@@ -65,7 +67,7 @@ export function RefreshStatus({
       <Line
         icon="exclamationmark.circle"
         tone="warning"
-        text="Couldn’t reach your Mac"
+        text={`Couldn’t reach ${comp.your}`}
         action={{ label: 'Try again', onPress: onRetry }}
         testID="refresh-failed"
       />

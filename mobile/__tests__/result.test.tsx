@@ -2,7 +2,7 @@ import type { AgentMessage, ResultCard, WelcomeFrame } from '@shipstudio/compani
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Text } from 'react-native';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
-import { OFFLINE_NOTE } from '../src/components/surfaces';
+import { offlineNote } from '../src/components/surfaces';
 import { ResultCardView, useCanRevise } from '../src/components/result';
 import { EMPTY_DRAFT, putDraft } from '../src/lib/drafts';
 import { useApp } from '../src/lib/store';
@@ -77,7 +77,7 @@ describe('the result card on the phone', () => {
     await show(v1, { onAskForChanges: ask });
     await fireEvent.press(screen.getByText('Ask for changes'));
     expect(ask).not.toHaveBeenCalled();
-    expect(screen.getByText(OFFLINE_NOTE)).toBeTruthy();
+    expect(screen.getByText(offlineNote())).toBeTruthy();
   });
 
   it('reads the Mac’s card: the work, then one Checks box with what it didn’t verify', async () => {

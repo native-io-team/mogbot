@@ -1344,9 +1344,11 @@ impl Backend for DesktopBackend {
                 .port
                 .filter(|p| crate::agents::dev_servers::serves(&target.path, *p)))
             .ok_or_else(|| {
-                CommandError::expected(
-                    "Open Preview on the Mac first — the site isn't running there.",
-                )
+                CommandError::expected(concat!(
+                    "Open Preview on the ",
+                    crate::computer::noun!(),
+                    " first — the site isn't running there."
+                ))
             })?;
         Ok((target.path, port))
     }
@@ -1392,6 +1394,7 @@ impl Backend for DesktopBackend {
         };
         MacStatus {
             name: self.server_name(),
+            computer: crate::computer::HOST,
             app_version: self.app_version(),
             power: PowerInfo {
                 keep_awake: power::keep_awake_active(),
@@ -1466,7 +1469,7 @@ fn computer_name() -> String {
     COMPUTER_NAME
         .get()
         .cloned()
-        .unwrap_or_else(|| "this Mac".to_string())
+        .unwrap_or_else(|| crate::computer::THIS.to_string())
 }
 
 async fn read_computer_name() {
@@ -1754,9 +1757,12 @@ fn keep_step(
     serving: Option<bool>,
 ) -> KeepStep {
     use tailscale::TailscaleState as Ts;
-    let down = |detail: &str| match current {
-        ServeState::Failed { detail: d } if d == detail => KeepStep::Leave,
-        _ => KeepStep::Down(detail.to_string()),
+    let down = |detail: &str| {
+        let detail = crate::computer::localize(detail);
+        match current {
+            ServeState::Failed { detail: d } if *d == *detail => KeepStep::Leave,
+            _ => KeepStep::Down(detail.into_owned()),
+        }
     };
     match now {
         Ts::Connected { dns_name, .. } => match current {

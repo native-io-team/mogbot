@@ -22,8 +22,10 @@ import { useApp } from '../lib/store';
 import { call, canCall } from '../lib/session';
 import { iconSize, PRESSED, space } from '../lib/theme';
 import { usePolling } from '../lib/usePolling';
+import { useComputer } from '../lib/computer';
 
 export default function UsageAccount() {
+  const comp = useComputer();
   const { engine, account } = useLocalSearchParams<{ engine: string; account: string }>();
   const styles = useStyles();
   const colors = useColors();
@@ -95,7 +97,7 @@ export default function UsageAccount() {
           </>
         ) : (
           <T color={colors.textSecondary}>
-            {inventory ? 'This account isn’t on your Mac anymore.' : 'Reading it from your Mac…'}
+            {inventory ? `This account isn’t on ${comp.your} anymore.` : `Reading it from ${comp.your}…`}
           </T>
         )}
         {state.error && (

@@ -30,6 +30,7 @@ import { call, callFresh, canCall, describeError, lastRead, READ_FRESH_MS } from
 import { useApp } from './store';
 import { usePolling } from './usePolling';
 import { idsOf, reordered } from './accountsView';
+import { pairedKind } from './computer';
 
 export { headerSubtitle, idsOf, reordered, runsOnChoices } from './accountsView';
 
@@ -98,7 +99,7 @@ export function useAccounts({ room = true }: { room?: boolean } = {}): AccountsS
     [agents]
   );
   const view = useMemo(
-    () => (accounts ? switcherView(accounts, inventory, { pins }) : []),
+    () => (accounts ? switcherView(accounts, inventory, { pins, computer: pairedKind() }) : []),
     [accounts, inventory, pins]
   );
 

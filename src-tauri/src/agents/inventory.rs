@@ -1192,7 +1192,11 @@ where
             ));
         }
         if f.tokens > 0 && f.shares.is_empty() {
-            s.push_str(" What share of a limit that is isn't known yet: it's learned from this Mac's readings as turns report them.");
+            s.push_str(concat!(
+                " What share of a limit that is isn't known yet: it's learned from this ",
+                crate::computer::noun!(),
+                "'s readings as turns report them."
+            ));
         }
         if !f.unknown.is_empty() {
             s.push_str(&format!(

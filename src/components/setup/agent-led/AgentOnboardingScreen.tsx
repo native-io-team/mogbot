@@ -49,6 +49,7 @@ import { phoneRouteLine } from '../../../lib/phoneApp';
 import { withTimeout, TimeoutError } from '../../../lib/withTimeout';
 import { trackEvent, setActiveScreen } from '../../../lib/analytics';
 import { logger } from '../../../lib/logger';
+import { THIS_COMPUTER } from '../../../lib/computer';
 
 const SETUP_STATUS_TIMEOUT_MS = 15_000;
 
@@ -92,10 +93,10 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
       setError(
         err instanceof TimeoutError
           ? {
-              line: 'Checking this Mac took too long.',
+              line: `Checking ${THIS_COMPUTER} took too long.`,
               fix: 'If it keeps happening, quit and reopen the app.',
             }
-          : { line: 'Couldn’t check this Mac.' }
+          : { line: `Couldn’t check ${THIS_COMPUTER}.` }
       );
       return null;
     }

@@ -324,7 +324,10 @@ pub fn env_hit(title: &str, names: &[String], envs: &[ProjectEnv]) -> Option<Str
             let v = v.to_ascii_lowercase();
             want.iter().any(|w| v.contains(w.as_str()))
         }) {
-            return Some(format!("in {name}’s .env on this Mac ({v})"));
+            return Some(format!(
+                "in {name}’s .env on {} ({v})",
+                crate::computer::THIS
+            ));
         }
     }
     None
@@ -587,12 +590,12 @@ async fn run_inner(app: &AppHandle) -> Result<usize, CommandError> {
         if via.is_none() && g.service == "github" {
             via = gh
                 .as_ref()
-                .map(|l| format!("GitHub CLI on this Mac, signed in as {l}"));
+                .map(|l| format!("GitHub CLI on {}, signed in as {l}", crate::computer::THIS));
         }
         if via.is_none() && g.service == "vercel" {
             via = vercel
                 .as_ref()
-                .map(|l| format!("Vercel CLI on this Mac, signed in as {l}"));
+                .map(|l| format!("Vercel CLI on {}, signed in as {l}", crate::computer::THIS));
         }
         if via.is_none() {
             if let (Some(mcp), Some(site)) = (

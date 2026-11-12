@@ -9,8 +9,8 @@ from "Asks a lot" to "Just does it".
 | Stop | What it does on its own |
 | --- | --- |
 | **Careful** | Reads and looks around; asks before bigger changes. |
-| **Steady** (the default) | Reads and edits; asks before running changes or anything leaving this Mac. |
-| **Bold** | Does local work on this Mac; asks before anything leaves it. |
+| **Steady** (the default) | Reads and edits; asks before running changes or anything leaving your computer. |
+| **Bold** | Does local work on your computer; asks before anything leaves it. |
 | **Unleashed** | Sends, posts and pushes too; only stops for money, logins, deleting for good or going live. |
 
 ## Setting it
@@ -34,7 +34,7 @@ At every stop, agents ask before:
 
 Even at Unleashed they also ask before pushing to production or a protected branch (like `main`),
 publishing a release or package, changing settings that affect what others see (domains, DNS,
-repository visibility), and anything that would keep running on your Mac by itself (like a launch
+repository visibility), and anything that would keep running on your computer by itself (like a launch
 agent or a change to your shell profile).
 
 ## Text from outside
@@ -51,9 +51,9 @@ command, the file, the site or the message. The agent's row says "Needs your OK"
 
 - **Allow** or **Deny**. Some cards also offer **Always allow** for that kind of thing (for
   example, web searches).
-- Answer from the Mac, the phone, or by typing "yes" or "approve it" in the chat when there's
+- Answer from the computer, the phone, or by typing "yes" or "approve it" in the chat when there's
   exactly one card open.
-- A card can be answered once. If you answer on the phone and the Mac at the same moment, only the
+- A card can be answered once. If you answer on the phone and the computer at the same moment, only the
   first answer counts and the other says "Already answered".
 - To stop accidental clicks, Allow is inactive for a moment after a card appears, and typing in the
   message box never answers a card.

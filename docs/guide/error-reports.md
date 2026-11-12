@@ -13,25 +13,25 @@ Each report contains only:
 - the error message and where in the app it happened (a technical trace),
 - the app's version, the operating system and the type of processor.
 
-Before a report leaves your Mac, your user name is removed from any file paths in it.
+Before a report leaves your computer, your user name is removed from any file paths in it.
 
 Never sent: your project files or code, environment variables, tokens, your user name, or anything
-that identifies your Mac.
+that identifies your computer.
 
 Reports can become public issues on GitHub, which is why the bar is "safe to publish".
 
-The same report is sent at most once a day, and your Mac sends no more than 30 reports a day in
+The same report is sent at most once a day, and your computer sends no more than 30 reports a day in
 total. Copies of the app you build from source don't send reports.
 
 ## Your phone
 
-The phone app keeps a note of its own crashes and hands them to your Mac the next time it connects.
-Your Mac sends them only if reports are on. The phone itself never sends a report anywhere.
+The phone app keeps a note of its own crashes and hands them to your computer the next time it connects.
+Your computer sends them only if reports are on. The phone itself never sends a report anywhere.
 
 ## Turning it off
 
 Open **Settings → Advanced** and turn off **Usage analytics & error reports**. With it off, nothing
-is sent, from the Mac or the phone.
+is sent, from the computer or the phone.
 
 ## Telling us about a problem yourself
 

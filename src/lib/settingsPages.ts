@@ -11,6 +11,7 @@
 
 import type { SettingsSectionRequest, SettingsTabRequest } from './settings';
 import { relayOn } from './brand';
+import { THIS_COMPUTER } from './computer';
 
 export type SettingsPage =
   | 'account'
@@ -48,7 +49,7 @@ export const SETTINGS_PAGES: readonly SettingsPageInfo[] = [
   {
     id: 'agents',
     title: 'Agents',
-    lead: 'What new agents run on, this Mac, disk space, and bringing agents in.',
+    lead: `What new agents run on, ${THIS_COMPUTER}, disk space, and bringing agents in.`,
     keywords: [
       'engine',
       'model',

@@ -32,7 +32,7 @@ import {
 } from './ApprovalCard';
 import { DiffLines } from './diff';
 import { choose as actionSheet } from './menu';
-import { ACTION, ACTION_ROW, Card, OFFLINE_NOTE } from './surfaces';
+import { ACTION, ACTION_ROW, Card, offlineNote } from './surfaces';
 import { Button, T } from './ui';
 import { moreMessage, promptAnswers } from '../lib/answers';
 
@@ -135,7 +135,7 @@ export function PromptCard({
       hideHead={fit.pinned}
       onLayout={fit.onCardLayout}
       onHeadLayout={fit.onHeadLayout}
-      note={!connected ? OFFLINE_NOTE : undefined}
+      note={!connected ? offlineNote() : undefined}
       actions={
         <Animated.View
           entering={FadeIn.duration(ARM_MS)}
