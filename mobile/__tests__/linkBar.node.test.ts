@@ -97,7 +97,7 @@ describe('the connection bar', () => {
     expect(b).toMatchObject({
       kind: 'connecting',
       tone: 'busy',
-      title: 'Reconnecting to your Mac…',
+      title: 'Reconnecting to your computer…',
     });
     expect(b?.detail).toMatch(/^Last heard from it .* · showing what was saved$/);
   });
@@ -112,7 +112,7 @@ describe('the connection bar', () => {
       },
       now
     );
-    expect(b).toMatchObject({ kind: 'connecting', title: 'Reconnecting to your Mac…' });
+    expect(b).toMatchObject({ kind: 'connecting', title: 'Reconnecting to your computer…' });
     expect(b?.detail).toMatch(/1 min ago/);
   });
 
@@ -129,7 +129,7 @@ describe('the connection bar', () => {
     expect(b).toMatchObject({
       kind: 'unreachable',
       tone: 'problem',
-      title: 'Can’t reach your Mac',
+      title: 'Can’t reach your computer',
     });
     expect(b?.checks.join(' ')).toMatch(/asleep or shut/);
     expect(b?.checks.join(' ')).toMatch(/Tailscale may be off/);
@@ -147,8 +147,8 @@ describe('the connection bar', () => {
       },
       now
     );
-    expect(b).toMatchObject({ kind: 'stuck', title: 'The app on your Mac isn’t responding' });
-    expect(b?.detail).toMatch(/^Your Mac is reachable/);
+    expect(b).toMatchObject({ kind: 'stuck', title: 'The app on your computer isn’t responding' });
+    expect(b?.detail).toMatch(/^Your computer is reachable/);
     expect(b?.checks).toEqual(STUCK_CHECKS);
   });
 
@@ -162,7 +162,7 @@ describe('the connection bar', () => {
     expect(bar(link, now)).toMatchObject({ kind: 'stuck', tone: 'problem' });
     expect(pill({ link, phoneOnline: true } as never, now)).toEqual({
       tone: 'problem',
-      label: 'Mac not responding',
+      label: 'Computer not responding',
     });
   });
 
@@ -184,7 +184,7 @@ describe('the connection bar', () => {
       },
       now
     );
-    expect(b).toMatchObject({ kind: 'closing', title: 'Waiting for the app on your Mac' });
+    expect(b).toMatchObject({ kind: 'closing', title: 'Waiting for the app on your computer' });
   });
 });
 
@@ -208,13 +208,13 @@ describe('the bar over the relay', () => {
     expect(b).toMatchObject({
       kind: 'mac_offline',
       tone: 'problem',
-      title: 'Your Mac is offline or asleep',
+      title: 'Your computer is offline or asleep',
     });
-    expect(b?.checks[0]).toBe('Wake your Mac, with the app open on it.');
+    expect(b?.checks[0]).toBe('Wake your computer, with the app open on it.');
     expect(b?.checks.join(' ')).not.toMatch(tailscaleAdvice);
     expect(pill({ link, phoneOnline: true } as never, now)).toEqual({
       tone: 'problem',
-      label: 'Mac offline',
+      label: 'Computer offline',
     });
     // Its first seconds stay calm: a Mac waking up reconnects to the relay by itself.
     const early = { ...link, since: now - 2000 };
@@ -232,11 +232,11 @@ describe('the bar over the relay', () => {
     expect(b).toMatchObject({
       kind: 'sign_in_needed',
       tone: 'problem',
-      title: 'Your Mac isn’t signed in',
+      title: 'Your computer isn’t signed in',
     });
-    expect(b?.checks).toEqual(['On your Mac, sign in, or use your own Tailscale instead.']);
+    expect(b?.checks).toEqual(['On your computer, sign in, or use your own Tailscale instead.']);
     expect(b?.checks.join(' ')).not.toMatch(tailscaleAdvice);
-    expect(pill({ link, phoneOnline: true } as never, now).label).toBe('Mac not signed in');
+    expect(pill({ link, phoneOnline: true } as never, now).label).toBe('Computer not signed in');
   });
 
   it('can’t reach a relay-only Mac: no Tailscale advice, it has none to check', () => {

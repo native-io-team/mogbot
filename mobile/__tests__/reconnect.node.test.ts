@@ -215,7 +215,7 @@ describe('reconnecting', () => {
     expect(pillFor(t.state, start + CALM_MS).label).toMatch(/^Reconnecting · last seen/);
     expect(pillFor(t.state, seen + 2 * 60_000 + 1)).toEqual({
       tone: 'problem',
-      label: 'Can’t reach Mac',
+      label: 'Can’t reach your computer',
     });
     t.close();
   });
@@ -226,12 +226,15 @@ describe('reconnecting', () => {
     t.setForeground(false);
     last().drop();
     jest.advanceTimersByTime(10 * 60_000);
-    expect(pillFor(t.state, Date.now())).toEqual({ tone: 'problem', label: 'Can’t reach Mac' });
+    expect(pillFor(t.state, Date.now())).toEqual({
+      tone: 'problem',
+      label: 'Can’t reach your computer',
+    });
     t.setForeground(true);
     expect(pillFor(t.state, Date.now())).toEqual({ tone: 'busy', label: 'Reconnecting…' });
     expect(pillFor(t.state, Date.now() + CALM_MS + 1)).toEqual({
       tone: 'problem',
-      label: 'Can’t reach Mac',
+      label: 'Can’t reach your computer',
     });
     t.close();
   });
@@ -247,7 +250,7 @@ describe('reconnecting', () => {
     expect(pillFor(t.state, Date.now())).toEqual({ tone: 'busy', label: 'Connecting…' });
     expect(pillFor(t.state, start + CALM_MS)).toEqual({
       tone: 'problem',
-      label: 'Can’t reach Mac',
+      label: 'Can’t reach your computer',
     });
     t.close();
   });
@@ -260,7 +263,7 @@ describe('reconnecting', () => {
     jest.advanceTimersByTime(60_000);
     expect(pillFor(t.state, Date.now())).toEqual({
       tone: 'busy',
-      label: 'Waiting for the app on your Mac',
+      label: 'Waiting for the app on your computer',
     });
     t.retryNow();
     last().welcome();

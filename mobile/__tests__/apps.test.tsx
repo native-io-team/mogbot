@@ -100,8 +100,8 @@ describe('the words, shared with the desk', () => {
       'Finance can read and change (asks first); Chief of Staff can read'
     );
     expect(grantsLine({ grants: [] }, names)).toBe('No agent can use it yet');
-    expect(keptWhere('oauth')).toBe('Signed in on this Mac');
-    expect(keptWhere('gh')).toBe('GitHub CLI on this Mac');
+    expect(keptWhere('oauth')).toBe('Signed in on this computer');
+    expect(keptWhere('gh')).toBe('GitHub CLI on this computer');
     expect(keptWhere('claude_ai')).toBe('Connected on claude.ai');
     expect(grantNote('full', false)).toBe('Every change asks you on a card first.');
     expect(grantNote('read', true)).toContain('No agent ticked');
@@ -123,7 +123,9 @@ describe('the words, shared with the desk', () => {
     const notion = fixture.flows.find((f) => f.service === 'notion')!;
     const figma = fixture.flows.find((f) => f.service === 'figma')!;
     expect(notion.flow?.url).toBeUndefined();
-    expect(appFlowLine(notion, 'Notion')).toBe('Finish signing in on your Mac — it’s open there.');
+    expect(appFlowLine(notion, 'Notion')).toBe(
+      'Finish signing in on your computer — it’s open there.'
+    );
     expect(appFlowLine(figma, 'Figma')).toBe(figma.flow!.message);
     expect(appWay(true, true)).toBe('sheet');
     expect(appWay(true, false)).toBe('mac');
@@ -141,7 +143,7 @@ describe('the apps screen', () => {
     await screen.findByText('Linear · sam@acme.com');
     expect(
       screen.getByText(
-        'Signed in on this Mac · Finance can read and change (asks first); Chief of Staff can read'
+        'Signed in on this computer · Finance can read and change (asks first); Chief of Staff can read'
       )
     ).toBeTruthy();
     expect(screen.getByText('Gmail · work@acme.com')).toBeTruthy();
@@ -189,7 +191,7 @@ describe('the apps screen', () => {
     await render(<Apps />);
     await screen.findByText('Linear · sam@acme.com');
     await fireEvent.press(within(screen.getByTestId('app-stripe')).getByText('Connect'));
-    expect(screen.getByText('Stripe’s sign-in opens on your Mac. Finish there.')).toBeTruthy();
+    expect(screen.getByText('Stripe’s sign-in opens on your computer. Finish there.')).toBeTruthy();
     await fireEvent.press(screen.getByText('Sign in to Stripe'));
     await waitFor(() =>
       expect(calls).toContainEqual([

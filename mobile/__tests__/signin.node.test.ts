@@ -51,7 +51,7 @@ const run = (...events: SigninEvent[]) => events.reduce(reduce, initialView);
 
 describe('the sign-in screen', () => {
   it('starts, goes live on the first picture, and only then takes input', () => {
-    expect(statusLine(initialView)).toMatch(/Opening it on your Mac/);
+    expect(statusLine(initialView)).toMatch(/Opening it on your computer/);
     const opened = run({ t: 'begun', begun });
     expect(opened.phase).toBe('live');
     expect(canAct(opened)).toBe(false);
@@ -124,7 +124,8 @@ describe('the sign-in screen', () => {
     const failed = reduce(initialView, {
       t: 'end',
       reason: 'failed',
-      message: "Chrome on your Mac isn't answering. It needs to be open there with Claude in Chrome on.",
+      message:
+        "Chrome on your Mac isn't answering. It needs to be open there with Claude in Chrome on.",
     });
     expect(retryWays(failed)).toEqual([
       { label: 'Try again' },
@@ -135,7 +136,8 @@ describe('the sign-in screen', () => {
     const off = reduce(initialView, {
       t: 'end',
       reason: 'failed',
-      message: "The agents' browser isn't on on this Mac (Settings → Agents), or Google Chrome isn't installed there.",
+      message:
+        "The agents' browser isn't on on this Mac (Settings → Agents), or Google Chrome isn't installed there.",
     });
     expect(retryWays(off)).toEqual([{ label: 'Try again' }]);
     // A session that ended after it was live isn't restarted from here.
@@ -256,10 +258,10 @@ describe('the agents’ browser', () => {
   it('names where the picture comes from, an older Mac being its Chrome', () => {
     const v = run({ t: 'begun', begun: agents });
     expect(v).toMatchObject({ phase: 'live', via: 'agents_browser' });
-    expect(viaLabel('agents_browser')).toBe('The agents’ browser on your Mac');
-    expect(viaLabel('chrome')).toBe('Chrome on your Mac');
+    expect(viaLabel('agents_browser')).toBe('The agents’ browser on your computer');
+    expect(viaLabel('chrome')).toBe('Chrome on your computer');
     // Still opening, the Mac hasn't named a browser: none is claimed.
-    expect(viaLabel(undefined)).toBe('Your Mac');
+    expect(viaLabel(undefined)).toBe('Your computer');
     expect(run({ t: 'begun', begun })).toMatchObject({ via: 'chrome' });
   });
 

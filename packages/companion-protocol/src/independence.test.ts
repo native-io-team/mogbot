@@ -44,7 +44,7 @@ describe('independence', () => {
       expect(INDEPENDENCE_DETAIL[level]).not.toContain('\n');
       expect(INDEPENDENCE_DETAIL[level].length).toBeLessThan(100);
       expect(INDEPENDENCE_STILL_ASKS[level]).toBe(INDEPENDENCE_ALWAYS_ASKS);
-      expect(independenceValueText(level)).toBe(
+      expect(independenceValueText(level, 'mac')).toBe(
         `${INDEPENDENCE_LABEL[level]}. ${INDEPENDENCE_DETAIL[level]}`
       );
     }

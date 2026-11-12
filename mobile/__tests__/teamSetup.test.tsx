@@ -143,7 +143,7 @@ describe('what the team can already reach', () => {
   it('leaves only what the Mac could not reach, each with one button and Not needed', async () => {
     await show(view());
     expect(
-      screen.getByText('Your team is ready. 2 things I couldn’t reach on this Mac:')
+      screen.getByText('Your team is ready. 2 things I couldn’t reach on this computer:')
     ).toBeTruthy();
     expect(screen.getByTestId('reach-open-linkedin')).toBeTruthy();
     expect(screen.getByTestId('reach-open-other:bankline')).toBeTruthy();

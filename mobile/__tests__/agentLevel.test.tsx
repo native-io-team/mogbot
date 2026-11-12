@@ -115,10 +115,10 @@ describe('one agent’s level on the phone', () => {
       min: 0,
       max: 3,
       now: 2,
-      text: 'Bold. Does local work on this Mac; asks before anything leaves it.',
+      text: 'Bold. Does local work on this computer; asks before anything leaves it.',
     });
     expect(
-      screen.getByText('Does local work on this Mac; asks before anything leaves it.')
+      screen.getByText('Does local work on this computer; asks before anything leaves it.')
     ).toBeTruthy();
     expect(
       screen.getByText(

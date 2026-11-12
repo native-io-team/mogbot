@@ -259,9 +259,11 @@ describe('usageGlance', () => {
     // What the user named it wins; where it's signed in stays a detail.
     const work = named({ name: 'Work', named: true, email: 'sam@example.com', plan: 'max' });
     expect(work.name).toBe('Work');
-    expect(work.detail).toEqual(['Max plan', 'sam@example.com', 'this Mac’s own sign-in']);
+    expect(work.detail).toEqual(['Max plan', 'sam@example.com', 'this computer’s own sign-in']);
     // The plan isn't said twice when it is the name.
-    expect(named({ name: 'This Mac', plan: 'max' }).detail).toEqual(['this Mac’s own sign-in']);
+    expect(named({ name: 'This Mac', plan: 'max' }).detail).toEqual([
+      'this computer’s own sign-in',
+    ]);
   });
 
   it('a second sign-in names the first by its key’s name, not the Mac’s "This Mac"', () => {
@@ -556,7 +558,7 @@ describe('this Mac signed in as another account', () => {
     );
     expect(g.signInChanged?.key).toBe('claude:1');
     expect(g.signInChanged?.text).toBe(
-      'This Mac’s Claude Code is now signed in as me@example.com. Your previous account (work@example.com, refills Mondays 4 PM) isn’t connected anymore — add it to keep stacking.'
+      'This computer’s Claude Code is now signed in as me@example.com. Your previous account (work@example.com, refills Mondays 4 PM) isn’t connected anymore — add it to keep stacking.'
     );
   });
 
@@ -579,7 +581,7 @@ describe('this Mac signed in as another account', () => {
       { now: NOW }
     );
     expect(g.signInChanged?.text).toBe(
-      'This Mac’s Claude Code is now signed in as me@example.com, whose week refills Saturdays 10 AM. It used to refill Mondays 4 PM, so that was another Claude account, and it isn’t connected anymore — add it to keep stacking.'
+      'This computer’s Claude Code is now signed in as me@example.com, whose week refills Saturdays 10 AM. It used to refill Mondays 4 PM, so that was another Claude account, and it isn’t connected anymore — add it to keep stacking.'
     );
   });
 
@@ -906,11 +908,21 @@ describe('glanceUsed (the glance, said as what is used)', () => {
 
   it('says each thing once: never "2 accounts" after "across 2 accounts"', () => {
     const u = glanceUsed({
-      total: total(46, { counted: 2, across: 'across 2 accounts', refill: { in: '3d 18h', at: 'Fri', account: 'Work' } }),
+      total: total(46, {
+        counted: 2,
+        across: 'across 2 accounts',
+        refill: { in: '3d 18h', at: 'Fri', account: 'Work' },
+      }),
       tone: 'calm',
-      row: { ...row('54% used', 'Refills in 3d 18h'), count: '2 accounts', notRead: '1 account not read yet' },
+      row: {
+        ...row('54% used', 'Refills in 3d 18h'),
+        count: '2 accounts',
+        notRead: '1 account not read yet',
+      },
     });
-    expect(u.detail).toBe('54% used across 2 accounts · 1 account not read yet · refills in 3d 18h');
+    expect(u.detail).toBe(
+      '54% used across 2 accounts · 1 account not read yet · refills in 3d 18h'
+    );
     // No phrase of two or more words appears twice.
     const words = u.detail.toLowerCase().replace(/[·.]/g, ' ').split(/\s+/).filter(Boolean);
     const pairs = words.slice(1).map((w, i) => `${words[i]} ${w}`);

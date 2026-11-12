@@ -76,7 +76,7 @@ describe('a login card, in words', () => {
         ...gmail,
         flow: { state: 'waiting', option: 'x', startedAt: 0, message: 'Open on claude.ai.' },
       })
-    ).toBe('Finish signing in on your Mac — it’s open there. Open on claude.ai.');
+    ).toBe('Finish signing in on your computer — it’s open there. Open on claude.ai.');
   });
 
   it('says how it was answered', () => {
@@ -125,7 +125,7 @@ describe('a login card, in words', () => {
     };
     expect(teamCardLine(card)).toBe('Recruiter · to read and send Gmail');
     expect(teamCardLine({ ...card, flow: { state: 'waiting', option: 'x', startedAt: 0 } })).toBe(
-      'Recruiter · Signing in on your Mac…'
+      'Recruiter · Signing in on your computer…'
     );
     expect(teamCardLine({ ...card, state: 'skipped', outcome: 'Not needed' })).toBe(
       'Recruiter · Not needed'
@@ -156,9 +156,9 @@ describe('a login card, in words', () => {
       /Keychain; this phone keeps nothing/
     );
     expect(phoneDetail(o('claude_ai'), 'web', 'Gmail')).toMatch(
-      /claude\.ai holds that sign-in, not your Mac/
+      /claude\.ai holds that sign-in, not your computer/
     );
-    expect(phoneDetail(o('oauth'), 'mac', 'Linear')).toBe('On the Mac. Finish on your Mac.');
+    expect(phoneDetail(o('oauth'), 'mac', 'Linear')).toBe('On the Mac. Finish on your computer.');
     // The card's one line under its main action: short, whatever the way.
     for (const [m, way] of [
       ['browser', 'tap'],
@@ -173,7 +173,7 @@ describe('a login card, in words', () => {
       expect(line).not.toMatch(/password|Claude in Chrome/);
     }
     expect(phoneLine(o('browser'), 'tap', 'Gmail')).toBe(
-      'Uses your Chrome on your Mac. It asks before anything it sends.'
+      'Uses your Chrome on your computer. It asks before anything it sends.'
     );
     expect(
       servesPhoneSignIn({

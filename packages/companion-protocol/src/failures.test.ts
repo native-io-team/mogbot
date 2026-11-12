@@ -53,7 +53,7 @@ describe('failure words', () => {
     expect(failureFixLabel('continue', 'Codex')).toBe(CONTINUE_TEXT);
     // The phone can't install or sign in an engine: it says where.
     expect(failureFixAtMac('install', 'Codex')).toBe(
-      'Install Codex on your Mac, then send it again.'
+      'Install Codex on your computer, then send it again.'
     );
     expect(failureFixAtMac('retry', 'Codex')).toBeNull();
   });

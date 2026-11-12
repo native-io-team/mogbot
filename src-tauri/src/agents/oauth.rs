@@ -304,7 +304,7 @@ pub fn parse_callback(request_line: &str) -> Callback {
     }
 }
 
-const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Signed in</title><body style=\"font:16px -apple-system,system-ui;margin:4em auto;max-width:28em;color:#333\"><h2>You're signed in</h2><p>You can close this tab. The app on this Mac has it from here.</p>";
+const DONE_PAGE: &str = concat!("<!doctype html><meta charset=utf-8><title>Signed in</title><body style=\"font:16px -apple-system,system-ui;margin:4em auto;max-width:28em;color:#333\"><h2>You're signed in</h2><p>You can close this tab. The app on this ", crate::computer::noun!(), " has it from here.</p>");
 const FAILED_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Not signed in</title><body style=\"font:16px -apple-system,system-ui;margin:4em auto;max-width:28em;color:#333\"><h2>Not signed in</h2><p>You can close this tab and try again from the card.</p>";
 
 async fn reply(stream: &mut tokio::net::TcpStream, page: &str) {

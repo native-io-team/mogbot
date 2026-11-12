@@ -33,7 +33,8 @@ describe('the reach checklist', () => {
       'This phone is online',
       'This phone is paired',
     ]);
-    for (const c of checks) expect(`${c.title} ${c.status} ${c.fix ?? ''}`).not.toMatch(/Tailscale/);
+    for (const c of checks)
+      expect(`${c.title} ${c.status} ${c.fix ?? ''}`).not.toMatch(/Tailscale/);
     expect(checks.every((c) => c.action !== 'get_tailscale' && c.action !== 'open_tailscale')).toBe(
       true
     );
@@ -56,7 +57,7 @@ describe('the reach checklist', () => {
     const mac = byId({ diagnosis: 'mac_unreachable' }).mac;
     expect(mac.tone).toBe('unknown');
     expect(mac.status).toMatch(/Can’t tell/);
-    expect(mac.fix).toMatch(/Wake the Mac and open the app/);
+    expect(mac.fix).toMatch(/Wake the computer and open the app/);
     const asleep = byId({ likelyAsleep: true, lastSeenAt: NOW - 10 * 60_000 }).mac;
     expect(asleep.tone).toBe('unknown');
     expect(asleep.status).toBe(

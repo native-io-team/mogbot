@@ -304,7 +304,14 @@ pub async fn relay(
         Ok(r) => r,
         Err(_) => {
             return if message.is_some() {
-                rpc_error(&id, "Couldn't reach the app. Check this Mac is online.")
+                rpc_error(
+                    &id,
+                    concat!(
+                        "Couldn't reach the app. Check this ",
+                        crate::computer::noun!(),
+                        " is online."
+                    ),
+                )
             } else {
                 plain(StatusCode::BAD_GATEWAY, "Couldn't reach the app")
             }

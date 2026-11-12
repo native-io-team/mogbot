@@ -76,7 +76,7 @@ describe('usage accounts, on the phone', () => {
       pins: [{ engine: 'claude', account: 'w1', name: 'QA 2' }],
     });
     expect(accountRowLines(claude.rows[0])).toEqual([
-      'Max plan · this Mac’s own sign-in',
+      'Max plan · this computer’s own sign-in',
       'In use',
     ]);
     expect(accountRowLines(claude.rows[1])).toEqual([
@@ -97,7 +97,7 @@ describe('usage accounts, on the phone', () => {
     expect(screen.queryByLabelText('Try sam@example.com earlier')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Try sam@example.com later'));
     expect(s.move).toHaveBeenCalledWith('claude', 0, 1);
-    expect(screen.getByText(/Add or sign in to accounts on your Mac/)).toBeTruthy();
+    expect(screen.getByText(/Add or sign in to accounts on your computer/)).toBeTruthy();
     expect(screen.getByText('Claude Code accounts')).toBeTruthy();
   });
 

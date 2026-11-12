@@ -67,7 +67,9 @@ const mockState = {
   },
 };
 jest.mock('../src/lib/store', () => ({
-  useApp: (select: (s: unknown) => unknown) => select(mockState),
+  useApp: Object.assign((select: (s: unknown) => unknown) => select(mockState), {
+    getState: () => mockState,
+  }),
   useServed: (m: string, f?: string) =>
     mockState.welcome.methods.includes(m) && (!f || mockState.welcome.features.includes(f)),
 }));

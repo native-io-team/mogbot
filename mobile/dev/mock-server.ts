@@ -965,6 +965,8 @@ export function createMockServer(opts: MockOptions = {}) {
   );
   const status: MacStatus = {
     ...structuredClone(real.systemStatus),
+    // What a Mac says it is (`computer.rs`); the fixtures predate the field.
+    computer: 'mac',
     claude: opts.codexOnly
       ? { installed: false, signedIn: 'unknown' }
       : { ...real.systemStatus.claude, signedIn: 'yes' },

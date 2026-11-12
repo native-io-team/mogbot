@@ -95,7 +95,7 @@ describe('which account is working', () => {
       ['Old', 'Not signed in', false],
     ]);
     // Never the email twice: it's the name of the unnamed one.
-    expect(claude.rows[0].detail).toEqual(['Max plan', 'this Mac’s own sign-in']);
+    expect(claude.rows[0].detail).toEqual(['Max plan', 'this computer’s own sign-in']);
     expect(claude.rows[1].detail).toEqual(['me@work.example']);
     expect(claude.rows[0].room.map((r) => [r.label, r.left])).toEqual([
       ['5-hour', 62],

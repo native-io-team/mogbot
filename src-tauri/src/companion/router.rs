@@ -1939,8 +1939,9 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         ),
         "agents.loginPhoneFinish" => "finished signing in on the phone".into(),
         "agents.appsConnect" => format!(
-            "connected {} on the Mac for {}",
+            "connected {} on {} for {}",
             field("service"),
+            crate::computer::THE,
             grants_audit(params)
         ),
         "agents.appsPhoneBegin" => format!(
@@ -1975,7 +1976,7 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
                 other => format!("memory {other}"),
             }
         }
-        "devices.unpairSelf" => "forgot this Mac".into(),
+        "devices.unpairSelf" => concat!("forgot this ", crate::computer::noun!()).into(),
         "system.reportCrashes" => format!(
             "sent {} crash note(s)",
             params

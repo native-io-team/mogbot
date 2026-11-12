@@ -403,7 +403,7 @@ fn put(raw: &str, preamble: &str) -> String {
             } else {
                 "\n\n"
             };
-            format!("{raw}{sep}{}\n", preamble.trim_end())
+            format!("{raw}{sep}{}\n", block.trim_end())
         }
     }
 }
@@ -486,13 +486,19 @@ pub(crate) fn upgrade(agent: &store::Agent) -> Result<bool, CommandError> {
     if let Some((start, end)) = section(&raw) {
         // Ours already: only its logins bullet moves on, by exact match.
         let ours = &raw[start..end];
-        let Some(old) = PAST_LOGINS_LINES.iter().find(|l| ours.contains(**l)) else {
+        // Written in this build's words for the computer (`put`), so matched
+        // and replaced in them too.
+        let Some(old) = PAST_LOGINS_LINES
+            .iter()
+            .map(|l| crate::computer::localize(l))
+            .find(|l| ours.contains(l.as_ref()))
+        else {
             return Ok(false);
         };
         let next = format!(
             "{}{}{}",
             &raw[..start],
-            ours.replacen(old, LOGINS_LINE, 1),
+            ours.replacen(old.as_ref(), &crate::computer::localize(LOGINS_LINE), 1),
             &raw[end..]
         );
         write(&agent.id, &next)?;

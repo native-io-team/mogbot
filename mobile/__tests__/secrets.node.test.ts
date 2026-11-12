@@ -146,13 +146,15 @@ class SelfSignedOk extends WebSocket {
     expect(secretRouteProblem(ts, true)).toBe(null);
     expect(
       secretRouteProblem({ kind: 'tailscale', url: 'http://mac.tail1.ts.net:47443' }, true)
-    ).toMatch(/only travels to your Mac over Tailscale/);
+    ).toMatch(/only travels to your computer over Tailscale/);
     expect(secretRouteProblem({ kind: 'lan', url: 'https://192.168.1.20:47444' }, true)).toMatch(
-      /only travels to your Mac over Tailscale/
+      /only travels to your computer over Tailscale/
     );
-    expect(secretRouteProblem(null, true)).toMatch(/needs your Mac/);
+    expect(secretRouteProblem(null, true)).toMatch(/needs your computer/);
     // A Tailscale route whose welcome wasn't signed by the pinned key.
-    expect(secretRouteProblem(ts, false)).toMatch(/hasn’t proved it’s the Mac you paired with/);
+    expect(secretRouteProblem(ts, false)).toMatch(
+      /hasn’t proved it’s the computer you paired with/
+    );
     expect(t.identityVerified).toBe(true);
   });
 
@@ -169,7 +171,7 @@ class SelfSignedOk extends WebSocket {
       request,
     };
     await expect(sendSecret(plain as never, 'fin', 'req_secret', [VALUE])).rejects.toThrow(
-      /only travels to your Mac over Tailscale/
+      /only travels to your computer over Tailscale/
     );
     const offline = {
       state: { kind: 'connecting', attempt: 1 },
@@ -178,7 +180,7 @@ class SelfSignedOk extends WebSocket {
       request,
     };
     await expect(sendSecret(offline as never, 'fin', 'req_secret', [VALUE])).rejects.toThrow(
-      /needs your Mac/
+      /needs your computer/
     );
     expect(request).not.toHaveBeenCalled();
   });

@@ -90,9 +90,10 @@ pub fn words(step: Step, assistant: &str) -> String {
     let a_cap = capital(a);
     match step {
         Step::Tailscale => format!(
-            "Nice, let's bring them over. {a_cap} needs a private way to reach me on this Mac, \
+            "Nice, let's bring them over. {a_cap} needs a private way to reach me on {this}, \
              and that's a free app called Tailscale. Install it and sign in. \
-             I'll notice the moment it's on."
+             I'll notice the moment it's on.",
+            this = crate::computer::THIS,
         ),
         Step::Link => format!(
             "Tailscale's on. Now I'll open a private link to me that only you hand out. \

@@ -88,7 +88,10 @@ impl ApiError {
             ApiError::Scope(s) => format!(
                 "The Slack app is missing a permission ({s}). Create it again from the setup link."
             ),
-            ApiError::Network(_) => "Couldn't reach Slack. Check this Mac is online.".into(),
+            ApiError::Network(_) => format!(
+                "Couldn't reach Slack. Check {} is online.",
+                crate::computer::THIS
+            ),
             ApiError::Slack(e) => format!("Slack said “{e}”."),
         }
     }
@@ -535,7 +538,7 @@ pub fn manifest_url() -> String {
     let manifest = serde_json::json!({
         "display_information": {
             "name": format!("{} agents", crate::brand::NAME),
-            "description": "Lets your agents on your Mac read the conversations you choose and reply as you.",
+            "description": format!("Lets your agents on {} read the conversations you choose and reply as you.", crate::computer::YOUR),
         },
         "oauth_config": { "scopes": { "user": USER_SCOPES } },
         "settings": {

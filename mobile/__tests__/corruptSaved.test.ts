@@ -58,7 +58,12 @@ describe('the saved pairing', () => {
       secretKey: undefined,
       routes: [null, ...good.routes, { kind: 'tailscale' }],
     });
-    expect(c).toMatchObject({ name: 'Your Mac', pairedAt: 0, secretKey: '', routes: good.routes });
+    expect(c).toMatchObject({
+      name: 'Your computer',
+      pairedAt: 0,
+      secretKey: '',
+      routes: good.routes,
+    });
   });
 });
 
@@ -132,9 +137,7 @@ describe('events of the wrong shape', () => {
   it('agents.status survives an overview whose agents aren’t a list', () => {
     const s = { ...emptySync(), overview: { agents: null } as unknown as AgentsOverview };
     const status = { state: 'working', activity: null, since: 1 };
-    expect(() =>
-      applyEvent(s, ev({ type: 'agents.status', agentId: 'a1', status }))
-    ).not.toThrow();
+    expect(() => applyEvent(s, ev({ type: 'agents.status', agentId: 'a1', status }))).not.toThrow();
     expect(applyEvent(s, ev({ type: 'agents.status', agentId: 'a1', status }))).toBe(s);
   });
 

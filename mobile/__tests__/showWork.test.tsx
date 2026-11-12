@@ -180,8 +180,8 @@ describe("links to the Mac's own servers", () => {
     connect([]);
     await render(<LocalLinks agentId="a" messageId="m" links={links} onError={jest.fn()} />);
     expect(screen.queryByText('Watch live')).toBeNull();
-    expect(screen.getByText('Running on your Mac · localhost:5173')).toBeTruthy();
-    expect(screen.getByLabelText('running on your Mac at localhost:5173')).toBeTruthy();
+    expect(screen.getByText('Running on your computer · localhost:5173')).toBeTruthy();
+    expect(screen.getByLabelText('running on your computer at localhost:5173')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
   });
 });

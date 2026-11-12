@@ -216,7 +216,7 @@ const updatesUrl = process.env.UPDATES_URL ?? (projectId ? `https://u.expo.dev/$
 const SURFACE_APP = '#151413'; // the dark palette's surfaceApp (src/lib/theme.ts)
 const SURFACE_APP_LIGHT = '#fdfcfa'; // the light palette's surfaceApp (src/lib/theme.ts)
 const CAMERA =
-  'Used to scan the pairing code on your Mac, and to take photos you send to your agents.';
+  'Used to scan the pairing code on your computer, and to take photos you send to your agents.';
 /**
  * iOS has one microphone string for the whole app, and expo-camera,
  * expo-image-picker and expo-speech-recognition each write it, so it says
@@ -435,7 +435,7 @@ export default (): ExpoConfig => {
       [
         'expo-image-picker',
         {
-          photosPermission: 'Sends the photos you pick to your agent on your Mac.',
+          photosPermission: 'Sends the photos you pick to your agent on your computer.',
           cameraPermission: CAMERA,
           microphonePermission: MICROPHONE,
         },

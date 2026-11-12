@@ -49,8 +49,8 @@ describe('the reach check, in words', () => {
 
   it('says what is left plainly, never as an alarm', () => {
     expect(residueLine(0)).toBe('Your team is ready.');
-    expect(residueLine(1)).toBe('Your team is ready. 1 thing I couldn’t reach on this Mac:');
-    expect(residueLine(3)).toBe('Your team is ready. 3 things I couldn’t reach on this Mac:');
+    expect(residueLine(1)).toBe('Your team is ready. 1 thing I couldn’t reach on this computer:');
+    expect(residueLine(3)).toBe('Your team is ready. 3 things I couldn’t reach on this computer:');
   });
 
   it('splits rows into the residue and receipts', () => {

@@ -16,7 +16,14 @@ import {
   type ComputerKind,
 } from '@shipstudio/companion-protocol';
 import { useMemo } from 'react';
-import { useApp } from './store';
+
+/**
+ * The store, required when first read rather than imported: the store loads
+ * `sync`, whose pure helpers (`bars`, `agents`) use these words, so a static
+ * import here closes a loop and `sync` is half-loaded when the store starts.
+ */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const store = (): typeof import('./store') => require('./store') as typeof import('./store');
 
 export interface ComputerWords {
   /** As reported; `undefined` when it hasn't said. */
@@ -57,13 +64,13 @@ export function computerWords(kind?: ComputerKind | null): ComputerWords {
 }
 
 /** The kind the paired computer reported, for code outside React. */
-export const pairedKind = (): ComputerKind | undefined => useApp.getState().mac?.computer;
+export const pairedKind = (): ComputerKind | undefined => store().useApp.getState().mac?.computer;
 
 /** The words for the paired computer, for code outside React (read when called). */
 export const pairedComputer = (): ComputerWords => computerWords(pairedKind());
 
 /** The words for the paired computer, kept current as it reports. */
 export function useComputer(): ComputerWords {
-  const kind = useApp((s) => s.mac?.computer);
+  const kind = store().useApp((s) => s.mac?.computer);
   return useMemo(() => computerWords(kind), [kind]);
 }

@@ -73,7 +73,7 @@ describe('the sign-in screen on the agents’ browser', () => {
   it('streams, hides a password field by itself, and offers another way when refused', async () => {
     await render(<SignInFromPhone />);
     expect(await screen.findByText('google.com')).toBeTruthy();
-    expect(screen.getByText('The agents’ browser on your Mac')).toBeTruthy();
+    expect(screen.getByText('The agents’ browser on your computer')).toBeTruthy();
     await act(() => new Promise((r) => setTimeout(r, 300)));
     // Each picture is asked for after the one before.
     expect(mockFrames[0].after).toBeUndefined();
@@ -87,7 +87,7 @@ describe('the sign-in screen on the agents’ browser', () => {
     expect(screen.getByText(/Sign in another way below/)).toBeTruthy();
     await fireEvent.press(screen.getByTestId('signin-fallback'));
     expect(mockFallback).toHaveBeenCalledWith('s1');
-    expect(await screen.findByText('A Chrome window on your Mac')).toBeTruthy();
+    expect(await screen.findByText('A Chrome window on your computer')).toBeTruthy();
     mockBlocked = false;
   });
 });

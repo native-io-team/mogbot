@@ -393,7 +393,7 @@ describe('bars above the composer', () => {
       },
     } as AgentMessage;
     const bar = importBar(agent(), [review])!;
-    expect(bar.title).toBe('Import from Grok · waiting on your Mac');
+    expect(bar.title).toBe('Import from Grok · waiting on your computer');
     expect(bar.detail).toBeUndefined();
   });
 

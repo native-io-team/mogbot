@@ -31,8 +31,8 @@ describe('pushLine', () => {
   it('says what the Mac answered, and nothing before it has', () => {
     expect(pushLine(null, true)).toBeNull();
     expect(pushLine('on', true)?.footer).toMatch(/never what it said/);
-    expect(pushLine('off', true)?.value).toBe('Off on your Mac');
-    expect(pushLine('unavailable', true)?.value).toBe('Not on this Mac');
+    expect(pushLine('off', true)?.value).toBe('Off on your computer');
+    expect(pushLine('unavailable', true)?.value).toBe('Not on this computer');
     expect(pushLine('pending', true)?.value).toBe('Connecting');
   });
 });

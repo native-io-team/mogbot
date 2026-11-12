@@ -290,7 +290,8 @@ export const ENDED_WORDS = [
   'That sign-in has ended.',
   'That sign-in was started on another phone.',
   'That sign-in sat idle for five minutes, so it was closed.',
-  'Another phone is signing in on this Mac right now.',
+  // "…on this Mac / PC / computer right now.": the start says it.
+  'Another phone is signing in on this ',
 ] as const;
 
 export function endsIt(message: string): boolean {

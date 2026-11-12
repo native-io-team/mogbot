@@ -475,7 +475,7 @@ pub fn memory_block(p: &Proposal, source: &str, conversations: usize) -> String 
     }
     if !p.apps.is_empty() {
         parts.push(format!(
-            "Apps I used in {source} (here I use what this Mac is connected to, and ask before connecting anything):\n{}",
+            "Apps I used in {source} (here I use what {this} is connected to, and ask before connecting anything):\n{}",
             p.apps
                 .iter()
                 .map(|a| {
@@ -486,7 +486,8 @@ pub fn memory_block(p: &Proposal, source: &str, conversations: usize) -> String 
                     }
                 })
                 .collect::<Vec<_>>()
-                .join("\n")
+                .join("\n"),
+            this = crate::computer::THIS,
         ));
     }
     if conversations > 0 {
@@ -585,8 +586,9 @@ pub fn playback(review: &review::Review, source: &str) -> Vec<PlaybackAgent> {
                 push(
                     "app",
                     format!(
-                        "With {source} I used {}. Here I use what this Mac is connected to, and ask before connecting anything",
-                        list_words(&p.apps.iter().map(|a| a.name.clone()).collect::<Vec<_>>())
+                        "With {source} I used {}. Here I use what {this} is connected to, and ask before connecting anything",
+                        list_words(&p.apps.iter().map(|a| a.name.clone()).collect::<Vec<_>>()),
+                        this = crate::computer::THIS,
                     ),
                 );
             }

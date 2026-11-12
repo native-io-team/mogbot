@@ -877,7 +877,7 @@ impl Companion {
             self.backend.audit(
                 &actor_for(&d.name),
                 "revoked",
-                "removed on this Mac".into(),
+                concat!("removed on this ", crate::computer::noun!()).into(),
                 true,
             );
             self.backend.changed();

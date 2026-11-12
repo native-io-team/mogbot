@@ -62,7 +62,7 @@ describe('the sign-in screen', () => {
     try {
       ps.signinBegin.mockImplementationOnce(() => new Promise(() => {}));
       await render(<SignInFromPhone />);
-      expect(screen.getByText('Your Mac')).toBeTruthy();
+      expect(screen.getByText('Your computer')).toBeTruthy();
       await act(async () => {
         jest.advanceTimersByTime(25_000);
       });

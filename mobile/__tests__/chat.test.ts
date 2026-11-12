@@ -501,7 +501,7 @@ describe('driven on the Mac', () => {
 
   it('says it one way everywhere: the row and the bar, in the desk’s words', () => {
     const a = driven();
-    expect(drivenLine(a.name)).toBe(`You’re driving ${a.name} on your Mac`);
+    expect(drivenLine(a.name)).toBe(`You’re driving ${a.name} on your computer`);
     expect(subtitle(a)).toBe(drivenLine(a.name));
     expect(drivenBar(a)?.title).toBe(drivenLine(a.name));
     expect(drivenWait(a.name)).toBe(`sends when you hand ${a.name} back`);

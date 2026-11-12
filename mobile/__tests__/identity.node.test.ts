@@ -225,7 +225,7 @@ describe('against a server', () => {
     t.onState((s) => states.push(s));
     await until(() => t.state.kind === 'refused');
     expect(t.state).toEqual({ kind: 'refused', reason: 'not_your_mac' });
-    expect(t.refusal?.message).toMatch(/couldn’t prove it’s the Mac you paired with/);
+    expect(t.refusal?.message).toMatch(/couldn’t prove it’s the computer you paired with/);
     expect(t.identityVerified).toBe(false);
     expect(states.some((s) => s.kind === 'connected')).toBe(false);
     // What it sent: one challenge. No hello, no token.
@@ -277,7 +277,7 @@ describe('against a server', () => {
     const t = open(url, old.issueToken().token, old);
     await until(() => t.state.kind === 'refused');
     expect(t.state).toEqual({ kind: 'refused', reason: 'update_mac' });
-    expect(t.refusal?.message).toMatch(/Update it on the Mac/);
+    expect(t.refusal?.message).toMatch(/Update it on the computer/);
     t.close();
     await old.close();
   });

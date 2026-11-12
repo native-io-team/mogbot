@@ -299,6 +299,7 @@ function demoMessages(now: number): Record<string, AgentMessage[]> {
 function demoStatus(): MacStatus {
   return {
     name: DEMO_MAC_NAME,
+    computer: 'mac',
     appVersion: 'demo',
     power: { keepAwake: true, lidClosedMode: 'unknown', onBattery: 'no' },
     claude: { installed: true, signedIn: 'yes' },

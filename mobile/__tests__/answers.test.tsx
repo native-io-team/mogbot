@@ -316,7 +316,7 @@ describe('an import review card', () => {
     await render(<ReviewOnMacCard approval={approval} />);
     expect(screen.getByText('Finance · Money')).toBeTruthy();
     expect(screen.getByText('Travel · Trips · replaces your Trips')).toBeTruthy();
-    expect(screen.getByText('From Grok · on your Mac')).toBeTruthy();
+    expect(screen.getByText('From Grok · on your computer')).toBeTruthy();
     // Once: the source says where, the note says why, never the desktop's sentence twice.
     expect(screen.queryByText(/Review on your Mac/)).toBeNull();
     expect(screen.queryAllByRole('button')).toHaveLength(0);

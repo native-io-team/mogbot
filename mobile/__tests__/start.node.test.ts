@@ -380,10 +380,12 @@ describe('routine times on the Mac’s clock', () => {
     expect(describeRoutineWhen(weekdays, now, phone)).toMatch(/^Every weekday at 9:00\s?AM$/);
     const other = phone === 'Asia/Tokyo' ? 'America/New_York' : 'Asia/Tokyo';
     expect(describeRoutineWhen(weekdays, now, other)).toMatch(
-      /^Every weekday at 9:00\s?AM Mac time$/
+      /^Every weekday at 9:00\s?AM computer time$/
     );
     expect(describeRoutineWhen({ kind: 'every', minutes: 120 }, now, other)).toBe('Every 2 hours');
-    expect(routineEcho(weekdays, 'Draft my day', now, other)).toMatch(/Mac time — Draft my day$/);
+    expect(routineEcho(weekdays, 'Draft my day', now, other)).toMatch(
+      /computer time — Draft my day$/
+    );
   });
 });
 

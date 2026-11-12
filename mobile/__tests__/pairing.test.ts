@@ -43,7 +43,7 @@ describe('pairing links', () => {
     const { fingerprint: _, ...old } = link;
     expect(parseLink(formatPairingLink(old as PairingLink))).toBeNull();
     expect(linkProblem(formatPairingLink(old as PairingLink))).toMatch(
-      /^Update the app on your Mac to pair/
+      /^Update the app on your computer to pair/
     );
     expect(linkProblem('hello')).toMatch(/isn’t a pairing code/);
   });
@@ -52,7 +52,7 @@ describe('pairing links', () => {
   it('say to update the Mac when its code is from before the rename', () => {
     const body = formatPairingLink(link).slice(PAIRING_SCHEME.length);
     expect(linkProblem(`${PREVIOUS_PAIRING_SCHEME}${body}`)).toMatch(
-      /^Update the app on your Mac to pair.*before the app was renamed/
+      /^Update the app on your computer to pair.*before the app was renamed/
     );
     expect(linkProblem(`${OTHER_APP_PAIRING_SCHEME}${body}`)).toMatch(/different app’s phone app/);
   });
@@ -60,7 +60,7 @@ describe('pairing links', () => {
   it('show names without invisible or reordering characters', () => {
     expect(cleanName('Julian’s Mac\u202Eorp kooBcaM\u200B')).toBe('Julian’s Macorp kooBcaM');
     expect(cleanName('a\n\tb')).toBe('a b');
-    expect(cleanName('\u200B\u202E')).toBe('your Mac');
+    expect(cleanName('\u200B\u202E')).toBe('your computer');
     expect(cleanName('x'.repeat(200))).toHaveLength(60);
   });
 });

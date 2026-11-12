@@ -60,7 +60,7 @@ describe('the phone’s “When…” composer', () => {
     await mount();
     expect(screen.getByText('When this happens')).toBeTruthy();
     expect(screen.getByText('Someone mentions you on GitHub')).toBeTruthy();
-    expect(screen.getAllByText('Free · checked from your Mac')).toHaveLength(2);
+    expect(screen.getAllByText('Free · checked from your computer')).toHaveLength(2);
     expect(screen.getByText('A Linear issue is assigned to you')).toBeTruthy();
     expect(screen.getByText('Check every')).toBeTruthy();
     // Everyday sources first, as on the desk; GitHub further down.
@@ -149,7 +149,7 @@ describe('the phone’s “When…” composer', () => {
   it('reads Mail on your Mac, narrowed by sender and words', async () => {
     await mount();
     await fireEvent.press(screen.getByText('An email arrives in Mail'));
-    expect(screen.getByText('Free · reads Mail on your Mac')).toBeTruthy();
+    expect(screen.getByText('Free · reads Mail on your computer')).toBeTruthy();
     await fireEvent.changeText(screen.getByLabelText('Only from'), 'billing@northwind.com');
     await fireEvent.changeText(screen.getByLabelText('Only with these words'), 'invoice');
     await fireEvent.changeText(

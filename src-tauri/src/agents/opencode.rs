@@ -215,7 +215,7 @@ pub fn models() -> Vec<ModelChoice> {
 fn label(m: &Model) -> String {
     let provider = m.id.split_once('/').map(|(p, _)| p).unwrap_or("");
     if m.local {
-        format!("{} · on this Mac", m.name)
+        format!("{} · on {}", m.name, crate::computer::THIS)
     } else if provider.is_empty() {
         m.name.clone()
     } else {
