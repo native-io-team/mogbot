@@ -105,6 +105,12 @@ const MAX_REPORTS_PER_SESSION: usize = 25;
 /// Dedup keys already reported this app session.
 static REPORTED: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
 
+/// Whether this build sends reports and the user left them on: what a
+/// caller relaying someone else's reports (the phone's) checks first.
+pub fn reporting_on() -> bool {
+    enabled() && secret().is_some() && ENDPOINT.is_some()
+}
+
 fn enabled() -> bool {
     reporting_build_enabled() && reporting_consent_enabled()
 }

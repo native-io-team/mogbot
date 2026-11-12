@@ -8,7 +8,8 @@
  * - **A JavaScript crash** (`installCrashHandler`): before the system's own
  *   handler ends the app, the drafts and the outbox are written out (for at
  *   most `SAVE_BEFORE_EXIT_MS`) and the error is logged on this phone
- *   (`crash-log.json`, the last `CRASH_LOG_MAX`; it goes nowhere else).
+ *   (`crash-log.json`, the last `CRASH_LOG_MAX`), and handed to the Mac on the next
+ *   connect (`sendCrashes`), which reports it only if its owner left error reports on.
  * - **A native crash, or the system killing the app on screen**
  *   (`startCrashWatch`): a marker is on disk only while the app is in the
  *   foreground. One still there at launch means the last run ended while you
@@ -26,6 +27,10 @@ import { readJson, removeJson, writeJson } from './persist';
 export const CRASH_LOG = 'crash-log.json';
 const LAST_CRASH = 'crash-last.json';
 const LIVE = 'foreground.json';
+/** When the newest crash the Mac was handed happened (`sendCrashes`). */
+const CRASH_SENT = 'crash-sent.json';
+/** Most crashes handed to the Mac at once. */
+export const CRASH_SEND_MAX = 20;
 export const CRASH_LOG_MAX = 20;
 /** How long a crash may wait for the drafts to reach the disk before the app ends. */
 export const SAVE_BEFORE_EXIT_MS = 1500;
@@ -63,6 +68,24 @@ export async function recordCrash(
 
 /** What's in this phone's crash log, oldest first. */
 export const crashLog = async () => (await readJson<CrashRecord[]>(CRASH_LOG)) ?? [];
+
+/**
+ * Hand the Mac the crashes it hasn't had yet, for it to report the way it
+ * reports its own (`system.reportCrashes`; its "Usage analytics & error
+ * reports" switch decides). Each crash goes once, sent or dropped: once the
+ * Mac answers, they're marked handed over, so a Mac with reporting off
+ * isn't asked again about the same ones.
+ */
+export async function sendCrashes(
+  send: (crashes: CrashRecord[]) => Promise<unknown>
+): Promise<number> {
+  const sentUpTo = (await readJson<number>(CRASH_SENT)) ?? 0;
+  const fresh = (await crashLog()).filter((r) => r.at > sentUpTo).slice(-CRASH_SEND_MAX);
+  if (fresh.length === 0) return 0;
+  await send(fresh);
+  await writeJson(CRASH_SENT, Math.max(...fresh.map((r) => r.at)));
+  return fresh.length;
+}
 
 type Handler = (error: unknown, isFatal?: boolean) => void;
 interface ErrorUtilsShape {

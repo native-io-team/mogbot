@@ -258,4 +258,27 @@ describe('a crash', () => {
     const next = launch();
     await expect(next.crash.startCrashWatch(true)).resolves.toBe(false);
   });
+
+  it('hands the Mac each crash once, at most a batch at a time', async () => {
+    const { crash } = launch();
+    await crash.recordCrash(new Error('First'), 'js', false, 1000);
+    await crash.recordCrash(new Error('Second'), 'render', false, 2000);
+    const sent: string[][] = [];
+    const send = (c: { message: string }[]) => {
+      sent.push(c.map((r) => r.message));
+      return Promise.resolve();
+    };
+    await expect(crash.sendCrashes(send)).resolves.toBe(2);
+    await expect(crash.sendCrashes(send)).resolves.toBe(0);
+    await crash.recordCrash(new Error('Third'), 'js', true, 3000);
+    await expect(crash.sendCrashes(send)).resolves.toBe(1);
+    expect(sent).toEqual([['First', 'Second'], ['Third']]);
+  });
+
+  it('keeps them for the next connect when the Mac didn\'t answer', async () => {
+    const { crash } = launch();
+    await crash.recordCrash(new Error('Lost'), 'js', false, 1000);
+    await expect(crash.sendCrashes(() => Promise.reject(new Error('gone')))).rejects.toThrow();
+    await expect(crash.sendCrashes(() => Promise.resolve())).resolves.toBe(1);
+  });
 });

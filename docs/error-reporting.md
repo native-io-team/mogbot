@@ -61,6 +61,22 @@ All reporting funnels through **`src-tauri/src/error_reporting.rs`**
 `get_automatic_report_status` command and `src/lib/autoReports.ts` wrapper
 expose recent confirmed deliveries to Settings.
 
+## The phone, and problems people report
+
+- **The phone** keeps its own crash log (`mobile/src/lib/crash.ts`) and hands
+  the Mac the crashes it hasn't had yet on each connect (`system.reportCrashes`,
+  at most 20). The Mac reports them like its own (`source: phone-ios` /
+  `phone-android`, scrubbed, deduped, capped), only while its "Usage analytics &
+  error reports" switch is on: one switch for both. The phone holds no
+  endpoint or secret and talks to nothing but the Mac.
+- **Windows and Linux** builds are the same Rust and frontend, so the same
+  reporting runs there; CI compiles the secret in from the repo secret.
+- **"Something broken?"**: the Chief's `report_problem` tool writes up what the
+  user said, shows the exact text on a card and, on Allow, sends it
+  (`send_user_report`, `source: user-report`). It isn't held by the switch or the
+  caps, since the user chose to send it. From the phone it's the same chat, so
+  the Mac sends it.
+
 ## Cost controls
 
 Reports can trigger paid agent investigations, so spam protection is layered —

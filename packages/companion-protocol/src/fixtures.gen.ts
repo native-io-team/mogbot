@@ -5503,6 +5503,7 @@ export const frames = [
       "devices.self",
       "devices.unpairSelf",
       "devices.setPush",
+      "system.reportCrashes",
       "agents.overview",
       "agents.messages",
       "agents.workSteps",

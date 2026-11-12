@@ -84,6 +84,17 @@ export interface BlobRef {
   size: number;
 }
 
+/** One crash or error the phone logged (`system.reportCrashes`). */
+export interface PhoneCrash {
+  /** When, ms since the epoch. */
+  at: number;
+  /** `js`: an uncaught error; `render`: a screen that failed to draw. */
+  where: 'js' | 'render';
+  fatal: boolean;
+  message: string;
+  stack?: string;
+}
+
 export interface Methods {
   // ---- The Mac and this device ------------------------------------------
   'system.status': { params: Record<string, never>; result: MacStatus };
@@ -100,6 +111,17 @@ export interface Methods {
   'devices.setPush': {
     params: { token: string | null; environment?: PushEnvironment };
     result: { status: PushStatus };
+  };
+  /**
+   * Crashes and errors this phone logged since it last sent them (the phone's
+   * crash log), for the Mac to report the way it reports its own
+   * (docs/error-reporting.md): the Mac's "Usage analytics & error reports"
+   * switch decides, and the Mac scrubs them. At most 20 a call.
+   * `accepted`: how many the Mac took (0 with reporting off: drop them anyway).
+   */
+  'system.reportCrashes': {
+    params: { crashes: PhoneCrash[]; platform: 'ios' | 'android'; appVersion: string };
+    result: { accepted: number };
   };
 
   // ---- Agents ------------------------------------------------------------

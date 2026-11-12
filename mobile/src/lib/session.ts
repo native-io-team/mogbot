@@ -84,7 +84,7 @@ import { registerPush } from './push';
 import { sendSecret } from './secrets';
 export { secretRouteProblem } from './secrets';
 import { DirectTransport, setTransportFaultReporter, WireFailure } from './transport';
-import { recordCrash } from './crash';
+import { recordCrash, sendCrashes } from './crash';
 import { asMessage, asOverview, asProjects, asRooms } from './wellFormed';
 
 // A frame the phone couldn't handle is skipped (transport.ts) and logged here.
@@ -240,6 +240,15 @@ function connect(c: Credentials) {
     if (!roomsOffered(welcome)) setApp({ rooms: null });
     if (!canCall('agents.teamSetup', welcome)) setApp({ teamSetup: null });
     if (canCall('devices.setPush', welcome)) void syncPush();
+    if (canCall('system.reportCrashes', welcome)) {
+      void sendCrashes((crashes) =>
+        call('system.reportCrashes', {
+          crashes,
+          platform: Platform.OS === 'android' ? 'android' : 'ios',
+          appVersion: appInfo().version,
+        })
+      ).catch(() => undefined);
+    }
   });
   t.onEvent((event, cursor) => {
     if (event.type === 'agents.message') {

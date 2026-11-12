@@ -23,6 +23,7 @@ pub const METHODS: &[&str] = &[
     "devices.self",
     "devices.unpairSelf",
     "devices.setPush",
+    "system.reportCrashes",
     "agents.overview",
     "agents.messages",
     "agents.workSteps",
@@ -1154,6 +1155,73 @@ fn parse<T: for<'de> Deserialize<'de>>(params: Value) -> Result<T, WireError> {
     serde_json::from_value(params).map_err(bad_params)
 }
 
+/// `system.reportCrashes`: the phone's logged crashes (`PhoneCrash` in methods.ts).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportCrashesParams {
+    crashes: Vec<PhoneCrash>,
+    platform: String,
+    #[serde(default)]
+    app_version: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PhoneCrash {
+    #[serde(rename = "where")]
+    place: String,
+    #[serde(default)]
+    fatal: bool,
+    message: String,
+    #[serde(default)]
+    stack: Option<String>,
+}
+
+/// Most crashes one `system.reportCrashes` passes on.
+const PHONE_CRASHES_MAX: usize = 20;
+
+/// `system.reportCrashes`: the phone's logged crashes, reported the way the
+/// Mac reports its own (`error_reporting::report_error`: the Mac's switch,
+/// scrubbing, dedup and caps all apply). Returns how many it took.
+fn report_phone_crashes(p: ReportCrashesParams) -> usize {
+    if !crate::error_reporting::reporting_on() {
+        return 0;
+    }
+    let platform = match p.platform.as_str() {
+        "ios" | "android" => p.platform.as_str(),
+        _ => "phone",
+    };
+    let version = p.app_version.unwrap_or_default();
+    let source = format!("phone-{platform}");
+    let mut taken = 0;
+    for c in p.crashes.into_iter().take(PHONE_CRASHES_MAX) {
+        let kind = if c.place == "render" {
+            "screen failed to draw"
+        } else if c.fatal {
+            "crash"
+        } else {
+            "error"
+        };
+        let message: String = c.message.chars().take(2000).collect();
+        let stack: Option<String> = c.stack.map(|s| {
+            let s: String = s.chars().take(8000).collect();
+            if version.is_empty() {
+                s
+            } else {
+                format!("phone app {version}\n{s}")
+            }
+        });
+        crate::error_reporting::report_error(
+            &format!("phone {kind}: {message}"),
+            stack.as_deref(),
+            &source,
+            None,
+        );
+        taken += 1;
+    }
+    taken
+}
+
 /// `devices.setPush`: a token, or `null` to stop.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1908,6 +1976,13 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             }
         }
         "devices.unpairSelf" => "forgot this Mac".into(),
+        "system.reportCrashes" => format!(
+            "sent {} crash note(s)",
+            params
+                .get("crashes")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len)
+        ),
         "devices.setPush" => match params.get("token").and_then(Value::as_str) {
             Some(_) => "push token set".into(),
             None => "push token cleared".into(),
@@ -2179,6 +2254,10 @@ async fn run(
                 b.changed();
             }
             Ok(Value::Null)
+        }
+        "system.reportCrashes" => {
+            let p: ReportCrashesParams = parse(params)?;
+            Ok(json!({ "accepted": report_phone_crashes(p) }))
         }
         "devices.setPush" => {
             let p: SetPushParams = parse(params)?;
