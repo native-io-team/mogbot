@@ -102,9 +102,19 @@ fn usable_method(m: &str) -> Option<hyper::Method> {
     }
 }
 
-fn response_frame(id: u64, first: bool, status: u16, headers: &Value, body: &[u8], more: bool) -> String {
+fn response_frame(
+    id: u64,
+    first: bool,
+    status: u16,
+    headers: &Value,
+    body: &[u8],
+    more: bool,
+) -> String {
     let mut f = Map::new();
-    f.insert("t".into(), json!(if first { "httpRes" } else { "httpBody" }));
+    f.insert(
+        "t".into(),
+        json!(if first { "httpRes" } else { "httpBody" }),
+    );
     f.insert("id".into(), json!(id));
     if first {
         f.insert("status".into(), json!(status));
@@ -191,7 +201,12 @@ impl Http {
                 match rx.recv().await {
                     Some(Piece::Data(b)) => Some((Ok(Frame::data(b)), Some(rx))),
                     Some(Piece::End) => None,
-                    None => Some((Err(std::io::Error::other("the phone went before its body ended")), None)),
+                    None => Some((
+                        Err(std::io::Error::other(
+                            "the phone went before its body ended",
+                        )),
+                        None,
+                    )),
                 }
             });
             StreamBody::new(stream).boxed_unsync()
@@ -289,7 +304,10 @@ async fn perform(
     let mut headers = Map::new();
     for (name, value) in response.headers() {
         let n = name.as_str();
-        if matches!(n, "connection" | "keep-alive" | "transfer-encoding" | "upgrade") {
+        if matches!(
+            n,
+            "connection" | "keep-alive" | "transfer-encoding" | "upgrade"
+        ) {
             continue;
         }
         let Ok(v) = value.to_str() else { continue };
@@ -371,11 +389,22 @@ mod tests {
     #[test]
     fn frames_say_more_only_when_more_follows() {
         let h = json!({ "content-type": "text/plain" });
-        let one: Value = serde_json::from_str(&response_frame(3, true, 200, &h, b"hi", false)).unwrap();
-        assert_eq!(one, json!({ "t": "httpRes", "id": 3, "status": 200, "headers": h, "body": "aGk" }));
+        let one: Value =
+            serde_json::from_str(&response_frame(3, true, 200, &h, b"hi", false)).unwrap();
+        assert_eq!(
+            one,
+            json!({ "t": "httpRes", "id": 3, "status": 200, "headers": h, "body": "aGk" })
+        );
         let empty: Value = serde_json::from_str(&bare(4, 502)).unwrap();
-        assert_eq!(empty, json!({ "t": "httpRes", "id": 4, "status": 502, "headers": {} }));
-        let next: Value = serde_json::from_str(&response_frame(3, false, 200, &h, b"", false)).unwrap();
-        assert_eq!(next, json!({ "t": "httpBody", "id": 3, "body": "", "more": false }));
+        assert_eq!(
+            empty,
+            json!({ "t": "httpRes", "id": 4, "status": 502, "headers": {} })
+        );
+        let next: Value =
+            serde_json::from_str(&response_frame(3, false, 200, &h, b"", false)).unwrap();
+        assert_eq!(
+            next,
+            json!({ "t": "httpBody", "id": 3, "body": "", "more": false })
+        );
     }
 }

@@ -145,6 +145,30 @@ pub struct Peer {
     /// A socket's place under [`limits::MAX_PREHELLO_PER_SOURCE`], given back
     /// once its `hello` checks out.
     pub prehello: Option<limits::Slot>,
+    /// It came through this app's relay link (a channel, or HTTP carrying
+    /// this launch's relay secret): there is no tailnet login to match, and
+    /// the device token alone says who it is.
+    pub relay: bool,
+}
+
+impl Peer {
+    /// The route it came by.
+    pub fn route(&self) -> RouteKind {
+        if self.relay {
+            RouteKind::Relay
+        } else {
+            // The listener is loopback-only and published solely by
+            // `tailscale serve` (TLS at the tailnet edge), or reached
+            // through the relay. A LAN listener would set its own kind here.
+            RouteKind::Tailscale
+        }
+    }
+
+    /// Whether `device` may be used from here: over Tailscale, only by the
+    /// tailnet user who paired it; over the relay, the token is enough.
+    fn may_use(&self, device: &DeviceRecord) -> bool {
+        self.relay || device.login_matches(self.login.as_deref())
+    }
 }
 
 impl Peer {
@@ -176,11 +200,26 @@ async fn handle(
     if !limits::host_allowed(req.headers()) || !limits::origin_allowed(req.headers()) {
         return status_only(StatusCode::FORBIDDEN);
     }
-    let mut peer = Peer {
-        source: limits::source_of(addr, req.headers()),
-        login: limits::tailnet_login(req.headers()),
-        conn,
-        prehello: None,
+    // A request from a relay channel (`relay/http.rs`) carries this launch's
+    // secret: its source is its channel, and it has no tailnet login. The
+    // secret is compared in constant time, and nothing else counts.
+    let relayed = super::relay::secret_ok(req.headers());
+    let mut peer = if relayed {
+        Peer {
+            source: super::relay::source_of(req.headers()),
+            login: None,
+            conn,
+            prehello: None,
+            relay: true,
+        }
+    } else {
+        Peer {
+            source: limits::source_of(addr, req.headers()),
+            login: limits::tailnet_login(req.headers()),
+            conn,
+            prehello: None,
+            relay: false,
+        }
     };
     let Some(slot) = c.sources.try_take(&peer.source, limits::MAX_PER_SOURCE) else {
         return status_only(StatusCode::TOO_MANY_REQUESTS);
@@ -189,6 +228,8 @@ async fn handle(
     match (req.method(), path.as_str()) {
         (&Method::POST, "/v1/identity") => identity(c, req).await,
         (&Method::POST, "/v1/pair") => pair(c, req, &peer).await,
+        // A relay channel speaks the socket's frames itself, never by upgrade.
+        (&Method::GET, "/v1/ws") if peer.relay => status_only(StatusCode::NOT_FOUND),
         (&Method::GET, "/v1/ws") => {
             // Strangers' sockets are cheap to open and held for the hello
             // timeout: a few per source, so one can't hold them all.
@@ -843,14 +884,11 @@ where
         device_id: record.id.clone(),
         device_name: record.name.clone(),
         label: Companion::label(&record.id, conn),
-        // The listener is loopback-only and published solely by `tailscale
-        // serve` (TLS at the tailnet edge): the only way in. A LAN listener
-        // would set its own kind here.
-        route: RouteKind::Tailscale,
+        route: peer.route(),
         shows: wire::Shows::from_hello(&hello.features),
     };
     c.registry
-        .touch(&record.id, now_ms() as i64, RouteKind::Tailscale, true);
+        .touch(&record.id, now_ms() as i64, caller.route, true);
     c.backend.audit(
         &actor,
         "connected",
@@ -881,7 +919,7 @@ where
     c.close_conn(conn);
     let _ = c.backend.focus(&caller.label, None).await;
     c.registry
-        .touch(&record.id, now_ms() as i64, RouteKind::Tailscale, true);
+        .touch(&record.id, now_ms() as i64, caller.route, true);
     c.backend.changed();
 }
 
@@ -995,7 +1033,7 @@ where
         peer.source.as_str()
     };
     let record = match c.registry.authenticate(&hello.token) {
-        Auth::Device(d) if d.login_matches(peer.login.as_deref()) => d,
+        Auth::Device(d) if peer.may_use(&d) => d,
         Auth::Device(d) => {
             c.note_refused(
                 source,
@@ -1210,7 +1248,7 @@ where
                     refuse(ws, RefusedReason::Revoked, "This Mac removed this phone.").await;
                     return Ended::Revoked;
                 }
-                c.registry.touch(&caller.device_id, now_ms() as i64, RouteKind::Tailscale, false);
+                c.registry.touch(&caller.device_id, now_ms() as i64, caller.route, false);
                 let frame = match serde_json::from_str::<ClientFrame>(&text) {
                     Ok(f) => f,
                     Err(e) => {

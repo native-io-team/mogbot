@@ -15,6 +15,7 @@ import { haptic } from '../lib/haptics';
 import { makeStyles, useColors } from '../lib/appearance';
 import { useChatGallery, viewerParams } from '../lib/gallery';
 import { attachmentSource } from '../lib/session';
+import { useAttachmentSources } from '../lib/relayImages';
 import { radius, space, PRESSED } from '../lib/theme';
 import { T } from './ui';
 
@@ -49,6 +50,7 @@ function Picture({
   ratio: number;
   onRatio?: (r: number) => void;
 }) {
+  useAttachmentSources();
   // The box takes the shape; the picture only fills it, with no fade-in: a
   // fade the reshaping interrupted left the picture unpainted on the web build.
   return (

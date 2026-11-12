@@ -17,6 +17,7 @@ import { Segmented, T } from '../../components/ui';
 import { formatAgo } from '../../lib/agents';
 import { extensionOf, formatSize, isPreviewableImage, share } from '../../lib/files';
 import { attachmentSource, describeError, download, listFiles } from '../../lib/session';
+import { useAttachmentSources } from '../../lib/relayImages';
 import { useRefresh } from '../../lib/refresh';
 import { RefreshStatus } from '../../components/RefreshStatus';
 import { useApp } from '../../lib/store';
@@ -30,6 +31,7 @@ type Filter = 'all' | 'user' | 'agent';
 export default withAgentAccent(Files);
 
 function Files() {
+  useAttachmentSources();
   const colors = useColors();
   const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();

@@ -31,6 +31,7 @@ pub mod limits;
 pub mod pairing;
 pub mod projects;
 pub mod push;
+pub mod relay;
 pub mod router;
 pub mod server;
 #[cfg(test)]

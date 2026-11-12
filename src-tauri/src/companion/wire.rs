@@ -82,6 +82,9 @@ impl From<Option<bool>> for Known {
 pub enum RouteKind {
     Tailscale,
     Lan,
+    /// Through the relay (docs/relay.md), end to end encrypted to the Mac's
+    /// pinned key: `wss://<relay host>/v1/phone/<fingerprint>`.
+    Relay,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

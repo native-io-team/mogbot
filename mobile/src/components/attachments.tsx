@@ -21,6 +21,7 @@ import {
 } from '../lib/files';
 import { useChatGallery, viewerParams } from '../lib/gallery';
 import { attachmentSource, describeError, download } from '../lib/session';
+import { useAttachmentSources } from '../lib/relayImages';
 import type { PendingAttachment } from '../lib/sync';
 import { alpha, iconSize, radius, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -94,6 +95,7 @@ function Thumb({
   // A file the Mac couldn't send (gone, or not reachable) says so with its
   // name, never an empty box.
   const [failed, setFailed] = useState(false);
+  useAttachmentSources();
   const source = file.localUri
     ? { uri: file.localUri }
     : attachmentSource(agentId, file.path, width);

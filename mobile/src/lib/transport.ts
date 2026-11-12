@@ -14,6 +14,7 @@ import {
   HTTP,
   MAX_ATTACHMENT_BYTES,
   RELAY_CLOSE_MAC_OFFLINE,
+  RELAY_CLOSE_SIGN_IN_NEEDED,
   SUPPORTED,
   type BlobRef,
   type ClientFrame,
@@ -31,6 +32,7 @@ import {
   type ServerFrame,
   type Transport,
   type WelcomeFrame,
+  type RelaySaid,
   type WireError,
 } from '@shipstudio/companion-protocol';
 import { checkMac, MAC_RESET, NOT_YOUR_MAC, UPDATE_MAC, type Pinned } from './identity';
@@ -347,8 +349,8 @@ export class DirectTransport implements Transport {
   private handshakeMs = 0;
   /** In this spell of trouble, what the Mac said as it turned the phone away. */
   private macSaid: MacSaid | undefined;
-  /** The relay's last answer in this spell: that Mac isn't connected to it (4404). */
-  private macOffline = false;
+  /** The relay's last answer in this spell: the Mac isn't connected (4404) or signed in (4402). */
+  private relaySaid: RelaySaid | undefined;
 
   /** Where the Mac can be reached; the Mac's welcome may bring newer ones (`setRoutes`). */
   private routes: Route[];
@@ -626,7 +628,7 @@ export class DirectTransport implements Transport {
         since: this.troubleSince,
         ...(this.appStuck ? { appStuck: true } : {}),
         ...(this.macSaid ? { macSaid: this.macSaid } : {}),
-        ...(this.macOffline ? { macOffline: true } : {}),
+        ...(this.relaySaid ? { relaySaid: this.relaySaid } : {}),
       });
     }
     // A relay route is the socket's own address; a Tailscale one is the Mac's, plus `/v1/ws`.
@@ -739,8 +741,15 @@ export class DirectTransport implements Transport {
         this.refuseLocally('not_your_mac', NOT_YOUR_MAC);
         return;
       }
-      // The relay says whether the Mac is connected to it; only it can.
-      if (this.route.kind === 'relay') this.macOffline = code === RELAY_CLOSE_MAC_OFFLINE;
+      // The relay says whether the Mac is connected to it, and signed in; only it can.
+      if (this.route.kind === 'relay') {
+        this.relaySaid =
+          code === RELAY_CLOSE_MAC_OFFLINE
+            ? 'mac_offline'
+            : code === RELAY_CLOSE_SIGN_IN_NEEDED
+              ? 'sign_in_needed'
+              : undefined;
+      }
       // The Mac's app closing says so; anything else (a drop, a refusal) doesn't.
       if (this.ready && code === CLOSE_MAC_CLOSING) {
         this.macClosing = true;
@@ -826,7 +835,7 @@ export class DirectTransport implements Transport {
         this.appStuck = false;
         this.stuckSince = 0;
         this.macSaid = undefined;
-        this.macOffline = false;
+        this.relaySaid = undefined;
         this.handshakeMs = Date.now() - this.triedAt;
         this.note(`welcome via ${this.route.kind} in ${this.handshakeMs}ms`);
         if (this.connectTimer) clearTimeout(this.connectTimer);
@@ -921,7 +930,7 @@ export class DirectTransport implements Transport {
             ...(this.macClosing ? { macClosing: true } : {}),
             ...(this.appStuck && !this.macClosing ? { appStuck: true } : {}),
             ...(this.macSaid ? { macSaid: this.macSaid } : {}),
-            ...(this.macOffline ? { macOffline: true } : {}),
+            ...(this.relaySaid ? { relaySaid: this.relaySaid } : {}),
           }
         : {
             kind: 'connecting',
@@ -929,7 +938,7 @@ export class DirectTransport implements Transport {
             since: this.troubleSince,
             ...(this.appStuck ? { appStuck: true } : {}),
             ...(this.macSaid ? { macSaid: this.macSaid } : {}),
-            ...(this.macOffline ? { macOffline: true } : {}),
+            ...(this.relaySaid ? { relaySaid: this.relaySaid } : {}),
           }
     );
     this.retryTimer = setTimeout(() => this.connect(), delay);

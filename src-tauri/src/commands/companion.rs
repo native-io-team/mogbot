@@ -27,6 +27,10 @@ pub struct PhoneStatus {
     pub methods: Vec<&'static str>,
     /// Phone notifications through the push relay.
     pub push: crate::companion::push::PushView,
+    /// The phone relay (docs/relay.md): whether this Mac is signed in there,
+    /// and the account its key is linked to. Connected with an account is a
+    /// route by itself, with or without Tailscale.
+    pub relay: crate::companion::relay::RelayStatus,
 }
 
 /// One line of a phone's audit trail: what it did, and when.
@@ -102,6 +106,7 @@ async fn read_status(app: &AppHandle) -> PhoneStatus {
         activity,
         methods: crate::companion::router::METHODS.to_vec(),
         push: c.push.view(&c),
+        relay: crate::companion::relay::status(),
     }
 }
 
@@ -132,6 +137,44 @@ pub async fn companion_set_push(
     let c = desktop::ensure(&app);
     crate::companion::push::set_enabled(&c, enabled).await?;
     Ok(read_status(&app).await)
+}
+
+/// "Sign in": link this Mac's key to an account at the relay. The code goes
+/// on the Mac's own signed-in relay socket and the sign-in page opens in the
+/// browser; the account arrives on that socket, and the desk hears it as a
+/// status change.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn companion_account_sign_in() -> Result<(), CommandError> {
+    if crate::companion::relay::relay_url().is_none() {
+        return Err(CommandError::expected(
+            "This build has no relay to sign in to. Your phone reaches this Mac over Tailscale.",
+        ));
+    }
+    if crate::companion::relay::status().state == crate::companion::relay::RelayState::Off {
+        return Err(CommandError::expected(
+            "Turn on phone access first: signing in goes through this Mac's connection to the relay.",
+        ));
+    }
+    let page = crate::companion::relay::link_start()
+        .await
+        .map_err(CommandError::expected)?;
+    tauri_plugin_opener::open_url(&page, None::<&str>).map_err(|e| {
+        tracing::warn!("[Relay] couldn't open the sign-in page: {e}");
+        CommandError::expected("The sign-in page didn't open in your browser. Try again.")
+    })
+}
+
+/// "Sign out": unlink this Mac from its account at the relay. Phones go on
+/// reaching it over Tailscale; over the relay, only once it's signed in again.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn companion_account_sign_out(app: AppHandle) -> Result<(), CommandError> {
+    crate::companion::relay::unlink()
+        .await
+        .map_err(CommandError::expected)?;
+    desktop::ensure(&app).backend.changed();
+    Ok(())
 }
 
 #[tauri::command]
@@ -206,7 +249,7 @@ pub async fn companion_pair_start(app: AppHandle) -> Result<PairingCode, Command
     let routes = desktop::routes();
     if routes.is_empty() {
         return Err(CommandError::expected(
-            "Your phone can't reach this Mac yet. Turn on phone access and wait for Tailscale.",
+            "Your phone can't reach this Mac yet. Turn on phone access and wait for Tailscale, or sign in.",
         ));
     }
     // The phone pins this key for good: only offer it once it's kept where
@@ -221,6 +264,8 @@ pub async fn companion_pair_start(app: AppHandle) -> Result<PairingCode, Command
         ));
     };
     // Exactly one route: the host the phone shows is the only one it tries.
+    // The relay's when this Mac is signed in there, else Tailscale's; the
+    // phone learns the others from the Mac's status once it's connected.
     let routes = routes.into_iter().take(1).collect();
     let (code, expires_at) = c.pairing.start(now_ms());
     let link = wire::PairingLink {

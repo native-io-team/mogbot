@@ -17,7 +17,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use super::super::Companion;
 use super::channel::{self, Out};
-use super::{crypto, mac_url, Link};
+use super::{crypto, mac_url, parse_account, Account, Command, Link};
 
 /// A ping this often keeps the link (and the relay's view of it) alive.
 pub const PING_EVERY: Duration = Duration::from_secs(30);
@@ -65,8 +65,15 @@ enum Ended {
 /// Keep the link to `cfg.base` until `stop` fires.
 pub async fn run(c: Arc<Companion>, cfg: Config, link: Arc<Link>, mut stop: oneshot::Receiver<()>) {
     let mut backoff = BACKOFF_MIN;
+    link.set_running();
+    changed(&c);
     loop {
         let ended = session(&c, &cfg, &link, &mut stop).await;
+        if ended == Ended::Stopped {
+            link.set_off();
+            changed(&c);
+            return;
+        }
         if link.set_down() {
             tracing::info!(?ended, "[Relay] link down");
             changed(&c);
@@ -88,7 +95,11 @@ pub async fn run(c: Arc<Companion>, cfg: Config, link: Arc<Link>, mut stop: ones
             continue;
         }
         tokio::select! {
-            _ = &mut stop => return,
+            _ = &mut stop => {
+                link.set_off();
+                changed(&c);
+                return;
+            }
             woke = sleep_or_wake(wait) => if woke {
                 tracing::info!("[Relay] Mac woke; reconnecting now");
                 backoff = BACKOFF_MIN;
@@ -142,7 +153,8 @@ fn changed(c: &Arc<Companion>) {
     });
 }
 
-type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+type Ws =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 /// The next text message, within the step timeout.
 async fn next_text(ws: &mut Ws) -> Option<String> {
@@ -159,8 +171,9 @@ async fn next_text(ws: &mut Ws) -> Option<String> {
     .ok()?
 }
 
-/// Connect and sign in. `None` for anything short of `ready`.
-async fn sign_in(c: &Companion, base: &str) -> Option<(Ws, String)> {
+/// Connect and sign in. `None` for anything short of `ready`; with it, the
+/// account the relay has this Mac's key linked to.
+async fn sign_in(c: &Companion, base: &str) -> Option<(Ws, String, Option<Account>)> {
     let Some(identity) = c.registry.identity() else {
         tracing::warn!("[Relay] no identity key yet (Keychain locked?); trying again later");
         return None;
@@ -195,7 +208,8 @@ async fn sign_in(c: &Companion, base: &str) -> Option<(Ws, String)> {
         tracing::warn!("[Relay] the relay didn't accept this Mac's sign-in");
         return None;
     }
-    Some((ws, fingerprint))
+    let account = parse_account(&ready["account"]);
+    Some((ws, fingerprint, account))
 }
 
 struct Open {
@@ -213,11 +227,13 @@ async fn session(
         s = sign_in(c, &cfg.base) => s,
         _ = &mut *stop => return Ended::Stopped,
     };
-    let Some((mut ws, fingerprint)) = signed_in else {
+    let Some((mut ws, fingerprint, account)) = signed_in else {
         return Ended::Failed;
     };
-    if link.set_up(&cfg.base, &fingerprint) {
-        tracing::info!("[Relay] link up");
+    let (cmd_tx, mut commands) = mpsc::channel::<Command>(8);
+    let linked = account.is_some();
+    if link.set_up(&cfg.base, &fingerprint, account, cmd_tx) {
+        tracing::info!(linked, "[Relay] link up");
         changed(c);
     }
 
@@ -244,6 +260,15 @@ async fn session(
                             continue;
                         }
                         let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
+                        if v["t"] == "account" {
+                            let account = parse_account(&v["account"]);
+                            let linked = account.is_some();
+                            if link.set_account(account) {
+                                tracing::info!(linked, "[Relay] the account changed");
+                                changed(c);
+                            }
+                            continue;
+                        }
                         let Some(ch) = v["ch"].as_u64().and_then(|n| u32::try_from(n).ok()) else { continue };
                         match v["t"].as_str() {
                             Some("open") => {
@@ -309,6 +334,21 @@ async fn session(
                     }
                 }
             },
+            Some(cmd) = commands.recv() => {
+                let (frame, ack, unlink) = match cmd {
+                    Command::LinkStart(code, ack) => (json!({ "t": "linkStart", "code": code }), ack, false),
+                    Command::Unlink(ack) => (json!({ "t": "unlink" }), ack, true),
+                };
+                let sent = ws.send(Message::Text(frame.to_string())).await.is_ok();
+                if sent && unlink && link.set_account(None) {
+                    // Gone at the relay with this frame: the desk says so now.
+                    changed(c);
+                }
+                let _ = ack.send(sent);
+                if !sent {
+                    break Ended::WasUp;
+                }
+            }
             _ = ping.tick() => {
                 if last_heard.elapsed() >= DEAD_AFTER {
                     tracing::info!("[Relay] nothing from the relay for {:?}; reconnecting", DEAD_AFTER);
@@ -371,7 +411,7 @@ pub fn stop() {
     if let Some(tx) = running {
         let _ = tx.send(());
     }
-    super::LINK.set_down();
+    super::LINK.set_off();
 }
 
 #[cfg(test)]

@@ -24,6 +24,7 @@ const status = (over: Partial<PhoneStatus> = {}): PhoneStatus => ({
   activity: {},
   methods: [],
   push: { available: false, enabled: false },
+  relay: { state: 'off', account: null },
   ...over,
 });
 

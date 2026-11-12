@@ -88,7 +88,23 @@ export interface PhoneStatus {
   methods: string[];
   /** Phone notifications through the push relay (`companion/push.rs`). */
   push: PushView;
+  /** The phone relay (docs/relay.md, `companion/relay/mod.rs` `RelayStatus`). */
+  relay: RelayStatus;
 }
+
+/**
+ * Whether this Mac is signed in at the relay, and the account its key is
+ * linked to (as the relay last said; kept through a reconnect, null once off).
+ * `off`: no relay in this build, or phone access is off.
+ */
+export interface RelayStatus {
+  state: 'off' | 'connecting' | 'connected';
+  account: { id: string; email: string | null } | null;
+}
+
+/** Connected with an account: phones reach this Mac through the relay. */
+export const relayReady = (r: RelayStatus | undefined) =>
+  r?.state === 'connected' && r.account !== null;
 
 /** `push::PushView`. `available` is false in a build with no push service. */
 export interface PushView {
@@ -113,6 +129,12 @@ export const setPhonePush = (enabled: boolean) =>
   invoke<PhoneStatus>('companion_set_push', { enabled });
 
 export const retryPhoneTailscale = () => invoke<PhoneStatus>('companion_retry_tailscale');
+
+/** "Sign in": opens the relay's sign-in page; the account arrives as a status change. */
+export const signInAccount = () => invoke<void>('companion_account_sign_in');
+
+/** "Sign out": unlinks this Mac from its account at the relay. */
+export const signOutAccount = () => invoke<void>('companion_account_sign_out');
 
 /** A phone signed in to this Mac's Tailscale account (`tailscale::TailnetPhone`). */
 export interface TailnetPhone {
@@ -170,11 +192,15 @@ export type PhoneStep =
   | { kind: 'approveHttps'; url: string }
   | { kind: 'failed'; detail: string }
   | { kind: 'starting' }
-  | { kind: 'ready'; url: string };
+  /** `url`: the Tailscale address, when that's serving (absent: the relay only). */
+  | { kind: 'ready'; url?: string };
 
-/** Off beats everything; then Tailscale itself; then our route. */
+/** Off beats everything; then the relay (a route without Tailscale); then Tailscale itself; then our route. */
 export function phoneStep(s: PhoneStatus): PhoneStep {
   if (!s.enabled) return { kind: 'off' };
+  if (relayReady(s.relay)) {
+    return s.serve.state === 'on' ? { kind: 'ready', url: s.serve.url } : { kind: 'ready' };
+  }
   if (s.tailscale.state === 'notInstalled') return { kind: 'installTailscale' };
   if (s.tailscale.state === 'needsLogin') return { kind: 'signInTailscale' };
   switch (s.serve.state) {

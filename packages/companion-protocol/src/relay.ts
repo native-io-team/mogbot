@@ -29,6 +29,11 @@ export const RELAY_HOST: string | null = (() => {
 
 /** The relay closes a phone's socket with this when that Mac isn't connected to it. */
 export const RELAY_CLOSE_MAC_OFFLINE = 4404;
+/**
+ * The relay closes a phone's socket with this when that Mac is connected but
+ * not signed in to an account (docs/relay.md, "Accounts": `sign_in_needed`).
+ */
+export const RELAY_CLOSE_SIGN_IN_NEEDED = 4402;
 /** Past the relay's 8 phone sockets per Mac. */
 export const RELAY_CLOSE_TOO_MANY = 4429;
 

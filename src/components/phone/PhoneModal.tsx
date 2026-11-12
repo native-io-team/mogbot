@@ -475,7 +475,11 @@ function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
         <span className="phone-dot" aria-hidden />
         <span
           className="phone-onbar__text"
-          title={`Phones reach this Mac at ${shortUrl(step.url)}`}
+          title={
+            step.url
+              ? `Phones reach this Mac at ${shortUrl(step.url)}`
+              : 'Phones reach this Mac through the relay'
+          }
         >
           <span className="phone-onbar__title">Phone access is on</span>
         </span>

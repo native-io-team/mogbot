@@ -65,7 +65,7 @@ import {
 } from '../lib/pairing';
 import {
   nextIntro,
-  PAIR_STAGES,
+  pairStages,
   prevIntro,
   progressOf,
   readSavedStep,
@@ -286,10 +286,12 @@ export default function Pair() {
 
   if (phase.kind === 'failed') {
     const kind = phase.failure.kind;
-    const unreachable = kind === 'tailscale_off' || kind === 'mac_unreachable';
+    // Over the relay there's no Tailscale to check: the line says what to.
+    const viaRelay = phase.link.routes.some((r) => r.kind === 'relay');
+    const unreachable = !viaRelay && (kind === 'tailscale_off' || kind === 'mac_unreachable');
     const newCode =
       kind === 'expired' || kind === 'refused' || kind === 'no_answer' || kind === 'not_your_mac';
-    const [title, body] = failureCopy(phase.failure, cleanName(phase.link.name));
+    const [title, body] = failureCopy(phase.failure, cleanName(phase.link.name), viaRelay);
     return (
       <StepScreen
         stepKey="failed"
@@ -332,8 +334,8 @@ export default function Pair() {
   return (
     <StepScreen
       stepKey="paired"
-      n={PAIR_STAGES.length + 1}
-      of={PAIR_STAGES.length}
+      n={pairStages().length + 1}
+      of={pairStages().length}
       testID="pair-paired"
       centered
       mark={
@@ -661,16 +663,26 @@ function Unreachable({
 }
 
 /** A failure's title and its one line. */
-function failureCopy(failure: PairFailure, mac: string): [string, string] {
+function failureCopy(failure: PairFailure, mac: string, viaRelay = false): [string, string] {
   switch (failure.kind) {
     // A checklist follows (`Unreachable`): no address in the first line.
     case 'tailscale_off':
     case 'mac_unreachable':
-      return [`Can’t reach ${mac}`, 'Check these, then try again.'];
+      return [
+        `Can’t reach ${mac}`,
+        viaRelay
+          ? 'Check this phone is online and your Mac is awake with the app open, then try again.'
+          : 'Check these, then try again.',
+      ];
     case 'mac_offline':
       return [
         `${mac} is offline or asleep`,
         'Wake your Mac, with the app open on it, then try again.',
+      ];
+    case 'sign_in_needed':
+      return [
+        `${mac} isn’t signed in`,
+        'On your Mac, sign in, or use Tailscale instead. Then try again.',
       ];
     case 'no_answer':
       return [

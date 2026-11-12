@@ -20,15 +20,33 @@ Security never rests on the relay or on an account. It rests on keys the two dev
 
 The Mac proves its key to the relay too (a signed challenge), so nobody else can take its slot.
 
-### Accounts (Clerk or similar): not needed for this, ready for later
+### Accounts: what unlocks our hosted services
 
-An account adds a sign-up step before the first useful moment (the thing this change is meant to
-remove) and a third party in the trust chain, and buys no security the keys don't already give.
-What an account *would* buy later: several Macs on one phone without scanning each, billing a paid
-tier, abuse limits per person rather than per Mac key, recovering a lost phone. The relay is built
-so that can be added without changing the crypto: a Mac's slot is keyed by its identity
-fingerprint, and an account would only *own* a list of fingerprints (an optional bearer on the Mac's
-relay login). Until then, abuse is bounded per Mac key and per IP (below).
+The first screen offers **Continue with Google**, **Continue with email**, or **Use without signing
+in**. Signing in unlocks what we host (the relay now; push notifications and anything later).
+Without signing in, everything that runs on your own machines still works: the phone over your own
+Tailscale, exactly as before. Forks and self-hosters never need our accounts.
+
+Accounts add *who may use our servers*; they never replace the keys above, and no account token is
+ever needed to read or send anything:
+
+- **The account lives at the relay, bound to the Mac's key.** Signing in links the Mac's identity
+  fingerprint to an account id (Clerk user id) in the relay's store. The Mac keeps no account token:
+  every relay login proves the Mac's key, and the relay answers `{"t":"ready","account":{"id","email"}|null}`.
+- **Linking** (desk "Sign in"): the Mac makes a one-time code `<fingerprint>.<b64url 32 random bytes>`
+  (the fingerprint lets the relay find the Mac's slot; it isn't secret, it's in every pairing QR;
+  the random half is), sends `{"t":"linkStart","code":"<code>"}`
+  on its authenticated relay socket, and opens `https://<relay host>/link?code=<code>` in the
+  browser. That page signs in with Clerk (Google or email code), then POSTs the session token and
+  the code to `/v1/link`. The relay verifies the Clerk token (JWKS), binds the code's fingerprint
+  to the user, and tells the Mac `{"t":"account","account":{…}}`. Codes live 10 minutes, single use.
+- **Signing out**: the Mac sends `{"t":"unlink"}` on its authenticated socket; the binding goes.
+- **Gating**: a phone reaching a Mac with no account gets 4402 `sign_in_needed` (the phone says to
+  sign in on the Mac, or use Tailscale). The Mac's own relay login is always allowed, so linking works.
+- **Phones don't sign in**: a phone pairs to a Mac by QR as today and uses the relay because its Mac
+  is signed in. (A phone account comes later, for several Macs; Apple's rules on sign-in options apply then.)
+- The account provider is Clerk: Google and email codes, its free tier up to 10,000 monthly users.
+  The relay only verifies Clerk's signed session tokens (public keys); no Clerk secret on the Mac or phone.
 
 ## Routes and fallback
 

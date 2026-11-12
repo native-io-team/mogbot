@@ -22,6 +22,7 @@ import { ZoomGallery, type ZoomPage } from '../components/ZoomGallery';
 import { share } from '../lib/files';
 import { getGallery, viewerStart } from '../lib/gallery';
 import { attachmentSource, describeError, download } from '../lib/session';
+import { useAttachmentSources } from '../lib/relayImages';
 import { IMAGE_UNAVAILABLE } from '../components/attachments';
 import { alpha, iconSize, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -70,6 +71,8 @@ export default function Viewer() {
     setError(null);
   }, []);
 
+  // Over the relay pictures arrive as files: redraw the pages as each one does.
+  const fetched = useAttachmentSources();
   // A file already on the phone is one page; a chat's pictures, one each.
   const pages = useMemo<ZoomPage[]>(() => {
     if (uri) {
@@ -89,7 +92,8 @@ export default function Viewer() {
       label: image.caption ?? image.file.name,
       onError: () => setError(`${IMAGE_UNAVAILABLE}: ${image.file.name}`),
     }));
-  }, [uri, name, images]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `fetched` is the redraw
+  }, [uri, name, images, fetched]);
 
   const doShare = async () => {
     setSharing(true);

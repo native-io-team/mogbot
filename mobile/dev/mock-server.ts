@@ -95,6 +95,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { cafePage, iconSheet, pdf, signinPage, siteScreenshot } from './mock-assets';
+import { createMockRelay } from './mock-relay';
 import { blocksMessages, briefMessages } from './mock-blocks';
 import { PAGE_AGENT, pageMock } from './mock-page';
 import { addHeavyAccount, heavyImportTalk } from './mock-heavy';
@@ -229,6 +230,12 @@ export interface MockOptions {
   probe?: boolean;
   /** With `probe`: the same Mac after a restart that cut Builder's turn off. */
   restarted?: boolean;
+  /**
+   * Also reachable through a mock relay (dev/mock-relay.ts, docs/relay.md):
+   * its routes are the relay first, then this server as the Tailscale route,
+   * and a new pairing link carries the relay route. `port` for the relay's own.
+   */
+  relay?: boolean | { port?: number };
 }
 
 // ---- Login cards (desktop `agents/logins.rs`) ----------------------------------------
@@ -4689,7 +4696,8 @@ export function createMockServer(opts: MockOptions = {}) {
       code,
       serverId,
       name: MAC_NAME,
-      routes: status.routes,
+      // Exactly one route: the relay when it's on, as the real Mac does.
+      routes: status.routes.slice(0, 1),
       fingerprint: identity.fingerprint,
     });
   }
@@ -4718,20 +4726,47 @@ export function createMockServer(opts: MockOptions = {}) {
   const handle = (req: http.IncomingMessage, res: http.ServerResponse) => void onRequest(req, res);
   const server = opts.tls ? https.createServer(opts.tls, handle) : http.createServer(handle);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1 << 20 });
+  /** Its Tailscale route answering (false: only the relay's loopback gets through). */
+  let direct = true;
+  /** Sockets the mock relay's Mac half opened on loopback. */
+  const viaRelay = new WeakSet<WebSocket>();
   server.on('upgrade', (req, socket, head) => {
     if (req.url !== HTTP.ws) return socket.destroy();
-    wss.handleUpgrade(req, socket, head, onConnection);
+    const fromRelay = req.headers['x-mock-relay'] === '1';
+    if (!direct && !fromRelay) return socket.destroy();
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      if (fromRelay) viaRelay.add(ws);
+      onConnection(ws);
+    });
   });
+  let own = '';
+  const relay = opts.relay
+    ? createMockRelay({
+        port: typeof opts.relay === 'object' ? opts.relay.port : undefined,
+        fingerprint: identity.fingerprint,
+        prove: (message) => signer.prove(message),
+        target: () => own,
+      })
+    : null;
 
   return {
     listen: () =>
       new Promise<string>((resolve) => {
         server.listen(opts.port ?? 0, () => {
           const { port } = server.address() as { port: number };
-          const own = `${opts.tls ? 'https' : 'http'}://localhost:${port}`;
-          status.routes = [{ kind: 'tailscale', url: opts.publicUrl ?? own }];
+          own = `${opts.tls ? 'https' : 'http'}://localhost:${port}`;
+          const tailscale = { kind: 'tailscale' as const, url: opts.publicUrl ?? own };
+          status.routes = [tailscale];
           if (!opts.hosts) hosts = [hostOf(opts.publicUrl ?? own) ?? 'localhost'];
-          resolve(own);
+          if (!relay) return resolve(own);
+          void relay.listen().then((relayUrl) => {
+            // Relay first, as the Mac offers it; its host is one the Mac signs.
+            status.routes = [{ kind: 'relay', url: relayUrl }, tailscale];
+            const relayHost = hostOf(relayUrl);
+            if (!opts.hosts && relayHost && !hosts.includes(relayHost)) hosts.push(relayHost);
+            log(`relay on ${relayUrl}`);
+            resolve(own);
+          });
         });
       }),
     close: () =>
@@ -4739,8 +4774,15 @@ export function createMockServer(opts: MockOptions = {}) {
         turns.forEach((t) => t.timer && clearInterval(t.timer));
         conns.forEach((c) => c.ws.terminate());
         wss.close();
-        server.close(() => resolve());
+        void (relay?.close() ?? Promise.resolve()).then(() => server.close(() => resolve()));
       }),
+    /** The mock relay (`relay` option), or null. */
+    relay,
+    /** Its Tailscale route answering (true), or refusing every socket but the relay's (false). */
+    setDirect(on: boolean) {
+      direct = on;
+      if (!on) conns.forEach((c) => !viaRelay.has(c.ws) && c.ws.terminate());
+    },
     pairingLink,
     issueToken,
     /** The fingerprint its pairing links carry. */

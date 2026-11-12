@@ -56,7 +56,11 @@ fn authorize(c: &Companion, headers: &HeaderMap) -> Result<DeviceRecord, Box<Res
             return Err(Box::new(status_only(StatusCode::UNAUTHORIZED)))
         }
     };
-    if !device.login_matches(super::limits::tailnet_login(headers).as_deref()) {
+    // Through this app's relay link (its per-launch secret, compared in
+    // constant time) there's no tailnet login: the token is enough. Any
+    // other request must come from the tailnet user who paired the phone.
+    let relayed = super::relay::secret_ok(headers);
+    if !relayed && !device.login_matches(super::limits::tailnet_login(headers).as_deref()) {
         return Err(Box::new(status_only(StatusCode::UNAUTHORIZED)));
     }
     if !c.allow_request(&device.id, now_ms()) {
@@ -68,8 +72,12 @@ fn authorize(c: &Companion, headers: &HeaderMap) -> Result<DeviceRecord, Box<Res
             ),
         )));
     }
-    c.registry
-        .touch(&device.id, now_ms() as i64, RouteKind::Tailscale, false);
+    let route = if relayed {
+        RouteKind::Relay
+    } else {
+        RouteKind::Tailscale
+    };
+    c.registry.touch(&device.id, now_ms() as i64, route, false);
     Ok(device)
 }
 

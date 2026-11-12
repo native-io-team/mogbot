@@ -17,6 +17,7 @@
 import {
   HTTP,
   RELAY_CLOSE_MAC_OFFLINE,
+  RELAY_CLOSE_SIGN_IN_NEEDED,
   SUPPORTED,
   type IdentityResponse,
   type PairRequest,
@@ -36,6 +37,8 @@ export type PairFailure =
   | { kind: 'mac_unreachable' }
   /** Over the relay: it says the Mac isn't connected to it (asleep, offline, the app closed). */
   | { kind: 'mac_offline' }
+  /** Over the relay: the Mac is there but signed out, so the relay won't carry the phone to it. */
+  | { kind: 'sign_in_needed' }
   /**
    * The code went and the Mac had it, but no answer came back inside the
    * desk's window. Whether someone clicked Allow is unknown here.
@@ -159,6 +162,7 @@ const unreachable = async (deps: PairDeps, route: Route, error?: unknown) => {
     // The relay knows whether the Mac is there; nothing to ask the OS.
     const code = error instanceof RelayClosed ? error.code : 0;
     if (code === RELAY_CLOSE_MAC_OFFLINE) return new PairError({ kind: 'mac_offline' });
+    if (code === RELAY_CLOSE_SIGN_IN_NEEDED) return new PairError({ kind: 'sign_in_needed' });
     if (code === RELAY_NOT_YOUR_MAC) return new PairError({ kind: 'not_your_mac' });
     return new PairError({ kind: 'mac_unreachable' });
   }

@@ -5,7 +5,13 @@
  * when the server answered, because silence looks the same either way.
  */
 
-import type { AgentEngine, EngineInfo, Known, MacSaid } from '@shipstudio/companion-protocol';
+import type {
+  AgentEngine,
+  EngineInfo,
+  Known,
+  MacSaid,
+  RelaySaid,
+} from '@shipstudio/companion-protocol';
 import { formatAgo } from './agents';
 import type { AppState } from './store';
 
@@ -142,9 +148,12 @@ export function pill(s: Inputs, now = Date.now()): Pill {
   // The first moments of trying read as calm: the phone tries every few
   // seconds with the app in front, and the Mac is usually back by then.
   const calm = link.since != null && now - link.since < CALM_MS;
-  // The relay said the Mac isn't connected to it: known, once the calm is over.
-  if (link.macOffline && !calm && !(link.kind === 'reconnecting' && link.macClosing)) {
-    return { tone: 'problem', label: 'Mac offline' };
+  // What the relay said of the Mac. Signed out is known at once (it won't
+  // pass by itself); offline once the calm is over (a Mac waking reconnects).
+  if (link.relaySaid && !(link.kind === 'reconnecting' && link.macClosing)) {
+    if (link.relaySaid === 'sign_in_needed')
+      return { tone: 'problem', label: RELAY_SAID.sign_in_needed.pill };
+    if (!calm) return { tone: 'problem', label: RELAY_SAID.mac_offline.pill };
   }
   if (link.kind === 'reconnecting') {
     // The Mac's app said it was closing (a quit, an update's restart): waiting for it isn't a fault.
@@ -220,7 +229,7 @@ export interface LinkBar {
   detail: string;
   /** "What to check": the likely causes, most likely first, each with its fix. */
   checks: string[];
-  kind: 'offline' | 'connecting' | 'closing' | 'stuck' | 'unreachable' | 'mac_offline' | MacSaid;
+  kind: 'offline' | 'connecting' | 'closing' | 'stuck' | 'unreachable' | RelaySaid | MacSaid;
 }
 
 /** "Last heard from it 2 min ago", or that nothing has been heard yet. */
@@ -231,14 +240,27 @@ function heard(at: number, now: number): string {
 const SAVED = ' · showing what was saved';
 
 /**
- * The relay answered that the Mac isn't connected to it: the Mac is asleep,
- * off the internet, or the app on it is closed. Nothing on this phone to fix,
- * so no Tailscale advice.
+ * What the relay answered for the Mac (`LinkState.relaySaid`), in the pill's
+ * words and the bar's. `mac_offline`: it isn't connected to the relay
+ * (asleep, off the internet, the app closed); nothing on this phone to fix,
+ * so no Tailscale advice. `sign_in_needed`: it's there but signed out, and
+ * the relay carries phones only to a signed-in Mac (docs/relay.md, "Accounts").
  */
-export const MAC_OFFLINE_CHECKS = [
-  'Wake your Mac, with the app open on it. It reconnects by itself.',
-  'If your Mac is awake, check it’s online, then quit the app there and open it again: your agents and chats are kept.',
-];
+export const RELAY_SAID: Record<RelaySaid, { pill: string; title: string; checks: string[] }> = {
+  mac_offline: {
+    pill: 'Mac offline',
+    title: 'Your Mac is offline or asleep',
+    checks: [
+      'Wake your Mac, with the app open on it.',
+      'If your Mac is awake, check it’s online. It reconnects by itself.',
+    ],
+  },
+  sign_in_needed: {
+    pill: 'Mac not signed in',
+    title: 'Your Mac isn’t signed in',
+    checks: ['On your Mac, sign in, or use Tailscale instead.'],
+  },
+};
 
 export const STUCK_CHECKS = [
   'The app on your Mac may be stuck. Quit it and open it again: your agents and chats are kept.',
@@ -310,13 +332,14 @@ export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
       checks: said.checks,
     };
   }
-  if (link.macOffline && p.tone === 'problem') {
+  if (link.relaySaid && p.tone === 'problem') {
+    const said = RELAY_SAID[link.relaySaid];
     return {
-      kind: 'mac_offline',
+      kind: link.relaySaid,
       tone: 'problem',
-      title: 'Your Mac is offline or asleep',
+      title: said.title,
       detail: since,
-      checks: MAC_OFFLINE_CHECKS,
+      checks: said.checks,
     };
   }
   // Known stuck: said once the calm first seconds are over, not after the
@@ -389,11 +412,15 @@ export function layers(
     const seen = seenAt ? `Last seen ${formatAgo(seenAt, now)}` : 'Not seen yet';
     // We can't know why from here; list the likely causes from the last status we had.
     const causes =
-      'macOffline' in s.link && s.link.macOffline
-        ? ['The relay says your Mac isn’t connected: it may be asleep, offline, or the app closed']
-        : s.credentials && !s.credentials.routes.some((r) => r.kind === 'tailscale')
-          ? ['It may be asleep, or this phone offline']
-          : ['Tailscale may be off on this phone or on the Mac'];
+      'relaySaid' in s.link && s.link.relaySaid === 'sign_in_needed'
+        ? ['Your Mac isn’t signed in, so the relay can’t reach it']
+        : 'relaySaid' in s.link && s.link.relaySaid === 'mac_offline'
+          ? [
+              'The relay says your Mac isn’t connected: it may be asleep, offline, or the app closed',
+            ]
+          : s.credentials && !s.credentials.routes.some((r) => r.kind === 'tailscale')
+            ? ['It may be asleep, or this phone offline']
+            : ['Tailscale may be off on this phone or on the Mac'];
     if (mac && !mac.power.keepAwake && mac.power.onBattery === 'yes') {
       const pct = mac.power.batteryPercent != null ? ` at ${mac.power.batteryPercent}%` : '';
       causes.unshift(`It was on battery${pct} with keep-awake off: it may be asleep`);

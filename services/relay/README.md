@@ -25,10 +25,12 @@ Mac's slot.
 | `GET /`, `GET /health` | `200 ok` |
 | `GET /v1/mac/<fingerprint>` | The Mac's WebSocket: challenge, signed login, then multiplexed channels |
 | `GET /v1/phone/<fingerprint>` | A phone's WebSocket: binary payloads only |
+| `GET /link?code=<code>` | The sign-in page the Mac opens to link itself to an account (accounts on only) |
+| `POST /v1/link` | `{code, token}` from that page: verifies the Clerk session token, links the Mac |
 
 `<fingerprint>` is 22 characters of base64url. Closes: `4401` bad or late Mac login, `4409` Mac
-replaced by a newer login, `4404 mac_offline` no Mac, `4429` more than 8 phones, `1009` a payload
-over 256 KiB. Idle sockets hibernate (and `ping` gets `pong` without waking the object), so they
+replaced by a newer login, `4404 mac_offline` no Mac, `4402 sign_in_needed` the Mac isn't signed in
+(accounts on only; offline is said first), `4429` more than 8 phones, `1009` a payload over 256 KiB. Idle sockets hibernate (and `ping` gets `pong` without waking the object), so they
 cost nothing.
 
 ## Run your own
@@ -54,6 +56,38 @@ then build the app. With `links.relay` null the app uses Tailscale only.
 
 The per-IP limit on new connections (60 a minute) is Cloudflare's rate limiting binding,
 `RATE_LIMITER` in `wrangler.jsonc`. The Worker runs without it if you remove it.
+
+## Accounts
+
+Accounts decide who may use a relay, nothing more: the encryption and the Mac's key work the same
+with them on or off. They are **off** unless `CLERK_JWKS_URL` is set. Off means no gating at all:
+every Mac that proves its key may log in and every one of its phones may connect. That is the right
+setting for a relay you run for yourself, and the one this repo ships (all four vars empty in
+`wrangler.jsonc`).
+
+On, a phone reaching a Mac that isn't linked to an account is closed `4402 sign_in_needed`. The Mac
+links itself with a one-time code, `<fingerprint>.<base64url of 32 random bytes>`: it sends
+`{"t":"linkStart","code":"…"}` on its logged-in socket (the relay keeps only the code's SHA-256, for
+10 minutes, one at a time), then opens `https://<relay>/link?code=<code>`. That page signs in with
+Clerk and posts the code and the session token to `/v1/link`; the relay checks the token against
+Clerk's public keys, stores `{id, email, linkedAt}` in that Mac's Durable Object and tells the Mac
+`{"t":"account","account":{"id","email"}}`. `{"t":"unlink"}` removes it and signs the phones out.
+`ready` carries the account (or `null`) on every login.
+
+To turn them on, make a Clerk application (Google and email code sign-in are set in Clerk's
+dashboard), then set, in `wrangler.jsonc` `vars` (all are public values; no Clerk secret is needed):
+
+| Var | Value |
+| --- | --- |
+| `CLERK_PUBLISHABLE_KEY` | The application's publishable key (`pk_live_…`), for the `/link` page |
+| `CLERK_JWKS_URL` | `https://<your Clerk frontend API>/.well-known/jwks.json`. Setting this turns accounts on |
+| `CLERK_ISSUER` | Your Clerk frontend API URL, e.g. `https://clerk.example.com`. Checked against `iss` when set |
+| `CLERK_AUTHORIZED_PARTIES` | The relay's own origin, e.g. `https://mogbot-relay.<you>.workers.dev`. Comma list; checked against `azp` when set |
+
+For the account's email to reach the Mac, add `"email": "{{user.primary_email_address}}"` to the
+session token's claims in Clerk (Sessions → Customize session token); without it the email is
+`null`. Set the issuer and authorized parties: without them any token from that Clerk instance's
+keys is accepted.
 
 ## Developing
 

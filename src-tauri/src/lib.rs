@@ -1052,6 +1052,8 @@ pub fn run() {
             commands::companion::companion_set_enabled,
             commands::companion::companion_set_push,
             commands::companion::companion_retry_tailscale,
+            commands::companion::companion_account_sign_in,
+            commands::companion::companion_account_sign_out,
             commands::companion::companion_tailnet_phones,
             commands::companion::companion_link_qr,
             commands::companion::companion_pair_start,

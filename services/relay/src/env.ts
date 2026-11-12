@@ -6,4 +6,20 @@ export interface Env {
   MAC: DurableObjectNamespace<MacRelay>;
   /** Cloudflare's rate limiting binding, per client address. Optional: absent means no limit. */
   RATE_LIMITER?: RateLimit;
+  /**
+   * Accounts (README, "Accounts"). All public values. Empty or absent
+   * `CLERK_JWKS_URL` turns accounts off: no gating, every Mac's phones allowed.
+   */
+  /** Clerk's publishable key, for the `/link` page. */
+  CLERK_PUBLISHABLE_KEY?: string;
+  /** Clerk's JWKS, e.g. `https://<frontend api>/.well-known/jwks.json`. */
+  CLERK_JWKS_URL?: string;
+  /** When set, a session token's `iss` must equal it. */
+  CLERK_ISSUER?: string;
+  /** When set (comma list of origins), a session token's `azp` must be one of them. */
+  CLERK_AUTHORIZED_PARTIES?: string;
+}
+
+export function accountsOn(env: Env): boolean {
+  return !!env.CLERK_JWKS_URL?.trim();
 }

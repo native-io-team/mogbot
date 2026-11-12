@@ -25,10 +25,26 @@ const status = (over: Partial<PhoneStatus> = {}): PhoneStatus => ({
   activity: {},
   methods: [],
   push: { available: false, enabled: false },
+  relay: { state: 'off', account: null },
   ...over,
 });
 
 describe('phoneStep', () => {
+  it('is ready through the relay alone once this Mac is signed in there', () => {
+    const relay = { state: 'connected' as const, account: { id: 'user_1', email: 'j@x.com' } };
+    expect(
+      phoneStep(status({ tailscale: { state: 'notInstalled' }, serve: { state: 'off' }, relay }))
+    ).toEqual({ kind: 'ready' });
+    expect(phoneStep(status({ relay })).kind).toBe('ready');
+    // Up but not signed in: the relay turns phones away, so Tailscale decides.
+    expect(
+      phoneStep(
+        status({ tailscale: { state: 'notInstalled' }, relay: { state: 'connected', account: null } })
+      ).kind
+    ).toBe('installTailscale');
+    expect(phoneStep(status({ enabled: false, relay })).kind).toBe('off');
+  });
+
   it('is off before anything else', () => {
     expect(phoneStep(status({ enabled: false, tailscale: { state: 'notInstalled' } }))).toEqual({
       kind: 'off',

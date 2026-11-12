@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { newNonce, verifyMacLogin } from './auth';
 import type { Env } from './env';
+import { LINK_TTL_MS, hashCode, linkError, parseLinkCode, sameHash } from './link';
 
 /** The Mac must answer the challenge within this. */
 export const AUTH_TIMEOUT_MS = 10_000;
@@ -9,9 +10,19 @@ export const MAX_PHONES = 8;
 /** Largest payload either way, not counting the Mac's 4-byte channel header. */
 export const MAX_PAYLOAD = 256 * 1024;
 
+/** The account this Mac is signed in to (docs/relay.md, "Accounts"). */
+export type Binding = { id: string; email: string | null; linkedAt: number };
+/** The one link code waiting, by its SHA-256. */
+export type PendingLink = { codeHash: string; expiresAt: number };
+
+export const ACCOUNT_KEY = 'account';
+export const PENDING_KEY = 'linkPending';
+
 type MacState = {
   role: 'mac';
   fingerprint: string;
+  /** The Worker has accounts on, so unlinking signs this Mac's phones out. */
+  accounts?: boolean;
   nonce: string;
   deadline: number;
   authed: boolean;
@@ -34,8 +45,9 @@ const CHANNEL_KEY = 'lastChannel';
 /**
  * One per Mac (named by its key's fingerprint). Holds the Mac's socket and its
  * phones' sockets and moves opaque bytes between them. All state lives in the
- * sockets' tags and attachments (and the channel counter in storage), so the
- * object can hibernate between messages.
+ * sockets' tags and attachments (and, in storage, the channel counter, the
+ * Mac's account binding and its one pending link code), so the object can
+ * hibernate between messages.
  */
 export class MacRelay extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -44,13 +56,16 @@ export class MacRelay extends DurableObject<Env> {
   }
 
   async fetch(request: Request): Promise<Response> {
-    const [, role, fingerprint] = new URL(request.url).pathname.split('/');
-    if (role === 'mac') return this.acceptMac(fingerprint);
-    if (role === 'phone') return this.acceptPhone();
+    const url = new URL(request.url);
+    const [, role, fingerprint] = url.pathname.split('/');
+    const accounts = url.searchParams.get('accounts') === '1';
+    if (role === 'mac') return this.acceptMac(fingerprint, accounts);
+    if (role === 'phone') return this.acceptPhone(accounts);
+    if (role === 'link' && request.method === 'POST') return this.completeLink(request);
     return new Response('not found', { status: 404 });
   }
 
-  private async acceptMac(fingerprint: string): Promise<Response> {
+  private async acceptMac(fingerprint: string, accounts: boolean): Promise<Response> {
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server, ['mac']);
     const state: MacState = {
@@ -59,6 +74,7 @@ export class MacRelay extends DurableObject<Env> {
       nonce: newNonce(),
       deadline: Date.now() + AUTH_TIMEOUT_MS,
       authed: false,
+      accounts,
     };
     server.serializeAttachment(state);
     server.send(JSON.stringify({ t: 'challenge', nonce: state.nonce }));
@@ -67,8 +83,10 @@ export class MacRelay extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  private async acceptPhone(): Promise<Response> {
+  private async acceptPhone(accounts: boolean): Promise<Response> {
     if (!this.currentMac()) return refuse(4404, 'mac_offline');
+    // Offline wins: a phone is told its Mac needs to sign in only when the Mac is there.
+    if (accounts && !(await this.binding())) return refuse(4402, 'sign_in_needed');
     if (this.openPhones().length >= MAX_PHONES) return refuse(4429, 'too_many_phones');
     const ch = await this.nextChannel();
     // The Mac may have gone while the counter was read.
@@ -86,7 +104,7 @@ export class MacRelay extends DurableObject<Env> {
     if (!state) return;
     if (state.role === 'phone') return this.fromPhone(ws, state, message);
     if (!state.authed) return this.login(ws, state, message);
-    return this.fromMac(message);
+    return this.fromMac(state, message);
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {
@@ -123,6 +141,8 @@ export class MacRelay extends DurableObject<Env> {
       frame.signature
     );
     if (!ok || ws.readyState !== OPEN) return closeQuietly(ws, 4401, 'unauthorized');
+    const account = publicAccount(await this.binding());
+    if (ws.readyState !== OPEN) return;
     // No await from here on, so two Macs logging in at once still leave exactly one.
     for (const other of this.ctx.getWebSockets('mac')) {
       const o = stateOf(other);
@@ -133,15 +153,19 @@ export class MacRelay extends DurableObject<Env> {
     // The old Mac's channels mean nothing to the new one: those phones reconnect.
     this.closeAllPhones();
     ws.serializeAttachment({ ...state, authed: true } satisfies MacState);
-    ws.send(JSON.stringify({ t: 'ready' }));
+    ws.send(JSON.stringify({ t: 'ready', account }));
   }
 
-  private fromMac(message: string | ArrayBuffer) {
+  private async fromMac(state: MacState, message: string | ArrayBuffer) {
     if (typeof message === 'string') {
       const frame = parseJson(message);
       if (frame?.t === 'close' && isChannel(frame.ch)) {
         const phone = this.phone(frame.ch);
         if (phone) this.closePhone(phone, 1000, 'closed');
+      } else if (frame?.t === 'linkStart') {
+        await this.startLink(state, frame.code);
+      } else if (frame?.t === 'unlink') {
+        await this.unlink(state);
       }
       return;
     }
@@ -174,6 +198,68 @@ export class MacRelay extends DurableObject<Env> {
     new DataView(framed.buffer).setUint32(0, state.ch);
     framed.set(new Uint8Array(message), 4);
     mac.send(framed);
+  }
+
+  private async binding(): Promise<Binding | undefined> {
+    return this.ctx.storage.get<Binding>(ACCOUNT_KEY);
+  }
+
+  /** Stores a new link code (by its hash), replacing any older one. Malformed or foreign codes are ignored. */
+  private async startLink(state: MacState, code: unknown) {
+    if (parseLinkCode(code)?.fingerprint !== state.fingerprint) return;
+    const pending: PendingLink = {
+      codeHash: await hashCode(code as string),
+      expiresAt: Date.now() + LINK_TTL_MS,
+    };
+    await this.ctx.storage.put(PENDING_KEY, pending);
+  }
+
+  private async unlink(state: MacState) {
+    await this.ctx.storage.delete([ACCOUNT_KEY, PENDING_KEY]);
+    const mac = this.currentMac();
+    mac?.send(JSON.stringify({ t: 'account', account: null }));
+    if (!state.accounts) return;
+    for (const ws of this.openPhones()) {
+      const s = stateOf(ws);
+      this.closePhone(ws, 4402, 'sign_in_needed');
+      // Its channel table stays exact: each phone that went is closed as usual.
+      if (s?.role === 'phone') mac?.send(JSON.stringify({ t: 'close', ch: s.ch }));
+    }
+  }
+
+  /** From the Worker, after it verified the Clerk token: the code must be this Mac's pending one. */
+  private async completeLink(request: Request): Promise<Response> {
+    let body: { code?: unknown; account?: { id?: unknown; email?: unknown } };
+    try {
+      body = await request.json();
+    } catch {
+      return linkError('bad_request', 400);
+    }
+    const id = body.account?.id;
+    const email = body.account?.email;
+    if (typeof body.code !== 'string' || typeof id !== 'string') {
+      return linkError('bad_request', 400);
+    }
+    const pending = await this.ctx.storage.get<PendingLink>(PENDING_KEY);
+    if (!pending || !sameHash(await hashCode(body.code), pending.codeHash)) {
+      return linkError('code_unknown', 404);
+    }
+    if (Date.now() > pending.expiresAt) {
+      await this.ctx.storage.delete(PENDING_KEY);
+      return linkError('code_expired', 410);
+    }
+    const binding: Binding = {
+      id,
+      email: typeof email === 'string' ? email : null,
+      linkedAt: Date.now(),
+    };
+    // Single use: the code goes as the binding lands (issued together, so one atomic write).
+    await Promise.all([
+      this.ctx.storage.delete(PENDING_KEY),
+      this.ctx.storage.put(ACCOUNT_KEY, binding),
+    ]);
+    this.currentMac()?.send(JSON.stringify({ t: 'account', account: publicAccount(binding) }));
+    return Response.json({ ok: true });
   }
 
   /** A socket closed or failed from its own side. */
@@ -236,6 +322,11 @@ function refuse(code: number, reason: string): Response {
   server.accept();
   server.close(code, reason);
   return new Response(null, { status: 101, webSocket: client });
+}
+
+/** What the Mac is told: the account without when it was linked. */
+function publicAccount(b: Binding | undefined): { id: string; email: string | null } | null {
+  return b ? { id: b.id, email: b.email } : null;
 }
 
 function channelTag(ch: number): string {

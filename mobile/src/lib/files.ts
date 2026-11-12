@@ -9,14 +9,15 @@
  * and the same file comes back over a different route just the same.
  */
 
-import { MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from '@shipstudio/companion-protocol';
+import { MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, toBase64Url } from '@shipstudio/companion-protocol';
 import * as Crypto from 'expo-crypto';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
-import type { HttpAdapter } from './transport';
+import { fromBase64Url } from './identity';
+import type { HttpAdapter, LocalFiles } from './transport';
 
 /** A file chosen on the phone, before it is uploaded. */
 export interface PickedFile {
@@ -142,6 +143,41 @@ export const http: HttpAdapter = {
     const res = await FileSystem.downloadAsync(url, dest, { headers });
     if (res.status !== 200) await FileSystem.deleteAsync(dest, { idempotent: true });
     return { status: res.status, uri: res.uri };
+  },
+};
+
+/** Standard base64, as expo-file-system reads and writes it, from bytes. */
+const toBase64 = (bytes: Uint8Array) => {
+  const url = toBase64Url(bytes).replace(/-/g, '+').replace(/_/g, '/');
+  return url + '='.repeat((4 - (url.length % 4)) % 4);
+};
+
+/**
+ * The same files over the relay, where the transport moves the bytes itself
+ * (`LocalFiles`): kept in the same cache, under the same keys, so a file
+ * fetched over one route is there on the other.
+ */
+export const localFiles: LocalFiles = {
+  async read(uri) {
+    const b64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    const bytes = fromBase64Url(b64);
+    if (!bytes) throw new Error('That file couldn’t be read.');
+    return bytes;
+  },
+  async cached(key) {
+    const dest = await cachePath(key);
+    const info = await FileSystem.getInfoAsync(dest);
+    return info.exists && info.size ? dest : null;
+  },
+  async write(key, bytes) {
+    const dest = await cachePath(key);
+    await FileSystem.makeDirectoryAsync(CACHE, { intermediates: true }).catch(() => {});
+    await FileSystem.writeAsStringAsync(dest, toBase64(bytes), {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return dest;
   },
 };
 

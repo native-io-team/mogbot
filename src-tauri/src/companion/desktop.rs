@@ -1409,11 +1409,7 @@ impl Backend for DesktopBackend {
     }
 
     fn serve_hosts(&self) -> Vec<String> {
-        routes()
-            .iter()
-            .filter(|r| r.kind == RouteKind::Tailscale)
-            .filter_map(|r| super::identity::host_of(&r.url))
-            .collect()
+        hosts_for(&tailscale_routes(), super::relay::LINK.host())
     }
 
     fn app_version(&self) -> String {
@@ -1587,9 +1583,9 @@ fn set_serve(state: ServeState) {
     }
 }
 
-/// The routes a phone can use right now. Only a serve handler we read back
+/// The Tailscale route, when it's up. Only a serve handler we read back
 /// counts; a command that exited zero proves nothing.
-pub fn routes() -> Vec<Route> {
+fn tailscale_routes() -> Vec<Route> {
     match serve_state() {
         ServeState::On { url } => vec![Route {
             kind: RouteKind::Tailscale,
@@ -1598,6 +1594,28 @@ pub fn routes() -> Vec<Route> {
         }],
         _ => Vec::new(),
     }
+}
+
+/// The routes a phone can use right now, best first: the relay while this
+/// Mac is signed in there with an account (docs/relay.md), then Tailscale
+/// while it's serving. A new pairing link takes the first only.
+pub fn routes() -> Vec<Route> {
+    routes_from(super::relay::LINK.route(), tailscale_routes())
+}
+
+fn routes_from(relay: Option<Route>, tailscale: Vec<Route>) -> Vec<Route> {
+    relay.into_iter().chain(tailscale).collect()
+}
+
+/// The hosts this Mac signs: Tailscale's, and the relay's while the link is
+/// up (a phone that reached it checks the host it reached is signed).
+fn hosts_for(tailscale: &[Route], relay_host: Option<String>) -> Vec<String> {
+    tailscale
+        .iter()
+        .filter(|r| r.kind == RouteKind::Tailscale)
+        .filter_map(|r| super::identity::host_of(&r.url))
+        .chain(relay_host)
+        .collect()
 }
 
 /// Start the loopback server (idempotent) on last time's port if it's free.
@@ -1674,6 +1692,8 @@ pub async fn bring_up(app: &AppHandle) -> Result<(), CommandError> {
     let c = ensure(app);
     read_computer_name().await;
     let port = start_server(c.clone()).await?;
+    // The relay link (a build with no relay skips it), beside Tailscale.
+    super::relay::client::start(c.clone(), port);
     publish(port).await;
     c.backend.changed();
     hold_awake_for_phone(&c);
@@ -1914,6 +1934,7 @@ pub async fn tear_down(app: &AppHandle) {
         }
     }
     set_serve(ServeState::Off);
+    super::relay::client::stop();
     if let Some(mut running) = RUNNING.lock().ok().and_then(|mut r| r.take()) {
         if let Some(tx) = running.shutdown.take() {
             let _ = tx.send(());
@@ -2158,6 +2179,54 @@ mod created_line_tests {
         assert_eq!(
             phone_created_line(&view.started_on(Engine::Codex, false)),
             "Created on your phone on Codex"
+        );
+    }
+}
+
+#[cfg(test)]
+mod relay_route_tests {
+    use super::*;
+
+    fn ts() -> Route {
+        Route {
+            kind: RouteKind::Tailscale,
+            url: format!("https://mac.tail1234.ts.net:{TAILNET_HTTPS_PORT}"),
+            pin: None,
+        }
+    }
+
+    fn relay() -> Route {
+        Route {
+            kind: RouteKind::Relay,
+            url: "wss://relay.example.com/v1/phone/fp".into(),
+            pin: None,
+        }
+    }
+
+    #[test]
+    fn the_relay_comes_first_and_tailscale_stays_second() {
+        assert_eq!(routes_from(Some(relay()), vec![ts()]), vec![relay(), ts()]);
+        assert_eq!(routes_from(None, vec![ts()]), vec![ts()]);
+        // Relay alone is a route: phone access is ready without Tailscale.
+        assert_eq!(routes_from(Some(relay()), vec![]), vec![relay()]);
+    }
+
+    #[test]
+    fn the_relay_host_is_signed_while_the_link_is_up() {
+        assert_eq!(
+            hosts_for(&[ts()], Some("relay.example.com".into())),
+            vec![
+                "mac.tail1234.ts.net".to_string(),
+                "relay.example.com".to_string()
+            ]
+        );
+        assert_eq!(
+            hosts_for(&[ts()], None),
+            vec!["mac.tail1234.ts.net".to_string()]
+        );
+        assert_eq!(
+            hosts_for(&[], Some("relay.example.com".into())),
+            vec!["relay.example.com".to_string()]
         );
     }
 }

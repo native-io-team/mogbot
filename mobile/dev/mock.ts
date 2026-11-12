@@ -16,6 +16,7 @@
  *   pnpm mock --probe --restarted  # the same Mac after a restart cut Builder's turn off
  *   pnpm mock --impostor           # signs with a stranger's key: "This isn't your Mac"
  *   pnpm mock --http --cors        # for the web build (`pnpm qa:web` passes both)
+ *   pnpm mock --relay              # also behind a mock relay (docs/relay.md); the link carries it
  *
  * The identity key and paired phones live in dev/.certs (gitignored), so a
  * restart is the same Mac and a paired phone stays paired (`--state <dir>` to
@@ -90,6 +91,9 @@ function selfSigned(dir: string) {
     liveWork: args.includes('--live-work'),
     probe: args.includes('--probe'),
     restarted: args.includes('--restarted'),
+    ...(args.includes('--relay')
+      ? { relay: arg('--relay-port') ? { port: Number(arg('--relay-port')) } : true }
+      : {}),
     ...(arg('--usage') === 'two-claude' ||
     arg('--usage') === 'one-read' ||
     arg('--usage') === 'room'
@@ -112,6 +116,7 @@ function selfSigned(dir: string) {
   void mock.listen().then((url) => {
     const link = mock.pairingLink();
     console.log(`\nShip Studio mock Mac on ${url}\n`);
+    if (mock.relay) console.log(`Mock relay on ${mock.relay.url}\n`);
     if (tls) {
       console.log('Simulator, once per simulator (trust the self-signed certificate):');
       console.log(`  xcrun simctl keychain booted add-root-cert ${tls.certPath}\n`);

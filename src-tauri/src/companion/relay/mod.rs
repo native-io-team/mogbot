@@ -23,6 +23,7 @@ mod http;
 use hyper::HeaderMap;
 use serde::Serialize;
 use std::sync::{Arc, LazyLock, Mutex};
+use tokio::sync::{mpsc, oneshot};
 
 use super::wire::{Route, RouteKind};
 
@@ -106,7 +107,9 @@ fn usable_url(raw: &str) -> Option<String> {
     if !secure && host != "127.0.0.1" && host != "localhost" {
         return None;
     }
-    Some(url.to_string())
+    // As the phone checks it (`isRelayUrl`): a URL's scheme and host are
+    // lowercase once parsed.
+    Some(url.to_ascii_lowercase())
 }
 
 /// Where the Mac signs in.
@@ -119,68 +122,187 @@ pub fn phone_url(base: &str, fingerprint: &str) -> String {
     format!("{base}/v1/phone/{fingerprint}")
 }
 
-/// What the desk and the routes read: whether the Mac's relay link is up.
+/// The relay's sign-in page for one linking code (docs/relay.md,
+/// "Accounts"): `https://<relay host>/link?code=…`, or plain `http` for a
+/// local relay.
+pub fn link_page_url(base: &str, code: &str) -> String {
+    let web = match base.strip_prefix("wss://") {
+        Some(rest) => format!("https://{rest}"),
+        None => format!("http://{}", base.strip_prefix("ws://").unwrap_or(base)),
+    };
+    format!("{web}/link?code={code}")
+}
+
+/// Whether the Mac is signed in at the relay.
+#[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RelayState {
+    /// No relay in this build, or phone access is off.
+    #[default]
+    Off,
+    /// Trying to reach the relay and sign in (or waiting to try again).
+    Connecting,
+    /// Signed in at the relay right now.
+    Connected,
+}
+
+/// The account this Mac's key is linked to at the relay, as the relay said
+/// it (`ready` / `account` frames). The Mac keeps no account token.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Account {
+    pub id: String,
+    /// The relay's word for it; `null` when the account has none it shares.
+    pub email: Option<String>,
+}
+
+/// The relay's `account` value: an object with an `id`, or anything else
+/// (`null`, absent, junk) for none.
+pub fn parse_account(v: &serde_json::Value) -> Option<Account> {
+    let clean = |s: &str, max: usize| -> Option<String> {
+        let s = s.trim();
+        (!s.is_empty() && s.len() <= max && !s.chars().any(char::is_control)).then(|| s.to_string())
+    };
+    let id = clean(v.get("id")?.as_str()?, 128)?;
+    let email = v
+        .get("email")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|e| clean(e, 320));
+    Some(Account { id, email })
+}
+
+/// What the desk reads (`PhoneStatus.relay`).
 #[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RelayStatus {
-    /// A relay is configured for this build (`links.relay` or the variable).
-    pub configured: bool,
-    /// Signed in at the relay right now: phones can reach this Mac through it.
-    pub connected: bool,
-    /// The relay's host (lowercase, no port), while connected.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub host: Option<String>,
+    pub state: RelayState,
+    /// Linked account, or `null`. Kept from the last time the relay said,
+    /// through a reconnect; gone once the relay is off.
+    pub account: Option<Account>,
 }
 
-#[derive(Debug, Default)]
+/// What the desk asks the signed-in socket to say.
+#[derive(Debug)]
+pub(crate) enum Command {
+    /// `{"t":"linkStart","code":…}`; the answer says it was sent.
+    LinkStart(String, oneshot::Sender<bool>),
+    /// `{"t":"unlink"}`.
+    Unlink(oneshot::Sender<bool>),
+}
+
+#[derive(Debug)]
 struct Up {
+    base: String,
+    fingerprint: String,
     /// `<relay>/v1/phone/<fingerprint>`.
     phone_url: String,
     host: String,
+    commands: mpsc::Sender<Command>,
+}
+
+#[derive(Debug, Default)]
+struct Inner {
+    /// The client is running (connecting or connected).
+    running: bool,
+    up: Option<Up>,
+    account: Option<Account>,
 }
 
 /// One relay link's state. The app has one ([`LINK`]); a test makes its own.
 #[derive(Debug, Default)]
 pub struct Link {
-    up: Mutex<Option<Up>>,
+    inner: Mutex<Inner>,
 }
 
+/// How long the desk waits for the socket to take a command.
+const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+const NOT_CONNECTED: &str =
+    "This Mac isn't connected to the relay right now. Check the internet connection and try again in a moment.";
+
 impl Link {
-    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Up>> {
-        self.up.lock().unwrap_or_else(|e| e.into_inner())
+    fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// True when this changed it.
-    fn set_up(&self, base: &str, fingerprint: &str) -> bool {
+    /// The client started: connecting.
+    pub(crate) fn set_running(&self) {
+        self.lock().running = true;
+    }
+
+    /// The client stopped: nothing is known about the relay any more.
+    /// True when this changed what the desk shows.
+    pub(crate) fn set_off(&self) -> bool {
+        let mut inner = self.lock();
+        let changed = inner.running || inner.up.is_some() || inner.account.is_some();
+        *inner = Inner::default();
+        changed
+    }
+
+    /// Signed in, with the account the relay named. True when this changed it.
+    pub(crate) fn set_up(
+        &self,
+        base: &str,
+        fingerprint: &str,
+        account: Option<Account>,
+        commands: mpsc::Sender<Command>,
+    ) -> bool {
         let Some(host) = super::identity::host_of(base) else {
             return false;
         };
-        let mut up = self.lock();
-        let was = up.is_some();
-        *up = Some(Up {
+        let mut inner = self.lock();
+        let changed = inner.up.is_none() || inner.account != account;
+        inner.running = true;
+        inner.up = Some(Up {
+            base: base.to_string(),
+            fingerprint: fingerprint.to_string(),
             phone_url: phone_url(base, fingerprint),
             host,
+            commands,
         });
-        !was
+        inner.account = account;
+        changed
     }
 
-    /// True when this changed it.
-    fn set_down(&self) -> bool {
-        self.lock().take().is_some()
+    /// The socket went; the client tries again. True when this changed it.
+    pub(crate) fn set_down(&self) -> bool {
+        self.lock().up.take().is_some()
+    }
+
+    /// The relay said the account changed. True when it did.
+    pub(crate) fn set_account(&self, account: Option<Account>) -> bool {
+        let mut inner = self.lock();
+        if inner.account == account {
+            return false;
+        }
+        inner.account = account;
+        true
     }
 
     pub fn status(&self) -> RelayStatus {
-        let up = self.lock();
+        let inner = self.lock();
+        let state = match (&inner.up, inner.running) {
+            (Some(_), _) => RelayState::Connected,
+            (None, true) => RelayState::Connecting,
+            (None, false) => RelayState::Off,
+        };
         RelayStatus {
-            configured: relay_url().is_some(),
-            connected: up.is_some(),
-            host: up.as_ref().map(|u| u.host.clone()),
+            state,
+            account: inner.account.clone(),
         }
     }
 
-    /// The relay route, while the link is up.
+    /// Signed in at the relay with an account: phones can come this way
+    /// (the relay refuses phones for a Mac with no account, 4402).
+    pub fn usable(&self) -> bool {
+        let inner = self.lock();
+        inner.up.is_some() && inner.account.is_some()
+    }
+
+    /// The relay route, while the link is up and an account is linked.
     pub fn route(&self) -> Option<Route> {
-        self.lock().as_ref().map(|u| Route {
+        let inner = self.lock();
+        inner.account.as_ref()?;
+        inner.up.as_ref().map(|u| Route {
             kind: RouteKind::Relay,
             url: u.phone_url.clone(),
             pin: None,
@@ -189,8 +311,59 @@ impl Link {
 
     /// The relay's host, signed among the Mac's hosts while the link is up.
     pub fn host(&self) -> Option<String> {
-        self.lock().as_ref().map(|u| u.host.clone())
+        self.lock().up.as_ref().map(|u| u.host.clone())
     }
+
+    async fn command(
+        &self,
+        make: impl FnOnce(oneshot::Sender<bool>) -> Command,
+    ) -> Result<String, &'static str> {
+        let (tx, base) = {
+            let inner = self.lock();
+            let up = inner.up.as_ref().ok_or(NOT_CONNECTED)?;
+            (up.commands.clone(), up.base.clone())
+        };
+        let (ack_tx, ack) = oneshot::channel();
+        tx.send(make(ack_tx)).await.map_err(|_| NOT_CONNECTED)?;
+        match tokio::time::timeout(COMMAND_TIMEOUT, ack).await {
+            Ok(Ok(true)) => Ok(base),
+            _ => Err(NOT_CONNECTED),
+        }
+    }
+
+    /// Start linking this Mac to an account: a fresh one-time code goes to
+    /// the relay on the signed-in socket, and the page to sign in on comes
+    /// back for the browser.
+    pub async fn link_start(&self) -> Result<String, &'static str> {
+        let fingerprint = {
+            let inner = self.lock();
+            inner.up.as_ref().ok_or(NOT_CONNECTED)?.fingerprint.clone()
+        };
+        let code = new_link_code(&fingerprint)
+            .ok_or("This Mac couldn't make a sign-in code. Try again.")?;
+        let base = self
+            .command(|ack| Command::LinkStart(code.clone(), ack))
+            .await?;
+        Ok(link_page_url(&base, &code))
+    }
+
+    /// Unlink this Mac from its account at the relay.
+    pub async fn unlink(&self) -> Result<(), &'static str> {
+        self.command(Command::Unlink).await?;
+        Ok(())
+    }
+}
+
+/// A linking code, as the relay reads it (`services/relay/src/link.ts`):
+/// `<fingerprint>.<32 random bytes, base64url>`. The fingerprint finds this
+/// Mac's slot (it is no secret: it's in every pairing code); the random half
+/// is the secret, single use, ten minutes.
+fn new_link_code(fingerprint: &str) -> Option<String> {
+    use base64::Engine;
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes).ok()?;
+    let secret = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
+    Some(format!("{fingerprint}.{secret}"))
 }
 
 /// The app's relay link.
@@ -201,6 +374,16 @@ pub fn status() -> RelayStatus {
     LINK.status()
 }
 
+/// [`Link::link_start`] on the app's link: the sign-in page's address.
+pub async fn link_start() -> Result<String, &'static str> {
+    LINK.link_start().await
+}
+
+/// [`Link::unlink`] on the app's link.
+pub async fn unlink() -> Result<(), &'static str> {
+    LINK.unlink().await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,7 +391,7 @@ mod tests {
     #[test]
     fn only_a_bare_relay_address_is_used() {
         assert_eq!(
-            usable_url("wss://relay.example.com/").as_deref(),
+            usable_url("wss://Relay.Example.com/").as_deref(),
             Some("wss://relay.example.com")
         );
         assert_eq!(
@@ -239,16 +422,99 @@ mod tests {
     }
 
     #[test]
-    fn the_link_offers_its_route_and_host_only_while_up() {
+    fn the_link_page_is_the_relays_own_web_address() {
+        assert_eq!(
+            link_page_url("wss://relay.example.com", "abc"),
+            "https://relay.example.com/link?code=abc"
+        );
+        assert_eq!(
+            link_page_url("ws://127.0.0.1:8787", "abc"),
+            "http://127.0.0.1:8787/link?code=abc"
+        );
+        let code = new_link_code("ajgD1fBZkCocba-8m6Rykg").unwrap();
+        let (fp, secret) = code.split_once('.').unwrap();
+        assert_eq!(fp, "ajgD1fBZkCocba-8m6Rykg");
+        assert_eq!(secret.len(), 43);
+    }
+
+    #[test]
+    fn an_account_is_an_id_or_nothing() {
+        use serde_json::json;
+        assert_eq!(
+            parse_account(&json!({ "id": "user_1", "email": "j@x.com" })),
+            Some(Account {
+                id: "user_1".into(),
+                email: Some("j@x.com".into())
+            })
+        );
+        assert_eq!(
+            parse_account(&json!({ "id": "user_1", "email": null }))
+                .unwrap()
+                .email,
+            None
+        );
+        assert_eq!(parse_account(&json!(null)), None);
+        assert_eq!(parse_account(&json!({ "email": "j@x.com" })), None);
+        assert_eq!(parse_account(&json!({ "id": "" })), None);
+        assert_eq!(parse_account(&json!({ "id": "a\nb" })), None);
+    }
+
+    #[test]
+    fn the_route_needs_the_link_up_and_an_account() {
         let link = Link::default();
+        let (tx, _rx) = mpsc::channel(1);
+        assert_eq!(link.status().state, RelayState::Off);
+        link.set_running();
+        assert_eq!(link.status().state, RelayState::Connecting);
         assert!(link.route().is_none() && link.host().is_none());
-        assert!(link.set_up("wss://Relay.Example.com", "fp"));
+
+        assert!(link.set_up("wss://relay.example.com", "fp", None, tx.clone()));
+        assert_eq!(link.status().state, RelayState::Connected);
+        assert_eq!(link.host().as_deref(), Some("relay.example.com"));
+        assert!(
+            link.route().is_none(),
+            "no account: the relay turns phones away"
+        );
+        assert!(!link.usable());
+
+        let account = Account {
+            id: "user_1".into(),
+            email: Some("j@x.com".into()),
+        };
+        assert!(link.set_account(Some(account.clone())));
+        assert!(!link.set_account(Some(account.clone())));
         let route = link.route().unwrap();
         assert_eq!(route.kind, RouteKind::Relay);
-        assert_eq!(route.url, "wss://Relay.Example.com/v1/phone/fp");
-        assert_eq!(link.host().as_deref(), Some("relay.example.com"));
-        assert!(link.status().connected);
+        assert_eq!(route.url, "wss://relay.example.com/v1/phone/fp");
+        assert!(link.usable());
+
+        // Down: no route, the account kept through the reconnect.
         assert!(link.set_down());
-        assert!(!link.status().connected && link.route().is_none());
+        let s = link.status();
+        assert_eq!(s.state, RelayState::Connecting);
+        assert_eq!(s.account, Some(account));
+        assert!(link.route().is_none() && link.host().is_none());
+
+        assert!(link.set_off());
+        assert_eq!(link.status(), RelayStatus::default());
+    }
+
+    #[test]
+    fn the_desk_reads_state_and_account() {
+        let s = RelayStatus {
+            state: RelayState::Connected,
+            account: Some(Account {
+                id: "user_1".into(),
+                email: Some("j@x.com".into()),
+            }),
+        };
+        assert_eq!(
+            serde_json::to_value(&s).unwrap(),
+            serde_json::json!({ "state": "connected", "account": { "id": "user_1", "email": "j@x.com" } })
+        );
+        assert_eq!(
+            serde_json::to_value(RelayStatus::default()).unwrap(),
+            serde_json::json!({ "state": "off", "account": null })
+        );
     }
 }

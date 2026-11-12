@@ -12,7 +12,9 @@ import {
 } from '@shipstudio/companion-protocol';
 import {
   INTRO_STEPS,
+  introSteps,
   nextIntro,
+  pairStages,
   PAIR_STAGES,
   prevIntro,
   progressOf,
@@ -47,6 +49,27 @@ describe('pairSteps', () => {
     expect(startStep('tailscale', false)).toBe('tailscale');
     expect(startStep(null, true)).toBe('code');
     expect(startStep('tailscale', true)).toBe('code');
+  });
+
+  // docs/relay.md: through the relay the phone needs no Tailscale to pair.
+  it('with a relay, passes over the Tailscale screen: mac → code, one fewer on the bar', () => {
+    expect([...introSteps(true)]).toEqual(['mac', 'code']);
+    expect([...introSteps(false)]).toEqual(['mac', 'tailscale', 'code']);
+    expect(nextIntro('mac', true)).toBe('code');
+    expect(nextIntro('getMac', true)).toBe('code');
+    expect(nextIntro('code', true)).toBeNull();
+    expect(prevIntro('code', true)).toBe('mac');
+    expect(pairStages(true)).toEqual(['mac', 'code', 'scan', 'pair', 'allow']);
+    expect(progressOf('mac', true)).toEqual({ n: 1, of: 5 });
+    expect(progressOf('code', true)).toEqual({ n: 2, of: 5 });
+    expect(progressOf('allow', true)).toEqual({ n: 5, of: 5 });
+    // Saved on the Tailscale screen by a build without the relay: on to the code.
+    expect(startStep('tailscale', false, true)).toBe('code');
+    expect(startStep('mac', false, true)).toBe('mac');
+    expect(startStep(null, false, true)).toBe('mac');
+    // Without a relay, nothing changes.
+    expect(startStep('tailscale', false, false)).toBe('tailscale');
+    expect(progressOf('code', false)).toEqual({ n: 3, of: 6 });
   });
 
   it('names the Mac’s own button, and the Mac names the phone’s', () => {

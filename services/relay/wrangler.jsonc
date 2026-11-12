@@ -11,6 +11,14 @@
     "bindings": [{ "name": "MAC", "class_name": "MacRelay" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MacRelay"] }],
+  // Accounts (README, "Accounts"). All public values. CLERK_JWKS_URL empty means
+  // accounts are off: no sign-in, and every Mac's phones may use the relay.
+  "vars": {
+    "CLERK_PUBLISHABLE_KEY": "",
+    "CLERK_JWKS_URL": "",
+    "CLERK_ISSUER": "",
+    "CLERK_AUTHORIZED_PARTIES": ""
+  },
   // New connections per client address (Mac or phone). Optional: the Worker
   // runs without it. A phone reconnecting on every app open stays well under.
   "ratelimits": [

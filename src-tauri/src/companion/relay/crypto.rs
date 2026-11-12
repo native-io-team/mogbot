@@ -283,7 +283,10 @@ mod tests {
 
         let mac_secret = StaticSecret::from(filled(&v, "macSecretFill"));
         let (answer, mut mac) = mac_answer(&identity, mac_secret, hello.as_bytes()).unwrap();
-        assert_eq!(String::from_utf8(answer.clone()).unwrap(), s(&v, "macAnswer"));
+        assert_eq!(
+            String::from_utf8(answer.clone()).unwrap(),
+            s(&v, "macAnswer")
+        );
 
         let parsed: MacAnswer = serde_json::from_slice(&answer).unwrap();
         let t = transcript(

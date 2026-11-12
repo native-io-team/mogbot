@@ -34,6 +34,7 @@ export function phoneStatus(over: Record<string, unknown> = {}) {
       'sessions.read',
     ],
     push: { available: false, enabled: false },
+    relay: { state: 'off', account: null },
     ...over,
   };
 }

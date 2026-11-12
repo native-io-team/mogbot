@@ -188,6 +188,87 @@ describe('the connection bar', () => {
   });
 });
 
+// docs/relay.md: the relay knows whether the Mac is there and signed in; the bar says that.
+describe('the bar over the relay', () => {
+  const now = 1_000_000;
+  const relayOnly = {
+    credentials: { routes: [{ kind: 'relay', url: 'wss://relay.example/v1/phone/f' }] },
+  };
+  const tailscaleAdvice = /Tailscale may be off|Tailscale DNS|Tailscale and check/;
+
+  it('the relay said the Mac isn’t connected (4404): offline or asleep, wake it, no Tailscale advice', () => {
+    const link: LinkState = {
+      kind: 'reconnecting',
+      lastSeenAt: now - 60_000,
+      nextTryAt: now + 1000,
+      since: now - CALM_MS - 1000,
+      relaySaid: 'mac_offline',
+    };
+    const b = bar(link, now, relayOnly);
+    expect(b).toMatchObject({
+      kind: 'mac_offline',
+      tone: 'problem',
+      title: 'Your Mac is offline or asleep',
+    });
+    expect(b?.checks[0]).toBe('Wake your Mac, with the app open on it.');
+    expect(b?.checks.join(' ')).not.toMatch(tailscaleAdvice);
+    expect(pill({ link, phoneOnline: true } as never, now)).toEqual({
+      tone: 'problem',
+      label: 'Mac offline',
+    });
+    // Its first seconds stay calm: a Mac waking up reconnects to the relay by itself.
+    const early = { ...link, since: now - 2000 };
+    expect(bar(early, now, relayOnly)).toMatchObject({ kind: 'connecting', tone: 'busy' });
+  });
+
+  it('the relay said the Mac isn’t signed in (4402): said at once, with its one fix', () => {
+    const link: LinkState = {
+      kind: 'connecting',
+      attempt: 1,
+      since: now - 1000,
+      relaySaid: 'sign_in_needed',
+    };
+    const b = bar(link, now, relayOnly);
+    expect(b).toMatchObject({
+      kind: 'sign_in_needed',
+      tone: 'problem',
+      title: 'Your Mac isn’t signed in',
+    });
+    expect(b?.checks).toEqual(['On your Mac, sign in, or use Tailscale instead.']);
+    expect(b?.checks.join(' ')).not.toMatch(tailscaleAdvice);
+    expect(pill({ link, phoneOnline: true } as never, now).label).toBe('Mac not signed in');
+  });
+
+  it('can’t reach a relay-only Mac: no Tailscale advice, it has none to check', () => {
+    const b = bar({ kind: 'connecting', attempt: 4, since: now - 3 * 60_000 }, now, relayOnly);
+    expect(b).toMatchObject({ kind: 'unreachable' });
+    expect(b?.checks.join(' ')).not.toMatch(tailscaleAdvice);
+  });
+
+  it('the transport says what the relay said, and forgets it once connected', () => {
+    const t = new DirectTransport({
+      routes: [{ kind: 'relay' as const, url: 'wss://relay.example/v1/phone/f' }],
+      token: 'tok',
+      app: { version: '1', runtimeVersion: 'test' },
+      getResume: () => undefined,
+      foreground: true,
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      pinned: { fingerprint: 'f', serverId: 'mac' },
+      challenge: () => 'c',
+      random: (n) => new Uint8Array(n).fill(7),
+    });
+    last().drop(4404);
+    expect(t.state).toMatchObject({ kind: 'connecting', relaySaid: 'mac_offline' });
+    jest.advanceTimersByTime(1500);
+    last().drop(4402);
+    expect(t.state).toMatchObject({ kind: 'connecting', relaySaid: 'sign_in_needed' });
+    jest.advanceTimersByTime(3000);
+    last().drop(1006);
+    expect(t.state).not.toHaveProperty('relaySaid');
+    t.close();
+  });
+});
+
 describe('telling a stuck app from a Mac out of reach', () => {
   it('a request that times out while the heartbeat still comes marks the link stuck, and an answer clears it', async () => {
     const t = make();

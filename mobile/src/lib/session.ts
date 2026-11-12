@@ -77,7 +77,8 @@ import {
   mergePage,
   setPendingFailed,
 } from './sync';
-import { clearCache, http, type PickedFile } from './files';
+import { clearCache, http, localFiles, type PickedFile } from './files';
+import { relayImage, retryRelayImages } from './relayImages';
 import { createReads } from './reads';
 import { roomIdOf, roomKey, roomsOffered } from './rooms';
 import { registerPush } from './push';
@@ -198,6 +199,8 @@ const transportFor = (
     getResume: () => getResume?.() ?? undefined,
     foreground: AppState.currentState === 'active',
     http,
+    files: localFiles,
+    random: (n) => Crypto.getRandomBytes(n),
     challenge: () => newChallenge((n) => Crypto.getRandomBytes(n)),
     pinned: { fingerprint: c.fingerprint, serverId: c.serverId },
   });
@@ -226,6 +229,7 @@ function connect(c: Credentials) {
   t.onRefused((refusal) => setApp({ refusal }));
   t.onWelcome((welcome) => {
     caughtUp = false;
+    retryRelayImages();
     setApp({
       welcome,
       served: { methods: [...welcome.methods], features: [...(welcome.features ?? [])] },
@@ -1054,13 +1058,30 @@ export function download(source: { blobId: string } | { agentId: string; path: s
   return transport.download(source);
 }
 
-/** An image source for an attachment: the Mac's thumbnail at `width` points (2x for the screen). */
-export function attachmentSource(agentId: string, path: string, width?: number) {
+/**
+ * An image source for an attachment: the Mac's thumbnail at `width` points
+ * (2x for the screen). On Tailscale, its address and headers; over the relay,
+ * the downloaded file (no `uri` while it comes, null if it couldn't).
+ */
+export function attachmentSource(
+  agentId: string,
+  path: string,
+  width?: number
+): { uri?: string; headers?: Record<string, string>; cacheKey: string } | null {
   if (!transport) return null;
+  const w = width ? width * 2 : undefined;
+  const cacheKey = `${agentId}/${path}@${width ?? 'full'}`;
+  if (transport instanceof DirectTransport && transport.route.kind === 'relay') {
+    const t = transport;
+    const uri = relayImage(cacheKey, () => t.download({ agentId, path }, w));
+    if (uri === null) return null;
+    if (uri) return { uri, cacheKey };
+    return { cacheKey };
+  }
   return {
-    uri: transport.attachmentUrl(agentId, path, width ? width * 2 : undefined),
+    uri: transport.attachmentUrl(agentId, path, w),
     headers: transport.authHeaders,
-    cacheKey: `${agentId}/${path}@${width ?? 'full'}`,
+    cacheKey,
   };
 }
 

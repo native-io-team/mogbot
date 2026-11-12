@@ -15,6 +15,13 @@ import type { RouteKind } from './model';
 /** A passing refusal (`LinkState.macSaid`). */
 export type MacSaid = 'too_many_connections' | 'unavailable' | 'other_account';
 
+/**
+ * What the relay answered for the Mac (`LinkState.relaySaid`, docs/relay.md):
+ * `mac_offline`, it isn't connected to the relay (close 4404); `sign_in_needed`,
+ * it's connected but signed out, so the relay won't carry phones to it (4402).
+ */
+export type RelaySaid = 'mac_offline' | 'sign_in_needed';
+
 export type LinkState =
   /**
    * Trying routes in order. `since`: when this spell of trying began (or the
@@ -29,7 +36,7 @@ export type LinkState =
       /** As for `reconnecting`. */
       macSaid?: MacSaid;
       /** As for `reconnecting`. */
-      macOffline?: boolean;
+      relaySaid?: RelaySaid;
     }
   /**
    * `stuck`: since when a request went unanswered though the Mac's heartbeat
@@ -62,12 +69,11 @@ export type LinkState =
        */
       macSaid?: MacSaid;
       /**
-       * The relay's last answer in this spell was that the Mac isn't
-       * connected to it (close 4404, `RELAY_CLOSE_MAC_OFFLINE`): asleep, off
-       * the internet, or the app closed. Known, not guessed: "Your Mac is
-       * offline", never Tailscale advice.
+       * The relay's last answer in this spell (`RelaySaid`): the Mac isn't
+       * connected to it (asleep, off the internet, the app closed), or isn't
+       * signed in. Known, not guessed: said as that, never Tailscale advice.
        */
-      macOffline?: boolean;
+      relaySaid?: RelaySaid;
     }
   /** The Mac said no for good: re-pair (revoked) or update a side. */
   | {
