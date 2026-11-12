@@ -161,6 +161,7 @@ jobs:
           # Stable names too, so releases/latest/download/<name> always means
           # the newest one (like Mogbot.dmg on the Mac).
           for f in $B/nsis/*-setup.exe; do cp "$f" "out/${NAME}-${{ matrix.artifact }}-setup.exe"; done
+          for f in $B/msi/*.msi; do cp "$f" "out/${NAME}-${{ matrix.artifact }}.msi"; done
           for f in $B/deb/*.deb; do cp "$f" "out/${NAME}-${{ matrix.artifact }}.deb"; done
           for f in $B/rpm/*.rpm; do cp "$f" "out/${NAME}-${{ matrix.artifact }}.rpm"; done
           for f in $B/appimage/*.AppImage; do cp "$f" "out/${NAME}-${{ matrix.artifact }}.AppImage"; done
