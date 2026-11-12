@@ -1,23 +1,22 @@
-// Ship Studio's push relay. NOT DEPLOYED: see docs/push-relay.md for the
-// owner's steps. Every value marked PLACEHOLDER must be replaced first.
+// Mogbot's push relay, deployed to Julian's Cloudflare account (see
+// docs/push-relay.md). Forks: replace the name, topic and database id.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "shipstudio-push-relay",
+  "name": "mogbot-push-relay",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   // No Workers Logs: the relay prints nothing about who or what, and keeps
   // no request logs of its own.
   "observability": { "enabled": false },
   "vars": {
-    // PLACEHOLDER: the official app's bundle id from the TestFlight team.
-    "APNS_TOPIC": "com.shipstudio.companion"
+    // The official phone app's bundle id (brand.json companion.bundleId).
+    "APNS_TOPIC": "io.native.mogbot.companion"
   },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "shipstudio-push",
-      // PLACEHOLDER: printed by `wrangler d1 create shipstudio-push`.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_name": "mogbot-push",
+      "database_id": "df278138-fdee-4bce-a7d2-30f774813162",
       "migrations_dir": "migrations"
     }
   ],

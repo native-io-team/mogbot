@@ -1,6 +1,6 @@
 # Push relay
 
-Phone notifications that arrive when the Ship Studio app is closed.
+Phone notifications that arrive when the phone app is closed.
 
 A Mac can't wake a phone itself. Apple (APNs) and Google (FCM) accept pushes
 only from whoever holds the app's signing key, and that key can't ship
@@ -8,8 +8,12 @@ inside a desktop app that anyone can unpack. So a tiny Cloudflare Worker,
 `services/push-relay/`, holds the key and does nothing else. It never sees
 what an agent said.
 
-**Status:** built and tested, **not deployed**. Nothing here runs until the
-owner does the steps in [Deploying](#deploying).
+**Status:** live since 2026-11-12 at
+`https://mogbot-push-relay.mogbot-relay.workers.dev` (Cloudflare account
+`4fb101fc…`, D1 `mogbot-push`, APNs key `94V3UT3768`, team `N2VB8A88LB`,
+topic `io.native.mogbot.companion`). The official Mac app has it compiled in
+from 1.0.6 (`links.pushRelay` in brand.json). Push is on until the user turns
+it off in the Phone panel (`PushConfig::on`). Android has no FCM yet.
 
 ## What leaves the Mac
 
@@ -124,7 +128,7 @@ shows "Not on this Mac".
 
 ## Deploying
 
-The owner does this once. Nothing here has been run.
+Done once for the official app (see Status). A fork does the same with its own accounts.
 
 **What's needed:**
 

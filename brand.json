@@ -31,7 +31,7 @@
     "companionSource": null,
     "appStore": null,
     "testFlight": "https://testflight.apple.com/join/fsm64m5E",
-    "pushRelay": null,
+    "pushRelay": "https://mogbot-push-relay.mogbot-relay.workers.dev",
     "relay": "wss://mogbot-relay.mogbot-relay.workers.dev",
     "macDownload": "https://mogbot.app/start"
   },

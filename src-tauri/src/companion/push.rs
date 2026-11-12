@@ -92,9 +92,24 @@ pub struct Installation {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PushConfig {
-    /// The Phone panel's toggle.
+    /// The Phone panel's toggle, as the user last set it. Read it through
+    /// [`PushConfig::on`]: until the user has touched the toggle, push is on.
     pub enabled: bool,
+    /// Whether the user ever set the toggle. Before 1.0.6 push started off
+    /// and nobody found the switch, so a phone in a pocket heard nothing.
+    pub user_set: bool,
     pub installation: Option<Installation>,
+}
+
+impl PushConfig {
+    /// Whether pushes go out: the user's choice once made, else on.
+    pub fn on(&self) -> bool {
+        if self.user_set {
+            self.enabled
+        } else {
+            true
+        }
+    }
 }
 
 /// `devices.setPush`'s answer: whether this phone will get pushes.
@@ -439,7 +454,7 @@ impl Push {
     pub fn view(&self, c: &Companion) -> PushView {
         PushView {
             available: self.relay().is_some(),
-            enabled: c.registry.read(|s| s.push.enabled),
+            enabled: c.registry.read(|s| s.push.on()),
         }
     }
 }
@@ -512,7 +527,7 @@ fn status_for(c: &Companion, device: &DeviceRecord, registered: bool) -> PushSta
         PushStatus::SelfBuild
     } else if c.push.relay().is_none() {
         PushStatus::Unavailable
-    } else if !c.registry.read(|s| s.push.enabled) || device.push.is_none() {
+    } else if !c.registry.read(|s| s.push.on()) || device.push.is_none() {
         PushStatus::Off
     } else if registered {
         PushStatus::On
@@ -570,7 +585,7 @@ pub async fn set_push(
         }
     }
     let device = c.registry.get(device_id).unwrap_or(before);
-    let enabled = c.registry.read(|s| s.push.enabled);
+    let enabled = c.registry.read(|s| s.push.on());
     let registered = match (c.push.relay(), enabled) {
         (Some(relay), true) => register(c, relay.as_ref(), &device).await,
         _ => false,
@@ -586,7 +601,10 @@ pub async fn set_enabled(c: &Companion, enabled: bool) -> Result<(), CommandErro
             "This build of the app has no push service.",
         ));
     };
-    c.registry.write(|s| s.push.enabled = enabled)?;
+    c.registry.write(|s| {
+        s.push.enabled = enabled;
+        s.push.user_set = true;
+    })?;
     if enabled {
         installation(c, relay.as_ref()).await.map_err(|e| {
             CommandError::expected(format!("Couldn't reach the push service ({e:?})."))
@@ -620,7 +638,7 @@ pub async fn forget_device(c: &Companion, device: &DeviceRecord) {
 
 /// Push one alert to every phone that should hear it. Returns the ids sent to.
 pub async fn deliver_all(c: &Companion, alert: &PushAlert, now: u64) -> Vec<String> {
-    let on = c.registry.read(|s| s.enabled && s.push.enabled);
+    let on = c.registry.read(|s| s.enabled && s.push.on());
     let Some(relay) = c.push.relay().filter(|_| on) else {
         return Vec::new();
     };
@@ -675,7 +693,7 @@ pub fn raise(agent_id: &str, kind: PushKind) {
     let Some(c) = super::desktop::get() else {
         return;
     };
-    if !c.registry.read(|s| s.enabled && s.push.enabled) {
+    if !c.registry.read(|s| s.enabled && s.push.on()) {
         return;
     }
     let badge = crate::agents::store::list()
@@ -821,18 +839,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn off_until_the_mac_turns_it_on_then_registered() {
+    async fn on_until_the_user_turns_it_off_then_off_until_on() {
         let (c, relay, id) = setup(BuildKind::Official);
+        // Never touched: a phone's token registers at once.
         let status = set_push(&c, &id, Some(TOKEN.into()), PushEnvironment::Production)
             .await
             .unwrap();
-        assert_eq!(status, PushStatus::Off);
-        assert!(
-            relay.calls().is_empty(),
-            "nothing leaves the Mac while it's off"
-        );
-
-        set_enabled(&c, true).await.unwrap();
+        assert_eq!(status, PushStatus::On);
         assert_eq!(
             relay.calls(),
             vec!["create".to_string(), format!("register {id} {TOKEN}")]
@@ -842,6 +855,24 @@ mod tests {
             .unwrap();
         assert_eq!(again, PushStatus::On);
         assert_eq!(relay.calls().len(), 2, "an unchanged token isn't re-sent");
+
+        // The user's Off sticks, and nothing goes out while it's off.
+        set_enabled(&c, false).await.unwrap();
+        assert!(!c.registry.read(|s| s.push.on()));
+        let before = relay.calls().len();
+        assert!(deliver_all(&c, &alert(PushKind::NeedsYou), 10).await.is_empty());
+        assert_eq!(relay.calls().len(), before, "nothing leaves the Mac while it's off");
+        set_enabled(&c, true).await.unwrap();
+        assert!(c.registry.read(|s| s.push.on()));
+    }
+
+    #[test]
+    fn a_saved_config_from_before_reads_as_on_until_the_user_chose() {
+        let old: PushConfig = serde_json::from_str(r#"{"enabled":false}"#).unwrap();
+        assert!(old.on());
+        let chose_off: PushConfig =
+            serde_json::from_str(r#"{"enabled":false,"userSet":true}"#).unwrap();
+        assert!(!chose_off.on());
     }
 
     #[tokio::test]
