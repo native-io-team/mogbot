@@ -132,7 +132,8 @@ function notice(title: string, text: string): Response {
  * signed-in visitor's account on its own.
  */
 const LINK_SCRIPT = `
-(function () {
+// In <head>, so wait for the body before looking anything up.
+document.addEventListener('DOMContentLoaded', function () {
   var KEY = 'relay.linkCode';
   var status = document.getElementById('status');
   var box = document.getElementById('sign-in');
@@ -206,7 +207,7 @@ const LINK_SCRIPT = `
     });
     Clerk.addListener(function (state) { if (state.session) ask(); });
   });
-})();
+});
 `;
 
 /** `GET /link?code=…`: sign in with Clerk, then hand the code and the session token to `/v1/link`. */
