@@ -107,6 +107,21 @@ export function useRecently(value: boolean, ms: number): boolean {
   return value || recent;
 }
 
+/** How long a glide to a new line is given before it counts as over. */
+const GLIDE_MS = 500;
+
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
+
+/** A key that scrolls the chat: a scrolling key, not typed into a field or pressed on a button. */
+export function scrollsTheChat(e: Pick<KeyboardEvent, 'key' | 'target'>): boolean {
+  if (!SCROLL_KEYS.has(e.key)) return false;
+  const t = e.target as HTMLElement | null;
+  if (!t || typeof t.closest !== 'function') return true;
+  return !t.closest(
+    'input, textarea, select, button, [contenteditable=""], [contenteditable="true"]'
+  );
+}
+
 /**
  * Follow the bottom of a chat while the reader is there.
  *
@@ -130,21 +145,44 @@ export function useFollowBottom(
   // then (the Chief, on launch) stopped following as its lines settled.
   const lastInput = useRef(-Infinity);
 
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const follow = useCallback(
     (smooth: boolean) => {
       const el = scrollRef.current;
       if (!el) return;
       const top = el.scrollHeight - el.clientHeight;
       if (smooth && !prefersReducedMotion() && top > el.scrollTop + 1) {
-        glideUntil.current = performance.now() + 500;
+        glideUntil.current = performance.now() + GLIDE_MS;
         el.scrollTo({ top, behavior: 'smooth' });
+        // Where the glide ended up, once it's over. WebKit drops a smooth
+        // scroll that anything else moves mid-way (a row above settling its
+        // height, a card's answers arming), and the scroll handler ignores
+        // the glide's positions, so the chat stayed short of a new card,
+        // still "following", until the next line. Still following and the
+        // reader hasn't taken the scroll: land on the bottom.
+        if (settle.current) clearTimeout(settle.current);
+        settle.current = setTimeout(() => {
+          settle.current = null;
+          const now = scrollRef.current;
+          if (!now || !atBottomRef.current || glideUntil.current === 0) return;
+          glideUntil.current = 0;
+          if (now.scrollHeight - now.clientHeight - now.scrollTop >= 1) {
+            now.scrollTop = now.scrollHeight;
+          }
+        }, GLIDE_MS + 50);
       } else if (performance.now() >= glideUntil.current) {
         el.scrollTop = el.scrollHeight;
       } else {
         el.scrollTo({ top, behavior: 'smooth' });
       }
     },
-    [scrollRef]
+    [scrollRef, atBottomRef]
+  );
+  useEffect(
+    () => () => {
+      if (settle.current) clearTimeout(settle.current);
+    },
+    []
   );
 
   const isGliding = useCallback(() => performance.now() < glideUntil.current, []);
@@ -163,6 +201,17 @@ export function useFollowBottom(
     const stop = () => {
       glideUntil.current = 0;
       lastInput.current = performance.now();
+    };
+    // Only what can scroll counts: the scrollbar (a press on the scroller
+    // itself) or a middle-click autoscroll, and scrolling keys outside a
+    // field. A click on Allow, or typing a note on a card, made the next
+    // second's layout shifts read as the reader leaving the bottom, so the
+    // card that came next landed out of view.
+    const press = (e: PointerEvent) => {
+      if (e.target === el || e.button === 1) stop();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (scrollsTheChat(e)) stop();
     };
     // A glide that has landed is over: growth after it (a reply streaming)
     // snaps in the same frame instead of riding a stale smooth scroll. Not
@@ -183,16 +232,16 @@ export function useFollowBottom(
     el.addEventListener('scroll', landed, { passive: true });
     el.addEventListener('wheel', stop, { passive: true });
     el.addEventListener('touchstart', stop, { passive: true });
-    el.addEventListener('keydown', stop);
+    el.addEventListener('keydown', key);
     // The scrollbar, and a middle-click autoscroll.
-    el.addEventListener('pointerdown', stop, { passive: true });
+    el.addEventListener('pointerdown', press, { passive: true });
     return () => {
       observer.disconnect();
       el.removeEventListener('scroll', landed);
       el.removeEventListener('wheel', stop);
       el.removeEventListener('touchstart', stop);
-      el.removeEventListener('keydown', stop);
-      el.removeEventListener('pointerdown', stop);
+      el.removeEventListener('keydown', key);
+      el.removeEventListener('pointerdown', press);
     };
   }, [scrollRef, contentRef, atBottomRef, follow]);
 

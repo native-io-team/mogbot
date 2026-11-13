@@ -29,6 +29,13 @@ export const browserAnchorsScroll = (): boolean =>
 export function useRowAnchoring(
   scrollRef: RefObject<HTMLElement | null>,
   contentRef: RefObject<HTMLElement | null>,
+  /**
+   * True while the chat follows its newest line: the bottom is the anchor
+   * then, not a row above. Shifting for a row above that shrank (a card
+   * folding into a receipt, a timeline closing) moved a chat pinned to the
+   * bottom up, and in WebKit cut short the glide to the card that came.
+   */
+  followingRef?: RefObject<boolean>,
   enabled = !browserAnchorsScroll()
 ): void {
   useEffect(() => {
@@ -37,6 +44,7 @@ export function useRowAnchoring(
     if (!enabled || !scroller || !content || typeof ResizeObserver === 'undefined') return;
     const heights = new WeakMap<Element, number>();
     const resizes = new ResizeObserver((entries) => {
+      const following = followingRef?.current === true;
       const top = scroller.getBoundingClientRect().top;
       let shift = 0;
       for (const entry of entries) {
@@ -48,7 +56,7 @@ export function useRowAnchoring(
         // Above the viewport: its bottom (at the new height) is above the top edge.
         if (entry.target.getBoundingClientRect().bottom <= top) shift += height - before;
       }
-      if (shift !== 0) scroller.scrollTop += shift;
+      if (shift !== 0 && !following) scroller.scrollTop += shift;
     });
     for (const row of content.children) resizes.observe(row);
     const rows = new MutationObserver((mutations) => {
@@ -63,5 +71,5 @@ export function useRowAnchoring(
       rows.disconnect();
       resizes.disconnect();
     };
-  }, [scrollRef, contentRef, enabled]);
+  }, [scrollRef, contentRef, followingRef, enabled]);
 }
