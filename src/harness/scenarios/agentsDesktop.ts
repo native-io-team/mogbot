@@ -528,10 +528,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     title: 'Agents — a new agent starts on the defaults (Codex, GPT-5.5)',
     looksRightWhen:
       'The New agent dialog with Advanced open: “Runs on” has Codex pressed, and Model has GPT-5.5 chosen — the defaults from Settings → Agents, not Claude Code and Default. Switching it to Claude Code would pick Balanced (Sonnet), Claude Code’s default.',
-    steps: [
-      { click: '.agents-list__new' },
-      { click: '.agent-editor__fill-in' },
-    ],
+    steps: [{ click: '.agents-list__new' }, { click: '.agent-editor__fill-in' }],
     requires: '.agent-sheet__menu',
     clipSelector: '.agent-editor',
     commands: {

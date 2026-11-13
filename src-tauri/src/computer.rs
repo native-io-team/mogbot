@@ -15,12 +15,14 @@ pub enum ComputerKind {
     Computer,
 }
 
-/// This build's kind.
-#[cfg(target_os = "macos")]
+/// This build's kind. Tests use the Mac's words on every OS, so the many
+/// copy assertions written against "this Mac" hold on Linux and Windows CI;
+/// the other words are tested through [`localize_with`] below.
+#[cfg(any(target_os = "macos", test))]
 pub const HOST: ComputerKind = ComputerKind::Mac;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(test)))]
 pub const HOST: ComputerKind = ComputerKind::Pc;
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(all(not(any(target_os = "macos", target_os = "windows")), not(test)))]
 pub const HOST: ComputerKind = ComputerKind::Computer;
 
 /// Declares the computer's words as `&'static str` constants for this build,
@@ -44,19 +46,19 @@ macro_rules! words {
 
 /// The noun as a literal, for `concat!`-built constants:
 /// `concat!("Gone from this ", computer::noun!(), ".")`.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", test))]
 macro_rules! noun {
     () => {
         "Mac"
     };
 }
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(test)))]
 macro_rules! noun {
     () => {
         "PC"
     };
 }
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(all(not(any(target_os = "macos", target_os = "windows")), not(test)))]
 macro_rules! noun {
     () => {
         "computer"
@@ -64,11 +66,11 @@ macro_rules! noun {
 }
 pub(crate) use noun;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", test))]
 words!("Mac");
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(test)))]
 words!("PC");
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(all(not(any(target_os = "macos", target_os = "windows")), not(test)))]
 words!("computer");
 
 /// Puts this build's words into prose written with "this Mac" / "your Mac" /

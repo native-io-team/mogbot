@@ -139,7 +139,7 @@ export const agentsKeysScenarios: Scenario[] = [
       // still "find" its control.
       { click: '.agent-editor__fill-in' },
       { fill: '.agent-sheet__field[aria-label="Agent name"]', value: 'Bookings' },
-    { click: '.agent-sheet__key' },
+      { click: '.agent-sheet__key' },
     ],
     commands,
   },
