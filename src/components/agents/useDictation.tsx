@@ -130,7 +130,8 @@ export function useDictation({
           // Undo puts back the live words, or Whisper's own when there were none.
           const before =
             now === originalRef.current ? joinDictation(originalRef.current, event.raw) : now;
-          if (before !== after) setUndo({ before, after });
+          // Going straight out (Enter while listening): nothing to undo.
+          if (before !== after && !sendAfterRef.current) setUndo({ before, after });
           break;
         }
         case 'level':
@@ -168,7 +169,6 @@ export function useDictation({
     if (phase !== 'idle' || !sendAfterRef.current) return;
     const send = sendAfterRef.current;
     sendAfterRef.current = null;
-    setUndo(null);
     send();
   }, [phase]);
 
