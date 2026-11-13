@@ -45,6 +45,11 @@ pub(super) struct TurnMark {
     /// never asked for it, and the next turn's end tidies again.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(super) quiet: bool,
+    /// The app quit cleanly while the turn ran (`shutdown_sync`): an update,
+    /// a relaunch, the user's ⌘Q. Not the turn's doing, so the pick-up it
+    /// gets doesn't count toward [`MAX_RESUMES`] (up to [`MAX_QUIT_RESUMES`]).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(super) quit: bool,
 }
 
 /// A running turn's progress, saved at most once a second while it changes:
@@ -62,6 +67,12 @@ pub(super) struct Progress {
 /// Auto pick-ups a turn gets, whatever cut it off (a restart, its engine
 /// dying). Past that, the chat says it was interrupted and offers Continue.
 pub(super) const MAX_RESUMES: u8 = 1;
+
+/// Pick-ups a turn gets when what cut it off each time was the app quitting
+/// cleanly. Observed: a turn picked up after an update, then cut off by the
+/// next relaunch, waited on a typed "Continue". A crash or the engine dying
+/// still gets [`MAX_RESUMES`]: it may be the turn's own doing.
+pub(super) const MAX_QUIT_RESUMES: u8 = 4;
 
 pub(super) fn read_mark(agent_id: &str) -> Option<TurnMark> {
     let raw = std::fs::read_to_string(mark_path(agent_id)?).ok()?;
@@ -136,6 +147,23 @@ pub(super) fn clear_mark(agent_id: &str) {
 /// The next pick-up a cut-off turn gets, if it has one left.
 pub(super) fn next_pickup(resumes: u8) -> Option<u8> {
     (resumes < MAX_RESUMES).then(|| resumes + 1)
+}
+
+/// The next pick-up a cut-off turn's mark allows: more when the app quit.
+pub(super) fn next_pickup_of(mark: &TurnMark) -> Option<u8> {
+    let cap = if mark.quit { MAX_QUIT_RESUMES } else { MAX_RESUMES };
+    (mark.resumes < cap).then(|| mark.resumes + 1)
+}
+
+/// Taken from the queue but its engine never started (the app went while
+/// the turn was getting ready: a bound agent's copy, an account check): no
+/// process, no conversation, nothing done. Its messages are simply sent
+/// again; there is nothing to pick up and nothing that could run twice.
+pub(super) fn never_spawned(mark: &TurnMark) -> bool {
+    mark.pid.is_none()
+        && mark.session.is_empty()
+        && mark.progress.is_none()
+        && !mark.took.is_empty()
 }
 
 /// Its engine's process ended mid-turn by itself, in a conversation the
@@ -273,4 +301,7 @@ pub(super) struct Recovery {
     pub(super) pickup: Option<Pickup>,
     /// Its timeline so far, for the recovery line.
     pub(super) work: Option<super::work::TurnWork>,
+    /// Messages a turn took but never started on, back on the queue as
+    /// they were ([`never_spawned`]).
+    pub(super) resent: Vec<Inbound>,
 }

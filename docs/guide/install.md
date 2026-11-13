@@ -25,7 +25,9 @@ If you open the app straight from the downloaded file instead, it still runs, bu
 itself from there. When an update is ready, the app offers **Move to Applications**: one click
 copies it there and reopens it.
 
-Updates download in the background. When one is ready you'll see **Restart to update**.
+Updates download in the background. When one is ready you'll see **Restart to update**. An agent that
+was working when the app closed picks its work back up on its own when it reopens, with one line saying
+so; one you stopped stays stopped.
 
 ## First launch
 

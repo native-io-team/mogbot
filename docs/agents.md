@@ -838,6 +838,18 @@ Claude Code stopped unexpectedly", same timeline, no fresh-session retry);
 dying again ends on the interrupted line. A pick-up that finds its session
 gone ends there too, rather than retrying fresh.
 
+**A clean quit doesn't use up the pick-up.** `runner::shutdown_sync` marks
+every running turn `quit` before stopping it (an update, a relaunch, ⌘Q), and
+such a turn is picked up after each launch up to `MAX_QUIT_RESUMES` (4); a
+crash or a dying engine still gets one, since it may be the turn's own doing.
+And a turn that took its messages but whose engine never started (no pid, no
+conversation, no progress: the app quit while it was getting ready, e.g. a
+bound agent's copy being made) has its messages sent again as they were,
+with the usual "Sent the message still waiting…" line, instead of "couldn't
+find this agent's conversation" (`mark::never_spawned`; after a crash it is
+still left for Continue). Observed: ten "couldn't find" lines and six
+cap-hit "Continue"s in a week, each waiting on a typed "Continue".
+
 **Nothing goes silent.** A worker that panics mid-turn resets the agent
 (idle, slot freed, an error line saying the turn didn't finish) instead of
 leaving it "working" forever. The panic is caught (`catch_unwind`) and

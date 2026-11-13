@@ -259,8 +259,16 @@ pub(super) async fn recover_one(app: &AppHandle, agent_id: &str, found: &[Inboun
     // What was queued behind it was never started: it runs now, once (it is
     // already back on the queue), and the chat says which messages were sent
     // again: only those still queued, not any a Stop has dropped meanwhile.
-    let resent: Vec<Inbound> = still_queued(agent_id, found)
+    // A pick-up that never got to start goes again as a pick-up: its line.
+    if plan.resent.iter().any(|m| m.resume > 0) {
+        let _ = record(
+            app,
+            new_message(agent_id, MessageKind::Note, Cause::Restart.picked_up_line()),
+        );
+    }
+    let resent: Vec<Inbound> = still_queued(agent_id, &plan.resent)
         .into_iter()
+        .chain(still_queued(agent_id, found))
         .filter(|m| m.resume == 0)
         .collect();
     if !resent.is_empty() {
@@ -310,7 +318,7 @@ pub(super) fn pickup_after(
         Pickup::Stopped
     } else if driven || mark.took.iter().any(|m| m.room.is_some()) {
         Pickup::Continue(cause.interrupted_line())
-    } else if next_pickup(mark.resumes).is_none() {
+    } else if next_pickup_of(mark).is_none() {
         Pickup::Continue(cause.interrupted_line())
     } else if !session_found {
         Pickup::Continue(SESSION_GONE_LINE)
@@ -353,6 +361,25 @@ pub(super) fn plan_recovery_for(
     if never_taken(&mark, found) {
         return plan;
     }
+    // One that took them and went before its engine started: they're sent
+    // again as they were, ahead of anything queued behind. Observed: a bound
+    // agent's copy takes seconds to make, a relaunch in between left a mark
+    // with no conversation, and the chat said it couldn't find one. Only
+    // after a clean quit: a crash or panic while getting ready may be the
+    // turn's own doing, and sending it again could crash again.
+    if cause == Cause::Restart && mark.quit && never_spawned(&mark) {
+        let again: Vec<Inbound> = mark
+            .took
+            .iter()
+            .map(|m| Inbound {
+                id: store::new_id(),
+                ..m.clone()
+            })
+            .collect();
+        requeue_first(agent_id, again.clone());
+        plan.resent = again;
+        return plan;
+    }
     let progress = mark.progress.clone().unwrap_or_default();
     plan.partial = partial_reply(agent_id, progress.draft.as_ref());
     plan.work = progress.work;
@@ -382,7 +409,7 @@ pub(super) fn plan_recovery_for(
             }
         })
         .or_log("an agent's engine session");
-        let resume = next_pickup(mark.resumes).unwrap_or(MAX_RESUMES);
+        let resume = next_pickup_of(&mark).unwrap_or(MAX_RESUMES);
         requeue_first(
             agent_id,
             resume_inbounds(&mark.took, resume, prompts::carry_on(cause.why())),
