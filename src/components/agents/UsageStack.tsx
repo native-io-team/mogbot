@@ -615,7 +615,7 @@ export function AccountDetail({
           <div className="usage-bar__actions">
             {k.fix.action === 'sign_in' && (
               <Button variant="secondary" onClick={actions.onSignIn}>
-                Sign in
+                {k.signedIn ? 'Sign in again' : 'Sign in'}
               </Button>
             )}
             {k.fix.action === 'sign_in_other' && (

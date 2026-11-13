@@ -47,32 +47,17 @@ vi.mock('../setup/OnboardingTerminal', () => ({
   ),
 }));
 
-// Backend-owned connect terminal — stub it so tests can drive the
-// captured/exit signals without an xterm + live PTY.
-vi.mock('./ClaudeConnectTerminal', () => ({
-  ClaudeConnectTerminal: ({
-    onCaptured,
-    onExit,
-  }: {
-    onCaptured: () => void;
-    onExit: (c: number) => void;
-  }) => (
-    <div data-testid="mock-connect-terminal">
-      <button data-testid="connect-captured" onClick={() => onCaptured()}>
-        captured
-      </button>
-      <button data-testid="connect-exit" onClick={() => onExit(0)}>
-        exit
-      </button>
-    </div>
-  ),
-}));
-
-// Generic per-workspace connect terminal (GitHub/Codex/Opencode) — stub it so
-// tests can drive the exit signal without an xterm + live PTY.
+// Per-workspace connect terminal (Claude Code/GitHub/Codex/Opencode) — stub it
+// so tests can drive the exit signal without an xterm + live PTY.
 vi.mock('./WorkspaceConnectTerminal', () => ({
-  WorkspaceConnectTerminal: ({ onExit }: { onExit: (c: number) => void }) => (
-    <div data-testid="mock-workspace-connect-terminal">
+  WorkspaceConnectTerminal: ({
+    onExit,
+    service,
+  }: {
+    onExit: (c: number) => void;
+    service: string;
+  }) => (
+    <div data-testid="mock-workspace-connect-terminal" data-service={service}>
       <button data-testid="workspace-connect-exit-0" onClick={() => onExit(0)}>
         exit 0
       </button>
@@ -359,7 +344,7 @@ describe('AgentsPanel', () => {
     await waitFor(() => expect(invokeCalls.some((c) => c.cmd === 'list_accounts')).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    // The connect modal opens at its email phase (no OnboardingTerminal),
+    // The connect modal opens on what happens next (no OnboardingTerminal),
     // naming the workspace.
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
@@ -367,10 +352,10 @@ describe('AgentsPanel', () => {
     // The workspace name appears in both the header badge and the modal copy.
     expect(screen.getAllByText(/Northwind/).length).toBeGreaterThan(0);
     expect(screen.queryByTestId('mock-terminal')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('mock-connect-terminal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mock-workspace-connect-terminal')).not.toBeInTheDocument();
   });
 
-  it('connect flow: Continue opens the PTY terminal; capture closes + refreshes', async () => {
+  it('connect flow: Continue runs claude auth login; its exit 0 closes + refreshes', async () => {
     mockInvoke('get_agents_status', [agent({ authed: false })]);
     mockInvoke('get_active_account_id', 'northwind');
     mockInvoke('list_accounts', [
@@ -382,18 +367,21 @@ describe('AgentsPanel', () => {
     await waitFor(() => expect(invokeCalls.some((c) => c.cmd === 'list_accounts')).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    // Email phase → Continue advances to the backend-PTY terminal phase.
+    // Intro → Continue advances to the backend-PTY terminal phase, which runs
+    // Claude Code's own sign-in in the workspace's folder (never a token).
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
     );
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    await waitFor(() => expect(screen.getByTestId('mock-connect-terminal')).toBeInTheDocument());
+    const terminal = await screen.findByTestId('mock-workspace-connect-terminal');
+    expect(terminal).toHaveAttribute('data-service', 'claude');
 
-    // Rust signals the token was captured → modal closes and status refreshes.
+    // Exit 0 (Rust passes it on only once the folder is signed in) → modal
+    // closes and status refreshes.
     const refreshesBefore = invokeCalls.filter((c) => c.cmd === 'get_agents_status').length;
-    fireEvent.click(screen.getByTestId('connect-captured'));
+    fireEvent.click(screen.getByTestId('workspace-connect-exit-0'));
     await waitFor(() =>
-      expect(screen.queryByTestId('mock-connect-terminal')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('mock-workspace-connect-terminal')).not.toBeInTheDocument()
     );
     expect(invokeCalls.filter((c) => c.cmd === 'get_agents_status').length).toBeGreaterThan(
       refreshesBefore
@@ -415,7 +403,7 @@ describe('AgentsPanel', () => {
     // Terminal modal opens; no connect modal.
     await waitFor(() => expect(screen.getByTestId('mock-terminal')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('mock-connect-terminal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mock-workspace-connect-terminal')).not.toBeInTheDocument();
   });
 
   // ============ Workspace badge + section grouping + Services rows ============

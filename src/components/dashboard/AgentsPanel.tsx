@@ -31,7 +31,7 @@ import {
   DEFAULT_ACCOUNT_ID,
   type AccountCredentialStatus,
 } from '../../lib/accounts';
-import { OnboardingTerminal, ClaudeConnectTerminal } from '../terminal/lazyTerminals';
+import { OnboardingTerminal, WorkspaceConnectTerminal } from '../terminal/lazyTerminals';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { DashboardCardDisclosure } from './DashboardCardDisclosure';
 import { Button } from '../primitives/Button';
@@ -126,11 +126,12 @@ function statusOf(a: AgentStatus): string {
  * Modal for connecting a workspace's isolated Claude login.
  *
  * Two phases:
- *  1. **Email** — the user names the account (display-only) and continues.
- *  2. **Terminal** — a backend-owned PTY runs `claude setup-token`: the browser
- *     opens, the user signs in, then pastes the shown code into the embedded
- *     terminal. Rust scrapes + stores the token (never crossing to the webview)
- *     and signals capture, at which point we report success.
+ *  1. **Intro** — what happens next.
+ *  2. **Terminal** — a backend-owned PTY runs Claude Code's own `claude auth
+ *     login` under the workspace's `CLAUDE_CONFIG_DIR`: the browser opens, the
+ *     user signs in (pasting a code back only if the browser asks). Claude
+ *     Code keeps the login for that folder; the app never sees it. It counts
+ *     once the CLI exits 0 and `claude auth status` as that folder agrees.
  */
 function ClaudeConnectModal({
   workspaceName,
@@ -145,18 +146,12 @@ function ClaudeConnectModal({
   onSuccess: (email?: string) => void;
   onClose: () => void;
 }) {
-  const [phase, setPhase] = useState<'email' | 'terminal'>('email');
-  const [email, setEmail] = useState('');
+  const [phase, setPhase] = useState<'intro' | 'terminal'>('intro');
   // A fresh session id per terminal attempt so "Start over" spawns a new PTY.
   const [sessionId, setSessionId] = useState('');
   const [exited, setExited] = useState(false);
-  // Latch capture so a near-simultaneous exit event can't fire a failure toast.
-  const capturedRef = useRef(false);
-
-  const trimmedEmail = email.trim() || undefined;
 
   const beginTerminal = () => {
-    capturedRef.current = false;
     setExited(false);
     setSessionId(crypto.randomUUID());
     setPhase('terminal');
@@ -169,33 +164,18 @@ function ClaudeConnectModal({
       title={reconnect ? 'Reconnect Claude' : 'Connect Claude'}
       className={phase === 'terminal' ? 'agents-panel-terminal-modal' : 'connect-modal'}
     >
-      {phase === 'email' ? (
+      {phase === 'intro' ? (
         <div className="connect-modal-body">
           <p>
             A browser window will open. Sign in with the Claude account you want{' '}
             <strong>{workspaceName}</strong> to use — its login stays isolated to this workspace and
             won't affect your other workspaces or your machine's default login.
           </p>
-          <label className="connect-modal-field">
-            <span>
-              Account email <span className="connect-modal-muted">(shown on the card)</span>
-            </span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') beginTerminal();
-              }}
-            />
-          </label>
           <div className="connect-modal-actions">
             <Button variant="secondary" onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={beginTerminal}>
+            <Button variant="primary" onClick={beginTerminal} autoFocus>
               Continue
             </Button>
           </div>
@@ -203,23 +183,18 @@ function ClaudeConnectModal({
       ) : (
         <div className="connect-modal-terminal-phase">
           <p className="connect-modal-instructions">
-            Sign in in the browser, then <strong>paste the code it shows</strong> into the terminal
+            Sign in in the browser. If it shows a code, <strong>paste it</strong> into the terminal
             below and press Enter.
           </p>
           <div className="agents-panel-terminal-body">
-            <ClaudeConnectTerminal
+            <WorkspaceConnectTerminal
               key={sessionId}
               sessionId={sessionId}
               accountId={accountId}
-              email={trimmedEmail}
-              onCaptured={() => {
-                capturedRef.current = true;
-                onSuccess(trimmedEmail);
-              }}
-              onExit={() => {
-                // Token already captured → success path handles close. Otherwise
-                // the user cancelled or login failed; offer a retry.
-                if (!capturedRef.current) setExited(true);
+              service="claude"
+              onExit={(code) => {
+                if (code === 0) onSuccess();
+                else setExited(true);
               }}
             />
           </div>

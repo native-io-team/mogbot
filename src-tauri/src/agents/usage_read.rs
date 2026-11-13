@@ -9,15 +9,16 @@
 //!   with the sign-in's OAuth access token. The answer names each window
 //!   (`five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`, …) with
 //!   `utilization` (0–100) and `resets_at` (RFC 3339), `null` for one that
-//!   doesn't apply. It needs the `user:profile` scope: a `claude /login`
-//!   sign-in has it, a `claude setup-token` token (how accounts added here
-//!   sign in) doesn't, and is refused `403 oauth_scope_insufficient`
-//!   (verified). The token is Claude Code's, read where Claude Code keeps it:
+//!   doesn't apply. It needs the `user:profile` scope: a `claude auth login`
+//!   sign-in has it (how accounts added here sign in, into their own
+//!   folder), a `claude setup-token` token (how an older build added them)
+//!   doesn't, and is refused `403 oauth_scope_insufficient` (verified). The token is Claude Code's, read where Claude Code keeps it:
 //!   the login Keychain item `Claude Code-credentials` (with
 //!   `-<first 8 hex of sha256(config dir)>` when `CLAUDE_CONFIG_DIR` is set,
 //!   as Claude Code names it), under the user's name, else
 //!   `<config dir>/.credentials.json`; for an added account, its own config
-//!   folder's, then the setup token kept in this app's Keychain. An access
+//!   folder's, then (an account an older build added, until it is signed in
+//!   again) the setup token that build kept. An access
 //!   token past its expiry is not used and **never refreshed** here: a
 //!   refresh rotates the refresh token, which would sign Claude Code out. It
 //!   is read again once Claude Code (any turn) has refreshed it.

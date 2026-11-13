@@ -5190,7 +5190,7 @@ Settings → Accounts & usage leads with the same total
 (`mobile/src/components/usageStack.tsx`).
 
 **One account signed in twice** (`inventory::same_as`). A Claude account
-added here signs in with `claude setup-token` in the user's browser, which
+added here signs in with `claude auth login` in the user's browser, which
 signs in as whoever claude.ai is already signed in as, so "adding" an account
 can add the same one again; the email shown for it was typed by the user,
 not read. Observed on the owner's Mac (2026-11-09): This Mac's sign-in and
@@ -5291,8 +5291,36 @@ added account's id is a fresh one, never a workspace's):
 | | Claude Code | Codex |
 |---|---|---|
 | Folder | `CLAUDE_CONFIG_DIR=~/.<slug>/accounts/<id>/claude` | `CODEX_HOME=~/.<slug>/accounts/<id>/codex` |
-| Sign-in | `claude setup-token` in a backend PTY; the printed token is captured and redacted in Rust (`claude_connect_start`), checked against the API, kept in the Keychain, injected as `CLAUDE_CODE_OAUTH_TOKEN` | `codex login` under that `CODEX_HOME` (`workspace_connect_start`), done when it exits 0 |
-| Signed in means | a stored token whose recorded expiry (1 year) hasn't passed | its `auth.json` exists |
+| Sign-in | `claude auth login` (the first sign-in's own command) under that `CLAUDE_CONFIG_DIR` in a backend PTY (`workspace_connect_start`, service `claude`), with `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_SECURESTORAGE_CONFIG_DIR` removed; done when it exits 0 **and** `claude auth status` as that folder says `loggedIn` (`accounts::finish_claude_folder_sign_in`) | `codex login` under that `CODEX_HOME` (`workspace_connect_start`), done when it exits 0 |
+| Signed in means | that confirmed sign-in, recorded as `.signed-in-here` in the folder (`accounts::claude_folder_signed_in`); or, for an account an older build added, its stored token while unexpired | its `auth.json` exists |
+
+**Claude Code keeps the login, never this app.** Anthropic doesn't allow
+third-party apps to store Claude session tokens, so an added Claude account
+is a Claude Code config folder and nothing more. Claude Code 2.1.318 on keys
+its Keychain login per folder (read in 2.1.323's own code: the service is
+`Claude Code-credentials` plus `-<first 8 hex of sha256(CLAUDE_CONFIG_DIR)>`
+whenever `CLAUDE_CONFIG_DIR` is set and `CLAUDE_SECURESTORAGE_CONFIG_DIR`
+isn't; both items were seen in this Mac's Keychain), so the folder alone
+isolates the login and `HOME` is left alone. Below that version
+(`claude --version`) the sign-in is refused with "Update Claude Code first",
+because one shared item would sign this Mac's own Claude Code in as the new
+account. A turn on the account gets `CLAUDE_CONFIG_DIR` and has
+`CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_SECURESTORAGE_CONFIG_DIR` removed
+(`wallet::env_for`, `wallet::env_unset_for`); its MCP config, skills,
+settings and deny rules come as for any account (the shared links below,
+`account_reach::sync_servers`, the turn's own `--mcp-config` and
+`--settings`). The same folder login now backs workspaces' Claude sign-in
+(Projects → Agents panel).
+
+**Accounts an older build added** (`claude setup-token`, its token kept in
+this app's Keychain and passed as `CLAUDE_CODE_OAUTH_TOKEN`) keep working on
+that token until they are signed in again; their page says "Sign in again to
+keep this account working: it still uses a saved token." with **Sign in
+again** (`AccountView.signInAgain`, `wallet::needs_sign_in_again`). Once the
+new sign-in is confirmed, the stored token, its expiry and the typed email
+are deleted (`accounts::clear_claude_token`) and turns stop passing any
+token. Nothing captures a token any more: `claude_connect_start` and its
+scraper are gone.
 
 Nothing else of the account isolation comes along: no `GH_CONFIG_DIR`, no
 workspace credentials, so an agent's `gh` and git identity are the user's
@@ -5349,11 +5377,13 @@ Code 2.1.319, read in its own code and observed on this Mac 2026-11-08):
   connect them here" without the browser). The access chain already falls
   back to a connection here or the user's Chrome for that service, since
   the connector is no longer in the agent's capabilities.
-- **Not verified:** a full turn on the owner's real added account (its token
-  is in the app's Keychain item, which nothing but the app reads without a
-  prompt), and whether a `setup-token` token reaches claude.ai connectors
-  at all (its scope may be inference only; then every connector is "not on"
-  for that account and the Note says so, which is honest either way).
+- **Not verified:** a real `claude auth login` into an added account's
+  folder and a full turn on it (the sign-in needs the owner's browser),
+  whether such a folder sign-in reaches claude.ai connectors (This Mac's
+  does) and Claude in Chrome directly, and whether a legacy `setup-token`
+  token reaches connectors at all (its scope may be inference only; then
+  every connector is "not on" for that account and the Note says so, which
+  is honest either way).
 
 **Failover** (`runner::run_on_accounts`, around `run_turn`):
 
@@ -5436,8 +5466,9 @@ anthropics/claude-code#103820, #103253, #70697):
   `account/rateLimits` when the text has none. Matched by text in both.
 - Keychain: Claude Code 2.1.318 keys its own login per config dir
   (`Claude Code-credentials-<sha256 prefix>`); older builds shared one
-  (#70697). The setup-token path is kept because it works on both and is
-  already proven here.
+  (#70697). Added accounts now rely on the per-folder item (2.1.318 and
+  later, enforced at sign-in); the setup-token path remains only for
+  accounts added before, until they sign in again.
 - **Not verified:** a real failover against a live exhausted account (no
   exhausted account was available), resuming a copied transcript on a second
   real account of either engine, and Codex's keyring-backed auth
@@ -5572,10 +5603,11 @@ never slow down for limits unless the user chose that.
     dir)>` when `CLAUDE_CONFIG_DIR` is set, as Claude Code names it) under
     the user's name, through `/usr/bin/security` on a pipe (Claude Code
     writes that item with it, so no prompt), else `<config
-    dir>/.credentials.json`; for an added account, its own folder's item,
-    then the setup token in this app's Keychain. `subscriptionType` there
+    dir>/.credentials.json`; for an added account, its own folder's item
+    (what `claude auth login` there wrote), then, for one an older build
+    added, the setup token it kept. `subscriptionType` there
     is the plan name shown ("Max plan"). The endpoint needs `user:profile`:
-    a `claude setup-token` token (how accounts added here sign in) is
+    a `claude setup-token` token (how older builds added accounts) is
     refused `403 oauth_scope_insufficient` (verified). Such an account is
     read instead from the **rate-limit headers of a one-token Messages
     request** (`claude_probe`: `claude-haiku-4-5`, `max_tokens` 1, about

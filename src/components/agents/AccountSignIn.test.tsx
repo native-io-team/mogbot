@@ -8,16 +8,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { UsageAccount } from '../../lib/agentAccounts';
 
-// The terminal "captures" the token as soon as it mounts, so a test reaches
-// the state after the browser sign-in.
+// The sign-in exits 0 as soon as it mounts, so a test reaches the state after
+// the browser sign-in. Which CLI sign-in ran is kept to check.
+const ran = vi.hoisted(() => ({ services: [] as string[] }));
 vi.mock('../terminal/lazyTerminals', async () => {
   const { useEffect } = await import('react');
   return {
-    ClaudeConnectTerminal: ({ onCaptured }: { onCaptured: () => void }) => {
-      useEffect(() => onCaptured(), [onCaptured]);
+    WorkspaceConnectTerminal: ({
+      service,
+      onExit,
+    }: {
+      service: string;
+      onExit: (code: number) => void;
+    }) => {
+      useEffect(() => {
+        ran.services.push(service);
+        onExit(0);
+      }, [service, onExit]);
       return null;
     },
-    WorkspaceConnectTerminal: () => null,
   };
 });
 
@@ -88,6 +97,16 @@ describe('AccountSignIn', () => {
     expect(same).toHaveClass('account-signin__status');
     expect(same).toHaveTextContent('sam@example.com');
     expect(screen.getByRole('button', { name: 'Remove it' })).toBeInTheDocument();
+  });
+
+  it('signs Claude in with its own login in the account folder, asking for no email', async () => {
+    check.fn.mockResolvedValue({});
+    ran.services = [];
+    render(<AccountSignIn account={account('claude')} onDone={() => {}} />);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByTestId('account-signin-done');
+    expect(ran.services).toEqual(['claude']);
   });
 
   it('says plainly when the check could not run, never closing silently', async () => {

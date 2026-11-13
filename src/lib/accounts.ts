@@ -225,24 +225,28 @@ export async function clearAccountCredential(id: string, key: CredentialKey): Pr
 
 /**
  * Config-dir login services that authenticate by writing into a workspace's
- * isolated config dir (GH_CONFIG_DIR / CODEX_HOME / XDG_DATA_HOME). Unlike
- * Claude (a global keychain entry needing token capture), these just run the
- * CLI's own login under the workspace's env — so the connect PTY streams output
- * verbatim and treats process exit as completion.
+ * isolated config dir (CLAUDE_CONFIG_DIR / GH_CONFIG_DIR / CODEX_HOME /
+ * XDG_DATA_HOME). Each runs the CLI's own login under the workspace's env, so
+ * the connect PTY streams output verbatim and treats process exit as
+ * completion. Claude Code keeps its login per config folder itself; its exit 0
+ * is passed on only once `claude auth status` as that folder agrees.
  */
 export type WorkspaceConnectService = 'github' | 'codex' | 'opencode';
 
+/** Every login the connect PTY runs: the workspace services, and Claude Code's own. */
+export type ConnectTerminalService = WorkspaceConnectService | 'claude';
+
 /**
- * Start a backend-owned PTY login for a workspace's GitHub/Codex/Opencode
- * account. Mirrors {@link claudeConnectStart} but with no token scraping: the
- * CLI writes its own credential files into the workspace's isolated config dir.
+ * Start a backend-owned PTY login for a workspace's Claude/GitHub/Codex/Opencode
+ * account. The CLI keeps its own login in the workspace's isolated config dir;
+ * nothing is scraped.
  * Output streams as `workspace-connect-data`; completion is `workspace-connect-exit`.
  * Rejected for the Default workspace (it uses the machine's native logins).
  */
 export async function workspaceConnectStart(args: {
   sessionId: string;
   accountId: string;
-  service: WorkspaceConnectService;
+  service: ConnectTerminalService;
   cols: number;
   rows: number;
 }): Promise<void> {

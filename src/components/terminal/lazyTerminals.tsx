@@ -9,7 +9,6 @@
 import { Suspense, lazy, type ComponentProps } from 'react';
 import type { OnboardingTerminal as OnboardingTerminalImpl } from '../setup/OnboardingTerminal';
 import type { AttachedTerminal as AttachedTerminalImpl } from './AttachedTerminal';
-import type { ClaudeConnectTerminal as ClaudeConnectTerminalImpl } from '../dashboard/ClaudeConnectTerminal';
 import type { WorkspaceConnectTerminal as WorkspaceConnectTerminalImpl } from '../dashboard/WorkspaceConnectTerminal';
 
 const Onboarding = lazy(() =>
@@ -17,9 +16,6 @@ const Onboarding = lazy(() =>
 );
 const Attached = lazy(() =>
   import('./AttachedTerminal').then((m) => ({ default: m.AttachedTerminal }))
-);
-const ClaudeConnect = lazy(() =>
-  import('../dashboard/ClaudeConnectTerminal').then((m) => ({ default: m.ClaudeConnectTerminal }))
 );
 const WorkspaceConnect = lazy(() =>
   import('../dashboard/WorkspaceConnectTerminal').then((m) => ({
@@ -38,13 +34,6 @@ export function AttachedTerminal(props: ComponentProps<typeof AttachedTerminalIm
   return (
     <Suspense fallback={null}>
       <Attached {...props} />
-    </Suspense>
-  );
-}
-export function ClaudeConnectTerminal(props: ComponentProps<typeof ClaudeConnectTerminalImpl>) {
-  return (
-    <Suspense fallback={null}>
-      <ClaudeConnect {...props} />
     </Suspense>
   );
 }

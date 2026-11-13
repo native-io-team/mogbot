@@ -34,6 +34,12 @@ a turn moves on to the next account when one runs out.
 - Signing in opens your browser, and it signs in as whoever is already logged in to claude.ai or
   chatgpt.com there. Sign out first, or use a private window, to add a different account. If you
   add one that's already there, the app tells you and offers to try again.
+- A Claude Code account signs in with Claude Code's own sign-in, the same one you used the first
+  time, into a folder of its own. Claude Code keeps that sign-in; the app never sees or saves it.
+  Claude Code needs to be version 2.1.318 or newer for this; the app asks you to update it if not.
+- An account added by an older version of the app still works, and its page says **Sign in
+  again**. Signing in again moves it to its own sign-in and deletes the saved token the app kept
+  for it.
 - The account you signed in with on this computer is always first in the list. You can rename it and
   move it down, but not remove it.
 - With two or more accounts, you can pick which one new work starts on, and pin an agent to one
