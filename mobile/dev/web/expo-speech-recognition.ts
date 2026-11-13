@@ -56,6 +56,8 @@ function finish(final: boolean) {
 }
 
 export const ExpoSpeechRecognitionModule = {
+  /** A script, not a recognizer: lib/dictation.ts keeps the analyzer out of its way. */
+  scripted: true,
   supportsOnDeviceRecognition: () => true,
   isRecognitionAvailable: () => true,
   requestPermissionsAsync: () =>

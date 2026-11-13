@@ -1153,6 +1153,18 @@ The phone can start work as well as answer it. Each piece is gated by
   before hearing anything (model not downloaded, "Failed to initialize
   recognizer") tries the platform's service once (`fallsBackToServer`). The
   desk does the same (`commands/dictation.rs`).
+  **On iOS 26 and later "on the phone" is SpeechAnalyzer** with
+  SpeechTranscriber (`modules/speech-analyzer`, a local Expo module;
+  `lib/speechAnalyzer.ts` puts it in front of expo-speech-recognition with
+  that module's shape, so the hook is unchanged): Apple's newer long-form
+  model, more accurate than SFSpeechRecognizer's. It's used once the
+  locale's model is installed; until then the old recognizer listens and
+  the model is asked for (AssetInventory). Starts through the platform's
+  service always go to the old recognizer. If the analyzer fails before
+  hearing anything, the same start carries on in the old recognizer
+  unseen, and the analyzer isn't tried again until the app restarts. The
+  team's names go to it as its context (`AnalysisContext`), best effort.
+  Earlier iOS and Android are as before.
   **Problems** come back as one plain line over the field with a fix chip
   (`problemCopy`): permission → Open Settings; no network, recognizer busy,
   interrupted, didn't start, nothing heard → Try again. The mic is never left
@@ -1959,7 +1971,9 @@ the share extension, the camera, real keyboard behaviour).
   tried on a device. Dictation's live waveform, streaming words and
   on-device → server fallback are checked on the simulator against fed
   recognizer events and in tests; the real level, partials and fallback on a
-  phone are not yet.
+  phone are not yet. The iOS 26 SpeechAnalyzer path (its accuracy, the model
+  download, context strings, the recording and the failover to the old
+  recognizer) is built and unit-tested in JS but not yet tried on a phone.
 - Verification on Android hardware.
 - Rooms on the phone: creating, renaming, muting or deleting one, changing
   its members or lead, Stop for a room, attachments in a room, and opening a
