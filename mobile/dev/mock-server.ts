@@ -236,6 +236,12 @@ export interface MockOptions {
    * and a new pairing link carries the relay route. `port` for the relay's own.
    */
   relay?: boolean | { port?: number };
+  /**
+   * Two of the Designer's ten screens (`result-many`) don't come: the 3rd
+   * answers 404 and the 6th never answers. For the tiles' "Image not
+   * available" and loading states (`QA_MOCK_FLAGS=--lost-pictures`).
+   */
+  lostPictures?: boolean;
 }
 
 // ---- Login cards (desktop `agents/logins.rs`) ----------------------------------------
@@ -4688,7 +4694,9 @@ export function createMockServer(opts: MockOptions = {}) {
           const b = blobs.get(decodeURIComponent(url.pathname.split('/').pop()!));
           return b && b.deviceId === deviceId ? b : undefined;
         })();
-    if (!found) {
+    const lost = opts.lostPictures ? /design_vis_many\/screen-(3|6)\.png$/.exec(rest ?? '') : null;
+    if (lost?.[1] === '6') return true; // never answered
+    if (!found || lost) {
       res.writeHead(404).end();
       return true;
     }

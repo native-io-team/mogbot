@@ -70,6 +70,10 @@ clear 404 unlinks it (`checkStillThere`; any other answer keeps it).
   Tailscale route, as today. The link still has exactly one route.
 - After the welcome, the Mac sends all its routes (`setRoutes`): relay first, then Tailscale when
   it's serving. The phone tries them in order and falls back on failure (`DirectTransport`).
+  A try with no answer after 3 s (`SECOND_TRY_MS`) gets a second socket on the *next* route
+  racing it, and the first to open is kept along with its route: with the phone's Tailscale waking
+  or off, a spare on the same dead route used to wait out the whole budget before the relay was
+  tried.
 - Phones paired over Tailscale keep working and learn the relay route on their next welcome.
 - With `links.relay` null the Mac never offers it and the phone never sees it.
 

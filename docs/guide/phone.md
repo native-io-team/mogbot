@@ -27,7 +27,11 @@ There are two ways. You can use either, or both.
   the phone, and **sign in to both with the same Tailscale account** before you pair. That's the one
   thing that makes pairing fail without a clear reason.
 
-If both are set up, the phone tries the relay first and falls back to Tailscale.
+If both are set up, the phone tries the relay first and falls back to Tailscale. When one is slow to
+answer (Tailscale waking up on the phone, say), the phone tries the other at the same time after a
+few seconds and keeps whichever answers first.
+
+A picture that can't be fetched says "Image not available"; tap it to try again.
 
 ## Pair your phone
 

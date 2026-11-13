@@ -8,6 +8,7 @@ import { CACHED_MESSAGES, fromCache, toCache, toOutbox } from '../src/lib/cache'
 import { EMPTY_DRAFT, liveMentions, putDraft } from '../src/lib/drafts';
 import {
   OUTBOX_WAIT_MS,
+  interruptStillMeant,
   outboxPlan,
   restorePending,
   sendInOrder,
@@ -117,6 +118,16 @@ describe('outbox', () => {
       false
     );
     expect(unreached(new Error('boom'))).toBe(false);
+  });
+
+  it('keeps a Send now’s interrupt while it waits, and only within the window', () => {
+    const waited = pend('now', now - 1000, { waiting: true, interrupt: true });
+    // Carried through the outbox file and a restart.
+    expect(restorePending({ a: [waited] }).a[0].interrupt).toBe(true);
+    expect(toOutbox({ pending: { a: [waited] } }).pending.a[0].interrupt).toBe(true);
+    expect(interruptStillMeant(waited.ts, now)).toBe(true);
+    expect(interruptStillMeant(now - OUTBOX_WAIT_MS - 1, now)).toBe(false);
+    expect(interruptStillMeant(undefined, now)).toBe(true);
   });
 
   it('treats a send in flight when the app died as waiting (its clientId makes it safe)', () => {

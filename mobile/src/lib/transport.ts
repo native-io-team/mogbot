@@ -93,7 +93,8 @@ function httpFailure(status: number, name?: string): WireFailure {
       `${name ?? 'That file'} is too big. Files can be up to ${MAX_ATTACHMENT_BYTES / MB} MB.`
     );
   }
-  if (status === 401) return protocol('refused', `${comp.yourCap} didn’t accept this phone. Pair again.`);
+  if (status === 401)
+    return protocol('refused', `${comp.yourCap} didn’t accept this phone. Pair again.`);
   if (status === 404) return protocol('bad_params', `That file isn’t on ${comp.your} any more.`);
   return new WireFailure({ type: 'Other', message: `${comp.yourCap} answered ${status}.` });
 }
@@ -282,14 +283,30 @@ const FRESH_TRY_MS = 1500;
  * minutes away, then "Reconnecting…" with the Mac awake and answering), while
  * a fresh one a few seconds later goes straight through. A slow link loses
  * nothing: the first try keeps going.
+ *
+ * With more than one route the second try goes to the next route, not the
+ * same one: with the phone's Tailscale waking or off while the relay works,
+ * a spare on the same dead route waited out the whole budget too, and only
+ * then was the relay tried.
  */
 export const SECOND_TRY_MS = 3000;
+
+/** A relay route is the socket's own address; a Tailscale one is the Mac's, plus `/v1/ws`. */
+function socketUrl(route: Route): { url: string; relay: boolean } {
+  const relay = route.kind === 'relay';
+  return {
+    url: relay ? route.url : route.url.replace(/^http/, 'ws').replace(/\/$/, '') + HTTP.ws,
+    relay,
+  };
+}
 
 export class DirectTransport implements Transport {
   private ws: SocketLike | null = null;
   /** A second socket racing the try in flight (`SECOND_TRY_MS`); the first to open is kept. */
   private spare: SocketLike | null = null;
   private spareTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The route the spare dialled: it becomes the route in use if the spare is kept. */
+  private spareRouteIndex = 0;
   private routeIndex = 0;
   private attempt = 0;
   private everConnected = false;
@@ -633,11 +650,7 @@ export class DirectTransport implements Transport {
         ...(this.relaySaid ? { relaySaid: this.relaySaid } : {}),
       });
     }
-    // A relay route is the socket's own address; a Tailscale one is the Mac's, plus `/v1/ws`.
-    const relay = this.route.kind === 'relay';
-    const url = relay
-      ? this.route.url
-      : this.route.url.replace(/^http/, 'ws').replace(/\/$/, '') + HTTP.ws;
+    const { url, relay } = socketUrl(this.route);
     const ws = this.dial(url, relay);
     this.ws = ws;
     this.triedAt = Date.now();
@@ -648,9 +661,13 @@ export class DirectTransport implements Transport {
       ? setTimeout(() => {
           this.spareTimer = null;
           if (ws !== this.ws || this.opened || this.spare || this.closed) return;
-          this.note('second try beside a slow first');
+          // The next route, when there is one: the first may be the one that's down.
+          this.spareRouteIndex = (this.routeIndex + 1) % this.routes.length;
+          const next = this.routes[this.spareRouteIndex];
+          this.note(`second try beside a slow first, via ${next.kind}`);
           this.spareAt = Date.now();
-          this.spare = this.dial(url, relay);
+          const spare = socketUrl(next);
+          this.spare = this.dial(spare.url, spare.relay);
         }, SECOND_TRY_MS)
       : null;
   }
@@ -677,6 +694,7 @@ export class DirectTransport implements Transport {
         const slow = this.ws;
         this.ws = ws;
         this.spare = null;
+        this.routeIndex = this.spareRouteIndex;
         this.triedAt = this.spareAt;
         if (slow) this.drop(slow);
         this.note('second try got through first');
@@ -731,6 +749,7 @@ export class DirectTransport implements Transport {
       if (!this.opened && this.spare) {
         this.ws = this.spare;
         this.spare = null;
+        this.routeIndex = this.spareRouteIndex;
         this.triedAt = this.spareAt;
         this.drop(ws);
         this.armConnectTimer(this.ws, tryBudgetMs(this.attempt, this.handshakeMs));

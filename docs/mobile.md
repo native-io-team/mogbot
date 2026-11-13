@@ -200,6 +200,16 @@ files (the chat's own attachment tiles), links (http/https only), Checked;
 older versions fold to a line. On a copy's live card Keep / Discard sit
 inside it.
 
+A picture tile is one view from loading to drawn (`Thumb` in
+`components/attachments.tsx`): a spinner after 600 ms, "Image not available"
+and **Tap to try again** after an error or 30 s with no answer (over the relay
+the fetch gives up at 30 s too, `RELAY_IMAGE_GIVE_UP_MS`, and a tap asks again,
+`retryRelayImage`). It is never swapped for another view and doesn't fade, and
+a result card has no layout glide (`Card glide={false}`): on iOS a view mounted
+in place of another while a layout animation ran could stay invisible, and a
+ten-picture card over the relay drew as blank space. `QA_MOCK_FLAGS=--lost-pictures`
+makes two of `result-many`'s ten fail (404) and hang.
+
 - `system.status`, `devices.self|unpairSelf|setPush`
 - `agents.overview|messages|send|stop|interrupt|answerApproval|focus|markUnread`
   (`answerApproval` takes `choice` for a session's question)
@@ -770,7 +780,10 @@ request, the diff and the photo viewer push over them. At
   reaches the store, cache, drafts, outbox, notifications or logs
   (`__tests__/secrets.node.test.ts`).
 - **Composer.** Send, Queue while working (with Send now and Stop), Stop; no
-  Stop while an approval waits. @mentions, quotes as `> ` blockquotes (the
+  Stop while an approval waits. Send now is the send arrow and its words, as
+  tall as the round buttons, at the right of the queue line; one that has to
+  wait in the outbox keeps its interrupt (`PendingSend.interrupt`) for the
+  outbox's 10 minutes (`interruptStillMeant`). @mentions, quotes as `> ` blockquotes (the
   helpers live in the package), and files from the camera, Photos or Files,
   each uploading as soon as it's picked with progress, retry and remove.
   Drafts, including uploaded files (kept 55 min), survive leaving the chat and
