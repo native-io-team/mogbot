@@ -6,7 +6,9 @@
  * - working: the mic, **Stop** and **Send**. The mic stays, so you can talk
  *   while it works: what you say queues, as what you type does. With words,
  *   Send queues (the line over the field says it reads it when it’s done with this one
- *   ends) and **Send now** (interrupt, then send) sits at that line's right;
+ *   ends) and **Send now** (interrupt, then send; the send arrow and its
+ *   words, as tall as the round buttons) sits at that line's right. A Send
+ *   now that waits in the outbox keeps its interrupt (session.ts `send`);
  * - waiting on your OK: no Stop, and Send goes now: the turn waiting on the
  *   card is interrupted, the card closes as moved on, and your message is read;
  * - offline: **Send** waits for the Mac (outbox.ts), and says so;
@@ -470,10 +472,11 @@ export function Composer({
     // Waiting on a card: the message is the answer. It goes now and the card
     // closes as moved on, rather than waiting behind a question nobody must answer.
     const answersCard = mode === 'queue' && waitingOnYou && !driven;
+    // Offline (or unheard), the interrupt waits in the outbox with the message.
     send(
       agent.id,
       body,
-      (now || answersCard) && connected,
+      now || answersCard,
       undefined,
       files,
       mentions,
@@ -639,9 +642,21 @@ export function Composer({
               onPress={() => submit(true)}
               android_ripple={ripple}
               hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-              style={({ pressed }) => [styles.nowChip, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.nowChip,
+                styles.sendNow,
+                !canSend && styles.off,
+                pressed && styles.pressed,
+              ]}
             >
-              <T variant="caption" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
+              {/* The composer's own send arrow, so it reads as a send, not a note. */}
+              <Icon
+                name="arrow.up"
+                size={iconSize.body}
+                color={colors.textStrong}
+                fallback={<T color={colors.textStrong}>↑</T>}
+              />
+              <T variant="small" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
                 Send now
               </T>
             </Pressable>
@@ -1493,6 +1508,15 @@ const useStyles = makeStyles((colors) => ({
     overflow: 'hidden',
   },
   pressed: { backgroundColor: colors.surfaceControlHover },
+  // Send now: the composer's height for a button (its round Send), with the arrow.
+  sendNow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    minHeight: composer.send,
+    paddingHorizontal: space.lg,
+  },
+  off: { opacity: DISABLED_OPACITY },
   suggestions: { gap: space.sm, paddingHorizontal: space.xs },
   suggestion: {
     flexDirection: 'row',

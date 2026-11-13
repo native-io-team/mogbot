@@ -110,6 +110,28 @@ describe('the message field', () => {
     expect(screen.getByLabelText('Queue: Ops reads it when it’s done with this one')).toBeTruthy();
     expect(screen.getByLabelText('Dictate')).toBeTruthy();
   });
+
+  it('Send now sends with the interrupt (kept in the outbox if it has to wait)', async () => {
+    const { send } = jest.requireMock<{ send: jest.Mock }>('../src/lib/session');
+    send.mockClear();
+    state(working);
+    await render(composer(working));
+    await act(async () => {
+      await fireEvent.changeText(screen.getByLabelText('Message Ops'), 'stop, use the other file');
+    });
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText('Send now: interrupt Ops and send'));
+    });
+    expect(send).toHaveBeenCalledWith(
+      'ops',
+      'stop, use the other file',
+      true,
+      undefined,
+      expect.anything(),
+      expect.anything(),
+      undefined
+    );
+  });
 });
 
 describe('the model chip', () => {

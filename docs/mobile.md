@@ -780,7 +780,10 @@ request, the diff and the photo viewer push over them. At
   reaches the store, cache, drafts, outbox, notifications or logs
   (`__tests__/secrets.node.test.ts`).
 - **Composer.** Send, Queue while working (with Send now and Stop), Stop; no
-  Stop while an approval waits. @mentions, quotes as `> ` blockquotes (the
+  Stop while an approval waits. Send now is the send arrow and its words, as
+  tall as the round buttons, at the right of the queue line; one that has to
+  wait in the outbox keeps its interrupt (`PendingSend.interrupt`) for the
+  outbox's 10 minutes (`interruptStillMeant`). @mentions, quotes as `> ` blockquotes (the
   helpers live in the package), and files from the camera, Photos or Files,
   each uploading as soon as it's picked with progress, retry and remove.
   Drafts, including uploaded files (kept 55 min), survive leaving the chat and

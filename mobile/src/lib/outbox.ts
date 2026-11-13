@@ -15,6 +15,18 @@ import { WireFailure } from './transport';
 /** How long a send waits for the Mac on its own. */
 export const OUTBOX_WAIT_MS = 10 * 60_000;
 
+/**
+ * A Send now that waited (offline, or unheard) still interrupts when it goes,
+ * within the outbox's own window: past it, the turn it was meant to cut off is
+ * long done and it goes as an ordinary message (a "Not sent · Send" tapped
+ * later included). The Mac interrupts only a running turn with a message of
+ * the user's queued behind it (`runner::interrupt`), so a turn that finished
+ * meanwhile isn't touched either way.
+ */
+export function interruptStillMeant(writtenAt: number | undefined, now: number): boolean {
+  return writtenAt == null || now - writtenAt < OUTBOX_WAIT_MS;
+}
+
 /** Which waiting sends to send now, and which have waited too long. */
 export function outboxPlan(
   pending: SyncState['pending'],

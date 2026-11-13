@@ -70,6 +70,12 @@ export interface PendingSend {
   mentions?: string[];
   /** "Ask for changes": the result it revises (its id goes with the send). */
   revises?: ResultRef;
+  /**
+   * Send now: interrupt the turn in progress once the Mac has it. Kept while
+   * it waits in the outbox, so a Send now tapped offline (or unheard) still
+   * interrupts when it goes (`INTERRUPT_KEPT_MS`).
+   */
+  interrupt?: boolean;
 }
 
 export interface PendingAttachment {

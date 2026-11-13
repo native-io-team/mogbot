@@ -64,7 +64,13 @@ import {
 import { flushCache, forgetCache, saveOutbox, loadCache, watchCache } from './cache';
 import { forgetRemembered } from './remembered';
 import { flushDrafts, forgetDrafts, loadDrafts, refusedToDraft, setComposer } from './drafts';
-import { outboxPlan, retryWaitMs, sendInOrder, unreached } from './outbox';
+import {
+  interruptStillMeant,
+  outboxPlan,
+  retryWaitMs,
+  sendInOrder,
+  unreached,
+} from './outbox';
 import { loadPrefs } from './prefs';
 import { getApp, setApp, update, useApp } from './store';
 import {
@@ -581,7 +587,8 @@ export function setOpenChat(agentId: string | null) {
  * it twice. `now`: interrupt the turn in progress once the Mac has it.
  *
  * With no link the send waits in the outbox (outbox.ts) and goes when the
- * Mac answers; a send the Mac may not have heard waits the same way.
+ * Mac answers; a send the Mac may not have heard waits the same way. A Send
+ * now keeps its interrupt there (`PendingSend.interrupt`, `interruptStillMeant`).
  */
 export async function send(
   agentId: string,
@@ -607,6 +614,7 @@ export async function send(
         ...(attachments.length ? { attachments } : {}),
         ...(mentions.length ? { mentions } : {}),
         ...(revises ? { revises } : {}),
+        ...(now ? { interrupt: true } : {}),
       })
     );
   // The outbox on disk first, then the composer's emptied draft: a crash in
@@ -636,8 +644,12 @@ export async function send(
     throw error;
   }
   waitingTries = 0;
+  // A Send now from the outbox: still meant only while it's fresh.
+  const written = (getApp().pending[agentId] ?? []).find((p) => p.clientId === id)?.ts;
   update((s) => confirmSend(s, id, message));
-  if (now) await call('agents.interrupt', { agentId });
+  if (now && interruptStillMeant(written, Date.now())) {
+    await call('agents.interrupt', { agentId });
+  }
 }
 
 /**
@@ -710,7 +722,7 @@ export async function sendToRoom(
 export const resend = (p: PendingSend) =>
   p.roomId
     ? sendToRoom(p.roomId, p.text, p.mentions ?? [], !!p.everyone, p.clientId)
-    : send(p.agentId, p.text, false, p.clientId, p.attachments, p.mentions, p.revises);
+    : send(p.agentId, p.text, !!p.interrupt, p.clientId, p.attachments, p.mentions, p.revises);
 
 let flushing = false;
 let waitingTimer: ReturnType<typeof setTimeout> | null = null;
