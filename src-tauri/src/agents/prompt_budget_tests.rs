@@ -29,7 +29,11 @@ fn agent(id: &str, name: &str, main: bool, engine: Engine) -> store::Agent {
 fn prompt_of(a: &store::Agent) -> String {
     let home = tempfile::tempdir().unwrap();
     let layout = super::super::project::layout(a, home.path(), vec![]);
-    let p = system_prompt_for(a, home.path(), &layout);
+    // The home folder's path is the machine's, not the app's: its length
+    // differs by OS (Windows temp paths run longer), so it is measured as a
+    // fixed stand-in.
+    let p = system_prompt_for(a, home.path(), &layout)
+        .replace(&*home.path().to_string_lossy(), "/home/agent");
     // `DUMP_PROMPTS=<dir>` writes each one out, to count its tokens.
     if let Ok(dir) = std::env::var("DUMP_PROMPTS") {
         std::fs::write(format!("{dir}/{}.txt", a.id), &p).unwrap();

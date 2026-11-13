@@ -161,6 +161,7 @@
 @import './features/agents-browser.css';
 @import './features/agents-results.css';
 @import './features/agents-blocks.css';
+@import './features/agents-blocks-table.css';
 @import './features/agents-page.css';
 @import './features/agents-preview.css';
 @import './features/agents-rooms.css';
