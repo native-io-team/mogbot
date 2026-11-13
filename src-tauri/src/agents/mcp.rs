@@ -3120,7 +3120,10 @@ pub(super) fn refused_reply(answer: &Answer, what: &str) -> Option<String> {
         Answer::Denied(Some(note)) => Some(format!(
             "The user said no, and told you: \"{note}\". Don't {what}."
         )),
-        Answer::NotYet => Some(format!("Don't {what} yet. {}", super::expiry::STILL_WAITING)),
+        Answer::NotYet => Some(format!(
+            "Don't {what} yet. {}",
+            super::expiry::STILL_WAITING
+        )),
     }
 }
 
@@ -3296,9 +3299,18 @@ pub fn answer_late(
     // Said in the chat, so the turn that follows isn't a mystery.
     let _ = runner::record(
         app,
-        runner::new_message(agent_id, MessageKind::Note, late_allow_line(&approval.title)),
+        runner::new_message(
+            agent_id,
+            MessageKind::Note,
+            late_allow_line(&approval.title),
+        ),
     );
-    runner::enqueue(app, agent_id, late_allow_prompt(approval), runner::From::App);
+    runner::enqueue(
+        app,
+        agent_id,
+        late_allow_prompt(approval),
+        runner::From::App,
+    );
     Ok(())
 }
 
@@ -4312,7 +4324,12 @@ mod tests {
 
         // A tool call's card grants that exact call.
         let input = json!({ "command": "npm test" });
-        let bash = new_card("b".into(), "Run a command".into(), "npm test".into(), Some(("Bash", &input)));
+        let bash = new_card(
+            "b".into(),
+            "Run a command".into(),
+            "npm test".into(),
+            Some(("Bash", &input)),
+        );
         assert_eq!(
             late_grant(&bash),
             Some(LateGrantOf::Call("Bash".into(), input.clone()))

@@ -195,9 +195,13 @@ fn verdicts() {
         Some(Expiry::MovedOn)
     );
     // A card of words is keyed by its words (`mcp::ask_inner`).
-    let mut prose = super::super::mcp::new_card("w".into(), "Set it up?".into(), String::new(), None);
+    let mut prose =
+        super::super::mcp::new_card("w".into(), "Set it up?".into(), String::new(), None);
     prose.summary = Some("Check Mail every 5 minutes".into());
-    assert_eq!(key_for(&prose), ask_key("Set it up?", "Check Mail every 5 minutes"));
+    assert_eq!(
+        key_for(&prose),
+        ask_key("Set it up?", "Check Mail every 5 minutes")
+    );
 }
 
 /// The two shapes of the pending "Run a command" cards in a real chat from
@@ -376,10 +380,7 @@ fn a_plan_card_stays_up_until_it_is_answered() {
         ));
         // Stop withdraws an ordinary card beside it; the plan stays.
         post(&a.id, bash_card("r1", "npm test"), now);
-        assert_eq!(
-            sweep_store(&a.id, Moment::Stopped, now, &|_| true).len(),
-            1
-        );
+        assert_eq!(sweep_store(&a.id, Moment::Stopped, now, &|_| true).len(), 1);
         assert_eq!(status(&a.id, "p1"), (ApprovalStatus::Pending, None));
     });
 }

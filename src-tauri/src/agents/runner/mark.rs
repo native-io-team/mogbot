@@ -151,7 +151,11 @@ pub(super) fn next_pickup(resumes: u8) -> Option<u8> {
 
 /// The next pick-up a cut-off turn's mark allows: more when the app quit.
 pub(super) fn next_pickup_of(mark: &TurnMark) -> Option<u8> {
-    let cap = if mark.quit { MAX_QUIT_RESUMES } else { MAX_RESUMES };
+    let cap = if mark.quit {
+        MAX_QUIT_RESUMES
+    } else {
+        MAX_RESUMES
+    };
     (mark.resumes < cap).then(|| mark.resumes + 1)
 }
 
