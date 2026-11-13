@@ -112,6 +112,21 @@ pub fn level_from_rms(rms: f32) -> f32 {
 }
 
 /// Vocabulary hints are cheap but not free; keep the list bounded.
+/// A segment's final text. macOS sometimes closes a segment after a pause
+/// with an empty final, or one holding only its last few words, though its
+/// partials had the whole sentence: taking that final as said threw the
+/// sentence away (issue #11). The final wins only when it carries at least
+/// what the latest partial showed; otherwise the partial is kept.
+pub fn final_text(final_said: &str, last_partial: &str) -> String {
+    let said = final_said.trim();
+    let heard = last_partial.trim();
+    if said.is_empty() || (said.chars().count() < heard.chars().count() && heard.ends_with(said)) {
+        last_partial.to_string()
+    } else {
+        final_said.to_string()
+    }
+}
+
 pub fn clean_contextual_strings(strings: Vec<String>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for s in strings {
@@ -778,13 +793,14 @@ mod macos {
                 }
                 .unwrap_or_default();
                 let is_final: bool = msg_send![result, isFinal];
-                SESSION.with(|s| {
-                    if let Some(s) = s.borrow_mut().as_mut() {
-                        s.heard = if is_final {
-                            String::new()
-                        } else {
-                            text.clone()
-                        };
+                let text = SESSION.with(|s| {
+                    let mut s = s.borrow_mut();
+                    let Some(s) = s.as_mut() else { return text };
+                    if is_final {
+                        final_text(&text, &std::mem::take(&mut s.heard))
+                    } else {
+                        s.heard = text.clone();
+                        text
                     }
                 });
                 if is_final {
@@ -959,6 +975,21 @@ mod macos {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_short_or_empty_final_keeps_the_sentence_heard() {
+        let heard = "Book a table for four at eight tonight";
+        // Empty after a pause: the partial stands.
+        assert_eq!(final_text("", heard), heard);
+        // Only its last words: the partial stands.
+        assert_eq!(final_text("eight tonight", heard), heard);
+        // A whole final, even reworded or repunctuated, is what was said.
+        assert_eq!(
+            final_text("Book a table for four at 8 tonight.", heard),
+            "Book a table for four at 8 tonight."
+        );
+        assert_eq!(final_text("Hello", ""), "Hello");
+    }
 
     #[test]
     fn level_maps_decibels_to_unit_range() {
