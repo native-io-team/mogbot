@@ -837,8 +837,15 @@ async fn clone_dependencies(anchor: &Path, dest: &Path) -> bool {
         if target.exists() || !target.parent().is_some_and(Path::is_dir) {
             continue;
         }
+        // Copy-on-write only: APFS's clonefile on a Mac (`cp -c`), a reflink
+        // elsewhere (btrfs, XFS; on ext4 it fails and nothing is copied).
         let mut cmd = tokio::process::Command::new("/bin/cp");
-        cmd.arg("-c").arg("-R").arg(&source).arg(&target);
+        if cfg!(target_os = "macos") {
+            cmd.arg("-c");
+        } else {
+            cmd.arg("--reflink=always");
+        }
+        cmd.arg("-R").arg(&source).arg(&target);
         match crate::external_command::run_with_timeout(
             cmd,
             "cp -c (agent copy)",
@@ -1968,8 +1975,12 @@ mod tests {
             "the copy starts from the last commit, not the user's unsaved edit"
         );
         assert!(path.join(".env").is_file(), ".env files come along");
-        assert!(path.join("node_modules/lib/index.js").is_file());
-        assert!(copy.deps);
+        // Dependencies come along copy-on-write, where the disk can (APFS on a
+        // Mac; a Linux runner's ext4 can't, and then they're left out).
+        if cfg!(target_os = "macos") {
+            assert!(path.join("node_modules/lib/index.js").is_file());
+            assert!(copy.deps);
+        }
         // Locked as ours.
         let list = sh(&repo, &["worktree", "list", "--porcelain"]);
         assert!(list.contains(&format!("locked {LOCK_MARK}id-Acme Site")));

@@ -156,10 +156,15 @@ fn nobody_is_asked_without_an_app_or_a_turn() {
         &msg,
     ));
     assert_eq!(out["result"]["isError"], json!(true), "{out}");
-    assert!(out["result"]["content"][0]["text"]
-        .as_str()
-        .unwrap()
-        .contains("Nobody can be asked"));
+    // Where the agents' browser is off (no Chrome, as on a Linux runner) the
+    // gate refuses first; either way it's an error and no card.
+    let said = out["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        said.contains("Nobody can be asked")
+            || said.contains("browser is off")
+            || said.contains("browser isn't on"),
+        "{said}"
+    );
 }
 
 #[test]

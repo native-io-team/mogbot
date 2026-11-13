@@ -809,6 +809,8 @@ fn report_panic(message: &str, location: Option<&str>, backtrace: &str) {
 fn without_sliced_text(message: &str) -> String {
     let slicing = [
         "byte index ",
+        // Newer Rust: "start byte index 24 is not a char boundary; it is inside 'İ' …".
+        "start byte index ",
         "begin <= end ",
         "end byte index ",
         "failed to slice string",
@@ -1171,14 +1173,17 @@ mod tests {
             .downcast_ref::<String>()
             .cloned()
             .unwrap_or_default();
-        assert!(raw.contains("İstanbul"), "the std message quotes it: {raw}");
+        // Older Rust quotes the string in this message; newer Rust names only
+        // the character. Either way nothing of it is left after scrubbing.
+        assert!(raw.contains("byte index"), "a slicing panic: {raw}");
         let clean = super::without_sliced_text(&raw);
         assert!(
             !clean.contains("Istanbul") && !clean.contains("İstanbul"),
             "{clean}"
         );
         assert!(!clean.contains("hunter22"), "{clean}");
-        assert!(clean.starts_with("byte index "), "{clean}");
+        assert!(clean.contains("byte index "), "{clean}");
+        assert!(!clean.contains('İ'), "{clean}");
         // Other panics are left as they are.
         assert_eq!(
             super::without_sliced_text("called `Option::unwrap()` on a `None` value"),
