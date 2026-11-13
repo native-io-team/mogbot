@@ -14,6 +14,12 @@
 //!   admin password and outlives us, so it is opt-in, read back from `pmset`
 //!   rather than remembered, and offered for undo on every launch it is
 //!   still set.
+//! - **Off the Mac** — Windows holds the same idle-sleep assertion with
+//!   `SetThreadExecutionState` on a thread of ours (released when it ends or
+//!   the process does); Linux with `systemd-inhibit` when it is installed,
+//!   running `tail --pid=<our pid>` so the lock dies with us. Without
+//!   `systemd-inhibit` the row isn't offered ([`keep_awake_available`]).
+//!   Lid-closed mode and reopening at login stay macOS only.
 //! - **Restart** — a LaunchAgent that reopens the app at login. macOS still
 //!   needs someone to log in after a restart when FileVault is on; nothing an
 //!   app does gets around that, and the UI says so instead of implying it.
@@ -90,10 +96,117 @@ async fn pmset(args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-pub async fn read_power() -> PowerStatus {
-    if !cfg!(target_os = "macos") {
+/// One `/sys/class/power_supply` entry: `(type, online, capacity, status)`.
+pub type Supply = (String, Option<String>, Option<String>, Option<String>);
+
+/// Read `/sys/class/power_supply` entries: each a `(type, online, capacity,
+/// status)` from that supply's files. Mains (`Mains`/`USB` with `online`)
+/// says whether it is plugged in; a `Battery` gives the rest.
+pub fn parse_power_supplies(supplies: &[Supply]) -> PowerStatus {
+    let mut status = PowerStatus::default();
+    let mut mains_seen = false;
+    let mut mains_online = false;
+    for (kind, online, capacity, state) in supplies {
+        match kind.trim() {
+            "Mains" | "USB" | "USB_C" | "USB_PD" => {
+                if let Some(online) = online.as_deref() {
+                    mains_seen = true;
+                    mains_online |= online.trim() == "1";
+                }
+            }
+            "Battery" if !status.has_battery => {
+                status.has_battery = true;
+                status.battery_percent = capacity
+                    .as_deref()
+                    .and_then(|c| c.trim().parse::<u8>().ok())
+                    .map(|p| p.min(100));
+                status.charging = match state.as_deref().map(str::trim) {
+                    Some("Discharging") => Some(false),
+                    Some("Charging") | Some("Full") | Some("Not charging") => Some(true),
+                    _ => None,
+                };
+            }
+            _ => {}
+        }
+    }
+    status.on_ac = if mains_seen {
+        Some(mains_online)
+    } else if status.has_battery {
+        // No mains supply listed: the battery's own state is the only word.
+        status.charging
+    } else {
+        None
+    };
+    status
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn read_linux_power() -> PowerStatus {
+    let Ok(entries) = std::fs::read_dir("/sys/class/power_supply") else {
+        return PowerStatus::default();
+    };
+    let read = |dir: &std::path::Path, name: &str| std::fs::read_to_string(dir.join(name)).ok();
+    let supplies: Vec<_> = entries
+        .flatten()
+        .filter_map(|e| {
+            let dir = e.path();
+            let kind = read(&dir, "type")?;
+            Some((
+                kind,
+                read(&dir, "online"),
+                read(&dir, "capacity"),
+                read(&dir, "status"),
+            ))
+        })
+        .collect();
+    parse_power_supplies(&supplies)
+}
+
+#[cfg(windows)]
+fn read_windows_power() -> PowerStatus {
+    use windows_sys::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+    // SAFETY: SYSTEM_POWER_STATUS is plain data the call fills in.
+    let mut s: SYSTEM_POWER_STATUS = unsafe { std::mem::zeroed() };
+    if unsafe { GetSystemPowerStatus(&mut s) } == 0 {
         return PowerStatus::default();
     }
+    windows_power_status(s.ACLineStatus, s.BatteryFlag, s.BatteryLifePercent)
+}
+
+/// `SYSTEM_POWER_STATUS`'s fields, read: ACLineStatus 0 off / 1 on / 255
+/// unknown; BatteryFlag 128 "no battery", 255 unknown, 8 charging;
+/// BatteryLifePercent 0–100 or 255 unknown.
+pub fn windows_power_status(ac_line: u8, battery_flag: u8, percent: u8) -> PowerStatus {
+    let on_ac = match ac_line {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    };
+    let has_battery = battery_flag != 255 && battery_flag & 128 == 0;
+    PowerStatus {
+        has_battery,
+        on_ac,
+        battery_percent: (has_battery && percent <= 100).then_some(percent),
+        charging: if !has_battery {
+            None
+        } else if battery_flag & 8 != 0 || on_ac == Some(true) {
+            Some(true)
+        } else if on_ac == Some(false) {
+            Some(false)
+        } else {
+            None
+        },
+    }
+}
+
+pub async fn read_power() -> PowerStatus {
+    #[cfg(windows)]
+    return read_windows_power();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    return tokio::task::spawn_blocking(read_linux_power)
+        .await
+        .unwrap_or_default();
+    #[allow(unreachable_code)]
     pmset(&["-g", "batt"])
         .await
         .map(|out| parse_pmset_batt(&out))
@@ -144,22 +257,78 @@ pub async fn set_lid_closed_mode(enabled: bool) -> Result<(), CommandError> {
 // Idle-sleep assertion
 // ============================================================================
 
-static CAFFEINATE: LazyLock<Mutex<Option<std::process::Child>>> =
-    LazyLock::new(|| Mutex::new(None));
+/// What holds the machine awake: `caffeinate` (macOS) or `systemd-inhibit`
+/// (Linux) as a child process, or a thread of ours holding
+/// `SetThreadExecutionState` (Windows).
+enum Holder {
+    #[cfg(unix)]
+    Process(std::process::Child),
+    #[cfg(windows)]
+    Thread(WinHold),
+}
 
-/// Hold the Mac awake until [`stop_keep_awake`] or until this process exits.
-pub fn start_keep_awake() -> Result<(), CommandError> {
-    if !cfg!(target_os = "macos") {
-        return Ok(());
-    }
-    let mut guard = CAFFEINATE
-        .lock()
-        .map_err(|e| format!("keep-awake lock poisoned: {e}"))?;
-    if let Some(child) = guard.as_mut() {
-        if matches!(child.try_wait(), Ok(None)) {
-            return Ok(());
+impl Holder {
+    fn alive(&mut self) -> bool {
+        match self {
+            #[cfg(unix)]
+            Holder::Process(child) => matches!(child.try_wait(), Ok(None)),
+            #[cfg(windows)]
+            Holder::Thread(hold) => !hold.thread.is_finished(),
         }
     }
+
+    fn release(self) {
+        match self {
+            #[cfg(unix)]
+            Holder::Process(mut child) => {
+                // systemd-inhibit runs `tail` in its own group: stop both.
+                #[cfg(all(unix, not(target_os = "macos")))]
+                // SAFETY: plain signal to the process group we created.
+                unsafe {
+                    libc::killpg(child.id() as libc::pid_t, libc::SIGTERM);
+                }
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            #[cfg(windows)]
+            Holder::Thread(hold) => {
+                drop(hold.stop);
+                let _ = hold.thread.join();
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+struct WinHold {
+    /// Dropping it ends the thread, which clears its execution state.
+    stop: std::sync::mpsc::Sender<()>,
+    thread: std::thread::JoinHandle<()>,
+}
+
+static CAFFEINATE: LazyLock<Mutex<Option<Holder>>> = LazyLock::new(|| Mutex::new(None));
+
+/// Whether this machine can be held awake at all: always on macOS and
+/// Windows; on Linux only with `systemd-inhibit` installed.
+pub fn keep_awake_available() -> bool {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    return systemd_inhibit().is_some();
+    #[allow(unreachable_code)]
+    true
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn systemd_inhibit() -> Option<std::path::PathBuf> {
+    which::which("systemd-inhibit").ok().or_else(|| {
+        ["/usr/bin/systemd-inhibit", "/bin/systemd-inhibit"]
+            .into_iter()
+            .map(std::path::PathBuf::from)
+            .find(|p| p.is_file())
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn spawn_holder() -> Result<Holder, CommandError> {
     // -i idle sleep, -s system sleep (mains only), -m disk sleep. The display
     // is allowed to sleep: nobody is looking at it. -w ties the assertion to
     // our pid, so it is released even if we crash.
@@ -170,16 +339,96 @@ pub fn start_keep_awake() -> Result<(), CommandError> {
         .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| CommandError::from(format!("Could not start caffeinate: {e}")))?;
-    tracing::info!(pid = child.id(), "[Remote] Keeping the Mac awake");
-    *guard = Some(child);
+    Ok(Holder::Process(child))
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn spawn_holder() -> Result<Holder, CommandError> {
+    use std::os::unix::process::CommandExt;
+    let bin = systemd_inhibit().ok_or_else(|| {
+        CommandError::expected("Keeping this computer awake needs systemd-inhibit.")
+    })?;
+    // The lock lasts while `tail` runs, and `tail --pid` ends when we do, so
+    // a crash can't leave the machine unable to sleep. The display may sleep.
+    let child = std::process::Command::new(bin)
+        .args([
+            "--what=idle:sleep",
+            &format!("--who={}", crate::brand::NAME),
+            "--why=Agents and remote access are running",
+            "--mode=block",
+            "tail",
+            &format!("--pid={}", std::process::id()),
+            "-f",
+            "/dev/null",
+        ])
+        .process_group(0)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| CommandError::from(format!("Could not start systemd-inhibit: {e}")))?;
+    Ok(Holder::Process(child))
+}
+
+#[cfg(windows)]
+fn spawn_holder() -> Result<Holder, CommandError> {
+    use windows_sys::Win32::System::Power::{
+        SetThreadExecutionState, ES_CONTINUOUS, ES_SYSTEM_REQUIRED,
+    };
+    let (stop, stopped) = std::sync::mpsc::channel::<()>();
+    let (started, result) = std::sync::mpsc::channel::<bool>();
+    // The execution state belongs to the thread that set it, so one thread
+    // holds it until told to stop (or the process ends). The display may
+    // still sleep: no ES_DISPLAY_REQUIRED.
+    let thread = std::thread::Builder::new()
+        .name("keep-awake".into())
+        .spawn(move || {
+            // SAFETY: plain Win32 call with flag constants.
+            let ok = unsafe { SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) } != 0;
+            let _ = started.send(ok);
+            if ok {
+                let _ = stopped.recv();
+                // SAFETY: as above; clears what this thread set.
+                unsafe { SetThreadExecutionState(ES_CONTINUOUS) };
+            }
+        })
+        .map_err(|e| CommandError::from(format!("Could not start keep-awake: {e}")))?;
+    if result.recv().unwrap_or(false) {
+        Ok(Holder::Thread(WinHold { stop, thread }))
+    } else {
+        let _ = thread.join();
+        Err(CommandError::from(
+            "Windows refused to keep this PC awake.".to_string(),
+        ))
+    }
+}
+
+/// Hold the machine awake until [`stop_keep_awake`] or until this process
+/// exits. Does nothing where it can't be done ([`keep_awake_available`]).
+pub fn start_keep_awake() -> Result<(), CommandError> {
+    if !keep_awake_available() {
+        return Ok(());
+    }
+    let mut guard = CAFFEINATE
+        .lock()
+        .map_err(|e| format!("keep-awake lock poisoned: {e}"))?;
+    if let Some(holder) = guard.as_mut() {
+        if holder.alive() {
+            return Ok(());
+        }
+    }
+    let holder = spawn_holder()?;
+    tracing::info!("[Remote] Keeping the computer awake");
+    if let Some(old) = guard.replace(holder) {
+        old.release();
+    }
     Ok(())
 }
 
 pub fn stop_keep_awake() {
-    let child = CAFFEINATE.lock().ok().and_then(|mut g| g.take());
-    if let Some(mut child) = child {
-        let _ = child.kill();
-        let _ = child.wait();
+    let holder = CAFFEINATE.lock().ok().and_then(|mut g| g.take());
+    if let Some(holder) = holder {
+        holder.release();
         tracing::info!("[Remote] Released the keep-awake assertion");
     }
 }
@@ -236,7 +485,7 @@ pub fn keep_awake_active() -> bool {
     CAFFEINATE
         .lock()
         .ok()
-        .and_then(|mut g| g.as_mut().map(|c| matches!(c.try_wait(), Ok(None))))
+        .and_then(|mut g| g.as_mut().map(Holder::alive))
         .unwrap_or(false)
 }
 
@@ -381,6 +630,75 @@ mod tests {
         let absent = "System-wide power settings:\nCurrently in use:\n standby              1\n";
         assert_eq!(parse_sleep_disabled(absent), Some(false));
         assert_eq!(parse_sleep_disabled(""), None);
+    }
+
+    fn supply(
+        kind: &str,
+        online: Option<&str>,
+        cap: Option<&str>,
+        st: Option<&str>,
+    ) -> (String, Option<String>, Option<String>, Option<String>) {
+        (
+            kind.into(),
+            online.map(Into::into),
+            cap.map(Into::into),
+            st.map(Into::into),
+        )
+    }
+
+    #[test]
+    fn reads_a_linux_laptop() {
+        let on_battery = parse_power_supplies(&[
+            supply("Mains\n", Some("0\n"), None, None),
+            supply("Battery\n", None, Some("64\n"), Some("Discharging\n")),
+        ]);
+        assert_eq!(
+            on_battery,
+            PowerStatus {
+                has_battery: true,
+                on_ac: Some(false),
+                battery_percent: Some(64),
+                charging: Some(false),
+            }
+        );
+        let plugged = parse_power_supplies(&[
+            supply("Battery", None, Some("100"), Some("Full")),
+            supply("Mains", Some("1"), None, None),
+        ]);
+        assert_eq!(plugged.on_ac, Some(true));
+        assert_eq!(plugged.charging, Some(true));
+    }
+
+    #[test]
+    fn a_linux_desktop_claims_only_what_it_lists() {
+        let desktop = parse_power_supplies(&[supply("Mains", Some("1"), None, None)]);
+        assert!(!desktop.has_battery);
+        assert_eq!(desktop.on_ac, Some(true));
+        assert_eq!(parse_power_supplies(&[]), PowerStatus::default());
+    }
+
+    #[test]
+    fn reads_windows_power_status() {
+        // Laptop on battery, 55%.
+        let s = windows_power_status(0, 1, 55);
+        assert_eq!(
+            s,
+            PowerStatus {
+                has_battery: true,
+                on_ac: Some(false),
+                battery_percent: Some(55),
+                charging: Some(false),
+            }
+        );
+        // Charging flag.
+        assert_eq!(windows_power_status(1, 8, 40).charging, Some(true));
+        // Desktop: "no system battery".
+        let desktop = windows_power_status(1, 128, 255);
+        assert!(!desktop.has_battery);
+        assert_eq!(desktop.battery_percent, None);
+        assert_eq!(desktop.on_ac, Some(true));
+        // Unknown everything claims nothing.
+        assert_eq!(windows_power_status(255, 255, 255), PowerStatus::default());
     }
 
     #[test]

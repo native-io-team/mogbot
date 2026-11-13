@@ -97,6 +97,11 @@ export interface RemoteAccessStatus {
   publish: PublishProgress;
   power: PowerStatus;
   keepAwake: boolean;
+  /**
+   * Whether the app can hold this computer awake at all (Linux needs
+   * systemd-inhibit). Absent from older backends: treated as yes.
+   */
+  keepAwakeAvailable?: boolean;
   lidClosedMode: boolean | null;
   openAtLogin: boolean;
   openAtLoginAvailable: boolean;
@@ -157,16 +162,20 @@ export const clearRemotePushPin = () => invoke<RemoteAccessStatus>('clear_remote
 export const getRemoteAudit = (limit = 50) => invoke<AuditEntry[]>('get_remote_audit', { limit });
 
 /**
- * What keeps agents going on this Mac, offered in Agents apart from remote
- * access: hold it awake (the same assertion remote access holds), keep
- * running when windows close, and open at login (remote access's own login
- * item). Each is read back from the thing itself; all macOS only.
+ * What keeps agents going on this computer, offered in Agents apart from
+ * remote access: hold it awake (the same assertion remote access holds),
+ * keep running when windows close (macOS), and open at login (remote
+ * access's own login item, macOS). Each is read back from the thing itself.
  */
 export interface StayOn {
   supported: boolean;
-  /** True while the Mac is held awake, including by remote access. */
+  /** True while the computer is held awake, including by remote access. */
   keepAwake: boolean;
+  /** False where the app can't hold it awake (Linux without systemd-inhibit). */
+  keepAwakeAvailable?: boolean;
   keepRunning: boolean;
+  /** Hiding windows on close needs the Dock to bring them back: macOS only. */
+  keepRunningAvailable?: boolean;
   openAtLogin: boolean;
   /** False in a dev build, which has no installed app to reopen. */
   openAtLoginAvailable: boolean;
@@ -190,7 +199,7 @@ export interface ReadinessItem {
 
 type ReadinessInput = Pick<
   RemoteAccessStatus,
-  'power' | 'keepAwake' | 'lidClosedMode' | 'openAtLogin'
+  'power' | 'keepAwake' | 'keepAwakeAvailable' | 'lidClosedMode' | 'openAtLogin'
 >;
 
 export function readinessItems(s: ReadinessInput): ReadinessItem[] {
@@ -228,12 +237,19 @@ export function readinessItems(s: ReadinessInput): ReadinessItem[] {
           title: 'Kept awake',
           detail: 'It won’t sleep while remote access is on. The screen can still turn off.',
         }
-      : {
-          id: 'awake',
-          state: 'warn',
-          title: 'May fall asleep',
-          detail: 'Turning on remote access keeps it awake.',
-        }
+      : s.keepAwakeAvailable === false
+        ? {
+            id: 'awake',
+            state: 'warn',
+            title: 'May fall asleep',
+            detail: `The app can’t hold ${THIS_COMPUTER} awake here. Set it never to sleep in its power settings.`,
+          }
+        : {
+            id: 'awake',
+            state: 'warn',
+            title: 'May fall asleep',
+            detail: 'Turning on remote access keeps it awake.',
+          }
   );
 
   if (power.hasBattery) {
@@ -250,7 +266,10 @@ export function readinessItems(s: ReadinessInput): ReadinessItem[] {
             id: 'lid',
             state: 'warn',
             title: 'Closing the lid puts it to sleep',
-            detail: 'Leave the lid open, or let it run with the lid closed.',
+            detail:
+              s.lidClosedMode === null
+                ? 'Leave the lid open, or set closing the lid to do nothing in its power settings.'
+                : 'Leave the lid open, or let it run with the lid closed.',
           }
     );
   }
@@ -261,14 +280,13 @@ export function readinessItems(s: ReadinessInput): ReadinessItem[] {
           id: 'restart',
           state: 'ok',
           title: 'Comes back after a restart',
-          detail:
-            'After a restart (like an overnight macOS update) someone still has to log in once.',
+          detail: `After a restart (like an overnight ${HOST_COMPUTER === 'mac' ? 'macOS' : 'system'} update) someone still has to log in once.`,
         }
       : {
           id: 'restart',
           state: 'warn',
           title: 'Won’t come back after a restart',
-          detail: 'If macOS restarts, remote access stays off until you’re back.',
+          detail: `If ${THIS_COMPUTER} restarts, remote access stays off until you’re back.`,
         }
   );
 

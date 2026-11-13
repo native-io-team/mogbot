@@ -52,6 +52,7 @@ fn named(id: &str) -> String {
 fn keeping_the_mac_going_is_a_card_and_letting_it_rest_is_a_line() {
     let now = MacNow {
         stay_on_supported: true,
+        keep_running_available: true,
         open_at_login_available: true,
         ..Default::default()
     };
@@ -138,6 +139,13 @@ fn only_an_admin_proposes_the_macs_switches_and_only_where_they_exist() {
         .contains("isn't available in this build"));
     let elsewhere = MacNow::default();
     assert!(mac_proposal(true, &awake, &elsewhere, None, 1)
+        .unwrap_err()
+        .contains("can't be held awake"));
+    let keep = MacChange {
+        keep_running: Some(true),
+        ..Default::default()
+    };
+    assert!(mac_proposal(true, &keep, &now, None, 1)
         .unwrap_err()
         .contains("only offered on macOS"));
     // Nothing would change.
