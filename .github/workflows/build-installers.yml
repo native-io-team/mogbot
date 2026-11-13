@@ -175,6 +175,22 @@ jobs:
           [ -n "$(ls out)" ] || { echo "::error::No installers were produced"; exit 1; }
           (cd out && for f in $(ls | grep -v '\.sig$'); do sha256sum "$f" > "$f.sha256"; done)
 
+      # An update bundle signed with any other key than the one the app
+      # carries is refused by every installed copy, silently: check each
+      # one the way the updater will, with this version in its signature.
+      - name: Check the update signatures
+        if: env.TAURI_UPDATER_CONFIG != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          shopt -s nullglob
+          sigs=(out/*_${VERSION}_*.sig)
+          [ ${#sigs[@]} -gt 0 ] || { echo "::error::The updater key is set but no update bundle was signed"; exit 1; }
+          for s in "${sigs[@]}"; do
+            node scripts/verify-updater-sig.mjs "${s%.sig}" "$s" --version "$VERSION"
+          done
+
       - name: Upload installers
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
