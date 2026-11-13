@@ -1447,6 +1447,8 @@ mod tests {
 
     /// The CLI kept waiting finishes the Funnel by itself once approved: the
     /// user never comes back to press anything.
+    // Unix only: the stand-in tailscale CLI is run with /bin/sh.
+    #[cfg(unix)]
     #[tokio::test]
     async fn a_kept_cli_finishes_by_itself_once_approved() {
         let mut cli = fake_cli("sleep 0.3; echo 'Success.'");
@@ -1465,6 +1467,8 @@ mod tests {
 
     /// A second approval (HTTPS, then Funnel) comes back as its own link,
     /// with the CLI still waiting on it; a refusal is a failure, not a wait.
+    // Unix only: the stand-in tailscale CLI is run with /bin/sh.
+    #[cfg(unix)]
     #[tokio::test]
     async fn a_second_link_or_a_refusal_is_reported() {
         let mut cli = fake_cli(
@@ -1503,6 +1507,8 @@ mod tests {
     /// Tailscale's CLI exits instead of waiting when the server says not to
     /// (exit 0 right after the link): nothing was approved, so it is asked
     /// again rather than taken for a yes.
+    // Unix only: the stand-in tailscale CLI is run with /bin/sh.
+    #[cfg(unix)]
     #[tokio::test]
     async fn a_cli_that_did_not_wait_is_not_a_yes() {
         let mut cli = fake_cli("exit 0");

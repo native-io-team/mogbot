@@ -2364,6 +2364,8 @@ mod tests {
         assert!(!carry_codex(&[mac, work.clone()], &work, thread).unwrap());
     }
 
+    // Unix only: shared settings are symlinked, which only Unix does.
+    #[cfg(unix)]
     #[test]
     fn only_settings_and_skills_are_shared_never_a_login() {
         let dir = tempfile::tempdir().unwrap();

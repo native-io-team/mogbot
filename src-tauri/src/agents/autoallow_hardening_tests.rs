@@ -111,6 +111,8 @@ fn a_request_carrying_a_secret_asks() {
     }
 }
 
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn ordinary_requests_still_go_through() {
     for (command, expected) in [
@@ -143,6 +145,8 @@ fn ordinary_requests_still_go_through() {
 // 2. Code from the network
 // ----------------------------------------------------------------------------
 
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn installs_of_what_the_project_declares_go_through() {
     let (_dir, c) = project();
@@ -276,6 +280,8 @@ fn sensitive_local_targets_always_ask() {
     }
 }
 
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn wrappers_are_judged_by_what_they_run() {
     for (command, expected) in [

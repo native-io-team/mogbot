@@ -68,6 +68,8 @@ fn old_install(home: &Path) {
     );
 }
 
+// Unix only: the old folders are left as symlinks, which only Unix makes.
+#[cfg(unix)]
 #[test]
 fn an_old_install_moves_over_whole_and_the_old_paths_still_resolve() {
     let home = tempfile::tempdir().unwrap();

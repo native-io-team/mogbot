@@ -268,7 +268,9 @@ mod tests {
             let l = TcpListener::bind("127.0.0.1:0").unwrap();
             l.local_addr().unwrap().port()
         };
-        assert_eq!(probe(port, Duration::from_millis(300)), Probe::NotRunning);
+        // Windows retries a refused loopback connect for about two seconds
+        // before saying so; the watchdog's own timeout is longer than that.
+        assert_eq!(probe(port, PROBE_TIMEOUT), Probe::NotRunning);
     }
 
     /// Reported once when silent past the stall, and once when it's back.

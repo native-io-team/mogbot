@@ -254,6 +254,13 @@ fn nowhere(p: &Path) -> bool {
     if std::fs::symlink_metadata(Path::new("/").join(top)).is_ok() {
         return false;
     }
+    // The tests' fictional Mac (`/Users/…`, `/Applications/…`) on a computer
+    // that has neither (a Linux runner): those folders exist on the Mac the
+    // tests describe, so they're never "nowhere" there.
+    #[cfg(test)]
+    if matches!(top.to_str(), Some("Users" | "Applications")) {
+        return false;
+    }
     !root_writable()
 }
 
@@ -501,6 +508,9 @@ fn resolve_plain(raw: &str, cwd: &Path, home: &Path) -> Option<PathBuf> {
     normalise(&joined)
 }
 
+// TODO(windows): a drive path (`C:\…`) is unknown here and `/Users/…`
+// isn't absolute on Windows, so every path there resolves to `None` and
+// asks: safe, but no path-based auto-answers on Windows yet.
 fn normalise(p: &Path) -> Option<PathBuf> {
     let mut out = PathBuf::new();
     for c in p.components() {

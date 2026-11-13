@@ -553,7 +553,14 @@ export const agentsDesktopScenarios: Scenario[] = [
         // As the Mac lists them: every engine, OpenCode not installed here.
         engines: [
           ...ENGINES,
-          { id: 'opencode', label: 'OpenCode', installed: false, signedIn: false, asks: true, models: [] },
+          {
+            id: 'opencode',
+            label: 'OpenCode',
+            installed: false,
+            signedIn: false,
+            asks: true,
+            models: [],
+          },
         ],
       },
       agents_desktop_settings: {

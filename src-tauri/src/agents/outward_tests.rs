@@ -125,7 +125,8 @@ fn the_words_are_read_from_the_call() {
         "Bash",
         &bash(&format!(
             "gh release create v2 --notes-file {}",
-            file.display()
+            // Forward slashes: a shell reads Windows' backslashes as escapes.
+            file.display().to_string().replace('\\', "/")
         )),
         None,
         &[],

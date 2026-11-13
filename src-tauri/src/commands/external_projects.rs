@@ -637,7 +637,13 @@ mod tests {
         std::os::unix::fs::symlink(root.join(".env"), root.join("public/leak.png")).unwrap();
         let mut found: Vec<String> = super::image_files(root)
             .iter()
-            .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().into_owned())
+            .map(|p| {
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+                    .replace('\\', "/")
+            })
             .collect();
         found.sort();
         assert_eq!(

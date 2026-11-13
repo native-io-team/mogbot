@@ -343,7 +343,7 @@ pub fn outside_note(outside: bool) -> Option<&'static str> {
 /// asks through `approve`, so nothing writes it without a card.
 pub fn outside_turn_args(home: &Path) -> Vec<String> {
     let file = home.join("CLAUDE.md");
-    let file = file.to_string_lossy();
+    let file = super::super::reach::claude_rule_path(&file.to_string_lossy());
     // `//` makes it an absolute path in a permission rule.
     let rule = |tool: &str| format!("{tool}(/{file})");
     vec![

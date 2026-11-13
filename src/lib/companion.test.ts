@@ -39,7 +39,10 @@ describe('phoneStep', () => {
     // Up but not signed in: the relay turns phones away, so Tailscale decides.
     expect(
       phoneStep(
-        status({ tailscale: { state: 'notInstalled' }, relay: { state: 'connected', account: null } })
+        status({
+          tailscale: { state: 'notInstalled' },
+          relay: { state: 'connected', account: null },
+        })
       ).kind
     ).toBe('installTailscale');
     expect(phoneStep(status({ enabled: false, relay })).kind).toBe('off');

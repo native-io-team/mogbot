@@ -404,6 +404,8 @@ mod tests {
         assert!(normalize_model(Engine::Codex, "opus").is_err());
     }
 
+    // Unix only: the stand-in codex is a /bin/sh script.
+    #[cfg(unix)]
     #[tokio::test]
     async fn only_a_codex_with_an_app_server_is_said_to_ask() {
         use crate::agents::codex_app::fake;

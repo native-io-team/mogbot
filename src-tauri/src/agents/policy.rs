@@ -1001,7 +1001,8 @@ pub fn turn_dirs(
         };
         if keep {
             let own = own.trim_end_matches('/');
-            out.claude_deny.push(format!("Edit(/{own}/**)"));
+            let rule = super::reach::claude_rule_path(own);
+            out.claude_deny.push(format!("Edit(/{rule}/**)"));
             out.read_only.push(PathBuf::from(own));
         }
     }

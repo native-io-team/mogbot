@@ -1755,7 +1755,10 @@ mod tests {
         );
         assert!(fin.bytes > 0);
         assert_eq!(preview.agents[0].rules, ["npm test"]);
-        assert!(preview.same_volume && preview.enough_space);
+        // Volumes and free space are read only on Unix; Windows says "not the same".
+        if cfg!(unix) {
+            assert!(preview.same_volume && preview.enough_space);
+        }
         assert_eq!(fin.attachments, 1);
         assert_eq!(fin.secrets, ["Stripe key"]);
         assert_eq!(fin.memory, ["Accountant is Sam"]);

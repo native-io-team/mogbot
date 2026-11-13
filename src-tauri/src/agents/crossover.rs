@@ -701,7 +701,10 @@ fn foldable(meta: &std::fs::Metadata) -> bool {
             return false;
         }
     }
-    meta.len() <= MAX_FOLD_BYTES
+    // TODO(windows): std can't count a file's names here (stable Rust has no
+    // nlink on Windows), so a hard link to a secret couldn't be told apart:
+    // never folded there, at the cost of a Codex note being dropped.
+    cfg!(unix) && meta.len() <= MAX_FOLD_BYTES
 }
 
 /// What `AGENTS.md` in a home is, for a turn answering outside text to have

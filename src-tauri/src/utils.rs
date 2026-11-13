@@ -3352,15 +3352,17 @@ mod ship_studio_root_tests {
     fn reads_ship_studios_default_workspace_folder_then_its_legacy_setting() {
         let a = tempfile::tempdir().unwrap();
         let b = tempfile::tempdir().unwrap();
-        let (a_s, b_s) = (a.path().to_string_lossy(), b.path().to_string_lossy());
+        // JSON strings, quotes included: a Windows path's backslashes are escaped.
+        let json = |p: &std::path::Path| serde_json::to_string(&p.to_string_lossy()).unwrap();
+        let (a_s, b_s) = (json(a.path()), json(b.path()));
         let both = format!(
-            r#"{{"projectsRoot":"{b_s}","accounts":[{{"id":"other","projectsRoot":"/nope"}},{{"id":"default","projectsRoot":"{a_s}"}}]}}"#
+            r#"{{"projectsRoot":{b_s},"accounts":[{{"id":"other","projectsRoot":"/nope"}},{{"id":"default","projectsRoot":{a_s}}}]}}"#
         );
         assert_eq!(
             ship_studio_root_from_state(&both).as_deref(),
             Some(a.path())
         );
-        let legacy = format!(r#"{{"projectsRoot":"{b_s}","accounts":[{{"id":"default"}}]}}"#);
+        let legacy = format!(r#"{{"projectsRoot":{b_s},"accounts":[{{"id":"default"}}]}}"#);
         assert_eq!(
             ship_studio_root_from_state(&legacy).as_deref(),
             Some(b.path())

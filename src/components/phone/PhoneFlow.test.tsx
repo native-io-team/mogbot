@@ -216,6 +216,8 @@ describe('PhoneFlow in a build with the relay', () => {
     );
     show('phoneAccess');
     expect(await screen.findByText(/Phone access is on/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Use my own Tailscale instead' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Use my own Tailscale instead' })
+    ).not.toBeInTheDocument();
   });
 });

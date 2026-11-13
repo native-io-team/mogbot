@@ -8,6 +8,11 @@
 #   ./scripts/release-mac.sh --skip-build     # re-sign/notarize/verify the last build
 #   ./scripts/release-mac.sh --skip-notarize  # a dry run: everything but Apple's notarization
 #   ./scripts/release-mac.sh --publish        # ...then publish it (below). Never with --skip-notarize
+#   ./scripts/release-mac.sh --allow-red-ci   # go on although CI on main isn't green (loudly)
+#
+# A full build and every --publish first check CI on main (the source repo,
+# origin, or MOGBOT_CI_REPO): the latest completed run for this commit, else
+# the newest completed main run, must be a success. --allow-red-ci overrides.
 #
 # Environment (all optional):
 #   MOGBOT_SIGNING_IDENTITY   default "Developer ID Application: Galluzzo Conseil Inc. (N2VB8A88LB)"
@@ -51,13 +56,15 @@ UNIVERSAL=0
 SKIP_BUILD=0
 SKIP_NOTARIZE=0
 PUBLISH=0
+ALLOW_RED_CI=0
 for arg in "$@"; do
   case "$arg" in
     --universal) UNIVERSAL=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
     --skip-notarize) SKIP_NOTARIZE=1 ;;
     --publish) PUBLISH=1 ;;
-    -h|--help) sed -n 2,38p "$0"; exit 0 ;;
+    --allow-red-ci) ALLOW_RED_CI=1 ;;
+    -h|--help) sed -n 2,43p "$0"; exit 0 ;;
     *) die "unknown argument: $arg (try --help)" ;;
   esac
 done
@@ -110,6 +117,46 @@ echo "    identity: $IDENTITY"
 echo "    target:   $TARGET_DIR"
 
 # ---------------------------------------------------------------- preflight
+# CI on main first, before any build work, so a red main stops a release early.
+# Checked on a full build and on every --publish (--skip-build --publish too).
+if [ "$SKIP_BUILD" = 0 ] || [ "$PUBLISH" = 1 ]; then
+  CI_REPO="${MOGBOT_CI_REPO:-$(git remote get-url origin 2>/dev/null | sed -E 's#^(https://github\.com/|git@github\.com:)##; s#\.git$##')}"
+  HEAD_SHA="$(git rev-parse HEAD)"
+  CI_VERDICT=""
+  if [ -n "$CI_REPO" ] && gh auth status >/dev/null 2>&1; then
+    # "<conclusion> <sha>" of the newest completed run for this commit, else of
+    # the newest completed main run that wasn't cancelled (a push superseding
+    # a run cancels it; that says nothing about the code). Empty when gh can't
+    # answer.
+    CI_VERDICT="$(gh run list -R "$CI_REPO" --workflow CI --branch main -L 30 \
+      --json conclusion,headSha,status \
+      --jq "([.[] | select(.status == \"completed\")] as \$done
+             | ([\$done[] | select(.headSha == \"$HEAD_SHA\")]
+                + [\$done[] | select(.conclusion != \"cancelled\")]) | first
+             | select(. != null) | \"\(.conclusion) \(.headSha)\")" 2>/dev/null || true)"
+  fi
+  CI_CONCLUSION="${CI_VERDICT%% *}"
+  CI_SHA="${CI_VERDICT#* }"
+  if [ "$CI_CONCLUSION" = "success" ]; then
+    if [ "$CI_SHA" = "$HEAD_SHA" ]; then ok "CI on main is green for this commit (${HEAD_SHA:0:9})"
+    else ok "CI on main is green (newest completed run, ${CI_SHA:0:9}; none finished yet for ${HEAD_SHA:0:9})"; fi
+  else
+    if [ -z "$CI_VERDICT" ]; then
+      CI_PROBLEM="couldn't read CI on main for ${CI_REPO:-<no repo>} (gh run list --workflow CI --branch main)"
+    else
+      CI_PROBLEM="CI on main is '$CI_CONCLUSION' for ${CI_SHA:0:9} (gh run list -R $CI_REPO --workflow CI --branch main)"
+    fi
+    if [ "$ALLOW_RED_CI" = 1 ]; then
+      echo -e "${RED}${BOLD}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!${NC}"
+      warn "${BOLD}--allow-red-ci: releasing anyway.${NC} $CI_PROBLEM"
+      warn "Whatever is red on main ships to everyone who updates."
+      echo -e "${RED}${BOLD}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!${NC}"
+    else
+      die "$CI_PROBLEM. Make main green, or pass --allow-red-ci to release anyway"
+    fi
+  fi
+fi
+
 grep -qF "\"$IDENTITY\"" <<<"$(security find-identity -v -p codesigning)" \
   || die "identity not in the keychain: $IDENTITY (security find-identity -v -p codesigning)"
 ok "signing identity found"

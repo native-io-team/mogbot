@@ -178,6 +178,28 @@ pub fn sweep() {
 /// commit is made by the app, not the agent; see `task`.)
 pub const PROTECTED_DIRS: [&str; 2] = [".git", ".shipstudio"];
 
+/// A path as Claude Code's permission rules spell it. On Windows it matches
+/// rules against the POSIX form (`C:\Users\a` is `/c/Users/a`), so a rule
+/// holding the native path would never match and the deny would do nothing.
+/// Absolute, it starts with `/`; a rule adds one more for `//`.
+pub fn claude_rule_path(path: &str) -> String {
+    rule_path_for(path, cfg!(windows))
+}
+
+fn rule_path_for(path: &str, windows: bool) -> String {
+    if !windows {
+        return path.to_string();
+    }
+    let p = path.replace('\\', "/");
+    let mut chars = p.chars();
+    match (chars.next(), chars.next()) {
+        (Some(drive), Some(':')) if drive.is_ascii_alphabetic() => {
+            format!("/{}{}", drive.to_ascii_lowercase(), &p[2..])
+        }
+        _ => p,
+    }
+}
+
 /// Claude Code permission rules denying writes to [`PROTECTED_DIRS`] under
 /// the working directory (relative rules) and under each added folder
 /// (absolute `//` rules: a relative rule doesn't reach an `--add-dir`).
@@ -189,6 +211,7 @@ pub fn claude_deny_rules(add_dirs: &[String]) -> Vec<String> {
         .map(|d| format!("Edit(**/{d}/**)"))
         .collect();
     for dir in add_dirs {
+        let dir = claude_rule_path(dir);
         let dir = dir.trim_end_matches('/');
         if dir.is_empty() {
             continue;
@@ -364,6 +387,20 @@ mod tests {
     }
 
     #[test]
+    fn windows_paths_are_written_the_way_claudes_rules_match_them() {
+        assert_eq!(
+            rule_path_for(r"C:\Users\Sam\agents\a1\CLAUDE.md", true),
+            "/c/Users/Sam/agents/a1/CLAUDE.md"
+        );
+        assert_eq!(
+            rule_path_for("/u/agents/abc\\CLAUDE.md", true),
+            "/u/agents/abc/CLAUDE.md"
+        );
+        // On a Mac a backslash is part of a name: left as it is.
+        assert_eq!(rule_path_for("/u/a\\b", false), "/u/a\\b");
+    }
+
+    #[test]
     fn claude_is_denied_persisting_git_settings_that_run_programs() {
         let rules = claude_deny_rules(&[]);
         for rule in [
@@ -401,7 +438,13 @@ mod tests {
         let found = protected_paths(&[root.to_path_buf()]);
         let rel: Vec<String> = found
             .iter()
-            .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().into_owned())
+            .map(|p| {
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+                    .replace('\\', "/")
+            })
             .collect();
         assert_eq!(
             rel,

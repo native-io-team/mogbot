@@ -234,7 +234,13 @@ fn only_regenerable_folders_beside_their_manifest_are_candidates() {
     let found = candidates(home, H, later());
     let rel: Vec<String> = found
         .iter()
-        .map(|p| p.strip_prefix(home).unwrap().to_string_lossy().to_string())
+        .map(|p| {
+            p.strip_prefix(home)
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
+                .replace('\\', "/")
+        })
         .collect();
     assert_eq!(
         rel,
@@ -405,7 +411,13 @@ fn a_candidate_holding_a_repo_or_a_fresh_file_is_kept() {
         .unwrap();
     let rel: Vec<String> = candidates(home, H, later())
         .iter()
-        .map(|p| p.strip_prefix(home).unwrap().to_string_lossy().to_string())
+        .map(|p| {
+            p.strip_prefix(home)
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
+                .replace('\\', "/")
+        })
         .collect();
     assert_eq!(rel, vec!["a/node_modules"]);
 }

@@ -760,8 +760,12 @@ fn a_member_added_later_gets_the_files_sent_before_it_joined() {
             asker: Asker::User,
         };
         let text = prompt(&late.id, &ask, &[(Asker::User, "read it".into())]).unwrap();
-        let path = late_home.join(&saved[0].path).display().to_string();
-        assert!(text.contains(&path), "{text}");
+        // Joined piece by piece, so the separators match the platform's.
+        let path = saved[0]
+            .path
+            .split('/')
+            .fold(late_home.clone(), |p, s| p.join(s));
+        assert!(text.contains(&path.display().to_string()), "{text}");
     });
 }
 

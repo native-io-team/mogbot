@@ -48,7 +48,7 @@ jobs:
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -56,12 +56,12 @@ jobs:
         run: bash scripts/ci-linux-deps.sh patchelf rpm file xdg-utils
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: '.nvmrc'
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           version: 9.15.9
 
@@ -70,10 +70,12 @@ jobs:
         run: npm config set script-shell "C:\Program Files\Git\bin\bash.exe"
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
 
       - name: Rust cache
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: './src-tauri -> target'
           key: installers-${{ matrix.artifact }}
@@ -174,7 +176,7 @@ jobs:
           (cd out && for f in $(ls | grep -v '\.sig$'); do sha256sum "$f" > "$f.sha256"; done)
 
       - name: Upload installers
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: installers-${{ matrix.artifact }}
           path: out/

@@ -257,8 +257,12 @@ describe('RoomChat', () => {
       }),
       agents
     );
-    expect(screen.getByText(/^Close October by Friday Chief of Staff made this room\./)).toBeTruthy();
-    expect(screen.getByRole('button', { name: '@everyone Where does each of you stand?' })).toBeTruthy();
+    expect(
+      screen.getByText(/^Close October by Friday Chief of Staff made this room\./)
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: '@everyone Where does each of you stand?' })
+    ).toBeTruthy();
     expect(
       screen.getAllByText(/Chief of Staff answers unless you @ someone/).length
     ).toBeGreaterThan(0);
