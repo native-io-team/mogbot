@@ -190,8 +190,16 @@ async function scanPage(s, theme) {
     // Let entrance transitions finish: a fading card measures as low contrast.
     await sleep(500);
     await page.eval(AXE_SOURCE + ';true');
+    let axeFound = JSON.parse(await page.eval(RUN_AXE));
+    // A slow CI runner can still be mid-fade at 500 ms (main run 43497996791:
+    // a modal's text measured 2 contrast failures that never reproduce). A real
+    // failure is still there a moment later, so a contrast find is read twice.
+    if (axeFound.some((v) => v.id === 'color-contrast')) {
+      await sleep(1500);
+      axeFound = JSON.parse(await page.eval(RUN_AXE));
+    }
     const violations = [
-      ...JSON.parse(await page.eval(RUN_AXE)),
+      ...axeFound,
       ...JSON.parse(await page.eval(MOTION_CHECK)),
     ];
     return { id: s.id, theme, ready, violations };

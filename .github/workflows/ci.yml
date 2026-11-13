@@ -200,7 +200,9 @@ jobs:
     name: Windows Checks
     runs-on: windows-latest
     needs: [config-integrity]
-    timeout-minutes: 40
+    # Tests alone took ~38 min in run 43497996791; the no-bundle build after
+    # them was cut off at 40.
+    timeout-minutes: 60
     env:
       # `cargo test --lib --bins --tests` codegens the crate twice at once
       # (the lib for the bins, and the lib's tests). With full MSVC debuginfo
