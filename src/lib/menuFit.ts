@@ -44,19 +44,25 @@ export function fitMenu(
  * from a trigger near the right edge lines up with the trigger's right), and
  * held `MENU_EDGE` inside the window when neither fits. Answers the one
  * inline edge to set, so a menu whose width changes stays put on that edge.
+ *
+ * `area` narrows "the window" to part of it (the chat beside the sidebar,
+ * say): the menu is held inside that, in window coordinates, as well.
  */
 export function fitMenuX(
   trigger: { left: number; right: number },
   viewportWidth: number,
   menuWidth: number,
-  preferred: 'left' | 'right'
+  preferred: 'left' | 'right',
+  area?: { left: number; right: number }
 ): { left: number } | { right: number } {
-  const fitsFromLeft = trigger.left + menuWidth <= viewportWidth - MENU_EDGE;
-  const fitsFromRight = trigger.right - menuWidth >= MENU_EDGE;
-  const fromLeft = { left: Math.max(MENU_EDGE, trigger.left) };
-  const fromRight = { right: Math.max(MENU_EDGE, viewportWidth - trigger.right) };
+  const lo = Math.max(MENU_EDGE, (area?.left ?? 0) + MENU_EDGE);
+  const hi = Math.min(viewportWidth, area?.right ?? viewportWidth) - MENU_EDGE;
+  const fitsFromLeft = Math.max(lo, trigger.left) + menuWidth <= hi;
+  const fitsFromRight = Math.min(hi, trigger.right) - menuWidth >= lo;
+  const fromLeft = { left: Math.max(lo, trigger.left) };
+  const fromRight = { right: viewportWidth - Math.min(hi, trigger.right) };
   if (preferred === 'left' ? fitsFromLeft : !fitsFromRight && fitsFromLeft) return fromLeft;
   if (fitsFromRight) return fromRight;
   // Wider than either side allows: as far left as keeps its right edge in.
-  return { left: Math.max(MENU_EDGE, viewportWidth - MENU_EDGE - menuWidth) };
+  return { left: Math.max(lo, hi - menuWidth) };
 }

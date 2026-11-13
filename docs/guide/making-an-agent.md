@@ -82,6 +82,9 @@ On your own messages you can:
 - **Rewind to here.** What comes after folds away; it isn't deleted. Work the agent already did
   outside the chat (files, sends) isn't undone.
 
+They're in the **…** beside your message (or a right-click on it). While the agent is working,
+Edit and resend and Rewind to here wait, and the menu says so; Fork from here always works.
+
 An agent works on one thing at a time. Messages sent while it's busy wait their turn.
 
 ## Dictation

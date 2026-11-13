@@ -57,6 +57,12 @@ interface DropdownBaseProps {
    * panes, editor panels). The menu re-anchors on scroll/resize.
    */
   portal?: boolean;
+  /**
+   * With `portal`: a selector for the trigger's ancestor the menu must stay
+   * inside across, not just the window (`.agent-chat`, so a menu by the
+   * chat's edge doesn't open over the sidebar beside it).
+   */
+  boundary?: string;
   /** Extra class on the menu container (for width/feature-specific tweaks). */
   menuClassName?: string;
   /** Notified after open state changes (e.g. to lazy-load menu data). */
@@ -124,6 +130,7 @@ export function Dropdown({
   presentation = 'menu',
   ariaLabel,
   portal = false,
+  boundary,
   menuClassName,
   onOpenChange,
   open: controlledOpen,
@@ -424,7 +431,16 @@ export function Dropdown({
           : { top: rect.bottom + MENU_GAP, bottom: 'auto' };
       // Never past the window's side edges either: against the trigger's
       // other edge when the side asked for has no room, else held inside.
-      const across = fitMenuX(rect, window.innerWidth, menuRef.current?.offsetWidth ?? 0, align);
+      // Inside the boundary too, when there is one: the window holds a
+      // sidebar the menu must not open over.
+      const area = boundary ? btn.closest(boundary)?.getBoundingClientRect() : undefined;
+      const across = fitMenuX(
+        rect,
+        window.innerWidth,
+        menuRef.current?.offsetWidth ?? 0,
+        align,
+        area
+      );
       setPortalPos({
         position: 'fixed',
         ...vertical,
@@ -445,7 +461,7 @@ export function Dropdown({
       window.removeEventListener('scroll', anchor, true);
       window.removeEventListener('resize', anchor);
     };
-  }, [isOpen, portal, align, side, close]);
+  }, [isOpen, portal, align, side, boundary, close]);
 
   const menu = isOpen ? (
     <div

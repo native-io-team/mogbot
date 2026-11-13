@@ -21,6 +21,25 @@ describe('fitMenuX', () => {
     expect(fitMenuX({ left: 150, right: 190 }, 400, 320, 'left')).toEqual({ left: 72 });
     expect(fitMenuX({ left: 150, right: 190 }, 300, 320, 'left')).toEqual({ left: 8 });
   });
+
+  // Issue #10: a 1000px window, the chat from 220 to 1000 beside the sidebar,
+  // and your long message's … at the chat's left edge.
+  const chat = { left: 220, right: 1000 };
+
+  it('flips a right-aligned menu rather than open over the sidebar', () => {
+    // The window alone had room on the left (252 - 240 >= 8): under the sidebar.
+    expect(fitMenuX({ left: 228, right: 252 }, 1000, 240, 'right')).toEqual({ right: 748 });
+    expect(fitMenuX({ left: 228, right: 252 }, 1000, 240, 'right', chat)).toEqual({ left: 228 });
+  });
+
+  it('holds a menu 8px inside the area when the trigger sits on its edge', () => {
+    expect(fitMenuX({ left: 210, right: 230 }, 1000, 240, 'right', chat)).toEqual({ left: 228 });
+    expect(fitMenuX({ left: 960, right: 1000 }, 1000, 240, 'left', chat)).toEqual({ right: 8 });
+  });
+
+  it('keeps a menu wider than the area against its left edge', () => {
+    expect(fitMenuX({ left: 300, right: 320 }, 1000, 900, 'left', chat)).toEqual({ left: 228 });
+  });
 });
 
 // A 900px window; the chat header's trigger sits at the top.

@@ -87,6 +87,9 @@ export function GoBackMenu({
     <Dropdown
       align="right"
       portal
+      // Your message's "…" can sit at the chat's left edge (a long message
+      // fills the column): the menu stays in the chat, never over the sidebar.
+      boundary=".agent-chat"
       menuClassName="agent-go-back__menu"
       trigger={(p) => (
         <MenuButton

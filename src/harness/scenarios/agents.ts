@@ -1582,6 +1582,28 @@ const GO_BACK = {
   ...CONVERSATIONS,
   agents_overview: acmeWith({ status: status('idle'), conversations: { loaded: 'c-launch' } }),
 };
+/**
+ * Issue #10: a long message of yours fills the column, so its "…" sits at the
+ * chat's left edge, beside the sidebar; and Acme is working, so the menu says
+ * why Edit and Rewind wait.
+ */
+const LAUNCH_LONG = msg(
+  'user',
+  'Plan the November launch email: who it goes to, three sections, one ask. Keep it short enough to read on a phone, lead with the pricing page, and leave the customer story for the end.',
+  9,
+  { agentId: 'acme', conversation: 'c-launch' }
+);
+const GO_BACK_EDGE = {
+  ...CONVERSATIONS,
+  agents_overview: acmeWith({
+    status: status('working', 'Drafting the email'),
+    conversations: { loaded: 'c-launch' },
+  }),
+  agents_messages: (args: Record<string, unknown>) =>
+    args.agentId === 'acme' && args.conversation === 'c-launch'
+      ? [LAUNCH_LONG, LAUNCH_CHAT[1]]
+      : CONVERSATIONS.agents_messages(args),
+};
 const REWOUND = {
   ...GO_BACK,
   agents_messages: (args: Record<string, unknown>) =>
@@ -3931,6 +3953,20 @@ export const agentsScenarios: Scenario[] = [
       { click: '.agent-chat__row--user [aria-label="Go back to here"]' },
     ],
     commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-menu-edge',
+    title: 'Agents — the … menu on a long message, beside the sidebar, while working',
+    looksRightWhen:
+      'A narrow window. Your long message fills the chat column, so its … sits at the chat’s left edge, next to the sidebar. Its menu opens wholly inside the chat area, never over or under the sidebar: “Edit and resend” and “Rewind to here” greyed, “Fork from here” available, and under them “Acme Site is working. Wait for it to finish, or Stop it.” Every word readable.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__menu',
+    viewport: { width: 1000, height: 800 },
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__row--user [aria-label="Go back to here"]' },
+    ],
+    commands: GO_BACK_EDGE,
   },
   {
     id: 'agents-go-back-context',
