@@ -113,14 +113,17 @@ pub fn landing(tool: &str, input: &Value, cwd: &Path, home: &Path) -> Landing {
 fn absolute(raw: &str, cwd: &Path, home: &Path) -> Option<PathBuf> {
     let joined = if raw == "~" {
         home.to_path_buf()
-    } else if let Some(rest) = raw.strip_prefix("~/") {
+    } else if let Some(rest) = super::paths::home_rest(raw) {
         home.join(rest)
     } else if raw.starts_with('~') {
         return None;
-    } else if raw.starts_with('/') {
-        PathBuf::from(raw)
     } else {
-        cwd.join(raw)
+        match super::paths::anchor(raw) {
+            super::paths::Anchor::Absolute(p) => p,
+            super::paths::Anchor::Relative => cwd.join(raw),
+            // Nothing to follow: judged as written (and asks there).
+            super::paths::Anchor::Unknown => return None,
+        }
     };
     let mut out = PathBuf::new();
     for c in joined.components() {
@@ -165,7 +168,8 @@ fn resolved(p: &Path) -> Option<PathBuf> {
     let mut rest: Vec<std::ffi::OsString> = Vec::new();
     loop {
         match existing.canonicalize() {
-            Ok(mut real) => {
+            Ok(real) => {
+                let mut real = super::paths::plain(real);
                 for part in rest.iter().rev() {
                     real.push(part);
                 }
@@ -183,7 +187,7 @@ fn protected(p: &Path) -> bool {
     p.components().any(|c| {
         super::reach::PROTECTED_DIRS
             .iter()
-            .any(|d| c.as_os_str() == *d)
+            .any(|d| super::paths::name_is(c.as_os_str(), d))
     })
 }
 

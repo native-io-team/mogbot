@@ -581,3 +581,25 @@ fn read_only_posts_and_get_queries_are_reads() {
     }
     assert!(super::super::outward::command_sends(writes[0]));
 }
+
+/// APFS and NTFS ignore case, so a credential store, a launch agent or a
+/// shell profile spelled differently is still that file. Found in review
+/// (2026-11-12): each of these ran at "Bold" on a Mac.
+#[cfg(any(target_os = "macos", windows))]
+#[test]
+fn the_ask_list_ignores_case_where_the_disk_does() {
+    for c in [
+        "echo k >> ~/.SSH/authorized_keys",
+        "echo x > ~/Library/launchagents/a.plist",
+        "echo x >> ~/.ZSHRC",
+        "cat ~/.Ssh/id_ed25519",
+    ] {
+        assert!(bash_asks(c, false), "{c}");
+    }
+    // The agent's own log, in any case, is still the app's.
+    let own = format!("{HOME}/Library/Application Support/FictionalApp/agents/a1");
+    assert!(bash_asks(
+        &format!("echo x >> '{own}/MESSAGES.JSONL'"),
+        false
+    ));
+}

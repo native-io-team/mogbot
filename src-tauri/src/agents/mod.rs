@@ -144,6 +144,7 @@ pub mod other_app;
 pub mod outward;
 pub mod page;
 pub mod paste;
+pub mod paths;
 pub mod permissions;
 pub mod phone_signin;
 pub mod plan_grant;
