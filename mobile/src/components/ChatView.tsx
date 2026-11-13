@@ -57,7 +57,6 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeOut,
-  LinearTransition,
   ZoomIn,
   ZoomOut,
   interpolate,
@@ -168,14 +167,6 @@ const NATIVE_HEADER_BUTTONS = Platform.OS === 'ios';
 const NO_KEYS: ReadonlySet<string> = new Set();
 /** A card counts as seen once its top is on screen: its title is the question. */
 const VIEWABILITY = { itemVisiblePercentThreshold: 10 };
-
-/**
- * Rows glide to where a growing or collapsing neighbour puts them: nothing
- * jumps. Not on the web (QA only): there the glide is a transform on the
- * cell, which replaces the inverted list's own flip, so every row it moved
- * drew upside down for its 220 ms.
- */
-const glide = Platform.OS === 'web' ? undefined : LinearTransition.duration(220);
 
 /**
  * A pending approval's question, held above a pane too short for the whole
@@ -810,7 +801,9 @@ export function ChatView({
                   inverted
                   data={items}
                   keyExtractor={(i) => i.key}
-                  itemLayoutAnimation={glide}
+                  // No itemLayoutAnimation: on iOS a row's glide left the pictures
+                  // inside it unpainted (result cards drew as blank space, never
+                  // on the web build, where it was always off). docs/mobile.md.
                   onLayout={(e: LayoutChangeEvent) => setListHeight(e.nativeEvent.layout.height)}
                   // Let go to read back: the rows on screen hold still while the
                   // newest grows or arrives below them. Following: none, so the

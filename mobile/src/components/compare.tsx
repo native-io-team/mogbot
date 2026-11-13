@@ -51,23 +51,31 @@ function Picture({
   onRatio?: (r: number) => void;
 }) {
   useAttachmentSources();
+  const colors = useColors();
+  const source = attachmentSource(agentId, file.path, Math.round(width));
   // The box takes the shape; the picture only fills it, with no fade-in: a
   // fade the reshaping interrupted left the picture unpainted on the web build.
+  // The box is always a visible surface, and never an Image with no address
+  // (expo-image calls that an error): never blank space.
   return (
-    <View style={{ width, height: Math.round(width / ratio) }}>
-      <Image
-        source={attachmentSource(agentId, file.path, Math.round(width))}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        contentPosition="top"
-        recyclingKey={file.path}
-        accessibilityIgnoresInvertColors
-        onLoad={(e) => {
-          const { width: w, height: h } = e.source;
-          // A tall page shows its top: what changed reads there, and the card stays short.
-          if (w && h && onRatio) onRatio(Math.min(1.8, Math.max(MIN_RATIO, w / h)));
-        }}
-      />
+    <View
+      style={{ width, height: Math.round(width / ratio), backgroundColor: colors.surfaceControl }}
+    >
+      {source?.uri ? (
+        <Image
+          source={source}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          contentPosition="top"
+          recyclingKey={file.path}
+          accessibilityIgnoresInvertColors
+          onLoad={(e) => {
+            const { width: w, height: h } = e.source;
+            // A tall page shows its top: what changed reads there, and the card stays short.
+            if (w && h && onRatio) onRatio(Math.min(1.8, Math.max(MIN_RATIO, w / h)));
+          }}
+        />
+      ) : null}
     </View>
   );
 }

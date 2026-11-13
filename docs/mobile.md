@@ -205,9 +205,11 @@ A picture tile is one view from loading to drawn (`Thumb` in
 and **Tap to try again** after an error or 30 s with no answer (over the relay
 the fetch gives up at 30 s too, `RELAY_IMAGE_GIVE_UP_MS`, and a tap asks again,
 `retryRelayImage`). It is never swapped for another view and doesn't fade, and
-a result card has no layout glide (`Card glide={false}`): on iOS a view mounted
-in place of another while a layout animation ran could stay invisible, and a
-ten-picture card over the relay drew as blank space. `QA_MOCK_FLAGS=--lost-pictures`
+neither a result card nor the chat list has a layout glide (`Card glide={false}`,
+no `itemLayoutAnimation` on the chat's list): on iOS views inside a gliding row
+could stay unpainted, and many-picture result cards drew as blank space (never
+on the web build, where the glide was always off). A compare picture's box is a
+visible surface until its picture lands, never an Image with no address. `QA_MOCK_FLAGS=--lost-pictures`
 makes two of `result-many`'s ten fail (404) and hang.
 
 - `system.status`, `devices.self|unpairSelf|setPush`

@@ -82,6 +82,17 @@ export const THUMB_GIVE_UP_MS = 30_000;
 export const TAP_TO_RETRY = 'Tap to try again';
 
 /**
+ * A tile's size as two numbers, never `aspectRatio`: in the wrapping grid of
+ * a many-picture card, iOS's layout gave `aspectRatio` tiles no height while
+ * the grid kept the room for them, so a result card drew as one big blank box
+ * (seen on a real iPhone; the web build lays out with CSS and never did).
+ */
+export const thumbSize = (width: number, ratio: number) => ({
+  width,
+  height: Math.round(width / ratio),
+});
+
+/**
  * One picture. Loading, failed and loaded are the same tile (one view, never
  * swapped for another): on iOS a view mounted in place of another while a
  * layout animation ran could stay invisible, and a ten-picture result card
@@ -166,7 +177,7 @@ function Thumb({
       }}
       style={({ pressed }) => [
         styles.thumb,
-        { width, aspectRatio: failed ? (square ? 1 : 4 / 3) : ratio },
+        thumbSize(width, failed ? (square ? 1 : 4 / 3) : ratio),
         failed && styles.missing,
         pressed && styles.pressed,
       ]}
