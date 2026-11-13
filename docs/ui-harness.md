@@ -42,7 +42,16 @@ once.
 
 Interactively, open `http://127.0.0.1:1425/harness.html?scenario=<id>`. A
 switcher at the bottom lists every scenario and states what the screen is
-supposed to look like. Useful query parameters:
+supposed to look like.
+
+The plain dev server (`pnpm dev`, which is what the app's preview pane runs
+when this repo is opened as a project) sends `/` here too whenever there is no
+Tauri shell, carrying the query string along, so the preview opens on the
+harness instead of crashing on `window.__TAURI_INTERNALS__`
+(`devHarnessRedirectPlugin` in `vite.config.ts`; dev server only, never a
+build, and `pnpm tauri dev` is unaffected).
+
+Useful query parameters:
 
 | Parameter | Effect |
 | --- | --- |
