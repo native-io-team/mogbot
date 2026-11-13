@@ -190,6 +190,11 @@ terminals find `cargo` too.
 **If it fails** with `cargo: command not found` in a new shell, run
 `. "$HOME/.cargo/env"` first.
 
+**CMake** (whisper.cpp, which dictation runs on, is built with it).
+Check: `cmake --version`. If missing: `brew install cmake` when Homebrew is
+there, else `python3 -m pip install --user cmake` and put the printed `bin`
+folder on `PATH`.
+
 ### Step 6. Get the code
 
 If you're already in the repo, skip this step.

@@ -19,6 +19,7 @@ Thanks for your interest in contributing. Mogbot (its name set only in `brand.js
 - **pnpm 9** — `npm install -g pnpm@9.15.9` (or `corepack enable pnpm`). A newer global pnpm switches itself to the version in `packageManager` inside this repo.
 - **Rust** (stable, per [`rust-toolchain.toml`](rust-toolchain.toml)) — install via [rustup.rs](https://rustup.rs/).
 - **Xcode Command Line Tools**: `xcode-select --install`. Full Xcode only if you build the phone app onto a device.
+- **CMake**, for whisper.cpp (dictation): `brew install cmake`, or `pip install cmake` without Homebrew. On Linux also `libasound2-dev` and `libclang-dev` (`scripts/ci-linux-deps.sh` lists everything).
 - **macOS.** The app and its install guide target the Mac; [docs/INSTALL.md](docs/INSTALL.md) is the step-by-step setup with a check for every step.
 
 ### Getting Started

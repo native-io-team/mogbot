@@ -89,8 +89,24 @@ An agent works on one thing at a time. Messages sent while it's busy wait their 
 
 ## Dictation
 
-Click the microphone in the message box and talk; your words appear as you speak and Enter
-finishes. Speech is recognised on your computer. If your default microphone is a Bluetooth headset
+Click the microphone in the message box (or press ⌘⇧D, or hold ⌥Space) and talk. On a Mac your words
+appear as you speak. **Enter** (or Send) stops and sends; **Esc** cancels.
+
+When you stop, your computer writes what you said out again with Whisper, a speech model that runs
+on your computer, primed with your agents' and projects' names. Then a quick pass by Claude (Haiku,
+with no tools) fixes only misheard names and punctuation, using the conversation you're in. The box
+says **Tidying…** for a few seconds, then shows the better words; **Undo** puts back what it first
+heard. If Claude Code isn't set up, you get Whisper's words alone.
+
+The speech model is a one-time 574 MB download, fetched the first time you dictate. On Windows and
+Linux dictation waits for it ("Getting dictation ready"); on a Mac you get the live words meanwhile.
+Your recording never leaves your computer. Only the written words go to the names pass, on your own
+Claude account.
+
+From the phone, the same happens on your computer: the phone sends the recording, and the better
+words come back.
+
+If your default microphone is a Bluetooth headset
 (AirPods and the like), dictation listens through your computer's built-in microphone instead, so your
 headphones keep playing music at full quality rather than switching to call mode.
 

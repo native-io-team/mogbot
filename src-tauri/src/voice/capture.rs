@@ -85,7 +85,7 @@ fn open(
     let config = device
         .default_input_config()
         .map_err(|e| format!("The microphone can't be used: {e}"))?;
-    let rate = config.sample_rate().0;
+    let rate = config.sample_rate();
     let channels = config.channels() as usize;
     let format = config.sample_format();
     let config: cpal::StreamConfig = config.into();
@@ -132,11 +132,11 @@ where
     let max = (super::MAX_SECONDS * rate as f32) as usize;
     device
         .build_input_stream(
-            config,
+            config.clone(),
             move |data: &[T], _: &cpal::InputCallbackInfo| {
                 let mono: Vec<f32> = data
                     .chunks(channels.max(1))
-                    .map(|f| f.iter().map(|s| f32::from_sample(*s)).sum::<f32>() / f.len() as f32)
+                    .map(|f| f.iter().map(|s| f32::from_sample_(*s)).sum::<f32>() / f.len() as f32)
                     .collect();
                 if mono.is_empty() {
                     return;

@@ -81,6 +81,10 @@ for arg in "$@"; do
 done
 
 [ "$(uname)" = "Darwin" ] || die "macOS only"
+# whisper.cpp (dictation) is built with cmake; ~/.mogbot/whisper-spike holds a
+# pip-installed one on machines without Homebrew's.
+[ -x "$HOME/.mogbot/whisper-spike/bin/cmake" ] && PATH="$PATH:$HOME/.mogbot/whisper-spike/bin"
+command -v cmake >/dev/null || die "cmake is needed to build (brew install cmake, or pip install cmake)"
 if [ "$PUBLISH" = 1 ] && [ "$SKIP_NOTARIZE" = 1 ]; then
   die "--publish needs a notarized build; drop --skip-notarize"
 fi
