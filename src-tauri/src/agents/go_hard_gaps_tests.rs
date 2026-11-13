@@ -353,6 +353,9 @@ fn a_write_through_a_variable_set_to_a_protected_path_asks() {
 /// would be. Only a guess that names something there counts: the engine's
 /// shell may have moved since, and `../site/.env` from a project the shell
 /// is really in stays a read of that project.
+// TODO(windows): the classifier reads POSIX shell paths; on Windows every
+// path asks, so this is held to Unix like the other classifier tests.
+#[cfg(unix)]
 #[test]
 fn relative_paths_into_the_apps_data_are_resolved() {
     let dir = tempfile::tempdir().unwrap();

@@ -21,6 +21,8 @@ fn a_dev_build_has_nothing_to_reopen() {
     }
 }
 
+// Linux paths: on Windows "/home/…" isn't absolute and joins with `\`.
+#[cfg(unix)]
 #[test]
 fn an_appimage_is_started_by_its_own_file_not_its_mount() {
     let mount = Path::new("/tmp/.mount_MogbotXy12/usr/bin/mogbot");
@@ -48,6 +50,7 @@ fn the_run_value_quotes_the_exe() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn autostart_honours_xdg_config_home() {
     let home = Path::new("/home/me");

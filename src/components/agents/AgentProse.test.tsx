@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
-import { GrowingProse } from './AgentProse';
+import { GrowingProse, Prose } from './AgentProse';
 import { revealStep, REVEAL_CATCH_UP_MS, REVEAL_MIN_RATE } from './useReveal';
 import { toSegments } from './agentMarkdown';
 
@@ -26,7 +26,14 @@ describe('a reply growing', () => {
     const whole = toSegments(text)[0];
     const wrapper = document.createElement('div');
     wrapper.innerHTML = whole.type === 'html' ? whole.html : '';
+    // A table that scrolls sideways is a tab stop, drawn either way.
+    for (const table of wrapper.querySelectorAll('table')) table.tabIndex = 0;
     expect(container.querySelector('.agent-markdown__prose')?.innerHTML).toBe(wrapper.innerHTML);
+  });
+
+  it('makes a table a tab stop, so a wide one can be scrolled by keyboard', () => {
+    const { container } = render(<Prose text={'| A | B |\n| - | - |\n| 1 | 2 |'} />);
+    expect(container.querySelector('table')?.getAttribute('tabindex')).toBe('0');
   });
 });
 

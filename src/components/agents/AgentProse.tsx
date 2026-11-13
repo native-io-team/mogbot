@@ -77,8 +77,30 @@ function ProseRun({ parts }: { parts: readonly string[] }) {
       now.push({ html, nodes });
     }
     drawn.current = now;
+    focusableTables(el);
   }, [parts]);
   return <div ref={ref} className="agent-markdown__prose" />;
+}
+
+/**
+ * A wide table scrolls sideways in its bubble, so keyboard users must be able
+ * to reach it to scroll it (axe: scrollable-region-focusable). The sanitizer
+ * keeps no attributes, so the tab stop is added once the HTML is in place.
+ */
+function focusableTables(el: HTMLElement) {
+  for (const table of el.querySelectorAll('table')) {
+    if (!table.hasAttribute('tabindex')) table.tabIndex = 0;
+  }
+}
+
+function StaticProse({ html }: { html: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (ref.current) focusableTables(ref.current);
+  }, [html]);
+  return (
+    <div ref={ref} className="agent-markdown__prose" dangerouslySetInnerHTML={{ __html: html }} />
+  );
 }
 
 function ProseSegments({ segments }: { segments: Segment[] }) {
@@ -90,11 +112,7 @@ function ProseSegments({ segments }: { segments: Segment[] }) {
         ) : segment.parts ? (
           <ProseRun key={i} parts={segment.parts} />
         ) : (
-          <div
-            key={i}
-            className="agent-markdown__prose"
-            dangerouslySetInnerHTML={{ __html: segment.html }}
-          />
+          <StaticProse key={i} html={segment.html} />
         )
       )}
     </>

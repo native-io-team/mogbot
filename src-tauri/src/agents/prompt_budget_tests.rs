@@ -32,8 +32,11 @@ fn prompt_of(a: &store::Agent) -> String {
     // The home folder's path is the machine's, not the app's: its length
     // differs by OS (Windows temp paths run longer), so it is measured as a
     // fixed stand-in.
+    // So is the secret store's name ("Windows Credential Manager" is 14
+    // characters longer than "the Keychain").
     let p = system_prompt_for(a, home.path(), &layout)
-        .replace(&*home.path().to_string_lossy(), "/home/agent");
+        .replace(&*home.path().to_string_lossy(), "/home/agent")
+        .replace(crate::keychain::store_name!(), "the Keychain");
     // `DUMP_PROMPTS=<dir>` writes each one out, to count its tokens.
     if let Ok(dir) = std::env::var("DUMP_PROMPTS") {
         std::fs::write(format!("{dir}/{}.txt", a.id), &p).unwrap();

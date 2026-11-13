@@ -327,6 +327,9 @@
 
 .agents-list__row.is-current .agents-list__preview {
   color: var(--text-secondary);
+  /* The fill snaps in, so its words do too: easing from the plain colour
+     left them below AA on the selected fill for a moment. */
+  transition: none;
 }
 
 /* Waiting on you is attention, not success: the label takes the amber of its

@@ -34,7 +34,11 @@ fn writers_racing_on_one_file_never_tear_it() {
         let (path, torn, versions) = (&path, &torn, &versions);
         s.spawn(move || {
             for _ in 0..400 {
-                let now = std::fs::read(path).unwrap_or_default();
+                // Windows refuses a read for the instant a file is being
+                // replaced (a sharing violation): that is no torn file.
+                let Ok(now) = std::fs::read(path) else {
+                    continue;
+                };
                 if now != b"[]" && !versions.contains(&now) {
                     torn.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 }
