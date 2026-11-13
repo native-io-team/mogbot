@@ -1,211 +1,170 @@
-# Mogbot
+<p align="center">
+  <a href="https://mogbot.app"><img src="src-tauri/icons/128x128@2x.png" alt="Mogbot" width="96"></a>
+</p>
 
-**The bot that makes your other bots look bad.**
+<h1 align="center">Mogbot</h1>
 
-Mogbot runs your Claude and ChatGPT plans as a team of agents, on your
-computer and your phone. Free and open source (MIT). Mac now, Windows and
-Linux soon, with apps for iPhone and Android.
+<p align="center"><b>The bot that makes your other bots look bad.</b></p>
+
+<p align="center">
+  A team of AI agents on your own computer, running on the Claude and ChatGPT plans you already pay for.<br>
+  Free and open source. Built for every computer: Mac, Windows and Linux, with a phone app for iPhone (Android coming).
+</p>
+
+<p align="center">
+  <a href="https://mogbot.app/start"><b>Download</b></a> ·
+  <a href="https://mogbot.app">Website</a> ·
+  <a href="https://mogbot.app/changelog">Changelog</a> ·
+  <a href="docs/INSTALL.md">Build from source</a> ·
+  <a href="https://mogbot.app/llms.txt">For AI agents</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/native-io-team/mogbot-releases/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/native-io-team/mogbot-releases?label=release&color=1d1c1a"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-1d1c1a"></a>
+  <img alt="Mac, Windows, Linux, iPhone" src="https://img.shields.io/badge/runs_on-Mac%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20iPhone-1d1c1a">
+</p>
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/agents-dark.webp">
-    <img src="docs/images/readme/agents-light.webp" alt="The Chief of Staff's chat on the desk, the team in the sidebar with Inbox waiting on your OK, and the same team on the phone" width="900">
+    <img src="docs/images/readme/agents-light.webp" alt="Mogbot's Agents view: the Chief of Staff's chat, the team in the sidebar with one agent waiting on your OK, and the same team on the phone" width="900">
   </picture>
 </p>
 
-You talk to a **Chief of Staff**. It creates named agents for the work you hand
-it, briefs them, delegates, and comes back with results. Each agent remembers
-you, keeps its own instructions and routines, and runs on **Claude Code,
-Codex or OpenCode** (your pick, per agent) on your own machine. Anything that spends money,
-sends something as you, or changes what other people see waits for your
-**Allow**. Follow along and answer from your phone.
+You talk to a **Chief of Staff**. It makes an agent for each job you hand it,
+briefs it, and comes back with the result. Every agent has its own
+instructions, memory, routines and model, and works on your computer with your
+apps and your files. Anything that spends money, uses your passwords or deletes
+for good waits for your **Allow**, on the desk or on your phone.
 
-The app's name lives in one file, [`brand.json`](brand.json), so a fork can
-rename it in one place.
+## Why Mogbot
 
-## What it does
+**Higher limits.** Add every Claude and ChatGPT plan you have: personal, work,
+a client's. When one runs out, your agents carry on with the next. The app
+shows your limits only as the engine reports them, and what each agent used.
 
-### A team you can see
+**Better models.** Pick the engine and model for each agent: Claude Code
+(Opus or Sonnet), Codex (GPT), or OpenCode with open models like Kimi, DeepSeek
+or Qwen, from a provider or on your own machine.
 
-Every agent is a key: its own colour, an icon, and a letter on your keyboard
-that jumps straight to it. A key is pressed while the agent works, sits proud
-and lit when it needs your OK, and comes out of its socket when it's paused.
-The Chief makes new ones from one sentence; you review them once, then they
-exist. Agents can work together in rooms, and you can step into any agent's
-own session in a terminal and hand it back.
+**Real work.** Every project gets its own workspace: the agent's chat,
+terminals, the live site and a visual editor, side by side. Agents work on
+their own branch, so you keep, review or throw away what they did.
 
-### Work comes back checked
+**One app for everything.** Agents get in through your apps (Gmail, Calendar,
+Slack, GitHub, Figma and more), the tools on your computer, their own browser
+or your signed-in Chrome when you allow it.
 
-Finished work is one card: the files and links, what the agent **says** it
-checked, and what it **didn't** verify. Ask for changes and you get a new
-version. Under every reply, a folded "what it did" timeline shows the steps it
-actually took. An agent working on a project gets its own copy (a git
-worktree on its own branch), so you choose Keep changes, Review, Preview or
-Discard.
+**You decide how much they do alone.** One slider per team or per agent:
+Careful, Steady, Bold, Unleashed. Even at Unleashed they stop for money,
+passwords, deleting for good and going live.
 
-### Usage you can trust
-
-The app shows your plan's limits only as the engine reports them, and what
-each agent and routine used this week. Nothing is guessed; an estimate is
-labelled as one. Add more than one account and agents carry on with the next
-when one runs out, or with the other engine if you say so. Pick Normal, Save
-my limits, or Use it all before the refill.
-
-### You decide how much they do alone
-
-One slider per team or per agent: **Careful, Steady, Bold, Unleashed**. Each
-step lets agents do more without asking. Even at Unleashed they stop for
-money, logins, deleting for good and going live. Approvals arrive as an Allow /
-Deny card. Secrets go into a masked card and the macOS Keychain, never the
-chat. Logins use the provider's own sign-in; agents never ask for a password.
-
-### Your phone, talking only to your Mac
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/phone-dark.webp">
-    <img src="docs/images/readme/phone-light.webp" alt="Three phone screens: the Chief of Staff with tomorrow's plan, Inbox with a reply waiting to send, and a result card saying what it checked" width="900">
-  </picture>
-</p>
-
-The companion app pairs by QR code and reaches your Mac through a free
-sign-in on the Mac (our relay, end to end encrypted) or your own Tailscale,
-whichever you pick. Chat, answer cards (from the Lock Screen too), review
-results, start agents and routines, send voice messages, step into an agent's
-browser when it hits a sign-in only you can pass. It notifies you while it's
-connected to the Mac; there's no push service yet, so a phone that's been in
-the background a while hears nothing until you open it. The phone won't send a
-secret until the Mac proves it's yours. Over Tailscale nothing passes through
-our servers; through the relay, only encrypted bytes do.
-
-### And
-
-- **Routines** on a schedule, in steps with your OK in the middle, or
-  "When…" something happens (a GitHub mention, a new file in a folder, an
-  email in Mail or a text in Messages on this Mac, a check through one of your
-  apps). Checks run sealed and read-only, from your Mac. A morning brief from
-  the Chief says what happened and what's waiting.
-- **Conversations that keep up:** several per agent, sharing its memory; edit
-  and resend, fork or rewind from any of your messages; a page pinned above
-  the chat that the agent keeps current; charts, tables and quick choices in
-  the reply when they say it better.
-- **Agents that learn:** after a hard task an agent can save how it did it as
-  a skill, so next time it's one sentence (you choose Automatically, Ask me or
-  Off).
-- **Agents find their own way in:** a connected app, the tools and files on
-  your Mac, Calendar, Reminders, Contacts, Notes and Messages (one Allow per
-  app), their own browser, or your signed-in Chrome when you allow it.
-- **Slack:** start an agent from a Slack message and get the answer in the
-  thread; every reply waits for your OK unless you've said otherwise.
-- **Bring your agents** from Grok Bot or any assistant that speaks MCP, through
-  a short interview, or from an export file (Grok Bot, OpenBot, OpenClaw,
-  Hermes) or a pasted reply; it ends on one card where you pick what to
-  import. Share an agent as a recipe file, without its memory or logins.
-- **Projects underneath:** when work becomes a site or an app, it lives in a
-  full workspace with your agents and terminals, live preview, visual editing,
-  git and hosting status (below).
-- A menu bar and Dock menu that follow where you are, and keyboard shortcuts
-  ([docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)).
-- Light and dark, on desktop and phone.
+**On your phone.** Pair by QR code. Chat, approve from the Lock Screen, review
+results and start routines from anywhere.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/projects-dark.webp">
-    <img src="docs/images/readme/projects-light.webp" alt="A project open: its agents, terminals and dev server in the sidebar, Claude Code at work in a terminal, the site live beside it, and an approval on the phone" width="900">
-  </picture>
-</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/editor-dark.webp">
-    <img src="docs/images/readme/editor-light.webp" alt="Visual editing: click a card on the live page and change it in the Elements and Edit panels while the agent works in the terminal" width="900">
+    <img src="docs/images/readme/projects-light.webp" alt="A project open in Mogbot: Ostler site's agent at work in its chat, terminals and dev server in the sidebar, the live site beside it, and an approval on the phone" width="900">
   </picture>
 </p>
 
 ## Download
 
-**[Get it for your Mac](https://mogbot.app/start)**, and the phone
-app from the same page (a public TestFlight beta for iPhone). Release builds
-are also on [GitHub Releases](https://github.com/native-io-team/mogbot-releases/releases).
+| | Get it | Notes |
+|---|---|---|
+| **Mac** | [Mogbot.dmg](https://github.com/native-io-team/mogbot-releases/releases/latest/download/Mogbot.dmg) | Apple silicon, macOS 14 or later. Signed, notarized, updates itself |
+| **Windows** | [Installer (.exe)](https://github.com/native-io-team/mogbot-releases/releases/latest/download/Mogbot-windows-x86_64-setup.exe) · [.msi](https://github.com/native-io-team/mogbot-releases/releases/latest/download/Mogbot-windows-x86_64.msi) | 64-bit (x64), signed and ready. No auto-update yet |
+| **Linux** (early beta) | [All builds](https://github.com/native-io-team/mogbot-releases/releases/latest) | AppImage, .deb and .rpm for x86_64 and arm64. Less tested. No auto-update yet |
+| **iPhone** | [TestFlight beta](https://mogbot.app/phone) | Public beta |
+| **Android** | Coming soon | In testing |
+
+Mac 1.0.8 is the full release. Windows 1.0.8 is signed and ready. Linux is an early beta. On Windows and Linux, pairing your phone, app sign-ins and connecting your other assistants are still coming.
+
+Or go to **[mogbot.app/start](https://mogbot.app/start)**, which picks the right one for your device.
+
+**What you need:** a computer that's on while your agents work, and a Claude
+plan (Pro or Max) or a ChatGPT plan (Plus or Pro). Or OpenCode with any
+provider, no plan needed. Setup takes about five minutes: pick an engine, the
+app installs and signs it in, and you're in a chat with your Chief of Staff.
+
+Already using another assistant? Bring your agents over: connect it (Claude,
+ChatGPT, Grok…) and it hands them over in a conversation (on Mac today),
+drop in an export from Grok Bot, OpenBot, OpenClaw or Hermes, or paste back one
+reply from any assistant. You review it all on one card before anything is
+imported. Ship Studio's agents copy straight in.
+
+## How it compares
+
+- **Grok Bot, Muse and other consumer agents** are easy to start and run in
+  their company's cloud, on one usage pool and the models they pick. Mogbot
+  runs on every plan you pay for, any model, on a computer you choose.
+  Side by side: [vs Grok Bot](https://mogbot.app/vs/grok-bot),
+  [vs Muse](https://mogbot.app/vs/muse).
+- **Claude Code or Codex in a terminal:** the same engines, plus a team with
+  memory, approval and result cards, routines, usage across accounts, project
+  workspaces and a phone app. You can still drop into any agent's terminal.
+- **The trade-off:** your computer does the work, so it has to be on while
+  your agents run.
+
+## Privacy and what we host
+
+The app is MIT licensed and free, with no account needed. Your agents, chats
+and files stay on your computer; they talk to the AI providers you pick, under
+your own plans. Native hosts only what needs a server, and each has a way
+around it:
+
+- **Phone relay:** an optional free sign-in lets your phone reach your
+  computer from anywhere, end to end encrypted. Or use your own Tailscale.
+- **Push notifications:** sent through our push relay to the official iPhone
+  app (not Android yet), as a generic alert with no message, agent name or
+  project. On by default; turn off **Phone notifications** in Settings → Phone.
+- **Error reports:** crashes and errors are sent scrubbed of personal paths,
+  on by default. Turn them off in Settings → Advanced → **Usage analytics &
+  error reports** (despite the name, the app sends no usage analytics), and on
+  the phone in Settings → Error reports.
+
+Details: [mogbot.app/privacy](https://mogbot.app/privacy),
+[docs/OPEN-AND-HOSTED.md](docs/OPEN-AND-HOSTED.md),
+[mogbot.app/free](https://mogbot.app/free).
 
 ## Build from source
 
 The full runbook, with a check for every step, is
-**[docs/INSTALL.md](docs/INSTALL.md)**.
-
-**You need**
-
-- A Mac on a recent macOS (14 or later expected; tested on 26), Apple Silicon
-  or Intel, with **15 GB free** (about 25 GB to build the phone app with Xcode)
-- A paid **Claude plan (Pro or Max)** for Claude Code, or a paid **ChatGPT
-  plan** for Codex, or both. Or **OpenCode**, with any provider you set up in
-  it (an API key, or a model served on this Mac)
-- For the phone: an iPhone (or Android phone). Sign in on the Mac (a free
-  account, Google or email) and the phone reaches it from anywhere through our
-  relay, end to end encrypted. Or skip the account and use a free **Tailscale**
-  account, signed in on the Mac **and** the phone with the same account before
-  you scan the pairing code. What's hosted and what's free: [docs/OPEN-AND-HOSTED.md](docs/OPEN-AND-HOSTED.md)
-
-**Easiest:** open this folder in Claude Code or Codex and say:
+**[docs/INSTALL.md](docs/INSTALL.md)**. The easiest way: open this folder in
+Claude Code or Codex and say:
 
 > Set this up on my Mac and phone. Follow docs/INSTALL.md.
 
-It installs the tools, builds the app (10 to 25 minutes the first time), and
-stops for the few things only you can do: your Mac password, signing in,
-installing apps on your phone, scanning a code.
+It installs the tools, builds the app and stops only for what needs you.
 
-**Never used Claude Code or a terminal?** Install the Claude desktop app
-([claude.ai/download](https://claude.ai/download)) and open its **Code** tab
-(or the Codex app), sign in, and say: *"Download
-https://github.com/native-io-team/mogbot into a folder in my home folder,
-then set it up on my Mac and phone. Follow docs/INSTALL.md."* See
-[WELCOME.md](docs/WELCOME.md).
-
-**By hand** (Xcode Command Line Tools, Node 22+, pnpm 9 and Rust first; see
-steps 2 to 5 of [INSTALL.md](docs/INSTALL.md)):
+By hand: you need Node 22+, pnpm 9 and Rust (plus Xcode Command Line Tools on a
+Mac). [INSTALL.md](docs/INSTALL.md) walks through the Mac today. Windows and
+Linux builds come from CI ([build-installers.yml](.github/workflows/build-installers.yml)),
+and their step-by-step guides are coming.
 
 ```bash
 git clone https://github.com/native-io-team/mogbot.git && cd mogbot
 pnpm install
-CI=true pnpm tauri build --bundles app
-osascript -e 'quit app "Mogbot"' 2>/dev/null; rm -rf /Applications/Mogbot.app && cp -R src-tauri/target/release/bundle/macos/Mogbot.app /Applications/ && codesign --force --deep --sign - /Applications/Mogbot.app && codesign --verify --deep --strict /Applications/Mogbot.app && echo SIGNATURE_OK && open /Applications/Mogbot.app
+pnpm tauri:dev        # run from source with hot reload
 ```
 
-The app then asks one thing: pick Claude Code, Codex or OpenCode. It installs
-and signs it in like any Mac installer, and you land in a conversation with
-your Chief of Staff. Importing agents, the phone and how independent agents
-are come up later, when they matter.
+`pnpm dev` alone runs only the web UI, without the desktop app.
 
-**The phone app from source** comes two ways (or use TestFlight above): **Expo Go**
-(minutes; a terminal on the Mac stays open; no dictation or share sheet) or
-**built with Xcode** (the real app; 30 to 60 minutes the first time; with a
-free Apple ID, re-install every 7 days). Neither gets push notifications yet.
-See [INSTALL.md, step 13](docs/INSTALL.md#step-13-choose-how-to-get-the-phone-app).
+**The phone app from source** comes two ways (or use TestFlight): **Expo Go**
+(minutes; no dictation or share sheet) or **built with Xcode** (the real app;
+with a free Apple ID, re-install every 7 days). Self-built phone apps don't get
+push notifications. See [INSTALL.md, step 13](docs/INSTALL.md#step-13-choose-how-to-get-the-phone-app).
 
-Your Mac does the work, so agents stop when it sleeps or the app is closed.
-The app tells you what will and won't keep running.
-
-## How it compares
-
-- **The experience is modelled on Grok Bot:** named agents you just talk to,
-  approvals as a tap, a chat that feels like a team. The difference is what's
-  underneath: Claude Code, Codex or OpenCode, on your machine and your own accounts,
-  with no usage ceiling of ours on top.
-- **Next to Claude Code or Codex in a terminal:** the same engines, plus a
-  team with memory, approval cards, result cards, routines, usage across
-  accounts and a phone app. You can still drop into any agent's terminal
-  session.
-- **Next to cloud agent services:** nothing runs on our servers, and nothing
-  is stored there. The trade-off is that your Mac has to be on.
+Your computer does the work, so agents stop when it sleeps or the app is
+closed. The app tells you what will and won't keep running.
 
 ## Something broken?
 
-Tell your Chief of Staff, in your own words ("the phone keeps dropping",
-"this button does nothing"). It writes the problem up, shows you exactly what
-will be sent, and on your OK sends it to us; an agent of ours checks it against
-the code and files or links the GitHub issue. Crashes and errors are reported
-the same way automatically, scrubbed of anything personal, unless you turn
-off "Usage analytics & error reports" in Settings → Advanced. Or
+Tell your Chief of Staff in your own words. It writes the problem up, shows
+you exactly what will be sent, and sends it on your OK; an agent of ours
+checks it against the code and files or links the GitHub issue. Or
 [open an issue](https://github.com/native-io-team/mogbot/issues) yourself.
 
 ## Security
@@ -216,46 +175,41 @@ short floor (money, credentials, deleting for good, pushing to production)
 always asks. Tokens and secrets live only in the macOS Keychain, never in the
 chat, argv or logs. Text from outside (web pages, mail, other people's
 messages) can't raise what an agent may do: imports and "When…" checks run
-sealed, read-only calls, and a turn answering outside text asks for more. The phone pairs only to a Mac that proves its
+sealed, read-only calls. The phone pairs only to a computer that proves its
 pinned identity, and every pairing is confirmed on the desk. Details:
-[docs/agents.md](docs/agents.md#approvals), [docs/mobile.md](docs/mobile.md),
-[docs/remote-access.md](docs/remote-access.md). To report a vulnerability, see
-[SECURITY.md](SECURITY.md).
+[docs/agents.md](docs/agents.md#approvals), [docs/mobile.md](docs/mobile.md).
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Status
 
-Early, and moving fast. Mac now; Windows and Linux builds are coming. The
-iPhone app is on TestFlight, the Android app in testing. No push
-notifications yet, and no telemetry: each stays off until `brand.json` names
-an endpoint for it. Several features landed recently and say in the docs where
-they haven't yet been tried on a real phone or a live account. What's next: [docs/ROADMAP.md](docs/ROADMAP.md).
-
-**Works with Ship Studio.** This is the evolution of
-[Ship Studio](https://github.com/ship-studio/ship-studio) and opens its
-projects (`~/ShipStudio`, the in-project `.shipstudio/` folder) and vice versa.
-Settings, agents, pairing and Keychain entries are this app's own, so the two
-run side by side. You can copy Ship Studio's agents in from Agents → Import.
+Early, and moving fast: a release most days. Mogbot is built for every
+computer. Mac 1.0.8 is the full release, Windows 1.0.8 is signed and ready,
+and Linux is an early beta. On Windows and Linux, pairing your phone, app sign-ins and connecting your other assistants are still coming. The iPhone app is on TestFlight, and Android
+is in testing. What's next: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Docs
 
-- [docs/WELCOME.md](docs/WELCOME.md): for invited testers, what to expect
-- [docs/INSTALL.md](docs/INSTALL.md): the setup runbook your agent follows
-- [docs/MISSION.md](docs/MISSION.md): why it exists and the rules that follow
-- [docs/OPEN-AND-HOSTED.md](docs/OPEN-AND-HOSTED.md): what's free and open, and the few services Native hosts
-- [docs/ROADMAP.md](docs/ROADMAP.md): what's done and what's next
+- [docs/guide](docs/guide): how to use Mogbot
+- [docs/INSTALL.md](docs/INSTALL.md): setup runbook, for you or your agent
 - [docs/agents.md](docs/agents.md): agents, approvals, routines, memory, engines
 - [docs/mobile.md](docs/mobile.md): the phone app and pairing
 - [docs/remote-access.md](docs/remote-access.md): driving your agents from another assistant
-- [docs/design-system.md](docs/design-system.md): tokens, accent, themes, primitives
+- [docs/MISSION.md](docs/MISSION.md) and [docs/ROADMAP.md](docs/ROADMAP.md): why it exists and what's next
+- [docs/FORKING.md](docs/FORKING.md): the app's name lives in [`brand.json`](brand.json), so a fork renames it in one place
 
 ## Contributing
 
-Contributions are welcome. Start with
-[CONTRIBUTING.md](CONTRIBUTING.md): setup, the UI harness, tests, the CI gates
-and the patterns the codebase expects. [CLAUDE.md](CLAUDE.md) and
-[AGENTS.md](AGENTS.md) are the architecture reference for people and coding
-agents alike. Please read the [Code of Conduct](CODE_OF_CONDUCT.md).
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md):
+setup, the UI harness, tests and the patterns the codebase expects.
+[AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md) are the architecture
+reference for people and coding agents alike. Please read the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
-## License
+## Made by Native
 
-[MIT](LICENSE).
+Mogbot is made and funded by [Native](https://www.native.agency), and grew
+out of [Ship Studio](https://ship.studio). It opens Ship Studio projects
+(`~/ShipStudio`, the in-project `.shipstudio/` folder) and vice versa, runs
+beside it, and can copy Ship Studio's agents in.
+
+[MIT](LICENSE) © Julian Galluzzo, Native, and contributors.
