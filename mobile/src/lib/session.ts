@@ -79,7 +79,7 @@ import {
   setPendingFailed,
 } from './sync';
 import { clearCache, http, localFiles, type PickedFile } from './files';
-import { relayImage, retryRelayImages } from './relayImages';
+import { relayImage, retryRelayImage, retryRelayImages } from './relayImages';
 import { createReads } from './reads';
 import { roomIdOf, roomKey, roomsOffered } from './rooms';
 import { registerPush } from './push';
@@ -1095,6 +1095,14 @@ export function attachmentSource(
     headers: transport.authHeaders,
     cacheKey,
   };
+}
+
+/**
+ * "Tap to try again" on a picture: over the relay it's fetched again; on a
+ * direct route the image view reloads it itself.
+ */
+export function retryAttachmentSource(agentId: string, path: string, width?: number) {
+  retryRelayImage(`${agentId}/${path}@${width ?? 'full'}`);
 }
 
 export const listFiles = (agentId: string) => call('agents.files', { agentId });

@@ -200,6 +200,16 @@ files (the chat's own attachment tiles), links (http/https only), Checked;
 older versions fold to a line. On a copy's live card Keep / Discard sit
 inside it.
 
+A picture tile is one view from loading to drawn (`Thumb` in
+`components/attachments.tsx`): a spinner after 600 ms, "Image not available"
+and **Tap to try again** after an error or 30 s with no answer (over the relay
+the fetch gives up at 30 s too, `RELAY_IMAGE_GIVE_UP_MS`, and a tap asks again,
+`retryRelayImage`). It is never swapped for another view and doesn't fade, and
+a result card has no layout glide (`Card glide={false}`): on iOS a view mounted
+in place of another while a layout animation ran could stay invisible, and a
+ten-picture card over the relay drew as blank space. `QA_MOCK_FLAGS=--lost-pictures`
+makes two of `result-many`'s ten fail (404) and hang.
+
 - `system.status`, `devices.self|unpairSelf|setPush`
 - `agents.overview|messages|send|stop|interrupt|answerApproval|focus|markUnread`
   (`answerApproval` takes `choice` for a session's question)

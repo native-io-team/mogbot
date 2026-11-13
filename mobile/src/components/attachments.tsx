@@ -9,7 +9,7 @@
 import type { Attachment } from '@shipstudio/companion-protocol';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import {
   extensionOf,
@@ -20,7 +20,7 @@ import {
   type PickedFile,
 } from '../lib/files';
 import { useChatGallery, viewerParams } from '../lib/gallery';
-import { attachmentSource, describeError, download } from '../lib/session';
+import { attachmentSource, describeError, download, retryAttachmentSource } from '../lib/session';
 import { useAttachmentSources } from '../lib/relayImages';
 import type { PendingAttachment } from '../lib/sync';
 import { alpha, iconSize, radius, space, type, PRESSED } from '../lib/theme';
@@ -74,6 +74,19 @@ export function Attachments({
   );
 }
 
+/** How long a picture may take before its tile says it's loading. */
+export const THUMB_SLOW_MS = 600;
+/** A picture with no answer by then counts as failed: never a blank box. */
+export const THUMB_GIVE_UP_MS = 30_000;
+/** What a failed tile says under "Image not available". */
+export const TAP_TO_RETRY = 'Tap to try again';
+
+/**
+ * One picture. Loading, failed and loaded are the same tile (one view, never
+ * swapped for another): on iOS a view mounted in place of another while a
+ * layout animation ran could stay invisible, and a ten-picture result card
+ * drew as blank space. No fade either, for the same reason.
+ */
 function Thumb({
   agentId,
   file,
@@ -92,53 +105,60 @@ function Thumb({
   const gallery = useChatGallery();
   // Until it loads its shape is unknown; then it keeps its own, within reason.
   const [ratio, setRatio] = useState(square ? 1 : 4 / 3);
-  // A file the Mac couldn't send (gone, or not reachable) says so with its
-  // name, never an empty box.
-  // Kept by the address that failed, so a picture fetched again over the
-  // relay (a new file) gets its chance instead of staying a box.
+  // Kept by the address that failed (or loaded), so a picture fetched again
+  // over the relay (a new file) gets its chance instead of staying failed.
   const [failedUri, setFailedUri] = useState<string | null>(null);
+  const [loadedUri, setLoadedUri] = useState<string | null>(null);
+  // "Tap to try again" on a direct route: the image view loads it afresh.
+  const [attempt, setAttempt] = useState(0);
+  // The address (and try) that has been loading a while.
+  const [slowOn, setSlowOn] = useState<string | null>(null);
+  // The address (and try) that had no answer in time.
+  const [gaveUpOn, setGaveUpOn] = useState<string | null>(null);
   useAttachmentSources();
   const source = file.localUri
     ? { uri: file.localUri }
     : attachmentSource(agentId, file.path, width);
-  const failed = !!source?.uri && failedUri === source.uri;
-  if (source && !source.uri) {
-    // Over the relay the picture is still coming: a quiet box of its size,
-    // never an Image with no address (expo-image calls that an error).
-    return (
-      <View
-        accessibilityLabel={`${file.name}, image loading`}
-        style={[styles.thumb, styles.missing, { width, aspectRatio: ratio }]}
-      />
-    );
-  }
-  if (failed || !source) {
-    return (
-      <View
-        accessibilityLabel={`${file.name}, ${IMAGE_UNAVAILABLE.toLowerCase()}`}
-        style={[styles.thumb, styles.missing, { width, aspectRatio: square ? 1 : 4 / 3 }]}
-      >
-        <Icon
-          name="photo"
-          size={iconSize.body}
-          color={colors.textMuted}
-          fallback={<T color={colors.textMuted}>▢</T>}
-        />
-        <T variant="caption" color={colors.textSecondary}>
-          {IMAGE_UNAVAILABLE}
-        </T>
-        <T variant="caption" color={colors.textMuted} numberOfLines={2} style={styles.missingName}>
-          {file.name}
-        </T>
-      </View>
-    );
-  }
+  const uri = source?.uri;
+  const waitKey = `${uri ?? 'pending'}#${attempt}`;
+  const failed = !source || (!!uri && (failedUri === uri || gaveUpOn === waitKey));
+  const loaded = !failed && !!uri && loadedUri === uri;
+  const loading = !failed && !loaded;
+
+  // A loading tile shows a spinner after a short wait (a cached picture never
+  // flashes one), and one with no answer in time counts as failed. Over the
+  // relay, the fetch itself gives up (`RELAY_IMAGE_GIVE_UP_MS`).
+  useEffect(() => {
+    if (!loading) return;
+    const showSpinner = setTimeout(() => setSlowOn(waitKey), THUMB_SLOW_MS);
+    const giveUp = uri ? setTimeout(() => setGaveUpOn(waitKey), THUMB_GIVE_UP_MS) : undefined;
+    return () => {
+      clearTimeout(showSpinner);
+      clearTimeout(giveUp);
+    };
+  }, [loading, uri, waitKey]);
+
+  const retry = () => {
+    setGaveUpOn(null);
+    setFailedUri(null);
+    setLoadedUri(null);
+    setAttempt((n) => n + 1);
+    if (!file.localUri) retryAttachmentSource(agentId, file.path, width);
+  };
+
+  const label = failed
+    ? `${file.name}, ${IMAGE_UNAVAILABLE.toLowerCase()}. ${TAP_TO_RETRY}`
+    : loading
+      ? `${file.name}, image loading`
+      : `${file.name}, image`;
   return (
     <Pressable
-      accessibilityRole="imagebutton"
-      accessibilityLabel={`${file.name}, image`}
-      disabled={!!file.localUri}
+      testID={`thumb:${file.path || file.localUri}`}
+      accessibilityRole={failed ? 'button' : 'imagebutton'}
+      accessibilityLabel={label}
+      disabled={loading || (!failed && !!file.localUri)}
       onPress={() => {
+        if (failed) return retry();
         router.push({
           pathname: '/viewer',
           params: viewerParams(gallery, agentId, file),
@@ -146,26 +166,60 @@ function Thumb({
       }}
       style={({ pressed }) => [
         styles.thumb,
-        { width, aspectRatio: ratio },
+        { width, aspectRatio: failed ? (square ? 1 : 4 / 3) : ratio },
+        failed && styles.missing,
         pressed && styles.pressed,
       ]}
     >
-      <Image
-        source={source}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        transition={180}
-        // A chat opened again (or scrolled back to) draws its pictures from
-        // memory, already decoded, instead of reading and decoding them again.
-        cachePolicy="memory-disk"
-        recyclingKey={file.path || file.localUri}
-        onError={() => setFailedUri(source.uri ?? null)}
-        onLoad={(e) => {
-          if (square) return;
-          const { width: w, height: h } = e.source;
-          if (w && h) setRatio(Math.min(1.8, Math.max(0.62, w / h)));
-        }}
-      />
+      {uri && !failed ? (
+        // Never an Image with no address: expo-image calls that an error.
+        <Image
+          key={attempt}
+          source={source}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          // A chat opened again (or scrolled back to) draws its pictures from
+          // memory, already decoded, instead of reading and decoding them again.
+          cachePolicy="memory-disk"
+          recyclingKey={file.path || file.localUri}
+          onError={() => setFailedUri(uri)}
+          onLoad={(e) => {
+            setLoadedUri(uri);
+            if (square) return;
+            const { width: w, height: h } = e.source;
+            if (w && h) setRatio(Math.min(1.8, Math.max(0.62, w / h)));
+          }}
+        />
+      ) : null}
+      {loading && slowOn === waitKey ? (
+        <View style={[StyleSheet.absoluteFill, styles.center]} testID="thumb-loading">
+          <Spinner />
+        </View>
+      ) : null}
+      {failed ? (
+        <>
+          <Icon
+            name="arrow.clockwise"
+            size={iconSize.body}
+            color={colors.textMuted}
+            fallback={<T color={colors.textMuted}>↻</T>}
+          />
+          <T variant="caption" color={colors.textSecondary} style={styles.missingName}>
+            {IMAGE_UNAVAILABLE}
+          </T>
+          <T variant="caption" color={colors.textMuted} style={styles.missingName}>
+            {TAP_TO_RETRY}
+          </T>
+          <T
+            variant="caption"
+            color={colors.textMuted}
+            numberOfLines={1}
+            style={styles.missingName}
+          >
+            {file.name}
+          </T>
+        </>
+      ) : null}
     </Pressable>
   );
 }
@@ -339,6 +393,7 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.cardBorder,
   },
   missingName: { textAlign: 'center' },
+  center: { alignItems: 'center', justifyContent: 'center' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',

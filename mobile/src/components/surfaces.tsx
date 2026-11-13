@@ -75,6 +75,7 @@ export function Card({
   children,
   hideHead = false,
   quiet = false,
+  glide = true,
   onLayout,
   onHeadLayout,
   style,
@@ -102,6 +103,12 @@ export function Card({
    * `.agent-approval[data-offer]`.
    */
   quiet?: boolean;
+  /**
+   * Glide when its size changes (the default). A result card turns it off:
+   * pictures mounted inside a view whose layout animation is running could
+   * stay invisible on iOS (a ten-picture card drew as blank space).
+   */
+  glide?: boolean;
   onLayout?: (e: LayoutChangeEvent) => void;
   onHeadLayout?: (e: LayoutChangeEvent) => void;
   style?: StyleProp<ViewStyle>;
@@ -118,7 +125,7 @@ export function Card({
         : colors.textMuted;
   return (
     <Animated.View
-      layout={CARD_GLIDE}
+      layout={glide ? CARD_GLIDE : undefined}
       onLayout={onLayout}
       style={[styles.card, quiet && styles.cardQuiet, style]}
       testID={testID}

@@ -91,6 +91,7 @@ function selfSigned(dir: string) {
     liveWork: args.includes('--live-work'),
     probe: args.includes('--probe'),
     restarted: args.includes('--restarted'),
+    lostPictures: args.includes('--lost-pictures'),
     ...(args.includes('--relay')
       ? { relay: arg('--relay-port') ? { port: Number(arg('--relay-port')) } : true }
       : {}),

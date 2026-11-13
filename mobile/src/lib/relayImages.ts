@@ -13,6 +13,8 @@ const kept = new Map<string, string | null>();
 /** When each picture last failed: it's tried again once this long has passed. */
 const failedAt = new Map<string, number>();
 export const RELAY_IMAGE_RETRY_MS = 15_000;
+/** A picture with no answer by then counts as failed, never a box forever. */
+export const RELAY_IMAGE_GIVE_UP_MS = 30_000;
 const waiting = new Set<string>();
 const listeners = new Set<() => void>();
 let version = 0;
@@ -38,24 +40,39 @@ export function relayImage(key: string, fetch: () => Promise<string>): string | 
   }
   if (!waiting.has(key)) {
     waiting.add(key);
-    fetch().then(
-      (uri) => {
-        waiting.delete(key);
-        failedAt.delete(key);
-        kept.set(key, uri);
-        changed();
-      },
-      () => {
-        waiting.delete(key);
-        failedAt.set(key, Date.now());
-        kept.set(key, null);
-        changed();
-        // Drawn as a box until then; a redraw after the wait tries it again.
-        setTimeout(changed, RELAY_IMAGE_RETRY_MS);
-      }
-    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('no answer')), RELAY_IMAGE_GIVE_UP_MS);
+    });
+    Promise.race([fetch(), late])
+      .finally(() => clearTimeout(timer))
+      .then(
+        (uri) => {
+          waiting.delete(key);
+          failedAt.delete(key);
+          kept.set(key, uri);
+          changed();
+        },
+        () => {
+          waiting.delete(key);
+          failedAt.set(key, Date.now());
+          kept.set(key, null);
+          changed();
+          // Drawn as "Image not available" until then; a redraw after the wait
+          // (or a tap) tries it again.
+          setTimeout(changed, RELAY_IMAGE_RETRY_MS);
+        }
+      );
   }
   return undefined;
+}
+
+/** "Tap to try again" on one picture: fetched again on the next draw. */
+export function retryRelayImage(key: string) {
+  if (waiting.has(key)) return;
+  failedAt.delete(key);
+  if (kept.has(key) && kept.get(key) == null) kept.delete(key);
+  changed();
 }
 
 /** Forget the pictures that couldn't be fetched, so a new link tries them again. */

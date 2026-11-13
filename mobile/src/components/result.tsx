@@ -357,6 +357,8 @@ export function ResultCardView({
   return (
     <Card
       icon="doc.text"
+      // No glide: its pictures arrive while it's drawn (docs/mobile.md).
+      glide={false}
       title={card.title}
       meta={
         [card.checkpoint ? CHECKPOINT_LABEL : null, card.version > 1 ? `v${card.version}` : null]
