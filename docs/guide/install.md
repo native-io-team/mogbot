@@ -5,8 +5,10 @@ order: 1
 
 ## What you need
 
-- A Mac with Apple silicon (M1 or later). Intel Macs, Windows and Linux aren't supported by the
-  download.
+- One of these computers:
+  - A Mac with Apple silicon (M1 or later). Intel Macs aren't supported by the download.
+  - A Windows PC (64-bit Intel or AMD).
+  - A Linux desktop (64-bit Intel/AMD or ARM). A server with no screen isn't supported yet.
 - One AI engine for your agents to run on. Pick at least one:
   - **Claude Code**, with a paid Claude plan (Pro or Max).
   - **Codex**, with a paid ChatGPT plan.
@@ -15,13 +17,16 @@ order: 1
 
 You don't need to install the engine first. The app does it for you.
 
-## Download and move to Applications
+## Download and install
 
-1. Go to [mogbot.app/start](https://mogbot.app/start) and download the Mac app.
-2. Open the downloaded file and drag the app into **Applications**.
-3. Open it from Applications.
+Go to [mogbot.app/start](https://mogbot.app/start) and download the app for your computer.
 
-If you open the app straight from the downloaded file instead, it still runs, but it can't update
+- **Mac:** open the downloaded file, drag the app into **Applications** and open it from there.
+- **Windows:** run the installer (`-setup.exe`, or the `.msi`).
+- **Linux:** use the `.deb` or `.rpm` for your distribution, or make the `.AppImage` executable and
+  run it.
+
+On a Mac, if you open the app straight from the downloaded file instead, it still runs, but it can't update
 itself from there. When an update is ready, the app offers **Move to Applications**: one click
 copies it there and reopens it.
 
@@ -34,6 +39,15 @@ so; one you stopped stays stopped.
 To have the app start on its own when you log in (so your agents and routines carry on after a
 restart), turn on **Open at login** in Settings → Agents. Turning it off removes it again. It isn't offered
 when you run the app from source.
+
+## Where your secrets are kept
+
+Logins and keys never sit in a plain file:
+
+- **Mac:** the Keychain.
+- **Windows:** Credential Manager. Other programs running as your Windows user can read it.
+- **Linux:** your desktop's keyring (Secret Service). With no keyring at all, an encrypted file in
+  the app's folder, readable only by you.
 
 ## First launch
 
