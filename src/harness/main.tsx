@@ -326,7 +326,15 @@ async function settle(): Promise<void> {
   // paint. This is what makes two capture runs agree: a fixed delay races
   // any panel whose state arrives on a later round-trip.
   await whenIpcQuiet();
-  await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 250)));
+  // One paint, or 500ms where frames are paused (a tab that isn't in front).
+  await new Promise<void>((r) => {
+    const done = () => setTimeout(r, 250);
+    const fallback = setTimeout(done, 500);
+    requestAnimationFrame(() => {
+      clearTimeout(fallback);
+      done();
+    });
+  });
   (window as unknown as { __harnessReady?: boolean }).__harnessReady = true;
 }
 

@@ -102,8 +102,15 @@ jobs:
   # scripts/a11y-baseline.json, so the known ones are worked down and no new
   # one lands. See docs/ui-harness.md, "Accessibility".
   a11y:
-    name: Accessibility (axe over the harness)
+    name: Accessibility (axe over the harness, ${{ matrix.theme }})
     runs-on: ubuntu-latest
+    # A full theme takes about 45 minutes; a run that hangs ends here instead
+    # of holding the whole CI run open for hours.
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        theme: [light, dark]
     needs: [config-integrity]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -132,13 +139,13 @@ jobs:
           exit 1
 
       - name: axe over every scenario
-        run: pnpm check:a11y
+        run: pnpm check:a11y --theme ${{ matrix.theme }}
 
       - name: Keep the report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: a11y-report
+          name: a11y-report-${{ matrix.theme }}
           path: harness/a11y/
 
   # Backend checks
