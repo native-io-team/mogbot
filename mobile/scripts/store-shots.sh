@@ -52,6 +52,9 @@ shoot_device() {
   [ -n "$udid" ] || { echo "no simulator called $device" >&2; exit 1; }
   xcrun simctl boot "$udid" 2>/dev/null || true
   xcrun simctl bootstatus "$udid" -b >/dev/null
+  # A pairing from an earlier run outlives an uninstall (it's in the
+  # keychain) and pins another mock's identity: "This isn't your computer".
+  xcrun simctl keychain "$udid" reset
   xcrun simctl keychain "$udid" add-root-cert "$here/dev/.certs/cert.pem" 2>/dev/null || true
   # A US 12-hour clock reads 9:41, not 09:41; it takes a restart to show.
   xcrun simctl spawn "$udid" defaults write -g AppleLocale en_US
@@ -64,13 +67,22 @@ shoot_device() {
     --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState discharging --batteryLevel 100
   xcrun simctl uninstall "$udid" "$bundle" 2>/dev/null || true
   xcrun simctl install "$udid" "$app"
-  for theme in light dark; do
-    xcrun simctl ui "$udid" appearance "$theme"
-    for s in "${SHOTS[@]}"; do
-      IFS='|' read -r name route stage <<<"$s"
-      start_mock "$stage"
+  # Each screen in both themes before the next stage: the phone keeps what
+  # it has seen, so going back to an earlier stage would show later messages.
+  for s in "${SHOTS[@]}"; do
+    IFS='|' read -r name route stage <<<"$s"
+    start_mock "$stage"
+    for theme in light dark; do
+      xcrun simctl ui "$udid" appearance "$theme"
       link="$(curl -sk "https://localhost:$port/dev/link")"
       xcrun simctl terminate "$udid" "$bundle" 2>/dev/null || true
+      # Stopping it on screen reads as a crash at the next launch
+      # (lib/crash.ts): drop the foreground marker so no notice shows.
+      data="$(xcrun simctl get_app_container "$udid" "$bundle" data 2>/dev/null || true)"
+      if [ -n "$data" ]; then
+        rm -f "$data/Library/Application Support/companion-state/foreground.json" \
+          "$data/Library/Application Support/companion-state/crash-last.json"
+      fi
       xcrun simctl launch "$udid" "$bundle" -screenshotPair "$link" -screenshotRoute "$route" >/dev/null
       sleep "${STORE_SETTLE:-9}"
       xcrun simctl io "$udid" screenshot "$out/$name-$tag-$theme.png" >/dev/null
