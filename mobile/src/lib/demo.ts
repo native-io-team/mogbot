@@ -39,7 +39,7 @@ import { agentColorKeys } from './theme';
 import { WireFailure } from './transport';
 
 export const DEMO_SERVER_ID = 'demo';
-export const DEMO_MAC_NAME = 'Demo Mac';
+export const DEMO_MAC_NAME = 'Demo computer';
 
 /** What a sample agent says when asked for real work. */
 export const DEMO_REPLY =
