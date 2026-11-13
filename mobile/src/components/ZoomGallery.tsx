@@ -56,7 +56,16 @@ export interface ZoomPage {
   placeholder?: ImageSource | null;
   label: string;
   onError: () => void;
+  /** Fetch it again (over the relay it's a new download; direct, a reload). */
+  retry?: () => void;
 }
+
+/** A picture that takes longer than this shows a spinner (a cached one never flashes it). */
+const SLOW_MS = 400;
+/** No picture by then: say so, and keep trying. */
+const GIVE_UP_MS = 20_000;
+/** A picture that couldn't load is tried again this often while it's shown. */
+const RETRY_MS = 5_000;
 
 const TIMING = { duration: 220 };
 const SPRING = { damping: 22, stiffness: 240 };
@@ -81,6 +90,7 @@ export function ZoomGallery({
   onIndex,
   onClose,
   overlay,
+  renderState,
 }: {
   pages: readonly ZoomPage[];
   start: number;
@@ -90,6 +100,8 @@ export function ZoomGallery({
   onClose: () => void;
   /** Drawn over the picture; a tap hides it, a pull to close fades it. */
   overlay?: ReactNode;
+  /** Over a picture still coming (a spinner) or that didn't load (`failed`). */
+  renderState?: (failed: boolean) => ReactNode;
 }) {
   const count = pages.length;
   const [index, setIndex] = useState(start);
@@ -375,6 +387,7 @@ export function ZoomGallery({
                   y={y}
                   drop={drop}
                   onNatural={(size) => natural(i, size)}
+                  renderState={renderState}
                 />
               )
             )}
@@ -401,6 +414,7 @@ function Page({
   y,
   drop,
   onNatural,
+  renderState,
 }: {
   page: ZoomPage;
   i: number;
@@ -412,6 +426,7 @@ function Page({
   y: SharedValue<number>;
   drop: SharedValue<number>;
   onNatural: (size: Size) => void;
+  renderState?: (failed: boolean) => ReactNode;
 }) {
   const style = useAnimatedStyle(() => {
     if (at.get() !== i) return { transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }] };
@@ -428,31 +443,80 @@ function Page({
       ],
     };
   });
+  const uri = page.source && 'uri' in page.source ? page.source.uri : undefined;
+  // Loaded, failed, slow and the try count, kept by address: a picture that
+  // arrives over the relay later (a new address) starts afresh.
+  const [loadedUri, setLoadedUri] = useState<string | null>(null);
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  // The address (and try) that has been loading a while, and the one that gave up.
+  const waitKey = `${uri ?? 'pending'}#${attempt}`;
+  const [slowOn, setSlowOn] = useState<string | null>(null);
+  const [lateOn, setLateOn] = useState<string | null>(null);
+  const loaded = !!uri && loadedUri === uri;
+  const slow = slowOn === waitKey;
+  // No source at all (no link to the computer, or the relay gave up) is a failure too.
+  const failed = !page.source || (!!uri && failedUri === uri) || lateOn === waitKey;
+  useEffect(() => {
+    if (loaded) return;
+    const s = setTimeout(() => setSlowOn(waitKey), SLOW_MS);
+    const l = setTimeout(() => setLateOn(waitKey), GIVE_UP_MS);
+    return () => {
+      clearTimeout(s);
+      clearTimeout(l);
+    };
+  }, [waitKey, loaded]);
+  // Never black for good: a picture that failed is fetched again while it's on screen.
+  const retry = useRef(page.retry);
+  useEffect(() => {
+    retry.current = page.retry;
+  });
+  useEffect(() => {
+    if (!failed || loaded) return;
+    const t = setTimeout(() => {
+      setFailedUri(null);
+      retry.current?.();
+      setAttempt((a) => a + 1);
+    }, RETRY_MS);
+    return () => clearTimeout(t);
+  }, [failed, loaded, attempt]);
   return (
     <Animated.View
       style={[styles.page, { left: i * width, width, height }, style]}
       testID="viewer-page"
       accessibilityLabel={page.label}
     >
-      <Image
-        source={page.source}
-        placeholder={page.placeholder ?? undefined}
-        placeholderContentFit="contain"
-        style={{ width, height }}
-        contentFit="contain"
-        // Decoded straight at the screen's size: the size it's drawn at
-        // anyway (expo-image downscales to the view), without first holding
-        // the whole photo in memory. A 48 MP photo is ~190 MB decoded, and the
-        // page beside it loads too; together they could get the app killed.
-        enforceEarlyResizing
-        transition={150}
-        recyclingKey={page.key}
-        onLoad={(e) => {
-          const { width: w, height: h } = e.source;
-          if (w && h) onNatural({ width: w, height: h });
-        }}
-        onError={page.onError}
-      />
+      {page.source && (
+        <Image
+          key={attempt}
+          source={page.source}
+          placeholder={page.placeholder ?? undefined}
+          placeholderContentFit="contain"
+          style={{ width, height }}
+          contentFit="contain"
+          // Decoded straight at the screen's size: the size it's drawn at
+          // anyway (expo-image downscales to the view), without first holding
+          // the whole photo in memory. A 48 MP photo is ~190 MB decoded, and the
+          // page beside it loads too; together they could get the app killed.
+          enforceEarlyResizing
+          transition={150}
+          recyclingKey={page.key}
+          onLoad={(e) => {
+            if (uri) setLoadedUri(uri);
+            const { width: w, height: h } = e.source;
+            if (w && h) onNatural({ width: w, height: h });
+          }}
+          onError={() => {
+            if (uri) setFailedUri(uri);
+            page.onError();
+          }}
+        />
+      )}
+      {!loaded && (slow || failed) && renderState && (
+        <View style={styles.state} pointerEvents="none" testID="viewer-page-state">
+          {renderState(failed)}
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -460,4 +524,5 @@ function Page({
 const styles = StyleSheet.create({
   strip: { position: 'absolute', top: 0, left: 0 },
   page: { position: 'absolute', top: 0 },
+  state: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
 });

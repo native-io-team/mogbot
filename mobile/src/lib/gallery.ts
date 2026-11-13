@@ -48,9 +48,17 @@ export function getGallery(id: string | undefined): GalleryImage[] | undefined {
 export function viewerParams(
   gallery: readonly GalleryImage[],
   agentId: string,
-  file: { path: string; name: string; mime: string }
+  file: { path: string; name: string; mime: string },
+  /** The width the chat drew it at, so the viewer opens on that same thumbnail. */
+  thumbWidth?: number
 ): Record<string, string> {
-  const base = { agentId, path: file.path, name: file.name, mime: file.mime };
+  const base: Record<string, string> = {
+    agentId,
+    path: file.path,
+    name: file.name,
+    mime: file.mime,
+  };
+  if (thumbWidth && thumbWidth > 0) base.thumb = String(Math.round(thumbWidth));
   const at = gallery.findIndex((g) => g.agentId === agentId && g.file.path === file.path);
   if (at < 0 || gallery.length < 2) return base;
   return { ...base, gallery: putGallery(gallery) };

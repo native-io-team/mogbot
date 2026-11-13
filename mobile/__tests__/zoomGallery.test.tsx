@@ -21,7 +21,9 @@ jest.mock('react-native-worklets', () =>
 /** Every number the viewer put in a shared value: what its transforms are drawn from. */
 const mockNumbersSet: number[] = [];
 jest.mock('react-native-reanimated', () => {
-  const base = jest.requireActual<typeof import('./reanimatedStub')>('./reanimatedStub').reanimated();
+  const base = jest
+    .requireActual<typeof import('./reanimatedStub')>('./reanimatedStub')
+    .reanimated();
   const useShared = base.useSharedValue;
   const recorded = new WeakSet<object>();
   return {
@@ -209,5 +211,55 @@ describe('the gallery’s gestures', () => {
     expect(screen.queryByText('over')).toBeNull();
     await fire('viewer-tap', [{}]);
     expect(screen.getByText('over')).toBeTruthy();
+  });
+});
+
+describe('a picture that is slow or fails', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  const state = (failed: boolean) => <Text>{failed ? 'retrying' : 'loading'}</Text>;
+
+  it('shows a spinner while it comes, never plain black', async () => {
+    await render(
+      <GestureHandlerRootView>
+        <ZoomGallery
+          pages={[page('a')]}
+          start={0}
+          width={400}
+          height={800}
+          onIndex={jest.fn()}
+          onClose={jest.fn()}
+          renderState={state}
+        />
+      </GestureHandlerRootView>
+    );
+    expect(screen.queryByText('loading')).toBeNull();
+    await act(() => jest.advanceTimersByTime(500));
+    expect(screen.getByText('loading')).toBeTruthy();
+  });
+
+  it('with no source says so and tries again', async () => {
+    const retry = jest.fn();
+    const missing: ZoomPage = { ...page('a'), source: null, retry };
+    await render(
+      <GestureHandlerRootView>
+        <ZoomGallery
+          pages={[missing]}
+          start={0}
+          width={400}
+          height={800}
+          onIndex={jest.fn()}
+          onClose={jest.fn()}
+          renderState={state}
+        />
+      </GestureHandlerRootView>
+    );
+    await act(() => jest.advanceTimersByTime(500));
+    expect(screen.getByText('retrying')).toBeTruthy();
+    await act(() => jest.advanceTimersByTime(5_000));
+    expect(retry).toHaveBeenCalledTimes(1);
+    await act(() => jest.advanceTimersByTime(5_000));
+    expect(retry).toHaveBeenCalledTimes(2);
   });
 });

@@ -172,7 +172,7 @@ function Thumb({
         if (failed) return retry();
         router.push({
           pathname: '/viewer',
-          params: viewerParams(gallery, agentId, file),
+          params: viewerParams(gallery, agentId, file, file.localUri ? undefined : width),
         });
       }}
       style={({ pressed }) => [

@@ -21,11 +21,14 @@ import { T } from '../components/ui';
 import { ZoomGallery, type ZoomPage } from '../components/ZoomGallery';
 import { share } from '../lib/files';
 import { getGallery, viewerStart } from '../lib/gallery';
-import { attachmentSource, describeError, download } from '../lib/session';
+import { attachmentSource, describeError, download, retryAttachmentSource } from '../lib/session';
 import { useAttachmentSources } from '../lib/relayImages';
 import { IMAGE_UNAVAILABLE } from '../components/attachments';
 import { alpha, iconSize, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
+
+/** A picture that didn't load (it's fetched again every few seconds while shown). */
+export const PICTURE_RETRYING = 'This picture didn’t load. Trying again…';
 
 export default function Viewer() {
   const colors = useColors();
@@ -40,6 +43,7 @@ export default function Viewer() {
     mime: string;
     uri?: string;
     gallery?: string;
+    thumb?: string;
   }>();
   const { agentId, path, name, mime, uri } = params;
 
@@ -85,12 +89,17 @@ export default function Viewer() {
         },
       ];
     }
+    // The picture tapped starts from the very thumbnail the chat drew (already
+    // on the phone, so it shows at once); the others from a small one.
+    const tapped = Number(params.thumb) || 0;
     return images.map((image) => {
       const source = attachmentSource(image.agentId, image.file.path);
+      const own = tapped > 0 && image.agentId === agentId && image.file.path === path;
       return {
         key: image.key,
         source,
-        placeholder: attachmentSource(image.agentId, image.file.path, 232),
+        placeholder: attachmentSource(image.agentId, image.file.path, own ? tapped : 232),
+        retry: () => retryAttachmentSource(image.agentId, image.file.path),
         label: image.caption ?? image.file.name,
         // Over the relay a picture with no address yet is still coming, not broken.
         onError: () => {
@@ -99,7 +108,7 @@ export default function Viewer() {
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `fetched` is the redraw
-  }, [uri, name, images, fetched]);
+  }, [uri, name, images, fetched, params.thumb, agentId, path]);
 
   const doShare = async () => {
     setSharing(true);
@@ -185,6 +194,15 @@ export default function Viewer() {
         onIndex={turned}
         onClose={close}
         overlay={overlay}
+        renderState={(failed) =>
+          failed ? (
+            <T variant="small" color={colors.onMedia} style={styles.retrying}>
+              {PICTURE_RETRYING}
+            </T>
+          ) : (
+            <Spinner color={colors.onMedia} />
+          )
+        }
       />
       {/* A photo sits on black in either appearance, so the clock is white over it. */}
       <StatusBar style="light" />
@@ -206,6 +224,7 @@ export default function Viewer() {
 
 const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.black },
+  retrying: { textAlign: 'center', paddingHorizontal: space.xl },
   bar: {
     position: 'absolute',
     left: 0,

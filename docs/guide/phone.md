@@ -31,7 +31,9 @@ If both are set up, the phone tries the relay first and falls back to Tailscale.
 answer (Tailscale waking up on the phone, say), the phone tries the other at the same time after a
 few seconds and keeps whichever answers first.
 
-A picture that can't be fetched says "Image not available"; tap it to try again.
+A picture that can't be fetched says "Image not available"; tap it to try again. Opened full
+screen, a picture starts from the thumbnail you tapped, shows a spinner while the full one comes,
+and if it doesn't load says so and keeps trying while it's on screen.
 
 ## Pair your phone
 

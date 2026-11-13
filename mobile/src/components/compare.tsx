@@ -211,7 +211,7 @@ export function Compare({ agentId, pages }: { agentId: string; pages: ComparePag
   if (!page) return null;
   const both = !!page.before && !!page.after;
   const open = (file: Attachment) => {
-    router.push({ pathname: '/viewer', params: viewerParams(gallery, agentId, file) });
+    router.push({ pathname: '/viewer', params: viewerParams(gallery, agentId, file, width) });
   };
   return (
     <View
