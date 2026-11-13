@@ -18,10 +18,11 @@ import {
   syncQuickActions,
   type QuickTarget,
 } from '../lib/quickActions';
-import { answerFromNotification, boot, send, startDemo, watchLifecycle } from '../lib/session';
+import { adopt, answerFromNotification, boot, send, startDemo, watchLifecycle } from '../lib/session';
 import { answerOf, replyOf, requestIdOf } from '../lib/actionable';
-import { screenshotRoute } from '../lib/screenshots';
-import { useApp } from '../lib/store';
+import { screenshotPairLink, screenshotRoute } from '../lib/screenshots';
+import { pair, parseLink } from '../lib/pairing';
+import { getApp, useApp } from '../lib/store';
 import { sheet, useStackOptions } from '../lib/navigation';
 import { RootAccent, useAccent } from '../lib/accent';
 import { AppearanceProvider, useTheme } from '../lib/appearance';
@@ -226,11 +227,29 @@ export default function RootLayout() {
   useEffect(() => {
     if (!ready) return;
     const route = screenshotRoute();
-    if (!route || !startDemo()) return;
-    const frame = requestAnimationFrame(() => {
+    if (!route) return;
+    const open = () => {
       router.replace('/agents');
       if (route !== '/agents') setTimeout(() => router.push(route as never), 300);
-    });
+    };
+    const link = screenshotPairLink();
+    if (link) {
+      // The mock Mac (`pnpm mock --store …`): pair once, then open the screen.
+      let cancelled = false;
+      void (async () => {
+        if (!getApp().credentials) {
+          const parsed = parseLink(link);
+          if (!parsed) return;
+          await adopt(await pair(parsed));
+        }
+        if (!cancelled) setTimeout(open, 1200);
+      })().catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!startDemo()) return;
+    const frame = requestAnimationFrame(open);
     return () => cancelAnimationFrame(frame);
   }, [ready, router]);
   useEffect(() => {
