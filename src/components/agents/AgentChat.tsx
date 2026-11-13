@@ -67,7 +67,12 @@ import { RememberModal } from './AgentRemember';
 import { useArrivals, useFollowBottom, usePresence, useRecently } from './useAgentMotion';
 import { useRowAnchoring } from './useRowAnchoring';
 import { useDictation } from './useDictation';
-import { blockedCopy, dictationVocabulary, openPrivacySettings } from '../../lib/dictation';
+import {
+  blockedCopy,
+  dictationContext,
+  dictationVocabulary,
+  openPrivacySettings,
+} from '../../lib/dictation';
 import { listProjects } from '../../lib/project';
 import {
   toOutgoing,
@@ -608,10 +613,19 @@ export const AgentChat = memo(function AgentChat({
       ),
     []
   );
+  // The names pass reads the last few messages here (lib/dictation).
+  const getContext = useStableEvent(() =>
+    dictationContext(
+      (Array.isArray(messages) ? messages : [])
+        .filter((m) => m.kind === 'user' || m.kind === 'agent')
+        .map((m) => ({ who: m.kind === 'user' ? 'Me' : agent.name, text: m.text }))
+    )
+  );
   const dictation = useDictation({
     getDraft,
     setDraft,
     getVocabulary,
+    getContext,
     meterRef: micRef,
     enabled: engineReady,
   });
@@ -2312,7 +2326,11 @@ export const AgentChat = memo(function AgentChat({
                           <ConversationBar
                             role="alert"
                             state="waiting"
-                            title={blocked.message}
+                            title={
+                              dictation.preparing === null
+                                ? blocked.message
+                                : `${blocked.message} ${Math.round(dictation.preparing * 100)}%`
+                            }
                             actions={
                               <>
                                 <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>

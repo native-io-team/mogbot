@@ -11,6 +11,8 @@ const dictation = {
   toggle: () => {},
   cancel: () => {},
   onComposerKeyDown: () => false,
+    stopAndSend: (send: () => void) => send(),
+    undo: null,
 };
 
 function Chat({

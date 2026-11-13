@@ -50,7 +50,7 @@ import { ConversationBar, ConversationBars } from './AgentCard';
 import { tintMentionsIn, useMentionPicker } from './AgentMentions';
 import { useDictation } from './useDictation';
 import { ComposerAttachments } from './AgentAttachments';
-import { ListeningStatus, useFollowDictation } from './AgentComposer';
+import { ListeningStatus, sendDisabled, useFollowDictation } from './AgentComposer';
 import {
   toOutgoing,
   useComposerAttachments,
@@ -821,7 +821,8 @@ function RoomComposer({
       data-has-attachments={staged.length > 0 || undefined}
       onSubmit={(e) => {
         e.preventDefault();
-        onSend();
+        if (dictating) dictation.stopAndSend(() => onSend());
+        else onSend();
       }}
     >
       {mentionPicker.menu}
@@ -847,7 +848,7 @@ function RoomComposer({
         onSelect={mentionPicker.sync}
         onPaste={attachments.onPaste}
         onKeyDown={(e) => {
-          if (dictation.onComposerKeyDown(e)) return;
+          if (dictation.onComposerKeyDown(e, () => onSend())) return;
           if (mentionPicker.onKeyDown(e)) return;
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
@@ -871,8 +872,14 @@ function RoomComposer({
             title="Attach files, or paste or drop them here"
           />
         )}
-        {dictating && <ListeningStatus phase={dictation.phase} onCancel={dictation.cancel} />}
-        {!dictating && (
+        {(dictating || dictation.undo) && (
+          <ListeningStatus
+            phase={dictation.phase}
+            onCancel={dictation.cancel}
+            onUndo={dictation.undo}
+          />
+        )}
+        {!dictating && !dictation.undo && (
           <span className="agent-composer__hint agent-room__address" aria-live="polite">
             {toLine ??
               (canSend && to.kind === 'ask' && !asking && !mentionPicker.showing
@@ -889,7 +896,7 @@ function RoomComposer({
               className="agent-composer__mic"
               icon={<MicrophoneIcon size={14} />}
               onClick={dictation.toggle}
-              disabled={dictation.phase === 'finishing'}
+              disabled={dictation.phase === 'finishing' || dictation.phase === 'tidying'}
               aria-pressed={dictating}
               aria-label={dictating ? 'Stop dictating' : 'Dictate'}
               title={
@@ -911,10 +918,10 @@ function RoomComposer({
             <IconButton
               tabIndex={0}
               type="submit"
-              variant={canSend && !dictating ? 'primary' : 'secondary'}
+              variant={!sendDisabled(dictation.phase, canSend) ? 'primary' : 'secondary'}
               className="agent-composer__send"
               icon={<ArrowUpIcon size={14} />}
-              disabled={!canSend || dictating}
+              disabled={sendDisabled(dictation.phase, canSend)}
               aria-label="Send"
               title="Send"
             />

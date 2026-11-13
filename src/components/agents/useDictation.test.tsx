@@ -34,7 +34,13 @@ function setup(initial = 'Hi') {
       enabled: true,
     })
   );
-  return { hook, draft: () => draft };
+  return {
+    hook,
+    draft: () => draft,
+    type: (text: string) => {
+      draft = text;
+    },
+  };
 }
 
 describe('useDictation', () => {
@@ -118,6 +124,94 @@ describe('useDictation', () => {
     expect(stop).toHaveBeenCalledWith(7);
     expect(hook.result.current.phase).toBe('finishing');
     expect(draft()).toBe('Hi ship it');
+  });
+
+  it('Enter with a send stops, waits for the tidied words, then sends', async () => {
+    const { hook, draft } = setup();
+    await act(async () => {
+      hook.result.current.toggle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    act(() => emit({ kind: 'partial', session: 7, text: 'tell mogbert' }));
+    const send = vi.fn(() => draft());
+    act(() => {
+      hook.result.current.onComposerKeyDown(
+        { key: 'Enter', code: 'Enter', preventDefault: () => {} } as unknown as Parameters<
+          typeof hook.result.current.onComposerKeyDown
+        >[0],
+        send
+      );
+    });
+    expect(stop).toHaveBeenCalledWith(7);
+    act(() => emit({ kind: 'final', session: 7, text: 'tell mogbert' }));
+    act(() => emit({ kind: 'improving', session: 7 }));
+    expect(hook.result.current.phase).toBe('tidying');
+    expect(send).not.toHaveBeenCalled();
+    act(() =>
+      emit({
+        kind: 'improved',
+        session: 7,
+        text: 'Tell Mogbot.',
+        raw: 'Tell Mogbert.',
+        tidied: true,
+      })
+    );
+    act(() => emit({ kind: 'ended', session: 7, cancelled: false }));
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.results[0].value).toBe('Hi Tell Mogbot.');
+  });
+
+  it('the tidied words replace the live ones, and Undo puts them back', async () => {
+    const { hook, draft } = setup();
+    await act(async () => {
+      hook.result.current.toggle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    act(() => emit({ kind: 'final', session: 7, text: 'ask labiva' }));
+    act(() => hook.result.current.toggle());
+    act(() => emit({ kind: 'improving', session: 7 }));
+    act(() =>
+      emit({ kind: 'improved', session: 7, text: 'Ask Lobeva.', raw: 'Ask Labiva.', tidied: true })
+    );
+    act(() => emit({ kind: 'ended', session: 7, cancelled: false }));
+    expect(draft()).toBe('Hi Ask Lobeva.');
+    expect(hook.result.current.undo).not.toBeNull();
+    act(() => hook.result.current.undo?.());
+    expect(draft()).toBe('Hi ask labiva');
+    expect(hook.result.current.undo).toBeNull();
+  });
+
+  it('never writes the tidied words over what you typed meanwhile', async () => {
+    const { hook, draft, type } = setup();
+    await act(async () => {
+      hook.result.current.toggle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    act(() => emit({ kind: 'final', session: 7, text: 'ship it' }));
+    act(() => hook.result.current.toggle());
+    act(() => emit({ kind: 'improving', session: 7 }));
+    type('Something else entirely');
+    act(() =>
+      emit({ kind: 'improved', session: 7, text: 'Ship it.', raw: 'Ship it.', tidied: false })
+    );
+    act(() => emit({ kind: 'ended', session: 7, cancelled: false }));
+    expect(draft()).toBe('Something else entirely');
+    expect(hook.result.current.undo).toBeNull();
+  });
+
+  it('Esc while tidying throws the dictation away', async () => {
+    const { hook, draft } = setup();
+    await act(async () => {
+      hook.result.current.toggle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    act(() => emit({ kind: 'final', session: 7, text: 'nope' }));
+    act(() => hook.result.current.toggle());
+    act(() => emit({ kind: 'improving', session: 7 }));
+    act(() => hook.result.current.cancel());
+    expect(cancel).toHaveBeenCalledWith(7);
+    expect(draft()).toBe('Hi');
+    expect(hook.result.current.phase).toBe('idle');
   });
 
   it('gives the field back if the stop never reaches the Mac', async () => {

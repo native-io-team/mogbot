@@ -17,6 +17,10 @@ export type DictationBlock =
   | 'speechRecognition'
   | 'unavailable'
   | 'missingUsageDescription'
+  // Windows and Linux, first use: the speech model is being fetched (once).
+  | 'preparing'
+  // That fetch failed (no connection): Try again.
+  | 'modelFailed'
   // Not from the Mac's check: macOS's own Siri & Dictation switch is off,
   // which surfaces only once a session has started (`dictationOffError`).
   | 'dictationOff';
@@ -30,6 +34,8 @@ export type DictationEvent =
   | { kind: 'final'; session: number; text: string }
   | { kind: 'level'; session: number; level: number }
   | { kind: 'error'; session: number; message: string }
+  | { kind: 'improving'; session: number }
+  | { kind: 'improved'; session: number; text: string; raw: string; tidied: boolean }
   | { kind: 'ended'; session: number; cancelled: boolean };
 
 /**
@@ -42,8 +48,57 @@ export function dictationVocabulary(agentNames: string[], projectNames: string[]
   return [...new Set([...agentNames, ...spoken].filter(Boolean))];
 }
 
-export function startDictation(contextualStrings: string[]): Promise<DictationStart> {
-  return invoke<DictationStart>('start_dictation', { contextualStrings });
+/**
+ * Start listening. `context` is the conversation so far, for the pass that
+ * fixes names once it stops.
+ */
+export function startDictation(
+  contextualStrings: string[],
+  context?: string
+): Promise<DictationStart> {
+  return invoke<DictationStart>('start_dictation', { contextualStrings, context: context ?? null });
+}
+
+export const DICTATION_MODEL_EVENT = 'dictation://model';
+
+/** The speech model Whisper uses (574 MB, fetched once). */
+export interface DictationModelStatus {
+  ready: boolean;
+  downloading: boolean;
+  received: number;
+  total: number;
+  failed: boolean;
+}
+
+export function dictationModelStatus(): Promise<DictationModelStatus> {
+  return invoke<DictationModelStatus>('dictation_model_status');
+}
+
+export function downloadDictationModel(): Promise<DictationModelStatus> {
+  return invoke<DictationModelStatus>('dictation_model_download');
+}
+
+export function onDictationModel(
+  handler: (status: DictationModelStatus) => void
+): Promise<UnlistenFn> {
+  return listen<DictationModelStatus>(DICTATION_MODEL_EVENT, (e) => handler(e.payload));
+}
+
+/**
+ * The conversation's last few messages, newest last, as plain lines for the
+ * names pass: who said it and what. Capped; the backend trims it again.
+ */
+export function dictationContext(lines: { who: string; text: string }[], max = 2_000): string {
+  const out: string[] = [];
+  let size = 0;
+  for (let i = lines.length - 1; i >= 0 && out.length < 8; i--) {
+    const line = `${lines[i].who}: ${lines[i].text.replace(/\s+/g, ' ').trim()}`;
+    if (!lines[i].text.trim()) continue;
+    if (size + line.length > max) break;
+    out.unshift(line);
+    size += line.length;
+  }
+  return out.join('\n');
 }
 
 export function stopDictation(session: number): Promise<void> {
@@ -76,6 +131,15 @@ export function blockedCopy(reason: DictationBlock): { message: string; settings
       return { message: 'This build can’t ask for microphone access.' };
     case 'unavailable':
       return { message: `Speech recognition isn’t available on ${THIS_COMPUTER} right now.` };
+    case 'preparing':
+      return {
+        message: `Getting dictation ready on ${THIS_COMPUTER}: a one-time 574 MB download.`,
+      };
+    case 'modelFailed':
+      return {
+        message:
+          'Dictation couldn’t finish getting ready. Check the connection, then try the mic again.',
+      };
     case 'dictationOff':
       return {
         message: `Dictation is turned off on ${THIS_COMPUTER}. Turn it on in Keyboard settings, then try again.`,

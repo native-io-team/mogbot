@@ -292,7 +292,7 @@ export function QuickEntry() {
               className="agent-composer__mic"
               icon={<MicrophoneIcon size={14} />}
               onClick={dictation.toggle}
-              disabled={dictation.phase === 'finishing'}
+              disabled={dictation.phase === 'finishing' || dictation.phase === 'tidying'}
               aria-pressed={dictating}
               aria-label={dictating ? 'Stop dictating' : 'Dictate'}
               title={dictating ? 'Stop dictating (Esc to discard)' : 'Dictate (⌘⇧D)'}

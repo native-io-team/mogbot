@@ -27,6 +27,9 @@ packages=(
   libssl-dev
   libsoup-3.0-dev
   libjavascriptcoregtk-4.1-dev
+  # Dictation: the microphone (cpal → ALSA) and whisper.cpp's build.
+  libasound2-dev
+  cmake
   "$@"
 )
 

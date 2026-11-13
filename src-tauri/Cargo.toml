@@ -88,6 +88,9 @@ thiserror = "1"
 # Native clipboard read for Windows terminal paste (WebView2 gates keyboard
 # paste behind an async permission wait — see commands/clipboard.rs).
 arboard = "3"
+# Dictation everywhere: whisper.cpp on this computer (src/voice/). Metal on
+# macOS (below); CPU on Windows and Linux. Building it needs cmake.
+whisper-rs = "0.16"
 # Remote access renders an agent tab's screen as text for a phone to read
 # (src/remote_access/screen.rs).
 vt100 = "0.16"
@@ -134,6 +137,11 @@ required-features = ["browser-demo"]
 # platform feature it is keyring's in-memory mock; nothing touches a real store).
 keyring = { version = "3.6", default-features = false }
 
+# The microphone on Windows and Linux (macOS uses AVAudioEngine, which also
+# feeds Apple's live words: commands/dictation.rs). Linux needs ALSA's headers.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+cpal = "0.18"
+
 # Unix: signals for a process group (agents::procs stops a turn's whole tree).
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -156,7 +164,13 @@ keyring = { version = "3.6", default-features = false, features = ["sync-secret-
 # Keychain items created by the app itself (SecItemAdd), so their access list
 # names this app rather than /usr/bin/security (see the keychain module).
 security-framework = "3"
+whisper-rs = { version = "0.16", features = ["metal"] }
 core-foundation = "0.10"
 objc2 = "0.5"
 objc2-foundation = { version = "0.2", features = ["NSString", "NSGeometry", "NSData"] }
 block2 = "0.5"
+
+# whisper.cpp unoptimised takes minutes per dictation: always build it optimised.
+[profile.dev.package.whisper-rs-sys]
+opt-level = 3
+debug = false

@@ -42,6 +42,7 @@ pub mod static_server;
 pub mod types;
 pub mod user_chrome;
 pub mod utils;
+pub mod voice;
 pub mod watchdog;
 pub mod webview_scripts;
 
@@ -1157,6 +1158,8 @@ pub fn run() {
             commands::dictation::start_dictation,
             commands::dictation::stop_dictation,
             commands::dictation::cancel_dictation,
+            commands::dictation::dictation_model_status,
+            commands::dictation::dictation_model_download,
             // Code Browser
             commands::code::list_project_files,
             commands::code::read_project_file,

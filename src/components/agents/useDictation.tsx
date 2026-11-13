@@ -3,7 +3,13 @@
  *
  * Click the mic or press ⌘⇧D to toggle; hold ⌥Space in the composer to talk
  * while held. Escape cancels and puts back what was typed before. Spoken text
- * goes after whatever was already in the draft and is never sent on its own.
+ * goes after whatever was already in the draft. Enter (or Send) while
+ * listening stops and sends once the words are in.
+ *
+ * When it stops, the computer writes the words out again (Whisper, then a
+ * pass that knows the team's names: src-tauri/src/voice): "Tidying…", then
+ * the better words replace the live ones, with Undo for a few seconds. On
+ * Windows and Linux there are no live words, only that.
  *
  * The level meter is written straight to a CSS variable on `meterRef`, so the
  * ~15 updates a second don't re-render the conversation.
@@ -24,13 +30,25 @@ import {
   dictationOffError,
   joinDictation,
   onDictationEvent,
+  onDictationModel,
   startDictation,
   stopDictation,
   type DictationBlock,
 } from '../../lib/dictation';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 
-export type DictationPhase = 'idle' | 'starting' | 'listening' | 'finishing';
+export type DictationPhase = 'idle' | 'starting' | 'listening' | 'finishing' | 'tidying';
+
+/** How long Undo stays after the words were written out again. */
+export const UNDO_TIDY_MS = 8_000;
+
+/** The words before the better ones replaced them, while Undo is offered. */
+export interface TidyUndo {
+  /** The whole draft to put back. */
+  before: string;
+  /** The draft as the better words left it (Undo only while it still is). */
+  after: string;
+}
 
 interface Options {
   getDraft: () => string;
@@ -40,9 +58,18 @@ interface Options {
   getVocabulary: () => Promise<string[]>;
   meterRef: RefObject<HTMLElement | null>;
   enabled: boolean;
+  /** The conversation so far, for the names pass (read when it starts). */
+  getContext?: () => string;
 }
 
-export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enabled }: Options) {
+export function useDictation({
+  getDraft,
+  setDraft,
+  getVocabulary,
+  meterRef,
+  enabled,
+  getContext,
+}: Options) {
   const { showToast } = useOptionalToast();
   const [phase, setPhaseState] = useState<DictationPhase>('idle');
   const [blocked, setBlocked] = useState<DictationBlock | null>(null);
@@ -55,6 +82,12 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
   /** A stop or cancel asked for before the session id came back. */
   const pendingRef = useRef<'stop' | 'cancel' | null>(null);
   const holdingRef = useRef(false);
+  /** Send once this dictation has ended (Enter or Send while listening). */
+  const sendAfterRef = useRef<(() => void) | null>(null);
+  /** The draft the live words last left, so better words replace only those. */
+  const shownRef = useRef('');
+  const [undo, setUndo] = useState<TidyUndo | null>(null);
+  const [preparing, setPreparing] = useState<number | null>(null);
 
   const setPhase = useCallback((next: DictationPhase) => {
     phaseRef.current = next;
@@ -73,14 +106,33 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
       if (event.session !== sessionRef.current) return;
       switch (event.kind) {
         case 'partial':
-          setDraft(joinDictation(baseRef.current, event.text));
+          shownRef.current = joinDictation(baseRef.current, event.text);
+          setDraft(shownRef.current);
           break;
         case 'final':
           // A long dictation arrives as several segments; each final one
           // becomes part of what the next is appended to.
           baseRef.current = joinDictation(baseRef.current, event.text);
+          shownRef.current = baseRef.current;
           setDraft(baseRef.current);
           break;
+        case 'improving':
+          setLevel(0);
+          setPhase('tidying');
+          break;
+        case 'improved': {
+          // Only over what the live words left: never over your own typing.
+          const now = getDraft();
+          if (now !== shownRef.current) break;
+          const after = joinDictation(originalRef.current, event.text);
+          if (after === now) break;
+          setDraft(after);
+          // Undo puts back the live words, or Whisper's own when there were none.
+          const before =
+            now === originalRef.current ? joinDictation(originalRef.current, event.raw) : now;
+          if (before !== after) setUndo({ before, after });
+          break;
+        }
         case 'level':
           setLevel(event.level);
           break;
@@ -91,6 +143,7 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
         case 'ended':
           if (event.cancelled && phaseRef.current !== 'finishing') {
             setDraft(originalRef.current);
+            sendAfterRef.current = null;
           }
           sessionRef.current = null;
           holdingRef.current = false;
@@ -107,7 +160,52 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
       unlisten?.();
       if (sessionRef.current !== null) void cancelDictation(sessionRef.current);
     };
-  }, [setDraft, setLevel, setPhase, showToast]);
+  }, [getDraft, setDraft, setLevel, setPhase, showToast]);
+
+  // Enter or Send while listening: it goes once the words are in. After the
+  // phase is idle (an effect), so the chat's send sees dictation over.
+  useEffect(() => {
+    if (phase !== 'idle' || !sendAfterRef.current) return;
+    const send = sendAfterRef.current;
+    sendAfterRef.current = null;
+    setUndo(null);
+    send();
+  }, [phase]);
+
+  // Undo goes after a few seconds, or as soon as the draft is changed.
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), UNDO_TIDY_MS);
+    return () => clearTimeout(t);
+  }, [undo]);
+
+  // Windows and Linux wait for the speech model the first time: say how far.
+  useEffect(() => {
+    if (blocked !== 'preparing') return;
+    let alive = true;
+    let unlisten: (() => void) | undefined;
+    void onDictationModel((status) => {
+      if (!alive) return;
+      if (status.ready) {
+        setBlocked(null);
+        setPreparing(null);
+      } else if (status.failed && !status.downloading) {
+        setPreparing(null);
+        setBlocked('modelFailed');
+      } else {
+        setPreparing(status.total ? status.received / status.total : 0);
+      }
+    }).then((fn) => (alive ? (unlisten = fn) : fn()));
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
+  }, [blocked]);
+
+  const undoTidy = useCallback(() => {
+    if (undo && getDraft() === undo.after) setDraft(undo.before);
+    setUndo(null);
+  }, [undo, getDraft, setDraft]);
 
   const stop = useCallback(() => {
     holdingRef.current = false;
@@ -128,6 +226,7 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
 
   const cancel = useCallback(() => {
     holdingRef.current = false;
+    sendAfterRef.current = null;
     if (phaseRef.current === 'starting') pendingRef.current = 'cancel';
     const session = sessionRef.current;
     if (session === null) return;
@@ -140,13 +239,15 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
 
   const start = useCallback(async () => {
     if (!enabled || phaseRef.current !== 'idle') return;
-    originalRef.current = baseRef.current = getDraft();
+    originalRef.current = baseRef.current = shownRef.current = getDraft();
     pendingRef.current = null;
+    sendAfterRef.current = null;
     setBlocked(null);
+    setUndo(null);
     setPhase('starting');
     try {
       const vocabulary = await getVocabulary().catch(() => []);
-      const result = await startDictation(vocabulary);
+      const result = await startDictation(vocabulary, getContext?.());
       if (result.status === 'blocked') {
         setBlocked(result.reason);
         setPhase('idle');
@@ -162,16 +263,29 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
       setPhase('idle');
       showToast(formatCommandError(asCommandError(error)), 'error');
     }
-  }, [enabled, getDraft, getVocabulary, setPhase, stop, cancel, showToast]);
+  }, [enabled, getDraft, getVocabulary, getContext, setPhase, stop, cancel, showToast]);
+
+  /** Stop listening and send once the words are in. */
+  const stopAndSend = useCallback(
+    (send: () => void) => {
+      if (phaseRef.current === 'idle') return send();
+      sendAfterRef.current = send;
+      if (phaseRef.current === 'listening' || phaseRef.current === 'starting') stop();
+    },
+    [stop]
+  );
 
   const toggle = useCallback(() => {
     if (phaseRef.current === 'idle') void start();
     else stop();
   }, [start, stop]);
 
-  /** Composer keys: hold ⌥Space to talk, Escape to cancel. True if handled. */
+  /**
+   * Composer keys: hold ⌥Space to talk, Escape to cancel, Enter to stop and
+   * send (with `send`; without, Enter only stops). True if handled.
+   */
   const onComposerKeyDown = useCallback(
-    (e: KeyboardEvent) => {
+    (e: KeyboardEvent, send?: () => void) => {
       if (e.code === 'Space' && e.altKey && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         if (!e.repeat && phaseRef.current === 'idle') {
@@ -185,17 +299,17 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
         cancel();
         return true;
       }
-      // Enter while listening finishes the dictation rather than doing
-      // nothing: the last words are still settling, so it never sends. The
-      // field takes focus when it ends, and the next Enter sends.
+      // Enter while listening stops and sends once the last words are in
+      // (and written out again). Shift+Enter only stops.
       if (e.key === 'Enter' && phaseRef.current !== 'idle') {
         e.preventDefault();
-        stop();
+        if (send && !e.shiftKey) stopAndSend(send);
+        else stop();
         return true;
       }
       return false;
     },
-    [start, stop, cancel]
+    [start, stop, cancel, stopAndSend]
   );
 
   // Releasing either key of the hold ends it; ⌘⇧D toggles from anywhere in
@@ -244,9 +358,14 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
   return {
     phase,
     blocked,
+    /** Windows and Linux, first use: how much of the speech model is here (0..1). */
+    preparing,
     dismissBlocked: () => setBlocked(null),
     toggle,
     cancel,
+    stopAndSend,
     onComposerKeyDown,
+    /** Offered for a few seconds after better words replaced the live ones. */
+    undo: undo ? undoTidy : null,
   };
 }
