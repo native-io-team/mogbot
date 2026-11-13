@@ -24,7 +24,13 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 
 type Base = (id: string, name: string, role: string, color: string, extra: Partial<Agent>) => Agent;
-type Attach = (agentId: string, messageId: string, name: string, mime: string, bytes: Buffer) => Attachment;
+type Attach = (
+  agentId: string,
+  messageId: string,
+  name: string,
+  mime: string,
+  bytes: Buffer
+) => Attachment;
 
 const picture = () => readFileSync(path.join(__dirname, 'store', 'ostler-licence.png'));
 
@@ -225,7 +231,11 @@ export function storeMessages(
       result: {
         items: [
           { kind: 'file', file: live, label: 'ostlertype.com/studio-licence' },
-          { kind: 'link', url: 'https://ostlertype.com/studio-licence', label: 'ostlertype.com/studio-licence' },
+          {
+            kind: 'link',
+            url: 'https://ostlertype.com/studio-licence',
+            label: 'ostlertype.com/studio-licence',
+          },
         ],
         id: 'res_licence_live',
         version: 1,
@@ -346,5 +356,31 @@ export function storeUsageAccounts(now: number) {
       spent: [],
       check,
     },
+  ];
+}
+
+/** `agents.accounts` for the same four, in the order turns use them. */
+export function storeWallet() {
+  const row = (
+    engine: 'claude' | 'codex',
+    id: string,
+    name: string,
+    thisMac: boolean,
+    plan: string
+  ) => ({
+    id,
+    engine,
+    name,
+    named: true,
+    thisMac,
+    signedIn: true,
+    plan,
+    out: false,
+  });
+  return [
+    row('claude', 'default', 'Studio', true, 'Max'),
+    row('claude', 'c2', 'Personal', false, 'Pro'),
+    row('codex', 'default', 'Work', true, 'pro'),
+    row('codex', 'x2', 'Personal', false, 'plus'),
   ];
 }

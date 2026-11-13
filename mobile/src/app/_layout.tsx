@@ -18,7 +18,14 @@ import {
   syncQuickActions,
   type QuickTarget,
 } from '../lib/quickActions';
-import { adopt, answerFromNotification, boot, send, startDemo, watchLifecycle } from '../lib/session';
+import {
+  adopt,
+  answerFromNotification,
+  boot,
+  send,
+  startDemo,
+  watchLifecycle,
+} from '../lib/session';
 import { answerOf, replyOf, requestIdOf } from '../lib/actionable';
 import { screenshotPairLink, screenshotRoute } from '../lib/screenshots';
 import { pair, parseLink } from '../lib/pairing';

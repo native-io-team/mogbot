@@ -106,6 +106,7 @@ import {
   storeAgents,
   storeMessages,
   storeUsageAccounts,
+  storeWallet,
   type StoreStage,
 } from './mock-store';
 import { addTortureAccount, tortureAction } from './mock-torture';
@@ -1403,7 +1404,13 @@ export function createMockServer(opts: MockOptions = {}) {
     const many = Array.from({ length: 10 }, (_, i) => ({
       kind: 'file' as const,
       label: `Screen ${i + 1}`,
-      file: attach('design', 'design_vis_many', `screen-${i + 1}.png`, 'image/png', cafePage((i % 3) as 0 | 1 | 2, i % 2 === 0)),
+      file: attach(
+        'design',
+        'design_vis_many',
+        `screen-${i + 1}.png`,
+        'image/png',
+        cafePage((i % 3) as 0 | 1 | 2, i % 2 === 0)
+      ),
     }));
     design.push({
       id: 'design_vis_many',
@@ -1412,7 +1419,13 @@ export function createMockServer(opts: MockOptions = {}) {
       kind: 'agent',
       text: 'Ten screens for the direction.',
       attachments: many.map((i) => i.file),
-      result: { id: 'res_many', version: 1, title: 'Ten screens', summary: 'Every screen of the direction, desk and phone.', items: many },
+      result: {
+        id: 'res_many',
+        version: 1,
+        title: 'Ten screens',
+        summary: 'Every screen of the direction, desk and phone.',
+        items: many,
+      },
     });
     design.sort((a, b) => a.ts - b.ts);
     const chief = agent('chief')!;
@@ -2404,50 +2417,52 @@ export function createMockServer(opts: MockOptions = {}) {
   // The phone's own changes to the usage mode and the spare-capacity list.
   let usageMode: UsageInventory['mode'] | null = null;
   const spareAdded: UsageInventory['backlog'] = [];
-  let walletAccounts: UsageAccount[] = opts.probe
-    ? probeAccounts()
-    : [
-        {
-          id: 'default',
-          engine: 'claude',
-          name: 'sam@example.com',
-          named: false,
-          thisMac: true,
-          signedIn: true,
-          email: 'sam@example.com',
-          plan: 'Max',
-          out: false,
-        },
-        {
-          id: 'w1',
-          engine: 'claude',
-          name: 'Work',
-          named: true,
-          thisMac: false,
-          signedIn: true,
-          email: 'me@work.example',
-          plan: 'max',
-          out: false,
-        },
-        {
-          id: 'p1',
-          engine: 'claude',
-          name: 'Personal',
-          named: true,
-          thisMac: false,
-          signedIn: true,
-          out: false,
-        },
-        {
-          id: 'default',
-          engine: 'codex',
-          name: 'Signed in on this Mac',
-          named: false,
-          thisMac: true,
-          signedIn: true,
-          out: false,
-        },
-      ];
+  let walletAccounts: UsageAccount[] = opts.store
+    ? storeWallet()
+    : opts.probe
+      ? probeAccounts()
+      : [
+          {
+            id: 'default',
+            engine: 'claude',
+            name: 'sam@example.com',
+            named: false,
+            thisMac: true,
+            signedIn: true,
+            email: 'sam@example.com',
+            plan: 'Max',
+            out: false,
+          },
+          {
+            id: 'w1',
+            engine: 'claude',
+            name: 'Work',
+            named: true,
+            thisMac: false,
+            signedIn: true,
+            email: 'me@work.example',
+            plan: 'max',
+            out: false,
+          },
+          {
+            id: 'p1',
+            engine: 'claude',
+            name: 'Personal',
+            named: true,
+            thisMac: false,
+            signedIn: true,
+            out: false,
+          },
+          {
+            id: 'default',
+            engine: 'codex',
+            name: 'Signed in on this Mac',
+            named: false,
+            thisMac: true,
+            signedIn: true,
+            out: false,
+          },
+        ];
   // Conversations (`agents/conversations.rs`): every agent has its first;
   // Acme Site also has a second, about the opening hours, its own lines in it.
   const convs = new Map<string, { current: string; items: ConversationView[] }>();
@@ -3690,10 +3705,18 @@ export function createMockServer(opts: MockOptions = {}) {
     // The plan as Claude Code reports it, in the shape of the real reading,
     // with resets from now so every window is current (the header's ring, Usage).
     'agents.quota': () =>
-      [
-        { engine: 'claude', windows: claudeWindows(Date.now()) },
-        ...real.agentsQuota.filter((q) => q.engine === 'codex'),
-      ] satisfies Quota[],
+      opts.store
+        ? (() => {
+            const [studio, , work] = storeUsageAccounts(Date.now());
+            return [
+              { engine: 'claude', windows: studio.windows },
+              { engine: 'codex', windows: work.windows },
+            ] satisfies Quota[];
+          })()
+        : ([
+            { engine: 'claude', windows: claudeWindows(Date.now()) },
+            ...real.agentsQuota.filter((q) => q.engine === 'codex'),
+          ] satisfies Quota[]),
     // As `agents::defaults::check` does: a ready engine, a model it offers.
     'agents.setDefaults': (p) => {
       const keys = Object.keys(p);
