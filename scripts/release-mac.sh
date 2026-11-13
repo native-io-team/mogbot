@@ -9,6 +9,12 @@
 #   ./scripts/release-mac.sh --skip-notarize  # a dry run: everything but Apple's notarization
 #   ./scripts/release-mac.sh --publish        # ...then publish it (below). Never with --skip-notarize
 #   ./scripts/release-mac.sh --allow-red-ci   # go on although CI on main isn't green (loudly)
+#   ./scripts/release-mac.sh --skip-build --publish --mac-only   # publish without Windows/Linux (loudly)
+#
+# --publish also attaches the Windows and Linux installers from the
+# build-installers.yml run for v<version> (pushing the tag starts it) and adds
+# their entries to latest.json, so those copies see the update too. It refuses
+# while that run is missing, unfinished or red, unless --mac-only.
 #
 # A full build and every --publish first check CI on main (the source repo,
 # origin, or MOGBOT_CI_REPO): the latest completed run for this commit, else
@@ -17,6 +23,9 @@
 # Environment (all optional):
 #   MOGBOT_SIGNING_IDENTITY   default "Developer ID Application: Galluzzo Conseil Inc. (N2VB8A88LB)"
 #   MOGBOT_NOTARY_PROFILE     default "mogbot-notary" (a notarytool keychain profile)
+#   MOGBOT_NOTARY_KEY_ID, MOGBOT_NOTARY_ISSUER, MOGBOT_NOTARY_KEY
+#                             an App Store Connect API key instead of the profile
+#                             (key file default ~/.appstoreconnect/private_keys/AuthKey_<id>.p8)
 #   MOGBOT_UPDATER_KEY        the updater's private key, default ~/.tauri/<slug>-updater.key
 #   CARGO_TARGET_DIR          where cargo builds; everything lands in $CARGO_TARGET_DIR/release-mac/
 #
@@ -57,6 +66,7 @@ SKIP_BUILD=0
 SKIP_NOTARIZE=0
 PUBLISH=0
 ALLOW_RED_CI=0
+MAC_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --universal) UNIVERSAL=1 ;;
@@ -64,6 +74,7 @@ for arg in "$@"; do
     --skip-notarize) SKIP_NOTARIZE=1 ;;
     --publish) PUBLISH=1 ;;
     --allow-red-ci) ALLOW_RED_CI=1 ;;
+    --mac-only) MAC_ONLY=1 ;;
     -h|--help) sed -n 2,43p "$0"; exit 0 ;;
     *) die "unknown argument: $arg (try --help)" ;;
   esac
@@ -76,6 +87,14 @@ fi
 
 IDENTITY="${MOGBOT_SIGNING_IDENTITY:-Developer ID Application: Galluzzo Conseil Inc. (N2VB8A88LB)}"
 NOTARY_PROFILE="${MOGBOT_NOTARY_PROFILE:-mogbot-notary}"
+if [ -n "${MOGBOT_NOTARY_KEY_ID:-}" ] && [ -n "${MOGBOT_NOTARY_ISSUER:-}" ]; then
+  NOTARY_AUTH=(--key "${MOGBOT_NOTARY_KEY:-$HOME/.appstoreconnect/private_keys/AuthKey_${MOGBOT_NOTARY_KEY_ID}.p8}"
+    --key-id "$MOGBOT_NOTARY_KEY_ID" --issuer "$MOGBOT_NOTARY_ISSUER")
+  NOTARY_NAME="API key $MOGBOT_NOTARY_KEY_ID"
+else
+  NOTARY_AUTH=(--keychain-profile "$NOTARY_PROFILE")
+  NOTARY_NAME="profile '$NOTARY_PROFILE'"
+fi
 TEAM_ID="$(sed -n 's/.*(\([A-Z0-9]\{10\}\))$/\1/p' <<<"$IDENTITY")"
 
 # The Memberstack Inc. Developer ID on this Mac belongs to another company
@@ -218,17 +237,33 @@ if [ "$PUBLISH" = 1 ]; then
   gh auth status >/dev/null 2>&1 || die "gh isn't signed in (gh auth login)"
   gh repo view "$RELEASES_REPO" >/dev/null 2>&1 || die "this gh account can't see $RELEASES_REPO"
   ok "will publish to $RELEASES_REPO as $TAG"
+  if [ "$MAC_ONLY" = 1 ]; then
+    warn "${BOLD}--mac-only:${NC} Windows and Linux copies won't see $TAG"
+  else
+    # The installers for this tag, from build-installers.yml (pushing the tag
+    # starts it). Checked before anything is built or sent to Apple.
+    SRC_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+    INSTALLERS_RUN="$(gh run list -R "$SRC_REPO" --workflow build-installers.yml --branch "$TAG" -L 1 \
+      --json databaseId,status,conclusion -q '.[0] | "\(.databaseId) \(.status) \(.conclusion)"' 2>/dev/null || true)"
+    read -r INSTALLERS_ID INSTALLERS_STATUS INSTALLERS_CONCLUSION <<<"$INSTALLERS_RUN"
+    [ -n "${INSTALLERS_ID:-}" ] || die "no build-installers run for $TAG: push the tag first (or --mac-only)"
+    [ "$INSTALLERS_STATUS" = completed ] \
+      || die "the Windows/Linux installers for $TAG are still building (run $INSTALLERS_ID): publish when it's done"
+    [ "$INSTALLERS_CONCLUSION" = success ] \
+      || die "the Windows/Linux installer run $INSTALLERS_ID for $TAG ended '$INSTALLERS_CONCLUSION' (or --mac-only)"
+    ok "Windows/Linux installers: run $INSTALLERS_ID"
+  fi
 fi
 
 if [ "$SKIP_NOTARIZE" = 1 ]; then
   NOTARIZE=0
   warn "--skip-notarize: a dry run. Nothing it makes is fit to give anyone."
-elif xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+elif xcrun notarytool history "${NOTARY_AUTH[@]}" >/dev/null 2>&1; then
   NOTARIZE=1
-  ok "notary profile '$NOTARY_PROFILE' works"
+  ok "notary $NOTARY_NAME works"
 else
   NOTARIZE=0
-  warn "no working notary profile '$NOTARY_PROFILE': this run builds and signs only."
+  warn "no working notary $NOTARY_NAME: this run builds and signs only."
   warn "  To notarize, run once:  xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <apple id> --team-id ${TEAM_ID:-<team>}"
   warn "  (the password it asks for is an app-specific password from account.apple.com)"
   [ "$PUBLISH" = 1 ] && die "--publish needs notarization"
@@ -337,10 +372,10 @@ elif [ "$NOTARIZE" = 1 ]; then
   mkdir -p "$OUT_DIR"
   rm -f "$ZIP"
   ditto -c -k --keepParent "$APP_PATH" "$ZIP"
-  xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json | tee "$OUT_DIR/notary-app.json"
+  xcrun notarytool submit "$ZIP" "${NOTARY_AUTH[@]}" --wait --output-format json | tee "$OUT_DIR/notary-app.json"
   rm -f "$ZIP"
   grep -q '"status" *: *"Accepted"' "$OUT_DIR/notary-app.json" \
-    || die "Apple did not accept the app. Log: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE"
+    || die "Apple did not accept the app. Log: xcrun notarytool log <id> ${NOTARY_AUTH[*]}"
   xcrun stapler staple "$APP_PATH"
   ok "app notarized and stapled"
 fi
@@ -420,9 +455,9 @@ ok "dmg: $DMG_PATH"
 
 if [ "$NOTARIZE" = 1 ]; then
   say "Notarizing the DMG"
-  xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json | tee "$OUT_DIR/notary-dmg.json"
+  xcrun notarytool submit "$DMG_PATH" "${NOTARY_AUTH[@]}" --wait --output-format json | tee "$OUT_DIR/notary-dmg.json"
   grep -q '"status" *: *"Accepted"' "$OUT_DIR/notary-dmg.json" \
-    || die "Apple did not accept the DMG. Log: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE"
+    || die "Apple did not accept the DMG. Log: xcrun notarytool log <id> ${NOTARY_AUTH[*]}"
   xcrun stapler staple "$DMG_PATH"
   ok "DMG notarized and stapled"
 fi
@@ -475,6 +510,16 @@ say "Publishing $TAG to $RELEASES_REPO"
 STABLE_DMG="$(dirname "$DMG_PATH")/$APP_NAME.dmg"
 cp -f "$DMG_PATH" "$STABLE_DMG"
 ASSETS=("$DMG_PATH" "$DMG_PATH.sha256" "$STABLE_DMG" "$UPDATER_PATH" "$UPDATER_PATH.sig")
+if [ "$MAC_ONLY" = 0 ]; then
+  INSTALLERS_DIR="$OUT_DIR/installers-$VERSION"
+  rm -rf "$INSTALLERS_DIR"
+  gh run download "$INSTALLERS_ID" -R "$SRC_REPO" -D "$INSTALLERS_DIR" \
+    || die "couldn't download the installers from run $INSTALLERS_ID"
+  node scripts/latest-json-add-platforms.mjs --require-all "$LATEST_JSON" "$INSTALLERS_DIR" "$TAG" \
+    || die "latest.json would miss a platform: the run had no signed update bundle for it"
+  while IFS= read -r f; do ASSETS+=("$f"); done < <(find "$INSTALLERS_DIR" -type f | sort)
+  ok "latest.json: darwin, windows and linux"
+fi
 if gh release view "$TAG" -R "$RELEASES_REPO" >/dev/null 2>&1; then
   # Replacing a release's files: the bundle and its signature go up before
   # the manifest that names them.
