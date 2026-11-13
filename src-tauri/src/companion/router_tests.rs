@@ -2055,3 +2055,119 @@ async fn a_failed_send_can_be_retried() {
     let ok = cache.once("k".into(), 1, || async { Ok(json!(1)) }).await;
     assert_eq!(ok.unwrap(), json!(1));
 }
+
+#[tokio::test]
+async fn a_dictation_is_written_out_again_and_its_audio_is_gone_after() {
+    use crate::companion::testkit::{dictation_wav, Stub, AGENT};
+    let (c, stub) = Stub::companion();
+    let me = caller("dev_a");
+    let blob = c
+        .blobs
+        .put(
+            "dev_a",
+            "Dictation.wav",
+            Some("audio/wav"),
+            &dictation_wav(1.0),
+            now_ms(),
+        )
+        .unwrap();
+    let path = blob.path.clone();
+    let said = dispatch(
+        &c,
+        &me,
+        "dictation.transcribe",
+        json!({ "blob": blob.id, "agentId": AGENT }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(said["text"], "Ask Priya to send the Acme invoice today.");
+    assert_eq!(said["tidied"], true);
+    assert!(said.get("preparing").is_none());
+    // 16 kHz mono in, the agent named; the audio never kept.
+    assert_eq!(
+        stub.transcribed.lock().unwrap().as_slice(),
+        &[(16_000, Some(AGENT.to_string()), None)]
+    );
+    assert!(!path.exists());
+    assert!(c.blobs.get("dev_a", &blob.id, now_ms()).is_none());
+    // Audited, never with the words.
+    let audit = stub.audited();
+    let line = audit
+        .iter()
+        .find(|a| a.1 == "dictation.transcribe")
+        .unwrap();
+    assert_eq!(line.2, "wrote out a dictation");
+    assert!(super::super::wire::MAC_FEATURES.contains(&"dictation.transcribe"));
+}
+
+#[tokio::test]
+async fn a_dictation_without_the_model_says_preparing_and_bad_audio_is_refused() {
+    use crate::companion::testkit::{dictation_wav, Stub};
+    use std::sync::atomic::Ordering;
+    let (c, stub) = Stub::companion();
+    let me = caller("dev_a");
+    stub.model_missing.store(true, Ordering::SeqCst);
+    let blob = c
+        .blobs
+        .put(
+            "dev_a",
+            "Dictation.wav",
+            None,
+            &dictation_wav(0.5),
+            now_ms(),
+        )
+        .unwrap();
+    let said = dispatch(
+        &c,
+        &me,
+        "dictation.transcribe",
+        json!({ "blob": blob.id, "roomId": "r1", "agentId": "" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(said, json!({ "text": null, "preparing": true }));
+    assert_eq!(
+        stub.transcribed.lock().unwrap().last().unwrap(),
+        &(8_000, None, Some("r1".to_string()))
+    );
+
+    // Not a WAV: refused, and still not kept.
+    let junk = c
+        .blobs
+        .put("dev_a", "x.wav", None, b"nope", now_ms())
+        .unwrap();
+    let refused = dispatch(&c, &me, "dictation.transcribe", json!({ "blob": junk.id }))
+        .await
+        .unwrap_err();
+    assert!(refused.summary().contains("WAV"));
+    assert!(c.blobs.get("dev_a", &junk.id, now_ms()).is_none());
+
+    // Another phone's recording isn't this one's to write out.
+    let theirs = c
+        .blobs
+        .put(
+            "dev_b",
+            "Dictation.wav",
+            None,
+            &dictation_wav(0.5),
+            now_ms(),
+        )
+        .unwrap();
+    assert!(dispatch(
+        &c,
+        &me,
+        "dictation.transcribe",
+        json!({ "blob": theirs.id })
+    )
+    .await
+    .is_err());
+    assert!(c.blobs.get("dev_b", &theirs.id, now_ms()).is_some());
+}
+
+#[test]
+fn dictation_has_its_own_longer_deadline_under_the_phones() {
+    use crate::companion::server::{deadline_for, REQUEST_DEADLINE};
+    assert!(deadline_for("dictation.transcribe") > REQUEST_DEADLINE);
+    assert!(deadline_for("dictation.transcribe") < std::time::Duration::from_secs(30));
+    assert_eq!(deadline_for("agents.overview"), REQUEST_DEADLINE);
+}

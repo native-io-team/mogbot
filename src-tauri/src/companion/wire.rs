@@ -429,6 +429,10 @@ pub const MAC_FEATURE_STEPS: &str = "routines.steps";
 /// (a reply pasted back from the old assistant, read on the Mac, ending on the review card).
 pub const MAC_FEATURE_IMPORT_EXPORT: &str = "import.export";
 
+/// `welcome.features`: `dictation.transcribe` writes the phone's dictation
+/// out again on this computer (Whisper, then the names pass), as the desk's.
+pub const MAC_FEATURE_DICTATION: &str = "dictation.transcribe";
+
 /// Everything `welcome.features` lists.
 pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_REVISE_RESULTS,
@@ -449,6 +453,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_STEPS,
     MAC_FEATURE_IMPORT_EXPORT,
     MAC_FEATURE_ALERTS,
+    MAC_FEATURE_DICTATION,
 ];
 
 /// What one connected app said it shows (`hello.features`).

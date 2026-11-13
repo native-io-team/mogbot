@@ -1576,6 +1576,41 @@ const LIVE = [
       await sleep(800);
     },
   },
+  // The computer writes it out again (dictation.transcribe; the mock answers in 1 s).
+  {
+    name: 'dictation-tidying',
+    route: '/chat/fin',
+    ready: 'Finance',
+    act: async (page) => {
+      await page.clickLabel('Dictate');
+      await sleep(5500);
+      await page.clickLabel('Stop dictating');
+      await sleep(250);
+    },
+    check:
+      'Stopped, the computer writing it out again: the card stays with the words, “Tidying…” over the field, × and Send; Stop dimmed',
+    after: async (page) => {
+      await page.clickLabel('Cancel dictation').catch(() => {});
+      await sleep(600);
+    },
+  },
+  {
+    name: 'dictation-tidied',
+    route: '/chat/fin',
+    ready: 'Finance',
+    act: async (page) => {
+      await page.clickLabel('Dictate');
+      await sleep(5500);
+      await page.clickLabel('Stop dictating');
+      await sleep(2500);
+    },
+    check:
+      'The better words in the field (“…for Thursday and send it to me first?”, no comma), “Tidied the names and words” with Undo over it',
+    after: async (page) => {
+      await page.clickLabel('Send').catch(() => {});
+      await sleep(800);
+    },
+  },
   {
     name: 'dictation-long',
     route: '/chat/design',

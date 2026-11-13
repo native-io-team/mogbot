@@ -14,6 +14,9 @@ import {
   HOLD_CANCEL_DISTANCE,
   NOTHING_HEARD_MS,
   RECORDING,
+  TIDY_IDLE,
+  TIDY_SEND_WAIT_MS,
+  UNDO_TIDY_MS,
   dictationDisplay,
   dictationHint,
   dictationReducer,
@@ -28,9 +31,13 @@ import {
   sendsOnRelease,
   silenceStops,
   stablePrefix,
+  tidiedDraft,
+  tidyReducer,
   useDictation,
   type DictationEvent,
   type DictationState,
+  type TidyAnswer,
+  type TidyState,
 } from '../src/lib/dictation';
 
 type Listener = (e: never) => void;
@@ -623,5 +630,327 @@ describe('holding the mic (a voice message)', () => {
     expect(sendsOnRelease(hook.result.current.state)).toBe(true);
     expect(hook.result.current.takeRecording()).toBe('file:///voice.wav');
     expect(hook.result.current.takeRecording()).toBeNull();
+  });
+});
+
+describe('the computer’s better words (the reducer)', () => {
+  const begun = (sendAfter = false): TidyState =>
+    tidyReducer(TIDY_IDLE, {
+      type: 'begin',
+      id: 1,
+      original: 'Typed',
+      shown: 'Typed ask pria about acme',
+      sendAfter,
+    }).state;
+  const better: TidyAnswer = {
+    text: 'ask Priya about Acme',
+    raw: 'ask pria about acme',
+  };
+
+  it('replaces only the dictated part, after what was typed, with Undo', () => {
+    const step = tidyReducer(begun(), {
+      type: 'answer',
+      id: 1,
+      answer: better,
+      draft: 'Typed ask pria about acme',
+    });
+    expect(step.draft).toBe('Typed ask Priya about Acme');
+    expect(step.send).toBe(false);
+    expect(step.state.phase).toBe('idle');
+    expect(step.state.undo).toEqual({
+      before: 'Typed ask pria about acme',
+      after: 'Typed ask Priya about Acme',
+    });
+    const undone = tidyReducer(step.state, { type: 'undo', draft: 'Typed ask Priya about Acme' });
+    expect(undone.draft).toBe('Typed ask pria about acme');
+    expect(undone.state.undo).toBeNull();
+  });
+
+  it('never writes over what was typed meanwhile, and Undo never over a changed draft', () => {
+    const step = tidyReducer(begun(), {
+      type: 'answer',
+      id: 1,
+      answer: better,
+      draft: 'Typed ask pria about acme, thanks',
+    });
+    expect(step.draft).toBeUndefined();
+    expect(step.state).toMatchObject({ phase: 'idle', undo: null });
+    const after = tidyReducer(begun(), {
+      type: 'answer',
+      id: 1,
+      answer: better,
+      draft: 'Typed ask pria about acme',
+    });
+    expect(tidyReducer(after.state, { type: 'undo', draft: 'Something else' }).draft).toBeUndefined();
+  });
+
+  it('keeps the draft on a failure, an empty answer, or the same words', () => {
+    for (const answer of [null, { text: null }, { text: '  ' }, { text: 'ask pria about acme' }]) {
+      const step = tidyReducer(begun(), {
+        type: 'answer',
+        id: 1,
+        answer,
+        draft: 'Typed ask pria about acme',
+      });
+      expect(step.draft).toBeUndefined();
+      expect(step.state.phase).toBe('idle');
+    }
+  });
+
+  it('Send waits for the better words, then sends them', () => {
+    let s = begun();
+    s = tidyReducer(s, { type: 'sendAfter' }).state;
+    expect(s.sendAfter).toBe(true);
+    const step = tidyReducer(s, {
+      type: 'answer',
+      id: 1,
+      answer: better,
+      draft: 'Typed ask pria about acme',
+    });
+    expect(step).toMatchObject({ draft: 'Typed ask Priya about Acme', send: true });
+  });
+
+  it('a wait that runs out sends what is on screen, and the late answer is ignored', () => {
+    const out = tidyReducer(begun(true), { type: 'timeout', id: 1 });
+    expect(out.send).toBe(true);
+    expect(out.draft).toBeUndefined();
+    const late = tidyReducer(out.state, {
+      type: 'answer',
+      id: 1,
+      answer: better,
+      draft: 'Typed ask pria about acme',
+    });
+    expect(late.draft).toBeUndefined();
+    expect(late.send).toBeUndefined();
+  });
+
+  it('× drops the wait and anything still on its way; an old session’s answer is ignored', () => {
+    const cancelled = tidyReducer(begun(true), { type: 'cancel' }).state;
+    expect(cancelled.phase).toBe('idle');
+    const late = tidyReducer(cancelled, {
+      type: 'answer',
+      id: 1,
+      answer: better,
+      draft: 'Typed ask pria about acme',
+    });
+    expect(late).toEqual({ state: cancelled });
+    const other = tidyReducer(begun(), {
+      type: 'answer',
+      id: 7,
+      answer: better,
+      draft: 'Typed ask pria about acme',
+    });
+    expect(other.draft).toBeUndefined();
+  });
+
+  it('with nothing typed and no live words, Undo puts back the computer’s own words', () => {
+    expect(tidiedDraft({ original: '', shown: '' }, '', { text: 'Hi Priya', raw: 'hi pria' })).toEqual(
+      { draft: 'Hi Priya', undo: { before: 'hi pria', after: 'Hi Priya' } }
+    );
+  });
+});
+
+describe('the computer’s better words (the hook)', () => {
+  async function withImprove(
+    r: Fake,
+    improve: ((uri: string) => Promise<TidyAnswer | null>) | null,
+    typed = ''
+  ) {
+    let draft = typed;
+    const discarded: string[] = [];
+    const hook = await renderHook(() =>
+      useDictation({
+        getDraft: () => draft,
+        setDraft: (t) => (draft = t),
+        vocabulary: [],
+        improve,
+        discard: (uri) => discarded.push(uri),
+        recognizer: r as never,
+      })
+    );
+    return {
+      hook,
+      draft: () => draft,
+      type: (t: string) => (draft = t),
+      discarded,
+    };
+  }
+  function deferred() {
+    let resolve!: (a: TidyAnswer | null) => void;
+    const promise = new Promise<TidyAnswer | null>((r) => (resolve = r));
+    return { promise, resolve };
+  }
+  const say = async (r: Fake, words: string) => {
+    await act(() => r.fire('result', { isFinal: false, results: [{ transcript: words }] }));
+    await act(() => r.fire('audioend', { uri: 'file:///cache/dictation.wav', timestamp: 1 }));
+  };
+
+  it('keeps every session’s audio, and replaces the dictated words once the computer answers', async () => {
+    const r = fakeRecognizer();
+    const answer = deferred();
+    const improve = jest.fn(() => answer.promise);
+    const { hook, draft, discarded } = await withImprove(r, improve, 'Typed');
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    expect(r.started[0].recordingOptions).toEqual(RECORDING);
+    await say(r, 'ask pria about acme');
+    await act(() => hook.result.current.stop());
+    expect(improve).toHaveBeenCalledWith('file:///cache/dictation.wav');
+    expect(hook.result.current.tidying).toBe(true);
+    expect(draft()).toBe('Typed ask pria about acme');
+    await act(async () => answer.resolve({ text: 'ask Priya about Acme', raw: 'x' }));
+    expect(draft()).toBe('Typed ask Priya about Acme');
+    expect(hook.result.current.tidying).toBe(false);
+    expect(hook.result.current.undo?.before).toBe('Typed ask pria about acme');
+    // The audio is deleted here once the computer has it.
+    expect(discarded).toEqual(['file:///cache/dictation.wav']);
+    await act(() => hook.result.current.undoTidy());
+    expect(draft()).toBe('Typed ask pria about acme');
+  });
+
+  it('doesn’t write over what was typed while it tidied', async () => {
+    const r = fakeRecognizer();
+    const answer = deferred();
+    const { hook, draft, type } = await withImprove(r, () => answer.promise);
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    await say(r, 'ask pria');
+    await act(() => hook.result.current.stop());
+    type('ask pria tomorrow');
+    await act(async () => answer.resolve({ text: 'ask Priya' }));
+    expect(draft()).toBe('ask pria tomorrow');
+    expect(hook.result.current.undo).toBeNull();
+  });
+
+  it('Send while listening stops (not aborts), waits for the better words, then sends', async () => {
+    const r = fakeRecognizer();
+    const answer = deferred();
+    const { hook, draft } = await withImprove(r, () => answer.promise);
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    await say(r, 'ask pria');
+    const sent: string[] = [];
+    await act(() => hook.result.current.sendWhenReady(() => sent.push(draft())));
+    expect(r.stop).toHaveBeenCalled();
+    expect(r.abort).not.toHaveBeenCalled();
+    expect(hook.result.current.tidying).toBe(true);
+    expect(sent).toEqual([]);
+    await act(async () => answer.resolve({ text: 'ask Priya' }));
+    expect(sent).toEqual(['ask Priya']);
+  });
+
+  it('sends what is on screen when the better words take too long', async () => {
+    jest.useFakeTimers();
+    try {
+      const r = fakeRecognizer();
+      const answer = deferred();
+      const { hook, draft } = await withImprove(r, () => answer.promise);
+      await act(async () => {
+        await hook.result.current.start();
+      });
+      await say(r, 'ask pria');
+      const sent: string[] = [];
+      await act(() => hook.result.current.sendWhenReady(() => sent.push(draft())));
+      await act(() => jest.advanceTimersByTime(TIDY_SEND_WAIT_MS - 1));
+      expect(sent).toEqual([]);
+      await act(() => jest.advanceTimersByTime(1));
+      expect(sent).toEqual(['ask pria']);
+      // Too late: nothing changes, nothing is sent again.
+      await act(async () => answer.resolve({ text: 'ask Priya' }));
+      expect(draft()).toBe('ask pria');
+      expect(sent).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('× while it tidies puts the draft back and drops the better words and the send', async () => {
+    const r = fakeRecognizer();
+    const answer = deferred();
+    const { hook, draft } = await withImprove(r, () => answer.promise, 'Typed');
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    await say(r, 'oops');
+    const sent: string[] = [];
+    await act(() => hook.result.current.sendWhenReady(() => sent.push(draft())));
+    expect(hook.result.current.tidying).toBe(true);
+    await act(() => hook.result.current.cancel());
+    expect(draft()).toBe('Typed');
+    expect(hook.result.current.tidying).toBe(false);
+    await act(async () => answer.resolve({ text: 'better' }));
+    expect(draft()).toBe('Typed');
+    expect(sent).toEqual([]);
+  });
+
+  it('a held voice message waits for the better words before it’s ready to send', async () => {
+    const r = fakeRecognizer();
+    const answer = deferred();
+    const { hook, draft } = await withImprove(r, () => answer.promise);
+    await act(async () => {
+      await hook.result.current.start({ held: true });
+    });
+    await say(r, 'call mum');
+    await act(() => hook.result.current.release());
+    expect(sendsOnRelease(hook.result.current.state)).toBe(true);
+    expect(hook.result.current.tidying).toBe(true);
+    await act(async () => answer.resolve({ text: 'Call Mum.' }));
+    expect(hook.result.current.tidying).toBe(false);
+    expect(draft()).toBe('Call Mum.');
+  });
+
+  it('a failure keeps the live words, as before', async () => {
+    const r = fakeRecognizer();
+    const { hook, draft, discarded } = await withImprove(r, () =>
+      Promise.reject(new Error('offline'))
+    );
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    await say(r, 'ask pria');
+    await act(async () => hook.result.current.stop());
+    await act(async () => {});
+    expect(hook.result.current.tidying).toBe(false);
+    expect(draft()).toBe('ask pria');
+    expect(discarded).toEqual(['file:///cache/dictation.wav']);
+  });
+
+  it('without the computer’s words: no audio kept, Send aborts and sends at once, as before', async () => {
+    const r = fakeRecognizer();
+    const { hook, draft } = await withImprove(r, null);
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    expect(r.started[0].recordingOptions).toBeUndefined();
+    await act(() => r.fire('result', { isFinal: false, results: [{ transcript: 'hello' }] }));
+    const sent: string[] = [];
+    await act(() => hook.result.current.sendWhenReady(() => sent.push(draft())));
+    expect(r.abort).toHaveBeenCalled();
+    expect(r.stop).not.toHaveBeenCalled();
+    expect(sent).toEqual(['hello']);
+    expect(hook.result.current.tidying).toBe(false);
+    expect(hook.result.current.outcome).toBe('sent');
+  });
+
+  it('Undo goes after a few seconds', async () => {
+    jest.useFakeTimers();
+    try {
+      const r = fakeRecognizer();
+      const { hook } = await withImprove(r, () => Promise.resolve({ text: 'Hi Priya' }));
+      await act(async () => {
+        await hook.result.current.start();
+      });
+      await say(r, 'hi pria');
+      await act(async () => hook.result.current.stop());
+      await act(async () => {});
+      expect(hook.result.current.undo).not.toBeNull();
+      await act(() => jest.advanceTimersByTime(UNDO_TIDY_MS));
+      expect(hook.result.current.undo).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

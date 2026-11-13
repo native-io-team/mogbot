@@ -150,6 +150,7 @@ pub const METHODS: &[&str] = &[
     "agents.teamSetup.dismiss",
     "agents.teamSetup.later",
     "agents.teamSetup.check",
+    "dictation.transcribe",
 ];
 
 /// `READ_ONLY_METHODS` in methods.ts (the served subset): not audited.
@@ -1064,6 +1065,17 @@ pub trait Backend: Send + Sync + 'static {
     fn server_name(&self) -> String;
     fn app_version(&self) -> String;
     fn audit(&self, actor: &str, tool: &str, detail: String, ok: bool);
+    /// `dictation.transcribe`: write a dictation's 16 kHz mono audio out
+    /// again (`crate::voice::improve`) with the team's names and the last
+    /// lines of `agent_id`'s chat (or `room_id`'s thread) as context. With
+    /// no speech model yet, start its one-time download and answer
+    /// `preparing`.
+    async fn transcribe(
+        &self,
+        samples_16k: Vec<f32>,
+        agent_id: Option<String>,
+        room_id: Option<String>,
+    ) -> Result<super::dictation::Transcribed, CommandError>;
     /// Something the Phone panel shows changed (a pair request, a connect).
     fn changed(&self);
 }
@@ -1402,6 +1414,16 @@ struct WorkStepsParams {
 struct BlobParam {
     #[serde(rename = "blobId")]
     blob_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TranscribeParams {
+    blob: String,
+    #[serde(default)]
+    agent_id: Option<String>,
+    #[serde(default)]
+    room_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1990,6 +2012,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         },
         "agents.fetchPath" => preview(field("path")),
         "agents.revokePermission" => format!("revoke {} {}", field("ruleId"), field("agentId")),
+        // Never the words: what was said is the user's.
+        "dictation.transcribe" => "wrote out a dictation".into(),
         "agents.skillEdit" => format!("edit skill {} of {}", field("slug"), field("agentId")),
         "agents.skillRemove" => format!("remove skill {} of {}", field("slug"), field("agentId")),
         "agents.onItsOwnNarrow" => format!(
@@ -3278,6 +3302,29 @@ async fn run(
                 now_ms(),
             )?;
             Ok(to_value(&blob.as_ref()))
+        }
+        "dictation.transcribe" => {
+            let p: TranscribeParams = parse(params)?;
+            let blob = c
+                .blobs
+                .get(&caller.device_id, &p.blob, now_ms())
+                .ok_or_else(|| {
+                    WireError::from(CommandError::expected(
+                        "The recording didn't reach this computer. Try again.",
+                    ))
+                })?;
+            // The audio is read once and gone: never kept, whatever happens next.
+            let bytes = std::fs::read(&blob.path);
+            c.blobs.consume(std::slice::from_ref(&p.blob));
+            let bytes = bytes.map_err(|e| CommandError::from(format!("read recording: {e}")))?;
+            let samples = crate::voice::pcm::parse_wav(&bytes).map_err(bad_params)?;
+            drop(bytes);
+            let samples = crate::voice::pcm::capped(samples);
+            let some = |s: Option<String>| s.filter(|s| !s.trim().is_empty());
+            Ok(to_value(
+                &b.transcribe(samples, some(p.agent_id), some(p.room_id))
+                    .await?,
+            ))
         }
         _ => Err(WireError::protocol(
             ProtocolCode::UnknownMethod,

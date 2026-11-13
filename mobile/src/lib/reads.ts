@@ -22,8 +22,8 @@ import { READ_ONLY_METHODS, type MethodName } from '@shipstudio/companion-protoc
 /** At most this many reads at the Mac at once. */
 export const READ_SLOTS = 6;
 
-/** Changes that move no reading: where the phone is looking. */
-const NEUTRAL = new Set<string>(['agents.focus', 'rooms.focus']);
+/** Changes that move no reading: where the phone is looking, and a dictation written out again. */
+const NEUTRAL = new Set<string>(['agents.focus', 'rooms.focus', 'dictation.transcribe']);
 const READS = new Set<string>(READ_ONLY_METHODS);
 
 export const isRead = (method: MethodName) => READS.has(method);

@@ -4119,6 +4119,15 @@ export const agentsFetchPath = {
   "name": "report.md",
   "size": 4
 } satisfies Result<'agents.fetchPath'>;
+export const dictationTranscribe = {
+  "raw": "Ask Pria to send the acme invoice today.",
+  "text": "Ask Priya to send the Acme invoice today.",
+  "tidied": true
+} satisfies Result<'dictation.transcribe'>;
+export const dictationPreparing = {
+  "preparing": true,
+  "text": null
+} satisfies Result<'dictation.transcribe'>;
 export const agentsSearch = [
   {
     "agentColor": "green",
@@ -5630,7 +5639,8 @@ export const frames = [
       "agents.teamSetup.missing",
       "agents.teamSetup.dismiss",
       "agents.teamSetup.later",
-      "agents.teamSetup.check"
+      "agents.teamSetup.check",
+      "dictation.transcribe"
     ],
     "timeZone": "America/New_York",
     "features": [
@@ -5651,7 +5661,8 @@ export const frames = [
       "agents.draft",
       "routines.steps",
       "import.export",
-      "alerts"
+      "alerts",
+      "dictation.transcribe"
     ]
   },
   {

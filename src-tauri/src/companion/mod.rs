@@ -21,6 +21,7 @@
 pub mod alerts;
 pub mod blobs;
 pub mod desktop;
+pub mod dictation;
 pub mod files;
 #[cfg(test)]
 mod fixtures;

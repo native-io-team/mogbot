@@ -10,6 +10,10 @@
  * (over five lines), fast, to show how a long dictation wraps. A `qaSay`
  * in the page's address hears that sentence instead, from the first listen
  * (Talk's shots say "deploy" to get a card; a shot's globals come too late).
+ * Asked to keep the audio (`recordingOptions.persist`, as every dictation is
+ * when the computer writes it out again), it reports a recording's file as
+ * the native module does, just before it ends (an empty one: the mock
+ * computer answers with its own better words).
  */
 
 type Listener = (e: unknown) => void;
@@ -32,6 +36,7 @@ const emit = (name: string, e: unknown = {}) => listeners.get(name)?.forEach((l)
 let timers: ReturnType<typeof setTimeout>[] = [];
 let running = false;
 let heard = '';
+let recording = false;
 
 type QaOptions = { deny?: boolean; error?: string; long?: boolean };
 
@@ -52,6 +57,7 @@ function finish(final: boolean) {
   running = false;
   clear();
   if (final && heard) emit('result', { isFinal: true, results: [{ transcript: heard }] });
+  if (recording) emit('audioend', { uri: 'file:///cache/qa-dictation.wav', timestamp: Date.now() });
   emit('end');
 }
 
@@ -62,10 +68,11 @@ export const ExpoSpeechRecognitionModule = {
   isRecognitionAvailable: () => true,
   requestPermissionsAsync: () =>
     Promise.resolve({ granted: !qa().deny, status: qa().deny ? 'denied' : 'granted' }),
-  start: () => {
+  start: (options?: { recordingOptions?: { persist?: boolean } }) => {
     clear();
     running = true;
     heard = '';
+    recording = Boolean(options?.recordingOptions?.persist);
     timers.push(setTimeout(() => emit('start'), 120));
     const fail = qa().error;
     if (fail) {

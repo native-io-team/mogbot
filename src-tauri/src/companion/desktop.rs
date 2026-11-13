@@ -1451,6 +1451,61 @@ impl Backend for DesktopBackend {
         crate::remote_access::companion_audit(actor, tool, detail, ok);
     }
 
+    async fn transcribe(
+        &self,
+        samples_16k: Vec<f32>,
+        agent_id: Option<String>,
+        room_id: Option<String>,
+    ) -> Result<super::dictation::Transcribed, CommandError> {
+        use super::dictation::{self as words, Transcribed};
+        // The model is fetched once, in the background; nothing better this time.
+        if crate::voice::model::ready_path().is_none() {
+            crate::voice::model::ensure(&self.app);
+            return Ok(Transcribed::preparing());
+        }
+        let projects: Vec<String> = crate::commands::projects::list_projects()
+            .await
+            .map(|list| list.into_iter().map(|p| p.name).collect())
+            .unwrap_or_default();
+        // As the desk's: the team's names, and the last lines said where it'll go.
+        let (names, context) = tokio::task::spawn_blocking(move || {
+            let agents = store::list().unwrap_or_default();
+            let name_of = |id: &str| agents.iter().find(|a| a.id == id).map(|a| a.name.clone());
+            let said = |page: Vec<store::AgentMessage>, who: &dyn Fn(&str) -> Option<String>| {
+                page.into_iter()
+                    .filter_map(|m| match m.kind {
+                        store::MessageKind::User => Some(("Me".to_string(), m.text)),
+                        store::MessageKind::Agent => who(&m.agent_id).map(|n| (n, m.text)),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            };
+            const PAGE: usize = 40;
+            let lines = match (&agent_id, &room_id) {
+                (_, Some(room)) => crate::agents::rooms::messages_page(room, PAGE, None)
+                    .map(|page| said(page, &name_of))
+                    .unwrap_or_default(),
+                (Some(agent), None) => {
+                    let name = name_of(agent);
+                    store::messages_page(agent, PAGE, None, None)
+                        .map(|page| said(page, &|_: &str| name.clone()))
+                        .unwrap_or_default()
+                }
+                (None, None) => Vec::new(),
+            };
+            let names = words::vocabulary(agents.iter().map(|a| a.name.clone()), projects);
+            (
+                crate::commands::dictation::clean_contextual_strings(names),
+                words::context(&lines),
+            )
+        })
+        .await
+        .map_err(crate::agents::err_other)?;
+        Ok(Transcribed::from_improved(
+            crate::voice::improve(samples_16k, names, context).await,
+        ))
+    }
+
     fn changed(&self) {
         let _ = self.app.emit(EVENT_CHANGED, ());
     }

@@ -7,7 +7,7 @@
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use super::router::{
@@ -621,6 +621,10 @@ pub struct Stub {
     /// Milliseconds `overview`, `projects` and `mac_status` block their
     /// thread for before answering, as a held store lock or a hung probe does.
     pub stall_ms: AtomicU64,
+    /// `dictation.transcribe` calls: (how many samples, agent, room).
+    pub transcribed: Mutex<Vec<(usize, Option<String>, Option<String>)>>,
+    /// The speech model isn't here yet: `transcribe` answers `preparing`.
+    pub model_missing: AtomicBool,
 }
 
 impl Stub {
@@ -791,6 +795,8 @@ impl Stub {
             hosts: Mutex::new(vec![HOST.into()]),
             team_setup: Mutex::new(Vec::new()),
             stall_ms: AtomicU64::new(0),
+            transcribed: Mutex::new(Vec::new()),
+            model_missing: AtomicBool::new(false),
         });
         let c = Arc::new(Companion::with_epoch(registry, stub.clone(), epoch.into()));
         let _ = stub.companion.set(Arc::downgrade(&c));
@@ -2742,6 +2748,28 @@ impl Backend for Stub {
             .push((actor.into(), tool.into(), detail, ok));
     }
 
+    async fn transcribe(
+        &self,
+        samples_16k: Vec<f32>,
+        agent_id: Option<String>,
+        room_id: Option<String>,
+    ) -> Result<super::dictation::Transcribed, CommandError> {
+        use super::dictation::Transcribed;
+        self.transcribed
+            .lock()
+            .unwrap()
+            .push((samples_16k.len(), agent_id, room_id));
+        if self.model_missing.load(Ordering::SeqCst) {
+            return Ok(Transcribed::preparing());
+        }
+        Ok(Transcribed {
+            text: Some("Ask Priya to send the Acme invoice today.".into()),
+            raw: Some("Ask Pria to send the acme invoice today.".into()),
+            tidied: Some(true),
+            preparing: None,
+        })
+    }
+
     fn changed(&self) {}
 }
 
@@ -3303,4 +3331,29 @@ pub fn team_fixture() -> Value {
         total: 2,
     })
     .unwrap()
+}
+
+/// A phone's dictation recording: `seconds` of a 440 Hz tone as a 16 kHz
+/// 16-bit mono WAV, the shape `RECORDING` writes.
+pub fn dictation_wav(seconds: f32) -> Vec<u8> {
+    let n = (16_000.0 * seconds) as usize;
+    let data: Vec<u8> = (0..n)
+        .map(|i| ((i as f32 * 440.0 * std::f32::consts::TAU / 16_000.0).sin() * 8_000.0) as i16)
+        .flat_map(|s| s.to_le_bytes())
+        .collect();
+    let mut out = Vec::new();
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&16_000u32.to_le_bytes());
+    out.extend_from_slice(&32_000u32.to_le_bytes());
+    out.extend_from_slice(&2u16.to_le_bytes());
+    out.extend_from_slice(&16u16.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    out.extend_from_slice(&data);
+    out
 }

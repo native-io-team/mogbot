@@ -585,6 +585,18 @@ pub(crate) async fn dispatch_caught(
 /// timing out on a silent socket.
 pub(crate) const REQUEST_DEADLINE: Duration = Duration::from_secs(20);
 
+/// `dictation.transcribe` runs Whisper and the names pass, about 5–15 s for
+/// a long dictation: its own deadline, still under the phone's 30 s.
+pub(crate) const DICTATION_DEADLINE: Duration = Duration::from_secs(27);
+
+/// How long `method` is worked on before it's answered as busy.
+pub(crate) fn deadline_for(method: &str) -> Duration {
+    match method {
+        "dictation.transcribe" => DICTATION_DEADLINE,
+        _ => REQUEST_DEADLINE,
+    }
+}
+
 /// What the phone shows when its Mac couldn't answer in time.
 pub(crate) const BUSY: &str =
     "Your Mac is busy and couldn't answer that in time. Try again in a moment.";
@@ -601,7 +613,7 @@ pub(crate) async fn dispatch_bounded(
     params: Value,
 ) -> Result<Value, WireError> {
     let name = method.clone();
-    bounded(&name, REQUEST_DEADLINE, async move {
+    bounded(&name, deadline_for(&name), async move {
         dispatch_caught(&c, &caller, &method, params).await
     })
     .await

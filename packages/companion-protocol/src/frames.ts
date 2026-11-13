@@ -257,6 +257,12 @@ export const MAC_FEATURES = {
    * it hears on its own, as before.
    */
   alerts: 'alerts',
+  /**
+   * `dictation.transcribe`: the phone's dictation written out again on the
+   * computer (Whisper, then the names pass), so every dictation keeps its
+   * audio until that answers.
+   */
+  dictation: 'dictation.transcribe',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

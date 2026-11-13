@@ -1168,6 +1168,15 @@ The phone can start work as well as answer it. Each piece is gated by
   before hearing anything (model not downloaded, "Failed to initialize
   recognizer") tries the platform's service once (`fallsBackToServer`). The
   desk does the same (`commands/dictation.rs`).
+  **Written out again on the computer** (Mac feature `dictation.transcribe`,
+  `companion/dictation.rs`): every session keeps its 16 kHz WAV; when it ends
+  the phone uploads it as a blob and the computer runs Whisper and the names
+  pass (`src-tauri/src/voice`) with the team's names and that chat's last
+  lines, consumes the blob at once and answers the better words. The card
+  says "Tidying…" (× still cancels), the dictated words are replaced only if
+  the draft is what the live words left, and Undo puts them back. Send while
+  listening waits for them (capped) and then sends. No model yet
+  (`preparing`), a failure or an older computer: today's words stand.
   **On iOS 26 and later "on the phone" is SpeechAnalyzer** with
   SpeechTranscriber (`modules/speech-analyzer`, a local Expo module;
   `lib/speechAnalyzer.ts` puts it in front of expo-speech-recognition with

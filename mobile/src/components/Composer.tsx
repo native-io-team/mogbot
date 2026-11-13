@@ -27,6 +27,13 @@
  *   your finger; let go and what it heard is sent; slide away first and
  *   nothing is (lib/dictation.ts, `holdEnds`). The mic is the accent while
  *   it's held.
+ * - tidying: when the paired computer serves `dictation.transcribe`, a
+ *   dictation that heard you is written out again there once it ends
+ *   (lib/dictation.ts, `improve`): the card stays, saying "Tidying…", ×
+ *   puts the draft back and Send waits for the better words (15 s at most);
+ *   tapping the words lets you edit meanwhile. Then the better words replace
+ *   the dictated part (never over your typing) and the line over the field
+ *   says "Tidied the names and words" with **Undo** for 8 s.
  *
  * The field is one piece of the system's glass (Glass.tsx) where the phone
  * has it, as the tab bar is; a theme surface where it doesn't. Everything is
@@ -79,6 +86,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import {
+  DICTATION_AUDIO_NAME,
   HOLD_CANCEL_DISTANCE,
   HOLD_DELAY_MS,
   RECORDING_NAME,
@@ -141,7 +149,14 @@ import { haptic } from '../lib/haptics';
 import { useRouter } from 'expo-router';
 import { chipLabel } from '../lib/agentControls';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
-import { describeError, send, sendEdited, stop, upload } from '../lib/session';
+import {
+  describeError,
+  send,
+  sendEdited,
+  stop,
+  tidyDictation,
+  upload,
+} from '../lib/session';
 import { getApp, useApp, useServed } from '../lib/store';
 import {
   keySize,
@@ -252,8 +267,32 @@ export function Composer({
   // The voice's level, 0..1, straight to the UI thread: the waveform reads it there.
   const level = useSharedValue(0);
   const onLevel = useCallback((l: number) => level.set(l), [level]);
-  const dictation = useDictation({ getDraft, setDraft: putSpoken, vocabulary, onLevel });
-  const listening = dictation.phase !== 'idle';
+  // The computer writes each dictation out again when it can: better names and words.
+  const canTidy = useServed('dictation.transcribe', MAC_FEATURES.dictation);
+  const improve = useMemo(
+    () =>
+      canTidy && connected
+        ? (uri: string) =>
+            tidyDictation({ uri, name: DICTATION_AUDIO_NAME, mime: 'audio/wav' }, agent.id)
+        : null,
+    [canTidy, connected, agent.id]
+  );
+  const dictation = useDictation({
+    getDraft,
+    setDraft: putSpoken,
+    vocabulary,
+    onLevel,
+    improve,
+    discard: discardFile,
+  });
+  // Tapping the words while it tidies: edit them meanwhile (the better words won't overwrite you).
+  const [editingTidy, setEditingTidy] = useState(false);
+  const tidying = dictation.tidying;
+  useEffect(() => {
+    if (!tidying) setEditingTidy(false);
+  }, [tidying]);
+  /** The field is the dictation card: listening, or tidying what it heard. */
+  const listening = dictation.phase !== 'idle' || (tidying && !editingTidy);
   /** A voice message: the mic is held (or was, and its last words are landing). */
   const held = listening && dictation.state.held;
   const problem = dictation.problem ? problemCopy(dictation.problem) : null;
@@ -329,7 +368,8 @@ export function Composer({
   /** Tapping the words while it listens: keep them and edit. */
   const editDictation = () => {
     refocus.current = true;
-    dictation.stop();
+    if (dictation.phase === 'idle' && tidying) setEditingTidy(true);
+    else dictation.stop();
   };
   const fixProblem = () => {
     const fix = problem?.fix;
@@ -375,7 +415,14 @@ export function Composer({
       : !listening && problem?.fix === 'retry'
         ? 'Try again'
         : null;
-  const chipNow = offerNow && !fixLabel;
+  // The better words came in: Undo, while the draft is still what they left.
+  const undo =
+    !listening && dictation.undo && draft.text === dictation.undo.after ? dictation.undo : null;
+  const undoTidy = () => {
+    haptic.select();
+    dictation.undoTidy();
+  };
+  const chipNow = offerNow && !fixLabel && !undo;
 
   const query = mentionQuery(draft.text);
   const suggestions = useMemo(() => {
@@ -449,8 +496,14 @@ export function Composer({
     haptic.select();
   };
 
-  const submit = (now: boolean) => {
+  /** `ready`: the computer's better words are in (or weren't coming), so it goes now. */
+  const submit = (now: boolean, ready = false) => {
     if (!canSend) return;
+    // Still tidying what was said: it goes once the better words are in.
+    if (!ready && dictation.tidying) {
+      dictation.sendWhenReady(() => submit(now, true));
+      return;
+    }
     // From the store, not this render: a second tap in the same frame finds
     // the draft already emptied by the first, and sends nothing.
     const current = takeDraft(getApp().composer[agent.id]);
@@ -495,21 +548,26 @@ export function Composer({
     });
   };
 
-  /** Send while listening: stop, and send what's on screen now. */
+  /**
+   * Send while listening: stop, and send once the words are in (with the
+   * computer's better words, waiting 15 s at most); without them, what's on
+   * screen now.
+   */
   const dictationSend = () => {
     if (!canSend) return;
-    dictation.send();
-    submit(false);
+    dictation.sendWhenReady(() => submit(false, true));
   };
 
   // A voice message let go, its words all in: it sends, as Send would. Once per hold.
   const sentHold = useRef<DictationState | null>(null);
+  // With the computer's better words, once they're in.
   useEffect(() => {
-    if (!sendsOnRelease(dictation.state) || sentHold.current === dictation.state) return;
+    if (!sendsOnRelease(dictation.state) || dictation.tidying) return;
+    if (sentHold.current === dictation.state) return;
     sentHold.current = dictation.state;
     const recording = dictation.takeRecording();
     if (!recording) {
-      submit(false);
+      submit(false, true);
       return;
     }
     // The audio goes with the words, to the Mac only, and is deleted here after.
@@ -527,12 +585,12 @@ export function Composer({
         () => onError(`The recording didn't reach ${macName}, so only the words went.`)
       )
       .finally(() => {
-        submit(false);
+        submit(false, true);
         void discardFile(recording);
       });
     // `submit` reads the draft from the store; only the session's end matters here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dictation.state]);
+  }, [dictation.state, dictation.tidying]);
 
   const stopTurn = () => {
     haptic.medium();
@@ -556,10 +614,14 @@ export function Composer({
       ? 'Sending what you said…'
       : (listeningNote(dictation.via) ?? 'Let go to send · slide away to cancel')
     : listening
-      ? (listeningNote(dictation.via) ?? queued)
+      ? tidying && dictation.phase === 'idle'
+        ? 'Tidying…'
+        : (listeningNote(dictation.via) ?? queued)
       : problem
         ? problem.text
-        : micHint
+        : undo
+          ? 'Tidied the names and words'
+          : micHint
           ? micHint
           : restored
             ? 'Restored your draft'
@@ -619,7 +681,7 @@ export function Composer({
           </ScrollView>
         </Animated.View>
       )}
-      {(hint || chipNow || fixLabel) && (
+      {(hint || chipNow || fixLabel || undo) && (
         <Animated.View
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(100)}
@@ -641,6 +703,21 @@ export function Composer({
             >
               <T variant="caption" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
                 {fixLabel}
+              </T>
+            </Pressable>
+          )}
+          {undo && !fixLabel && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Undo"
+              accessibilityHint="Puts back the words as they were heard"
+              onPress={undoTidy}
+              android_ripple={ripple}
+              hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+              style={({ pressed }) => [styles.nowChip, pressed && styles.pressed]}
+            >
+              <T variant="caption" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
+                Undo
               </T>
             </Pressable>
           )}
@@ -822,7 +899,7 @@ export function Composer({
               key="dictation-stop"
               label="Stop dictating"
               hint="Puts what you said in the message, to edit before you send"
-              disabled={dictation.phase === 'stopping'}
+              disabled={dictation.phase === 'stopping' || dictation.phase === 'idle'}
               onPress={dictationStop}
               tone="quiet"
             >

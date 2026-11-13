@@ -4402,6 +4402,32 @@ export function createMockServer(opts: MockOptions = {}) {
       });
       return ref;
     },
+    // The phone's dictation written out again: the scripted sentence, a little
+    // better, a second later (the real one runs Whisper and a names pass).
+    'dictation.transcribe': (p, c) => {
+      const blobId = String(p.blob);
+      const b = blobs.get(blobId);
+      if (!b || b.deviceId !== c.deviceId || b.expiresAt < Date.now()) {
+        return fail({
+          type: 'Other',
+          message: 'The recording didn’t reach this computer. Try again.',
+          expected: true,
+        });
+      }
+      // Read once and gone, as on the computer.
+      blobs.delete(blobId);
+      return new Promise((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              text: 'Can you draft the launch email for Thursday and send it to me first?',
+              raw: 'can you draft the launch email for thursday and send it to me first',
+              tidied: true,
+            }),
+          1000
+        ).unref()
+      );
+    },
     'agents.markUnread': (p) => {
       const a = agent(String(p.agentId));
       if (a) {
@@ -4541,6 +4567,19 @@ export function createMockServer(opts: MockOptions = {}) {
             message: `${frame.method} isn’t available yet`,
           });
         const result = handler!(frame.params as Record<string, unknown>, c);
+        // A handler that takes a while (dictation.transcribe) answers when it's done.
+        if (result instanceof Promise) {
+          const id = frame.id;
+          void result.then(
+            (value) => send(c, { t: 'res', id, ok: true, result: value } as ServerFrame),
+            (error: unknown) => {
+              const e: WireError =
+                error instanceof Failure ? error.wire : { type: 'Other', message: String(error) };
+              send(c, { t: 'res', id, ok: false, error: e });
+            }
+          );
+          return;
+        }
         if (frame.method === 'agents.send' && busySends > 0) {
           // Done, but answered past the deadline as busy (`server.rs` BUSY).
           busySends--;

@@ -1076,6 +1076,22 @@ export function upload(file: PickedFile, onProgress?: (fraction: number) => void
   return transport.upload(file, onProgress);
 }
 
+/**
+ * A dictation's audio, written out again on the computer
+ * (`dictation.transcribe`: Whisper, then the names pass), with this agent's
+ * conversation as context. The computer reads the upload once and deletes
+ * it. Null when it had nothing better (no model yet, too little sound).
+ */
+export async function tidyDictation(
+  file: { uri: string; name: string; mime: string },
+  agentId: string
+): Promise<{ text: string; raw?: string } | null> {
+  if (!transport) throw new Error('Not paired');
+  const ref = await transport.upload(file);
+  const said = await call('dictation.transcribe', { blob: ref.blobId, agentId });
+  return said.text ? { text: said.text, raw: said.raw } : null;
+}
+
 /** A local copy of an attachment (cached) or of a blob the Mac produced. */
 export function download(source: { blobId: string } | { agentId: string; path: string }) {
   if (!transport) return Promise.reject(new Error('Not paired'));

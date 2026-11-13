@@ -918,6 +918,44 @@ async fn generate() -> String {
             .await,
         ),
     );
+    let recording = c
+        .blobs
+        .put(
+            &caller.device_id,
+            "Dictation.wav",
+            Some("audio/wav"),
+            &super::testkit::dictation_wav(1.0),
+            super::now_ms(),
+        )
+        .unwrap();
+    out += &entry(
+        "dictationTranscribe",
+        "Result<'dictation.transcribe'>",
+        call(
+            "dictation.transcribe",
+            json!({ "blob": recording.id, "agentId": AGENT }),
+        )
+        .await,
+    );
+    stub.model_missing
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let recording = c
+        .blobs
+        .put(
+            &caller.device_id,
+            "Dictation.wav",
+            Some("audio/wav"),
+            &super::testkit::dictation_wav(1.0),
+            super::now_ms(),
+        )
+        .unwrap();
+    out += &entry(
+        "dictationPreparing",
+        "Result<'dictation.transcribe'>",
+        call("dictation.transcribe", json!({ "blob": recording.id })).await,
+    );
+    stub.model_missing
+        .store(false, std::sync::atomic::Ordering::SeqCst);
     out += &entry(
         "agentsSearch",
         "Result<'agents.search'>",

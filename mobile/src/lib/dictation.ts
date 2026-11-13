@@ -26,7 +26,20 @@
  * has heard you: you decide when it ends. Only when Settings → Voice →
  * "Attach the recording" is on is the audio kept (`record`): a 16 kHz WAV in
  * the phone's cache, uploaded with the message to your own Mac and then
- * deleted here (`takeRecording`). Otherwise nothing is recorded to a file.
+ * deleted here (`takeRecording`).
+ *
+ * **Better words from the computer** (`improve`): when the paired computer
+ * serves `dictation.transcribe`, every session keeps its audio too, and when
+ * it ends the computer writes it out again (Whisper, then a pass that knows
+ * the team's names), as the desk's own dictation is: "Tidying…", then the
+ * better words replace the dictated part of the draft (only if the draft is
+ * still exactly what the live words left), with Undo for 8 s. Send while
+ * listening stops, waits for them (at most `TIDY_SEND_WAIT_MS`, then sends
+ * what's on screen) and sends; a voice message waits for them too. × drops
+ * all of it. The WAV is deleted here once the computer has answered. On a
+ * failure, an empty answer or a computer without it, everything is as
+ * before. The steps are a second pure reducer (`tidyReducer`). Otherwise
+ * nothing is recorded to a file.
  *
  * The phases are a pure reducer (`dictationReducer`) so a test can walk
  * every path: idle → starting → listening → stopping → idle, with the way it
@@ -491,6 +504,134 @@ export function sendsOnRelease(s: DictationState): boolean {
   return s.held && s.released && s.phase === 'idle' && s.outcome === 'done' && s.heard;
 }
 
+// ---- Better words from the computer ---------------------------------------------
+
+/** How long Undo stays after the better words came in (the desk's `UNDO_TIDY_MS`). */
+export const UNDO_TIDY_MS = 8_000;
+/** Send waits at most this long for the better words, then sends what's on screen. */
+export const TIDY_SEND_WAIT_MS = 15_000;
+/** The name a dictation's audio has on its way to the computer (deleted there once read). */
+export const DICTATION_AUDIO_NAME = 'Dictation.wav';
+
+/** The computer's answer: `text` null means keep what you have. */
+export interface TidyAnswer {
+  text: string | null;
+  /** Its own words before the names pass: what Undo puts back when there were no live ones. */
+  raw?: string;
+}
+
+/** The words before the better ones replaced them, while Undo is offered. */
+export interface TidyUndo {
+  /** The whole draft to put back. */
+  before: string;
+  /** The draft as the better words left it (Undo only while it still is). */
+  after: string;
+}
+
+export interface TidyState {
+  phase: 'idle' | 'tidying';
+  /** Which session's answer is awaited: an older one's is ignored. */
+  id: number;
+  /** The draft before the mic was tapped. */
+  original: string;
+  /** The draft the live words left: only that is replaced. */
+  shown: string;
+  /** Send once the better words are in (Send was pressed). */
+  sendAfter: boolean;
+  undo: TidyUndo | null;
+}
+
+export const TIDY_IDLE: TidyState = {
+  phase: 'idle',
+  id: 0,
+  original: '',
+  shown: '',
+  sendAfter: false,
+  undo: null,
+};
+
+export type TidyEvent =
+  /** A session ended having heard you, with its audio on its way to the computer. */
+  | { type: 'begin'; id: number; original: string; shown: string; sendAfter?: boolean }
+  /** Send while tidying: it goes once the better words are in. */
+  | { type: 'sendAfter' }
+  /** The computer answered (null: it failed). `draft` is the draft now. */
+  | { type: 'answer'; id: number; answer: TidyAnswer | null; draft: string }
+  /** Send waited `TIDY_SEND_WAIT_MS`: send what's on screen. */
+  | { type: 'timeout'; id: number }
+  /** ×, or the draft was sent: nothing more comes into it. */
+  | { type: 'cancel' }
+  | { type: 'undo'; draft: string }
+  /** Undo's few seconds are up. */
+  | { type: 'expire' };
+
+/** One step: the next state, the draft to write (if it changes) and whether to send now. */
+export interface TidyStep {
+  state: TidyState;
+  draft?: string;
+  send?: boolean;
+}
+
+/**
+ * The better words in the draft: the dictated part replaced, after what was
+ * there before, and only when the draft is still exactly what the live
+ * words left (never over your own typing). Null when nothing changes.
+ */
+export function tidiedDraft(
+  { original, shown }: { original: string; shown: string },
+  draft: string,
+  answer: TidyAnswer | null
+): { draft: string; undo: TidyUndo | null } | null {
+  const text = answer?.text?.trim();
+  if (!text || draft !== shown) return null;
+  const after = joinDictation(original, text);
+  if (after === draft) return null;
+  // Undo puts back the live words, or the computer's own when there were none.
+  const before = draft === original ? joinDictation(original, answer?.raw ?? '') : draft;
+  return { draft: after, undo: before !== after ? { before, after } : null };
+}
+
+export function tidyReducer(s: TidyState, e: TidyEvent): TidyStep {
+  const waiting = (id: number) => s.phase === 'tidying' && s.id === id;
+  switch (e.type) {
+    case 'begin':
+      return {
+        state: {
+          phase: 'tidying',
+          id: e.id,
+          original: e.original,
+          shown: e.shown,
+          sendAfter: Boolean(e.sendAfter),
+          undo: null,
+        },
+      };
+    case 'sendAfter':
+      return s.phase === 'tidying' ? { state: { ...s, sendAfter: true } } : { state: s };
+    case 'answer': {
+      if (!waiting(e.id)) return { state: s };
+      const better = tidiedDraft(s, e.draft, e.answer);
+      return {
+        state: { ...TIDY_IDLE, id: s.id, undo: better?.undo ?? null },
+        ...(better ? { draft: better.draft } : {}),
+        send: s.sendAfter,
+      };
+    }
+    case 'timeout':
+      if (!waiting(e.id)) return { state: s };
+      return { state: { ...TIDY_IDLE, id: s.id }, send: s.sendAfter };
+    case 'cancel':
+      return s.phase === 'idle' && !s.undo ? { state: s } : { state: { ...TIDY_IDLE, id: s.id } };
+    case 'undo':
+      if (!s.undo) return { state: s };
+      return {
+        state: { ...s, undo: null },
+        ...(e.draft === s.undo.after ? { draft: s.undo.before } : {}),
+      };
+    case 'expire':
+      return s.undo ? { state: { ...s, undo: null } } : { state: s };
+  }
+}
+
 // ---- The hook --------------------------------------------------------------------
 
 /**
@@ -501,13 +642,18 @@ export function sendsOnRelease(s: DictationState): boolean {
  * a send) leaves it.
  * `vocabulary` (the team's names) helps the recognizer spell what you'll say
  * most. `onLevel` gets the voice's level, 0..1, about 20 times a second;
- * it's for a shared value, so nothing re-renders for it.
+ * it's for a shared value, so nothing re-renders for it. `improve` (the
+ * computer's better words) keeps every session's audio and hands it over
+ * when the session ends; `sendWhenReady` is Send then, `tidying` and `undo`
+ * what the field shows meanwhile and after.
  */
 export function useDictation({
   getDraft,
   setDraft,
   vocabulary,
   onLevel,
+  improve,
+  discard,
   recognizer: given,
   now = Date.now,
 }: {
@@ -515,6 +661,14 @@ export function useDictation({
   setDraft: (text: string) => void;
   vocabulary: string[];
   onLevel?: (level: number) => void;
+  /**
+   * The computer writes the words out again (`dictation.transcribe`): every
+   * session keeps its audio, and this gets the file once a session that
+   * heard you ends. Absent or null: as before.
+   */
+  improve?: ((uri: string) => Promise<TidyAnswer | null>) | null;
+  /** Delete a kept audio file, once it has gone to the computer (or isn't wanted). */
+  discard?: (uri: string) => void;
   /** Tests only. */
   recognizer?: Recognizer | null;
   /** Tests only. */
@@ -531,16 +685,31 @@ export function useDictation({
   const stateRef = useRef(state);
   /** Sessions started on the recognizer whose `end` hasn't come: an old one's events are ignored. */
   const inFlight = useRef(0);
-  /** This session keeps its audio (a held mic with "Attach the recording" on). */
+  /** This session keeps its audio (for the computer's better words, or a voice message's attachment). */
   const recordRef = useRef(false);
+  /** The audio is the caller's after (a held mic with "Attach the recording" on): `takeRecording`. */
+  const keepRef = useRef(false);
+  const [tidy, setTidy] = useState<TidyState>(TIDY_IDLE);
+  const tidyRef = useRef(tidy);
+  /** Send once the words are in: Send was pressed while it listened or tidied. */
+  const pendingSend = useRef<(() => void) | null>(null);
+  const waitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alive = useRef(true);
   /** The kept audio's file, once the recognizer has finished writing it. */
   const recording = useRef<string | null>(null);
   const lastVoiceAt = useRef(0);
   const startedRef = useRef(0);
-  const latest = useRef({ setDraft, onLevel, now });
+  const latest = useRef({ setDraft, getDraft, onLevel, now, improve, discard });
   useEffect(() => {
-    latest.current = { setDraft, onLevel, now };
-  }, [setDraft, onLevel, now]);
+    latest.current = { setDraft, getDraft, onLevel, now, improve, discard };
+  }, [setDraft, getDraft, onLevel, now, improve, discard]);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      if (waitTimer.current) clearTimeout(waitTimer.current);
+    };
+  }, []);
 
   /** One step: the next state, and the draft written in the same tick, so it never lags. */
   const apply = useCallback((e: DictationEvent) => {
@@ -557,6 +726,63 @@ export function useDictation({
     if (!active(next)) latest.current.onLevel?.(0);
     return next;
   }, []);
+
+  /** Send now what was waiting to be sent (Send while it listened or tidied). */
+  const fireSend = useCallback(() => {
+    const then = pendingSend.current;
+    pendingSend.current = null;
+    if (waitTimer.current) clearTimeout(waitTimer.current);
+    waitTimer.current = null;
+    then?.();
+  }, []);
+
+  /** One step of the better words: state, the draft, and a send, in that order. */
+  const stepTidy = useCallback(
+    (e: TidyEvent) => {
+      const step = tidyReducer(tidyRef.current, e);
+      if (step.state !== tidyRef.current) {
+        tidyRef.current = step.state;
+        setTidy(step.state);
+      }
+      if (step.draft !== undefined) latest.current.setDraft(step.draft);
+      if (step.send) fireSend();
+    },
+    [fireSend]
+  );
+
+  /**
+   * A session is over: hand its audio to the computer when it heard you
+   * (`improve`), else let the audio go and send anything waiting to be sent.
+   */
+  const afterEnd = useCallback(
+    (next: DictationState) => {
+      const uri = recording.current;
+      const { improve: better, discard: drop } = latest.current;
+      const keep = keepRef.current;
+      if (!keep) recording.current = null;
+      if (!(next.outcome === 'done' && next.heard && better && uri)) {
+        if (uri && !keep) drop?.(uri);
+        if (pendingSend.current) fireSend();
+        return;
+      }
+      const id = tidyRef.current.id + 1;
+      stepTidy({
+        type: 'begin',
+        id,
+        original: next.original,
+        shown: draftText(next),
+        sendAfter: Boolean(pendingSend.current),
+      });
+      void better(uri)
+        .catch(() => null)
+        .then((answer) => {
+          if (!keep) drop?.(uri);
+          if (!alive.current) return;
+          stepTidy({ type: 'answer', id, answer, draft: latest.current.getDraft() });
+        });
+    },
+    [fireSend, stepTidy]
+  );
 
   /** Start the recognizer, on the phone or through the platform's service. */
   const listen = useRef<(mode: DictationVia) => boolean>(() => false);
@@ -644,14 +870,26 @@ export function useDictation({
             return;
           }
         }
-        apply({ type: 'end' });
+        const before = stateRef.current;
+        const next = apply({ type: 'end' });
+        if (next !== before) {
+          afterEnd(next);
+          return;
+        }
+        // Ended already (×, Send, an error): its audio isn't wanted.
+        const uri = recording.current;
+        if (uri && !keepRef.current) {
+          recording.current = null;
+          latest.current.discard?.(uri);
+        }
+        if (pendingSend.current) fireSend();
       }),
     ];
     return () => {
       subs.forEach((s) => s.remove());
       if (active(stateRef.current)) r.abort();
     };
-  }, [r, apply]);
+  }, [r, apply, afterEnd, fireSend]);
 
   const phase = state.phase;
 
@@ -689,7 +927,11 @@ export function useDictation({
       if (!r || active(stateRef.current)) return false;
       const can = dictationSupport(r);
       if (can === 'no-module' || can === 'unavailable') return false;
-      recordRef.current = held && record;
+      // A new dictation: the last one's better words, Undo and any wait are over.
+      if (tidyRef.current.phase === 'tidying' || tidyRef.current.undo) stepTidy({ type: 'cancel' });
+      pendingSend.current = null;
+      keepRef.current = held && record;
+      recordRef.current = keepRef.current || Boolean(latest.current.improve);
       recording.current = null;
       apply({ type: 'request', draft: getDraft(), held });
       setStartedAt(0); // the clock reads 0:00 until the recognizer is listening
@@ -703,12 +945,12 @@ export function useDictation({
       }
       if (stateRef.current.phase === 'stopping') {
         // Stop before the recognizer started: nothing to keep.
-        apply({ type: 'end' });
+        afterEnd(apply({ type: 'end' }));
         return false;
       }
       return listen.current(can === 'on-device' ? 'on-device' : 'server');
     },
-    [r, getDraft, apply]
+    [r, getDraft, apply, afterEnd, stepTidy]
   );
 
   /** The voice message's audio file, once (and only if it was kept): the caller owns it now. */
@@ -749,21 +991,95 @@ export function useDictation({
     if (started) r.abort();
   }, [r, apply]);
 
-  /** ×: put the draft back as it was before the mic was tapped. */
+  /** Nothing waits to be sent any more. */
+  const forgetSend = useCallback(() => {
+    pendingSend.current = null;
+    if (waitTimer.current) clearTimeout(waitTimer.current);
+    waitTimer.current = null;
+  }, []);
+
+  /**
+   * ×: put the draft back as it was before the mic was tapped, and drop
+   * everything on its way: the words, the better words, a send waiting.
+   */
   const cancel = useCallback(() => {
+    forgetSend();
+    const t = tidyRef.current;
+    if (t.phase === 'tidying') {
+      stepTidy({ type: 'cancel' });
+      latest.current.setDraft(t.original);
+      return;
+    }
     if (!r || !active(stateRef.current)) return;
     const started = stateRef.current.phase !== 'starting';
     apply({ type: 'cancel' });
     if (started) r.abort();
-  }, [r, apply]);
+  }, [r, apply, stepTidy, forgetSend]);
 
   /** The draft was sent: drop whatever is still on its way, and leave the draft alone. */
   const drop = useCallback(() => {
+    forgetSend();
+    stepTidy({ type: 'cancel' });
     if (!r || !active(stateRef.current)) return;
     const started = stateRef.current.phase !== 'starting';
     apply({ type: 'drop' });
     if (started) r.abort();
-  }, [r, apply]);
+  }, [r, apply, stepTidy, forgetSend]);
+
+  /**
+   * Send, with the computer's better words when it has them: while it
+   * listens, stop (the last words still land), wait for the better words
+   * and then `then()` (the caller sends the draft); while it tidies, the
+   * same wait. Never longer than `TIDY_SEND_WAIT_MS`: then what's on
+   * screen goes. Without `improve`, `send` and `then()` at once, as before.
+   */
+  const sendWhenReady = useCallback(
+    (then: () => void) => {
+      const s = stateRef.current;
+      const tidying = tidyRef.current.phase === 'tidying';
+      if (!active(s) && !tidying) {
+        then();
+        return;
+      }
+      if (active(s) && (!latest.current.improve || !r)) {
+        send();
+        then();
+        return;
+      }
+      pendingSend.current = then;
+      if (waitTimer.current) clearTimeout(waitTimer.current);
+      waitTimer.current = setTimeout(() => {
+        waitTimer.current = null;
+        if (!pendingSend.current) return;
+        // Waited long enough: what's on screen goes.
+        const now = stateRef.current;
+        if (active(now)) {
+          const started = now.phase !== 'starting';
+          apply({ type: 'send' });
+          if (started) r?.abort();
+        }
+        const t = tidyRef.current;
+        if (t.phase === 'tidying') stepTidy({ type: 'timeout', id: t.id });
+        else fireSend();
+      }, TIDY_SEND_WAIT_MS);
+      if (tidying) stepTidy({ type: 'sendAfter' });
+      else stop();
+    },
+    [r, send, stop, apply, stepTidy, fireSend]
+  );
+
+  /** Undo: the live words back, while the draft is still what the better words left. */
+  const undoTidy = useCallback(
+    () => stepTidy({ type: 'undo', draft: latest.current.getDraft() }),
+    [stepTidy]
+  );
+
+  // Undo goes after a few seconds.
+  useEffect(() => {
+    if (!tidy.undo) return;
+    const t = setTimeout(() => stepTidy({ type: 'expire' }), UNDO_TIDY_MS);
+    return () => clearTimeout(t);
+  }, [tidy.undo, stepTidy]);
 
   const clearProblem = useCallback(() => {
     if (!stateRef.current.problem) return;
@@ -787,8 +1103,14 @@ export function useDictation({
     release,
     takeRecording,
     send,
+    sendWhenReady,
     cancel,
     drop,
     clearProblem,
+    /** The computer is writing the words out again: the field says "Tidying…". */
+    tidying: tidy.phase === 'tidying',
+    /** The better words replaced the live ones: Undo, for a few seconds. */
+    undo: tidy.undo,
+    undoTidy,
   };
 }
