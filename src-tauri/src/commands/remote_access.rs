@@ -121,8 +121,8 @@ async fn build_status() -> RemoteAccessStatus {
     let funnel_approval_kind = funnel_approval_url.as_deref().map(tailscale::approval_kind);
     RemoteAccessStatus {
         // macOS, Windows and Linux alike: Tailscale and the server run on
-        // each. Only lid-closed mode and reopening at login are Mac-only,
-        // and those report themselves unavailable (`None` / `false`).
+        // each. Only lid-closed mode is Mac-only, and reports itself
+        // unavailable (`None`); reopening at login is `login_item`.
         supported: true,
         enabled: config.enabled,
         server_running: remote_access::is_running(),
@@ -428,8 +428,8 @@ mod tests {
 
 /// What keeps agents going on this computer, as offered in Agents: "Keep it
 /// awake" (the same assertion remote access holds), "Keep running when
-/// windows close", and "Open at login" (remote access's own LaunchAgent, one
-/// file shared by both; macOS only). Each is read back from the thing itself.
+/// windows close", and "Open at login" (remote access's own login item, one
+/// entry shared by both; `login_item`). Each is read back from the thing itself.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StayOn {
@@ -444,14 +444,14 @@ pub struct StayOn {
     /// Hiding windows on close needs the Dock to bring them back: macOS only.
     pub keep_running_available: bool,
     pub open_at_login: bool,
-    /// False in a dev build, which has no app bundle to reopen.
+    /// False in a dev build, which has no installed app to reopen.
     pub open_at_login_available: bool,
 }
 
-/// Reopening at login is a LaunchAgent pointing at the installed `.app`:
-/// macOS only, and not in a dev build.
+/// Reopening at login points at the installed app (`login_item`): a
+/// LaunchAgent, the Run key or an XDG autostart entry; not in a dev build.
 fn open_at_login_available() -> bool {
-    cfg!(target_os = "macos") && power::app_bundle_path().is_some()
+    crate::remote_access::login_item::available()
 }
 
 pub(crate) fn stay_on_now() -> StayOn {

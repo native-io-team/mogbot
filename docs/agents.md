@@ -5994,10 +5994,10 @@ back from the thing itself:
   opt-in because it changes what closing a window does for every project, not
   only Agents. Nobody who hasn't turned it on here sees any difference.
 - **Open at login** is remote access's own login item
-  (`remote_access::power::set_open_at_login`, the
-  `studio.ship.reopen-at-login` LaunchAgent): one file, so turning it on or off
-  here shows in remote access's checklist too. Hidden in a dev build, which has
-  no installed app to reopen.
+  (`remote_access::login_item`: the `<identifier>.reopen-at-login` LaunchAgent
+  on macOS, the app's value in the Run key on Windows, an XDG autostart entry
+  on Linux): one entry, so turning it on or off here shows in remote access's
+  checklist too. Hidden in a dev build, which has no installed app to reopen.
 
 They are offered in two quiet places only, and only once they matter: at the
 foot of What's in flight while an agent is working or something is scheduled

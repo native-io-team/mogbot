@@ -19,8 +19,9 @@
 //!   the process does); Linux with `systemd-inhibit` when it is installed,
 //!   running `tail --pid=<our pid>` so the lock dies with us. Without
 //!   `systemd-inhibit` the row isn't offered ([`keep_awake_available`]).
-//!   Lid-closed mode and reopening at login stay macOS only.
-//! - **Restart** — a LaunchAgent that reopens the app at login. macOS still
+//!   Lid-closed mode stays macOS only.
+//! - **Restart** — an entry that reopens the app at login (`login_item`: a
+//!   LaunchAgent, the Run key on Windows, XDG autostart on Linux). macOS still
 //!   needs someone to log in after a restart when FileVault is on; nothing an
 //!   app does gets around that, and the UI says so instead of implying it.
 
@@ -492,86 +493,17 @@ pub fn keep_awake_active() -> bool {
 // ============================================================================
 // Reopen after restart
 // ============================================================================
+//
+// The entry itself, per OS, is `login_item`.
 
-/// `<identifier>.reopen-at-login`. Ship Studio's agent is
-/// `studio.ship.reopen-at-login`; sharing it would let either app's toggle
-/// rewrite or delete the other's.
-fn launch_agent_label() -> String {
-    format!("{}.reopen-at-login", crate::brand::IDENTIFIER)
-}
-
-fn launch_agent_path() -> Option<std::path::PathBuf> {
-    dirs::home_dir().map(|h| {
-        h.join("Library/LaunchAgents")
-            .join(format!("{}.plist", launch_agent_label()))
-    })
-}
-
-/// The `.app` bundle we are running from. `None` in a dev build, where there
-/// is no bundle to reopen and the toggle is shown as unavailable.
-pub fn app_bundle_path() -> Option<std::path::PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    exe.ancestors()
-        .find(|p| p.extension().is_some_and(|e| e == "app"))
-        .map(|p| p.to_path_buf())
-}
+pub use super::login_item::{app_bundle_path, launch_agent_plist};
 
 pub fn open_at_login_active() -> bool {
-    launch_agent_path().is_some_and(|p| p.exists())
-}
-
-pub fn launch_agent_plist(bundle: &std::path::Path) -> String {
-    let bundle = bundle
-        .to_string_lossy()
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;");
-    format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>{label}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/usr/bin/open</string>
-    <string>-g</string>
-    <string>{bundle}</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-</dict>
-</plist>
-"#,
-        label = launch_agent_label()
-    )
+    super::login_item::active()
 }
 
 pub fn set_open_at_login(enabled: bool) -> Result<(), CommandError> {
-    let path = launch_agent_path()
-        .ok_or_else(|| CommandError::expected("Could not find your home folder."))?;
-    if !enabled {
-        if path.exists() {
-            std::fs::remove_file(&path)?;
-        }
-        return Ok(());
-    }
-    if !cfg!(target_os = "macos") {
-        return Err(CommandError::expected(
-            "Reopening after a restart is only available on macOS.",
-        ));
-    }
-    let bundle = app_bundle_path().ok_or_else(|| {
-        CommandError::expected(
-            "This build isn't running from an installed app, so there is nothing to reopen.",
-        )
-    })?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    std::fs::write(&path, launch_agent_plist(&bundle))?;
-    Ok(())
+    super::login_item::set(enabled)
 }
 
 #[cfg(test)]

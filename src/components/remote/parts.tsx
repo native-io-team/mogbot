@@ -44,7 +44,7 @@ import {
   type RemoteAccessStatus,
   type RemoteProblem,
 } from '../../lib/remoteAccess';
-import { COMPUTER, HOST_COMPUTER, THIS_COMPUTER } from '../../lib/computer';
+import { COMPUTER, THIS_COMPUTER } from '../../lib/computer';
 
 export const errMsg = (err: unknown) => formatCommandError(asCommandError(err));
 
@@ -108,11 +108,7 @@ export function ReadinessList({ ctl }: { ctl: RemoteCtl }) {
                 <span className="remote-toggle__text">
                   Reopen the app after a restart
                   {!status.openAtLoginAvailable && (
-                    <span className="remote-toggle__hint">
-                      {HOST_COMPUTER === 'mac'
-                        ? 'Only in the installed app.'
-                        : 'Only on a Mac for now.'}
-                    </span>
+                    <span className="remote-toggle__hint">Only in the installed app.</span>
                   )}
                 </span>
               </label>

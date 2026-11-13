@@ -29,6 +29,12 @@ Updates download in the background. When one is ready you'll see **Restart to up
 was working when the app closed picks its work back up on its own when it reopens, with one line saying
 so; one you stopped stays stopped.
 
+## Open at login
+
+To have the app start on its own when you log in (so your agents and routines carry on after a
+restart), turn on **Open at login** in Settings → Agents. Turning it off removes it again. It isn't offered
+when you run the app from source.
+
 ## First launch
 
 Setup is a few short screens, one question each. You can go back at any point, and if you quit

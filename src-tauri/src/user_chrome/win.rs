@@ -31,9 +31,9 @@ use windows_sys::Win32::Security::{
 };
 use windows_sys::Win32::System::Pipes::{GetNamedPipeClientProcessId, GetNamedPipeServerProcessId};
 use windows_sys::Win32::System::Registry::{
-    RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegEnumValueW, RegGetValueW, RegOpenKeyExW,
-    RegSetValueExW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WRITE,
-    REG_OPTION_NON_VOLATILE, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
+    RegCloseKey, RegCreateKeyExW, RegDeleteKeyValueW, RegDeleteTreeW, RegEnumValueW, RegGetValueW,
+    RegOpenKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ,
+    KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
 };
 use windows_sys::Win32::System::Threading::{
     GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -376,6 +376,18 @@ pub fn string_values(root: Root, subkey: &str) -> Vec<String> {
         RegCloseKey(key);
     }
     out
+}
+
+/// Remove `subkey`'s value `name`. Gone already (or no key) is fine.
+pub fn delete_value(root: Root, subkey: &str, name: &str) -> io::Result<()> {
+    let sub = wide(subkey);
+    let name = wide(name);
+    // SAFETY: NUL-terminated strings.
+    let r = unsafe { RegDeleteKeyValueW(hkey(root), sub.as_ptr(), name.as_ptr()) };
+    if r == ERROR_FILE_NOT_FOUND {
+        return Ok(());
+    }
+    check(r)
 }
 
 /// Remove `subkey` and everything under it. Gone already is fine.

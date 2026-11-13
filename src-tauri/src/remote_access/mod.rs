@@ -23,6 +23,7 @@
 
 pub(crate) mod agent_state;
 mod deploy;
+pub mod login_item;
 pub mod power;
 pub mod screen;
 pub(crate) mod server;

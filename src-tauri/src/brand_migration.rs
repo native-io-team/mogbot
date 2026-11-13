@@ -13,7 +13,10 @@
 //! over lazily, on their first read, by `crate::keychain` ("Carrying secrets
 //! over a rename"). Remote Access's old Funnel mount is removed the next time
 //! it is turned on (`remote_access::tailscale`), and the Chrome native host's
-//! old manifest the next time it is installed (`user_chrome::install`).
+//! old manifest the next time it is installed (`user_chrome::install`). On
+//! Windows and Linux the only thing carrying the old name is the open-at-login
+//! entry (the Run value, the XDG autostart file), moved on every launch that
+//! finds one (`remote_access::login_item::carry_over_previous`).
 //!
 //! ## Never losing anything
 //!
@@ -160,7 +163,8 @@ pub fn run_at_startup() -> Vec<String> {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        Vec::new()
+        // Off the Mac only the open-at-login entry carries a name to move.
+        crate::remote_access::login_item::carry_over_previous()
     }
 }
 

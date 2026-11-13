@@ -165,7 +165,7 @@ export const getRemoteAudit = (limit = 50) => invoke<AuditEntry[]>('get_remote_a
  * What keeps agents going on this computer, offered in Agents apart from
  * remote access: hold it awake (the same assertion remote access holds),
  * keep running when windows close (macOS), and open at login (remote
- * access's own login item, macOS). Each is read back from the thing itself.
+ * access's own login item). Each is read back from the thing itself.
  */
 export interface StayOn {
   supported: boolean;
