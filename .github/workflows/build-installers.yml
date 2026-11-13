@@ -181,3 +181,87 @@ jobs:
           name: installers-${{ matrix.artifact }}
           path: out/
           if-no-files-found: error
+
+  # Someone who has the last release installs this one over it: the new
+  # installer must succeed, leave the new version installed, and the app must
+  # start (Linux: under a virtual display for 15s). Nothing is published.
+  install-over-last-release:
+    name: Install over the last release (${{ matrix.name }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            artifact: windows-x86_64
+          - name: Linux x64
+            os: ubuntu-22.04
+            artifact: linux-x86_64
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # TODO: pin to a commit like the other actions once checked.
+      - uses: actions/download-artifact@v7
+        with:
+          name: installers-${{ matrix.artifact }}
+          path: new
+
+      - name: Download the last release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO=$(node -p "new URL(require('./brand.json').links.releases).pathname.slice(1).replace(/\/$/,'')")
+          NAME=$(node -p "require('./brand.json').name")
+          case "${{ matrix.artifact }}" in
+            windows-*) PATTERN="${NAME}-${{ matrix.artifact }}-setup.exe" ;;
+            *) PATTERN="${NAME}-${{ matrix.artifact }}.deb" ;;
+          esac
+          mkdir -p old
+          if ! gh release download -R "$REPO" -p "$PATTERN" -D old; then
+            echo "::warning::The last release has no $PATTERN; nothing to install over"
+            echo "NO_OLD=1" >> "$GITHUB_ENV"
+          fi
+          echo "NEW_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+          echo "APP_NAME=$NAME" >> "$GITHUB_ENV"
+
+      - name: Install the last release, then this one (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:NO_OLD) {
+            $old = Get-ChildItem old -Filter *-setup.exe | Select-Object -First 1
+            Start-Process $old.FullName -ArgumentList '/S' -Wait
+          }
+          $new = Get-ChildItem new -Filter "$($env:APP_NAME)-*-setup.exe" | Select-Object -First 1
+          $p = Start-Process $new.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "the new installer exited $($p.ExitCode)" }
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\$($env:APP_NAME)" -Recurse -Filter *.exe |
+            Where-Object { $_.Name -notmatch 'uninstall' } | Select-Object -First 1
+          if (-not $exe) { throw "no installed app under $env:LOCALAPPDATA\$($env:APP_NAME)" }
+          $v = $exe.VersionInfo.ProductVersion
+          Write-Host "installed: $($exe.FullName) $v"
+          if (-not $v.StartsWith($env:NEW_VERSION)) { throw "installed $v, expected $env:NEW_VERSION" }
+
+      - name: Install the last release, then this one (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci-linux-deps.sh xvfb
+          if [ -z "${NO_OLD:-}" ]; then sudo apt-get install -y ./old/*.deb; fi
+          sudo apt-get install -y "./new/${APP_NAME}-${{ matrix.artifact }}.deb"
+          PKG=$(dpkg-deb -f "new/${APP_NAME}-${{ matrix.artifact }}.deb" Package)
+          V=$(dpkg-query -W -f '${Version}' "$PKG")
+          echo "installed: $PKG $V"
+          [ "$V" = "$NEW_VERSION" ] || { echo "::error::installed $V, expected $NEW_VERSION"; exit 1; }
+          BIN=$(dpkg -L "$PKG" | grep -E '^/usr/bin/' | head -1)
+          xvfb-run -a "$BIN" & PID=$!
+          sleep 15
+          kill -0 "$PID" || { echo "::error::$BIN exited within 15s"; exit 1; }
+          kill "$PID" || true
