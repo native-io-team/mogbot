@@ -809,6 +809,51 @@ const scrollToText = (text) => async (page) => {
   throw new Error(`never found "${text}"`);
 };
 
+/**
+ * Every sideways well on screen (a table, a code block): its words' width
+ * against its own, so a wide table that can't scroll fails the shot.
+ */
+const SIDEWAYS = `[...document.querySelectorAll('body *')].filter((e) => {
+  const s = getComputedStyle(e);
+  return /auto|scroll/.test(s.overflowX) && e.scrollWidth > e.clientWidth + 1 && e.getBoundingClientRect().height > 40;
+})`;
+
+/**
+ * Drag each wide table sideways with a finger over its middle, and fail
+ * unless every one of them moved (the chat staying put is logged).
+ */
+const scrollTablesSideways = async (page) => {
+  const n = await page.eval(`${SIDEWAYS}.length`);
+  if (n < 3) throw new Error(`expected 3 wide tables, found ${n}`);
+  const seen = [];
+  for (let i = 0; i < n; i++) {
+    const w = await page.eval(`(() => {
+      const e = ${SIDEWAYS}[${i}];
+      e.scrollIntoView({ block: 'center' });
+      const r = e.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + Math.min(r.height / 2, 60), sw: e.scrollWidth, cw: e.clientWidth };
+    })()`);
+    await sleep(500);
+    const top = await page.eval(`window.__qaScroller ? window.__qaScroller.scrollTop : 0`);
+    // A finger's drag, not a wheel: on the web the inverted chat list takes
+    // every wheel event for itself (react-native-web's inverted wheel
+    // handler), which a phone never sends.
+    await page.send('Input.synthesizeScrollGesture', {
+      x: w.x,
+      y: w.y,
+      xDistance: -300,
+      yDistance: 0,
+      gestureSourceType: 'touch',
+      speed: 1200,
+    });
+    await sleep(500);
+    const after = await page.eval(`(() => ({ x: ${SIDEWAYS}[${i}].scrollLeft, top: window.__qaScroller ? window.__qaScroller.scrollTop : 0 }))()`);
+    seen.push({ width: [w.sw, w.cw], scrollLeft: after.x, chatMoved: after.top !== top });
+  }
+  log('tables', JSON.stringify(seen));
+  if (seen.some((t) => !(t.scrollLeft > 0))) throw new Error(`a wide table didn't scroll sideways: ${JSON.stringify(seen)}`);
+};
+
 /** Long-press the message whose words start with `start`, as a finger held on it. */
 const holdMessage = async (page, start) => {
   const box = await page.eval(`(() => {
@@ -1349,6 +1394,27 @@ const LIVE = [
     },
     check:
       'Touching a chart: its column stands out (the others dim) and a tooltip names the day with every series’ value',
+  },
+  // Wide tables (dev/mock-tables.ts): a reply's, a table block and a result card's.
+  {
+    name: 'tables-chat',
+    route: '/chat/tables',
+    ready: 'Tables',
+    pages: 4,
+    check:
+      'Three six-column vendor tables wider than the phone: the reply’s, the “Renewals next year” block and the one in the “Vendor renewals for 2027” result card. Each is cut at its well’s right edge with a fade, columns keep readable widths, and the sentences around them wrap normally',
+  },
+  {
+    name: 'tables-scrolled',
+    route: '/chat/tables',
+    ready: 'Tables',
+    act: async (page) => {
+      await page.eval(FIND_SCROLLER);
+      await scrollTablesSideways(page);
+    },
+    pages: 4,
+    check:
+      'After a sideways scroll over each table, every one shows its right-hand columns (Annual cost, Notes) and its fade is gone at the end, while the words above and below, the card’s title and its checks have not moved',
   },
   // A conversation's living page (dev/mock-page.ts): pinned above the messages.
   {

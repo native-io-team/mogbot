@@ -97,6 +97,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { cafePage, iconSheet, pdf, signinPage, siteScreenshot } from './mock-assets';
 import { createMockRelay } from './mock-relay';
 import { blocksMessages, briefMessages } from './mock-blocks';
+import { tablesMessages } from './mock-tables';
 import { PAGE_AGENT, pageMock } from './mock-page';
 import { addHeavyAccount, heavyImportTalk } from './mock-heavy';
 import { addTortureAccount, tortureAction } from './mock-torture';
@@ -1028,6 +1029,18 @@ export function createMockServer(opts: MockOptions = {}) {
     unread: 0,
   });
   messages.set('brief', briefMessages(now));
+  // Wide tables in a reply, a table block and a result card (dev/mock-tables.ts).
+  agents.push({
+    ...structuredClone(sample),
+    id: 'tables',
+    name: 'Tables',
+    pinned: false,
+    hidden: true,
+    status: { state: 'idle', activity: null, since: null },
+    pendingApprovals: 0,
+    unread: 0,
+  });
+  messages.set('tables', tablesMessages(now));
   // A conversation with a living page (`agents/page.rs`, dev/mock-page.ts).
   const pages = pageMock(now);
   agents.push({

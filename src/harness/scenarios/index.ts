@@ -11,6 +11,7 @@ import { agentsLiveScenarios } from './agentsLive';
 import { agentsResultsScenarios } from './agentsResults';
 import { agentsShowWorkScenarios } from './agentsShowWork';
 import { agentsBlocksScenarios } from './agentsBlocks';
+import { agentsWideTablesScenarios } from './agentsWideTables';
 import { agentsPageScenarios } from './agentsPage';
 import { agentsBriefBlocksScenarios } from './agentsBriefBlocks';
 import { agentsPreviewScenarios } from './agentsPreview';
@@ -75,6 +76,7 @@ export const scenarios: Scenario[] = [
   ...agentsResultsScenarios,
   ...agentsShowWorkScenarios,
   ...agentsBlocksScenarios,
+  ...agentsWideTablesScenarios,
   ...agentsPageScenarios,
   ...agentsBriefBlocksScenarios,
   ...agentsPreviewScenarios,

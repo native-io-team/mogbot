@@ -45,6 +45,7 @@ import { iconSize, keySize, radius, space, squircle } from '../lib/theme';
 import { useApp, useServed } from '../lib/store';
 import { Attachments } from './attachments';
 import { Compare } from './compare';
+import { Markdown, MarkdownSurface } from './Markdown';
 import { useCopyParts, type CopyProps } from './copy';
 import { Card, Line, offlineNote, TextAction } from './surfaces';
 import { Icon, T } from './ui';
@@ -234,7 +235,13 @@ function Body({
           </T>
         </View>
       )}
-      {!!card.summary && <T color={colors.textBody}>{card.summary}</T>}
+      {/* Markdown, as a reply is: a table in it scrolls sideways in its own
+          well, fading into the card, instead of arriving as rows of pipes. */}
+      {!!card.summary && (
+        <MarkdownSurface.Provider value={colors.surfacePanel}>
+          <Markdown text={card.summary} />
+        </MarkdownSurface.Provider>
+      )}
       {pages.length > 0 && <Compare agentId={agentId} pages={pages} />}
       {files.length > 0 && <Attachments agentId={agentId} attachments={files} onError={onError} />}
       {links.length > 0 && (

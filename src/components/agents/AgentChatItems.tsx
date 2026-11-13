@@ -7,7 +7,6 @@
 
 import {
   memo,
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -87,6 +86,7 @@ import { requestSwitcher, switcherMounted } from '../../lib/agentAccounts';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
+import { useProseLinks } from './useProseLinks';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import {
   connectorTextParts,
@@ -104,8 +104,6 @@ import {
   retryPhrase,
   formatDivider,
   formatExactTime,
-  localPathFromHref,
-  openLocalPath,
   peerGroupLabel,
   revokePermission,
   splitQuotes,
@@ -123,38 +121,6 @@ import {
  */
 interface Arrival {
   arrived?: boolean;
-}
-
-/**
- * Links in agent text: web links open in the system browser, never in the app
- * webview; a local path opens in its default app (⌘-click shows it in Finder
- * instead). The backend decides what is safe to open: folders, apps and
- * scripts are only ever revealed.
- */
-function useProseLinks(agentId: string) {
-  const { showToast } = useOptionalToast();
-  return useCallback(
-    (event: MouseEvent<HTMLElement>) => {
-      const anchor = (event.target as HTMLElement).closest('a');
-      const href = anchor?.getAttribute('href');
-      if (!href) return;
-      event.preventDefault();
-      if (/^(https?|mailto):/i.test(href)) {
-        void openUrl(href);
-        return;
-      }
-      const path = localPathFromHref(href);
-      if (!path) return;
-      const reveal = event.metaKey;
-      openLocalPath(agentId, path, reveal).then(
-        (done) => {
-          if (done === 'reveal' && !reveal) showToast('Shown in Finder', 'info');
-        },
-        (error: unknown) => showToast(formatCommandError(asCommandError(error)), 'error')
-      );
-    },
-    [agentId, showToast]
-  );
 }
 
 /**

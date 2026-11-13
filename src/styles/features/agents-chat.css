@@ -806,6 +806,17 @@
   overflow-wrap: break-word;
 }
 
+/* A column of words keeps a readable width: past what fits, the table
+   scrolls in its frame rather than squeezing the right-hand columns. */
+.agent-markdown :is(th, td):not([align='right']) {
+  min-width: var(--agents-table-cell-min);
+}
+
+/* A figure is never broken over two lines. */
+.agent-markdown :is(th, td)[align='right'] {
+  white-space: nowrap;
+}
+
 .agent-markdown th {
   font-weight: var(--font-weight-heading);
   color: var(--text-secondary);

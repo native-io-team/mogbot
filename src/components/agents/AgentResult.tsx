@@ -56,6 +56,8 @@ import {
 } from '@/components/icons';
 import { useAgentPreview } from './AgentPreviewContext';
 import { TestReportView } from './AgentTestReport';
+import { Prose } from './AgentProse';
+import { useProseLinks } from './useProseLinks';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
@@ -272,6 +274,7 @@ function ResultBody({
   );
   const rows = listed.filter((item) => !(item.kind === 'file' && isImageMime(item.file.mime)));
   const changes = card.version > 1 ? card.changes?.trim() : undefined;
+  const onProseClick = useProseLinks(agent.id);
   return (
     <>
       {changes && (
@@ -280,7 +283,13 @@ function ResultBody({
           <p className="agent-result__changes-text">{changes}</p>
         </div>
       )}
-      {card.summary && <p className="agent-result__summary">{card.summary}</p>}
+      {/* Markdown, as a reply is: a table in it scrolls sideways in its own
+          frame (agents-chat.css) instead of arriving as rows of pipes. */}
+      {card.summary && (
+        <div className="agent-result__summary agent-markdown" onClick={onProseClick}>
+          <Prose text={card.summary} />
+        </div>
+      )}
       {/* The work first; what it checked and what it didn't come after it,
           together, so the caveats are read beside the claims they qualify. */}
       <ResultCompare agent={agent} pages={pages} onView={setViewing} />

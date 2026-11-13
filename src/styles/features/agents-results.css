@@ -123,7 +123,9 @@
   font-size: var(--font-size-subhead-lg);
   line-height: var(--line-height-reading);
   color: var(--text-primary);
-  white-space: pre-wrap;
+  /* Markdown, as a reply is; a table in it scrolls in its own frame, so the
+     summary may be narrower than its widest line. */
+  min-width: 0;
   overflow-wrap: anywhere;
   -webkit-user-select: text;
   user-select: text;

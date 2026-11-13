@@ -61,6 +61,11 @@
   /* A card (approval, result, copy): one step forward of the canvas. Dark
      gets that from the control fill; light from a white panel ringed by a
      hairline shadow, or the Allow card reads as a faint smudge. */
+  /* A table cell's narrowest, so a wide table keeps readable columns and
+     scrolls sideways in its own frame instead of squeezing the right-hand
+     ones to a word, or a letter, a line. Figures and short columns don't
+     wrap at all, so they need none. */
+  --agents-table-cell-min: 9em;
   --agents-card-surface: var(--surface-control);
   --agents-card-shadow: var(--shadow-card);
 }
