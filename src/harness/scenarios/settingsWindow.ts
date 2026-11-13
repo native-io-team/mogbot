@@ -71,6 +71,26 @@ export const settingsWindowScenarios: Scenario[] = [
     },
   },
   {
+    id: 'settings-page-accounts-opencode',
+    title: 'Settings — Accounts & usage with OpenCode installed too',
+    looksRightWhen:
+      'Add a Claude Code account and Add a Codex account, and no Add an OpenCode account: OpenCode keeps no accounts here (its providers are set up in OpenCode).',
+    command: 'settings.page.accounts',
+    requires: '[data-settings-page="accounts"] [data-add-account]',
+    clipSelector: '.settings-window',
+    viewport: VIEWPORT,
+    commands: {
+      agents_overview: {
+        ...overview(TEAM),
+        engines: [
+          ...ENGINES,
+          { id: 'opencode', label: 'OpenCode', installed: true, signedIn: true, models: [] },
+        ],
+        defaults: DEFAULTS,
+      },
+    },
+  },
+  {
     id: 'settings-page-narrow',
     title: 'Settings — a narrow window',
     looksRightWhen:

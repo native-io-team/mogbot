@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOptionalToast } from '../../contexts/ToastContext';
-import { asCommandError, formatCommandError } from '../../lib/errors';
+import { asCommandError, formatCommandError, isExpectedCommandError } from '../../lib/errors';
 import {
   listUsageAccounts,
   onUsageAccountsChanged,
@@ -74,7 +74,11 @@ export function useUsageAccounts() {
         reload();
         return true;
       } catch (e) {
-        showToast(formatCommandError(asCommandError(e)), 'error');
+        // A refusal of what was typed (a name already taken) is the app
+        // working: said plainly, never an 'error' toast, which files a report.
+        const err = asCommandError(e);
+        const refused = err.type === 'Validation' || isExpectedCommandError(err);
+        showToast(formatCommandError(err), refused ? 'info' : 'error');
         return false;
       }
     },

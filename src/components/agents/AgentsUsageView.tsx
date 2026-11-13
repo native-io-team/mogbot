@@ -47,7 +47,12 @@ import {
 } from '../primitives/Breadcrumb';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { ENGINE_LABEL, updateAgent, type AgentEngine } from '../../lib/agents';
+import {
+  ENGINE_LABEL,
+  ENGINES_WITH_ACCOUNTS,
+  updateAgent,
+  type AgentEngine,
+} from '../../lib/agents';
 import {
   addUsageAccount,
   onUsageAccountRequest,
@@ -165,6 +170,8 @@ export function UsagePanel({
   // The account whose page is showing; null on the overview.
   const [open, setOpen] = useState<UsageAccountRef | null>(() => takeUsageAccount());
   const installed = engines.filter((e) => e.installed).map((e) => e.id);
+  // Only these keep accounts here; OpenCode's providers are set up in OpenCode.
+  const accountable = installed.filter((e) => ENGINES_WITH_ACCOUNTS.includes(e));
   // Engines agents can run on that aren't here yet: offered, never hidden.
   const missing = engines.filter((e) => !e.installed).map((e) => e.id);
   const setUpButtons = missing.map((engine) => (
@@ -248,16 +255,16 @@ export function UsagePanel({
   // add to. In Settings, also the palette's request for a given engine, and
   // being scrolled to.
   useEffect(() => {
-    if (installed.length === 0) return;
+    if (accountable.length === 0) return;
     const asked = inSettings ? takeAccountsRequest() : null;
     if (inSettings && takeSettingsSectionRequest('agent-usage')) {
       top.current?.scrollIntoView?.({ block: 'start' });
     }
-    if (asked && asked !== 'show' && installed.includes(asked)) void add(asked);
-    else if (takeUsageAdd()) void add(installed[0]);
+    if (asked && asked !== 'show' && accountable.includes(asked)) void add(asked);
+    else if (takeUsageAdd()) void add(accountable[0]);
     // Once, when the engines are known.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [installed.length]);
+  }, [accountable.length]);
 
   // An account the Chief added from chat (`manage_account add`): its
   // sign-in runs here, once the list has it. Only Settings answers, which is
@@ -409,11 +416,14 @@ export function UsagePanel({
             <div className="usage-bar" role="status" data-testid="usage-low">
               <p className="usage-bar__text">{glance.low.text}</p>
               <div className="usage-bar__actions">
-                {installed.length > 0 && (
+                {accountable.length > 0 && (
                   <Button
                     variant="secondary"
                     leftIcon={<AddIcon size={14} />}
-                    onClick={() => void add(glance.keys[0]?.engine ?? installed[0])}
+                    onClick={() => {
+                      const first = glance.keys[0]?.engine;
+                      void add(first && accountable.includes(first) ? first : accountable[0]);
+                    }}
                   >
                     Add an account
                   </Button>
@@ -446,7 +456,7 @@ export function UsagePanel({
                 </h3>
                 {installed.length > 0 && (
                   <div className="usage-add__buttons">
-                    {installed.map((engine) => (
+                    {accountable.map((engine) => (
                       <Button
                         key={engine}
                         variant="ghost"
@@ -454,7 +464,7 @@ export function UsagePanel({
                         onClick={() => void add(engine)}
                         data-add-account={engine}
                       >
-                        {installed.length > 1 || missing.length > 0
+                        {accountable.length > 1 || missing.length > 0
                           ? `Add a ${ENGINE_LABEL[engine]} account`
                           : 'Add an account'}
                       </Button>
@@ -496,7 +506,7 @@ export function UsagePanel({
           {glance.keys.length === 0 && installed.length > 0 && (
             <div className="usage-add">
               <div className="usage-add__buttons">
-                {installed.map((engine) => (
+                {accountable.map((engine) => (
                   <Button
                     key={engine}
                     variant="secondary"

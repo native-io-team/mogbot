@@ -3,11 +3,18 @@
  * events, after each change); an older read answering late must not put the
  * old order back over a newer one.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import type { UsageAccount } from '../../lib/agentAccounts';
 import { useUsageAccounts } from './useUsageAccounts';
+
+const toasts: [string, string | undefined][] = [];
+vi.mock('../../contexts/ToastContext', () => ({
+  useOptionalToast: () => ({
+    showToast: (text: string, type?: string) => toasts.push([text, type]),
+  }),
+}));
 
 afterEach(() => {
   cleanup();
@@ -53,5 +60,31 @@ describe('useUsageAccounts', () => {
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(result.current.accounts?.map((a) => a.id)).toEqual(['work', 'default']);
+  });
+
+  it('says a refused name plainly, not as an error that files a report', async () => {
+    mockIPC((cmd) => (cmd === 'agents_accounts' ? [] : null), { shouldMockEvents: true });
+    const { result } = renderHook(() => useUsageAccounts());
+    toasts.length = 0;
+    await act(async () => {
+      // A command rejects with the plain CommandError object, as Tauri does.
+      await result.current.attempt(() =>
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        Promise.reject({
+          type: 'Validation',
+          field: 'name',
+          reason: "There's already a Claude Code account called Account 2.",
+        })
+      );
+    });
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0][1]).toBe('info');
+
+    toasts.length = 0;
+    await act(async () => {
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      await result.current.attempt(() => Promise.reject({ type: 'Io', message: 'disk full' }));
+    });
+    expect(toasts[0][1]).toBe('error');
   });
 });

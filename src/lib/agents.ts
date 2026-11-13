@@ -422,6 +422,9 @@ export interface SchedulePreview {
 
 export type AgentEngine = 'claude' | 'codex' | 'opencode';
 
+/** Mirrors `Engine::PLANS`: the engines whose accounts are kept here. */
+export const ENGINES_WITH_ACCOUNTS: readonly AgentEngine[] = ['claude', 'codex'];
+
 /** Mirrors `store::EFFORTS`: the levels both engines take. */
 export type AgentEffort = 'low' | 'medium' | 'high';
 
