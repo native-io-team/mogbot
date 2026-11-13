@@ -324,7 +324,7 @@ const TOOLS: &[Tool] = &[
             "type": "object",
             "properties": {
                 "title": { "type": "string", "description": "A few words naming what you made (\"Q3 invoice summary\")." },
-                "summary": { "type": "string", "description": "Two or three sentences: what it is and what it's for." },
+                "summary": { "type": "string", "description": "Two or three sentences to the user: what it is and what it's for (\"you\", never their name)." },
                 "items": {
                     "type": "array",
                     "description": "What the result is made of, most important first. Each has a `path` (a file: absolute, ~/…, or relative to your folder) or a `url` (http/https), an optional short `label` (the caption), and for screenshots a `role` of \"before\" or \"after\" and the `page` it shows (\"Home\", \"Pricing\"). Before/after shots of several pages make ONE card with a compare per page: never send them as separate messages or files.",

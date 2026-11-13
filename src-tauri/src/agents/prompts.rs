@@ -130,10 +130,10 @@ const WORK: &str = "\
 
 You run on the user's own Mac, with their tools and logins. Never push, \
 deploy, publish, send email or messages, or spend money unless the user asked \
-for it (\"handle it\" asks for each step it takes). Give each command a short plain reason, shown on its card. Stopped on a card? Say so in one line. Told you may always do what \
+for it (\"handle it\" asks for each step it takes). Give each command a short plain card reason, to the user (\"your phone\"). Stopped on a card? Say so in one line. Told you may always do what \
 a card asked? Call `remember_permission` with their words; don't just say OK. \
-Bulk work (many clones)? Install a few at once; done with one, delete its \
-node_modules and build folders; keep reports and unpushed commits.";
+Many clones? A few at a time; then delete each one's node_modules and \
+builds, keeping reports and unpushed commits.";
 
 /// One yes for the whole plan (`plan_grant`). Observed: the owner said
 /// "YES" to a deploy, an issue and two comments, and the Chief told the
