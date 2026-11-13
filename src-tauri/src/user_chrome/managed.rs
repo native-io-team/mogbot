@@ -12,7 +12,9 @@
 //! - **This Mac** (MDM): `/Library/Managed Preferences/com.google.Chrome.plist`
 //!   and the per-user copy beside it. Read with `plutil`; every profile on
 //!   this Mac gets it, so a new profile doesn't help. [`blocks`] reads the
-//!   policies that stop an unpacked extension or its native host.
+//!   policies that stop an unpacked extension or its native host. Linux:
+//!   the JSON files in `/etc/opt/chrome/policies/{managed,recommended}`.
+//!   Windows: `Software\Policies\Google\Chrome` in HKLM and HKCU (read only).
 //! - **A profile** (a Google Workspace account signed in to that profile,
 //!   policy set in Google Admin): kept as `<profile>/Policy/User Policy`, a
 //!   signed protobuf this module doesn't parse. Its presence says the profile
@@ -28,7 +30,7 @@
 
 use serde::Serialize;
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// One Chrome profile, as Chrome lists it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -155,7 +157,8 @@ pub fn blocks(policy: &Value, ids: &[String], host: &str) -> Vec<Block> {
 }
 
 /// This Mac's Chrome policy files (MDM): the machine's and this user's.
-pub fn machine_policy_files() -> Vec<PathBuf> {
+#[cfg(target_os = "macos")]
+pub fn machine_policy_files() -> Vec<std::path::PathBuf> {
     let root = Path::new("/Library/Managed Preferences");
     let mut out = vec![root.join("com.google.Chrome.plist")];
     if let Some(user) = dirs::home_dir().and_then(|h| h.file_name().map(|n| n.to_owned())) {
@@ -165,6 +168,7 @@ pub fn machine_policy_files() -> Vec<PathBuf> {
 }
 
 /// A policy plist as JSON, through `plutil` (managed plists are binary).
+#[cfg(target_os = "macos")]
 fn read_plist(path: &Path) -> Option<Value> {
     if !path.is_file() {
         return None;
@@ -180,17 +184,90 @@ fn read_plist(path: &Path) -> Option<Value> {
         .flatten()
 }
 
-/// What this Mac's Chrome policy blocks, read now.
+/// Linux: Chrome's policy folders, each holding JSON files of policies.
+pub const LINUX_POLICY_DIRS: [&str; 2] = [
+    "/etc/opt/chrome/policies/managed",
+    "/etc/opt/chrome/policies/recommended",
+];
+
+/// The policy documents Chrome reads on this computer, as JSON objects of
+/// Chrome's policy names.
+fn machine_policies() -> Vec<Value> {
+    #[cfg(target_os = "macos")]
+    let out = machine_policy_files()
+        .iter()
+        .filter_map(|p| read_plist(p))
+        .collect();
+    #[cfg(target_os = "windows")]
+    let out = [super::win::Root::Machine, super::win::Root::User]
+        .into_iter()
+        .map(windows_policy)
+        .collect();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let out = LINUX_POLICY_DIRS
+        .iter()
+        .filter_map(|d| std::fs::read_dir(d).ok())
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .filter_map(|p| serde_json::from_slice(&std::fs::read(p).ok()?).ok())
+        .collect();
+    out
+}
+
+/// Windows: the DWORD policies [`blocks`] reads.
+pub const WINDOWS_DWORD_POLICIES: [&str; 3] = [
+    "ExtensionDeveloperModeSettings",
+    "DeveloperToolsAvailability",
+    "NativeMessagingUserLevelHosts",
+];
+
+/// Windows: the list policies [`blocks`] reads, each a subkey of values
+/// "1", "2", ….
+pub const WINDOWS_LIST_POLICIES: [&str; 5] = [
+    "ExtensionInstallBlocklist",
+    "ExtensionInstallAllowlist",
+    "ExtensionAllowedTypes",
+    "NativeMessagingBlocklist",
+    "NativeMessagingAllowlist",
+];
+
+/// Windows: Chrome's policy under `root` (`Software\Policies\Google\Chrome`)
+/// as the JSON object [`blocks`] takes. `ExtensionSettings` is a JSON string.
+#[cfg(target_os = "windows")]
+fn windows_policy(root: super::win::Root) -> Value {
+    use super::win;
+    const KEY: &str = r"Software\Policies\Google\Chrome";
+    let mut out = serde_json::Map::new();
+    for name in WINDOWS_DWORD_POLICIES {
+        if let Some(v) = win::get_dword(root, KEY, name) {
+            out.insert(name.into(), Value::from(v));
+        }
+    }
+    for name in WINDOWS_LIST_POLICIES {
+        let values = win::string_values(root, &format!(r"{KEY}\{name}"));
+        if !values.is_empty() {
+            out.insert(name.into(), Value::from(values));
+        }
+    }
+    if let Some(v) = win::get_string(root, KEY, Some("ExtensionSettings"))
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+    {
+        out.insert("ExtensionSettings".into(), v);
+    }
+    Value::Object(out)
+}
+
+/// What this computer's Chrome policy blocks, read now.
 pub fn machine_blocks() -> Vec<Block> {
     let ids = super::auth::extension_ids();
     let host = super::install::host_name();
     let mut out: Vec<Block> = Vec::new();
-    for p in machine_policy_files() {
-        if let Some(v) = read_plist(&p) {
-            for b in blocks(&v, &ids, &host) {
-                if !out.contains(&b) {
-                    out.push(b);
-                }
+    for v in machine_policies() {
+        for b in blocks(&v, &ids, &host) {
+            if !out.contains(&b) {
+                out.push(b);
             }
         }
     }
@@ -309,12 +386,18 @@ pub fn new_profile_dir(existing: &[Profile]) -> String {
 /// `open`'s arguments to show Chrome in profile `dir` (Chrome makes the
 /// profile when the folder doesn't exist yet). `-n` hands the arguments to
 /// the running Chrome, which opens a window for that profile.
+/// The switch that opens profile `dir` when Chrome's binary is started
+/// with it (Windows, Linux: a running Chrome takes it and opens a window).
+pub fn profile_switch(dir: &str) -> String {
+    format!("--profile-directory={dir}")
+}
+
 pub fn open_profile_args(dir: &str) -> Vec<String> {
     vec![
         "-na".into(),
         "Google Chrome".into(),
         "--args".into(),
-        format!("--profile-directory={dir}"),
+        profile_switch(dir),
     ]
 }
 

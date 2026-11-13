@@ -27,6 +27,7 @@ turn, Claude Code and Codex alike.
    │ user_chrome::tools: the gate (browser_gate), refs, page logic (PageCdp)
    ▼
  link: Unix socket in the app's folder (user_chrome::link), 0600 in 0700
+       (Windows: a named pipe, this user's SID only, no remote clients)
    ▲ handshake: HMAC proofs both ways over a per-launch token
    │
  native host = the app's own binary, started by Chrome (user_chrome::host)
@@ -48,10 +49,11 @@ turn, Claude Code and Codex alike.
 | `auth` | The extension ids allowed (dev id fixed by the manifest key; Web Store id from `brand.json`), the token file, nonces and proofs. |
 | `link` | The socket (stale one replaced, live one never stolen, peer uid checked), the handshake, one `Conn` per Chrome profile (a reconnecting profile replaces its old link), blocking `call` with timeouts, events to the tools. |
 | `host` | The native host: refuses any other origin, tells the extension `app_not_running` when the app is away, then relays frames unchanged. `main.rs` runs it before anything else when argv[1] is `chrome-extension://…`, so there is no extra binary to ship or sign. |
-| `install` | The host manifest (`<Chrome user data>/NativeMessagingHosts/<identifier>.chrome_link.json`), staging the extension into the app's data folder for Load unpacked, the External Extensions file once listed. |
+| `install` | The host manifest (`<Chrome user data>/NativeMessagingHosts/<identifier>.chrome_link.json`; on Windows in the app's folder, named by `HKCU` keys; see "Linux and Windows"), staging the extension into the app's data folder for Load unpacked, the External Extensions file once listed. |
 | `tools` | The `user_chrome` MCP server: the agents' browser's 13 tools with identical names and schemas (a test holds them equal), plus `hover`, `browsers`, `use_browser`. Per-agent tab ownership, refs, the gate, cards. |
 | `settings` | `user-chrome.json`, **off** by default. |
-| `managed` | Whether Chrome's policy (this Mac's, or a work profile's) keeps the extension out; the profiles, which are managed, and opening a personal one. |
+| `win` | Windows only: the pipe's DACL and peer checks, and the registry reads and writes. |
+| `managed` | Whether Chrome's policy (this computer's, or a work profile's) keeps the extension out; the profiles, which are managed, and opening a personal one. |
 
 `agent_browser/page.rs` (new) is the page logic both browsers share:
 `PageCdp` has one required method, `cdp(method, params)`; navigate, settle,
@@ -85,7 +87,7 @@ permissions, no content scripts.
   each time the link starts. A process squatting on the socket can't pass;
   a host without the token learns nothing. The extension never holds the
   token.
-- **Never on the network**: a Unix socket, not a port. No web page can reach
+- **Never on the network**: a Unix socket (a named pipe on Windows), not a port. No web page can reach
   it (no DNS rebinding, no `fetch` to localhost). Debug builds may move it
   with `MOGBOT_CHROME_LINK_DIR`; release builds ignore that variable, so
   nothing in Chrome's environment can point a real host elsewhere.
@@ -354,6 +356,30 @@ answered by the app itself (no extension), for any engine.
   hard floor (Terminal, System Settings, password fields, Keychain Access).
   The app shows a persistent "an agent is using your Mac" bar with Stop.
 - Not started.
+
+## Linux and Windows
+
+The same link, host and handshake; only where things live changes.
+
+| | Linux | Windows |
+|---|---|---|
+| Link | Unix socket, as on macOS (`peer_cred` uid check) | Named pipe `\\.\pipe\<slug>-chrome-link-<hash of the link folder>`: protected DACL with only this user's SID, `reject_remote_clients`, `first_pipe_instance` (a second copy or a squatter makes start fail, never shares). The app checks each client's process runs as this user; the host opens with `SECURITY_IDENTIFICATION` (the app can't impersonate it) and checks the server runs as this user. The token proofs run on top, both ways |
+| Token | 0600 in a 0700 folder | In `%LOCALAPPDATA%`, whose inherited ACL admits only the user, SYSTEM and Administrators |
+| Chrome's user data | `~/.config/google-chrome` | `%LOCALAPPDATA%\Google\Chrome\User Data` |
+| Host manifest | `NativeMessagingHosts/` under Chrome's, and Chromium's (`~/.config/chromium`) and Brave's (`~/.config/BraveSoftware/Brave-Browser`) when installed | In the app's folder (`chrome-host/NativeMessagingHosts/`), named by the default value of `HKCU\Software\{Google\Chrome, Microsoft\Edge, Chromium}\NativeMessagingHosts\<name>`. Only HKCU is written |
+| Policy read | JSON in `/etc/opt/chrome/policies/{managed,recommended}` | `HKLM` and `HKCU` `Software\Policies\Google\Chrome` (read only) |
+| Web Store offer | None per user (system folders only): the store page alone | `HKCU\Software\Google\Chrome\Extensions\<id>` `update_url` |
+| Opening Chrome's pages and profiles | Chrome's binary with `chrome://extensions/` or `--profile-directory=` | Same |
+
+No binary copy is made off macOS (folder-access prompts are macOS's), and
+the binary is named by its plain path (no `\\?\` prefix, which Chrome's
+`cmd.exe` launch can't take).
+
+**Verified**: compiles for Windows (`cargo xwin check`/`clippy`, with a stub
+resource compiler), unit tests on macOS. **Not verified**: anything run on
+Linux or Windows; Chrome actually starting the host there; the pipe's DACL
+and peer checks against a real second user; whether Chrome opens
+`chrome://extensions/` from a launch argument on those systems.
 
 ## Verified vs assumed
 

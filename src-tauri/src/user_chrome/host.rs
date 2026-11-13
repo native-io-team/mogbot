@@ -10,7 +10,9 @@
 //!
 //! 1. Refuses any origin but the app's extension (Chrome already only starts
 //!    it for the ids in its manifest; this is the second check).
-//! 2. Reads the link's token (0600, this user's) and connects to the socket.
+//! 2. Reads the link's token (0600, this user's) and connects to the socket
+//!    (on Windows the pipe, checked to be served by this user, opened so
+//!    the app can identify the host but never act as it).
 //!    If the app isn't running it tells the extension so
 //!    ([`ToExtension::Unavailable`]) and exits, and the extension backs off.
 //! 3. The handshake: the app proves the token first, then the host does.
@@ -19,9 +21,13 @@
 //!    Chrome a frame over Chrome's 1 MiB limit.
 
 use std::io::{self, Read, Write};
-use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::time::Duration;
+
+#[cfg(windows)]
+pub use pipe::PipeStream as LinkStream;
+#[cfg(unix)]
+pub use std::os::unix::net::UnixStream as LinkStream;
 
 use super::auth;
 use super::frame::{self, FrameError, MAX_FROM_CHROME, MAX_TO_CHROME};
@@ -103,9 +109,12 @@ fn tell<W: Write>(out: &mut W, reason: &str) {
 }
 
 /// Connect and handshake. `Err`: the reason the extension is told.
-pub fn connect(dir: &Path, origin: &str) -> Result<UnixStream, &'static str> {
+pub fn connect(dir: &Path, origin: &str) -> Result<LinkStream, &'static str> {
     let token = auth::read_token(dir).map_err(|_| "app_not_running")?;
-    let stream = UnixStream::connect(auth::socket_path(dir)).map_err(|_| "app_not_running")?;
+    #[cfg(unix)]
+    let stream = LinkStream::connect(auth::socket_path(dir)).map_err(|_| "app_not_running")?;
+    #[cfg(windows)]
+    let stream = LinkStream::connect(&auth::pipe_name(dir)).map_err(|_| "app_not_running")?;
     stream
         .set_read_timeout(Some(Duration::from_secs(10)))
         .map_err(|_| "app_not_running")?;
@@ -127,7 +136,7 @@ fn recv<R: Read>(r: &mut R) -> Result<Handshake, &'static str> {
 }
 
 /// The host's half of the handshake.
-pub fn handshake(mut s: UnixStream, token: &str, origin: &str) -> Result<UnixStream, &'static str> {
+pub fn handshake(mut s: LinkStream, token: &str, origin: &str) -> Result<LinkStream, &'static str> {
     let host_nonce = auth::nonce();
     send(
         &mut s,
@@ -161,7 +170,7 @@ pub fn handshake(mut s: UnixStream, token: &str, origin: &str) -> Result<UnixStr
 /// real host; Chrome then sees the port close and the extension reconnects
 /// later). Tests leave it off and close Chrome's side themselves.
 pub fn relay<R: Read, W: Write + Send>(
-    stream: UnixStream,
+    stream: LinkStream,
     from_chrome: &mut R,
     to_chrome: &mut W,
     exit_with_app: bool,
@@ -204,4 +213,146 @@ pub fn relay<R: Read, W: Write + Send>(
         let _ = back.join();
         forward
     })
+}
+
+/// Windows: the link's pipe as a blocking stream, for the host's two relay
+/// threads. A synchronous pipe handle serialises every read and write on it
+/// (one thread blocked reading would stop the other writing), so the pipe
+/// is opened overlapped through tokio and each side's read or write is
+/// driven on a one-thread runtime instead. Clones share the pipe; shutdown
+/// ends every read with end-of-stream, so the relay's other thread stops.
+#[cfg(windows)]
+pub mod pipe {
+    use std::io::{self, Read, Write};
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+    use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
+    use tokio_util::sync::CancellationToken;
+
+    use super::super::win;
+
+    struct Shared {
+        rt: tokio::runtime::Runtime,
+        pipe: NamedPipeClient,
+        closed: CancellationToken,
+        read_timeout: Mutex<Option<Duration>>,
+    }
+
+    pub struct PipeStream(Arc<Shared>);
+
+    impl PipeStream {
+        /// Open the app's pipe `name`: retried while every instance is busy
+        /// for a moment, and refused unless the app serving it runs as this
+        /// user.
+        pub fn connect(name: &str) -> io::Result<PipeStream> {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .enable_all()
+                .build()?;
+            let pipe = {
+                let _enter = rt.enter();
+                let mut tries = 0;
+                loop {
+                    match ClientOptions::new()
+                        .security_qos_flags(win::SECURITY_IDENTIFICATION)
+                        .open(name)
+                    {
+                        Ok(p) => break p,
+                        Err(e) if e.raw_os_error() == Some(win::ERROR_PIPE_BUSY) && tries < 50 => {
+                            tries += 1;
+                            std::thread::sleep(Duration::from_millis(20));
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+            };
+            if !win::peer_is_this_user(&pipe, false) {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "the link's pipe isn't served by this user",
+                ));
+            }
+            Ok(PipeStream(Arc::new(Shared {
+                rt,
+                pipe,
+                closed: CancellationToken::new(),
+                read_timeout: Mutex::new(None),
+            })))
+        }
+
+        pub fn try_clone(&self) -> io::Result<PipeStream> {
+            Ok(PipeStream(self.0.clone()))
+        }
+
+        pub fn set_read_timeout(&self, t: Option<Duration>) -> io::Result<()> {
+            *self
+                .0
+                .read_timeout
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = t;
+            Ok(())
+        }
+
+        /// Every read, now and later, ends as end-of-stream.
+        pub fn shutdown(&self, _how: std::net::Shutdown) -> io::Result<()> {
+            self.0.closed.cancel();
+            Ok(())
+        }
+    }
+
+    impl Read for PipeStream {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let s = &self.0;
+            let wait = *s.read_timeout.lock().unwrap_or_else(|e| e.into_inner());
+            s.rt.block_on(async {
+                let read = async {
+                    loop {
+                        s.pipe.readable().await?;
+                        match s.pipe.try_read(buf) {
+                            Ok(n) => return Ok(n),
+                            Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                            // The app closed its end: the end of the stream.
+                            Err(e) if e.kind() == io::ErrorKind::BrokenPipe => return Ok(0),
+                            Err(e) => return Err(e),
+                        }
+                    }
+                };
+                let read = async {
+                    match wait {
+                        Some(w) => tokio::time::timeout(w, read)
+                            .await
+                            .unwrap_or_else(|_| Err(io::ErrorKind::TimedOut.into())),
+                        None => read.await,
+                    }
+                };
+                tokio::select! {
+                    _ = s.closed.cancelled() => Ok(0),
+                    r = read => r,
+                }
+            })
+        }
+    }
+
+    impl Write for PipeStream {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let s = &self.0;
+            if s.closed.is_cancelled() {
+                return Err(io::ErrorKind::BrokenPipe.into());
+            }
+            s.rt.block_on(async {
+                loop {
+                    s.pipe.writable().await?;
+                    match s.pipe.try_write(buf) {
+                        Ok(n) => return Ok(n),
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                        Err(e) => return Err(e),
+                    }
+                }
+            })
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
 }

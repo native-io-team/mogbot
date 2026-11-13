@@ -3,10 +3,14 @@
 //!
 //! - **The native host's manifest**: `<Chrome's user data>/NativeMessagingHosts/<name>.json`,
 //!   naming this app's binary and only the app's extension ids. Chrome's
-//!   per-user location on macOS is the default profile root's
-//!   `NativeMessagingHosts` folder; a Chrome run with `--user-data-dir`
-//!   looks in that folder's own (which is how the end-to-end check stays off
-//!   the user's real Chrome).
+//!   per-user location on macOS (`~/Library/Application Support/Google/Chrome`)
+//!   and Linux (`~/.config/google-chrome`, plus Chromium's and Brave's when
+//!   they're there) is the default profile root's `NativeMessagingHosts`
+//!   folder; a Chrome run with `--user-data-dir` looks in that folder's own
+//!   (which is how the end-to-end check stays off the user's real Chrome).
+//!   On Windows the manifest sits in the app's own folder and
+//!   `HKCU\Software\Google\Chrome\NativeMessagingHosts\<name>` (and Edge's
+//!   and Chromium's) names it; only the current user's hive is written.
 //! - **The extension**: copied from the app's bundle to the app's data folder
 //!   (a stable path for Chrome's "Load unpacked", which an app update would
 //!   otherwise move from under it). Once the Web Store listing exists
@@ -50,9 +54,129 @@ fn host_name_for(identifier: &str) -> String {
     format!("{base}.chrome_link")
 }
 
-/// Google Chrome's own user data folder (the user's real profiles).
+/// Google Chrome's own user data folder (the user's real profiles): where
+/// its profiles, `Local State` and (off Windows) its per-user
+/// `NativeMessagingHosts` folder are.
 pub fn chrome_user_data_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join("Library/Application Support/Google/Chrome"))
+    #[cfg(target_os = "macos")]
+    let dir = dirs::home_dir().map(|h| h.join("Library/Application Support/Google/Chrome"));
+    #[cfg(target_os = "windows")]
+    let dir = dirs::data_local_dir().map(|d| d.join(r"Google\Chrome\User Data"));
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let dir = dirs::config_dir().map(|c| c.join("google-chrome"));
+    dir
+}
+
+/// Linux: the other Chromium browsers' user data folders under the config
+/// folder, which read their own `NativeMessagingHosts` (Chromium, Brave).
+/// The manifest goes into each that is there; Google Chrome's always.
+pub const LINUX_OTHER_BROWSERS: [&str; 2] = ["chromium", "BraveSoftware/Brave-Browser"];
+
+/// Every folder the host's manifest is written under (its
+/// `NativeMessagingHosts`). macOS: Chrome's user data. Linux: Chrome's, and
+/// Chromium's and Brave's when they're installed. Windows: the app's own
+/// folder, which Chrome finds through the registry ([`WINDOWS_HOST_KEYS`]).
+/// The first is the one the status reads.
+pub fn manifest_roots() -> Vec<PathBuf> {
+    #[cfg(target_os = "windows")]
+    let out = vec![host_copy_dir()];
+    #[cfg(not(target_os = "windows"))]
+    #[allow(unused_mut)]
+    let mut out: Vec<PathBuf> = chrome_user_data_dir().into_iter().collect();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    if let Some(config) = dirs::config_dir() {
+        out.extend(
+            LINUX_OTHER_BROWSERS
+                .iter()
+                .map(|b| config.join(b))
+                .filter(|d| d.is_dir()),
+        );
+    }
+    out
+}
+
+/// Windows: the per-user registry keys Chrome, Edge and Chromium read a
+/// native host's manifest path from (`HKCU\<key>\<host name>`, default value).
+pub const WINDOWS_HOST_KEYS: [&str; 3] = [
+    r"Software\Google\Chrome\NativeMessagingHosts",
+    r"Software\Microsoft\Edge\NativeMessagingHosts",
+    r"Software\Chromium\NativeMessagingHosts",
+];
+
+/// The registry key naming host `name` under `base`. Pure.
+pub fn windows_host_key(base: &str, name: &str) -> String {
+    format!(r"{base}\{name}")
+}
+
+/// Windows: every browser's key names `manifest`, and none names the
+/// manifest under the app's previous name.
+#[cfg(target_os = "windows")]
+fn register_windows(manifest: &Path) -> std::io::Result<()> {
+    use super::win::{delete_tree, set_string, Root};
+    let value = manifest.to_string_lossy();
+    for base in WINDOWS_HOST_KEYS {
+        set_string(
+            Root::User,
+            &windows_host_key(base, &host_name()),
+            None,
+            &value,
+        )?;
+        if let Some(old) = previous_host_name() {
+            let _ = delete_tree(Root::User, &windows_host_key(base, &old));
+        }
+    }
+    Ok(())
+}
+
+/// Windows: Chrome's key names `manifest`.
+#[cfg(target_os = "windows")]
+fn registered_windows(manifest: &Path) -> bool {
+    let key = windows_host_key(WINDOWS_HOST_KEYS[0], &host_name());
+    super::win::get_string(super::win::Root::User, &key, None)
+        .is_some_and(|v| Path::new(&v) == manifest)
+}
+
+/// Google Chrome's binary, where it usually installs (the agents' browser
+/// finds it on macOS; Windows and Linux are looked up here).
+pub fn chrome_binary() -> Option<PathBuf> {
+    if let Some(p) = crate::agent_browser::chrome::find_chrome() {
+        return Some(p);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let roots = [
+            std::env::var_os("ProgramFiles"),
+            std::env::var_os("ProgramFiles(x86)"),
+            dirs::data_local_dir().map(PathBuf::into_os_string),
+        ];
+        if let Some(p) = roots
+            .iter()
+            .flatten()
+            .map(|r| Path::new(r).join(r"Google\Chrome\Application\chrome.exe"))
+            .find(|p| p.is_file())
+        {
+            return Some(p);
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let bins = [
+            "/opt/google/chrome/chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/google-chrome",
+        ];
+        if let Some(p) = bins.iter().map(PathBuf::from).find(|p| p.is_file()) {
+            return Some(p);
+        }
+    }
+    None
+}
+
+/// Chrome is installed here: its binary in a usual place or, off macOS, its
+/// user data folder (it has run for this user from somewhere else).
+pub fn chrome_installed() -> bool {
+    chrome_binary().is_some()
+        || (!cfg!(target_os = "macos") && chrome_user_data_dir().is_some_and(|d| d.is_dir()))
 }
 
 pub fn host_manifest_path(user_data_dir: &Path) -> PathBuf {
@@ -124,11 +248,13 @@ fn remove_previous_host(user_data_dir: &Path) {
     }
 }
 
-/// The app's binary, as the host manifest names it.
+/// The app's binary, as the host manifest names it. `dunce`: on Windows a
+/// plain `C:\…` path, never the `\\?\` form `canonicalize` gives, which
+/// Chrome hands to `cmd.exe` to start.
 pub fn this_exe() -> Option<PathBuf> {
     std::env::current_exe()
         .ok()
-        .and_then(|p| p.canonicalize().ok())
+        .and_then(|p| dunce::canonicalize(p).ok())
 }
 
 /* ------------------------------------------------- where the host runs from */
@@ -186,9 +312,15 @@ pub fn host_exe_for(exe: &Path, home: Option<&Path>, copy_dir: &Path) -> PathBuf
     }
 }
 
-/// The binary Chrome is told to start, for this app's `exe`.
+/// The binary Chrome is told to start, for this app's `exe`. Only macOS
+/// guards folders with a prompt, so elsewhere it is always `exe`.
 pub fn host_exe(exe: &Path) -> PathBuf {
-    host_exe_for(exe, dirs::home_dir().as_deref(), &host_copy_dir())
+    let home = if cfg!(target_os = "macos") {
+        dirs::home_dir()
+    } else {
+        None
+    };
+    host_exe_for(exe, home.as_deref(), &host_copy_dir())
 }
 
 /// What a copy was made from: the source's path, size and modified time.
@@ -258,6 +390,41 @@ pub fn host_state_with(user_data_dir: &Path, exe: &Path, target: &Path) -> HostS
 /// it's needed) and the manifest naming it.
 pub fn prepare_host(user_data_dir: &Path, exe: &Path) -> std::io::Result<PathBuf> {
     prepare_host_with(user_data_dir, exe, &host_exe(exe))
+}
+
+/// [`prepare_host`] in every place this OS's browsers look
+/// ([`manifest_roots`]), and on Windows the registry keys pointing at it.
+pub fn prepare_host_everywhere(exe: &Path) -> std::io::Result<()> {
+    let roots = manifest_roots();
+    for (i, root) in roots.iter().enumerate() {
+        match prepare_host(root, exe) {
+            Ok(_) => {}
+            // Chrome's own must work; another browser's is a bonus.
+            Err(e) if i == 0 => return Err(e),
+            Err(e) => {
+                tracing::info!(error = %e, root = %root.display(), "[UserChrome] another browser's host manifest wasn't written")
+            }
+        }
+    }
+    #[cfg(target_os = "windows")]
+    if let Some(root) = roots.first() {
+        register_windows(&host_manifest_path(root))?;
+    }
+    Ok(())
+}
+
+/// Whether Chrome can start the host for `exe`, read where this OS's Chrome
+/// looks ([`manifest_roots`]'s first, and on Windows its registry key).
+pub fn host_state_here(exe: &Path) -> HostState {
+    let Some(root) = manifest_roots().into_iter().next() else {
+        return HostState::Missing;
+    };
+    let state = host_state_for_app(&root, exe);
+    #[cfg(target_os = "windows")]
+    if state == HostState::Current && !registered_windows(&host_manifest_path(&root)) {
+        return HostState::Stale;
+    }
+    state
 }
 
 /// [`prepare_host`] with the binary Chrome starts given.
@@ -444,6 +611,32 @@ pub fn external_extension_path(user_data_dir: &Path, id: &str) -> PathBuf {
     user_data_dir
         .join("External Extensions")
         .join(format!("{id}.json"))
+}
+
+/// Windows: the per-user key that asks Chrome to offer Web Store extension
+/// `id` (its `update_url` value). Pure.
+pub fn windows_external_key(id: &str) -> String {
+    format!(r"Software\Google\Chrome\Extensions\{id}")
+}
+
+/// Ask Chrome to offer the Web Store extension on its next start, where
+/// this OS has a per-user way to: the External Extensions file on macOS,
+/// the `HKCU` key on Windows. Linux has only system-wide folders, so there
+/// the Web Store page alone does it ("Add to Chrome").
+pub fn offer_external_extension(id: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "macos")]
+    if let Some(udd) = chrome_user_data_dir() {
+        write_external_extension(&udd, id)?;
+    }
+    #[cfg(target_os = "windows")]
+    super::win::set_string(
+        super::win::Root::User,
+        &windows_external_key(id),
+        Some("update_url"),
+        WEB_STORE_UPDATE_URL,
+    )?;
+    let _ = id;
+    Ok(())
 }
 
 /// Ask Chrome to offer the Web Store extension on its next start (Chrome

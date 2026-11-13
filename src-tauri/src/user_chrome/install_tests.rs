@@ -269,3 +269,50 @@ fn staging_follows_the_files_not_only_the_version() {
     let empty = tempfile::tempdir().unwrap();
     assert!(!needs_staging(empty.path(), &dest));
 }
+
+#[test]
+fn chrome_user_data_is_where_this_os_keeps_it() {
+    let d = chrome_user_data_dir().unwrap();
+    #[cfg(target_os = "macos")]
+    assert!(d.ends_with("Library/Application Support/Google/Chrome"));
+    #[cfg(target_os = "windows")]
+    assert!(d.ends_with(r"Google\Chrome\User Data"));
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    assert!(d.ends_with("google-chrome"));
+}
+
+#[test]
+fn chromes_own_folder_is_the_first_place_written() {
+    let roots = manifest_roots();
+    #[cfg(not(target_os = "windows"))]
+    assert_eq!(roots.first(), chrome_user_data_dir().as_ref());
+    // Windows: the app's own folder, which the registry names.
+    #[cfg(target_os = "windows")]
+    assert_eq!(roots, vec![host_copy_dir()]);
+}
+
+#[test]
+fn windows_keys_are_the_users_own_and_name_only_our_host() {
+    for base in WINDOWS_HOST_KEYS {
+        assert!(base.starts_with(r"Software\") && base.ends_with(r"\NativeMessagingHosts"));
+    }
+    assert_eq!(
+        windows_host_key(WINDOWS_HOST_KEYS[0], &host_name()),
+        format!(
+            r"Software\Google\Chrome\NativeMessagingHosts\{}",
+            host_name()
+        )
+    );
+    assert_eq!(
+        windows_external_key("abc"),
+        r"Software\Google\Chrome\Extensions\abc"
+    );
+}
+
+#[test]
+fn only_macos_copies_the_binary_out_of_a_guarded_folder() {
+    let exe = dirs::home_dir()
+        .unwrap()
+        .join("Desktop/checkout/target/debug/x");
+    assert_eq!(host_exe(&exe) != exe, cfg!(target_os = "macos"));
+}

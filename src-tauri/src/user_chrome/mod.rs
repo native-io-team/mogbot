@@ -27,10 +27,10 @@
 
 pub mod auth;
 pub mod frame;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub mod host;
-/// No native host off Unix: the link is a Unix socket ([`SUPPORTED`]).
-#[cfg(not(unix))]
+/// No native host elsewhere ([`SUPPORTED`]).
+#[cfg(not(any(unix, windows)))]
 pub mod host {
     /// Never started by Chrome here.
     pub fn from_argv() -> Option<i32> {
@@ -44,13 +44,20 @@ pub mod protocol;
 pub mod settings;
 pub mod setup;
 pub mod tools;
+#[cfg(windows)]
+pub mod win;
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
-/// The link runs here: a Unix socket and a native host on macOS.
-pub const SUPPORTED: bool = cfg!(target_os = "macos");
+/// The link runs here: a Unix socket (macOS, Linux) or a named pipe
+/// (Windows), and the native host Chrome starts.
+pub const SUPPORTED: bool = cfg!(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows"
+));
 
 static REGISTRY: OnceLock<Arc<link::Registry>> = OnceLock::new();
 
@@ -80,6 +87,8 @@ impl Running {
     pub fn stop(self, registry: &link::Registry, reason: &str) {
         self.task.abort();
         registry.close_all(reason);
+        // A pipe goes with its last handle; a socket's file stays behind.
+        #[cfg(unix)]
         let _ = std::fs::remove_file(&self.socket);
     }
 }
@@ -87,19 +96,19 @@ impl Running {
 /// Start the link in `dir` with a fresh token. Must run inside the async
 /// runtime.
 pub async fn start_at(dir: &Path, registry: Arc<link::Registry>) -> std::io::Result<Running> {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     {
         let token = auth::fresh_token(dir)?;
         let (listener, socket) = link::bind(dir)?;
         let task = tokio::spawn(link::serve(listener, token, registry));
         Ok(Running { task, socket })
     }
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = (dir, registry);
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
-            "the Chrome link needs a Unix socket",
+            "the Chrome link needs a Unix socket or a named pipe",
         ))
     }
 }
@@ -153,10 +162,10 @@ pub fn stop(reason: &str) {
 /// The host manifest in the user's Chrome names this binary, and the
 /// extension's files are staged (only once the user turned it on).
 fn prepare_install() -> std::io::Result<()> {
-    if let (Some(udd), Some(exe)) = (install::chrome_user_data_dir(), install::this_exe()) {
+    if let Some(exe) = install::this_exe() {
         // A copy of the binary when this one sits where Chrome can't start
-        // it without a prompt (a development build under ~/Desktop).
-        install::prepare_host(&udd, &exe)?;
+        // it without a prompt (a development build under ~/Desktop, macOS).
+        install::prepare_host_everywhere(&exe)?;
     }
     if let Some(src) = install::extension_source() {
         let dest = install::staged_extension_dir();
@@ -264,11 +273,11 @@ pub fn status() -> Status {
         .as_deref()
         .is_some_and(|s| browsers.iter().any(|b| older(&b.extension_version, s)));
     let udd = install::chrome_user_data_dir();
-    let host = match (&udd, install::this_exe()) {
-        (Some(udd), Some(exe)) => install::host_state_for_app(udd, &exe),
-        _ => install::HostState::Missing,
+    let host = match install::this_exe() {
+        Some(exe) => install::host_state_here(&exe),
+        None => install::HostState::Missing,
     };
-    let chrome_installed = crate::agent_browser::chrome::find_chrome().is_some();
+    let chrome_installed = install::chrome_installed();
     let management = managed::read();
     let extension_dir = staged_ok.then(|| staged.to_string_lossy().into_owned());
     // Each profile's Developer mode and whether the extension is in it, as

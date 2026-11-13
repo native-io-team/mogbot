@@ -2642,7 +2642,9 @@ switching Claude accounts never needs the Claude extension signed in again;
 Claude in Chrome is only the fallback. Settings → Chrome says which way
 agents use now and why, and each agent's "What it can reach" says its own. A
 Chrome profile managed by work (Developer mode off) is detected and the page
-offers a personal profile instead (`user_chrome/managed.rs`). Design, trust,
+offers a personal profile instead (`user_chrome/managed.rs`). On macOS and
+Linux the link is a Unix socket; on Windows a named pipe only this user can
+open, the host registered under `HKCU` (Chrome, Edge, Chromium). Design, trust,
 install routes and what's verified: docs/design/own-browser-layer.md.
 
 **Set up once, checked by the app.** ⌘K "Let agents use your browser…", the

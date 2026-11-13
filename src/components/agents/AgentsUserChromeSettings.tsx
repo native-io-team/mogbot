@@ -22,6 +22,7 @@ import { POLICY_EVENT } from '../../lib/agentPolicy';
 import {
   USER_CHROME_CONNECTED,
   USER_CHROME_TITLE,
+  FILE_MANAGER,
   addUserChromeFromStore,
   browserLabel,
   currentStep,
@@ -171,7 +172,7 @@ export function AgentsUserChromeSettings() {
             {status.extensionDir && (
               <>
                 <Button variant="default" onClick={tryIt(showUserChromeExtension)}>
-                  Show the folder in Finder
+                  Show the folder in {FILE_MANAGER}
                 </Button>
                 <Button variant="secondary" onClick={() => void copy(status.extensionDir!)}>
                   {isCopied ? 'Copied' : 'Copy folder path'}

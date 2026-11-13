@@ -1,10 +1,13 @@
-//! The app's end of the link: a Unix socket in the app's own folder, the
-//! handshake with each native host Chrome starts, and the connections that
-//! come out of it, one per Chrome profile the extension is in.
+//! The app's end of the link: a Unix socket in the app's own folder (a
+//! named pipe on Windows), the handshake with each native host Chrome
+//! starts, and the connections that come out of it, one per Chrome profile
+//! the extension is in.
 //!
-//! A Unix socket, never a TCP port: nothing on the network, and nothing a
-//! web page can reach (no DNS rebinding, no `fetch` to localhost). The
-//! socket is 0600 in a 0700 folder, and each side still proves the token.
+//! A Unix socket or a named pipe, never a TCP port: nothing on the network,
+//! and nothing a web page can reach (no DNS rebinding, no `fetch` to
+//! localhost). The socket is 0600 in a 0700 folder; the pipe admits only
+//! this user's SID and no remote clients (`win`); every peer is checked to
+//! run as this user, and each side still proves the token.
 //!
 //! Requests are blocking ([`Conn::call`]): the tools run on a blocking
 //! thread, like the agents' browser's. The socket itself is read and
@@ -311,6 +314,77 @@ fn same_user(stream: &tokio::net::UnixStream) -> bool {
         // SAFETY: getuid has no preconditions.
         Ok(c) => c.uid() == unsafe { libc::getuid() },
         Err(_) => false,
+    }
+}
+
+#[cfg(windows)]
+/// The link's pipe, ready for the next host: always one instance waiting,
+/// so a host never finds the name gone between two connections.
+pub struct Listener {
+    name: String,
+    security: super::win::PipeSecurity,
+    next: Option<tokio::net::windows::named_pipe::NamedPipeServer>,
+}
+
+#[cfg(windows)]
+/// Claim the link's pipe for `dir`, admitting only this user. A name
+/// already taken (another copy of the app, or anything squatting on it)
+/// fails rather than shares: `first_pipe_instance`.
+pub fn bind(dir: &Path) -> std::io::Result<(Listener, std::path::PathBuf)> {
+    let name = auth::pipe_name(dir);
+    let security = super::win::PipeSecurity::this_user_only()?;
+    let first = super::win::create_pipe(&name, &security, true).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::PermissionDenied {
+            std::io::Error::new(
+                std::io::ErrorKind::AddrInUse,
+                "another copy of the app holds the Chrome link",
+            )
+        } else {
+            e
+        }
+    })?;
+    Ok((
+        Listener {
+            name: name.clone(),
+            security,
+            next: Some(first),
+        },
+        std::path::PathBuf::from(name),
+    ))
+}
+
+#[cfg(windows)]
+/// Accept hosts for ever (until the task is aborted).
+pub async fn serve(mut listener: Listener, token: String, registry: Arc<Registry>) {
+    loop {
+        let pipe = match listener.next.take() {
+            Some(p) => p,
+            None => match super::win::create_pipe(&listener.name, &listener.security, false) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!(error = %e, "[UserChrome] couldn't open the pipe for the next host");
+                    tokio::time::sleep(Duration::from_millis(250)).await;
+                    continue;
+                }
+            },
+        };
+        if let Err(e) = pipe.connect().await {
+            tracing::warn!(error = %e, "[UserChrome] accept failed");
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            continue;
+        }
+        // The next instance before this one is handed off.
+        listener.next = super::win::create_pipe(&listener.name, &listener.security, false).ok();
+        if !super::win::peer_is_this_user(&pipe, true) {
+            tracing::warn!("[UserChrome] refused a connection from another user");
+            continue;
+        }
+        let (token, registry) = (token.clone(), registry.clone());
+        tokio::spawn(async move {
+            if let Err(why) = handle(pipe, &token, &registry).await {
+                tracing::info!(why, "[UserChrome] a link ended");
+            }
+        });
     }
 }
 

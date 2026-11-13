@@ -10,9 +10,11 @@
 //!   nothing and gets no relay.
 //! - **The token** is 32 random bytes in a 0600 file inside a 0700 folder of
 //!   the app's own, rewritten each time the link starts. The extension never
-//!   holds it. Other processes running as the same macOS user could read it;
+//!   holds it. Other processes running as the same user could read it;
 //!   that is the same boundary the rest of the app keeps (its Keychain items,
-//!   its agent bridge token), and is said so in the design doc.
+//!   its agent bridge token), and is said so in the design doc. On Windows
+//!   the folder is in the user's own `%LOCALAPPDATA%`, whose inherited ACL
+//!   admits only that user, SYSTEM and Administrators (no mode bits to set).
 
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -66,6 +68,19 @@ pub const DIR_ENV: &str = "MOGBOT_CHROME_LINK_DIR";
 
 pub fn socket_path(dir: &Path) -> PathBuf {
     dir.join("link.sock")
+}
+
+/// Windows: the link's named pipe for `dir`. Pipe names are one namespace
+/// for the whole PC, so the name carries a hash of the link's folder (which
+/// is under this user's profile, and is what the debug-only [`DIR_ENV`]
+/// moves): one name per user and folder, the same for the app and the host,
+/// with nothing personal in it. The pipe's DACL and the token are what keep
+/// it the user's; the name only keeps users apart. Pure.
+pub fn pipe_name(dir: &Path) -> String {
+    use sha2::Digest as _;
+    let key = dir.to_string_lossy().to_lowercase();
+    let h = hex::encode(Sha256::digest(key.as_bytes()));
+    format!(r"\\.\pipe\{}-chrome-link-{}", crate::brand::SLUG, &h[..16])
 }
 
 pub fn token_path(dir: &Path) -> PathBuf {
@@ -257,6 +272,20 @@ mod tests {
             "chrome-extension://{DEV_EXTENSION_ID}"
         )));
         assert!(!extension_allowed(""));
+    }
+
+    #[test]
+    fn the_pipe_name_is_per_folder_and_names_no_one() {
+        let a = pipe_name(Path::new(r"C:\Users\ann\AppData\Local\App\chrome-link"));
+        let b = pipe_name(Path::new(r"C:\Users\bob\AppData\Local\App\chrome-link"));
+        assert!(a.starts_with(r"\\.\pipe\"));
+        assert_ne!(a, b);
+        assert!(!a.contains("ann"));
+        // Windows paths aren't case-sensitive: the same folder, the same pipe.
+        assert_eq!(
+            a,
+            pipe_name(Path::new(r"c:\users\ANN\appdata\local\app\chrome-link"))
+        );
     }
 
     #[test]

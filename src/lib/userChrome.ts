@@ -13,6 +13,20 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { THIS_COMPUTER } from './computer';
+import { isMac, isWindows } from './setup';
+
+/** The desk's file manager, by the name its users know it. */
+export const FILE_MANAGER = isMac()
+  ? 'Finder'
+  : isWindows()
+    ? 'File Explorer'
+    : 'your file manager';
+/** Chrome's folder picker, typing a path into it, on this desk. */
+const PICKER_PASTE = isMac()
+  ? '⇧⌘G, paste the folder’s path'
+  : isWindows()
+    ? 'paste the folder’s path into the picker’s address bar'
+    : 'Ctrl+L, paste the folder’s path';
 
 export type HostState = 'missing' | 'stale' | 'current';
 
@@ -88,7 +102,7 @@ export interface ChromeRouteNow {
 export const getUserChromeStatus = () => invoke<UserChromeStatus>('agents_user_chrome_status');
 export const setUserChromeEnabled = (on: boolean) =>
   invoke<UserChromeStatus>('agents_user_chrome_set_enabled', { on });
-/** Shows the extension's folder in Finder (the path lives in Rust). */
+/** Shows the extension's folder in the file manager (the path lives in Rust). */
 export const showUserChromeExtension = () => invoke<void>('agents_user_chrome_show_extension');
 /** Opens chrome://extensions in Google Chrome. */
 export const openChromeExtensionsPage = () =>
@@ -144,7 +158,7 @@ export function extensionLine(s: UserChromeStatus): string {
   if (s.webStoreUrl) {
     return 'Not done yet. Add it from the Chrome Web Store, then press Enable when Chrome asks.';
   }
-  return 'Not done yet. In Chrome’s extensions page turn on Developer mode, press Load unpacked, and choose this folder (copy its path, then ⇧⌘G in the picker). This turns to Connected by itself.';
+  return `Not done yet. In Chrome’s extensions page turn on Developer mode, press Load unpacked, and choose this folder (copy its path, then in the picker ${PICKER_PASTE}). This turns to Connected by itself.`;
 }
 
 /* ------------------------------------------------------ the setup, in steps */
@@ -225,7 +239,7 @@ export function setupSteps(s: UserChromeStatus): SetupStep[] {
         : 'Done.'
       : st.turnedOff
         ? `Not done yet: it’s in “${st.loadedIn}” but turned off. Turn it on in Chrome’s extensions page.`
-        : 'Not done yet. Drag the app’s folder from Finder onto the extensions page. Or press Load unpacked, then ⇧⌘G, paste the folder’s path and press Select.',
+        : `Not done yet. Drag the app’s folder from ${FILE_MANAGER} onto the extensions page. Or press Load unpacked, then ${PICKER_PASTE} and press Select.`,
   });
   steps.push({
     id: 'connect',

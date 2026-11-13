@@ -3713,33 +3713,69 @@ pub async fn agents_user_chrome_show_extension() -> Result<(), CommandError> {
             "The extension's files aren't set up yet. Turn Your Chrome on first.",
         ));
     }
-    let mut cmd = tokio::process::Command::new("open");
-    cmd.arg("-R").arg(&dir);
-    crate::external_command::run_with_timeout(cmd, "open -R", 10)
-        .await
-        .map(|_| ())
+    #[cfg(target_os = "macos")]
+    {
+        let mut cmd = tokio::process::Command::new("open");
+        cmd.arg("-R").arg(&dir);
+        crate::external_command::run_with_timeout(cmd, "open -R", 10)
+            .await
+            .map(|_| ())
+    }
+    #[cfg(not(target_os = "macos"))]
+    tauri_plugin_opener::reveal_item_in_dir(&dir)
+        .map_err(|_| CommandError::expected("The extension's folder couldn't be shown."))
+}
+
+/// Windows, Linux: start Chrome's binary with `args` (a running Chrome takes
+/// them and opens a window or tab).
+#[cfg(not(target_os = "macos"))]
+async fn start_chrome(args: &[String], what: &str) -> Result<(), CommandError> {
+    let Some(chrome) = crate::user_chrome::install::chrome_binary() else {
+        return Err(CommandError::expected(concat!(
+            "Google Chrome isn't installed on this ",
+            crate::computer::noun!(),
+            "."
+        )));
+    };
+    // A Chrome already running takes the arguments and the launch exits; a
+    // new one keeps running. Either way it is reaped off this task.
+    let mut child = crate::utils::create_command(&chrome)
+        .args(args)
+        .spawn()
+        .map_err(|e| CommandError::expected(format!("Couldn't {what}: {e}")))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
 }
 
 /// Open Chrome's extensions page (where Developer mode and Load unpacked are).
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_user_chrome_open_extensions_page() -> Result<(), CommandError> {
-    // `open` hands chrome:// URLs to Chrome as a launch argument, which it
-    // ignores for its own pages; asking Chrome for a new tab works.
-    let mut cmd = tokio::process::Command::new("osascript");
-    cmd.arg("-e")
-        .arg(crate::user_chrome::install::OPEN_EXTENSIONS_SCRIPT);
-    if crate::external_command::run_with_timeout(cmd, "open chrome://extensions", 15)
-        .await
-        .is_ok()
+    #[cfg(not(target_os = "macos"))]
     {
-        return Ok(());
+        start_chrome(&["chrome://extensions/".to_string()], "open Chrome").await
     }
-    let mut cmd = tokio::process::Command::new("open");
-    cmd.args(["-a", "Google Chrome", "chrome://extensions/"]);
-    crate::external_command::run_with_timeout(cmd, "open chrome://extensions", 10)
-        .await
-        .map(|_| ())
+    #[cfg(target_os = "macos")]
+    {
+        // `open` hands chrome:// URLs to Chrome as a launch argument, which it
+        // ignores for its own pages; asking Chrome for a new tab works.
+        let mut cmd = tokio::process::Command::new("osascript");
+        cmd.arg("-e")
+            .arg(crate::user_chrome::install::OPEN_EXTENSIONS_SCRIPT);
+        if crate::external_command::run_with_timeout(cmd, "open chrome://extensions", 15)
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+        let mut cmd = tokio::process::Command::new("open");
+        cmd.args(["-a", "Google Chrome", "chrome://extensions/"]);
+        crate::external_command::run_with_timeout(cmd, "open chrome://extensions", 10)
+            .await
+            .map(|_| ())
+    }
 }
 
 /// Open Chrome in a personal profile for agents' browsing, where the app's
@@ -3774,9 +3810,14 @@ pub async fn agents_user_chrome_open_profile(dir: Option<String>) -> Result<Stri
         }
         None => managed::new_profile_dir(&profiles),
     };
-    let mut cmd = tokio::process::Command::new("open");
-    cmd.args(managed::open_profile_args(&dir));
-    crate::external_command::run_with_timeout(cmd, "open a Chrome profile", 15).await?;
+    #[cfg(target_os = "macos")]
+    {
+        let mut cmd = tokio::process::Command::new("open");
+        cmd.args(managed::open_profile_args(&dir));
+        crate::external_command::run_with_timeout(cmd, "open a Chrome profile", 15).await?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    start_chrome(&[managed::profile_switch(&dir)], "open Chrome").await?;
     Ok(dir)
 }
 
@@ -3793,15 +3834,9 @@ pub async fn agents_user_chrome_add_from_store() -> Result<(), CommandError> {
             "The extension isn't on the Chrome Web Store yet: add it with Load unpacked.",
         ));
     };
-    if let Some(udd) = crate::user_chrome::install::chrome_user_data_dir() {
-        crate::user_chrome::install::write_external_extension(&udd, id)
-            .map_err(agents::err_other)?;
-    }
-    let mut cmd = tokio::process::Command::new("open");
-    cmd.arg(&url);
-    crate::external_command::run_with_timeout(cmd, "open the Web Store", 10)
-        .await
-        .map(|_| ())
+    crate::user_chrome::install::offer_external_extension(id).map_err(agents::err_other)?;
+    tauri_plugin_opener::open_url(&url, None::<&str>)
+        .map_err(|_| CommandError::expected("The Web Store page couldn't be opened."))
 }
 
 /// The switch. Off closes the agents' Chrome.
