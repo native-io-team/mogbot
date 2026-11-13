@@ -203,6 +203,9 @@ export function Composer({
   const { fontScale } = useWindowDimensions();
   const draft = useComposerDraft(agent.id);
   const [staged, setStaged] = useState<Staged[]>([]);
+  // Between the picker closing and its files arriving (photos are converted
+  // first, a few seconds for many): said, so it never looks like nothing.
+  const [preparing, setPreparing] = useState(false);
   // The Mac's last answer while it's away: "+" stays, disabled, so the field doesn't jump.
   const canAttach = useServed('agents.files');
   const team = useApp((s) => s.overview?.agents ?? NONE);
@@ -404,27 +407,32 @@ export function Composer({
 
   const add = (files: PickedFile[]) => {
     const { kept, refused } = admit(files, MAX_ATTACHMENTS - attached);
-    if (refused) onError(refused);
+    if (refused) {
+      haptic.error();
+      onError(refused);
+    }
     const items = kept.map((file) => ({ key: `f${seq.current++}`, file, progress: 0 }));
     setStaged((list) => [...list, ...items]);
     items.forEach((item) => void start(item));
   };
 
+  // A pick that fails always says so: never an empty line.
+  const pickFailed = (e: unknown) => {
+    haptic.error();
+    onError(describeError(e).trim() || 'Those files couldn’t be added. Try again.');
+  };
+  const picking = (pick: () => Promise<PickedFile[]>) => {
+    setPreparing(true);
+    pick()
+      .then(add, pickFailed)
+      .finally(() => setPreparing(false));
+  };
   const attach = () =>
     choose(undefined, [
-      {
-        label: 'Take Photo',
-        run: () => void takePhoto().then(add, (e: Error) => onError(e.message)),
-      },
-      {
-        label: 'Photo Library',
-        run: () =>
-          void pickPhotos(MAX_ATTACHMENTS - attached).then(add, (e: Error) => onError(e.message)),
-      },
-      {
-        label: 'Choose File',
-        run: () => void pickDocuments().then(add, (e: Error) => onError(e.message)),
-      },
+      { label: 'Take Photo', run: () => picking(takePhoto) },
+      // The picker stops at the room left (`selectionLimit`); `admit` holds it anyway.
+      { label: 'Photo Library', run: () => picking(() => pickPhotos(MAX_ATTACHMENTS - attached)) },
+      { label: 'Choose File', run: () => picking(pickDocuments) },
     ]);
 
   const setText = (text: string) => {
@@ -559,9 +567,11 @@ export function Composer({
               ? hasContent
                 ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
                 : 'What you type stays here'
-              : uploading
-                ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-                : queued;
+              : preparing
+                ? 'Adding your files…'
+                : uploading
+                  ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
+                  : queued;
 
   return (
     <View

@@ -36,26 +36,36 @@ const CACHE = `${FileSystem.cacheDirectory ?? ''}companion/`;
 /** The desktop's wording (agents/attachments.rs), so both say the same thing. */
 export const tooBig = (name: string, size: number) =>
   `${name} is ${Math.ceil(size / MB)} MB. Files can be up to ${MAX_ATTACHMENT_BYTES / MB} MB.`;
-export const tooMany = () => `You can attach up to ${MAX_ATTACHMENTS} files at a time.`;
 
 /**
  * Keep what fits: the first `room` files under the size limit. Returns the
- * kept files and one sentence about what was left out, if anything was.
+ * kept files and one sentence about what was left out, if anything was, with
+ * how many went in and the limit: a pick past the limit never adds nothing
+ * without saying why.
  */
 export function admit(
   files: PickedFile[],
   room: number
 ): { kept: PickedFile[]; refused: string | null } {
+  const space = Math.max(0, Math.floor(Number.isFinite(room) ? room : 0));
   const big = files.find((f) => f.size != null && f.size > MAX_ATTACHMENT_BYTES);
   const fitting = files.filter((f) => f.size == null || f.size <= MAX_ATTACHMENT_BYTES);
-  const kept = fitting.slice(0, Math.max(0, room));
-  const refused = big
-    ? tooBig(big.name, big.size!)
-    : fitting.length > kept.length
-      ? tooMany()
-      : null;
-  return { kept, refused };
+  const kept = fitting.slice(0, space);
+  const parts: string[] = [];
+  if (big) parts.push(tooBig(big.name, big.size!));
+  if (fitting.length > kept.length) parts.push(tooManyPicked(kept.length, fitting.length));
+  return { kept, refused: parts.length ? parts.join(' ') : null };
 }
+
+/** More picked than there was room for: how many went in, of how many, and the limit. */
+export function tooManyPicked(added: number, picked: number): string {
+  if (added === 0) return full();
+  return `Added ${added} of ${picked}. You can attach up to ${MAX_ATTACHMENTS} files at a time.`;
+}
+
+/** No room left at all: why nothing went in, and what to do. */
+export const full = () =>
+  `Nothing added: ${MAX_ATTACHMENTS} files are already attached, the most at a time. Send them or remove one first.`;
 
 export const isImage = (mime: string) => mime.startsWith('image/');
 /** Images the Mac can thumbnail and the phone can draw. */
@@ -93,14 +103,22 @@ export async function takePhoto(): Promise<PickedFile[]> {
   return r.canceled ? [] : r.assets.map(fromAsset);
 }
 
+/**
+ * Photos, at most `limit` of them: the picker itself stops at the limit
+ * (`selectionLimit`). Never opened with no room: a `selectionLimit` of 0
+ * means "no limit" to the picker, so that would let you pick any number
+ * and then add none.
+ */
 export async function pickPhotos(limit: number): Promise<PickedFile[]> {
+  const room = Math.floor(limit);
+  if (!(room >= 1)) throw new Error(full());
   const r = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
-    allowsMultipleSelection: true,
-    selectionLimit: limit,
+    allowsMultipleSelection: room > 1,
+    selectionLimit: room,
     quality: 0.9,
   });
-  return r.canceled ? [] : r.assets.map(fromAsset);
+  return r.canceled ? [] : (r.assets ?? []).map(fromAsset);
 }
 
 export async function pickDocuments(): Promise<PickedFile[]> {
