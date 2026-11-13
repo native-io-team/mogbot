@@ -119,9 +119,14 @@ import {
 import {
   endOffset,
   FAR,
+  byFinger,
   FOLLOWING,
   fromEnd,
   holdFor,
+  insetFor,
+  touched,
+  UNTOUCHED,
+  type Touch,
   newestSignature,
   pillFor,
   revealsCard,
@@ -276,8 +281,7 @@ export function ChatView({
   // The keyboard's lift, as the list's top inset: where the newest end is now.
   const insetTop = useRef(0);
   // A finger on the list, or its fling still running: only that lets go.
-  const dragging = useRef(false);
-  const flinging = useRef(false);
+  const touch = useRef<Touch>(UNTOUCHED);
   const [listHeight, setListHeight] = useState(0);
   // The pin and the list together: the room a card is measured against, the
   // same whether the pin shows or not.
@@ -476,6 +480,8 @@ export function ChatView({
 
   /** To the newest line, wherever the keyboard has put it, and following it again. */
   const toNewest = useCallback((animated = true) => {
+    // This jump stops any fling, and iOS says nothing when a fling is cut short.
+    touch.current = { ...touch.current, flinging: false };
     setFollow(toEnd());
     setFar(false);
     list.current?.scrollToOffset({ offset: endOffset(insetTop.current), animated });
@@ -861,21 +867,28 @@ export function ChatView({
                   onViewableItemsChanged={onViewable}
                   viewabilityConfig={VIEWABILITY}
                   onScrollBeginDrag={() => {
-                    dragging.current = true;
+                    touch.current = touched(touch.current, 'dragStart');
                   }}
                   onScrollEndDrag={() => {
-                    dragging.current = false;
+                    touch.current = touched(touch.current, 'dragEnd');
                   }}
                   onMomentumScrollBegin={() => {
-                    flinging.current = true;
+                    touch.current = touched(touch.current, 'momentumStart');
                   }}
                   onMomentumScrollEnd={() => {
-                    flinging.current = false;
+                    touch.current = touched(touch.current, 'momentumEnd');
                   }}
                   onScroll={(e) => {
-                    const d = fromEnd(e.nativeEvent.contentOffset.y, insetTop.current);
+                    // The offset and its inset from the same instant (lib/follow).
+                    const inset = insetFor(
+                      e.nativeEvent.contentInset?.top,
+                      insetTop.current,
+                      Platform.OS === 'ios'
+                    );
+                    insetTop.current = inset;
+                    const d = fromEnd(e.nativeEvent.contentOffset.y, inset);
                     distance.current = d;
-                    const byUser = dragging.current || flinging.current;
+                    const byUser = byFinger(touch.current);
                     // Bail-outs keep these from re-rendering on every event.
                     setFollow((now) => scrolled(now, d, newestRef.current, byUser));
                     setFar(d > FAR);

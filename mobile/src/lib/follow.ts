@@ -42,6 +42,54 @@ export const fromEnd = (offsetY: number, insetTop: number) => Math.max(0, offset
 export const endOffset = (insetTop: number) => -insetTop;
 
 /**
+ * The inset that goes with a scroll event's offset. iOS reports the list's
+ * inset in the event itself, measured in the same instant as the offset: use
+ * it. The inset heard separately (`onContentInsetChange`, via the UI thread)
+ * can lag the offset by a frame or more, and pairing the keyboard-down offset
+ * (0) with the keyboard-up inset (~330) read as "scrolled back 330 points".
+ * Android's events carry no keyboard inset, so there the one heard is all
+ * there is.
+ */
+export const insetFor = (eventInsetTop: number | undefined, heardInsetTop: number, ios: boolean) =>
+  ios && typeof eventInsetTop === 'number' && Number.isFinite(eventInsetTop)
+    ? eventInsetTop
+    : heardInsetTop;
+
+/** Whether a finger is moving the list: on it, or its fling still running. */
+export interface Touch {
+  dragging: boolean;
+  flinging: boolean;
+}
+
+export const UNTOUCHED: Touch = { dragging: false, flinging: false };
+
+/**
+ * The finger's state after a scroll view's gesture event. A finger that
+ * catches a fling stops it without an end-of-momentum event (iOS sends none
+ * when deceleration is interrupted), so a new drag clears the fling: without
+ * that, "flinging" stuck on, every later scroll the app made (the keyboard,
+ * a reply arriving, Send's jump to the newest) counted as the user's, let go
+ * of the newest line, and the list held old rows while new ones landed below.
+ */
+export function touched(
+  _state: Touch,
+  event: 'dragStart' | 'dragEnd' | 'momentumStart' | 'momentumEnd'
+): Touch {
+  switch (event) {
+    case 'dragStart':
+      return { dragging: true, flinging: false };
+    case 'dragEnd':
+      return UNTOUCHED;
+    case 'momentumStart':
+      return { dragging: false, flinging: true };
+    case 'momentumEnd':
+      return UNTOUCHED;
+  }
+}
+
+export const byFinger = (t: Touch) => t.dragging || t.flinging;
+
+/**
  * What the newest row is and how far it has got: a reply being written
  * changes it as it grows, so "New" shows for more words, not only a new row.
  */

@@ -6,16 +6,21 @@
 
 import {
   AT_END,
+  byFinger,
   endOffset,
   FAR,
   FOLLOWING,
   fromEnd,
   holdFor,
   HOLD,
+  insetFor,
   newestSignature,
   pillFor,
   scrolled,
   toEnd,
+  touched,
+  UNTOUCHED,
+  type Touch,
 } from '../src/lib/follow';
 
 describe('distance from the newest line', () => {
@@ -121,5 +126,42 @@ describe('the pill', () => {
 
   it('puts a card waiting on you first', () => {
     expect(pillFor(left, 200, 'm7', true)).toEqual({ says: 'urgent' });
+  });
+});
+
+describe('the inset that goes with an offset (#2)', () => {
+  it('takes the scroll event’s own inset on iOS, not one heard a frame late', () => {
+    // Keyboard just went down: the event says offset 0, inset 0. The inset
+    // heard separately still says 336; paired with it, 0 read as 336 back.
+    const inset = insetFor(0, 336, true);
+    expect(inset).toBe(0);
+    expect(fromEnd(0, inset)).toBe(0);
+    expect(fromEnd(-336, insetFor(336, 0, true))).toBe(0);
+  });
+
+  it('falls back to the inset heard where the event has none (Android, or no field)', () => {
+    expect(insetFor(0, 336, false)).toBe(336);
+    expect(insetFor(undefined, 336, true)).toBe(336);
+    expect(insetFor(Number.NaN, 336, true)).toBe(336);
+  });
+});
+
+describe('whose scroll it is (#2)', () => {
+  const run = (...events: Parameters<typeof touched>[1][]) =>
+    events.reduce<Touch>((t, e) => touched(t, e), UNTOUCHED);
+
+  it('a drag, and its fling until it ends, are the finger’s', () => {
+    expect(byFinger(run('dragStart'))).toBe(true);
+    expect(byFinger(run('dragStart', 'dragEnd', 'momentumStart'))).toBe(true);
+    expect(byFinger(run('dragStart', 'dragEnd', 'momentumStart', 'momentumEnd'))).toBe(false);
+    expect(byFinger(run('dragStart', 'dragEnd'))).toBe(false);
+  });
+
+  it('a fling caught by a finger (no momentum end on iOS) doesn’t stay the finger’s', () => {
+    // Fling, catch it, let go without a flick: iOS never says the fling ended.
+    const caught = run('dragStart', 'dragEnd', 'momentumStart', 'dragStart', 'dragEnd');
+    expect(byFinger(caught)).toBe(false);
+    // So the keyboard's or Send's scroll that follows doesn't let go of the newest line.
+    expect(scrolled(FOLLOWING, 336, 'm3', byFinger(caught))).toBe(FOLLOWING);
   });
 });
