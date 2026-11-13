@@ -212,6 +212,10 @@ pub fn merge(known: &mut Vec<Quota>, reading: Quota, now: i64) {
         known.retain(|q| q.engine != reading.engine);
         return;
     }
+    let mut reading = reading;
+    if let Some(quota) = known.iter().find(|q| q.engine == reading.engine) {
+        hold_peak(&quota.windows, &mut reading.windows, now);
+    }
     match known.iter_mut().find(|q| q.engine == reading.engine) {
         Some(quota) if reading.engine == Engine::Claude => *quota = reading,
         Some(quota) => {
@@ -225,6 +229,31 @@ pub fn merge(known: &mut Vec<Quota>, reading: Quota, now: i64) {
             }
         }
         None => known.push(reading),
+    }
+}
+
+/// Two readings of the same window can disagree by a point: Claude Code's
+/// usage check and a turn's own report come in turns, and showed 78%, then
+/// 77%, then 78% (issue #13). Within one window (the same reset, to the
+/// second or so) usage never goes down, so a lower figure for it keeps the
+/// higher one already known; a new window (a later reset) starts afresh.
+const SAME_RESET_MS: i64 = 60 * 1000;
+
+fn hold_peak(known: &[QuotaWindow], new: &mut [QuotaWindow], now: i64) {
+    for w in new.iter_mut() {
+        let (Some(used), Some(reset)) = (w.used_percent, w.resets_at) else {
+            continue;
+        };
+        let peak = known
+            .iter()
+            .filter(|k| k.kind == w.kind && current(k, now))
+            .filter(|k| {
+                k.resets_at
+                    .is_some_and(|r| (r - reset).abs() < SAME_RESET_MS)
+            })
+            .filter_map(|k| k.used_percent)
+            .fold(used, f64::max);
+        w.used_percent = Some(peak);
     }
 }
 
@@ -334,6 +363,37 @@ mod tests {
         let warn = from_claude(&events[1], NOW).unwrap();
         assert!((warn.windows[0].used_percent.unwrap() - 85.0).abs() < 1e-9);
         assert!(!warn.windows[0].limited);
+    }
+
+    #[test]
+    fn two_readings_of_one_window_never_step_back() {
+        // Issue #13, as recorded on a real Mac: the usage check said 78% with
+        // a reset 355 ms off the turn's, then a turn said 77%.
+        let w = |used: f64, reset: i64| QuotaWindow {
+            kind: "seven_day".into(),
+            used_percent: Some(used),
+            resets_at: Some(reset),
+            window_minutes: None,
+            limited: false,
+            observed_at: NOW,
+        };
+        let q = |win: QuotaWindow| Quota {
+            engine: Engine::Claude,
+            windows: vec![win],
+            plan: None,
+        };
+        let reset = NOW + 3 * 24 * HOUR_MS;
+        let mut known = Vec::new();
+        merge(&mut known, q(w(78.0, reset + 355)), NOW);
+        merge(&mut known, q(w(77.0, reset)), NOW);
+        assert_eq!(known[0].windows[0].used_percent, Some(78.0));
+        // Higher is taken as it comes.
+        merge(&mut known, q(w(79.0, reset)), NOW);
+        assert_eq!(known[0].windows[0].used_percent, Some(79.0));
+        // A new window (the refill) starts from its own figure.
+        let next = reset + 7 * 24 * HOUR_MS;
+        merge(&mut known, q(w(2.0, next)), NOW);
+        assert_eq!(known[0].windows[0].used_percent, Some(2.0));
     }
 
     #[test]
