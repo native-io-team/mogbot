@@ -11,6 +11,7 @@ import {
   upsertMessage,
 } from './agentsStore';
 import {
+  cardToOpen,
   conversationKey,
   conversationOfKey,
   lineConversation,
@@ -61,8 +62,46 @@ describe('conversation keys', () => {
   });
 });
 
+describe('the card a chat opens on (issue #22)', () => {
+  const card = (id: string, conversation?: string, extra: object = {}): AgentMessage => ({
+    ...line(id, conversation),
+    kind: 'approval',
+    approval: {
+      requestId: `r-${id}`,
+      title: 'Run a command',
+      detail: 'ls',
+      status: 'pending',
+      ...extra,
+    },
+  });
+
+  it('is the newest card still waiting, in the conversation it was said in', () => {
+    const lines = [card('m1', 'c2'), line('m2', 'first'), card('m3', 'c3'), line('m4')];
+    expect(cardToOpen(lines)).toEqual({ message: lines[2], conversation: 'c3' });
+    // A line from before conversations is the first's, as the Mac pages it.
+    expect(cardToOpen([card('m5')])?.conversation).toBe('first');
+  });
+
+  it('is never an answered card or a skill offer, which waits on nothing', () => {
+    const answered = card('m1', 'c2', { status: 'allowed' });
+    const skill = card('m2', 'c2', { skill: { name: 'Export invoices' } });
+    expect(cardToOpen([answered, skill])).toBeNull();
+    expect(cardToOpen(undefined)).toBeNull();
+  });
+});
+
 describe('a conversation’s chat in the store', () => {
   afterEach(() => __resetAgentsStore());
+
+  it('gets a room line the Mac stamped, as its page holds it (a card raised in a room)', async () => {
+    mockIPC((cmd) => (cmd === 'agents_messages' ? [line('m1', 'c2')] : null));
+    const key = conversationKey('a', 'c2');
+    await loadMessages(key);
+    upsertMessage({ ...line('m2', 'c2'), room: 'r1' });
+    // An older line with no conversation stays out, as before.
+    upsertMessage({ ...line('m3'), room: 'r1' });
+    expect(getAgentsSnapshot().messages[key].map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
 
   it('reads only its own lines and gets only its own events', async () => {
     const asked: Record<string, unknown>[] = [];

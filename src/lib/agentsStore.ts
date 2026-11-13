@@ -498,11 +498,15 @@ export function upsertMessage(message: AgentMessage) {
   noteFinished(message.id);
   const drafts = message.agentId ? withoutDraft(message.agentId, message.id) : state.drafts;
   // A member's line said in a room is in both its own chat and the room's
-  // thread; a line in the agent's own chat, in its conversation's too.
+  // thread; a line in the agent's own chat, in its conversation's too. A room
+  // line the Mac stamped with a conversation is in that conversation's page
+  // as well (`store::conversation_page`), folded, or a card while it waits:
+  // left out here, a card raised in a room never reached the chat until it
+  // was read again, while the row already said "Needs your OK".
   const keys = [
     message.agentId,
     message.room ? roomKey(message.room) : '',
-    message.agentId && !message.room
+    message.agentId && (!message.room || message.conversation)
       ? conversationKey(
           message.agentId,
           lineConversation(

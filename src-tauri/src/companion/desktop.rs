@@ -213,6 +213,42 @@ async fn watch_projects(c: Arc<Companion>) {
 // The backend: the Agents commands, called as the desk calls them
 // ============================================================================
 
+/// A page of an agent's chat for the phone, and whether older lines exist.
+/// The newest page reaches back to a card still waiting on the user
+/// (`store::oldest_open_card`), as the desk's does: the phone's page is
+/// short, and a card the list says "Needs your OK" for must be in the chat.
+fn phone_page(
+    agent_id: &str,
+    conversation: Option<&str>,
+    limit: usize,
+    before: Option<&str>,
+) -> Result<(Vec<store::AgentMessage>, bool), CommandError> {
+    // How far a page may reach back for a card.
+    const CARD_REACH: usize = 2000;
+    let card = before
+        .is_none()
+        .then(|| store::oldest_open_card(agent_id, conversation))
+        .flatten();
+    let through = card.as_deref().map(|id| (id, CARD_REACH));
+    let read = |n: usize, before: Option<&str>, through| match conversation {
+        Some(c) => store::conversation_page(agent_id, c, n, before, through),
+        None => store::messages_page(agent_id, n, before, through),
+    };
+    // One past the page says whether older messages exist.
+    let mut page = read(limit.saturating_add(1), before, through)?;
+    let reached = card.is_some() && page.first().map(|m| &m.id) == card.as_ref();
+    if reached && page.len() > limit {
+        // Kept whole down to the card; older lines are whatever lies before it.
+        let more = !read(1, Some(&page[0].id), None)?.is_empty();
+        return Ok((page, more));
+    }
+    let more = page.len() > limit;
+    if more {
+        page.drain(..page.len() - limit);
+    }
+    Ok((page, more))
+}
+
 struct DesktopBackend {
     app: AppHandle,
 }
@@ -238,17 +274,9 @@ impl Backend for DesktopBackend {
     ) -> Result<(Vec<Value>, bool), CommandError> {
         let (agent_id, before) = (agent_id.to_string(), before.map(str::to_string));
         let conversation = conversation.map(str::to_string);
-        // One past the page says whether older messages exist.
         let (page, more) = tokio::task::spawn_blocking(move || {
-            let n = limit.saturating_add(1);
-            let mut page = match conversation.as_deref() {
-                Some(c) => store::conversation_page(&agent_id, c, n, before.as_deref(), None)?,
-                None => store::messages_page(&agent_id, n, before.as_deref(), None)?,
-            };
-            let more = page.len() > limit;
-            if more {
-                page.drain(..page.len() - limit);
-            }
+            let (mut page, more) =
+                phone_page(&agent_id, conversation.as_deref(), limit, before.as_deref())?;
             // As the desk shows it, read after the log's lock is let go.
             crate::agents::as_shown(&agent_id, &mut page);
             Ok::<_, CommandError>((page, more))
@@ -2234,5 +2262,66 @@ mod relay_route_tests {
             hosts_for(&[], Some("relay.example.com".into())),
             vec!["relay.example.com".to_string()]
         );
+    }
+}
+
+#[cfg(test)]
+mod phone_page_tests {
+    use super::*;
+    use crate::agents::store::MessageKind;
+
+    /// The phone's short page reaches back to a card still waiting (issue
+    /// #22), says truly whether anything is older, and pages on as before.
+    #[test]
+    fn the_phone_page_holds_the_card_its_list_counts() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let a = store::create(store::NewAgent {
+            name: "Busy".into(),
+            role: "Does things".into(),
+            instructions: "Be brief.".into(),
+            shape: None,
+            color: None,
+            is_main: false,
+        })
+        .unwrap();
+        let said = |text: &str, ts: i64| {
+            let mut m = runner::new_message(&a.id, MessageKind::Agent, text);
+            m.ts = ts;
+            m.conversation = Some("first".into());
+            m
+        };
+        store::append_message(&said("oldest", 1)).unwrap();
+        let mut card = said("", 2);
+        card.kind = MessageKind::Approval;
+        card.approval = Some(crate::agents::mcp::new_card(
+            store::new_id(),
+            "Run a command".into(),
+            "ls".into(),
+            None,
+        ));
+        store::append_message(&card).unwrap();
+        for i in 0..8 {
+            store::append_message(&said(&format!("line {i}"), 10 + i)).unwrap();
+        }
+        let (page, more) = phone_page(&a.id, Some("first"), 3, None).unwrap();
+        assert_eq!(page.first().map(|m| &m.id), Some(&card.id));
+        assert_eq!(page.len(), 9);
+        assert!(more, "the line before the card is still there");
+        let (older, more) = phone_page(&a.id, Some("first"), 3, Some(&card.id)).unwrap();
+        assert_eq!(older.len(), 1);
+        assert!(!more);
+        // With no card waiting, the page is the newest three as before.
+        store::set_approval_status(
+            &a.id,
+            &card.approval.as_ref().unwrap().request_id,
+            store::ApprovalStatus::Allowed,
+        )
+        .unwrap();
+        let (page, more) = phone_page(&a.id, None, 3, None).unwrap();
+        assert_eq!(page.len(), 3);
+        assert!(more);
+        store::set_root_for_tests(None);
     }
 }

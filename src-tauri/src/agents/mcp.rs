@@ -1657,9 +1657,7 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
     let mut sent = runner::new_message(&caller.id, MessageKind::SentToAgent, body);
     sent.peer = Some(peer(&target));
     let _ = runner::record(app, sent);
-    let mut received = runner::new_message(&target.id, MessageKind::FromAgent, body);
-    received.peer = Some(peer(caller));
-    let _ = runner::record(app, received);
+    let _ = runner::record(app, received_line(caller, &target, body, answer));
     // Sent from a turn answering outside text: the taint goes with it, so
     // the recipient can't be talked into what the sender couldn't do.
     let outside = runner::from_outside(&caller.id);
@@ -1695,6 +1693,26 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
         "Delivered to {}. Their answer comes back to you as a new message when they're done; don't wait for it.{plan}",
         target.name
     ))
+}
+
+/// The line `target`'s chat shows for what `caller` sent it. An answer to a
+/// request `target` made goes in the conversation that asked
+/// (`conversations::asked_in`), where the turn it wakes runs too
+/// (`inbox::conversation_for`); left unsaid it was stamped with whichever
+/// conversation `target`'s engine had loaded, so a helper's answer showed up
+/// in the conversation the user was in, about something asked elsewhere.
+pub(super) fn received_line(
+    caller: &store::Agent,
+    target: &store::Agent,
+    body: &str,
+    answer: bool,
+) -> store::AgentMessage {
+    let mut received = runner::new_message(&target.id, MessageKind::FromAgent, body);
+    received.peer = Some(peer(caller));
+    if answer {
+        received.conversation = super::conversations::asked_in(&target.id, &caller.id);
+    }
+    received
 }
 
 /// Copy a file the agent made into its chat as a message from it. Only files

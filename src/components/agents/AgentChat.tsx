@@ -81,7 +81,9 @@ import { ConversationPage, ConversationPagePin } from './ConversationPage';
 import { useConversationPage } from '../../lib/agentPage';
 import {
   FIRST_CONVERSATION,
+  cardToOpen,
   conversationKey,
+  conversationOf,
   loadedConversation,
 } from '../../lib/agentConversations';
 import {
@@ -162,6 +164,7 @@ import {
   roleWithoutPath,
   showsStarters,
   agentKeyState,
+  needsYou,
   ROUTINES_NEED_THE_COMPUTER,
 } from '../../lib/agents';
 import { AgentStarters } from './AgentStarters';
@@ -430,6 +433,11 @@ interface AgentChatProps extends AgentActions {
   /** A search result to scroll to and flash; `onJumped` is called once it's shown. */
   jumpTo?: string | null;
   onJumped?: () => void;
+  /**
+   * Open the chat on one line, in its own conversation (switching to it):
+   * how a card waiting elsewhere in this agent's chat is reached.
+   */
+  onOpenMessage?: (agentId: string, messageId: string, conversation?: string) => void;
   /** Words put in the composer for you to finish ("Set up an agent that "); `n` asks again. */
   prefill?: { text: string; n: number } | null;
   /** "Apps your agents can use", for a ready-made agent that needs one. */
@@ -484,6 +492,7 @@ export const AgentChat = memo(function AgentChat({
   compact,
   jumpTo,
   onJumped,
+  onOpenMessage,
   prefill,
   onOpenApps,
   onMoreIdeas,
@@ -531,6 +540,22 @@ export const AgentChat = memo(function AgentChat({
   // Every line it has, whatever the conversation: what waits on you (its
   // cards) is the agent's, said in every conversation.
   const allLines = useAgentsSelector((s) => s.messages[agent.id]);
+  // Opened while its row says "Needs your OK": on the card, in whichever of
+  // its conversations holds it (the conversation the user was last in may
+  // not), once per agent opened. A search hit being jumped to comes first.
+  const landedFor = useRef<string | null>(null);
+  const waitsOnYou = needsYou(agent);
+  useEffect(() => {
+    if (!onOpenMessage || !viewing || !allLines || landedFor.current === agent.id) return;
+    landedFor.current = agent.id;
+    if (!waitsOnYou || jumpTo) return;
+    const card = cardToOpen(allLines);
+    if (card) onOpenMessage(agent.id, card.message.id, card.conversation);
+  }, [agent.id, viewing, allLines, waitsOnYou, jumpTo, onOpenMessage]);
+  const reviewCard = useCallback(
+    (message: AgentMessage) => onOpenMessage?.(agent.id, message.id, conversationOf(message)),
+    [agent.id, onOpenMessage]
+  );
   // The streaming bubble's place in the history: the same object for the
   // whole reply, so the history is built once when it starts, not per word.
   const streaming = useMemo(
@@ -2214,7 +2239,13 @@ export const AgentChat = memo(function AgentChat({
                       { id: 'stepIn', node: <StepInBar agent={agent} messages={allLines ?? []} /> },
                       {
                         id: 'waiting',
-                        node: <WaitingForYouBar agent={agent} messages={allLines ?? []} />,
+                        node: (
+                          <WaitingForYouBar
+                            agent={agent}
+                            messages={allLines ?? []}
+                            onReview={onOpenMessage ? reviewCard : undefined}
+                          />
+                        ),
                       },
                       {
                         id: 'takeover',

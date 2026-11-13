@@ -73,6 +73,21 @@ describe('WaitingForYouBar', () => {
     card.remove();
   });
 
+  it('Review opens the card where it is, even with no row for it on screen (issue #22)', () => {
+    const card = msg({ title: 'Push to GitHub' });
+    const reviewed: AgentMessage[] = [];
+    render(
+      <WaitingForYouBar
+        agent={waiting as never}
+        messages={[{ ...card, conversation: 'c2' }]}
+        onReview={(m) => reviewed.push(m)}
+      />
+    );
+    // No element carries the card here (another conversation): Review still goes to it.
+    screen.getByRole('button', { name: 'Review' }).click();
+    expect(reviewed.map((m) => [m.id, m.conversation])).toEqual([['m', 'c2']]);
+  });
+
   it('shows nothing while the agent works', () => {
     const { container } = render(<WaitingForYouBar agent={idle as never} messages={[msg({})]} />);
     expect(container.textContent).toBe('');

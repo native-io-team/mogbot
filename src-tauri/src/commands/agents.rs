@@ -239,6 +239,14 @@ pub async fn agents_messages(
     const MAX: usize = 5000;
     blocking(move || {
         let limit = limit.unwrap_or(400).min(MAX);
+        // The newest page reaches back to a card still waiting on the user,
+        // so the chat always holds what its row says needs your OK.
+        let through = through.or_else(|| {
+            before
+                .is_none()
+                .then(|| store::oldest_open_card(&agent_id, conversation.as_deref()))
+                .flatten()
+        });
         let through = through.as_deref().map(|id| (id, MAX));
         // One conversation's lines; without one (an older client), all of them.
         let mut page = match conversation.as_deref() {

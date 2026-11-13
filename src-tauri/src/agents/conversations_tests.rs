@@ -389,6 +389,42 @@ fn an_answer_goes_back_to_the_conversation_that_asked() {
     });
 }
 
+/// Issue #24: a helper answering with `message_agent` (not its final words)
+/// put the answer in whichever conversation the asker had loaded, which is
+/// the one the user was talking in, while the turn it woke ran where it was
+/// asked. The line goes where it was asked, as `give_answer`'s does.
+#[test]
+fn an_answer_sent_with_message_agent_is_shown_where_it_was_asked() {
+    scratch(|| {
+        let asker = agent("Chief");
+        let helper = agent("Helper");
+        let c = create(&asker.id).unwrap().current;
+        store::update(&asker.id, |a| {
+            swap(a, &c);
+        })
+        .unwrap();
+        note_asked(&asker.id, &helper.id);
+        // The user moves the asker on to another conversation.
+        store::update(&asker.id, |a| {
+            swap(a, FIRST);
+        })
+        .unwrap();
+        let (asker, helper) = (
+            store::get(&asker.id).unwrap(),
+            store::get(&helper.id).unwrap(),
+        );
+        let answer = crate::agents::mcp::received_line(&helper, &asker, "Done.", true);
+        assert_eq!(answer.agent_id, asker.id);
+        assert_eq!(answer.conversation.as_deref(), Some(c.as_str()));
+        // Stamping on the way in keeps it there.
+        assert_eq!(of(&stamped(&answer)), c);
+        // A new request isn't an answer: it goes where the target is working.
+        let request = crate::agents::mcp::received_line(&helper, &asker, "Can you?", false);
+        assert_eq!(request.conversation, None);
+        assert_eq!(of(&stamped(&request)), FIRST);
+    });
+}
+
 #[test]
 fn what_was_asked_stays_small() {
     scratch(|| {

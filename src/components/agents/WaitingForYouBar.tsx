@@ -47,9 +47,16 @@ function waitingMessage(
 export function WaitingForYouBar({
   agent,
   messages,
+  onReview,
 }: {
   agent: Pick<Agent, 'status' | 'name'>;
   messages: readonly AgentMessage[] | undefined;
+  /**
+   * Opens the chat on the card wherever it is: in another of the agent's
+   * conversations, or above the lines mounted so far, where no element for
+   * it exists and Review used to do nothing at all (issue #22).
+   */
+  onReview?: (message: AgentMessage) => void;
 }) {
   const message = waitingMessage(agent, messages);
   const card = message?.approval;
@@ -61,6 +68,10 @@ export function WaitingForYouBar({
   // The card is in this chat, but often scrolled away: the bar never says
   // "below" (it sits under the card) and brings it to the middle instead.
   const show = () => {
+    if (onReview) {
+      onReview(message);
+      return;
+    }
     const target = document.querySelector<HTMLElement>(
       `[data-message-ids~="${CSS.escape(message.id)}"]`
     );

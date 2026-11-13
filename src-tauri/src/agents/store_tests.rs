@@ -1275,3 +1275,58 @@ fn the_chiefs_old_names_still_mean_the_chief() {
         assert!(!super::chief_alias(name), "{name}");
     }
 }
+
+/// Issue #22: a card stays up for days, so in a busy chat it sank below the
+/// newest page; the row said "Needs your OK" and the chat had nothing to
+/// answer. The newest page now reaches back to the oldest open card, in its
+/// own conversation only.
+#[test]
+fn the_newest_page_reaches_back_to_a_card_still_waiting() {
+    with_root(|| {
+        let a = create(new("Busy")).unwrap();
+        let said = |text: &str, ts: i64, conversation: &str| {
+            let mut m = crate::agents::runner::new_message(&a.id, MessageKind::Agent, text);
+            m.ts = ts;
+            m.conversation = Some(conversation.into());
+            m
+        };
+        append_message(&said("before", 1, "c2")).unwrap();
+        let mut card = said("", 2, "c2");
+        card.kind = MessageKind::Approval;
+        card.approval = Some(crate::agents::mcp::new_card(
+            new_id(),
+            "Run a command".into(),
+            "ls".into(),
+            None,
+        ));
+        append_message(&card).unwrap();
+        for i in 0..30 {
+            append_message(&said(&format!("c2 {i}"), 10 + i, "c2")).unwrap();
+            append_message(&said(&format!("first {i}"), 10 + i, "first")).unwrap();
+        }
+        assert_eq!(oldest_open_card(&a.id, Some("c2")), Some(card.id.clone()));
+        assert_eq!(oldest_open_card(&a.id, None), Some(card.id.clone()));
+        // Another conversation's chat isn't stretched for it.
+        assert_eq!(oldest_open_card(&a.id, Some("first")), None);
+        // Ten lines would have left it out; reaching back keeps it, and no further.
+        let through = oldest_open_card(&a.id, Some("c2")).map(|id| (id, 5000));
+        let page = conversation_page(
+            &a.id,
+            "c2",
+            10,
+            None,
+            through.as_ref().map(|(id, cap)| (id.as_str(), *cap)),
+        )
+        .unwrap();
+        assert_eq!(page.first().map(|m| &m.id), Some(&card.id));
+        assert_eq!(page.len(), 31);
+        // Answered, nothing reaches back any more.
+        set_approval_status(
+            &a.id,
+            &card.approval.as_ref().unwrap().request_id,
+            ApprovalStatus::Allowed,
+        )
+        .unwrap();
+        assert_eq!(oldest_open_card(&a.id, None), None);
+    });
+}

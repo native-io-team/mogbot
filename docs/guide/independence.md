@@ -47,7 +47,9 @@ for the rest of that conversation.
 ## Approval cards
 
 When an agent needs your OK, a card appears in its chat showing exactly what it wants to do: the
-command, the file, the site or the message. The agent's row says "Needs your OK" while it waits.
+command, the file, the site or the message. The agent's row says "Needs your OK" while it waits,
+and opening its chat takes you to the card, in whichever of its conversations it was asked, however
+far back it is. **Review** on the "needs your OK" bar does the same.
 
 - **Allow** or **Deny**. Some cards also offer **Always allow** for that kind of thing (for
   example, web searches).

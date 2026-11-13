@@ -870,7 +870,13 @@ A scheduled run is settled by its ticket id (it rides on the queued wake and
 carries over an interrupt); stopped, or dropped by a Stop, it is recorded as
 failed ("Stopped"), never as a success or left "Running". The status says
 "Needs your OK" until every open card of the turn is answered (a count per
-agent, per turn). Deleting an agent stops it, closes its queue (anything sent to it
+agent, per turn). A chat's newest page (desk and phone) reaches back to the
+oldest card still waiting in that conversation (`store::oldest_open_card`),
+so a card a row counts is always in the chat, and opening an agent that
+needs you lands on its newest open card, switching to the conversation it
+was asked in (`cardToOpen`). An answer an agent sends with `message_agent`
+goes to the conversation that asked, like one from its final words
+(`mcp::received_line`, `conversations::asked_in`). Deleting an agent stops it, closes its queue (anything sent to it
 meanwhile is refused and its sender told), and waits up to 3 s for its
 turn to end; a write for an agent no longer registered is refused, so its
 folder never comes back.

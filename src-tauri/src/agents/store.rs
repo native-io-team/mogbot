@@ -2773,6 +2773,20 @@ pub fn pending_card_messages(agent_id: &str) -> Result<Vec<AgentMessage>, Comman
     pending_cards(agent_id)
 }
 
+/// The oldest card still waiting on the user among one conversation's lines
+/// (every line with `None`): a chat's newest page reaches back to it
+/// (`through`), so a card the row counts as "Needs your OK" is never on a
+/// page the chat hasn't read. A card stays up for days, and a busy chat
+/// buried it under more lines than one page holds (issue #22).
+pub fn oldest_open_card(agent_id: &str, conversation: Option<&str>) -> Option<String> {
+    pending_card_messages(agent_id)
+        .ok()?
+        .into_iter()
+        .filter(|m| conversation.is_none_or(|c| super::conversations::of(m) == c))
+        .min_by_key(|m| m.ts)
+        .map(|m| m.id)
+}
+
 /// The cards still waiting on an answer, oldest first.
 pub fn pending_approvals(agent_id: &str) -> Result<Vec<Approval>, CommandError> {
     let lock = log_lock(agent_id);

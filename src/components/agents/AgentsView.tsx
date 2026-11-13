@@ -1236,6 +1236,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   {...actions}
                   jumpTo={jump?.agentId === shown.id ? jump.messageId : null}
                   onJumped={clearJump}
+                  onOpenMessage={openMessage}
                   prefill={prefill?.agentId === shown.id ? prefill : null}
                 />
               )}
