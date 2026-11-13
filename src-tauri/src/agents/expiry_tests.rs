@@ -48,14 +48,34 @@ fn status(agent_id: &str, rid: &str) -> (ApprovalStatus, Option<Expiry>) {
 
 const MIN: i64 = 60_000;
 
+/// The owner answered ~15 cards a week after they had expired: a card now
+/// stays up through its turn ending, any number of looks and a restart.
 #[test]
-fn a_card_whose_turn_ended_closes_at_once_as_moved_on() {
+fn a_card_stays_up_through_its_turn_ending_and_a_restart() {
+    with_root(|| {
+        let a = agent();
+        let now = store::now_ms();
+        post(&a.id, bash_card("r1", "npm test"), now);
+        let later = now + 10 * (CARD_EXPIRY_SECS as i64) * 1000;
+        for moment in [Moment::TurnEnded, Moment::Tick, Moment::Launch] {
+            assert!(sweep_store(&a.id, moment, later, &|_| false).is_empty());
+        }
+        store::expire_stale_approvals();
+        assert_eq!(status(&a.id, "r1"), (ApprovalStatus::Pending, None));
+        assert_eq!(store::get(&a.id).unwrap().pending_approvals, 1);
+        let input = json!({ "command": "npm test" });
+        assert!(!already_expired(&a.id, &tool_key("Bash", &input)));
+    });
+}
+
+#[test]
+fn stop_withdraws_a_card_as_moved_on() {
     with_root(|| {
         let a = agent();
         let now = store::now_ms();
         post(&a.id, bash_card("r1", "npm test"), now);
         assert_eq!(store::get(&a.id).unwrap().pending_approvals, 1);
-        let changed = sweep_store(&a.id, Moment::TurnEnded, now, &|_| true);
+        let changed = sweep_store(&a.id, Moment::Stopped, now, &|_| true);
         assert_eq!(changed.len(), 1);
         assert_eq!(
             status(&a.id, "r1"),
@@ -68,33 +88,15 @@ fn a_card_whose_turn_ended_closes_at_once_as_moved_on() {
 }
 
 #[test]
-fn a_card_still_blocking_a_turn_waits_then_expires_as_no_answer() {
+fn a_card_left_for_days_closes_as_moved_on() {
     with_root(|| {
         let a = agent();
         let now = store::now_ms();
         post(&a.id, bash_card("r1", "npm test"), now - 2 * MIN);
-        // Still waited on, within the timeout: left alone.
-        assert!(sweep_store(&a.id, Moment::Tick, now, &|_| true).is_empty());
-        assert_eq!(status(&a.id, "r1").0, ApprovalStatus::Pending);
-        // Past the timeout: closed, and remembered for this task.
-        let later = now + (CARD_EXPIRY_SECS as i64) * 1000;
-        assert_eq!(sweep_store(&a.id, Moment::Tick, later, &|_| true).len(), 1);
-        assert_eq!(
-            status(&a.id, "r1"),
-            (ApprovalStatus::Expired, Some(Expiry::NoAnswer))
-        );
-        let input = json!({ "command": "npm test" });
-        assert!(already_expired(&a.id, &tool_key("Bash", &input)));
-    });
-}
-
-#[test]
-fn a_card_nobody_waits_on_closes_on_the_next_look() {
-    with_root(|| {
-        let a = agent();
-        let now = store::now_ms();
-        post(&a.id, bash_card("r1", "ls"), now);
-        sweep_store(&a.id, Moment::Tick, now, &|_| false);
+        let nearly = now + (CARD_STAYS_SECS as i64) * 1000 - 3 * MIN;
+        assert!(sweep_store(&a.id, Moment::Tick, nearly, &|_| false).is_empty());
+        let days = now + (CARD_STAYS_SECS as i64) * 1000;
+        assert_eq!(sweep_store(&a.id, Moment::Tick, days, &|_| false).len(), 1);
         assert_eq!(
             status(&a.id, "r1"),
             (ApprovalStatus::Expired, Some(Expiry::MovedOn))
@@ -177,19 +179,25 @@ fn the_same_ask_has_one_key_however_it_is_worded_around() {
 fn verdicts() {
     let card = bash_card("r1", "ls");
     let over = (CARD_EXPIRY_SECS as i64) * 1000;
-    assert_eq!(verdict(&card, 0, true, Moment::Tick), None);
+    for waited_on in [true, false] {
+        for moment in [Moment::Tick, Moment::Launch, Moment::TurnEnded] {
+            assert_eq!(verdict(&card, 0, waited_on, moment), None);
+            assert_eq!(verdict(&card, over, waited_on, moment), None);
+        }
+        assert_eq!(
+            verdict(&card, 0, waited_on, Moment::Stopped),
+            Some(Expiry::MovedOn)
+        );
+    }
+    let stale = (CARD_STAYS_SECS as i64) * 1000;
     assert_eq!(
-        verdict(&card, over, true, Moment::Tick),
-        Some(Expiry::NoAnswer)
-    );
-    assert_eq!(
-        verdict(&card, 0, true, Moment::Launch),
+        verdict(&card, stale, false, Moment::Tick),
         Some(Expiry::MovedOn)
     );
-    assert_eq!(
-        verdict(&card, 0, true, Moment::TurnEnded),
-        Some(Expiry::MovedOn)
-    );
+    // A card of words is keyed by its words (`mcp::ask_inner`).
+    let mut prose = super::super::mcp::new_card("w".into(), "Set it up?".into(), String::new(), None);
+    prose.summary = Some("Check Mail every 5 minutes".into());
+    assert_eq!(key_for(&prose), ask_key("Set it up?", "Check Mail every 5 minutes"));
 }
 
 /// The two shapes of the pending "Run a command" cards in a real chat from
@@ -246,7 +254,7 @@ fn an_imports_leftover_cards_all_close_at_launch() {
         post(
             &a.id,
             bash_card("grok", "cd /workspace/fictional-outreach 2>&1 && ls -la"),
-            now - MIN,
+            now - 4 * 24 * 60 * MIN,
         );
         let search: Approval = serde_json::from_value(json!({
             "requestId": "web",
@@ -258,7 +266,7 @@ fn an_imports_leftover_cards_all_close_at_launch() {
             "always": { "kind": "tool", "label": "web searches", "value": "WebSearch" }
         }))
         .unwrap();
-        post(&a.id, search, now - MIN);
+        post(&a.id, search, now - 4 * 24 * 60 * MIN);
         assert_eq!(store::get(&a.id).unwrap().pending_approvals, 3);
         store::expire_stale_approvals();
         assert_eq!(
@@ -366,11 +374,12 @@ fn a_plan_card_stays_up_until_it_is_answered() {
             &a.id,
             "ask:another plan\n1. x"
         ));
-        // An ordinary card beside it still closes.
+        // Stop withdraws an ordinary card beside it; the plan stays.
         post(&a.id, bash_card("r1", "npm test"), now);
         assert_eq!(
-            sweep_store(&a.id, Moment::TurnEnded, now, &|_| true).len(),
+            sweep_store(&a.id, Moment::Stopped, now, &|_| true).len(),
             1
         );
+        assert_eq!(status(&a.id, "p1"), (ApprovalStatus::Pending, None));
     });
 }

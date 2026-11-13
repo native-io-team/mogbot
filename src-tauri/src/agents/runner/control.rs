@@ -87,6 +87,9 @@ pub fn update_settings<F: FnOnce(&mut store::Agent)>(
 pub fn stop(app: &AppHandle, agent_id: &str) -> bool {
     let (stopped, dropped) = stop_queue(agent_id, false);
     tell_dropped(app, agent_id, dropped, Dropped::Stopped);
+    // Its cards are withdrawn: they wait through a turn ending or a restart
+    // (`expiry::verdict`), but never past the user's Stop.
+    super::expiry::sweep_agent(app, agent_id, super::expiry::Moment::Stopped);
     stopped
 }
 

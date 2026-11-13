@@ -79,6 +79,20 @@ fn grant_once_at(agent_id: &str, tool: &str, input: &Value, at: SystemTime) {
     ));
 }
 
+/// The grant a late Allow makes for a card with no tool call behind it (a
+/// push, the app's own "OK?"): keyed by what the card asked for, kind and
+/// target (`expiry::key_for`), so only the very same ask goes through.
+/// Never a real tool's name, whose input is always an object.
+const CARD_GRANT: &str = "\u{0}card";
+
+fn grant_card_once(agent_id: &str, key: &str) {
+    grant_once(agent_id, CARD_GRANT, &Value::String(key.to_string()));
+}
+
+fn take_card_grant(agent_id: &str, key: &str) -> bool {
+    take_grant(agent_id, CARD_GRANT, &Value::String(key.to_string()))
+}
+
 fn take_grant(agent_id: &str, tool: &str, input: &Value) -> bool {
     let mut grants = GRANTS.lock().unwrap_or_else(|e| e.into_inner());
     let now = SystemTime::now();
@@ -2815,8 +2829,9 @@ fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet
 
 /// Put an Allow / Deny card in the caller's chat and wait for the answer.
 ///
-/// `call` is the Claude Code tool call the card is about, if any. Those cards
-/// outlive the wait (see APPROVAL_WAIT_SECS); cards without one expire with it.
+/// `call` is the Claude Code tool call the card is about, if any. Every card
+/// outlives the wait (see APPROVAL_WAIT_SECS): a late Allow grants that call,
+/// or the same ask made again, once (`answer_late`).
 pub(super) async fn ask_user(
     app: &AppHandle,
     caller: &store::Agent,
@@ -2898,18 +2913,38 @@ async fn ask_inner(
     if super::expiry::already_expired(&caller.id, &key) {
         return Answer::NotYet;
     }
-    // A plan card stays up until it's answered (`expiry::stays_open`): the
-    // same plan asked again while it's still up isn't a second card.
-    let stays = plan.is_some();
-    if stays && open_card_for(&caller.id, &key) {
+    // The user allowed this very card after its wait ran out
+    // (`answer_late`): asked again exactly as before, it goes through once.
+    if plan.is_none() && call.is_none() && take_card_grant(&caller.id, &key) {
+        return Answer::Allowed;
+    }
+    // A card stays up until it's answered (`expiry::verdict`): the same ask
+    // made again while it's up is no second card. The call waits on the one
+    // already there; if another call already does, it's told it's waiting.
+    let existing = open_card_id_for(&caller.id, &key);
+    if existing.as_deref().is_some_and(is_waited_on) {
         return Answer::NotYet;
     }
-    let request_id = store::new_id();
+    let request_id = existing.clone().unwrap_or_else(store::new_id);
     let (tx, rx) = oneshot::channel();
     PENDING_APPROVALS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .insert(request_id.clone(), tx);
+    if existing.is_some() {
+        // Answered between the look and the wait: that answer is this one.
+        // A late Allow it made is used here, not left for a later call.
+        if let Some(answered) = settled_answer(&caller.id, &request_id) {
+            drop_waiter(&request_id);
+            if answered == Answer::Allowed && call.is_none() {
+                take_card_grant(&caller.id, &key);
+            } else if let (Answer::Allowed, Some((tool, input))) = (&answered, call) {
+                take_grant(&caller.id, tool, input);
+            }
+            return answered;
+        }
+        return wait_on_card(app, caller, request_id, rx).await;
+    }
 
     let mut card = runner::new_message(&caller.id, MessageKind::Approval, "");
     let detail_was_empty = detail.is_empty();
@@ -2934,6 +2969,21 @@ async fn ask_inner(
     super::notify::refresh_badge(app);
     // Working for another agent: a line where the user is talking says so.
     runner::point_to_card(app, caller, &pointer);
+    wait_on_card(app, caller, request_id, rx).await
+}
+
+/// Wait on a card in the caller's chat for as long as the engine will hold
+/// the call (`approval_wait`). The card outlives the wait: unanswered, it
+/// stays up (`expiry::verdict`), and a later Allow grants exactly what it
+/// asked for and wakes the agent to do it (`answer_late`). Observed: about
+/// fifteen cards a week expired at four minutes, before the user got to
+/// them, and the work waited on a typed "go ahead".
+async fn wait_on_card(
+    app: &AppHandle,
+    caller: &store::Agent,
+    request_id: String,
+    rx: oneshot::Receiver<bool>,
+) -> Answer {
     // "Waiting for your OK" until this card and any other open one are answered.
     let wait = runner::begin_wait(app, &caller.id);
 
@@ -2948,25 +2998,7 @@ async fn ask_inner(
             .flatten()
             .and_then(|a| a.note)
     });
-    // An answered card was already written by the command. An unanswered
-    // one expires now, into a one-line receipt, and isn't asked again in
-    // this task (`agents/expiry.rs`). Closed before the waiter goes, so the
-    // sweep never reads it as abandoned. A plan card is the exception: it
-    // stays up, and a later Allow grants the plan and wakes the agent
-    // (`answer_late`). Observed: a pull request asked for from the phone
-    // just before it was put away; the card came up seconds later, expired
-    // four minutes after that, and the PR waited hours on a typed reply.
-    if answer == Answer::NotYet && stays {
-        store::refresh_pending(&caller.id);
-    } else if answer == Answer::NotYet {
-        super::expiry::remember(&caller.id, key);
-        if let Ok(Some(updated)) =
-            store::expire_card(&caller.id, &request_id, super::expiry::Expiry::NoAnswer)
-        {
-            let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
-        }
-        store::refresh_pending(&caller.id);
-    }
+    store::refresh_pending(&caller.id);
     PENDING_APPROVALS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -2981,10 +3013,27 @@ async fn ask_inner(
 
 /// Whether a card asking for `key` is still up in the agent's chat.
 pub(super) fn open_card_for(agent_id: &str, key: &str) -> bool {
+    open_card_id_for(agent_id, key).is_some()
+}
+
+/// The card asking for `key` still up in the agent's chat, if any.
+pub(super) fn open_card_id_for(agent_id: &str, key: &str) -> Option<String> {
     store::pending_approvals(agent_id)
         .unwrap_or_default()
-        .iter()
-        .any(|a| super::expiry::key_for(a) == key)
+        .into_iter()
+        .find(|a| super::expiry::key_for(a) == key)
+        .map(|a| a.request_id)
+}
+
+/// The answer already written on a card, if it's no longer pending.
+fn settled_answer(agent_id: &str, request_id: &str) -> Option<Answer> {
+    let a = store::find_approval(agent_id, request_id).ok().flatten()?;
+    match a.status {
+        ApprovalStatus::Pending => None,
+        ApprovalStatus::Allowed => Some(Answer::Allowed),
+        ApprovalStatus::Denied => Some(Answer::Denied(a.note)),
+        _ => Some(Answer::NotYet),
+    }
 }
 
 /// What a wait on a card came to: `None` when the wait ran out, `Some(None)`
@@ -3071,7 +3120,7 @@ pub(super) fn refused_reply(answer: &Answer, what: &str) -> Option<String> {
         Answer::Denied(Some(note)) => Some(format!(
             "The user said no, and told you: \"{note}\". Don't {what}."
         )),
-        Answer::NotYet => Some(format!("Don't {what} now. {}", super::expiry::TOLD)),
+        Answer::NotYet => Some(format!("Don't {what} yet. {}", super::expiry::STILL_WAITING)),
     }
 }
 
@@ -3232,7 +3281,7 @@ pub fn answer_late(
         }
         return Ok(());
     }
-    let (Some(tool), Some(input)) = (&approval.tool, &approval.input) else {
+    let Some(grant) = late_grant(approval) else {
         return Err(CommandError::expected(
             "That request isn't waiting any more. Ask the agent to try again.",
         ));
@@ -3240,17 +3289,64 @@ pub fn answer_late(
     if !allow {
         return Ok(());
     }
-    grant_once(agent_id, tool, input);
-    runner::enqueue(
+    match grant {
+        LateGrantOf::Call(tool, input) => grant_once(agent_id, &tool, &input),
+        LateGrantOf::Card(key) => grant_card_once(agent_id, &key),
+    }
+    // Said in the chat, so the turn that follows isn't a mystery.
+    let _ = runner::record(
         app,
-        agent_id,
-        format!(
-            "[The user has now approved this, which you asked for earlier: {} — {}. It will go through without asking if you run it exactly as before. Carry on with what you were doing.]",
-            approval.title, approval.detail
-        ),
-        runner::From::App,
+        runner::new_message(agent_id, MessageKind::Note, late_allow_line(&approval.title)),
     );
+    runner::enqueue(app, agent_id, late_allow_prompt(approval), runner::From::App);
     Ok(())
+}
+
+/// What a late Allow grants: the exact tool call the card showed, or (a
+/// card with none behind it, a push or the app's own "OK?") the same ask
+/// again, by kind and target. Cards answered some other way grant nothing.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum LateGrantOf {
+    Call(String, Value),
+    Card(String),
+}
+
+pub(super) fn late_grant(approval: &Approval) -> Option<LateGrantOf> {
+    if let (Some(tool), Some(input)) = (&approval.tool, &approval.input) {
+        return Some(LateGrantOf::Call(tool.clone(), input.clone()));
+    }
+    let special = approval.plan.is_some()
+        || approval.secret.is_some()
+        || approval.login.is_some()
+        || approval.prompt.is_some()
+        || approval.connector.is_some()
+        || approval.front.is_some()
+        || approval.step_in.is_some()
+        || approval.settings.is_some()
+        || approval.handoff.is_some()
+        || approval.gate.is_some()
+        || approval.crossover.is_some()
+        || approval.account_switch.is_some()
+        || approval.skill.is_some()
+        || approval.slack_reply.is_some();
+    (!special).then(|| LateGrantOf::Card(super::expiry::key_for(approval)))
+}
+
+/// The chat line a late Allow leaves.
+pub(super) fn late_allow_line(title: &str) -> String {
+    format!("Allowed after it had stopped waiting · {title}. Picking it back up.")
+}
+
+/// What the agent is woken with after a late Allow.
+pub(super) fn late_allow_prompt(approval: &Approval) -> String {
+    let what = match approval.summary.as_deref().filter(|s| !s.trim().is_empty()) {
+        Some(summary) if approval.detail.trim().is_empty() => summary.to_string(),
+        _ => approval.detail.clone(),
+    };
+    format!(
+        "[The user has now allowed this on its card, which you asked for earlier and stopped waiting on: {} — {}. Do exactly that now: make the same call with the same request and it goes through without another card. Nothing else is covered. Then carry on with what you were doing.]",
+        approval.title, what
+    )
 }
 
 /// Turn a pending tool call into words a person can approve.
@@ -4051,7 +4147,7 @@ pub(super) fn denied(note: Option<String>) -> String {
 }
 
 /// What the agent is told when the card is still waiting.
-pub(super) const NOT_YET: &str = super::expiry::TOLD;
+pub(super) const NOT_YET: &str = super::expiry::STILL_WAITING;
 
 async fn approve(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &Value) -> Value {
     let tool = args
@@ -4185,6 +4281,56 @@ mod tests {
             updated_lines("Finance", "Books", &["role"], by).0,
             "Renamed Finance to Books and updated its role"
         );
+    }
+
+    /// A card with no tool call behind it (a push, the app's own "OK?")
+    /// answered after its wait ran out: Allow grants the same ask once, by
+    /// what it asked for, never another, and never twice.
+    #[test]
+    fn a_late_allow_on_a_card_grants_the_same_ask_once() {
+        let push = new_card(
+            "p".into(),
+            "Publish site".into(),
+            "Branch main → origin\n9f3c2e1 Fix the header".into(),
+            None,
+        );
+        let Some(LateGrantOf::Card(key)) = late_grant(&push) else {
+            panic!("a push card is granted by its ask");
+        };
+        assert_eq!(key, super::super::expiry::key_for(&push));
+        grant_card_once("agent-c", &key);
+        assert!(!take_card_grant("agent-d", &key));
+        // The project changed since: another ask, another card.
+        assert!(!take_card_grant(
+            "agent-c",
+            &super::super::expiry::ask_key("Publish site", "Branch main → origin\n1a2b3c4 More")
+        ));
+        // Not a tool call's grant either.
+        assert!(!take_grant("agent-c", "Bash", &json!({ "command": key })));
+        assert!(take_card_grant("agent-c", &key));
+        assert!(!take_card_grant("agent-c", &key));
+
+        // A tool call's card grants that exact call.
+        let input = json!({ "command": "npm test" });
+        let bash = new_card("b".into(), "Run a command".into(), "npm test".into(), Some(("Bash", &input)));
+        assert_eq!(
+            late_grant(&bash),
+            Some(LateGrantOf::Call("Bash".into(), input.clone()))
+        );
+        // Cards answered their own way grant nothing here.
+        let mut secret = new_card("s".into(), "Secure input · KEY".into(), "p".into(), None);
+        secret.secret = Some(
+            serde_json::from_value(json!({
+                "fields": [], "kind": "other", "name": "n", "purpose": "p", "reference": "r"
+            }))
+            .unwrap(),
+        );
+        assert_eq!(late_grant(&secret), None);
+        // The wake names exactly what was allowed, and that nothing else is.
+        let told = late_allow_prompt(&push);
+        assert!(told.contains("Publish site") && told.contains("9f3c2e1 Fix the header"));
+        assert!(told.contains("Nothing else is covered"));
+        assert!(late_allow_line("Publish site").contains("stopped waiting"));
     }
 
     #[test]

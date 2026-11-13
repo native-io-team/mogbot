@@ -1291,7 +1291,8 @@ be confused with agent-to-agent `message_agent`:
   commits and what gets committed first. It has no tool call behind it, so
   no "Always allow" is offered and no rule can skip it. Allow pushes exactly
   the tree the card described (`frozen_tree` / `push_frozen`); a change in
-  between pushes nothing. An unanswered card expires after 240s.
+  between pushes nothing. An unanswered card stays up; a late Allow wakes the
+  agent to push exactly that (see "Allow / Deny cards wait for the user").
 - **Questions a session asks** (`agents/decisions.rs`): when a session stops
   on something it can't answer itself (Claude Code's folder-trust dialog, a
   permission prompt in the tab, any menu or y/n `agent_state.rs` recognises),
@@ -2098,22 +2099,32 @@ one card with the exact text, whose grant then goes with the message. Reviews
 on pull requests and teammates' names aren't the user; "draft it and send it
 to me" isn't a send. Room @mentions aren't checked this way.
 
-**Cards expire** (`agents/expiry.rs`; this supersedes the "stays live" and
-late-Allow behaviour below, which now only reaches a card from before it). A
-card whose turn ended, or that a restart left behind, closes at once as
-"Expired — the agent moved on". A card still blocking a turn closes when the
-wait runs out (240s for Claude Code, bounded by its 300s ceiling; the sweep
-closes anything past `CARD_EXPIRY_SECS`, 10 min): the call is denied with "No
-answer — ask again later if it still matters" and the agent is told to carry
-on without it or say what's left in one line. Sign-ins and secure input close
-after 10 min as "Maybe later". Each becomes a one-line receipt (desk and
-phone), counts in no badge, and the same ask (kind + target) is refused
-without a card for the rest of that task, until the user next writes to the
-agent, **or the Chief (or an admin) passes on the user's own request to it**
-(`runner::relay_lifts_expired`: a turn answering the user's message in its own
-chat, not a routine, check-in, room or outside text), since a user who talks
-only to the Chief says "try again" there. A sweep runs at launch and every
-minute.
+**Allow / Deny cards wait for the user** (`agents/expiry.rs`, `expiry::verdict`).
+Observed: about fifteen cards a week, across every agent, expired (at the
+240s wait, or the moment the turn they stopped ended) before the owner got to
+them, and the work waited on a typed "Continue". Now a card a tool call, a
+push or the app's own "OK?" blocks on stays up through the wait running out,
+its turn ending and a restart. The engine's call can't wait that long (Claude
+Code gives up on a permission prompt at 300s), so when the wait runs out the
+call is answered with `expiry::STILL_WAITING`: the card stays, don't retry or
+work around it, carry on with what doesn't need it, else say in one line it's
+waiting and stop. The same ask (kind + target) made again while the card is up
+waits on that card, never a second one. A **late Allow** (`mcp::answer_late`,
+through the one-answer gate like any answer) grants exactly what the card
+showed, once: the tool call with the same input, or for a card with no tool
+call behind it (a push) the same ask by its key (`mcp::grant_card_once`), so a
+push whose commits changed since is a new card. It leaves the line "Allowed
+after it had stopped waiting · <title>. Picking it back up." and queues a turn
+telling the agent the user allowed exactly that and nothing else. A late Deny
+just records the No. **Stop** withdraws an agent's open cards as "Expired —
+the agent moved on" (`Moment::Stopped`): the user ended that work and a late
+Allow must not restart it. A card nobody answers in three days
+(`CARD_STAYS_SECS`) closes the same way. Sign-ins and secure input don't block
+a turn: they close after 10 min (`CARD_EXPIRY_SECS`) as "Maybe later", become
+a one-line receipt (desk and phone), count in no badge, and the same ask is
+refused without a card for the rest of that task, until the user next writes
+to the agent, **or the Chief (or an admin) passes on the user's own request to
+it** (`runner::relay_lifts_expired`). A sweep runs at launch and every minute.
 
 **Except a plan** (`expiry::stays_open`). Observed: the owner asked for a
 pull request from the phone and put it away; the "Do these under your name?"

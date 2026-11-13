@@ -55,6 +55,9 @@ command, the file, the site or the message. The agent's row says "Needs your OK"
   exactly one card open.
 - A card can be answered once. If you answer on the phone and the computer at the same moment, only the
   first answer counts and the other says "Already answered".
+- A card waits for you, even after the agent's turn ends or the app restarts. Allow it later and
+  the agent picks that exact step back up on its own, with a line saying so. Pressing Stop withdraws
+  an agent's open cards; one left unanswered for three days closes by itself.
 - To stop accidental clicks, Allow is inactive for a moment after a card appears, and typing in the
   message box never answers a card.
 
