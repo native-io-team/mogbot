@@ -190,7 +190,7 @@ fn gh_command_and_account(project_path: Option<&str>) -> Result<(Command, String
 /// flaky network, not an app malfunction (issue #686). `Expected` keeps it out
 /// of telemetry; ImportProject.tsx matches the "took too long" wording to
 /// suggest retrying instead of re-authenticating — keep them in sync.
-const GH_TIMEOUT_MESSAGE: &str =
+pub(crate) const GH_TIMEOUT_MESSAGE: &str =
     "GitHub took too long to respond. Check your internet connection and try again.";
 
 /// User-facing message when `gh repo create --push` blows its (longer) time

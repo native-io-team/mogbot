@@ -21,12 +21,31 @@ async fn run_net(
     cmd: std::process::Command,
     label: &str,
 ) -> Result<std::process::Output, CommandError> {
-    run_with_timeout(
+    let result = run_with_timeout(
         tokio::process::Command::from(cmd),
         label.to_string(),
         NETWORK_TIMEOUT_SECS,
     )
-    .await
+    .await;
+    gh_timeout_is_expected(result, label)
+}
+
+/// A `gh pr …` that outlives its budget is a slow network or GitHub, not a
+/// malfunction: said plainly and kept out of error reports, as github.rs and
+/// `run_git_net` already do (issue #18: `cmderr-timeout-gh pr list`).
+fn gh_timeout_is_expected<T>(
+    result: Result<T, CommandError>,
+    label: &str,
+) -> Result<T, CommandError> {
+    match result {
+        Err(CommandError::Timeout { .. }) => {
+            tracing::warn!(label, "pull request command timed out waiting for GitHub");
+            Err(CommandError::expected(
+                crate::commands::github::GH_TIMEOUT_MESSAGE,
+            ))
+        }
+        other => other,
+    }
 }
 
 /// List pull requests for the repository
@@ -471,6 +490,26 @@ mod tests {
             .expect("git --version should run within the timeout");
         assert!(out.status.success());
         assert!(String::from_utf8_lossy(&out.stdout).contains("git version"));
+    }
+
+    #[test]
+    fn a_timed_out_pr_command_is_expected_not_a_bug() {
+        let timed_out: Result<(), CommandError> = Err(CommandError::Timeout {
+            cmd: "gh pr list".into(),
+            secs: 60,
+        });
+        let err = gh_timeout_is_expected(timed_out, "gh pr list").unwrap_err();
+        assert!(matches!(err, CommandError::Expected { .. }), "{err:?}");
+        assert!(err.to_string().contains("took too long"));
+        // Anything else passes through untouched.
+        let other: Result<(), CommandError> = Err(CommandError::Validation {
+            field: "x".into(),
+            reason: "y".into(),
+        });
+        assert!(matches!(
+            gh_timeout_is_expected(other, "gh pr list"),
+            Err(CommandError::Validation { .. })
+        ));
     }
 
     /// is_conflict_stderr gates the MergeConflict error path; keep its phrase
