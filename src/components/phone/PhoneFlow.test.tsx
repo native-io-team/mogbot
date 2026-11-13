@@ -124,6 +124,43 @@ describe('PhoneFlow', () => {
     await waitFor(() => expect(startPairing).toHaveBeenCalledTimes(1));
   });
 
+  // Tom's first install: the status read on arrival (pairing off) landed after
+  // the code and threw it away, leaving a spinner until Back and forward again.
+  it('keeps the first code although the status read before it says pairing is off', async () => {
+    // Later reads take as long as a real one, so the screen draws the new code
+    // while it still holds the read from before it.
+    getPhoneStatus
+      .mockReset()
+      .mockResolvedValueOnce(status())
+      .mockImplementation(
+        () =>
+          new Promise((done) => setTimeout(() => done(status({ pairing: { active: true } })), 50))
+      );
+    show('phoneScan');
+    expect(
+      await screen.findByRole('img', { name: /Pairing code for the/ }, { timeout: 3000 })
+    ).toBeInTheDocument();
+    expect(startPairing).toHaveBeenCalledTimes(1);
+  });
+
+  it('tries again on its own when the code can’t be made yet', async () => {
+    getPhoneStatus.mockReset().mockResolvedValue(status({ pairing: { active: true } }));
+    const code = {
+      link: 'x://pair?d=1',
+      qr: { size: 21, modules: '0'.repeat(441) },
+      expiresAt: Date.now() + 300_000,
+    };
+    startPairing
+      .mockReset()
+      .mockRejectedValueOnce(new Error('phone access is starting'))
+      .mockResolvedValue(code);
+    show('phoneScan');
+    expect(
+      await screen.findByRole('img', { name: /Pairing code for the/ }, { timeout: 5000 })
+    ).toBeInTheDocument();
+    expect(startPairing).toHaveBeenCalledTimes(2);
+  });
+
   it('a request takes the screen; Allow is the neutral answer and ends on Paired', async () => {
     getPhoneStatus.mockResolvedValue(
       status({
