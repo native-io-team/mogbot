@@ -21,6 +21,7 @@ import { useCommands } from '../../commands/useCommands';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import {
   cancelDictation,
+  dictationOffError,
   joinDictation,
   onDictationEvent,
   startDictation,
@@ -84,7 +85,8 @@ export function useDictation({ getDraft, setDraft, getVocabulary, meterRef, enab
           setLevel(event.level);
           break;
         case 'error':
-          showToast(event.message, 'error');
+          if (dictationOffError(event.message)) setBlocked('dictationOff');
+          else showToast(event.message, 'error');
           break;
         case 'ended':
           if (event.cancelled && phaseRef.current !== 'finishing') {

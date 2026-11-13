@@ -16,7 +16,10 @@ export type DictationBlock =
   | 'microphone'
   | 'speechRecognition'
   | 'unavailable'
-  | 'missingUsageDescription';
+  | 'missingUsageDescription'
+  // Not from the Mac's check: macOS's own Siri & Dictation switch is off,
+  // which surfaces only once a session has started (`dictationOffError`).
+  | 'dictationOff';
 
 export type DictationStart =
   | { status: 'listening'; session: number }
@@ -73,7 +76,21 @@ export function blockedCopy(reason: DictationBlock): { message: string; settings
       return { message: 'This build can’t ask for microphone access.' };
     case 'unavailable':
       return { message: `Speech recognition isn’t available on ${THIS_COMPUTER} right now.` };
+    case 'dictationOff':
+      return {
+        message: `Dictation is turned off on ${THIS_COMPUTER}. Turn it on in Keyboard settings, then try again.`,
+        settings: 'x-apple.systempreferences:com.apple.Keyboard-Settings.extension',
+      };
   }
+}
+
+/**
+ * True when a session's error is macOS saying its own Siri & Dictation switch
+ * is off ("Siri and Dictation are disabled."): a setting to change, not a
+ * fault, so it shows as the blocked line with its Settings button (issue #17).
+ */
+export function dictationOffError(message: string): boolean {
+  return /siri and dictation are disabled|dictation is (disabled|turned off)/i.test(message);
 }
 
 export function openPrivacySettings(url: string): Promise<void> {
