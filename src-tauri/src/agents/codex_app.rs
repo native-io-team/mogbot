@@ -1269,6 +1269,8 @@ mod tests {
 
     /// Codex's requests reach `mcp::decide` as the same calls Claude Code
     /// makes, so the independence level answers them the same way.
+    // Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+    #[cfg(unix)]
     #[test]
     fn codex_requests_are_classified_like_claude_code_calls() {
         use super::super::autoallow::{classify, Class, Ctx};
@@ -1455,6 +1457,8 @@ mod tests {
         assert_eq!(quoted("no quotes"), None);
     }
 
+    // Unix only: the stand-in codex is a /bin/sh script.
+    #[cfg(unix)]
     #[tokio::test]
     async fn the_app_server_is_used_only_when_its_schema_lists_every_method() {
         let dir = tempfile::tempdir().unwrap();
@@ -1466,6 +1470,8 @@ mod tests {
         assert!(!available(&no).await);
     }
 
+    // Unix only: the stand-in codex is a /bin/sh script.
+    #[cfg(unix)]
     #[tokio::test]
     async fn a_check_that_broke_is_not_kept_as_the_answer() {
         let dir = tempfile::tempdir().unwrap();

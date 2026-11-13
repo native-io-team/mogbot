@@ -487,6 +487,8 @@ mod tests {
             .contains(&"--no-chrome".to_string()));
     }
 
+    // Unix only: the stand-in codex is a /bin/sh script.
+    #[cfg(unix)]
     #[tokio::test]
     async fn the_turn_runs_codex_over_the_app_server_only_when_it_has_one() {
         use crate::agents::codex_app::fake;

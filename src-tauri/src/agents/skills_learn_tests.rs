@@ -264,7 +264,10 @@ fn each_engine_finds_its_skills() {
     let index = prompt_section(Placement::Index, home.path(), &skills).unwrap();
     assert!(index.starts_with("## Skills you saved"));
     assert!(index.contains("- Export invoices: When asked for invoices ("));
-    assert!(index.contains(".claude/skills/export-invoices/SKILL.md"));
+    // Windows writes the path with backslashes.
+    assert!(index
+        .replace('\\', "/")
+        .contains(".claude/skills/export-invoices/SKILL.md"));
     // No skills, no section.
     assert_eq!(prompt_section(Placement::Index, home.path(), &[]), None);
 

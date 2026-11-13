@@ -377,6 +377,8 @@ mod tests {
         "/Users/sam/ShipStudio",
     ];
 
+    // Unix only: the fixtures are Unix paths, which a Windows Path doesn't read as absolute.
+    #[cfg(unix)]
     #[test]
     fn a_cd_into_a_repository_is_working_in_it() {
         let cwd = Path::new("/Users/sam/ShipStudio/.shipstudio/agents/a1");
@@ -400,6 +402,8 @@ mod tests {
         assert_eq!(project_of(&bash("echo cd ~/x"), cwd, &ex(), &probe), None);
     }
 
+    // Unix only: the fixtures are Unix paths, which a Windows Path doesn't read as absolute.
+    #[cfg(unix)]
     #[test]
     fn reads_edits_and_searches_find_their_repository() {
         let cwd = Path::new("/tmp");

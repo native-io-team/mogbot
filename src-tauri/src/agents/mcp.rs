@@ -4378,6 +4378,8 @@ mod tests {
         store::set_root_for_tests(None);
     }
 
+    // Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+    #[cfg(unix)]
     #[test]
     fn the_sweep_answers_only_what_the_level_would_and_never_logins() {
         use super::super::autoallow::Ctx;

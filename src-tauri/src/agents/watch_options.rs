@@ -48,8 +48,20 @@ pub struct Options {
 fn label(path: &str, home: &str) -> String {
     if path == home {
         "~".into()
-    } else if let Some(rest) = path.strip_prefix(&format!("{home}/")) {
-        format!("~/{rest}")
+    } else if let Some(rest) = path.strip_prefix(home).and_then(|r| {
+        r.strip_prefix('/')
+            .or_else(|| r.strip_prefix('\\').filter(|_| cfg!(windows)))
+    }) {
+        format!("~/{}", slashed(rest))
+    } else {
+        path.to_string()
+    }
+}
+
+/// On Windows a path may use backslashes; written with `/` there to label and compare.
+fn slashed(path: &str) -> String {
+    if cfg!(windows) {
+        path.replace('\\', "/")
     } else {
         path.to_string()
     }
@@ -63,7 +75,7 @@ pub fn folders_in(home: &Path, watched: &[String]) -> Vec<Folder> {
     let mut out: Vec<Folder> = Vec::new();
     let mut add = |path: String| {
         let path = path.trim_end_matches('/').to_string();
-        if path.is_empty() || out.iter().any(|f| f.path == path) {
+        if path.is_empty() || out.iter().any(|f| slashed(&f.path) == slashed(&path)) {
             return;
         }
         out.push(Folder {

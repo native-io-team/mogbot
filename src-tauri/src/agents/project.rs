@@ -127,8 +127,10 @@ pub async fn ensure_listed(app: &tauri::AppHandle, agent_id: &str, wanted: &str)
 
 /// The last folder of a path, for lines that name a project by its path.
 pub fn folder_name(path: &str) -> &str {
-    path.trim_end_matches('/')
-        .rsplit('/')
+    // Windows paths use `\` too; on Unix it is a character a name may hold.
+    let sep = |c: char| c == '/' || (cfg!(windows) && c == '\\');
+    path.trim_end_matches(sep)
+        .rsplit(sep)
         .next()
         .unwrap_or(path)
 }

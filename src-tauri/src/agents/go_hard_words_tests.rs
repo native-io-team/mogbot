@@ -109,6 +109,8 @@ fn a_variable_the_line_sets_is_filled_in() {
 /// A new Vercel project's first deployment is its production one: from a
 /// folder not linked yet, `vercel deploy` asks at "Full send"; from a linked
 /// one it is the preview it says it is.
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn the_first_deploy_of_a_new_vercel_project_asks() {
     let dir = tempfile::tempdir().unwrap();

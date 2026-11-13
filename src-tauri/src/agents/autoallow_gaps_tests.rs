@@ -31,6 +31,8 @@ fn class(command: &str) -> Class {
 
 /// What a project agent runs while it checks on pull requests: none of it
 /// waits at "Go hard", and the pure reads don't at "Use good judgement".
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn checking_on_pull_requests_runs_without_a_card() {
     let c = ctx();
@@ -148,6 +150,8 @@ fn network_writes_still_ask_at_go_hard() {
 /// package new to the project asks only in a turn that read outside
 /// content: `autoallow_hardening_tests`); raw addresses, global installs and
 /// `sudo` still ask.
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn package_installs_run_at_go_hard() {
     for command in [

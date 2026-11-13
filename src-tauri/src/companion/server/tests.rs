@@ -637,6 +637,16 @@ async fn put_blob(
     mime: &str,
     bytes: Vec<u8>,
 ) -> reqwest::Response {
+    try_put_blob(port, token, name, mime, bytes).await.unwrap()
+}
+
+async fn try_put_blob(
+    port: u16,
+    token: Option<&str>,
+    name: &str,
+    mime: &str,
+    bytes: Vec<u8>,
+) -> reqwest::Result<reqwest::Response> {
     let mut req = reqwest::Client::new()
         .put(format!("http://127.0.0.1:{port}/v1/blobs"))
         .header("X-Name", urlencoding::encode(name).into_owned())
@@ -645,7 +655,7 @@ async fn put_blob(
     if let Some(t) = token {
         req = req.bearer_auth(t);
     }
-    req.send().await.unwrap()
+    req.send().await
 }
 
 /// [`put_blob`]'s status, for a flood: a server that refuses an upload
@@ -860,15 +870,20 @@ async fn uploads_over_the_desks_limit_are_refused() {
         .registry
         .add(&phone(), String::new(), 1, &[], None)
         .unwrap();
-    let res = put_blob(
+    // Refused with 413, or (Windows) the connection closed on the client
+    // before it finished sending the body: a refusal either way.
+    match try_put_blob(
         port,
         Some(&token),
         "big.bin",
         "application/octet-stream",
         vec![0u8; MAX_FILE_BYTES as usize + 1],
     )
-    .await;
-    assert_eq!(res.status(), 413);
+    .await
+    {
+        Ok(res) => assert_eq!(res.status(), 413),
+        Err(e) => assert!(e.is_request(), "{e}"),
+    }
     // Exactly the limit is fine.
     let res = put_blob(
         port,

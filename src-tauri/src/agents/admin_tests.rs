@@ -197,6 +197,8 @@ fn a_request_from_tainted_work_is_always_the_users() {
     assert_eq!(classify(&bash("ls"), true).0, Kind::Yours);
 }
 
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn with_its_context_local_work_is_exactly_what_go_hard_answers() {
     let home = std::path::PathBuf::from("/Users/sam");

@@ -223,6 +223,8 @@ const TABLE: &[(&str, Class)] = &[
     ("cd ~/.ssh && cat id_ed25519", Ask),
 ];
 
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn the_table_holds_at_every_level() {
     assert!(TABLE.len() >= 80, "{}", TABLE.len());
@@ -245,6 +247,8 @@ fn the_table_holds_at_every_level() {
     }
 }
 
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn compound_commands_take_their_most_dangerous_part() {
     for (command, expected) in [
@@ -275,6 +279,8 @@ fn compound_commands_take_their_most_dangerous_part() {
     }
 }
 
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn outside_text_never_gets_a_write_without_a_card() {
     let c = ctx();
@@ -333,6 +339,8 @@ fn the_always_ask_list_holds_at_go_hard() {
     }
 }
 
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn file_tools_follow_the_same_lines() {
     let c = ctx();
@@ -432,6 +440,8 @@ fn codex_commands_are_classified_like_claude_codes() {
     assert_eq!(classify("Bash", &bash(tricky), &c), Ask);
 }
 
+// Unix only: the classifier reads Unix paths; on Windows they don't resolve and ask (the safe side).
+#[cfg(unix)]
 #[test]
 fn scripts_are_read_before_they_run() {
     let dir = tempfile::tempdir().unwrap();

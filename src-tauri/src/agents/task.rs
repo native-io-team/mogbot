@@ -1859,12 +1859,20 @@ mod tests {
         std::fs::create_dir_all(root.join(".git/node_modules")).unwrap();
         let mut found: Vec<String> = dependency_dirs(root)
             .iter()
-            .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().to_string())
+            .map(|p| {
+                p.strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+                    .replace('\\', "/")
+            })
             .collect();
         found.sort();
         assert_eq!(found, vec!["node_modules", "packages/web/node_modules"]);
     }
 
+    // Unix only: free space is read with statvfs; Windows reports it unknown.
+    #[cfg(unix)]
     #[test]
     fn free_space_is_read_from_the_volume() {
         let dir = tempfile::tempdir().unwrap();

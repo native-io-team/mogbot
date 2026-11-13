@@ -439,6 +439,8 @@ fn the_choice_and_this_outages_yes_are_kept_and_the_yes_ends_with_the_outage() {
     });
 }
 
+// Unix only: AGENTS.md is a symlink to CLAUDE.md, which only Unix makes.
+#[cfg(unix)]
 #[test]
 fn one_set_of_instructions_and_memory_and_memory_saved_on_codex_is_kept() {
     let dir = tempfile::tempdir().unwrap();
@@ -531,6 +533,8 @@ fn the_overview_says_what_was_chosen_and_who_is_away() {
 /// CLAUDE.md. Swapping the AGENTS.md link for a file of its own made that
 /// file Codex's project doc for every later turn, and `sync_instructions`
 /// then folded it into CLAUDE.md's memory for good.
+// Unix only: AGENTS.md is a symlink to CLAUDE.md, which only Unix makes.
+#[cfg(unix)]
 #[test]
 fn review_an_outside_turn_swapping_agents_md_for_its_own_file_is_put_back() {
     let dir = tempfile::tempdir().unwrap();
@@ -591,6 +595,8 @@ fn review_a_hard_linked_or_huge_agents_md_is_never_folded_into_memory() {
     assert!(!sync_instructions(&home));
     let claude = std::fs::read_to_string(home.join("CLAUDE.md")).unwrap();
     assert!(!claude.contains("fakekeymaterial"), "{claude}");
+    // Only Unix makes the link; on Windows the file is just removed.
+    #[cfg(unix)]
     assert!(std::fs::symlink_metadata(home.join("AGENTS.md"))
         .unwrap()
         .file_type()
@@ -601,7 +607,7 @@ fn review_a_hard_linked_or_huge_agents_md_is_never_folded_into_memory() {
         .contains("fakekeymaterial"));
 
     // Far bigger than any memory: not read in.
-    std::fs::remove_file(home.join("AGENTS.md")).unwrap();
+    let _ = std::fs::remove_file(home.join("AGENTS.md"));
     let huge = "- line of junk that goes on\n".repeat(20_000);
     std::fs::write(home.join("AGENTS.md"), &huge).unwrap();
     assert!(!sync_instructions(&home));
