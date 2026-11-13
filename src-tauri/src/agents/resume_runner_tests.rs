@@ -513,3 +513,97 @@ fn a_picked_up_panic_carries_its_debts_over() {
         RUNTIMES.lock().unwrap().remove(id);
     });
 }
+
+/// A turn cut off by a clean quit (an update, a relaunch) is picked up again
+/// after each one, up to `MAX_QUIT_RESUMES`; a crash still gets one.
+/// Observed: picked up after an update, cut off by the next relaunch, and
+/// left for a typed "Continue".
+#[test]
+fn a_turn_cut_off_by_clean_quits_is_picked_up_each_time() {
+    scratch(|| {
+        let a = agent("Quinn");
+        start_turn(&a.id, vec![user("Ship the release notes")]);
+        mark_quitting();
+        assert!(read_mark(&a.id).unwrap().quit);
+        RUNTIMES.lock().unwrap().remove(&a.id);
+        for n in 1..=MAX_QUIT_RESUMES {
+            let plan = plan_recovery(&a.id, &[], false, on_disk);
+            assert_eq!(plan.pickup, Some(Pickup::Resume), "pick-up {n}");
+            let batch = take_batch(&a.id).unwrap();
+            assert_eq!(batch.resume, n);
+            assert!(!batch.prompt.contains("Ship the release notes"));
+            update_mark(&a.id, |m| {
+                m.pid = Some(424242);
+                m.session = SESSION.into();
+                m.session_id = Some(SESSION.into());
+            });
+            RUNTIMES.lock().unwrap().get_mut(&a.id).unwrap().running = true;
+            mark_quitting();
+            RUNTIMES.lock().unwrap().remove(&a.id);
+        }
+        // Past the cap, even quits stop: Continue.
+        let plan = plan_recovery(&a.id, &[], false, on_disk);
+        assert_eq!(plan.pickup, Some(Pickup::Continue(RESTART_LINE)));
+        forget(&a.id);
+
+        // A crash (no quit mark) after one pick-up: Continue, as before.
+        start_turn(&a.id, vec![user("Ship it")]);
+        update_mark(&a.id, |m| m.resumes = 1);
+        RUNTIMES.lock().unwrap().remove(&a.id);
+        let plan = plan_recovery(&a.id, &[], false, on_disk);
+        assert_eq!(plan.pickup, Some(Pickup::Continue(RESTART_LINE)));
+
+        // A stopped turn the app quit on is never picked up.
+        start_turn(&a.id, vec![user("Ship it")]);
+        let (stopped, _) = stop_queue(&a.id, false);
+        assert!(stopped);
+        mark_quitting();
+        RUNTIMES.lock().unwrap().remove(&a.id);
+        let plan = plan_recovery(&a.id, &[], false, on_disk);
+        assert_eq!(plan.pickup, Some(Pickup::Stopped));
+        assert!(queue_of(&a.id).is_empty());
+        forget(&a.id);
+    });
+}
+
+/// Taken from the queue, then the app quit before the engine started (a
+/// bound agent's copy takes seconds): its messages go again as they were,
+/// not "couldn't find this agent's conversation".
+#[test]
+fn a_turn_the_app_quit_on_before_it_started_is_sent_again() {
+    scratch(|| {
+        let a = agent("Rae");
+        {
+            let mut runtimes = RUNTIMES.lock().unwrap();
+            let r = runtimes.entry(a.id.clone()).or_default();
+            r.queue.push_back(user("Fix the header"));
+            r.running = true;
+        }
+        take_batch(&a.id).expect("a batch");
+        mark_quitting();
+        RUNTIMES.lock().unwrap().remove(&a.id);
+        let plan = plan_recovery(&a.id, &[], false, not_on_disk);
+        assert_eq!(plan.pickup, None, "nothing to pick up, nothing said gone");
+        assert_eq!(plan.resent.len(), 1);
+        let queued = queue_of(&a.id);
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].text, "Fix the header");
+        assert_eq!(queued[0].resume, 0);
+        assert!(read_mark(&a.id).is_none());
+        forget(&a.id);
+
+        // The same after a crash: left for Continue (it may crash again).
+        {
+            let mut runtimes = RUNTIMES.lock().unwrap();
+            let r = runtimes.entry(a.id.clone()).or_default();
+            r.queue.push_back(user("Fix the header"));
+            r.running = true;
+        }
+        take_batch(&a.id).expect("a batch");
+        RUNTIMES.lock().unwrap().remove(&a.id);
+        let plan = plan_recovery(&a.id, &[], false, not_on_disk);
+        assert_eq!(plan.pickup, Some(Pickup::Continue(SESSION_GONE_LINE)));
+        assert!(queue_of(&a.id).is_empty());
+        forget(&a.id);
+    });
+}

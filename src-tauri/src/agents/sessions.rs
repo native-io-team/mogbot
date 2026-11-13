@@ -719,7 +719,7 @@ async fn push(app: &AppHandle, caller: &store::Agent, project: &str) -> Value {
             return mcp_error(format!("The user said no, and told you: \"{note}\". Don't push."))
         }
         Answer::NotYet => {
-            return mcp_error("The user didn't answer the push card in time; nothing was pushed. Tell them in one line, and call push again when they say so.")
+            return mcp_error("The push card is still waiting for the user; nothing was pushed yet. When they allow it you're woken to push: call push again then, exactly as before, and it goes through without another card. Tell them in one line it's waiting on their OK, then stop.")
         }
     }
     // Pushed is exactly what the card showed, or nothing.

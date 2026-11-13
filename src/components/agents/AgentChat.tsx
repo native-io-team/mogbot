@@ -1155,7 +1155,7 @@ export const AgentChat = memo(function AgentChat({
     messagesRef,
     atBottomRef
   );
-  useRowAnchoring(scrollRef, messagesRef);
+  useRowAnchoring(scrollRef, messagesRef, atBottomRef);
 
   // Follow new content only if the reader was already at the bottom: glide
   // to a new line, land on the bottom (before paint) on first render. A reply

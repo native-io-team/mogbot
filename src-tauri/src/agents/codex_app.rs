@@ -866,8 +866,8 @@ pub async fn answer(app: &AppHandle, agent_id: &str, turn: u64, ask: Ask) -> Vec
     match mcp::ask_user(app, &agent, title, detail.trim().to_string(), None).await {
         mcp::Answer::Allowed => vec![reply(&ask.allow)],
         mcp::Answer::Denied(note) => refused(mcp::denied(note)),
-        // Unanswered: the card expired (`agents/expiry.rs`).
-        mcp::Answer::NotYet => refused(super::expiry::TOLD.to_string()),
+        // Unanswered: the card stays up, and a late Allow wakes it (`agents/expiry.rs`).
+        mcp::Answer::NotYet => refused(super::expiry::STILL_WAITING.to_string()),
     }
 }
 

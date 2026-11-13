@@ -430,10 +430,10 @@ fn a_fresh_start_leaves_the_conversation_and_keeps_the_rest() {
 fn approvals_resolve_once_and_stale_ones_expire() {
     with_root(|| {
         let a = create(new("Finance")).unwrap();
-        let pending = |rid: &str| AgentMessage {
+        let pending = |rid: &str, ts: i64| AgentMessage {
             id: new_id(),
             agent_id: a.id.clone(),
-            ts: now_ms(),
+            ts,
             kind: MessageKind::Approval,
             text: String::new(),
             peer: None,
@@ -490,8 +490,11 @@ fn approvals_resolve_once_and_stale_ones_expire() {
             fix: None,
             conversation: None,
         };
-        append_message(&pending("r1")).unwrap();
-        append_message(&pending("r2")).unwrap();
+        let days = (crate::agents::expiry::CARD_STAYS_SECS as i64) * 1000;
+        append_message(&pending("r1", now_ms())).unwrap();
+        append_message(&pending("r2", now_ms() - days)).unwrap();
+        // Unanswered and young: it waits through a restart for the user.
+        append_message(&pending("r3", now_ms())).unwrap();
         assert!(set_approval_status(&a.id, "r1", ApprovalStatus::Allowed)
             .unwrap()
             .is_some());
@@ -508,6 +511,10 @@ fn approvals_resolve_once_and_stale_ones_expire() {
         assert_eq!(
             log[1].approval.as_ref().unwrap().status,
             ApprovalStatus::Expired
+        );
+        assert_eq!(
+            log[2].approval.as_ref().unwrap().status,
+            ApprovalStatus::Pending
         );
     });
 }

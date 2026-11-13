@@ -1,11 +1,13 @@
 //! Cards expire. An Allow / Deny card, a sign-in or a secure input never sits
 //! in a chat asking forever:
 //!
-//! - **Its turn ended** (the engine stopped waiting on it, or the app
-//!   restarted): it closes at once as "Expired — the agent moved on".
-//! - **It still blocks a live turn**: the wait runs out (`mcp::approval_wait`,
-//!   capped by what the engine will hold a tool call for) and the call is
-//!   denied with [`TOLD`]; the card becomes a one-line receipt.
+//! - **An Allow / Deny card** (a tool call, a push, the app's own "OK?")
+//!   waits as long as the user needs. The engine's call can't (Claude Code
+//!   gives up on a permission prompt at 300s), so when the wait runs out
+//!   (`mcp::approval_wait`) the call is answered with [`STILL_WAITING`] and
+//!   the card stays up, through the turn ending and an app restart. A late
+//!   Allow grants exactly that call once and wakes the agent to run it
+//!   (`mcp::answer_late`); a late Deny just records the No.
 //! - **Sign-ins and secure input** don't block a turn, so they close after
 //!   [`CARD_EXPIRY_SECS`] as "Maybe later", and are never raised again on
 //!   their own.
@@ -31,6 +33,11 @@ use super::store::{self, AgentMessage, Approval};
 /// closed by the sweep.
 pub const CARD_EXPIRY_SECS: u64 = 600;
 
+/// How long an Allow / Deny card nobody answered stays up: long enough for
+/// a night, a weekend and a day away; past it, what it asked about is
+/// history, and an Allow then would start work nobody remembers.
+pub const CARD_STAYS_SECS: u64 = 3 * 24 * 3600;
+
 /// How often the sweep looks.
 pub const SWEEP_EVERY_SECS: u64 = 60;
 
@@ -49,6 +56,10 @@ pub enum Expiry {
 /// What the agent is told when its card expired, or when it asks again for
 /// something that already expired in this task.
 pub const TOLD: &str = "No answer — ask again later if it still matters. The request expired and nothing was done. Don't retry it, don't work around it, and don't ask for it again in this task. Carry on without it; if you can't, say what's left in one line and stop.";
+
+/// What the agent is told when the wait on its card ran out: the card is
+/// still up, and an Allow later wakes it to run exactly that.
+pub const STILL_WAITING: &str = "No answer yet. The card stays in the user's chat until they answer it; when they allow it you're woken to run exactly this, and it goes through without another card. Don't retry it, don't work around it, and don't ask for it again before then. Carry on with anything that doesn't need it; if nothing's left, tell the user in one line it's waiting on their OK on the card, then stop.";
 
 /// What an agent is told when it asks again for a sign-in or secure input
 /// that became "Maybe later" in this task.
@@ -75,6 +86,9 @@ pub fn key_for(a: &Approval) -> String {
     }
     match (&a.tool, &a.input) {
         (Some(tool), Some(input)) => tool_key(tool, input),
+        // A card of words (`ask_user_prose`) has its words as its summary,
+        // as `mcp::ask_inner` keys it.
+        _ if a.detail.is_empty() => ask_key(&a.title, a.summary.as_deref().unwrap_or_default()),
         _ => ask_key(&a.title, &a.detail),
     }
 }
@@ -145,11 +159,15 @@ pub enum Moment {
     TurnEnded,
     /// The periodic look.
     Tick,
+    /// The user pressed Stop: what the stopped turn asked for is withdrawn,
+    /// so a late Allow can't start it again.
+    Stopped,
 }
 
 /// What happens to one pending card. `age_ms` is how long it has been up,
-/// `waited_on` whether a tool call is still blocked on it.
-pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Option<Expiry> {
+/// `_waited_on` whether a tool call is still blocked on it (no card's fate
+/// turns on it any more: one nobody waits on stays up for a late answer).
+pub fn verdict(a: &Approval, age_ms: i64, _waited_on: bool, moment: Moment) -> Option<Expiry> {
     let overdue = age_ms >= (CARD_EXPIRY_SECS as i64) * 1000;
     // An import's own cards carry everything they show, and only exist
     // because the user started the import: they stay until answered.
@@ -221,12 +239,15 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
             _ => overdue.then_some(Expiry::NoAnswer),
         };
     }
-    // A card a tool call (or the app's own confirmation) blocks on.
-    match moment {
-        Moment::Launch | Moment::TurnEnded => Some(Expiry::MovedOn),
-        Moment::Tick if !waited_on => Some(Expiry::MovedOn),
-        Moment::Tick => overdue.then_some(Expiry::NoAnswer),
-    }
+    // A card a tool call (or the app's own confirmation) blocks on: it waits
+    // for the user however long they take, through its turn ending and a
+    // restart. Observed: about fifteen a week expired at four minutes, or
+    // when the turn they stopped ended, before the user got to them; a late
+    // Allow now runs exactly that call (`mcp::answer_late`). Stop withdraws
+    // it: the user ended that work, and an Allow must not restart it. Days
+    // later it's history ([`CARD_STAYS_SECS`]).
+    let stale = age_ms >= (CARD_STAYS_SECS as i64) * 1000;
+    (moment == Moment::Stopped || stale).then_some(Expiry::MovedOn)
 }
 
 /// Close what [`verdict`] says to in one agent's chat; returns every copy
@@ -274,7 +295,7 @@ pub fn sweep_agent(app: &AppHandle, agent_id: &str, moment: Moment) {
     if changed.is_empty() {
         return;
     }
-    if moment == Moment::TurnEnded {
+    if matches!(moment, Moment::TurnEnded | Moment::Stopped) {
         // A tool call still parked on one of them is let go: its card is closed.
         for m in &changed {
             if let Some(a) = &m.approval {

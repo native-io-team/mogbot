@@ -20,6 +20,7 @@
  *   __torture.answer()                           // the pending card allowed, in place
  *   __torture.replace()                          // the last reply edited (same id)
  *   __torture.lateDraft()                        // a draft event after its reply
+ *   __torture.card()                             // a reply, then an Allow / Deny card
  *
  * Every name, address, number and link here is made up.
  */
@@ -315,6 +316,7 @@ declare global {
       answer: () => void;
       replace: () => void;
       lateDraft: () => void;
+      card: () => void;
     };
   }
 }
@@ -399,6 +401,42 @@ if (here && SCENARIO_IDS.includes(here)) {
       const last = [...chiefLog()].reverse().find((m) => m.kind === 'agent');
       if (!last) return;
       say({ ...last, text: `${String(last.text)}\n\n*(edited: one line added)*` });
+    },
+    // A reply, then the card its next step waits on, a moment apart, as a
+    // turn posts them: the chat must end on the card's answers.
+    card: () => {
+      const t = Date.now();
+      const status = (state: string, activity: string | null) =>
+        void emit('agents://status', {
+          agentId: 'chief',
+          status: { state, activity, since: Date.now() },
+        });
+      status('working', 'Running npm test');
+      say({
+        id: `card-reply-${++live}`,
+        agentId: 'chief',
+        ts: t,
+        kind: 'agent',
+        text: 'Tests pass. Pushing the branch next, which needs your OK.',
+      });
+      window.setTimeout(() => {
+        say({
+          id: `card-${++live}`,
+          agentId: 'chief',
+          ts: t + 300,
+          kind: 'approval',
+          text: '',
+          approval: {
+            requestId: `card-req-${live}`,
+            title: 'Run a command',
+            detail: 'git push origin returns-by-courier',
+            status: 'pending',
+            tool: 'Bash',
+            input: { command: 'git push origin returns-by-courier' },
+          },
+        });
+        status('waiting', null);
+      }, 300);
     },
     lateDraft: () => {
       const last = [...chiefLog()].reverse().find((m) => m.kind === 'agent');

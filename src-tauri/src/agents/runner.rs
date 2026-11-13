@@ -183,8 +183,24 @@ static QUITTING: AtomicBool = AtomicBool::new(false);
 /// already on disk. Returns how many turns were stopped.
 pub fn shutdown_sync() -> usize {
     QUITTING.store(true, Ordering::SeqCst);
+    mark_quitting();
     super::dev_servers::stop_all_sync();
     procs::kill_all_sync()
+}
+
+/// Every turn in flight is cut off by a clean quit, not by anything it did:
+/// its mark says so, so the next launch picks it up (`next_pickup_of`).
+fn mark_quitting() {
+    let running: Vec<String> = RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .filter(|(_, r)| r.running)
+        .map(|(id, _)| id.clone())
+        .collect();
+    for agent_id in running {
+        update_mark(&agent_id, |m| m.quit = true);
+    }
 }
 
 #[cfg(test)]
