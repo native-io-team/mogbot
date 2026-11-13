@@ -7,9 +7,9 @@
 import type { CompanionEvent, Cursor } from '@shipstudio/companion-protocol';
 import { WebSocket } from 'ws';
 import { createMockServer } from '../dev/mock-server';
-import { until, provenBy } from './helpers';
+import { until, provenBy, random } from './helpers';
 import { applyEvent, emptySync, mergePage, type SyncState } from '../src/lib/sync';
-import { DirectTransport } from '../src/lib/transport';
+import { DirectTransport, SECOND_TRY_MS } from '../src/lib/transport';
 
 jest.setTimeout(20_000);
 
@@ -257,6 +257,63 @@ describe('DirectTransport when the first try goes nowhere', () => {
       await until(() => t.state.kind === 'connected', 10_000);
       expect(made).toBe(2);
       expect(Date.now() - started).toBeLessThan(8000);
+    } finally {
+      t.close();
+    }
+  });
+});
+
+describe('DirectTransport when the first route is down and the next works', () => {
+  const mock = createMockServer({ quiet: true, allowAfterMs: 0, relay: true });
+  afterAll(() => mock.close());
+
+  it('races the next route, not the same dead one again', async () => {
+    await mock.listen();
+    const { token } = mock.issueToken();
+    // The phone's Tailscale waking or off: its sockets go nowhere.
+    const deadTailscale = 'http://100.100.100.100:9';
+    const dialled: string[] = [];
+    class TailscaleGoesNowhere {
+      constructor(u: string) {
+        dialled.push(u);
+        if (u.startsWith('ws://100.100.100.100')) {
+          return {
+            readyState: 0,
+            send() {},
+            close() {},
+            onopen: null,
+            onmessage: null,
+            onclose: null,
+            onerror: null,
+          } as unknown as TailscaleGoesNowhere;
+        }
+        return new WebSocket(u) as unknown as TailscaleGoesNowhere;
+      }
+    }
+    const started = Date.now();
+    const t = new DirectTransport({
+      routes: [
+        { kind: 'tailscale', url: deadTailscale },
+        { kind: 'relay', url: mock.relay!.url },
+      ],
+      token,
+      app: { version: '0.1.0', runtimeVersion: 'test' },
+      getResume: () => undefined,
+      foreground: true,
+      random,
+      WebSocketImpl: TailscaleGoesNowhere as unknown as typeof globalThis.WebSocket,
+      ...provenBy(mock),
+    });
+    try {
+      await until(() => t.state.kind === 'connected', 10_000);
+      expect(t.state).toMatchObject({ kind: 'connected', route: 'relay' });
+      expect(t.route.kind).toBe('relay');
+      // Well inside the dead route's 16 s budget, and it was dialled only once.
+      expect(Date.now() - started).toBeLessThan(SECOND_TRY_MS + 4000);
+      expect(dialled.filter((u) => u.startsWith('ws://100.100.100.100'))).toHaveLength(1);
+      // The rest of the session uses the route that worked.
+      const overview = await t.request('agents.overview', {});
+      expect(overview).toBeTruthy();
     } finally {
       t.close();
     }
