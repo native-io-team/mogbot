@@ -2405,6 +2405,17 @@ with the variable's name and the reference (`secret:finance/stripe_key`).
 Deny wakes it with a plain refusal (or the user's note). The registry keeps
 names, purpose, reference, created and last-used only.
 
+Off the Mac the same items go to Windows Credential Manager, or on Linux to
+the Secret Service (`keychain/linux_store.rs`). A Linux box with no session
+bus at all gets an encrypted file instead (`keychain/file_store.rs`):
+`secrets.enc` (ChaCha20-Poly1305, 0600) in the app's folder, its key derived
+with HKDF from `secrets.key` beside it (0600) or the file named by
+`<SLUG>_SECRET_KEY_FILE`. The choice is written down once (`secret-store`),
+so secrets never split across two stores; a desktop whose keyring doesn't
+answer gets the error, never a new empty file. `<SLUG>_SECRET_STORE=file` or
+`=secret-service` chooses outright. A lost or wrong key, or a tampered file,
+is an error and the file is never overwritten.
+
 **Use: environment variables.** Each turn is a fresh `claude` process, so
 that agent's turns (and no other's) start with its secrets as variables
 (`$STRIPE_KEY`; a login's fields as `$BANK_USERNAME`, `$BANK_PASSWORD`), and

@@ -2,7 +2,8 @@
 //! credentials, agents' secrets, the companion's identity key).
 //!
 //! Everything below is about macOS. On Windows (Credential Manager) and
-//! Linux (the Secret Service) secrets go through [`os_store`] instead, which
+//! Linux (the Secret Service, or an encrypted file on a box with none:
+//! [`linux_store`], [`file_store`]) secrets go through [`os_store`] instead, which
 //! keeps the same three-way [`Read`] and nothing else of this: those
 //! platforms never had legacy items or a previous name. The user-facing name
 //! of wherever this build keeps secrets is [`STORE_NAME`].
@@ -82,6 +83,11 @@ mod macos;
 mod keyring_store;
 #[cfg(any(windows, target_os = "linux", test))]
 mod os_store;
+// A box with no Secret Service (headless, a container): an encrypted file.
+#[cfg(any(target_os = "linux", test))]
+mod file_store;
+#[cfg(any(target_os = "linux", test))]
+mod linux_store;
 
 /// Where this build keeps secrets, as copy says it: "the Keychain",
 /// "Windows Credential Manager", "your system keyring". A macro too, for
@@ -737,12 +743,23 @@ fn memory() -> Option<std::sync::MutexGuard<'static, HashMap<(String, String), S
         .map(|m| m.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
-/// Windows Credential Manager / the Secret Service. No rename carry-over:
-/// these platforms never kept a secret under a previous name.
-#[cfg(any(windows, target_os = "linux"))]
+/// Windows Credential Manager. No rename carry-over: these platforms never
+/// kept a secret under a previous name.
+#[cfg(windows)]
 static PLAIN: std::sync::LazyLock<os_store::Plain<keyring_store::OsStore>> =
     std::sync::LazyLock::new(|| {
         os_store::Plain::new(keyring_store::OsStore, keyring_store::MAX_BLOB)
+    });
+
+/// The Secret Service, or the encrypted file on a box without one
+/// ([`linux_store`] says which, once).
+#[cfg(target_os = "linux")]
+static PLAIN: std::sync::LazyLock<os_store::Plain<linux_store::LinuxStore>> =
+    std::sync::LazyLock::new(|| {
+        os_store::Plain::new(
+            linux_store::LinuxStore::new(crate::brand::app_support_dir()),
+            keyring_store::MAX_BLOB,
+        )
     });
 
 #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
