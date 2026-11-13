@@ -1876,7 +1876,11 @@ The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
   here-documents, subshells, `eval` of anything known only when it runs,
   unknown programs and anything that doesn't parse ask. Paths are judged as
   written and where they really are
-  (a symlink out of the home asks). When in doubt, a card.
+  (a symlink out of the home asks), ignoring case on macOS and Windows,
+  whose disks do (`~/.SSH` is `~/.ssh`). On Windows `C:\…`, `C:/…`, Git
+  Bash's `/c/…` and its `/tmp` are placed like a Mac's paths; a share, a
+  drive-relative `C:x` or a path with no drive asks (`agents/paths.rs`).
+  When in doubt, a card.
 
 Each one answered this way leaves a step in the turn's "What it did"
 ("Allowed automatically — Bold · ls -la ~/SomeFolder"). A turn answering

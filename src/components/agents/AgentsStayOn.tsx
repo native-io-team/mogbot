@@ -9,7 +9,8 @@
  * "Keep running when closed" changes what closing a window does for every
  * project, so it is only ever turned on here, by asking.
  *
- * Shows nothing until the backend has answered, and nothing off macOS.
+ * Shows nothing until the backend has answered; each switch only where it
+ * works here (keep running when closed and open at login are macOS only).
  *
  * @module components/agents/AgentsStayOn
  */
@@ -33,25 +34,29 @@ export function AgentsStayOnNote() {
           : `Agents run on ${THIS_COMPUTER}. Quitting the app stops them, and sleep pauses them.`}
       </p>
       <div className="agents-stay-on__actions">
-        <ToggleButton
-          variant="ghost"
-          size="compact"
-          pressed={state.keepAwake}
-          leftIcon={tick(state.keepAwake)}
-          onClick={() => void change({ keepAwake: !state.keepAwake })}
-        >
-          Keep {THIS_COMPUTER} awake
-        </ToggleButton>
-        <ToggleButton
-          variant="ghost"
-          size="compact"
-          pressed={state.keepRunning}
-          leftIcon={tick(state.keepRunning)}
-          title="Closing a window hides it and the app keeps running. Click its Dock icon to bring it back; ⌘Q quits."
-          onClick={() => void change({ keepRunning: !state.keepRunning })}
-        >
-          Keep running when closed
-        </ToggleButton>
+        {state.keepAwakeAvailable !== false && (
+          <ToggleButton
+            variant="ghost"
+            size="compact"
+            pressed={state.keepAwake}
+            leftIcon={tick(state.keepAwake)}
+            onClick={() => void change({ keepAwake: !state.keepAwake })}
+          >
+            Keep {THIS_COMPUTER} awake
+          </ToggleButton>
+        )}
+        {state.keepRunningAvailable !== false && (
+          <ToggleButton
+            variant="ghost"
+            size="compact"
+            pressed={state.keepRunning}
+            leftIcon={tick(state.keepRunning)}
+            title="Closing a window hides it and the app keeps running. Click its Dock icon to bring it back; ⌘Q quits."
+            onClick={() => void change({ keepRunning: !state.keepRunning })}
+          >
+            Keep running when closed
+          </ToggleButton>
+        )}
         {state.openAtLoginAvailable && (
           <ToggleButton
             variant="ghost"
@@ -77,7 +82,7 @@ export function AgentsStayOnNote() {
 /** The schedule footnote's trailing link; nothing once the Mac is held awake. */
 export function KeepAwakeLink() {
   const { state, change } = useStayOn();
-  if (!state?.supported || state.keepAwake) return null;
+  if (!state?.supported || state.keepAwakeAvailable === false || state.keepAwake) return null;
   return (
     <>
       {' '}

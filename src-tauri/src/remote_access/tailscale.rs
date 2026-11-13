@@ -24,18 +24,57 @@ use tokio::io::AsyncReadExt;
 /// `tailscale serve` config, and each must leave the other's alone.
 pub const MOUNT_PATH: &str = crate::brand::FUNNEL_MOUNT_PATH;
 
-/// Where the CLI lives. The Mac App Store / standalone app ships it inside
-/// the bundle; Homebrew and the open-source build put it on PATH.
+/// Where the CLI lives. On macOS the standalone app ships it inside the
+/// bundle, and Homebrew and the open-source build put it on PATH. On Windows
+/// the installer puts `tailscale.exe` under Program Files (and on PATH); on
+/// Linux the packages install `/usr/bin/tailscale` (the snap, `/snap/bin`).
 fn candidate_binaries() -> Vec<std::path::PathBuf> {
-    let mut out = vec![
-        std::path::PathBuf::from("/Applications/Tailscale.app/Contents/MacOS/Tailscale"),
-        std::path::PathBuf::from("/opt/homebrew/bin/tailscale"),
-        std::path::PathBuf::from("/usr/local/bin/tailscale"),
-    ];
+    let mut out = platform_candidates();
     if let Ok(found) = which::which("tailscale") {
         out.insert(0, found);
     }
     out
+}
+
+#[cfg(target_os = "macos")]
+fn platform_candidates() -> Vec<std::path::PathBuf> {
+    [
+        "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+        "/opt/homebrew/bin/tailscale",
+        "/usr/local/bin/tailscale",
+    ]
+    .into_iter()
+    .map(std::path::PathBuf::from)
+    .collect()
+}
+
+#[cfg(windows)]
+fn platform_candidates() -> Vec<std::path::PathBuf> {
+    ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .map(|dir| {
+            std::path::PathBuf::from(dir)
+                .join("Tailscale")
+                .join("tailscale.exe")
+        })
+        .chain(std::iter::once(std::path::PathBuf::from(
+            r"C:\Program Files\Tailscale\tailscale.exe",
+        )))
+        .collect()
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn platform_candidates() -> Vec<std::path::PathBuf> {
+    [
+        "/usr/bin/tailscale",
+        "/usr/local/bin/tailscale",
+        "/usr/sbin/tailscale",
+        "/snap/bin/tailscale",
+    ]
+    .into_iter()
+    .map(std::path::PathBuf::from)
+    .collect()
 }
 
 pub fn find_binary() -> Option<std::path::PathBuf> {
@@ -73,6 +112,10 @@ pub enum TailscaleState {
 fn cli_command(bin: std::path::PathBuf) -> tokio::process::Command {
     let mut cmd = tokio::process::Command::new(bin);
     cmd.env("TAILSCALE_BE_CLI", "1");
+    // A console program spawned from a GUI app opens a console window on
+    // Windows unless told not to.
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     cmd
 }
 

@@ -419,21 +419,24 @@ fn build_menu(app: &AppHandle, model: &TrayModel) -> tauri::Result<tauri::menu::
         .item(&MenuItemBuilder::with_id("quick", "New message to Chief…").build(app)?)
         .separator();
     if let Some(stay) = stay.filter(|s| s.supported) {
-        menu = menu
-            .item(
+        if stay.keep_awake_available {
+            menu = menu.item(
                 &CheckMenuItemBuilder::with_id(
                     "awake",
                     concat!("Keep this ", crate::computer::noun!(), " awake"),
                 )
                 .checked(stay.keep_awake)
                 .build(app)?,
-            )
-            .item(
+            );
+        }
+        if stay.keep_running_available {
+            menu = menu.item(
                 &CheckMenuItemBuilder::with_id("keep", "Keep running when closed")
                     .checked(stay.keep_running)
                     .build(app)?,
-            )
-            .separator();
+            );
+        }
+        menu = menu.separator();
     }
     menu.item(&MenuItemBuilder::with_id("quit", format!("Quit {}", crate::brand::NAME)).build(app)?)
         .build()

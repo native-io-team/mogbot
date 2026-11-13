@@ -627,9 +627,14 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         run: async () => {
           try {
             const result = await setStayOn(c.change);
+            const works =
+              result.supported &&
+              !(c.change.keepAwake !== undefined && result.keepAwakeAvailable === false) &&
+              !(c.change.keepRunning !== undefined && result.keepRunningAvailable === false) &&
+              !(c.change.openAtLogin === true && !result.openAtLoginAvailable);
             showToast(
-              result.supported ? c.done : 'Only available on macOS',
-              result.supported ? 'success' : 'info'
+              works ? c.done : `Not available on ${THIS_COMPUTER}`,
+              works ? 'success' : 'info'
             );
           } catch (err) {
             showToast(`Couldn’t change that setting: ${errorText(err)}`, 'error');

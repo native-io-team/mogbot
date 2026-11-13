@@ -91,26 +91,30 @@ export function AgentsPage({ onImport }: { onImport: () => void }) {
         </SectionBoundary>
         {stayOn?.supported && (
           <div className="settings-section">
-            <Row
-              label={`Keep ${THIS_COMPUTER} awake`}
-              description={`Agents pause while the ${COMPUTER} sleeps.`}
-            >
-              <Toggle
-                on={stayOn.keepAwake}
+            {stayOn.keepAwakeAvailable !== false && (
+              <Row
                 label={`Keep ${THIS_COMPUTER} awake`}
-                onChange={(on) => void change({ keepAwake: on })}
-              />
-            </Row>
-            <Row
-              label="Keep running when closed"
-              description="Closing the window keeps agents going; ⌘Q still quits."
-            >
-              <Toggle
-                on={stayOn.keepRunning}
+                description={`Agents pause while the ${COMPUTER} sleeps.`}
+              >
+                <Toggle
+                  on={stayOn.keepAwake}
+                  label={`Keep ${THIS_COMPUTER} awake`}
+                  onChange={(on) => void change({ keepAwake: on })}
+                />
+              </Row>
+            )}
+            {stayOn.keepRunningAvailable !== false && (
+              <Row
                 label="Keep running when closed"
-                onChange={(on) => void change({ keepRunning: on })}
-              />
-            </Row>
+                description="Closing the window keeps agents going; ⌘Q still quits."
+              >
+                <Toggle
+                  on={stayOn.keepRunning}
+                  label="Keep running when closed"
+                  onChange={(on) => void change({ keepRunning: on })}
+                />
+              </Row>
+            )}
             {stayOn.openAtLoginAvailable && (
               <Row label="Open at login" description="Reopens the app after a restart.">
                 <Toggle

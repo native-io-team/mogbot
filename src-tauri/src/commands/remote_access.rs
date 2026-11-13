@@ -41,6 +41,9 @@ pub struct RemoteAccessStatus {
     pub publish: remote_access::PublishProgress,
     pub power: power::PowerStatus,
     pub keep_awake: bool,
+    /// Whether this computer can be held awake at all (Linux needs
+    /// `systemd-inhibit`); when false the UI says so instead of offering it.
+    pub keep_awake_available: bool,
     pub lid_closed_mode: Option<bool>,
     pub open_at_login: bool,
     pub open_at_login_available: bool,
@@ -117,7 +120,10 @@ async fn build_status() -> RemoteAccessStatus {
         .map(tailscale::classify_funnel_failure);
     let funnel_approval_kind = funnel_approval_url.as_deref().map(tailscale::approval_kind);
     RemoteAccessStatus {
-        supported: cfg!(target_os = "macos"),
+        // macOS, Windows and Linux alike: Tailscale and the server run on
+        // each. Only lid-closed mode and reopening at login are Mac-only,
+        // and those report themselves unavailable (`None` / `false`).
+        supported: true,
         enabled: config.enabled,
         server_running: remote_access::is_running(),
         tailscale: ts,
@@ -132,9 +138,10 @@ async fn build_status() -> RemoteAccessStatus {
         publish: remote_access::publish_progress(),
         power: power::read_power().await,
         keep_awake: power::keep_awake_active(),
+        keep_awake_available: power::keep_awake_available(),
         lid_closed_mode: power::lid_closed_mode_active().await,
         open_at_login: power::open_at_login_active(),
-        open_at_login_available: power::app_bundle_path().is_some(),
+        open_at_login_available: open_at_login_available(),
         push_pin: remote_access::push_pin_state(&config),
         projects: config.projects,
         ever_connected: config.ever_connected,
@@ -277,11 +284,6 @@ pub async fn set_remote_access_enabled(
     app: tauri::AppHandle,
     enabled: bool,
 ) -> Result<RemoteAccessStatus, CommandError> {
-    if enabled && !cfg!(target_os = "macos") {
-        return Err(CommandError::expected(
-            "Remote access is only available on macOS for now.",
-        ));
-    }
     remote_access::update_config(|c| c.enabled = enabled)?;
     if enabled {
         tailscale::forget_reachability();
@@ -424,30 +426,43 @@ mod tests {
     }
 }
 
-/// What keeps agents going on this Mac, as offered in Agents: "Keep this Mac
-/// awake" (the same `caffeinate` assertion remote access holds), "Keep running
-/// when windows close", and "Open at login" (remote access's own LaunchAgent,
-/// one file shared by both). Each is read back from the thing itself.
+/// What keeps agents going on this computer, as offered in Agents: "Keep it
+/// awake" (the same assertion remote access holds), "Keep running when
+/// windows close", and "Open at login" (remote access's own LaunchAgent, one
+/// file shared by both; macOS only). Each is read back from the thing itself.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StayOn {
-    /// macOS only; elsewhere none of this is offered.
+    /// Whether any of this is offered here (every desktop system now).
     pub supported: bool,
     /// True while the assertion is held, including by remote access.
     pub keep_awake: bool,
+    /// False where the app can't hold the computer awake (Linux without
+    /// `systemd-inhibit`): that row isn't offered.
+    pub keep_awake_available: bool,
     pub keep_running: bool,
+    /// Hiding windows on close needs the Dock to bring them back: macOS only.
+    pub keep_running_available: bool,
     pub open_at_login: bool,
     /// False in a dev build, which has no app bundle to reopen.
     pub open_at_login_available: bool,
 }
 
+/// Reopening at login is a LaunchAgent pointing at the installed `.app`:
+/// macOS only, and not in a dev build.
+fn open_at_login_available() -> bool {
+    cfg!(target_os = "macos") && power::app_bundle_path().is_some()
+}
+
 pub(crate) fn stay_on_now() -> StayOn {
     StayOn {
-        supported: cfg!(target_os = "macos"),
+        supported: true,
         keep_awake: power::keep_awake_active(),
+        keep_awake_available: power::keep_awake_available(),
         keep_running: crate::commands::window::keep_running_when_closed(),
+        keep_running_available: cfg!(target_os = "macos"),
         open_at_login: power::open_at_login_active(),
-        open_at_login_available: power::app_bundle_path().is_some(),
+        open_at_login_available: open_at_login_available(),
     }
 }
 

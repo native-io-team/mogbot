@@ -110,8 +110,11 @@ pub struct MacNow {
     pub keep_running: bool,
     pub open_at_login: bool,
     pub your_chrome: bool,
-    /// macOS, where the last three exist.
+    /// Whether this computer can be held awake (macOS, Windows, Linux with
+    /// `systemd-inhibit`).
     pub stay_on_supported: bool,
+    /// Keep running when closed: macOS only (the Dock brings windows back).
+    pub keep_running_available: bool,
     /// Where the Your Chrome link runs (macOS).
     pub your_chrome_supported: bool,
     /// False in a dev build: there is no app bundle to reopen.
@@ -170,10 +173,11 @@ pub fn mac_proposal(
     if !admin {
         return Err("Only an admin (the Chief of Staff) can propose this Mac's settings. Ask it with message_agent.".into());
     }
-    let stay_on =
-        want.keep_awake.is_some() || want.keep_running.is_some() || want.open_at_login.is_some();
-    if stay_on && !now.stay_on_supported {
-        return Err("Keeping agents going (awake, running when closed, open at login) is only offered on macOS.".into());
+    if want.keep_awake.is_some() && !now.stay_on_supported {
+        return Err("This computer can't be held awake by the app (on Linux it needs systemd-inhibit). Nothing changed.".into());
+    }
+    if want.keep_running == Some(true) && !now.keep_running_available {
+        return Err("Keep running when closed is only offered on macOS. Nothing changed.".into());
     }
     if want.your_chrome.is_some() && !now.your_chrome_supported {
         return Err("Your Chrome is only offered on macOS. Nothing changed.".into());
@@ -264,7 +268,8 @@ fn mac_now() -> MacNow {
         keep_running: stay.keep_running,
         open_at_login: stay.open_at_login,
         your_chrome: crate::user_chrome::settings::enabled(),
-        stay_on_supported: stay.supported,
+        stay_on_supported: stay.keep_awake_available,
+        keep_running_available: stay.keep_running_available,
         your_chrome_supported: crate::user_chrome::SUPPORTED,
         open_at_login_available: stay.open_at_login_available,
     }

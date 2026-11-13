@@ -44,6 +44,7 @@ use std::path::{Component, Path, PathBuf};
 use super::egress;
 use super::independence::{self, Level};
 use super::installs::{self, Eco};
+use super::paths::{self, name_is, same, under, Anchor};
 
 /// What a call does, from harmless to "ask".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -160,24 +161,24 @@ impl Ctx {
     }
 
     fn is_secret(&self, p: &Path) -> bool {
-        if p.starts_with(&self.own_home) {
+        if under(p, &self.own_home) {
             return false;
         }
-        self.secret_dirs().iter().any(|d| p.starts_with(d))
-            || SYSTEM_SECRETS.iter().any(|s| p.starts_with(s))
+        self.secret_dirs().iter().any(|d| under(p, d))
+            || SYSTEM_SECRETS.iter().any(|s| under(p, Path::new(s)))
             || sensitive_name(p)
     }
 
     /// A folder that holds a secret somewhere below it: reading its contents
     /// recursively would read the secret.
     fn holds_secret(&self, p: &Path) -> bool {
-        if p.starts_with(&self.own_home) {
+        if under(p, &self.own_home) {
             return false;
         }
         self.secret_dirs()
             .iter()
             .chain(self.write_protected().iter())
-            .any(|d| d.starts_with(p) && d != p)
+            .any(|d| under(d, p) && !same(d, p))
     }
 
     /// Writes that change how the Mac or the shell behaves.
@@ -195,12 +196,13 @@ impl Ctx {
 
     /// The app's own files in the agent's home: its log, its instructions.
     fn bookkeeping(&self, p: &Path) -> bool {
-        p.parent() == Some(self.own_home.as_path())
+        p.parent().is_some_and(|d| same(d, &self.own_home))
             && p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                let n = n.to_lowercase();
                 n.ends_with(".jsonl")
                     || n.ends_with(".json")
                     || n.starts_with('.')
-                    || matches!(n, "CLAUDE.md" | "AGENTS.md")
+                    || matches!(n.as_str(), "claude.md" | "agents.md")
             })
     }
 
@@ -208,12 +210,12 @@ impl Ctx {
         nowhere(p)
             || both(p, in_temp)
             || both(p, |p| {
-                p.starts_with(&self.home)
+                under(p, &self.home)
                     && !self.bookkeeping(p)
                     && !self.is_secret(p)
-                    && !self.write_protected().iter().any(|d| p.starts_with(d))
+                    && !self.write_protected().iter().any(|d| under(p, d))
                     && !p.components().any(|c| {
-                        matches!(c, Component::Normal(n) if PROTECTED_FOLDERS.iter().any(|f| n == *f))
+                        matches!(c, Component::Normal(n) if PROTECTED_FOLDERS.iter().any(|f| name_is(n, f)))
                     })
             })
     }
@@ -228,12 +230,11 @@ impl Ctx {
         self.writable(p)
             && both(p, |p| {
                 self.scratch.iter().any(|s| {
-                    p.strip_prefix(s).is_ok_and(|rest| {
-                        rest.components().any(|c| {
+                    under(p, s)
+                        && p.components().skip(s.components().count()).any(|c| {
                             matches!(c, Component::Normal(n)
-                                if n.to_str().is_some_and(|n| REGENERABLE.contains(&n)))
+                                if REGENERABLE.iter().any(|r| name_is(n, r)))
                         })
-                    })
                 })
             })
     }
@@ -296,7 +297,7 @@ fn real(p: &Path) -> PathBuf {
     let mut rest: Vec<std::ffi::OsString> = Vec::new();
     loop {
         if let Ok(canon) = std::fs::canonicalize(&base) {
-            let mut out = canon;
+            let mut out = paths::plain(canon);
             for part in rest.iter().rev() {
                 out.push(part);
             }
@@ -354,6 +355,26 @@ const SECRET_DIRS: &[&str] = &[
     ".bash_profile",
     ".profile",
     ".config/fish",
+    // Windows: Credential Manager and DPAPI keys, browser profiles, CLI
+    // logins, PowerShell profiles.
+    "AppData/Roaming/Microsoft/Credentials",
+    "AppData/Local/Microsoft/Credentials",
+    "AppData/Roaming/Microsoft/Protect",
+    "AppData/Roaming/Microsoft/Vault",
+    "AppData/Local/Microsoft/Vault",
+    "AppData/Local/Google/Chrome",
+    "AppData/Local/Microsoft/Edge",
+    "AppData/Local/BraveSoftware",
+    "AppData/Local/Vivaldi",
+    "AppData/Roaming/Opera Software",
+    "AppData/Roaming/Mozilla",
+    "AppData/Local/1Password",
+    "AppData/Roaming/1Password",
+    "AppData/Roaming/GitHub CLI",
+    "AppData/Roaming/gcloud",
+    "AppData/Roaming/npm-cache/_cacache/index-v5",
+    "Documents/PowerShell",
+    "Documents/WindowsPowerShell",
 ];
 
 /// Outside the home, the few readable files that are still secrets.
@@ -363,6 +384,9 @@ const SYSTEM_SECRETS: &[&str] = &[
     "/etc/master.passwd",
     "/private/etc/master.passwd",
     "/Library/Keychains",
+    // Windows' registry hives (SAM, SECURITY) and its own credential store.
+    "C:/Windows/System32/config",
+    "C:/ProgramData/Microsoft/Crypto",
 ];
 
 /// Shell profiles, launch agents, preferences and PATH folders: writing
@@ -390,6 +414,10 @@ const PROFILE_PATHS: &[&str] = &[
     "Library/Preferences",
     "Library/Services",
     "Library/Scripts",
+    // Windows: what runs at sign-in, and every PowerShell session.
+    "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup",
+    "Documents/PowerShell",
+    "Documents/WindowsPowerShell",
 ];
 
 /// A file whose name says it holds a secret.
@@ -496,26 +524,29 @@ pub fn classify(tool: &str, input: &Value, ctx: &Ctx) -> Class {
 fn resolve_plain(raw: &str, cwd: &Path, home: &Path) -> Option<PathBuf> {
     let joined = if raw == "~" {
         home.to_path_buf()
-    } else if let Some(rest) = raw.strip_prefix("~/") {
+    } else if let Some(rest) = paths::home_rest(raw) {
         home.join(rest)
     } else if raw.starts_with('~') {
         return None;
-    } else if raw.starts_with('/') {
-        PathBuf::from(raw)
     } else {
-        cwd.join(raw)
+        match paths::anchor(raw) {
+            Anchor::Absolute(p) => p,
+            Anchor::Relative => cwd.join(raw),
+            Anchor::Unknown => return None,
+        }
     };
     normalise(&joined)
 }
 
-// TODO(windows): a drive path (`C:\…`) is unknown here and `/Users/…`
-// isn't absolute on Windows, so every path there resolves to `None` and
-// asks: safe, but no path-based auto-answers on Windows yet.
+/// `.` and `..` taken out; `None` unless the result is absolute. On Windows
+/// only a drive path (`C:\…`) is: a rooted path with no drive, a share or a
+/// device path can't be placed (`paths`).
 fn normalise(p: &Path) -> Option<PathBuf> {
+    let p = paths::plain(p.to_path_buf());
     let mut out = PathBuf::new();
     for c in p.components() {
         match c {
-            Component::RootDir => out.push("/"),
+            Component::RootDir => out.push(std::path::MAIN_SEPARATOR_STR),
             Component::CurDir => {}
             Component::ParentDir => {
                 if !out.pop() || out.as_os_str().is_empty() {
@@ -523,7 +554,10 @@ fn normalise(p: &Path) -> Option<PathBuf> {
                 }
             }
             Component::Normal(n) => out.push(n),
-            Component::Prefix(_) => return None,
+            Component::Prefix(pre) => match pre.kind() {
+                std::path::Prefix::Disk(_) if out.as_os_str().is_empty() => out.push(c.as_os_str()),
+                _ => return None,
+            },
         }
     }
     out.is_absolute().then_some(out)
@@ -992,10 +1026,14 @@ impl<'a> Eval<'a> {
             // A quoted `~` is a folder named "~".
             return normalise(&self.cwd.as_ref()?.join(&w.text));
         }
-        if !w.text.starts_with('/') && !w.text.starts_with('~') {
-            return normalise(&self.cwd.as_ref()?.join(&w.text));
+        if w.text.starts_with('~') {
+            return resolve_plain(&w.text, Path::new("/"), &self.ctx.home);
         }
-        resolve_plain(&w.text, Path::new("/"), &self.ctx.home)
+        match paths::anchor(&w.text) {
+            Anchor::Absolute(p) => normalise(&p),
+            Anchor::Relative => normalise(&self.cwd.as_ref()?.join(&w.text)),
+            Anchor::Unknown => None,
+        }
     }
 
     /// Account for `how` on `w`.
@@ -1044,8 +1082,7 @@ impl<'a> Eval<'a> {
             Use::Content => ctx.readable(&p),
             Use::Tree => ctx.readable_tree(&p),
             Use::Write => {
-                ctx.writable(&p)
-                    && (!w.glob || !ctx.write_protected().iter().any(|d| d.starts_with(&p)))
+                ctx.writable(&p) && (!w.glob || !ctx.write_protected().iter().any(|d| under(d, &p)))
             }
             Use::Delete => ctx.deletable(&p),
         };
@@ -2402,7 +2439,7 @@ impl<'a> Eval<'a> {
         let Some(path) = self.path(file) else {
             return self.ask();
         };
-        if !self.ctx.writable(&path) && !path.starts_with(&self.ctx.own_home) {
+        if !self.ctx.writable(&path) && !under(&path, &self.ctx.own_home) {
             // Only scripts in the home, outside every protected place.
             return self.ask();
         }
@@ -2612,6 +2649,15 @@ fn temp_roots() -> Vec<PathBuf> {
     if real.starts_with("/private/var/folders") && real.components().count() > 4 {
         roots.push(real);
         roots.push(tmp);
+    } else if cfg!(windows) {
+        // The account's own temp folder (`%LOCALAPPDATA%\Temp`, Git Bash's
+        // `/tmp`), not one a `TEMP` setting moved somewhere else.
+        let real = paths::plain(real);
+        if dirs::home_dir()
+            .is_some_and(|h| under(&real, &h.join("AppData").join("Local").join("Temp")))
+        {
+            roots.push(real);
+        }
     }
     roots
 }
@@ -2626,7 +2672,7 @@ fn known_tmpdir() -> Option<String> {
 
 /// Inside a temporary folder (not the folder itself).
 fn in_temp(p: &Path) -> bool {
-    temp_roots().iter().any(|r| p.starts_with(r) && p != r)
+    temp_roots().iter().any(|r| under(p, r) && !same(p, r))
 }
 
 /// `git branch` filters that take a commit.
@@ -3613,3 +3659,7 @@ mod gaps_tests;
 #[cfg(test)]
 #[path = "autoallow_hardening_tests.rs"]
 mod hardening_tests;
+
+#[cfg(test)]
+#[path = "autoallow_os_tests.rs"]
+mod os_tests;

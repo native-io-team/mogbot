@@ -70,6 +70,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 use super::autoallow::Ctx;
+use super::paths::{self, name_is, same, under, Anchor};
 
 /// Whether a call still asks at "Go hard". `outside`: the turn answers
 /// outside text.
@@ -136,14 +137,17 @@ pub(super) fn resolve(raw: &str, ctx: &Ctx) -> Option<PathBuf> {
     }
     let p = if raw == "~" {
         ctx.home.clone()
-    } else if let Some(rest) = raw.strip_prefix("~/") {
+    } else if let Some(rest) = paths::home_rest(&raw) {
         ctx.home.join(rest)
     } else if raw.starts_with('~') {
         return None;
-    } else if raw.starts_with('/') {
-        PathBuf::from(&raw)
     } else {
-        ctx.cwd.join(&raw)
+        match paths::anchor(&raw) {
+            Anchor::Absolute(p) => p,
+            Anchor::Relative => ctx.cwd.join(&raw),
+            // A share, a drive-relative or driveless Windows path.
+            Anchor::Unknown => return None,
+        }
     };
     Some(normalise(&p))
 }
@@ -165,7 +169,7 @@ fn normalise(p: &Path) -> PathBuf {
 /// Keychains, `~/.ssh`, `~/.gnupg` and the like, and the app's own data
 /// other than this agent's home: never read or written without a card.
 fn credential_store(p: &Path, ctx: &Ctx) -> bool {
-    if p.starts_with(&ctx.own_home) {
+    if under(p, &ctx.own_home) {
         return false;
     }
     const STORES: &[&str] = &[
@@ -176,10 +180,17 @@ fn credential_store(p: &Path, ctx: &Ctx) -> bool {
         "Library/Cookies",
         "Library/Application Support/com.apple.TCC",
         "Library/Application Support/1Password",
+        // Windows: Credential Manager, DPAPI keys, the vaults, 1Password.
+        "AppData/Roaming/Microsoft/Credentials",
+        "AppData/Local/Microsoft/Credentials",
+        "AppData/Roaming/Microsoft/Protect",
+        "AppData/Roaming/Microsoft/Vault",
+        "AppData/Local/Microsoft/Vault",
+        "AppData/Local/1Password",
     ];
-    STORES.iter().any(|s| p.starts_with(ctx.home.join(s)))
-        || ctx.app_data.iter().any(|d| p.starts_with(d))
-        || p.starts_with("/Library/Keychains")
+    STORES.iter().any(|s| under(p, &ctx.home.join(s)))
+        || ctx.app_data.iter().any(|d| under(p, d))
+        || under(p, Path::new("/Library/Keychains"))
 }
 
 /// Files in the agents folder that name accounts and connections: read
@@ -198,13 +209,11 @@ const TEAM_PRIVATE: &[&str] = &["wallet.json", "connections.json"];
 fn team_file(p: &Path, ctx: &Ctx) -> bool {
     ctx.app_data.iter().any(|d| {
         let root = d.join("agents");
-        p.starts_with(&root)
+        under(p, &root)
             && !super::autoallow::sensitive_name(p)
-            && !p
-                .strip_prefix(&root)
-                .ok()
-                .and_then(|r| r.to_str())
-                .is_some_and(|r| TEAM_PRIVATE.contains(&r))
+            && !(p.components().count() == root.components().count() + 1
+                && p.file_name()
+                    .is_some_and(|n| TEAM_PRIVATE.iter().any(|t| name_is(n, t))))
     })
 }
 
@@ -230,15 +239,19 @@ fn protected(p: &Path, ctx: &Ctx, outside: bool) -> bool {
         ".oh-my-zsh",
         "Library/LaunchAgents",
         "Library/LaunchDaemons",
+        // Windows: what runs at sign-in, and every PowerShell session.
+        "AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup",
+        "Documents/PowerShell",
+        "Documents/WindowsPowerShell",
     ];
-    if credential_store(p, ctx) || PROFILES.iter().any(|s| p.starts_with(ctx.home.join(s))) {
+    if credential_store(p, ctx) || PROFILES.iter().any(|s| under(p, &ctx.home.join(s))) {
         return true;
     }
     if own_files(p, ctx, outside) {
         return true;
     }
-    // Outside the home and temporary folders: the Mac's own files.
-    !p.starts_with(&ctx.home) && !in_temp(p) && !p.starts_with("/dev")
+    // Outside the home and temporary folders: the computer's own files.
+    !under(p, &ctx.home) && !in_temp(p) && !p.starts_with("/dev")
 }
 
 /// [`protected`], less "outside the home": what a path only guessed at
@@ -247,7 +260,7 @@ fn protected(p: &Path, ctx: &Ctx, outside: bool) -> bool {
 /// files, but one that lands in a credential store or the app's data (`cd
 /// .. && cat ../bridge.json` from the agent's home) is judged as there.
 fn guarded(p: &Path, ctx: &Ctx, outside: bool) -> bool {
-    protected(p, ctx, outside) && (p.starts_with(&ctx.home) || in_temp(p))
+    protected(p, ctx, outside) && (under(p, &ctx.home) || in_temp(p))
 }
 
 /// The app's own files in the agent's home ([`protected`]).
@@ -257,9 +270,10 @@ fn own_files(p: &Path, ctx: &Ctx, outside: bool) -> bool {
     // memory however it edits the file: observed, a `sed -i` saving the
     // owner's new rule raised a card at Full send, went unanswered, and the
     // agent told them it couldn't save it.
-    if p.parent() == Some(ctx.own_home.as_path()) {
+    if p.parent().is_some_and(|d| same(d, &ctx.own_home)) {
         if let Some(n) = p.file_name().and_then(|n| n.to_str()) {
-            if n.ends_with(".jsonl") || outside && matches!(n, "CLAUDE.md" | "AGENTS.md") {
+            let n = n.to_lowercase();
+            if n.ends_with(".jsonl") || outside && matches!(n.as_str(), "claude.md" | "agents.md") {
                 return true;
             }
         }
@@ -281,8 +295,8 @@ fn in_temp(p: &Path) -> bool {
         PathBuf::from("/var/folders"),
         PathBuf::from("/private/var/folders"),
     ];
-    roots.push(std::env::temp_dir());
-    roots.iter().any(|r| p.starts_with(r) && p != r)
+    roots.push(paths::plain(std::env::temp_dir()));
+    roots.iter().any(|r| under(p, r) && !same(p, r))
 }
 
 /// Folders people keep projects in, below the home.
@@ -309,6 +323,9 @@ fn deletable(p: &Path, ctx: &Ctx) -> bool {
         return true;
     }
     let lib = ctx.home.join("Library");
+    // Windows' counterpart: settings, caches and every app's data.
+    let app_data_dir = ctx.home.join("AppData");
+    let lib_like = |p: &Path| under(p, &lib) || under(p, &app_data_dir);
     let agents = ctx.app_data.iter().map(|d| d.join("agents"));
     let mut roots: Vec<PathBuf> = ctx.scratch.clone();
     roots.push(ctx.own_home.clone());
@@ -317,24 +334,25 @@ fn deletable(p: &Path, ctx: &Ctx) -> bool {
     if let Ok(r) = crate::utils::projects_root() {
         roots.push(r);
     }
-    if ctx.cwd.starts_with(&ctx.home) && ctx.cwd != ctx.home && !ctx.cwd.starts_with(&lib) {
+    if under(&ctx.cwd, &ctx.home) && !same(&ctx.cwd, &ctx.home) && !lib_like(&ctx.cwd) {
         roots.push(ctx.cwd.clone());
         // The folder the working copy sits in (`../fix-268` beside it).
         if let Some(repo) = repo_of(&ctx.cwd) {
             if let Some(parent) = repo.parent() {
-                if parent.starts_with(&ctx.home) && parent != ctx.home {
+                if under(parent, &ctx.home) && !same(parent, &ctx.home) {
                     roots.push(parent.to_path_buf());
                 }
             }
         }
     }
-    if roots.iter().any(|r| p.starts_with(r) && p != r) {
+    if roots.iter().any(|r| under(p, r) && !same(p, r)) {
         return true;
     }
-    // Inside a git working copy below the home (not the home, not ~/Library).
-    p.starts_with(&ctx.home)
-        && !p.starts_with(&lib)
-        && repo_of(p).is_some_and(|r| r != ctx.home && r.starts_with(&ctx.home))
+    // Inside a git working copy below the home (not the home, not ~/Library
+    // or Windows' AppData).
+    under(p, &ctx.home)
+        && !lib_like(p)
+        && repo_of(p).is_some_and(|r| !same(&r, &ctx.home) && under(&r, &ctx.home))
 }
 
 /// The working copy `p` is in: the nearest ancestor (or itself) with `.git`.
@@ -2151,10 +2169,10 @@ fn is_assignment(w: &str) -> bool {
 }
 
 fn is_abs(raw: &str) -> bool {
-    raw.starts_with('/')
-        || raw.starts_with('~')
+    raw.starts_with('~')
         || raw.starts_with("$HOME")
         || raw.starts_with("${HOME}")
+        || !matches!(paths::anchor(raw), Anchor::Relative)
 }
 
 /// `raw` resolved when where it points can be known (see `command_asks`).
@@ -3221,7 +3239,7 @@ const USER_FOLDERS: &[&str] = &[
 
 /// `p` is the home, a folder above it, or one of [`USER_FOLDERS`] itself.
 fn users_folder(p: &Path, ctx: &Ctx) -> bool {
-    ctx.home.starts_with(p) || USER_FOLDERS.iter().any(|f| p == ctx.home.join(f))
+    under(&ctx.home, p) || USER_FOLDERS.iter().any(|f| same(p, &ctx.home.join(f)))
 }
 
 /// The folder a path names before any glob (`~/Downloads/*` is Downloads).

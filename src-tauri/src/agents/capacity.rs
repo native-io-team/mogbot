@@ -85,17 +85,32 @@ fn meminfo(key: &str) -> Option<u64> {
     Some(kb * 1024)
 }
 
+/// Total and available physical memory, from GlobalMemoryStatusEx.
+#[cfg(windows)]
+fn windows_memory() -> Option<(u64, u64)> {
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    // SAFETY: MEMORYSTATUSEX is plain data; dwLength must be set before the
+    // call, which fills the rest.
+    let mut status: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+    status.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+    let ok = unsafe { GlobalMemoryStatusEx(&mut status) };
+    (ok != 0 && status.ullTotalPhys > 0).then_some((status.ullTotalPhys, status.ullAvailPhys))
+}
+
 pub fn total_memory() -> Option<u64> {
     #[cfg(target_os = "macos")]
     return sysctl_u64("hw.memsize");
     #[cfg(target_os = "linux")]
     return meminfo("MemTotal:");
+    #[cfg(windows)]
+    return windows_memory().map(|(total, _)| total);
     #[allow(unreachable_code)]
     None
 }
 
 /// Memory free for a new process. On macOS, the kernel's own "memory free
-/// percentage" (what `memory_pressure` prints) of the total.
+/// percentage" (what `memory_pressure` prints) of the total; on Linux
+/// `MemAvailable`; on Windows the available physical memory.
 pub fn available_memory() -> Option<u64> {
     #[cfg(target_os = "macos")]
     return {
@@ -104,6 +119,8 @@ pub fn available_memory() -> Option<u64> {
     };
     #[cfg(target_os = "linux")]
     return meminfo("MemAvailable:");
+    #[cfg(windows)]
+    return windows_memory().map(|(_, available)| available);
     #[allow(unreachable_code)]
     None
 }
@@ -142,7 +159,7 @@ mod tests {
 
     #[test]
     fn this_machine_reports_its_memory() {
-        if cfg!(any(target_os = "macos", target_os = "linux")) {
+        if cfg!(any(target_os = "macos", target_os = "linux", windows)) {
             let total = total_memory().expect("total memory");
             assert!(total >= 2 * GIB);
             let free = available_memory().expect("free memory");

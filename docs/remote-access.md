@@ -41,6 +41,7 @@ this first, before any setup, and makes it as unlikely as possible.
 | --- | --- | --- |
 | Idle sleep | `caffeinate -i -s -m -w <our pid>` while remote access is on. No privileges, and it's released if we crash (verified). | `-s` only holds on mains power. |
 | Lid closed (laptops) | **Lid-closed mode**: `pmset -a disablesleep 1` behind the admin password prompt. `caffeinate` cannot do this — macOS sleeps on lid close regardless. Offered ticked-by-default beside **Turn on remote access** on laptops, with the cost spelled out (plug in, uses battery, not in a bag). Read back from `pmset -g` every time. When Remote access turned it on (`lid_mode_by_us`), turning remote access off switches it back — a second password prompt; macOS allows no other way without a privileged helper. | It outlives the app if the app quits while it's on; the checklist keeps showing it. |
+| Windows and Linux | Remote access, Tailscale (`tailscale.exe` under Program Files; `/usr/bin/tailscale`, `/snap/bin`) and power readings (`GetSystemPowerStatus`; `/sys/class/power_supply`) work as on the Mac. Idle sleep is held with `SetThreadExecutionState` on a thread of ours (Windows) or `systemd-inhibit --what=idle:sleep tail --pid=<our pid>` (Linux). Lid-closed mode and reopening at login are macOS only and report themselves unavailable. | Linux without `systemd-inhibit`: keep-awake isn't offered and the checklist says to set the power settings by hand. Not yet run on a real Windows or Linux machine. |
 | Battery | The checklist shows "On battery (64%)", and the sidebar indicator turns amber. `computer_status` warns the assistant, loudly below 20%. | Charge it. |
 | Restart | **Reopen after a restart**: a LaunchAgent (`<identifier>.reopen-at-login`, from `brand.json`) runs `open -g` on the bundle at login, and remote access resumes on launch if it was on. | With FileVault, someone still has to log in once. The copy says so. |
 | Quitting | The quit confirmation says remote access is on and what quitting does. | — |
@@ -103,7 +104,7 @@ link's path).
 
 | `id` | When | Line (short) | Fix / action |
 | --- | --- | --- | --- |
-| `unsupported` | not macOS | Remote access only works on a Mac | use an export or paste |
+| `unsupported` | backend says not supported (none today: macOS, Windows and Linux all are) | Remote access isn't available here | use an export or paste |
 | `tailscaleMissing` | no CLI | Tailscale isn't on this Mac yet | Get Tailscale (opens download) |
 | `tailscaleNotRunning` | CLI can't reach its daemon | installed but isn't open | open it, Check again |
 | `tailscaleOff` | `BackendState` `Stopped` | switched off | switch it on in the menu bar, Check again |

@@ -1081,7 +1081,7 @@ function AppContents({ initialProjectPath }: AppProps) {
   const quitConfirmModal = quitGuard.asking && (
     <QuitConfirmModal
       check={quitGuard.asking.check}
-      backgroundAvailable={stayOn?.supported === true}
+      backgroundAvailable={stayOn?.supported === true && stayOn.keepRunningAvailable !== false}
       onCancel={quitGuard.cancel}
       onQuit={quitGuard.quit}
       onKeepRunning={quitGuard.keepRunning}
