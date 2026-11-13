@@ -221,7 +221,10 @@ mod tests {
                 "/Volumes/Share/in"
             ]
         );
-        assert_eq!(got[0].path, format!("{h}/Downloads"));
+        assert_eq!(
+            got[0].path,
+            home.path().join("Downloads").to_string_lossy().to_string()
+        );
     }
 
     #[test]
