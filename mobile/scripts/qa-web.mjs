@@ -220,6 +220,7 @@ async function startMock(...flags) {
     '--state',
     mockState,
     ...flags,
+    ...(process.env.QA_MOCK_FLAGS ? process.env.QA_MOCK_FLAGS.split(' ') : []),
   ]);
   await waitForUrl(`${MOCK}/dev/link`, 30_000, 'the mock Mac');
   log(`mock up ${flags.join(' ')}`);
@@ -1407,6 +1408,13 @@ const LIVE = [
     ready: 'Fixtures',
     act: scrollToText('Ask for changes'),
     check: 'A result card with Ask for changes (needs welcome.features)',
+  },
+  {
+    name: 'result-many',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: scrollToText('Ten screens'),
+    check: 'A result card of ten pictures: every picture shows in the grid, none an empty box',
   },
   // Showing the work: the Designer's café refresh (dev/mock-server.ts, "Moss & Co.").
   {

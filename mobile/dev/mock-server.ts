@@ -1351,6 +1351,21 @@ export function createMockServer(opts: MockOptions = {}) {
         },
       }
     );
+    // A result of many pictures with no before/after: the grid, not a compare.
+    const many = Array.from({ length: 10 }, (_, i) => ({
+      kind: 'file' as const,
+      label: `Screen ${i + 1}`,
+      file: attach('design', 'design_vis_many', `screen-${i + 1}.png`, 'image/png', cafePage((i % 3) as 0 | 1 | 2, i % 2 === 0)),
+    }));
+    design.push({
+      id: 'design_vis_many',
+      agentId: 'design',
+      ts: at - 60_000,
+      kind: 'agent',
+      text: 'Ten screens for the direction.',
+      attachments: many.map((i) => i.file),
+      result: { id: 'res_many', version: 1, title: 'Ten screens', summary: 'Every screen of the direction, desk and phone.', items: many },
+    });
     design.sort((a, b) => a.ts - b.ts);
     const chief = agent('chief')!;
     chief.checkIns = [
