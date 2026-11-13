@@ -9,7 +9,9 @@
  * Where the words are recognised: on the phone whenever it can (iOS and
  * Android 13+ with an on-device model), and otherwise by the platform's
  * speech service, off the phone; the field says so while it listens in that
- * case. The desk does the same (src-tauri/src/commands/dictation.rs).
+ * case. The desk does the same (src-tauri/src/commands/dictation.rs). On
+ * iOS 26+ "on the phone" is SpeechAnalyzer's transcriber when its model is
+ * installed (lib/speechAnalyzer.ts), else the older on-device recognizer.
  *
  * The recognizer is a native module (expo-speech-recognition), which Expo Go
  * doesn't carry. There `dictationSupport()` is `'no-module'` and the mic
@@ -35,21 +37,30 @@ import { requireOptionalNativeModule } from 'expo';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import type { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import { loadSpeechAnalyzer } from '../../modules/speech-analyzer';
+import { withSpeechAnalyzer } from './speechAnalyzer';
 import { LEVEL_INTERVAL_MS, levelFromVolume } from './waveform';
 
 type Recognizer = typeof ExpoSpeechRecognitionModule;
 
-/** Only loaded when the native half is in this build: importing it without one throws. */
+/**
+ * Only loaded when the native half is in this build: importing it without one
+ * throws. On iOS 26+ the analyzer (lib/speechAnalyzer.ts) goes in front of it.
+ */
 function loadRecognizer(): Recognizer | null {
   // The web QA build resolves the package to a scripted stand-in.
   if (Platform.OS !== 'web' && !requireOptionalNativeModule('ExpoSpeechRecognition')) return null;
+  let legacy: Recognizer;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return (require('expo-speech-recognition') as typeof import('expo-speech-recognition'))
+    legacy = (require('expo-speech-recognition') as typeof import('expo-speech-recognition'))
       .ExpoSpeechRecognitionModule;
   } catch {
     return null;
   }
+  // The scripted stand-in (QA) stays itself, so a simulator shows its script.
+  if (Platform.OS !== 'ios' || (legacy as { scripted?: boolean }).scripted) return legacy;
+  return withSpeechAnalyzer(legacy, loadSpeechAnalyzer());
 }
 
 let recognizer: Recognizer | null | undefined;
