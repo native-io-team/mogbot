@@ -1199,6 +1199,40 @@ const startListening = () => {
   return { status: 'listening', session: 1 };
 };
 
+/** Stopped: the live words are in, and the computer is writing them out again. */
+const startThenTidying = () => {
+  setTimeout(() => {
+    void emit('dictation://event', {
+      kind: 'final',
+      session: 1,
+      text: 'tell the labiva site agent the pictures are fixed',
+    });
+    void emit('dictation://event', { kind: 'improving', session: 1 });
+  }, 50);
+  return { status: 'listening', session: 1 };
+};
+
+/** Written out again: the better words replaced the live ones, Undo offered. */
+const startThenTidied = () => {
+  setTimeout(() => {
+    void emit('dictation://event', {
+      kind: 'final',
+      session: 1,
+      text: 'tell the labiva site agent the pictures are fixed',
+    });
+    void emit('dictation://event', { kind: 'improving', session: 1 });
+    void emit('dictation://event', {
+      kind: 'improved',
+      session: 1,
+      text: 'Tell the Lobeva Site agent the pictures are fixed.',
+      raw: 'Tell the Labiva site agent the pictures are fixed.',
+      tidied: true,
+    });
+    void emit('dictation://event', { kind: 'ended', session: 1, cancelled: false });
+  }, 50);
+  return { status: 'listening', session: 1 };
+};
+
 /** A long dictation: a finished segment, then a partial still arriving. */
 const startListeningLong = () => {
   setTimeout(() => {
@@ -3679,6 +3713,42 @@ export const agentsScenarios: Scenario[] = [
       agents_overview: overview(),
       agents_messages: messagesFor,
       start_dictation: startListeningLong,
+      cancel_dictation: null,
+      stop_dictation: null,
+    },
+  },
+  {
+    id: 'agents-dictation-tidying',
+    title: 'Agents — dictation being written out again',
+    looksRightWhen:
+      'The heard words sit in the composer (read-only); the small row under the text says ● Tidying… · Cancel. The mic and Send are off until it is done. Nothing reads as an error.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-composer[data-dictation="tidying"]',
+    clipSelector: '.agent-chat__footer',
+    steps: [{ click: '.agent-composer__mic' }],
+    mockEvents: true,
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      start_dictation: startThenTidying,
+      cancel_dictation: null,
+      stop_dictation: null,
+    },
+  },
+  {
+    id: 'agents-dictation-tidied',
+    title: 'Agents — dictation tidied, with Undo',
+    looksRightWhen:
+      'The composer holds “Tell the Lobeva Site agent the pictures are fixed.” (the name corrected), editable, Send on. The small row under the text says Tidied the names and words · Undo, with no dot.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-composer__listening[data-tidied]',
+    clipSelector: '.agent-chat__footer',
+    steps: [{ click: '.agent-composer__mic' }],
+    mockEvents: true,
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      start_dictation: startThenTidied,
       cancel_dictation: null,
       stop_dictation: null,
     },
