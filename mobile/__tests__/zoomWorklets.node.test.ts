@@ -13,6 +13,8 @@ const content = { width: 400, height: 200 };
 
 /** Every way the viewer calls the maths, including leaning on default arguments. */
 const calls: Record<string, unknown[][]> = {
+  finiteOr: [[2, 1], [Number.NaN, 1], [Number.POSITIVE_INFINITY, 0], [undefined, 3]],
+  usableEvent: [[[1, 2]], [[1, Number.NaN]], [[undefined]], [[]]],
   isZoomed: [[1], [2.5]],
   fitSize: [[{ width: 2000, height: 1000 }, screen], [{ width: 0, height: 0 }, screen]],
   clampScale: [[0.4], [3], [9], [Number.NaN], [9, 6]],

@@ -18,9 +18,27 @@ import { ZoomGallery, type ZoomPage } from '../src/components/ZoomGallery';
 jest.mock('react-native-worklets', () =>
   jest.requireActual<typeof import('./reanimatedStub')>('./reanimatedStub').worklets()
 );
-jest.mock('react-native-reanimated', () =>
-  jest.requireActual<typeof import('./reanimatedStub')>('./reanimatedStub').reanimated()
-);
+/** Every number the viewer put in a shared value: what its transforms are drawn from. */
+const mockNumbersSet: number[] = [];
+jest.mock('react-native-reanimated', () => {
+  const base = jest.requireActual<typeof import('./reanimatedStub')>('./reanimatedStub').reanimated();
+  const useShared = base.useSharedValue;
+  const recorded = new WeakSet<object>();
+  return {
+    ...base,
+    useSharedValue: <T,>(start: T) => {
+      const sv = useShared(start);
+      if (recorded.has(sv)) return sv;
+      recorded.add(sv);
+      const set = sv.set.bind(sv);
+      sv.set = (next) => {
+        if (typeof next === 'number') mockNumbersSet.push(next);
+        set(next);
+      };
+      return sv;
+    },
+  };
+});
 jest.mock('react-native-gesture-handler', () => {
   const actual = jest.requireActual<Record<string, unknown>>('react-native-gesture-handler');
   const { isWorklet, onUiRuntime } =
@@ -137,6 +155,32 @@ describe('the gallery’s gestures', () => {
     // Pinched below fit, it springs back to fit, and a swipe turns the page again.
     await pinch(0.2);
     await swipe();
+    expect(onIndex).toHaveBeenCalledWith(2);
+  });
+
+  it('a pinch whose numbers are unusable never puts a NaN into a transform (#3)', async () => {
+    const { onIndex } = await draw();
+    mockNumbersSet.length = 0;
+    // On the phone a NaN transform reaches Core Animation, which throws and ends the app.
+    await fire('viewer-pinch', [
+      { scale: 1, focalX: Number.NaN, focalY: 400 },
+      { scale: 2, focalX: Number.NaN, focalY: 400 },
+      { scale: 2, focalX: Number.NaN, focalY: 400 },
+    ]);
+    await fire('viewer-pinch', [
+      { scale: 1, focalX: 200, focalY: 400 },
+      { scale: Number.POSITIVE_INFINITY, focalX: 200, focalY: 400 },
+      { scale: Number.NaN, focalX: 200, focalY: 400 },
+      { scale: 0, focalX: 200, focalY: 400 },
+    ]);
+    // Not a frame of it held a NaN or Infinity, not only the picture it settled on.
+    expect(mockNumbersSet.filter((n) => !Number.isFinite(n))).toEqual([]);
+    // Still at fit: a swipe turns the page.
+    await fire('viewer-pan', [
+      { translationX: 0, translationY: 0, velocityX: 0 },
+      { translationX: -60, translationY: 0, changeX: -60, velocityX: -100 },
+      { translationX: -200, translationY: 0, changeX: -140, velocityX: -100 },
+    ]);
     expect(onIndex).toHaveBeenCalledWith(2);
   });
 

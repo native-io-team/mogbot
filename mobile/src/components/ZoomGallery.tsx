@@ -38,12 +38,14 @@ import {
   clampScale,
   doubleTapTarget,
   dragBy,
+  finiteOr,
   fitSize,
   isZoomed,
   offsetLimit,
   pageAfterSwipe,
   pageDrag,
   shouldClose,
+  usableEvent,
   zoomOffset,
   type Size,
 } from '../lib/zoom';
@@ -192,6 +194,8 @@ export function ZoomGallery({
     testID: 'viewer-pinch',
     onActivate: guard((e) => {
       'worklet';
+      // A pinch with no usable focal point never starts (see `finiteOr`).
+      if (!usableEvent([e.focalX, e.focalY])) return;
       pinching.set(true);
       cancelAnimation(scale);
       cancelAnimation(x);
@@ -206,16 +210,21 @@ export function ZoomGallery({
     }),
     onUpdate: guard((e) => {
       'worklet';
-      if (drop.get() !== 0) return;
+      if (!pinching.get() || drop.get() !== 0) return;
+      if (!usableEvent([e.scale, e.focalX, e.focalY]) || e.scale <= 0) return;
       const b = base.get();
       const to = Math.min(Math.max(b.scale * e.scale, 0.6), MAX_OVERSHOOT);
       // The picture point that was between the fingers stays between them.
-      x.set(zoomOffset(b.x, b.scale, to, b.fx, e.focalX - width / 2));
-      y.set(zoomOffset(b.y, b.scale, to, b.fy, e.focalY - height / 2));
+      const nx = zoomOffset(b.x, b.scale, to, b.fx, e.focalX - width / 2);
+      const ny = zoomOffset(b.y, b.scale, to, b.fy, e.focalY - height / 2);
+      if (!usableEvent([nx, ny, to])) return;
+      x.set(nx);
+      y.set(ny);
       scale.set(to);
     }),
     onDeactivate: guard(() => {
       'worklet';
+      if (!pinching.get()) return;
       pinching.set(false);
       settle();
     }),
@@ -235,6 +244,7 @@ export function ZoomGallery({
     onUpdate: guard((e) => {
       'worklet';
       if (pinching.get() || e.numberOfPointers > 1) return;
+      if (!usableEvent([e.translationX, e.translationY, e.changeX, e.changeY])) return;
       if (mode.get() === UNDECIDED) {
         const ax = Math.abs(e.translationX);
         const ay = Math.abs(e.translationY);
@@ -259,12 +269,16 @@ export function ZoomGallery({
         const content = contentNow();
         const lx = offsetLimit(content.width, scale.get(), width);
         const ly = offsetLimit(content.height, scale.get(), height);
-        x.set(withDecay({ velocity: e.velocityX, clamp: [-lx, lx], rubberBandEffect: true }));
-        y.set(withDecay({ velocity: e.velocityY, clamp: [-ly, ly], rubberBandEffect: true }));
+        const vx = finiteOr(e.velocityX, 0);
+        const vy = finiteOr(e.velocityY, 0);
+        x.set(withDecay({ velocity: vx, clamp: [-lx, lx], rubberBandEffect: true }));
+        y.set(withDecay({ velocity: vy, clamp: [-ly, ly], rubberBandEffect: true }));
       } else if (was === PAGE) {
-        pageTo(pageAfterSwipe(at.get(), e.translationX, e.velocityX, width, count));
+        const dx = finiteOr(e.translationX, 0);
+        pageTo(pageAfterSwipe(at.get(), dx, finiteOr(e.velocityX, 0), width, count));
       } else if (was === CLOSE) {
-        if (shouldClose(e.translationY, e.velocityY)) scheduleOnRN(onClose);
+        const dy = finiteOr(e.translationY, 0);
+        if (shouldClose(dy, finiteOr(e.velocityY, 0))) scheduleOnRN(onClose);
         else drop.set(withSpring(0, SPRING));
       }
     }),
@@ -275,6 +289,7 @@ export function ZoomGallery({
     numberOfTaps: 2,
     onActivate: guard((e) => {
       'worklet';
+      if (!usableEvent([e.x, e.y])) return;
       const t = doubleTapTarget(
         scale.get(),
         { x: e.x - width / 2, y: e.y - height / 2 },
@@ -296,9 +311,11 @@ export function ZoomGallery({
   const taps = useExclusiveGestures(doubleTap, singleTap);
   const gesture = useSimultaneousGestures(pinch, pan, taps);
 
-  const stripStyle = useAnimatedStyle(() => ({ transform: [{ translateX: strip.get() }] }));
+  const stripStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: finiteOr(strip.get(), -at.get() * width) }],
+  }));
   const overlayStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(drop.get(), [0, CLOSE_PULL], [1, 0], 'clamp'),
+    opacity: interpolate(finiteOr(drop.get(), 0), [0, CLOSE_PULL], [1, 0], 'clamp'),
   }));
 
   // Each picture's own size, kept so a rotation can fit them to the new screen.
@@ -399,12 +416,15 @@ function Page({
   const style = useAnimatedStyle(() => {
     if (at.get() !== i) return { transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }] };
     // Pulled down to close, it follows the finger and shrinks a little.
-    const shrink = interpolate(drop.get(), [0, height], [1, 0.7], 'clamp');
+    const pull = finiteOr(drop.get(), 0);
+    const shrink = interpolate(pull, [0, Math.max(height, 1)], [1, 0.7], 'clamp');
+    // Never a NaN into a transform: Core Animation throws on one and the app ends.
+    const s = finiteOr(scale.get(), 1);
     return {
       transform: [
-        { translateX: x.get() },
-        { translateY: y.get() + drop.get() },
-        { scale: scale.get() * shrink },
+        { translateX: finiteOr(x.get(), 0) },
+        { translateY: finiteOr(y.get(), 0) + pull },
+        { scale: (s > 0 ? s : 1) * shrink },
       ],
     };
   });
@@ -420,6 +440,11 @@ function Page({
         placeholderContentFit="contain"
         style={{ width, height }}
         contentFit="contain"
+        // Decoded straight at the screen's size: the size it's drawn at
+        // anyway (expo-image downscales to the view), without first holding
+        // the whole photo in memory. A 48 MP photo is ~190 MB decoded, and the
+        // page beside it loads too; together they could get the app killed.
+        enforceEarlyResizing
         transition={150}
         recyclingKey={page.key}
         onLoad={(e) => {

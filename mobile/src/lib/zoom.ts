@@ -30,6 +30,28 @@ const PAGE_VELOCITY = 500;
 export const CLOSE_PULL = 120;
 const CLOSE_VELOCITY = 800;
 
+/**
+ * `value`, or `fallback` when it isn't a finite number. Everything that ends
+ * in a transform goes through this: a NaN or Infinity there (a pinch event
+ * missing a field, a division by a zero distance) reaches Core Animation,
+ * which throws on a NaN geometry and ends the app, where a guard in JS can't
+ * catch it.
+ */
+export function finiteOr(value: number, fallback: number): number {
+  'worklet';
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/** Every one of the gesture event's numbers the viewer reads is there and finite. */
+export function usableEvent(values: readonly (number | undefined)[]): boolean {
+  'worklet';
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (typeof v !== 'number' || !Number.isFinite(v)) return false;
+  }
+  return true;
+}
+
 export function isZoomed(scale: number): boolean {
   'worklet';
   return scale > 1 + EPSILON;
