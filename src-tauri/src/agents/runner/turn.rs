@@ -548,9 +548,13 @@ pub(super) async fn run_turn(
             "MCP_TOOL_TIMEOUT",
             ((super::mcp::APPROVAL_WAIT_SECS + 60) * 1000).to_string(),
         )
-        .envs(secret_env)
-        // The account it runs on (nothing for this Mac's own sign-in).
-        .envs(super::wallet::env_for(account))
+        .envs(secret_env);
+    // The account it runs on (nothing for this Mac's own sign-in): its own
+    // folder's login, never one inherited from this app's environment.
+    for var in super::wallet::env_unset_for(account) {
+        cmd.env_remove(var);
+    }
+    cmd.envs(super::wallet::env_for(account))
         .current_dir(&layout.cwd);
 
     let mut cmd = tokio::process::Command::from(cmd);

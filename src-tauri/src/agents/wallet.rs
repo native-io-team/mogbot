@@ -8,11 +8,14 @@
 //! account added here is signed in into a folder of its own, with the
 //! isolation `commands::accounts` already had for workspaces:
 //!
-//! - Claude Code: `CLAUDE_CONFIG_DIR=~/.<slug>/accounts/<id>/claude`, plus
-//!   the long-lived token `claude setup-token` printed (captured in Rust,
-//!   kept in the Keychain) as `CLAUDE_CODE_OAUTH_TOKEN`. The config dir
-//!   alone doesn't separate logins on macOS, because Claude Code's own
-//!   Keychain entry is shared (see `accounts::get_env_vars_for_account`).
+//! - Claude Code: `CLAUDE_CONFIG_DIR=~/.<slug>/accounts/<id>/claude`, signed
+//!   in by Claude Code's own `claude auth login` run there. Claude Code
+//!   (2.1.318 on) keeps that login in a Keychain item of its own per config
+//!   folder (`Claude Code-credentials-<sha256(dir)[..8]>`), so the folder is
+//!   the whole of the isolation and this app never holds the login. An
+//!   account added by an older build still has the `claude setup-token`
+//!   token it kept, used as `CLAUDE_CODE_OAUTH_TOKEN` until the account is
+//!   signed in again (then deleted; [`needs_sign_in_again`]).
 //! - Codex: `CODEX_HOME=~/.<slug>/accounts/<id>/codex`, signed in by
 //!   `codex login` run there (its `auth.json`).
 //!
@@ -1062,7 +1065,10 @@ pub async fn signed_in(account: &Account) -> bool {
         return super::engine::signed_in_here(account.engine).await;
     }
     match account.engine {
-        Engine::Claude => accounts::claude_token_for(&account.id).is_some(),
+        Engine::Claude => {
+            accounts::claude_folder_signed_in(&account.id)
+                || accounts::claude_token_for(&account.id).is_some()
+        }
         Engine::Codex => accounts::codex_home_dir(&account.id)
             .join("auth.json")
             .is_file(),
@@ -1083,9 +1089,36 @@ pub async fn any_added_signed_in(engine: Engine) -> bool {
 
 /* ------------------------------------------------------------- the turn */
 
+/// An added Claude Code account still running on the token an older build
+/// kept for it: it works, and says "Sign in again" until it is signed in in
+/// its own folder.
+pub fn needs_sign_in_again(account: &Account) -> bool {
+    account.engine == Engine::Claude
+        && !account.is_this_mac()
+        && !accounts::claude_folder_signed_in(&account.id)
+        && accounts::claude_token_for(&account.id).is_some()
+}
+
+/// What a turn's process must *not* inherit to run as `account`: for an
+/// added Claude Code account, anything that would make Claude Code use
+/// another login than the one it keeps for the account's folder. Removed
+/// before [`env_for`] is applied.
+pub fn env_unset_for(account: &Account) -> Vec<&'static str> {
+    if account.is_this_mac() || account.engine != Engine::Claude {
+        return Vec::new();
+    }
+    let set = env_for(account);
+    accounts::CLAUDE_LOGIN_OVERRIDES
+        .iter()
+        .copied()
+        .filter(|var| !set.iter().any(|(k, _)| k == var))
+        .collect()
+}
+
 /// What a turn's process gets to run as `account`: nothing for this Mac's
 /// own sign-in (the engine finds its own login, as always), else the
-/// account's folder and, for Claude Code, its token.
+/// account's folder (and, for a Claude Code account an older build added
+/// and not yet signed in again, the token it kept).
 pub fn env_for(account: &Account) -> Vec<(String, String)> {
     if account.is_this_mac() {
         return Vec::new();
@@ -1098,6 +1131,7 @@ pub fn env_for(account: &Account) -> Vec<(String, String)> {
                     .to_string_lossy()
                     .into_owned(),
             )];
+            // None once the account is signed in in its own folder.
             if let Some(token) = accounts::claude_token_for(&account.id) {
                 // In the turn's environment, so an `env` or a script that
                 // echoes it would carry it into the chat, the timeline and
@@ -1609,20 +1643,22 @@ pub struct AccountView {
     pub limit: Option<LimitHit>,
     /// Out right now.
     pub out: bool,
+    /// Still on the token an older build kept: "Sign in again"
+    /// ([`needs_sign_in_again`]).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub sign_in_again: bool,
 }
 
 /// Who `account` is signed in as, from its engine's own files; for an added
-/// Claude Code account, the email captured at its sign-in comes first (its
-/// folder's settings file may not name one).
+/// Claude Code account an older build signed in, the email typed then when
+/// its folder's settings file names none.
 pub fn identity_of(account: &Account) -> super::identity::Identity {
     use super::identity;
     match account.engine {
         Engine::Claude => {
             let mut who = identity::read(claude_config_for(account).as_deref(), identity::claude);
-            if !account.is_this_mac() {
-                if let Some(email) = accounts::claude_email_for(&account.id) {
-                    who.email = Some(email);
-                }
+            if !account.is_this_mac() && who.email.is_none() {
+                who.email = accounts::claude_email_for(&account.id);
             }
             who
         }
@@ -1647,6 +1683,7 @@ pub async fn views() -> Vec<AccountView> {
         } else {
             super::identity::Identity::default()
         };
+        let sign_in_again = signed_in && needs_sign_in_again(&account);
         out.push(AccountView {
             out: account.out(now).is_some(),
             this_mac: account.is_this_mac(),
@@ -1657,6 +1694,7 @@ pub async fn views() -> Vec<AccountView> {
             signed_in,
             email: who.email,
             plan: who.plan,
+            sign_in_again,
             limit: account.limit,
         });
     }
@@ -1733,6 +1771,34 @@ mod tests {
             added_at: 0,
             limit,
         }
+    }
+
+    /// An added Claude Code account signed in with `claude auth login` in its
+    /// own folder runs on that folder alone: no token is handed to the turn,
+    /// and nothing inherited can point Claude Code at another login.
+    #[tokio::test]
+    async fn a_folder_signed_in_claude_account_runs_on_its_folder_alone() {
+        let a = account("wallet-folder-login-test-7c1d", "Work", None);
+        let dir = accounts::claude_config_dir(&a.id);
+        std::fs::write(dir.join(accounts::CLAUDE_FOLDER_LOGIN_MARKER), "1").unwrap();
+        let env = env_for(&a);
+        assert_eq!(
+            env,
+            vec![(
+                "CLAUDE_CONFIG_DIR".to_string(),
+                dir.to_string_lossy().into_owned()
+            )]
+        );
+        assert_eq!(
+            env_unset_for(&a),
+            vec!["CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_SECURESTORAGE_CONFIG_DIR"]
+        );
+        assert!(signed_in(&a).await);
+        assert!(!needs_sign_in_again(&a));
+        // This Mac's own sign-in is left exactly as it was.
+        let mac = this_mac(Engine::Claude);
+        assert!(env_for(&mac).is_empty() && env_unset_for(&mac).is_empty());
+        let _ = std::fs::remove_dir_all(dir.parent().unwrap());
     }
 
     fn cand(id: &str, name: &str, signed_in: bool, limit: Option<LimitHit>) -> Candidate {

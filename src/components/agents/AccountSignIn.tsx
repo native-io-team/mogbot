@@ -2,11 +2,17 @@
  * Signs a usage account in, into its own folder, with its engine's own
  * sign-in running in a terminal the backend owns:
  *
- * - Claude Code: `claude setup-token` (`ClaudeConnectTerminal`). The token
- *   it prints is captured and kept in the Keychain by Rust, and never
- *   reaches this view.
- * - Codex: `codex login` under the account's own `CODEX_HOME`
- *   (`WorkspaceConnectTerminal`); it finishes when the CLI exits 0.
+ * - Claude Code: `claude auth login` under the account's own
+ *   `CLAUDE_CONFIG_DIR`, the same sign-in as the first one. Claude Code keeps
+ *   the login for that folder itself; the app never sees or stores it. It
+ *   finishes when the CLI exits 0 and `claude auth status` as that folder
+ *   agrees (Rust checks before the exit reaches here).
+ * - Codex: `codex login` under the account's own `CODEX_HOME`; it finishes
+ *   when the CLI exits 0.
+ *
+ * Both run in `WorkspaceConnectTerminal`. An account an older build signed
+ * in with a captured token says "Sign in again" in Usage; signing it in here
+ * replaces that token, which is then deleted.
  *
  * The trap it guards against: the browser signs in as whoever is already
  * logged in to claude.ai (or chatgpt.com), so "adding" an account often
@@ -27,8 +33,7 @@ import { CheckIcon, WarningIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
-import { TextField } from '../primitives/TextField';
-import { ClaudeConnectTerminal, WorkspaceConnectTerminal } from '../terminal/lazyTerminals';
+import { WorkspaceConnectTerminal } from '../terminal/lazyTerminals';
 import { ENGINE_LABEL } from '../../lib/agents';
 import type { UsageAccount } from '../../lib/agentAccounts';
 import {
@@ -65,7 +70,6 @@ export function AccountSignIn({
   const label = ENGINE_LABEL[account.engine];
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [phase, setPhase] = useState<Phase>('before');
-  const [email, setEmail] = useState(account.email ?? '');
   const [twin, setTwin] = useState<string | null>(null);
   const [exited, setExited] = useState(false);
   const done = useRef(false);
@@ -130,29 +134,13 @@ export function AccountSignIn({
               <li key={s}>{s}</li>
             ))}
           </ol>
-          {account.engine === 'claude' && (
-            <label className="connect-modal-field">
-              <span>
-                Account email <span className="connect-modal-muted">(shown in Usage)</span>
-              </span>
-              <TextField
-                type="email"
-                value={email}
-                placeholder="you@example.com"
-                autoFocus
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') setPhase('terminal');
-                }}
-              />
-            </label>
-          )}
           <div className="connect-modal-actions">
             <Button variant="secondary" onClick={onDone}>
               Later
             </Button>
             <Button
               variant="strong"
+              autoFocus
               data-testid="account-signin-continue"
               onClick={() => setPhase('terminal')}
             >
@@ -221,33 +209,20 @@ export function AccountSignIn({
         <div className="connect-modal-terminal-phase">
           <p className="connect-modal-instructions">
             {account.engine === 'claude'
-              ? 'Sign in in the browser, then paste the code it shows into the terminal below and press Enter.'
+              ? 'A browser window opens: sign in to Claude there. If it shows a code, paste it into the terminal below and press Enter.'
               : 'A browser window opens: sign in to ChatGPT there. This finishes on its own.'}
           </p>
           <div className="agents-panel-terminal-body">
-            {account.engine === 'claude' ? (
-              <ClaudeConnectTerminal
-                key={sessionId}
-                sessionId={sessionId}
-                accountId={account.id}
-                email={email.trim() || undefined}
-                onCaptured={() => void finished()}
-                onExit={() => {
-                  if (!done.current) setExited(true);
-                }}
-              />
-            ) : (
-              <WorkspaceConnectTerminal
-                key={sessionId}
-                sessionId={sessionId}
-                accountId={account.id}
-                service="codex"
-                onExit={(code) => {
-                  if (code === 0) void finished();
-                  else if (!done.current) setExited(true);
-                }}
-              />
-            )}
+            <WorkspaceConnectTerminal
+              key={sessionId}
+              sessionId={sessionId}
+              accountId={account.id}
+              service={account.engine === 'claude' ? 'claude' : 'codex'}
+              onExit={(code) => {
+                if (code === 0) void finished();
+                else if (!done.current) setExited(true);
+              }}
+            />
           </div>
           <div className="connect-modal-actions">
             {exited ? (

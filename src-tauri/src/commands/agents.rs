@@ -3334,8 +3334,8 @@ pub async fn agents_accounts() -> Result<Vec<agents::wallet::AccountView>, Comma
 }
 
 /// Add an account for an engine. It isn't signed in yet: Settings runs the
-/// sign-in into its own folder next (`claude_connect_start` /
-/// `workspace_connect_start` with this id).
+/// sign-in into its own folder next (`workspace_connect_start` with this id:
+/// `claude auth login` or `codex login` there).
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_account_add(

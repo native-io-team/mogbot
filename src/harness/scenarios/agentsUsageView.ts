@@ -630,6 +630,20 @@ export const agentsUsageViewScenarios: Scenario[] = [
     null
   ),
   ...trio(
+    'sign-in-again',
+    'an account added the old way, with a saved token',
+    'The same as two accounts: Work still counts and runs; nothing on the overview nags about it.',
+    {
+      accounts: TWO.accounts.map((a) => (a.id === 'a1work' ? { ...a, signInAgain: true } : a)),
+      inv: TWO.inv,
+    },
+    {
+      account: 'a1work',
+      looksRightWhen:
+        'Work’s page: a calm bar “Sign in again to keep this account working: it still uses a saved token.” with “Sign in again”; its limits below as usual.',
+    }
+  ),
+  ...trio(
     'pace',
     'every limit, against pace',
     'One bar of the total; Work (88%) first in the rows.',
@@ -658,7 +672,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
     id: 'usage-add-account-warning',
     title: 'Usage — adding an account warns about the browser first',
     looksRightWhen:
-      'The sign-in dialog opens on a plain warning before any terminal: “Your browser will sign in as whoever is logged into claude.ai — sign out there first, or use a private window or another browser profile, to add a different account.” Then the email field, Later and Continue.',
+      'The sign-in dialog opens on a plain warning before any terminal: “Your browser will sign in as whoever is logged into claude.ai — sign out there first, or use a private window or another browser profile, to add a different account.” Then the three steps, Later and Continue (no email field: who it is comes from Claude Code’s own sign-in).',
     openSelector: AGENTS_TAB,
     steps: [...OPEN, { click: '[data-add-account="claude"]' }],
     requires: '[data-testid="account-signin-warning"]',
@@ -677,8 +691,8 @@ export const agentsUsageViewScenarios: Scenario[] = [
 ];
 
 /**
- * The sign-in dialog after the browser sign-in returns: the terminal's
- * capture is played (`claude-connect-captured`), then the one check of which
+ * The sign-in dialog after the browser sign-in returns: `claude auth login`
+ * exiting 0 is played (`workspace-connect-exit`), then the one check of which
  * account it is answers (or never does, for "checking").
  */
 function signInStates(): Scenario[] {
@@ -739,14 +753,15 @@ function signInStates(): Scenario[] {
     commands: {
       ...commands(SIGNIN_CHANGED.accounts, SIGNIN_CHANGED.inv),
       agents_account_add: { id: 'a5new', engine: 'claude', name: 'Account 3', named: true },
-      claude_connect_start: (args: Record<string, unknown>) => {
+      // `claude auth login` in the account's folder, exiting 0 once signed in.
+      workspace_connect_start: (args: Record<string, unknown>) => {
         const sessionId = args.sessionId;
-        setTimeout(() => void emit('claude-connect-captured', { sessionId }), 300);
+        setTimeout(() => void emit('workspace-connect-exit', { sessionId, exitCode: 0 }), 300);
         return null;
       },
-      claude_connect_write: null,
-      claude_connect_resize: null,
-      claude_connect_close: null,
+      workspace_connect_write: null,
+      workspace_connect_resize: null,
+      workspace_connect_close: null,
       agents_usage_check_account: st.check,
     },
   }));

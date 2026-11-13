@@ -1891,6 +1891,12 @@ export interface UsageAccount {
   limit?: UsageLimitHit;
   /** Out of usage right now. */
   out: boolean;
+  /**
+   * A Claude Code account an older build signed in with a saved token: it
+   * still runs, and says "Sign in again" until it's signed in in its own
+   * folder (`wallet::needs_sign_in_again`). Absent: no.
+   */
+  signInAgain?: boolean;
 }
 
 /** How the user wants their limits used (`agents::usage_plan::Mode`). */

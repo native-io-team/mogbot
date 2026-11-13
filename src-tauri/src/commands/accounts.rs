@@ -32,7 +32,6 @@ use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, PtySize};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
@@ -64,30 +63,37 @@ const ALL_CRED_KEYS: &[&str] = &[
 /// they're deliberately NOT in `ALL_CRED_KEYS`). They still belong to the
 /// account, so they're wiped alongside the rest on account deletion.
 ///
-/// `claude_oauth_token` is a long-lived token captured by `connect_claude_account`
-/// (via `claude setup-token`) and injected as `CLAUDE_CODE_OAUTH_TOKEN`; see
-/// `get_env_vars_for_account`. `claude_email` is the account identity captured
-/// at connect time, used only for display.
+/// `claude_oauth_token` is a long-lived token an older build captured from
+/// `claude setup-token` and injected as `CLAUDE_CODE_OAUTH_TOKEN`. Nothing
+/// stores one any more: an isolated account now signs in with Claude Code's
+/// own `claude auth login` into its own config folder, and Claude Code keeps
+/// that login itself ([`claude_folder_signed_in`]). A token left from before
+/// is still used until the account is signed in again, then deleted
+/// ([`finish_claude_folder_sign_in`]). `claude_email` was typed at connect
+/// time, display only.
 const MANAGED_CRED_KEYS: &[&str] = &[
     "claude_oauth_token",
     "claude_email",
     "claude_token_expires_at",
 ];
 
-/// Keychain key holding a workspace's captured Claude OAuth token.
+/// Keychain key holding a workspace's legacy Claude OAuth token.
 const CLAUDE_TOKEN_KEY: &str = "claude_oauth_token";
 /// Keychain key holding the email for a workspace's connected Claude account.
 const CLAUDE_EMAIL_KEY: &str = "claude_email";
-/// Keychain key holding the unix-seconds expiry of the captured Claude token.
+/// Keychain key holding the unix-seconds expiry of the legacy Claude token.
 const CLAUDE_EXPIRES_KEY: &str = "claude_token_expires_at";
 
-/// How long a `claude setup-token` token is valid. The CLI states "valid for 1
-/// year" when it mints one; we record an expiry at connect time and surface a
-/// "needs reconnect" (red) state once it passes. There is no cheap server-side
-/// validity check for these opaque tokens (verified: `claude auth status`
-/// reports `loggedIn:true` even for a garbage token), so this local expiry is
-/// our reconnect signal. Revocation before expiry isn't detected here.
-const CLAUDE_TOKEN_TTL_SECS: u64 = 365 * 24 * 60 * 60;
+/// Written into an isolated account's Claude config folder once a
+/// `claude auth login` there was confirmed by `claude auth status` run as that
+/// folder. Holds only the time; the login itself is Claude Code's.
+pub const CLAUDE_FOLDER_LOGIN_MARKER: &str = ".signed-in-here";
+
+/// The first Claude Code known to key its Keychain login per config folder
+/// (`Claude Code-credentials-<sha256(dir)[..8]>`; read in 2.1.323's own code,
+/// and seen as an item on this Mac). Older builds shared one item, so a sign-in
+/// in another folder would replace this Mac's own: refused below this.
+const CLAUDE_PER_FOLDER_LOGIN_SINCE: (u64, u64, u64) = (2, 1, 318);
 
 /// Validates a frontend-supplied account id before it's joined into filesystem
 /// paths (`~/.<slug>/accounts/<id>/`), keychain service names, or env vars.
@@ -217,98 +223,128 @@ fn delete_all_account_credentials(account_id: &str) {
     }
 }
 
-/// Persist a workspace's captured Claude OAuth token (and account email, when
-/// known) to its keychain vault. Called by the connect flow after a successful
-/// `claude setup-token`. Stored under [`MANAGED_CRED_KEYS`], so it's never
-/// writable via the frontend and is wiped when the workspace is deleted.
-pub fn store_claude_token(
-    account_id: &str,
-    token: &str,
-    email: Option<&str>,
-) -> Result<(), CommandError> {
-    write_to_keychain(account_id, CLAUDE_TOKEN_KEY, token.trim())?;
-    // A usage account signed in again may be another Claude account now.
-    crate::agents::usage_plan::fresh_sign_in(crate::agents::engine::Engine::Claude, account_id);
-    if let Some(email) = email.map(str::trim).filter(|e| !e.is_empty()) {
-        // Email is display-only; a failure to store it must not fail the connect.
-        let _ = write_to_keychain(account_id, CLAUDE_EMAIL_KEY, email);
-    } else {
-        // Reconnecting without re-supplying an email shouldn't leave a stale one.
-        delete_from_keychain(account_id, CLAUDE_EMAIL_KEY);
-    }
-    let expires_at = unix_now().saturating_add(CLAUDE_TOKEN_TTL_SECS);
-    let _ = write_to_keychain(account_id, CLAUDE_EXPIRES_KEY, &expires_at.to_string());
-    Ok(())
-}
-
-/// Remove a workspace's captured Claude token + email + expiry (i.e. disconnect
-/// Claude for that workspace). Its terminals fall back to no injected token.
+/// Remove a workspace's legacy Claude token + email + expiry. Its terminals
+/// fall back to no injected token.
 pub fn clear_claude_token(account_id: &str) {
     delete_from_keychain(account_id, CLAUDE_TOKEN_KEY);
     delete_from_keychain(account_id, CLAUDE_EMAIL_KEY);
     delete_from_keychain(account_id, CLAUDE_EXPIRES_KEY);
 }
 
-/// Best-effort check that a freshly-captured Claude token actually
-/// authenticates, run once at connect time before we persist it.
-///
-/// It mirrors the exact request Claude Code makes — `POST /v1/messages` with the
-/// OAuth bearer + `oauth-2025-04-20` beta header — so a token that passes here is
-/// genuinely usable by the agent terminal (same endpoint, same scope). We send
-/// `max_tokens: 1` so a *valid* token costs a negligible one-token completion.
-///
-/// Returns `true` ONLY on a definitive auth rejection (HTTP 401) — the signature
-/// of a truncated/garbage capture or a revoked token. Network errors, timeouts,
-/// rate limits, and server errors all return `false`, so a transient blip never
-/// blocks a real login (we'd rather store a token and let normal use surface a
-/// problem than reject a good login offline).
-///
-/// Also answers the organization the token is for, when the answer named it
-/// (`anthropic-organization-id`, `usage_read::ORG_HEADER`), so a second
-/// sign-in of an account already here is known as one at once, not only at
-/// its first usage read.
-fn claude_token_check(token: &str) -> (bool, Option<String>) {
+/// Whether an isolated account is signed in to Claude Code in its own config
+/// folder: its sign-in was confirmed there ([`finish_claude_folder_sign_in`]).
+/// The login itself is Claude Code's, in its own Keychain item for that
+/// folder; this app never reads or keeps it. Stored state only, no process.
+pub fn claude_folder_signed_in(account_id: &str) -> bool {
+    if account_id == DEFAULT_ACCOUNT_ID || validate_account_id(account_id).is_err() {
+        return false;
+    }
+    account_config_root(account_id)
+        .join("claude")
+        .join(CLAUDE_FOLDER_LOGIN_MARKER)
+        .is_file()
+}
+
+/// `claude auth status`, run as `account_id`'s own config folder with any
+/// token stripped from its environment, so the answer is about the login
+/// Claude Code keeps for that folder. `None`: the CLI couldn't answer.
+pub async fn claude_folder_auth_status(account_id: &str) -> Option<(bool, Option<String>)> {
+    if account_id == DEFAULT_ACCOUNT_ID || validate_account_id(account_id).is_err() {
+        return None;
+    }
+    let binary = find_binary_by_name("claude")?;
+    let mut cmd = create_command(binary);
+    cmd.args(["auth", "status"]);
+    cmd.env("PATH", get_extended_path());
+    cmd.env("CLAUDE_CONFIG_DIR", claude_config_dir(account_id));
+    for var in CLAUDE_LOGIN_OVERRIDES {
+        cmd.env_remove(var);
+    }
+    let out = run_with_timeout(tokio::process::Command::from(cmd), "claude auth status", 10)
+        .await
+        .ok()?;
+    parse_claude_auth_status(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Variables that would make Claude Code use some other login than the one
+/// it keeps for the config folder: an injected token, or a secure-storage
+/// folder that isn't this one. Removed from every process run as an
+/// isolated account's own sign-in.
+pub const CLAUDE_LOGIN_OVERRIDES: &[&str] =
+    &["CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_SECURESTORAGE_CONFIG_DIR"];
+
+/// After `claude auth login` ran in an isolated account's folder and exited
+/// 0: confirm it with `claude auth status` as that folder, and only then
+/// record it ([`CLAUDE_FOLDER_LOGIN_MARKER`]) and delete the token an older
+/// build kept for the account. Returns whether the folder is signed in.
+pub async fn finish_claude_folder_sign_in(account_id: &str) -> bool {
+    if !matches!(claude_folder_auth_status(account_id).await, Some((true, _))) {
+        tracing::warn!(
+            account_id,
+            "claude auth login exited 0 but its folder isn't signed in"
+        );
+        return false;
+    }
+    let marker = claude_config_dir(account_id).join(CLAUDE_FOLDER_LOGIN_MARKER);
+    if let Err(e) = std::fs::write(&marker, unix_now().to_string()) {
+        tracing::warn!(account_id, error = %e, "couldn't record a Claude folder sign-in");
+        return false;
+    }
+    // The login works on its own now: the token from before goes.
+    clear_claude_token(account_id);
+    // A usage account signed in again may be another Claude account now.
+    crate::agents::usage_plan::fresh_sign_in(crate::agents::engine::Engine::Claude, account_id);
+    true
+}
+
+/// `claude --version` (`2.1.323 (Claude Code)`) at or past `since`.
+fn claude_version_at_least(text: &str, since: (u64, u64, u64)) -> bool {
+    let Some(word) = text
+        .split_whitespace()
+        .find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))
+    else {
+        return false;
+    };
+    let mut parts = word.split('.').map(|p| {
+        p.chars()
+            .take_while(char::is_ascii_digit)
+            .collect::<String>()
+            .parse::<u64>()
+            .ok()
+    });
+    match (
+        parts.next().flatten(),
+        parts.next().flatten(),
+        parts.next().flatten(),
+    ) {
+        (Some(a), Some(b), Some(c)) => (a, b, c) >= since,
+        _ => false,
+    }
+}
+
+/// Whether this Claude Code keeps a separate login per config folder, asked
+/// of the binary itself (bounded: a hung CLI answers no). Called from a
+/// command thread, outside the async runtime.
+fn claude_logs_in_per_folder(binary: &std::path::Path) -> bool {
+    let mut cmd = create_command(binary);
+    cmd.arg("--version").env("PATH", get_extended_path());
     let Ok(rt) = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     else {
-        return (false, None);
+        return false;
     };
-    rt.block_on(async {
-        let Ok(client) = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-        else {
-            return (false, None);
-        };
-        let body = serde_json::json!({
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 1,
-            "messages": [{ "role": "user", "content": "hi" }],
-        });
-        match client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("authorization", format!("Bearer {token}"))
-            .header("anthropic-version", "2023-06-01")
-            .header("anthropic-beta", "oauth-2025-04-20")
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await
-        {
-            Ok(resp) => {
-                let org = resp
-                    .headers()
-                    .get(crate::agents::usage_read::ORG_HEADER)
-                    .and_then(|v| v.to_str().ok())
-                    .map(str::trim)
-                    .filter(|v| !v.is_empty())
-                    .map(str::to_string);
-                (resp.status() == reqwest::StatusCode::UNAUTHORIZED, org)
-            }
-            Err(_) => (false, None),
-        }
-    })
+    match rt.block_on(run_with_timeout(
+        tokio::process::Command::from(cmd),
+        "claude --version",
+        10,
+    )) {
+        Ok(out) if out.status.success() => claude_version_at_least(
+            &String::from_utf8_lossy(&out.stdout),
+            CLAUDE_PER_FOLDER_LOGIN_SINCE,
+        ),
+        _ => false,
+    }
 }
 
 /// Current wall-clock time in unix seconds (0 if the clock is before the epoch).
@@ -341,11 +377,15 @@ fn should_inject_claude_token(expires_at: Option<u64>, now: u64) -> bool {
     }
 }
 
-/// The Claude token to run an isolated account's turns with: the one its
-/// sign-in captured, while its recorded expiry hasn't passed. Used by usage
-/// wallets (`agents::wallet`), whose accounts reuse this isolation.
+/// The legacy Claude token an older build kept for an isolated account, while
+/// its recorded expiry hasn't passed and the account hasn't been signed in
+/// again in its own folder (then Claude Code's own login is used and this
+/// token is deleted). Used by usage wallets (`agents::wallet`).
 pub fn claude_token_for(account_id: &str) -> Option<String> {
     if account_id == DEFAULT_ACCOUNT_ID || validate_account_id(account_id).is_err() {
+        return None;
+    }
+    if claude_folder_signed_in(account_id) {
         return None;
     }
     let token = read_from_keychain(account_id, CLAUDE_TOKEN_KEY)?;
@@ -375,6 +415,11 @@ pub fn forget_isolated_account(account_id: &str) {
         return;
     }
     delete_all_account_credentials(account_id);
+    // Claude Code's own login for the folder lives in its Keychain item for
+    // that folder: Claude Code removes it, before the folder goes.
+    if claude_folder_signed_in(account_id) {
+        claude_folder_sign_out(account_id);
+    }
     if let Err(e) = std::fs::remove_dir_all(account_config_root(account_id)) {
         if e.kind() != std::io::ErrorKind::NotFound {
             tracing::warn!(account_id, error = %e, "couldn't remove a usage account's folder");
@@ -423,6 +468,15 @@ pub async fn resolve_claude_identity(account_id: &str) -> ClaudeIdentity {
         return resolve_default_claude_identity().await;
     }
 
+    if claude_folder_signed_in(account_id) {
+        // Who it is, as Claude Code's own file for the folder records it.
+        let config = claude_config_dir(account_id).join(".claude.json");
+        let who = crate::agents::identity::read(Some(&config), crate::agents::identity::claude);
+        return ClaudeIdentity {
+            state: ClaudeConnState::Connected,
+            email: who.email,
+        };
+    }
     match read_from_keychain_checked(account_id, CLAUDE_TOKEN_KEY) {
         crate::keychain::Read::Found(_) => {}
         crate::keychain::Read::NotFound => {
@@ -741,26 +795,21 @@ pub fn get_env_vars_for_account(account_id: &str) -> HashMap<String, String> {
                 .to_string(),
         );
 
-        // Per-workspace Claude login. Unlike the CLI config dirs above, Claude
-        // Code on macOS stores its OAuth token in a single global Keychain
-        // entry that ignores CLAUDE_CONFIG_DIR (Claude bug #20553) — so config
-        // isolation alone can't separate logins, and an interactive `/login` in
-        // one workspace silently clobbers every other workspace's (and the
-        // Default workspace's) token. Instead we capture a long-lived token per
-        // workspace via `claude setup-token` (see connect_claude_account) and
-        // inject it here. CLAUDE_CODE_OAUTH_TOKEN takes precedence over the
-        // keychain, so each workspace authenticates as its own identity without
-        // ever reading or writing the shared keychain entry. Only injected when
-        // the workspace has actually connected Claude; otherwise its terminals
-        // stay logged out (the correct "not connected" state).
+        // Per-workspace Claude login. Claude Code (2.1.318 on) keeps its
+        // login per config folder (Keychain `Claude Code-credentials-<hash of
+        // the folder>`), so the CLAUDE_CONFIG_DIR above is the whole of the
+        // isolation: the workspace signs in with `claude auth login` there and
+        // nothing of the login passes through this app.
         //
-        // A token past its stored expiry is NOT injected (only the stored
-        // expiry is consulted — no network on this hot path): the env token
-        // overrides any interactive `/login` inside the terminal, so a dead
-        // token would make re-login impossible (issue #159). Skipping it keeps
-        // the isolated CLAUDE_CONFIG_DIR (set above) but lets the terminal
-        // authenticate interactively until the workspace is reconnected.
-        if let Some(token) = read_from_keychain(account_id, CLAUDE_TOKEN_KEY) {
+        // Legacy: older builds captured a `claude setup-token` token instead.
+        // It is still injected until the workspace is signed in again in its
+        // folder (then it is deleted, `finish_claude_folder_sign_in`), and
+        // never past its stored expiry: the env token overrides any login in
+        // the terminal, so a dead one would make signing in again impossible
+        // (issue #159).
+        if claude_folder_signed_in(account_id) {
+            // Claude Code's own login for the folder; nothing to inject.
+        } else if let Some(token) = read_from_keychain(account_id, CLAUDE_TOKEN_KEY) {
             if should_inject_claude_token(read_claude_token_expiry(account_id), unix_now()) {
                 vars.insert("CLAUDE_CODE_OAUTH_TOKEN".to_string(), token);
             } else {
@@ -1188,449 +1237,24 @@ pub fn clear_account_credential(id: String, key: String) -> Result<(), CommandEr
     Ok(())
 }
 
-// ============ Claude connect (backend-owned PTY) ============
+// ============ Sign-in terminals (backend-owned PTY) ============
 //
-// `claude setup-token` is inherently interactive: it prints an authorization
-// URL, the user logs in via the browser, and the hosted callback page shows a
-// code the user must PASTE BACK at the CLI's `Paste code here >` prompt. Run
-// headless (stdin closed) it hangs forever. So the backend spawns it in a real
-// pseudo-terminal, streams the terminal to the webview, accepts keystrokes via
-// a command — and, crucially, scrapes the printed `sk-ant-…` token out of the
-// byte stream and stores it IN RUST, redacting it from the streamed bytes so
-// the secret never reaches the webview.
+// A CLI's own sign-in (`claude auth login`, `codex login`, `gh auth login`,
+// `opencode auth login`) run in a real pseudo-terminal under the account's
+// isolated env, so the login lands in the account's own config folder. The
+// backend streams the terminal to the webview and takes keystrokes (the code
+// `claude auth login` asks to have pasted back when the browser can't call it
+// back). Nothing is scraped: the CLI keeps its own login.
 
-/// One in-flight `claude setup-token` PTY, keyed by a frontend-supplied session
-/// id. The backend owns the PTY end to end (spawn, stream, token capture).
+/// One in-flight sign-in PTY, keyed by a frontend-supplied session id.
 struct ConnectSession {
     writer: Mutex<Box<dyn Write + Send>>,
     child_killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
-    /// Set once the token has been scraped + stored, so the reader thread stops
-    /// redacting and streams the remaining output verbatim.
-    captured: AtomicBool,
 }
 
 static CONNECT_REGISTRY: LazyLock<Mutex<HashMap<String, Arc<ConnectSession>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// The prefix every long-lived Claude token starts with.
-const TOKEN_PREFIX: &[u8] = b"sk-ant-";
-/// Real tokens are ~108 chars; guard against redacting a stray `sk-ant-` word.
-const TOKEN_MIN_LEN: usize = 20;
-/// What the user sees in the terminal where the token would have printed.
-const TOKEN_PLACEHOLDER: &[u8] = b"sk-ant-[redacted]";
-
-/// Minimum column width for the `claude setup-token` PTY. The CLI renders its
-/// output (via Ink) wrapped to the terminal width, so a narrow terminal inserts
-/// a real newline into the middle of the ~108-char token — and the scraper,
-/// which stops at the first non-token byte, then captures only the pre-wrap
-/// fragment and stores a truncated, invalid token (the "shows connected but
-/// every call is 401" bug). We force the PTY wide enough that the token always
-/// prints on one line, regardless of how small the connect modal is. The
-/// on-screen terminal reflows for display, so widening costs nothing visible.
-const CLAUDE_CONNECT_MIN_COLS: u16 = 400;
-
-fn is_token_byte(b: u8) -> bool {
-    // Token charset is base64url (`-`/`_`), but accept standard base64 (`+`/`/`/`=`)
-    // too so a format change can never silently truncate capture at one of those
-    // bytes. The token's real boundary is whitespace / ESC / EOF, none of which
-    // are in this set.
-    b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'+' | b'/' | b'=')
-}
-
-/// First index of `needle` within `haystack`, if present.
-fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return None;
-    }
-    haystack.windows(needle.len()).position(|w| w == needle)
-}
-
-/// Length of the longest suffix of `data` that is a *proper* prefix of `prefix`.
-/// Used to hold back a partial `sk-ant-` straddling a read boundary so it isn't
-/// emitted before we can tell whether a token follows.
-fn partial_prefix_len(data: &[u8], prefix: &[u8]) -> usize {
-    let max = data.len().min(prefix.len().saturating_sub(1));
-    (1..=max)
-        .rev()
-        .find(|&k| data[data.len() - k..] == prefix[..k])
-        .unwrap_or(0)
-}
-
-/// Token-redaction pass over the PTY byte stream.
-///
-/// `carry` holds bytes received but not yet emitted. We split off the prefix
-/// that is safe to forward to the webview — with any complete `sk-ant-…` token
-/// replaced by [`TOKEN_PLACEHOLDER`] — and leave in `carry` only the trailing
-/// bytes that might still be (or begin) a token. The captured token, if a
-/// complete one was found, is returned so the caller can store it in the vault.
-///
-/// `eof` flips the "still growing" case: mid-stream an unterminated token is
-/// held back for the next read; at end-of-stream there is no next read, so a
-/// long-enough unterminated run IS the token.
-fn redact_token_stream(carry: &mut Vec<u8>, eof: bool) -> (Vec<u8>, Option<String>) {
-    let data = std::mem::take(carry);
-    let n = data.len();
-    let mut emit = Vec::with_capacity(n);
-    let mut captured: Option<String> = None;
-    let mut pos = 0;
-
-    loop {
-        match find_subslice(&data[pos..], TOKEN_PREFIX) {
-            Some(rel) => {
-                let i = pos + rel;
-                emit.extend_from_slice(&data[pos..i]);
-                let mut j = i + TOKEN_PREFIX.len();
-                while j < n && is_token_byte(data[j]) {
-                    j += 1;
-                }
-                let terminated = j < n;
-                if !terminated && !eof {
-                    // Token may still be growing — retain it for the next read.
-                    *carry = data[i..].to_vec();
-                    return (emit, captured);
-                }
-                if j - i >= TOKEN_MIN_LEN {
-                    if captured.is_none() {
-                        captured = Some(String::from_utf8_lossy(&data[i..j]).into_owned());
-                    }
-                    emit.extend_from_slice(TOKEN_PLACEHOLDER);
-                } else {
-                    // Too short to be a real token — pass through untouched.
-                    emit.extend_from_slice(&data[i..j]);
-                }
-                pos = j;
-                if pos >= n {
-                    return (emit, captured);
-                }
-            }
-            None => {
-                let rem = &data[pos..];
-                let hold = if eof {
-                    0
-                } else {
-                    partial_prefix_len(rem, TOKEN_PREFIX)
-                };
-                let split = rem.len() - hold;
-                emit.extend_from_slice(&rem[..split]);
-                *carry = rem[split..].to_vec();
-                return (emit, captured);
-            }
-        }
-    }
-}
-
-/// Emit a chunk of PTY output to the webview for the given connect session.
-fn emit_connect_data(app: &AppHandle, session_id: &str, bytes: &[u8]) {
-    let _ = app.emit(
-        "claude-connect-data",
-        serde_json::json!({ "sessionId": session_id, "data": bytes }),
-    );
-}
-
-/// Start an interactive Claude connect for a workspace in a backend-owned PTY.
-///
-/// Spawns `claude setup-token` in a real pseudo-terminal under the workspace's
-/// isolated env (minus any previously injected token, so identity comes from
-/// the fresh browser login). Output streams to the webview via
-/// `claude-connect-data` events; the user types into it via
-/// [`claude_connect_write`]. The reader thread scrapes the printed token,
-/// stores it in the workspace vault via [`store_claude_token`], emits
-/// `claude-connect-captured`, and redacts the token from the streamed bytes —
-/// so the secret is captured entirely in Rust and never crosses into the
-/// webview. `claude-connect-exit` fires when the process ends.
-///
-/// `email` is display-only: Claude exposes no way to resolve the account from
-/// the opaque token, so the caller passes what the user logged in as.
-#[tauri::command]
-#[tracing::instrument(skip(app, email), fields(session_id = %session_id, id = %id))]
-pub fn claude_connect_start(
-    app: AppHandle,
-    session_id: String,
-    id: String,
-    email: Option<String>,
-    cols: u16,
-    rows: u16,
-) -> Result<(), CommandError> {
-    validate_account_id(&id)?;
-    validate_account_id(&session_id)?;
-    if id == DEFAULT_ACCOUNT_ID {
-        return Err(CommandError::Validation {
-            field: "id".into(),
-            reason: "The Default workspace uses your machine's native Claude login; \
-                     run `claude` and use /login there instead of connecting a token."
-                .into(),
-        });
-    }
-
-    let binary = find_binary_by_name("claude").ok_or_else(|| CommandError::Io {
-        message: "Claude Code CLI not found. Install Claude Code first, then connect.".into(),
-    })?;
-
-    // Idempotent: a live session under this id means connect is already running.
-    {
-        let map = CONNECT_REGISTRY
-            .lock()
-            .map_err(|e| format!("claude connect registry poisoned: {e}"))?;
-        if map.contains_key(&session_id) {
-            return Ok(());
-        }
-    }
-
-    // Force a wide terminal so `claude setup-token` never wraps the token across
-    // a newline (which would truncate the scraped token — see
-    // CLAUDE_CONNECT_MIN_COLS). The frontend xterm reflows for display.
-    let cols = cols.max(CLAUDE_CONNECT_MIN_COLS);
-    let pair = native_pty_system()
-        .openpty(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(crate::commands::pty_session::openpty_error)?;
-    let writer = pair
-        .master
-        .take_writer()
-        .map_err(|e| format!("take_writer: {e}"))?;
-    let mut reader = pair
-        .master
-        .try_clone_reader()
-        .map_err(|e| format!("clone_reader: {e}"))?;
-
-    let mut cmd = CommandBuilder::new(&binary);
-    cmd.arg("setup-token");
-    cmd.cwd(dirs::home_dir().unwrap_or_default());
-    cmd.env("PATH", get_extended_path());
-    // A real terminal type so the CLI renders its interactive prompts properly.
-    cmd.env("TERM", "xterm-256color");
-    // Run inside the workspace's isolated env so any files setup-token writes
-    // land under the workspace dir, never the global one. Strip any previously
-    // injected token: setup-token derives identity from the fresh BROWSER login,
-    // and a stale token in the env shouldn't shadow that.
-    let mut env = get_env_vars_for_account(&id);
-    env.remove("CLAUDE_CODE_OAUTH_TOKEN");
-    for (k, v) in env {
-        cmd.env(k, v);
-    }
-
-    // Labeled + retried on transient EAGAIN; a persistent one is classified
-    // Expected instead of a bare "spawn_command: os error 35" (issue #587).
-    let mut child = crate::external_command::retry_spawn_on_pressure("claude setup-token", || {
-        pair.slave.spawn_command(cmd.clone())
-    })
-    .map_err(|e| {
-        let message = format!("spawn_command `claude setup-token`: {e}");
-        if crate::external_command::is_spawn_resource_pressure(&message) {
-            crate::external_command::spawn_resource_pressure_error("claude setup-token")
-        } else {
-            CommandError::from(message)
-        }
-    })?;
-    let child_killer = child.clone_killer();
-
-    let session = Arc::new(ConnectSession {
-        writer: Mutex::new(writer),
-        child_killer: Mutex::new(child_killer),
-        master: Mutex::new(pair.master),
-        captured: AtomicBool::new(false),
-    });
-    CONNECT_REGISTRY
-        .lock()
-        .map_err(|e| format!("claude connect registry poisoned: {e}"))?
-        .insert(session_id.clone(), session.clone());
-
-    // Reader thread: scrapes + redacts the token, streams the rest.
-    {
-        let app = app.clone();
-        let session_id = session_id.clone();
-        let account_id = id.clone();
-        let email = email
-            .as_deref()
-            .map(str::trim)
-            .filter(|e| !e.is_empty())
-            .map(str::to_string);
-        let session = session.clone();
-        std::thread::spawn(move || {
-            let mut buf = [0u8; 4096];
-            let mut carry: Vec<u8> = Vec::new();
-            let store_and_signal = |token: String| {
-                // We've scraped a token; stop scanning regardless of outcome.
-                session.captured.store(true, Ordering::Relaxed);
-
-                // Validate before persisting. Storing a token that the API
-                // rejects is the exact trap that made a workspace read
-                // "connected" on the dashboard while every agent call returned
-                // 401 — so a rejected token is dropped, not saved.
-                let (rejected, org) = claude_token_check(&token);
-                if rejected {
-                    tracing::warn!(
-                        account_id = %account_id,
-                        "captured Claude token was rejected by the API (401); not storing"
-                    );
-                    let msg = "\r\n\x1b[31mThat login didn't work — the API rejected the token. \
-                               Please start over and run the login again.\x1b[0m\r\n";
-                    emit_connect_data(&app, &session_id, msg.as_bytes());
-                    // No `claude-connect-captured`: the workspace stays
-                    // disconnected, and the connect modal's exit handler shows
-                    // its "Login didn't finish / Start over" affordance.
-                    return;
-                }
-
-                if let Err(e) = store_claude_token(&account_id, &token, email.as_deref()) {
-                    tracing::warn!("failed to store captured Claude token: {e}");
-                } else if let Some(org) = org {
-                    // After `store_claude_token`, which forgets the old one.
-                    crate::agents::usage_plan::set_org(
-                        crate::agents::engine::Engine::Claude,
-                        &account_id,
-                        &org,
-                    );
-                }
-                let _ = app.emit(
-                    "claude-connect-captured",
-                    serde_json::json!({ "sessionId": session_id }),
-                );
-            };
-            loop {
-                let n = match reader.read(&mut buf) {
-                    Ok(0) | Err(_) => break,
-                    Ok(n) => n,
-                };
-                if session.captured.load(Ordering::Relaxed) {
-                    emit_connect_data(&app, &session_id, &buf[..n]);
-                    continue;
-                }
-                carry.extend_from_slice(&buf[..n]);
-                let (emit, token) = redact_token_stream(&mut carry, false);
-                if !emit.is_empty() {
-                    emit_connect_data(&app, &session_id, &emit);
-                }
-                if let Some(token) = token {
-                    store_and_signal(token);
-                    // The retained tail is unrelated text now — flush it raw.
-                    if !carry.is_empty() {
-                        let tail = std::mem::take(&mut carry);
-                        emit_connect_data(&app, &session_id, &tail);
-                    }
-                }
-            }
-            // EOF flush: treat end-of-stream as a token terminator.
-            if !session.captured.load(Ordering::Relaxed) {
-                let (emit, token) = redact_token_stream(&mut carry, true);
-                if !emit.is_empty() {
-                    emit_connect_data(&app, &session_id, &emit);
-                }
-                if let Some(token) = token {
-                    store_and_signal(token);
-                }
-            } else if !carry.is_empty() {
-                let tail = std::mem::take(&mut carry);
-                emit_connect_data(&app, &session_id, &tail);
-            }
-        });
-    }
-
-    // Waiter thread: reaps the child, drops the registry entry, signals exit.
-    {
-        let app = app.clone();
-        let session_id = session_id.clone();
-        std::thread::spawn(move || {
-            let code = match child.wait() {
-                Ok(status) if status.success() => 0,
-                Ok(status) => status.exit_code() as i32,
-                Err(_) => -1,
-            };
-            if let Ok(mut map) = CONNECT_REGISTRY.lock() {
-                map.remove(&session_id);
-            }
-            let _ = app.emit(
-                "claude-connect-exit",
-                serde_json::json!({ "sessionId": session_id, "exitCode": code }),
-            );
-        });
-    }
-
-    Ok(())
-}
-
-/// Forward keystrokes (e.g. the pasted authorization code) to a connect PTY.
-#[tauri::command]
-#[tracing::instrument(skip(data))]
-pub fn claude_connect_write(session_id: String, data: Vec<u8>) -> Result<(), CommandError> {
-    let session = {
-        let map = CONNECT_REGISTRY
-            .lock()
-            .map_err(|e| format!("claude connect registry poisoned: {e}"))?;
-        map.get(&session_id).cloned()
-    };
-    let Some(session) = session else {
-        // A keystroke/resize can land after the connect PTY exited (the waiter
-        // thread pruned the registry) or after the modal was closed — a benign,
-        // expected race the frontend already ignores, not a bug (issue #563).
-        return Err(CommandError::expected("unknown connect session"));
-    };
-    let mut w = session
-        .writer
-        .lock()
-        .map_err(|e| format!("writer lock poisoned: {e}"))?;
-    w.write_all(&data).map_err(|e| format!("write: {e}"))?;
-    Ok(())
-}
-
-/// Resize a connect PTY to match the on-screen terminal.
-#[tauri::command]
-#[tracing::instrument]
-pub fn claude_connect_resize(session_id: String, cols: u16, rows: u16) -> Result<(), CommandError> {
-    let session = {
-        let map = CONNECT_REGISTRY
-            .lock()
-            .map_err(|e| format!("claude connect registry poisoned: {e}"))?;
-        map.get(&session_id).cloned()
-    };
-    let Some(session) = session else {
-        // A keystroke/resize can land after the connect PTY exited (the waiter
-        // thread pruned the registry) or after the modal was closed — a benign,
-        // expected race the frontend already ignores, not a bug (issue #563).
-        return Err(CommandError::expected("unknown connect session"));
-    };
-    let master = session
-        .master
-        .lock()
-        .map_err(|e| format!("master lock poisoned: {e}"))?;
-    // Keep the floor from claude_connect_start: a later fit-resize from the
-    // (narrow) modal must not shrink the PTY back down and let the token wrap
-    // before it's printed and captured. See CLAUDE_CONNECT_MIN_COLS.
-    let cols = cols.max(CLAUDE_CONNECT_MIN_COLS);
-    master
-        .resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| format!("resize: {e}"))?;
-    Ok(())
-}
-
-/// Kill a connect PTY and drop its registry entry. Idempotent — called when the
-/// user closes the connect modal (whether or not a token was captured).
-#[tauri::command]
-#[tracing::instrument]
-pub fn claude_connect_close(session_id: String) -> Result<(), CommandError> {
-    let session = {
-        let mut map = CONNECT_REGISTRY
-            .lock()
-            .map_err(|e| format!("claude connect registry poisoned: {e}"))?;
-        map.remove(&session_id)
-    };
-    if let Some(session) = session {
-        if let Ok(mut killer) = session.child_killer.lock() {
-            let _ = killer.kill();
-        }
-    }
-    Ok(())
-}
 
 /// Disconnect a workspace's Claude login: clears its captured token, email, and
 /// expiry. The workspace's terminals fall back to no injected token (logged out).
@@ -1647,22 +1271,65 @@ pub fn disconnect_claude_account(id: String) -> Result<(), CommandError> {
         });
     }
     clear_claude_token(&id);
+    forget_claude_folder_sign_in(&id);
     Ok(())
 }
 
-// ── Generalized per-workspace login PTY (GitHub / Codex / Opencode) ──────────
+/// `claude auth logout` as an isolated account's own folder (bounded, best
+/// effort), so Claude Code removes the login it keeps for it. Runs on its own
+/// thread with its own runtime, so it is safe to call from anywhere.
+fn claude_folder_sign_out(account_id: &str) {
+    let Some(binary) = find_binary_by_name("claude") else {
+        return;
+    };
+    let mut cmd = create_command(binary);
+    cmd.args(["auth", "logout"])
+        .env("PATH", get_extended_path())
+        .env("CLAUDE_CONFIG_DIR", claude_config_dir(account_id));
+    for var in CLAUDE_LOGIN_OVERRIDES {
+        cmd.env_remove(var);
+    }
+    let done = std::thread::spawn(move || {
+        if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            let _ = rt.block_on(run_with_timeout(
+                tokio::process::Command::from(cmd),
+                "claude auth logout",
+                15,
+            ));
+        }
+    });
+    let _ = done.join();
+}
+
+/// Forget that an isolated account signed in to Claude Code in its folder
+/// (its login itself is Claude Code's: `claude auth logout` there removes it).
+fn forget_claude_folder_sign_in(account_id: &str) {
+    if account_id == DEFAULT_ACCOUNT_ID || validate_account_id(account_id).is_err() {
+        return;
+    }
+    let marker = account_config_root(account_id)
+        .join("claude")
+        .join(CLAUDE_FOLDER_LOGIN_MARKER);
+    let _ = std::fs::remove_file(marker);
+}
+
+// ── Per-account login PTY (Claude Code / GitHub / Codex / Opencode) ──────────
 //
-// Claude needs token scraping (its login is a global keychain entry), but the
-// other three logins are *config-dir* based: running their login CLI under the
-// workspace's injected `GH_CONFIG_DIR` / `CODEX_HOME` / `XDG_DATA_HOME` writes
-// the credentials into the workspace's isolated dir. So these reuse the same
-// backend-owned PTY machinery as Claude (ConnectSession + CONNECT_REGISTRY) but
-// stream output verbatim — there's no secret to redact — and treat process exit
-// as the completion signal (no "captured" event).
+// Every login here is *config-dir* based: running the CLI's own login under
+// the account's injected `CLAUDE_CONFIG_DIR` / `GH_CONFIG_DIR` / `CODEX_HOME` /
+// `XDG_DATA_HOME` keeps the credentials in that account's own place (for
+// Claude Code, its Keychain item for that folder). Output streams verbatim —
+// there's no secret in it — and process exit is the completion signal. For
+// Claude Code an exit 0 counts only once `claude auth status` as that folder
+// says it is signed in (`finish_claude_folder_sign_in`).
 
 /// A login service that authenticates by writing into a per-workspace config dir.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ConnectService {
+    Claude,
     Github,
     Codex,
     Opencode,
@@ -1671,6 +1338,7 @@ enum ConnectService {
 impl ConnectService {
     fn parse(s: &str) -> Option<Self> {
         match s {
+            "claude" => Some(Self::Claude),
             "github" => Some(Self::Github),
             "codex" => Some(Self::Codex),
             "opencode" => Some(Self::Opencode),
@@ -1681,6 +1349,7 @@ impl ConnectService {
     /// The CLI binary name to look up on PATH.
     fn binary(self) -> &'static str {
         match self {
+            Self::Claude => "claude",
             Self::Github => "gh",
             Self::Codex => "codex",
             Self::Opencode => "opencode",
@@ -1693,6 +1362,9 @@ impl ConnectService {
             // `--web` uses the device flow (prints a one-time code + opens the
             // browser); `--git-protocol https` skips the protocol prompt.
             Self::Github => &["auth", "login", "--web", "--git-protocol", "https"],
+            // Claude Code's own sign-in, the same command the first sign-in
+            // runs (`TERMINAL_COMMANDS.claude_auth`).
+            Self::Claude => &["auth", "login"],
             Self::Codex => &["login"],
             Self::Opencode => &["auth", "login"],
         }
@@ -1755,6 +1427,14 @@ pub fn workspace_connect_start(
             svc.binary()
         ),
     })?;
+    // An older Claude Code keeps one login for every folder: signing in here
+    // would sign this Mac's own Claude Code in as this account.
+    if svc == ConnectService::Claude && !claude_logs_in_per_folder(&binary) {
+        return Err(CommandError::expected(
+            "Update Claude Code first: this version keeps one sign-in for the whole Mac, \
+             so signing in another account would replace yours.",
+        ));
+    }
 
     // Idempotent: a live session under this id means connect is already running.
     {
@@ -1791,8 +1471,18 @@ pub fn workspace_connect_start(
     cmd.env("PATH", get_extended_path());
     cmd.env("TERM", "xterm-256color");
     // Run inside the workspace's isolated env so the login writes into the
-    // workspace's config dir (GH_CONFIG_DIR / CODEX_HOME / XDG_DATA_HOME).
-    for (k, v) in get_env_vars_for_account(&id) {
+    // workspace's config dir (CLAUDE_CONFIG_DIR / GH_CONFIG_DIR / CODEX_HOME /
+    // XDG_DATA_HOME).
+    let mut env = get_env_vars_for_account(&id);
+    if svc == ConnectService::Claude {
+        // Claude Code's own login for this folder, nothing else: no token
+        // from before, no other secure-storage folder (inherited or set).
+        for var in CLAUDE_LOGIN_OVERRIDES {
+            env.remove(*var);
+            cmd.env_remove(var);
+        }
+    }
+    for (k, v) in env {
         cmd.env(k, v);
     }
 
@@ -1816,7 +1506,6 @@ pub fn workspace_connect_start(
         writer: Mutex::new(writer),
         child_killer: Mutex::new(child_killer),
         master: Mutex::new(pair.master),
-        captured: AtomicBool::new(false),
     });
     CONNECT_REGISTRY
         .lock()
@@ -1866,12 +1555,28 @@ pub fn workspace_connect_start(
         let app = app.clone();
         let session_id = session_id.clone();
         let is_github = matches!(svc, ConnectService::Github);
+        let is_claude = matches!(svc, ConnectService::Claude);
+        let account_id = id.clone();
         std::thread::spawn(move || {
-            let code = match child.wait() {
+            let mut code = match child.wait() {
                 Ok(status) if status.success() => 0,
                 Ok(status) => status.exit_code() as i32,
                 Err(_) => -1,
             };
+            // Claude Code said it signed in: done only once its folder says so.
+            if is_claude && code == 0 {
+                let confirmed = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map(|rt| rt.block_on(finish_claude_folder_sign_in(&account_id)))
+                    .unwrap_or(false);
+                if !confirmed {
+                    let msg = "\r\n\x1b[31mClaude Code finished, but this account doesn't \
+                               show as signed in. Start over to try again.\x1b[0m\r\n";
+                    emit_workspace_connect_data(&app, &session_id, msg.as_bytes());
+                    code = 1;
+                }
+            }
             if let Ok(mut map) = CONNECT_REGISTRY.lock() {
                 map.remove(&session_id);
             }
@@ -1968,7 +1673,7 @@ pub fn workspace_connect_close(session_id: String) -> Result<(), CommandError> {
     Ok(())
 }
 
-/// Sign a workspace out of a config-dir login (GitHub / Codex / Opencode) by
+/// Sign a workspace out of a config-dir login (Claude Code / GitHub / Codex / Opencode) by
 /// running the CLI's logout under the workspace's isolated env. Best-effort:
 /// returns the captured output for surfacing, but a non-zero exit (already
 /// logged out) is not treated as an error.
@@ -1995,11 +1700,20 @@ pub fn workspace_disconnect_service(id: String, service: String) -> Result<(), C
         ConnectService::Github => &["auth", "logout", "--hostname", "github.com"],
         ConnectService::Codex => &["logout"],
         ConnectService::Opencode => &["auth", "logout"],
+        ConnectService::Claude => &["auth", "logout"],
     };
     let mut command = std::process::Command::new(&binary);
     command.args(logout_args);
     command.env("PATH", get_extended_path());
-    for (k, v) in get_env_vars_for_account(&id) {
+    let mut env = get_env_vars_for_account(&id);
+    if svc == ConnectService::Claude {
+        forget_claude_folder_sign_in(&id);
+        for var in CLAUDE_LOGIN_OVERRIDES {
+            env.remove(*var);
+            command.env_remove(var);
+        }
+    }
+    for (k, v) in env {
         command.env(k, v);
     }
     // Best-effort: failures (e.g. "not logged in") are fine.
@@ -2060,48 +1774,6 @@ mod tests {
         assert!(!vars.contains_key("CLAUDE_CODE_OAUTH_TOKEN"));
     }
 
-    /// Convenience: run the stream redactor over a single complete buffer.
-    fn redact_once(input: &[u8]) -> (Vec<u8>, Option<String>) {
-        let mut carry = input.to_vec();
-        let (mut emit, token) = redact_token_stream(&mut carry, true);
-        // EOF flush leaves nothing behind, but be defensive.
-        emit.extend_from_slice(&carry);
-        (emit, token)
-    }
-
-    #[test]
-    fn redact_captures_token_and_replaces_it_in_the_stream() {
-        // Mirrors real `claude setup-token` output (token is sk-ant-oat…, ~108 chars).
-        let out =
-            b"\nLong-lived token created!\n\nsk-ant-oat01-abcDEF_123-456.789xyz\n\nStore it.\n";
-        let (emit, token) = redact_once(out);
-        assert_eq!(token.as_deref(), Some("sk-ant-oat01-abcDEF_123-456.789xyz"));
-        // The real token is gone from what the webview would see; placeholder stays.
-        let shown = String::from_utf8_lossy(&emit);
-        assert!(!shown.contains("oat01-abcDEF"), "token leaked: {shown}");
-        assert!(shown.contains("sk-ant-[redacted]"));
-        // Surrounding text is preserved verbatim.
-        assert!(shown.contains("Long-lived token created!"));
-        assert!(shown.contains("Store it."));
-    }
-
-    #[test]
-    fn redact_captures_token_with_base64_chars() {
-        // Defensive: if the token format ever includes standard base64 (`+`/`/`/`=`)
-        // instead of base64url, the scan must not stop at one of those bytes and
-        // store a truncated token. The run still terminates at the trailing space.
-        let out = b"sk-ant-oat01-AbC+dEf/123=ghIJKlmnopQRstuvWXyz456 trailing";
-        let (emit, token) = redact_once(out);
-        assert_eq!(
-            token.as_deref(),
-            Some("sk-ant-oat01-AbC+dEf/123=ghIJKlmnopQRstuvWXyz456")
-        );
-        let shown = String::from_utf8_lossy(&emit);
-        assert!(!shown.contains("AbC+dEf"), "token leaked: {shown}");
-        assert!(shown.contains("sk-ant-[redacted]"));
-        assert!(shown.contains("trailing"));
-    }
-
     #[test]
     fn connect_service_parses_known_services_only() {
         assert_eq!(
@@ -2113,7 +1785,10 @@ mod tests {
             ConnectService::parse("opencode"),
             Some(ConnectService::Opencode)
         );
-        assert_eq!(ConnectService::parse("claude"), None);
+        assert_eq!(
+            ConnectService::parse("claude"),
+            Some(ConnectService::Claude)
+        );
         assert_eq!(ConnectService::parse("vercel"), None);
         assert_eq!(ConnectService::parse(""), None);
     }
@@ -2124,6 +1799,47 @@ mod tests {
         assert!(ConnectService::Github.auto_enter());
         assert!(!ConnectService::Codex.auto_enter());
         assert!(!ConnectService::Opencode.auto_enter());
+        assert!(!ConnectService::Claude.auto_enter());
+    }
+
+    #[test]
+    fn claude_signs_in_with_its_own_login_never_a_setup_token() {
+        // The same command the first sign-in runs; nothing is captured.
+        assert_eq!(ConnectService::Claude.binary(), "claude");
+        assert_eq!(ConnectService::Claude.args(), &["auth", "login"]);
+        assert!(CLAUDE_LOGIN_OVERRIDES.contains(&"CLAUDE_CODE_OAUTH_TOKEN"));
+        assert!(CLAUDE_LOGIN_OVERRIDES.contains(&"CLAUDE_SECURESTORAGE_CONFIG_DIR"));
+    }
+
+    #[test]
+    fn only_a_claude_code_that_keeps_a_login_per_folder_signs_in_here() {
+        let since = CLAUDE_PER_FOLDER_LOGIN_SINCE;
+        assert!(claude_version_at_least("2.1.323 (Claude Code)", since));
+        assert!(claude_version_at_least("2.1.318 (Claude Code)", since));
+        assert!(claude_version_at_least("2.2.0 (Claude Code)", since));
+        assert!(claude_version_at_least("3.0.0", since));
+        assert!(!claude_version_at_least("2.1.317 (Claude Code)", since));
+        assert!(!claude_version_at_least("1.9.999 (Claude Code)", since));
+        assert!(!claude_version_at_least("Claude Code", since));
+        assert!(!claude_version_at_least("", since));
+    }
+
+    #[test]
+    fn a_confirmed_folder_sign_in_replaces_the_old_token() {
+        let id = "folder-login-test-0b5e";
+        assert!(!claude_folder_signed_in(id));
+        let marker = claude_config_dir(id).join(CLAUDE_FOLDER_LOGIN_MARKER);
+        std::fs::write(&marker, "1").unwrap();
+        assert!(claude_folder_signed_in(id));
+        // Signed in in its folder: no token is handed to anything.
+        assert!(claude_token_for(id).is_none());
+        assert!(!get_env_vars_for_account(id).contains_key("CLAUDE_CODE_OAUTH_TOKEN"));
+        forget_claude_folder_sign_in(id);
+        assert!(!claude_folder_signed_in(id));
+        let _ = std::fs::remove_dir_all(account_config_root(id));
+        // Never for the Default account or a bad id.
+        assert!(!claude_folder_signed_in(DEFAULT_ACCOUNT_ID));
+        assert!(!claude_folder_signed_in("../x"));
     }
 
     #[test]
@@ -2144,80 +1860,6 @@ mod tests {
         assert!(workspace_disconnect_service("some-workspace".into(), "bogus".into()).is_err());
         // The Default workspace's native logins aren't managed here.
         assert!(workspace_disconnect_service(DEFAULT_ACCOUNT_ID.into(), "github".into()).is_err());
-    }
-
-    #[test]
-    fn redact_handles_ansi_color_around_token() {
-        // setup-token may color the token; ANSI brackets it rather than splitting
-        // it, so the prefix is still found and the run terminates at the ESC.
-        let colored = b"\x1b[32msk-ant-oat01-tokenWithEnoughLength12345\x1b[0m done";
-        let (emit, token) = redact_once(colored);
-        assert_eq!(
-            token.as_deref(),
-            Some("sk-ant-oat01-tokenWithEnoughLength12345")
-        );
-        assert!(!String::from_utf8_lossy(&emit).contains("tokenWithEnoughLength"));
-    }
-
-    #[test]
-    fn redact_leaves_non_token_text_untouched() {
-        let (emit, token) = redact_once(b"no token here, just a prompt > ");
-        assert_eq!(token, None);
-        assert_eq!(emit, b"no token here, just a prompt > ");
-        // A too-short sk-ant- fragment is not mistaken for a token.
-        let (emit, token) = redact_once(b"see sk-ant-x in docs");
-        assert_eq!(token, None);
-        assert_eq!(emit, b"see sk-ant-x in docs");
-    }
-
-    #[test]
-    fn redact_captures_token_split_across_reads() {
-        // The token straddles two PTY reads — including a split mid-prefix. The
-        // held-back tail must let us still capture + redact it.
-        let mut carry: Vec<u8> = Vec::new();
-        let mut all_emitted: Vec<u8> = Vec::new();
-        let mut captured: Option<String> = None;
-
-        for chunk in [
-            &b"token: sk-an"[..],
-            &b"t-oat01-splitAcrossTwoReads99"[..],
-            &b"\n(done)"[..],
-        ] {
-            carry.extend_from_slice(chunk);
-            let (emit, token) = redact_token_stream(&mut carry, false);
-            all_emitted.extend_from_slice(&emit);
-            if token.is_some() {
-                captured = token;
-            }
-        }
-        let (emit, token) = redact_token_stream(&mut carry, true);
-        all_emitted.extend_from_slice(&emit);
-        if token.is_some() {
-            captured = token;
-        }
-
-        assert_eq!(
-            captured.as_deref(),
-            Some("sk-ant-oat01-splitAcrossTwoReads99")
-        );
-        let shown = String::from_utf8_lossy(&all_emitted);
-        assert!(
-            !shown.contains("splitAcrossTwoReads"),
-            "token leaked: {shown}"
-        );
-        assert!(shown.contains("sk-ant-[redacted]"));
-        assert!(shown.contains("(done)"));
-    }
-
-    #[test]
-    fn redact_does_not_emit_a_partial_prefix_early() {
-        // A buffer ending mid-prefix must hold the partial back (not emit it),
-        // so a token completing on the next read is still redacted.
-        let mut carry = b"prompt sk-an".to_vec();
-        let (emit, token) = redact_token_stream(&mut carry, false);
-        assert_eq!(token, None);
-        assert_eq!(emit, b"prompt ");
-        assert_eq!(carry, b"sk-an"); // retained for the next read
     }
 
     #[test]

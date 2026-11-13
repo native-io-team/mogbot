@@ -465,7 +465,11 @@ export function glanceUsed(glance: Pick<UsageGlance, 'total' | 'tone' | 'row'>):
   // already says it (the owner read "2 accounts" twice), and a lone
   // account's figure says "this week" instead.
   const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
-  const detail = [of, reading ? row.notRead : null, saysWhen || !row.refill ? null : lower(row.refill)]
+  const detail = [
+    of,
+    reading ? row.notRead : null,
+    saysWhen || !row.refill ? null : lower(row.refill),
+  ]
     .filter(Boolean)
     .join(' · ');
   const tone: GlanceUsed['tone'] =
@@ -834,6 +838,14 @@ function detailOf(
 }
 
 /**
+ * An account an older build signed in with a saved token (`signInAgain`):
+ * it still works; signing in again moves it to its own sign-in, and the
+ * saved token is deleted.
+ */
+export const SIGN_IN_AGAIN =
+  'Sign in again to keep this account working: it still uses a saved token.';
+
+/**
  * The name an account's row leads with. A name the app made up when the
  * account was added ("Account 2") says nothing, so the account's email leads
  * instead and the plan sits under it; a name the user chose is kept.
@@ -920,7 +932,9 @@ function keyOf(
     ? { action: 'sign_in', text: 'Sign in to use it.' }
     : same
       ? { action: 'sign_in_other', text: `${sameAccountLine(row.engine, same)}.` }
-      : null;
+      : a.signInAgain
+        ? { action: 'sign_in', text: SIGN_IN_AGAIN }
+        : null;
   return {
     key: row.key,
     engine: row.engine,
@@ -1383,7 +1397,11 @@ export function usageGlance(
         })
       ),
     signInChanged: change
-      ? { engine: change.engine, key: change.key, text: signInChangedText(change, macName, opts.computer) }
+      ? {
+          engine: change.engine,
+          key: change.key,
+          text: signInChangedText(change, macName, opts.computer),
+        }
       : null,
     headline,
     unread: counted.length > 0 && read.length === 0,

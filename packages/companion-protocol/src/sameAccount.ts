@@ -68,7 +68,7 @@ export function browserSteps(engine: AgentEngine): string[] {
     `Open ${SITE[engine]} in the browser and check whose account it shows.`,
     'If it’s an account already in your list, sign out there, or use a private window or the browser profile where you’re signed in as the other account.',
     engine === 'claude'
-      ? 'Then press Continue: the sign-in page opens, and the code it shows goes in the box that follows.'
+      ? 'Then press Continue: the sign-in page opens. If it shows a code, it goes in the box that follows.'
       : 'Then press Continue: the sign-in page opens, and this finishes on its own.',
   ];
 }

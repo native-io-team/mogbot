@@ -1,9 +1,9 @@
 /**
  * Terminal view for the generalized per-workspace connect flow
- * (GitHub / Codex / Opencode).
+ * (Claude Code / GitHub / Codex / Opencode).
  *
- * A sibling of {@link ClaudeConnectTerminal}, but for the *config-dir* logins:
- * there's no secret to scrape, so this streams the CLI's output verbatim over
+ * Every one is a *config-dir* login: there's no secret to scrape, so this
+ * streams the CLI's output verbatim over
  * `workspace-connect-*` events and treats process exit (`onExit`) as the only
  * completion signal — there is no "captured" event. The backend spawns the
  * login under the workspace's isolated env so credentials land in that
@@ -27,7 +27,7 @@ import {
   workspaceConnectClose,
   onWorkspaceConnectData,
   onWorkspaceConnectExit,
-  type WorkspaceConnectService,
+  type ConnectTerminalService,
 } from '../../lib/accounts';
 import '@xterm/xterm/css/xterm.css';
 
@@ -37,7 +37,7 @@ interface WorkspaceConnectTerminalProps {
   /** Workspace whose login is being connected. */
   accountId: string;
   /** Which config-dir login to run. */
-  service: WorkspaceConnectService;
+  service: ConnectTerminalService;
   /** Fired when the connect process exits, with its exit code. */
   onExit: (exitCode: number) => void;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { UsageAccount, UsageAccountLine, UsageInventory } from './model';
 import {
+  SIGN_IN_AGAIN,
   accountDisplayName,
   changeLines,
   glanceUsed,
@@ -85,6 +86,20 @@ describe('usageGlance', () => {
     expect(g.keys[0].left).toBeNull();
     expect(g.keys[0].tone).toBe('quiet');
     expect(g.headline).toBe('Your usage shows here after an agent’s first reply.');
+  });
+
+  it('an account still on a saved token works, and asks once to be signed in again', () => {
+    const g = usageGlance(
+      [acct('default'), acct('work', { name: 'Work', signInAgain: true })],
+      inv([line('default', { windows: [week(22)] }), line('work', { windows: [week(40)] })]),
+      { now: NOW }
+    );
+    const work = g.keys[1];
+    expect(work.fix).toEqual({ action: 'sign_in', text: SIGN_IN_AGAIN });
+    // Still counted and usable meanwhile.
+    expect(work.left).toBe(60);
+    expect(work.canUse).toBe(true);
+    expect(g.keys[0].fix).toBeNull();
   });
 
   it('a second sign-in of the same account adds no room and says how to fix it', () => {
