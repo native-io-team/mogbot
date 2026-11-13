@@ -119,8 +119,59 @@ fn fold(p: &Path) -> String {
     p.to_string_lossy().to_lowercase()
 }
 
-/// `p` is `base` or inside it, ignoring case where the file system does.
+/// Windows' 8.3 short names (`C:\Users\JULIAN~1`) expanded to the long
+/// ones, so a path written through the short form still lands under the
+/// folder the rules name in long form. Only paths with a `~` are touched (a
+/// short name always has one); the longest part that exists is expanded and
+/// the rest kept as written, since a file being read or made may not exist
+/// yet. Found in review (2026-11-13): at "Bold", the app's `bridge.json`
+/// read through the short form of its folder ran without a card.
+/// Identity off Windows.
+pub fn long_name(p: &Path) -> std::borrow::Cow<'_, Path> {
+    #[cfg(windows)]
+    {
+        if p.to_string_lossy().contains('~') {
+            if let Some(long) = win_long(p) {
+                return std::borrow::Cow::Owned(long);
+            }
+        }
+    }
+    std::borrow::Cow::Borrowed(p)
+}
+
+#[cfg(windows)]
+fn win_long(p: &Path) -> Option<PathBuf> {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Storage::FileSystem::GetLongPathNameW;
+    let mut existing = p.to_path_buf();
+    let mut rest: Vec<std::ffi::OsString> = Vec::new();
+    while !existing.exists() {
+        rest.push(existing.file_name()?.to_os_string());
+        existing = existing.parent()?.to_path_buf();
+    }
+    let wide: Vec<u16> = existing
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut buf = vec![0u16; 1024];
+    // SAFETY: `wide` is NUL-terminated; `buf` holds `buf.len()` u16s.
+    let n = unsafe { GetLongPathNameW(wide.as_ptr(), buf.as_mut_ptr(), buf.len() as u32) };
+    if n == 0 || n as usize >= buf.len() {
+        return None;
+    }
+    let mut out = PathBuf::from(std::ffi::OsString::from_wide(&buf[..n as usize]));
+    for part in rest.into_iter().rev() {
+        out.push(part);
+    }
+    Some(out)
+}
+
+/// `p` is `base` or inside it, ignoring case where the file system does,
+/// and Windows' short names ([`long_name`]).
 pub fn under(p: &Path, base: &Path) -> bool {
+    let (p, base) = (long_name(p), long_name(base));
+    let (p, base) = (p.as_ref(), base.as_ref());
     if !CASE_INSENSITIVE {
         return p.starts_with(base);
     }
@@ -152,6 +203,29 @@ pub fn name_is(name: &std::ffi::OsStr, want: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A folder reached through its 8.3 short name is still under it.
+    #[cfg(windows)]
+    #[test]
+    fn a_short_name_lands_under_the_long_folder() {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+        let root = tempfile::tempdir().unwrap();
+        let long = root.path().join("Mogbot Application Data");
+        std::fs::create_dir(&long).unwrap();
+        let wide: Vec<u16> = long.as_os_str().encode_wide().chain([0]).collect();
+        let mut buf = vec![0u16; 1024];
+        // SAFETY: NUL-terminated input, buffer of buf.len() u16s.
+        let n = unsafe { GetShortPathNameW(wide.as_ptr(), buf.as_mut_ptr(), buf.len() as u32) };
+        let short = PathBuf::from(std::ffi::OsString::from_wide(&buf[..n as usize]));
+        if n == 0 || !short.to_string_lossy().contains('~') {
+            eprintln!("this volume makes no short names; nothing to test");
+            return;
+        }
+        assert!(under(&short.join("bridge.json"), &long));
+        assert!(under(&long.join("bridge.json"), &short));
+        assert!(!under(&root.path().join("other"), &long));
+    }
 
     fn win(raw: &str) -> Anchor {
         anchor_for(raw, true, Path::new(r"C:\Users\sam\AppData\Local\Temp"))
