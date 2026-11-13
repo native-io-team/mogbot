@@ -5,6 +5,7 @@
  */
 
 import { x25519 } from '@noble/curves/ed25519.js';
+import { isScreenshotsBuild } from './screenshots';
 import {
   HTTP,
   readPairingLink,
@@ -60,11 +61,11 @@ export { PairError, type PairFailure, type PairStep };
 /**
  * A pairing link from a scan, a paste or another app, or null. Tailscale
  * routes only on a `*.ts.net` host; a development build also takes the mock
- * Mac on this machine (`pnpm mock`).
+ * Mac on this machine (`pnpm mock`), as does a screenshots build (lib/screenshots.ts).
  */
 export function readLink(text: string): ParsedLink {
   return readPairingLink(text, {
-    allowHost: __DEV__ ? isDevHost : undefined,
+    allowHost: __DEV__ || isScreenshotsBuild() ? isDevHost : undefined,
   });
 }
 

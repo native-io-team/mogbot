@@ -28,3 +28,7 @@ export function screenshotPairLink(): string | null {
   const link: unknown = Settings.get('screenshotPair');
   return typeof link === 'string' && link.includes('pair?d=') ? link : null;
 }
+
+/** A screenshots build (simulator only, never uploaded): it may pair with the mock Mac. */
+export const isScreenshotsBuild = () =>
+  Constants.expoConfig?.extra?.screenshots === true && Platform.OS === 'ios';

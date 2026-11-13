@@ -53,8 +53,11 @@ shoot_device() {
   xcrun simctl boot "$udid" 2>/dev/null || true
   xcrun simctl bootstatus "$udid" -b >/dev/null
   xcrun simctl keychain "$udid" add-root-cert "$here/dev/.certs/cert.pem" 2>/dev/null || true
+  # A US clock reads 9:41, not 09:41.
+  xcrun simctl spawn "$udid" defaults write -g AppleLocale en_US
+  xcrun simctl spawn "$udid" defaults write -g AppleLanguages -array en
   xcrun simctl status_bar "$udid" override --time 9:41 --dataNetwork wifi --wifiMode active \
-    --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+    --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState discharging --batteryLevel 100
   xcrun simctl uninstall "$udid" "$bundle" 2>/dev/null || true
   xcrun simctl install "$udid" "$app"
   for theme in light dark; do
