@@ -225,7 +225,7 @@ pub fn awaiting_choice_detail(lines: &[String]) -> Option<(String, Vec<String>)>
     let options = numbered.into_iter().map(|(_, o)| o).collect();
     match (question, highlighted) {
         (Some(q), _) => Some(((*q).to_string(), options)),
-        (None, true) => Some(("choose an option".to_string(), options)),
+        (None, true) => Some(("Choose an option".to_string(), options)),
         (None, false) => None,
     }
 }
@@ -266,11 +266,21 @@ fn unnumbered_menu(lines: &[String]) -> Option<(String, Vec<String>)> {
             }
         })
         .collect();
-    let question = lines[lower_bound..first]
+    // Claude Code's Bypass Permissions warning asks nothing with a "?"; its
+    // first line says what it is.
+    let floor = footer.saturating_sub(30);
+    let bypass = lines[floor..first]
         .iter()
-        .rev()
-        .find_map(|l| l.rfind('?').map(|q| l[..=q].trim().to_string()))
-        .unwrap_or_else(|| "choose an option".to_string());
+        .any(|l| l.to_lowercase().contains("bypass permissions mode"));
+    let question = if bypass {
+        "Run Claude Code without asking first?".to_string()
+    } else {
+        lines[lower_bound..first]
+            .iter()
+            .rev()
+            .find_map(|l| l.rfind('?').map(|q| l[..=q].trim().to_string()))
+            .unwrap_or_else(|| "Choose an option".to_string())
+    };
     Some((question, options))
 }
 
@@ -523,6 +533,39 @@ mod tests {
         assert_eq!(
             latest_reply(&done, Some("Create a file named hello.txt"), 10),
             lines(&["⏺ I created hello.txt, which contains \"hi\"."])
+        );
+    }
+
+    #[test]
+    fn the_bypass_warning_offers_both_answers() {
+        // Claude Code's Bypass Permissions warning, as Julian's phone showed it.
+        let screen = lines(&[
+            "────────────────────────────────",
+            "  WARNING: Claude Code running in Bypass Permissions mode",
+            "",
+            "  In Bypass Permissions mode, Claude Code will not ask for your approval before running",
+            "  potentially dangerous commands.",
+            "  This mode should only be used in a sandboxed container/VM that has restricted internet access",
+            "  and can easily be restored if damaged.",
+            "",
+            "  By proceeding, you accept all responsibility for actions taken while running in Bypass",
+            "  Permissions mode.",
+            "",
+            "  https://code.claude.com/docs/en/security",
+            "",
+            "  ❯ No, exit",
+            "    Yes, I accept",
+            "",
+            "  Enter to confirm · Esc to cancel",
+        ]);
+        let (question, options) = awaiting_choice_detail(&screen).unwrap();
+        assert_eq!(question, "Run Claude Code without asking first?");
+        assert_eq!(
+            options,
+            vec![
+                format!("No, exit{HIGHLIGHTED}"),
+                "Yes, I accept".to_string()
+            ]
         );
     }
 

@@ -3260,7 +3260,9 @@ async fn run(
         }
         "sessions.key" => {
             let p: SessionKeyParams = parse(params)?;
-            if crate::remote_access::tools::key_bytes(&p.key).is_none() {
+            if crate::remote_access::tools::key_bytes(&p.key).is_none()
+                && crate::remote_access::tools::option_index(&p.key).is_none()
+            {
                 return Err(WireError::protocol(
                     ProtocolCode::Refused,
                     format!("\"{}\" isn't a key the phone can press.", p.key),

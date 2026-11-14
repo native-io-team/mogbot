@@ -1341,6 +1341,15 @@ impl Backend for DesktopBackend {
         let project = project_of_session(&all_projects().await, session_id).ok_or_else(|| {
             CommandError::expected("That session isn't open in the app any more.")
         })?;
+        if let Some(i) = crate::remote_access::tools::option_index(key) {
+            let id = session_id.to_string();
+            return tokio::task::spawn_blocking(move || {
+                crate::remote_access::tools::pick_option(&id, i)
+            })
+            .await
+            .map_err(|e| CommandError::expected(e.to_string()))?
+            .map_err(CommandError::expected);
+        }
         match press(&project, Some(session_id), key) {
             Ok(_) => Ok(()),
             Err(Undelivered::NotAsking { .. }) => Err(CommandError::expected(

@@ -81,3 +81,5 @@ Good to know:
 - To have an agent work straight in your folder instead, turn on **Work directly in the project**
   in its editor.
 - On the phone you can Keep or Discard. Preview and pull requests are on the computer.
+- When a task in a project asks something (a menu like Claude Code's folder trust or Bypass
+  Permissions warning), the phone offers every answer, not only the one already highlighted.
