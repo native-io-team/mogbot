@@ -347,6 +347,19 @@ export const agentsDesktopScenarios: Scenario[] = [
     },
   },
   {
+    id: 'settings-agents-dictation-words',
+    title: 'Settings — Dictation, your words',
+    looksRightWhen:
+      'A Dictation group on the Agents page: “Your words” with one line, a field (“Add a word, like a name”) and a neutral Add beside it; then one row per word, each with a small ×: Lobeva first with “Learned from your fixes (heard as “Labiva”, “lo bever”)”, then Native and Maverick Rock with no line. The footnote says a word fixed twice is added on its own, kept on this computer, used for the phone too.',
+    command: 'agents.desktopSettings',
+    requires: '[aria-label="Add a word"]',
+    clipSelector: 'section[aria-labelledby="settings-group-dictation-words"]',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+    },
+  },
+  {
     id: 'settings-agents-low-power',
     title: 'Settings — Slow down on battery',
     looksRightWhen:

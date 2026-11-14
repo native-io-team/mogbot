@@ -778,3 +778,19 @@
   background: var(--settings-card-surface);
   border-radius: var(--radius-lg);
 }
+
+/* Dictation → Your words: the field and Add on one line under the row's words. */
+.dictation-words__add {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.dictation-words__add > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.dictation-words__empty {
+  color: var(--text-secondary);
+}

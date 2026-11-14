@@ -22,6 +22,7 @@ pub mod model;
 pub mod pcm;
 pub mod tidy;
 pub mod transcribe;
+pub mod words;
 
 #[cfg(not(target_os = "macos"))]
 pub mod capture;
@@ -58,6 +59,13 @@ pub async fn improve(
         return None;
     }
     let path = model::ready_path()?;
+    // Your own words first (typed in, or learned from your fixes), then the
+    // app's name, then the team's.
+    let yours = tokio::task::spawn_blocking(words::load)
+        .await
+        .unwrap_or_default();
+    let vocabulary = words::with_yours(&yours, vocabulary);
+    let fixes = yours.fix_lines();
     let names = vocabulary.clone();
     let started = std::time::Instant::now();
     let raw =
@@ -70,7 +78,7 @@ pub async fn improve(
     if raw.trim().is_empty() {
         return None;
     }
-    let tidied = tidy::tidy(&raw, &vocabulary, context.as_deref()).await;
+    let tidied = tidy::tidy(&raw, &vocabulary, &fixes, context.as_deref()).await;
     tracing::info!(
         heard_ms,
         total_ms = started.elapsed().as_millis() as u64,

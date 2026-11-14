@@ -362,6 +362,7 @@ export function RoomChat({
   const send = (target?: Addressed) => {
     const text = composerDraft(draftKey).trim();
     if ((!text && staged.length === 0) || members.length === 0 || dictating) return;
+    dictation.noteSent(text);
     const aim = target ?? addressed(text, members, room.lead);
     if (aim.kind === 'ask') {
       setAsking(true);

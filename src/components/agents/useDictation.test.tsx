@@ -6,12 +6,14 @@ let emit: (event: DictationEvent) => void = () => {};
 const start = vi.fn<(vocabulary: string[]) => Promise<DictationStart>>();
 const stop = vi.fn((_session: number) => Promise.resolve());
 const cancel = vi.fn((_session: number) => Promise.resolve());
+const learn = vi.fn((_dictated: string, _sent: string) => Promise.resolve<string[]>([]));
 
 vi.mock('../../lib/dictation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/dictation')>()),
   startDictation: (vocabulary: string[]) => start(vocabulary),
   stopDictation: (s: number) => stop(s),
   cancelDictation: (s: number) => cancel(s),
+  learnFromDictation: (d: string, t: string) => learn(d, t),
   onDictationEvent: (handler: (event: DictationEvent) => void) => {
     emit = handler;
     return Promise.resolve(() => {});
@@ -239,5 +241,34 @@ describe('useDictation', () => {
     });
     expect(hook.result.current.blocked).toBe('microphone');
     expect(hook.result.current.phase).toBe('idle');
+  });
+
+  it('learns from a dictated message only when you changed it before sending', async () => {
+    const { hook } = setup('');
+    await act(async () => {
+      hook.result.current.toggle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    act(() => hook.result.current.toggle());
+    act(() => emit({ kind: 'final', session: 7, text: 'ask mog about' }));
+    act(() => emit({ kind: 'ended', session: 7, cancelled: false }));
+    act(() => hook.result.current.noteSent('ask Mogbot'));
+    expect(learn).toHaveBeenCalledWith('ask mog about', 'ask Mogbot');
+    // Once per dictation: a later typed message teaches nothing.
+    act(() => hook.result.current.noteSent('something else'));
+    expect(learn).toHaveBeenCalledTimes(1);
+  });
+
+  it('sent as dictated teaches nothing', async () => {
+    const { hook } = setup('');
+    await act(async () => {
+      hook.result.current.toggle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    act(() => hook.result.current.toggle());
+    act(() => emit({ kind: 'final', session: 7, text: 'ship it' }));
+    act(() => emit({ kind: 'ended', session: 7, cancelled: false }));
+    act(() => hook.result.current.noteSent('ship it'));
+    expect(learn).not.toHaveBeenCalled();
   });
 });

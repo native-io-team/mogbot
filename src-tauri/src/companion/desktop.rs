@@ -292,6 +292,8 @@ impl Backend for DesktopBackend {
         text: String,
         extras: SendExtras,
     ) -> Result<Value, CommandError> {
+        // Dictated on the phone and fixed before sending: learn the fix.
+        crate::voice::words::phone_sent(agent_id, &text);
         let mentions = (!extras.mentions.is_empty()).then_some(extras.mentions);
         let attachments = (!extras.attachments.is_empty()).then(|| {
             extras
@@ -548,6 +550,7 @@ impl Backend for DesktopBackend {
         text: String,
         send: RoomSend,
     ) -> Result<Value, CommandError> {
+        crate::voice::words::phone_sent(&format!("room:{room_id}"), &text);
         json(
             crate::commands::agent_rooms::agents_room_send(
                 self.app.clone(),
@@ -1468,6 +1471,11 @@ impl Backend for DesktopBackend {
             .map(|list| list.into_iter().map(|p| p.name).collect())
             .unwrap_or_default();
         // As the desk's: the team's names, and the last lines said where it'll go.
+        let chat = match (&agent_id, &room_id) {
+            (_, Some(room)) => Some(format!("room:{room}")),
+            (Some(agent), None) => Some(agent.clone()),
+            (None, None) => None,
+        };
         let (names, context) = tokio::task::spawn_blocking(move || {
             let agents = store::list().unwrap_or_default();
             let name_of = |id: &str| agents.iter().find(|a| a.id == id).map(|a| a.name.clone());
@@ -1501,9 +1509,12 @@ impl Backend for DesktopBackend {
         })
         .await
         .map_err(crate::agents::err_other)?;
-        Ok(Transcribed::from_improved(
-            crate::voice::improve(samples_16k, names, context).await,
-        ))
+        let improved = crate::voice::improve(samples_16k, names, context).await;
+        // What it wrote, so the message the phone sends can teach a fix.
+        if let (Some(chat), Some(i)) = (&chat, &improved) {
+            crate::voice::words::phone_dictated(chat, &i.text);
+        }
+        Ok(Transcribed::from_improved(improved))
     }
 
     fn changed(&self) {

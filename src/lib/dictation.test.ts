@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { blockedCopy, dictationOffError, dictationVocabulary, joinDictation } from './dictation';
+import {
+  blockedCopy,
+  dictationOffError,
+  dictationVocabulary,
+  joinDictation,
+  learnedWordsLine,
+} from './dictation';
+
+describe('learnedWordsLine', () => {
+  it('names each word it added', () => {
+    expect(learnedWordsLine(['Mogbot'])).toBe('Added “Mogbot” to your words');
+    expect(learnedWordsLine(['Mogbot', 'Lobeva'])).toBe(
+      'Added “Mogbot” and “Lobeva” to your words'
+    );
+  });
+});
 
 describe('joinDictation', () => {
   it('appends spoken text after the draft with one space', () => {

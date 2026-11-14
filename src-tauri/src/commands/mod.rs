@@ -27,6 +27,7 @@ pub mod css_rule_mutations;
 pub mod custom_classes;
 pub mod dictation;
 pub mod dictation_mic;
+pub mod dictation_words;
 pub mod edit;
 pub mod edit_css;
 pub mod edit_structure;

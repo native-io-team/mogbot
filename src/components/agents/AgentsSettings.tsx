@@ -8,7 +8,8 @@
  *   quick message, `AgentsDesktopSettings`; keep awake, keep running when
  *   closed, open at login, read back from the thing itself, `useStayOn`;
  *   whether a stopped preview wakes its agent; slowing down on battery,
- *   `power.rs`), disk space (`AgentsDiskSettings`), and importing agents.
+ *   `power.rs`), dictation's words (`AgentDictationWords`), disk space
+ *   (`AgentsDiskSettings`), and importing agents.
  * - **Independence** (`IndependencePage`): the one scale, the four-stop
  *   slider (Careful, Steady, Bold, Unleashed; `AgentIndependenceSettings`),
  *   what agents can reach (`AgentTeamPolicySettings`, `agents/policy.rs`),
@@ -35,6 +36,7 @@ import { UsagePanel } from './AgentsUsageView';
 import { AgentIndependenceSettings } from './AgentIndependenceSettings';
 import { DeclinedAppsSettings } from './DeclinedAppsSettings';
 import { AgentsDiskSettings } from './AgentsDiskSettings';
+import { AgentDictationWords } from './AgentDictationWords';
 import { AgentAdminSettings } from './AgentAdmin';
 import { Row, Toggle } from './AgentSettingsRows';
 import { SectionBoundary } from './AgentsErrorBoundary';
@@ -135,6 +137,10 @@ export function AgentsPage({ onImport }: { onImport: () => void }) {
           </SectionBoundary>
         </div>
       </section>
+
+      <SectionBoundary name="dictation-words">
+        <AgentDictationWords />
+      </SectionBoundary>
 
       <SectionBoundary name="disk">
         <AgentsDiskSettings />

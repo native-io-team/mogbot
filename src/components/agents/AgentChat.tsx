@@ -1635,6 +1635,7 @@ export const AgentChat = memo(function AgentChat({
     const canSend = draft.trim().length > 0 || staged.length > 0 || quotes.length > 0;
     if (!canSend || dictating) return;
     const typed = draft.trim();
+    dictation.noteSent(typed);
     // Edit and resend: back to just before the message, then this goes there.
     if (editing) {
       const target = editing;

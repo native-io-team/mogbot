@@ -157,6 +157,7 @@ export function QuickEntry() {
 
   const send = async () => {
     if (!canSend || !to) return;
+    dictation.noteSent(recipient.text);
     setSending(true);
     setProblem(null);
     try {

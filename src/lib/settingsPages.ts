@@ -49,7 +49,7 @@ export const SETTINGS_PAGES: readonly SettingsPageInfo[] = [
   {
     id: 'agents',
     title: 'Agents',
-    lead: `What new agents run on, ${THIS_COMPUTER}, disk space, and bringing agents in.`,
+    lead: `What new agents run on, ${THIS_COMPUTER}, dictation, disk space, and bringing agents in.`,
     keywords: [
       'engine',
       'model',
@@ -67,6 +67,9 @@ export const SETTINGS_PAGES: readonly SettingsPageInfo[] = [
       'fix stopped previews',
       'slow down on battery',
       'disk space',
+      'dictation',
+      'your words',
+      'vocabulary',
       'import',
     ],
   },

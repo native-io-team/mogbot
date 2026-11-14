@@ -1160,6 +1160,10 @@ pub fn run() {
             commands::dictation::cancel_dictation,
             commands::dictation::dictation_model_status,
             commands::dictation::dictation_model_download,
+            commands::dictation_words::dictation_words,
+            commands::dictation_words::dictation_word_add,
+            commands::dictation_words::dictation_word_remove,
+            commands::dictation_words::dictation_learn,
             // Code Browser
             commands::code::list_project_files,
             commands::code::read_project_file,

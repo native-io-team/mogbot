@@ -98,6 +98,12 @@ with no tools) fixes only misheard names and punctuation, using the conversation
 says **Tidying…** for a few seconds, then shows the better words; **Undo** puts back what it first
 heard. If Claude Code isn't set up, you get Whisper's words alone.
 
+**Your words.** Settings → Agents → Dictation keeps the names and terms dictation should always get
+right. Add one there, or just fix it: when you change the same dictated word twice before sending
+("mog about" to "Mogbot"), it's added on its own, with Undo. Whisper and the names pass get your
+words and the fixes you've made, on the desk and for the phone's dictation. Remove a word and it isn't
+learned again unless you add it back.
+
 The speech model is a one-time 574 MB download, fetched the first time you dictate. On Windows and
 Linux dictation waits for it ("Getting dictation ready"); on a Mac you get the live words meanwhile.
 Your recording never leaves your computer. Only the written words go to the names pass, on your own

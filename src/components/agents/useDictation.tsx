@@ -29,7 +29,10 @@ import {
   cancelDictation,
   dictationOffError,
   joinDictation,
+  learnedWordsLine,
+  learnFromDictation,
   onDictationEvent,
+  removeDictationWord,
   onDictationModel,
   startDictation,
   stopDictation,
@@ -87,6 +90,8 @@ export function useDictation({
   /** The draft the live words last left, so better words replace only those. */
   const shownRef = useRef('');
   const [undo, setUndo] = useState<TidyUndo | null>(null);
+  /** The draft as the last dictation left it, until it's sent (to learn your fixes). */
+  const dictatedRef = useRef<string | null>(null);
   const [preparing, setPreparing] = useState<number | null>(null);
 
   const setPhase = useCallback((next: DictationPhase) => {
@@ -145,6 +150,8 @@ export function useDictation({
           if (event.cancelled && phaseRef.current !== 'finishing') {
             setDraft(originalRef.current);
             sendAfterRef.current = null;
+          } else {
+            dictatedRef.current = getDraft();
           }
           sessionRef.current = null;
           holdingRef.current = false;
@@ -203,9 +210,37 @@ export function useDictation({
   }, [blocked]);
 
   const undoTidy = useCallback(() => {
-    if (undo && getDraft() === undo.after) setDraft(undo.before);
+    if (undo && getDraft() === undo.after) {
+      setDraft(undo.before);
+      dictatedRef.current = undo.before;
+    }
     setUndo(null);
   }, [undo, getDraft, setDraft]);
+
+  /**
+   * The message is going: if you fixed a dictated word in it first, the
+   * computer notes the fix, and the second time a word becomes yours, said
+   * in a toast with Undo.
+   */
+  const noteSent = useCallback(
+    (sent: string) => {
+      const dictated = dictatedRef.current;
+      dictatedRef.current = null;
+      if (!dictated || !sent.trim() || dictated.trim() === sent.trim()) return;
+      void learnFromDictation(dictated, sent)
+        .then((learned) => {
+          if (!learned.length) return;
+          showToast(learnedWordsLine(learned), 'info', {
+            label: 'Undo',
+            onClick: () => {
+              for (const word of learned) void removeDictationWord(word).catch(() => {});
+            },
+          });
+        })
+        .catch(() => {});
+    },
+    [showToast]
+  );
 
   const stop = useCallback(() => {
     holdingRef.current = false;
@@ -367,5 +402,7 @@ export function useDictation({
     onComposerKeyDown,
     /** Offered for a few seconds after better words replaced the live ones. */
     undo: undo ? undoTidy : null,
+    /** Call with a message as it's sent: learns the fixes you made to dictated words. */
+    noteSent,
   };
 }

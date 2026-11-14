@@ -168,3 +168,41 @@ export function joinDictation(base: string, spoken: string): string {
   if (!base) return said;
   return /\s$/.test(base) ? base + said : `${base} ${said}`;
 }
+
+/** Your words (Settings → Agents → Dictation), and the fixes that taught some. */
+export interface DictationWords {
+  words: { word: string; learned: boolean; added: number }[];
+  fixes: { heard: string; fixed: string; count: number; last: number }[];
+  removed: string[];
+}
+
+export function dictationWords(): Promise<DictationWords> {
+  return invoke<DictationWords>('dictation_words');
+}
+
+export function addDictationWord(word: string): Promise<DictationWords> {
+  return invoke<DictationWords>('dictation_word_add', { word });
+}
+
+export function removeDictationWord(word: string): Promise<DictationWords> {
+  return invoke<DictationWords>('dictation_word_remove', { word });
+}
+
+/**
+ * A dictated message as it was sent: the computer notes each word you fixed
+ * and answers the words that became yours because of it (the same fix made
+ * a second time).
+ */
+export function learnFromDictation(dictated: string, sent: string): Promise<string[]> {
+  return invoke<string[]>('dictation_learn', { dictated, sent });
+}
+
+/** The line shown when a fix taught a word. */
+export function learnedWordsLine(words: string[]): string {
+  const quoted = words.map((w) => `“${w}”`);
+  const list =
+    quoted.length <= 1
+      ? quoted.join('')
+      : `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
+  return `Added ${list} to your words`;
+}
