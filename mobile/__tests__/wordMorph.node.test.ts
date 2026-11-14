@@ -5,7 +5,9 @@ import {
   morphParts,
   settleOpacity,
   shimmerOpacity,
+  stagger,
   swapLook,
+  WORD_GAP_MS,
   tokens,
 } from '../src/lib/wordMorph';
 
@@ -53,5 +55,23 @@ describe('timing', () => {
     const frame = [0, 1, 2, 3, 4].map((i) => shimmerOpacity(i, 5, 400));
     expect(Math.max(...frame)).toBeGreaterThan(0.9);
     expect(Math.min(...frame)).toBeCloseTo(0.62);
+  });
+});
+
+describe('stagger', () => {
+  it('lets words handed over together out one after another', () => {
+    const born = stagger([], 3, 1_000);
+    expect(born).toEqual([1_000, 1_000 + WORD_GAP_MS, 1_000 + 2 * WORD_GAP_MS]);
+    // Two more while the last is still to come: they queue behind it.
+    const more = stagger(born, 5, 1_010);
+    expect(more.slice(0, 3)).toEqual(born);
+    expect(more[3]).toBe(born[2] + WORD_GAP_MS);
+  });
+
+  it('gets a big batch out quickly and keeps times when words are taken back', () => {
+    const born = stagger([], 30, 0);
+    expect(born[29]).toBeLessThan(600);
+    expect(stagger(born, 10, 5_000)).toEqual(born.slice(0, 10));
+    expect(stagger([5, 6], 3, 2_000)).toEqual([5, 6, 2_000]);
   });
 });

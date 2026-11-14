@@ -19,6 +19,7 @@ import {
   morphParts,
   settleOpacity,
   shimmerOpacity,
+  stagger,
   swapLook,
   tokens,
 } from '../lib/wordMorph';
@@ -36,12 +37,6 @@ interface Clock {
   now: number;
   /** When each live word arrived, by its place in the text. */
   born: number[];
-}
-
-function births(born: number[], count: number, at: number): number[] {
-  if (born.length === count) return born;
-  if (born.length > count) return born.slice(0, count);
-  return [...born, ...new Array<number>(count - born.length).fill(at)];
 }
 
 /**
@@ -64,7 +59,7 @@ function useWordClock(
       if (t - last >= FRAME_MS) {
         last = t;
         const at = Date.now();
-        born.current = births(born.current, count, at);
+        born.current = stagger(born.current, count, at);
         setClock({ now: at, born: born.current });
         const youngest = born.current.length ? born.current[born.current.length - 1] : 0;
         const moving =
@@ -92,11 +87,13 @@ export function LiveWords({
 }) {
   const colors = useColors();
   const still = useReducedMotion();
-  const words = tokens(settled);
+  const said = tokens(settled);
+  const words = [...said, ...tokens(deciding)];
   const { now, born } = useWordClock(words.length, !!tidying, morph, still);
-  // A word the clock hasn't seen yet has only just arrived.
+  // A word the clock hasn't timed yet has only just arrived.
   const age = (i: number) => (i < born.length ? now - born[i] : 0);
-  const settling = !still && !tidying && !morph && words.some((_, i) => age(i) < SETTLE_MS);
+  const listening = !still && !tidying && !morph;
+  const settling = listening && words.some((_, i) => age(i) < SETTLE_MS);
   const morphing = !still && !!morph && now - morph.at < MORPH_MS;
   const ink = (o: number) => alpha(colors.textBody, o);
 
@@ -124,11 +121,12 @@ export function LiveWords({
   }
   if (morph) return <Text>{morph.to}</Text>;
   if (tidying && !still) {
-    const t = now - (born[born.length - 1] ?? now);
+    const n = said.length;
+    const t = now - (born[n - 1] ?? now);
     return (
       <>
-        {words.map((w, i) => (
-          <Text key={i} style={{ color: ink(shimmerOpacity(i, words.length, t)) }}>
+        {said.map((w, i) => (
+          <Text key={i} style={{ color: ink(shimmerOpacity(i, n, t)) }}>
             {w}
           </Text>
         ))}
@@ -144,19 +142,34 @@ export function LiveWords({
       </>
     );
   }
+  // Words come out one after another: a word whose turn hasn't come stays
+  // out, and so does everything after it.
+  const shown = words.findIndex((_, i) => age(i) < 0);
+  const upTo = shown === -1 ? words.length : shown;
   return (
     <>
-      {words.map((w, i) => {
+      {words.slice(0, upTo).map((w, i) => {
         const a = age(i);
-        return a >= SETTLE_MS ? (
-          <Text key={i}>{w}</Text>
-        ) : (
-          <Text key={i} style={{ color: ink(settleOpacity(a)) }}>
+        const later = i >= said.length;
+        if (a >= SETTLE_MS) {
+          return later ? (
+            <Text key={i} style={{ color: colors.textSecondary }}>
+              {w}
+            </Text>
+          ) : (
+            <Text key={i}>{w}</Text>
+          );
+        }
+        const o = settleOpacity(a);
+        return (
+          <Text
+            key={i}
+            style={{ color: later ? alpha(colors.textSecondary, o) : ink(o) }}
+          >
             {w}
           </Text>
         );
       })}
-      <Text style={{ color: colors.textSecondary }}>{deciding}</Text>
     </>
   );
 }

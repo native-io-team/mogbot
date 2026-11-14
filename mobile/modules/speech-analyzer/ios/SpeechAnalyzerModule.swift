@@ -147,11 +147,13 @@ final class AnalyzerSession {
 
   static func makeTranscriber(_ locale: Locale) -> SpeechTranscriber {
     // Volatile results stream the words as they're decided; the finals are
-    // the model's best, with its own punctuation and capitals.
+    // the model's best, with its own punctuation and capitals. Fast results
+    // send them as soon as they're heard rather than in chunks a few seconds
+    // apart (the computer's pass gets the words right after).
     SpeechTranscriber(
       locale: locale,
       transcriptionOptions: [],
-      reportingOptions: [.volatileResults],
+      reportingOptions: [.volatileResults, .fastResults],
       attributeOptions: []
     )
   }

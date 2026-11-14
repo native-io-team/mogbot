@@ -1,13 +1,92 @@
-//! Whisper (whisper.cpp through whisper-rs). The model is loaded for each
-//! dictation and let go after: kept in a static, ggml's Metal backend aborts
-//! the process as it exits (its device is torn down under a live context), so
-//! quitting the app would crash. One at a time.
+//! Whisper (whisper.cpp through whisper-rs). Loading the model takes seconds
+//! (10.8 s cold on Julian's Mac, most of a dictation's wait), so it stays
+//! loaded between dictations and is let go after `KEEP_FOR` idle, and always
+//! before the app exits (`release`): ggml's Metal backend aborts the process
+//! if a live context is still around as it exits. `warm` loads it as soon as
+//! someone starts talking, so the load overlaps the speaking. One at a time.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
-static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+/// The loaded model, which file it is, and when it was last used.
+struct Loaded {
+    path: PathBuf,
+    ctx: WhisperContext,
+    used: Instant,
+}
+
+static MODEL: Mutex<Option<Loaded>> = Mutex::new(None);
+
+/// How long the model stays loaded after the last dictation (about 600 MB).
+const KEEP_FOR: Duration = Duration::from_secs(10 * 60);
+
+fn held() -> std::sync::MutexGuard<'static, Option<Loaded>> {
+    MODEL.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The model in `slot`, loading it if it isn't already.
+fn ensure<'a>(slot: &'a mut Option<Loaded>, model: &Path) -> Result<&'a mut Loaded, String> {
+    if slot.as_ref().is_some_and(|l| l.path != model) {
+        *slot = None;
+    }
+    if slot.is_none() {
+        let started = Instant::now();
+        let ctx = WhisperContext::new_with_params(model, WhisperContextParameters::default())
+            .map_err(|e| format!("Whisper couldn't load its model: {e}"))?;
+        tracing::info!(
+            ms = started.elapsed().as_millis() as u64,
+            "[Dictation] Whisper loaded"
+        );
+        *slot = Some(Loaded {
+            path: model.to_path_buf(),
+            ctx,
+            used: Instant::now(),
+        });
+        let _ = std::thread::Builder::new()
+            .name("whisper-idle".into())
+            .spawn(let_go_when_idle);
+    }
+    let loaded = slot.as_mut().ok_or("Whisper isn't loaded.")?;
+    loaded.used = Instant::now();
+    Ok(loaded)
+}
+
+/// Lets the model go once nobody has dictated for `KEEP_FOR`.
+fn let_go_when_idle() {
+    loop {
+        std::thread::sleep(Duration::from_secs(30));
+        let mut slot = held();
+        match slot.as_ref() {
+            None => return,
+            Some(l) if l.used.elapsed() >= KEEP_FOR => {
+                *slot = None;
+                tracing::info!("[Dictation] Whisper let go (idle)");
+                return;
+            }
+            Some(_) => {}
+        }
+    }
+}
+
+/// Load the model now, off the caller's thread, so it's ready by the time
+/// the words are. Does nothing when it's loaded or missing.
+pub fn warm(model: PathBuf) {
+    let _ = std::thread::Builder::new()
+        .name("whisper-warm".into())
+        .spawn(move || {
+            let mut slot = held();
+            if let Err(error) = ensure(&mut slot, &model) {
+                tracing::warn!(%error, "[Dictation] Whisper warm-up failed");
+            }
+        });
+}
+
+/// Let the model go: before the app exits, without fail.
+pub fn release() {
+    *held() = None;
+}
 
 /// The names Whisper is primed with, as one short sentence (its prompt holds
 /// about 220 tokens; past that it's ignored).
@@ -31,15 +110,9 @@ pub fn hint(names: &[String]) -> String {
 }
 
 pub fn transcribe(model: &Path, samples_16k: &[f32], names: &[String]) -> Result<String, String> {
-    let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
-    let started = std::time::Instant::now();
-    let ctx = WhisperContext::new_with_params(model, WhisperContextParameters::default())
-        .map_err(|e| format!("Whisper couldn't load its model: {e}"))?;
-    tracing::info!(
-        ms = started.elapsed().as_millis() as u64,
-        "[Dictation] Whisper loaded"
-    );
-    let mut state = ctx.create_state().map_err(|e| e.to_string())?;
+    let mut slot = held();
+    let loaded = ensure(&mut slot, model)?;
+    let mut state = loaded.ctx.create_state().map_err(|e| e.to_string())?;
 
     let mut params = FullParams::new(SamplingStrategy::BeamSearch {
         beam_size: 5,

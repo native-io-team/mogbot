@@ -261,6 +261,8 @@ pub async fn start_dictation(
 ) -> Result<DictationStart, CommandError> {
     // The better words need the model: fetched once, in the background.
     crate::voice::model::ensure(&app);
+    // Load Whisper while you talk, so the better words come sooner.
+    crate::voice::warm_up();
     // Your words lead Apple's live words too (the better pass adds them itself).
     let yours = crate::voice::words::load();
     let names = clean_contextual_strings(crate::voice::words::with_yours(

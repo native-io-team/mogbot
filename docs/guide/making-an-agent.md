@@ -96,7 +96,7 @@ When you stop, your computer writes what you said out again with Whisper, a spee
 on your computer, primed with your agents' and projects' names. Then a quick pass by Claude (Haiku,
 with no tools) fixes only misheard names and punctuation, using the conversation you're in. The box
 says **Tidying…** for a few seconds, then shows the better words; **Undo** puts back what it first
-heard. On the phone your words stay in the box while that happens, with a soft light passing over
+heard. On the phone your words come out one after another as you speak, stay in the box while that happens, with a soft light passing over
 them, then only the words that changed swap, lit for a moment. If Claude Code isn't set up, you get
 Whisper's words alone.
 
@@ -106,7 +106,7 @@ right. Add one there, or just fix it: when you change the same dictated word twi
 words and the fixes you've made, on the desk and for the phone's dictation. Remove a word and it isn't
 learned again unless you add it back.
 
-The speech model is a one-time 574 MB download, fetched the first time you dictate. On Windows and
+The speech model is a one-time 574 MB download, fetched the first time you dictate. It loads when you start talking (or open a chat on your phone) and stays loaded for 10 minutes after your last dictation, so the better words come quickly. On Windows and
 Linux dictation waits for it ("Getting dictation ready"); on a Mac you get the live words meanwhile.
 Your recording never leaves your computer. Only the written words go to the names pass, on your own
 Claude account.

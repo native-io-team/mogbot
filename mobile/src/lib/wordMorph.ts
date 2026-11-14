@@ -1,7 +1,9 @@
 /**
  * Live words to better words, smoothly (`components/LiveWords.tsx`).
  *
- * - **Listening**: each new word settles in (a quick fade) instead of popping.
+ * - **Listening**: words come out one after another, the way you said them,
+ *   even when the recognizer hands over a few at once; each settles in with
+ *   a quick fade instead of popping.
  * - **Tidying**: the live words stay; a soft light passes over them, left to
  *   right, until the computer answers. Never a blank.
  * - **The better words arrive**: only the words that changed swap. The old
@@ -24,6 +26,26 @@ export const MORPH_GLOW_MS = 1_300;
 export const MORPH_MS = MORPH_OUT_MS + MORPH_IN_MS + MORPH_GLOW_MS;
 /** A new live word fades in over this long. */
 export const SETTLE_MS = 220;
+/** Words handed over together come out this far apart… */
+export const WORD_GAP_MS = 70;
+/** …or closer, so a big batch is all out within this long. */
+export const CATCH_UP_MS = 600;
+
+/**
+ * When each of `count` words shows: the ones already timed keep their time,
+ * new ones come out one after another from `at` (or after the last one still
+ * to come). Fewer words than before (the recognizer changed its mind) keeps
+ * the first `count`.
+ */
+export function stagger(born: number[], count: number, at: number): number[] {
+  if (born.length >= count) return born.length === count ? born : born.slice(0, count);
+  const added = count - born.length;
+  const gap = Math.min(WORD_GAP_MS, CATCH_UP_MS / added);
+  const lastAt = born.length ? born[born.length - 1] : null;
+  const start = lastAt === null ? at : Math.max(at, lastAt + gap);
+  return [...born, ...Array.from({ length: added }, (_, k) => start + gap * k)];
+}
+
 /** One pass of the light over the words while tidying. */
 export const SHIMMER_MS = 1_300;
 

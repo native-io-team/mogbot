@@ -50,6 +50,14 @@ pub struct Improved {
 /// Write out 16 kHz mono audio again and tidy it. `None` when the model isn't
 /// here yet, there was too little sound, or Whisper failed: the caller keeps
 /// what it had.
+/// Load Whisper now, in the background, when the model is on this computer:
+/// someone has started talking, or opened a chat on the phone.
+pub fn warm_up() {
+    if let Some(path) = model::ready_path() {
+        transcribe::warm(path);
+    }
+}
+
 pub async fn improve(
     samples_16k: Vec<f32>,
     vocabulary: Vec<String>,
