@@ -1594,6 +1594,24 @@ const LIVE = [
       await sleep(600);
     },
   },
+  // The better words arriving: only the changed words swap, lit for a moment.
+  {
+    name: 'dictation-swapping',
+    route: '/chat/fin',
+    ready: 'Finance',
+    act: async (page) => {
+      await page.clickLabel('Dictate');
+      await sleep(5500);
+      await page.clickLabel('Stop dictating');
+      await sleep(1500);
+    },
+    check:
+      'Mid-swap: the words where they were, the changed ones (the comma gone, “send it to me first?”) faintly highlighted; the rest unchanged; no caret',
+    after: async (page) => {
+      await page.clickLabel('Send').catch(() => {});
+      await sleep(800);
+    },
+  },
   {
     name: 'dictation-tidied',
     route: '/chat/fin',

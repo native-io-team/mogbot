@@ -112,6 +112,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { MORPH_MS } from '../lib/wordMorph';
+import { LiveWords, type WordMorph } from './LiveWords';
 import { Waveform } from './Waveform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccent } from '../lib/accent';
@@ -149,14 +151,7 @@ import { haptic } from '../lib/haptics';
 import { useRouter } from 'expo-router';
 import { chipLabel } from '../lib/agentControls';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
-import {
-  describeError,
-  send,
-  sendEdited,
-  stop,
-  tidyDictation,
-  upload,
-} from '../lib/session';
+import { describeError, send, sendEdited, stop, tidyDictation, upload } from '../lib/session';
 import { getApp, useApp, useServed } from '../lib/store';
 import {
   keySize,
@@ -293,6 +288,26 @@ export function Composer({
   }, [tidying]);
   /** The field is the dictation card: listening, or tidying what it heard. */
   const listening = dictation.phase !== 'idle' || (tidying && !editingTidy);
+  // The better words arriving: the field shows the swap for a moment (only
+  // the changed words move), then it's the editable text again.
+  const [morph, setMorph] = useState<WordMorph | null>(null);
+  const wasTidying = useRef(false);
+  const tidiedTo = dictation.undo?.after;
+  useEffect(() => {
+    const was = wasTidying.current;
+    wasTidying.current = tidying;
+    const undo = dictation.undo;
+    if (!was || tidying || !undo || editingTidy || getDraft() !== undo.after) return;
+    const swap = { from: undo.before, to: undo.after, at: Date.now() };
+    const show = setTimeout(() => setMorph(swap), 0);
+    const done = setTimeout(() => setMorph((m) => (m === swap ? null : m)), MORPH_MS);
+    return () => {
+      clearTimeout(show);
+      clearTimeout(done);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on the tidy ending only
+  }, [tidying, tidiedTo]);
+  const morphing = !!morph && !listening && draft.text === morph.to;
   /** A voice message: the mic is held (or was, and its last words are landing). */
   const held = listening && dictation.state.held;
   const problem = dictation.problem ? problemCopy(dictation.problem) : null;
@@ -534,18 +549,12 @@ export function Composer({
     // closes as moved on, rather than waiting behind a question nobody must answer.
     const answersCard = mode === 'queue' && waitingOnYou && !driven;
     // Offline (or unheard), the interrupt waits in the outbox with the message.
-    send(
-      agent.id,
-      body,
-      now || answersCard,
-      undefined,
-      files,
-      mentions,
-      draft.revising
-    ).catch((error: unknown) => {
-      haptic.error();
-      onError(describeError(error));
-    });
+    send(agent.id, body, now || answersCard, undefined, files, mentions, draft.revising).catch(
+      (error: unknown) => {
+        haptic.error();
+        onError(describeError(error));
+      }
+    );
   };
 
   /**
@@ -622,18 +631,18 @@ export function Composer({
         : undo
           ? 'Tidied the names and words'
           : micHint
-          ? micHint
-          : restored
-            ? 'Restored your draft'
-            : !connected
-              ? hasContent
-                ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
-                : 'What you type stays here'
-              : preparing
-                ? 'Adding your files…'
-                : uploading
-                  ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-                  : queued;
+            ? micHint
+            : restored
+              ? 'Restored your draft'
+              : !connected
+                ? hasContent
+                  ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
+                  : 'What you type stays here'
+                : preparing
+                  ? 'Adding your files…'
+                  : uploading
+                    ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
+                    : queued;
 
   return (
     <View
@@ -801,7 +810,17 @@ export function Composer({
           }
           label={`Message ${agent.name}`}
           inputRef={input}
-          dictation={listening ? { ...dictation.display, onPress: editDictation } : undefined}
+          dictation={
+            listening
+              ? {
+                  ...dictation.display,
+                  onPress: editDictation,
+                  tidying: tidying && dictation.phase === 'idle',
+                }
+              : morphing
+                ? { settled: '', deciding: '', morph, onPress: () => setMorph(null) }
+                : undefined
+          }
           // Held, the field keeps the shape it had, so the mic stays under the finger.
           hold={held}
           // The files ride at the card's top, as Claude's own, each with its ×.
@@ -1107,7 +1126,15 @@ export function ComposerField({
    * input's exact type and padding so the field keeps its height. What's
    * still being decided is lighter. A tap on them is `onPress`.
    */
-  dictation?: { settled: string; deciding: string; onPress: () => void };
+  dictation?: {
+    settled: string;
+    deciding: string;
+    onPress: () => void;
+    /** The computer is writing them out again: a soft light passes over them. */
+    tidying?: boolean;
+    /** The better words arriving: only the changed ones swap (`LiveWords`). */
+    morph?: WordMorph | null;
+  };
   /**
    * The mic is held (a voice message): the field keeps the shape it had when
    * the hold began, pill or card, so the button under the finger isn't moved
@@ -1177,7 +1204,7 @@ export function ComposerField({
   // from code (a send). Empty, it's held to one line (`emptyHeight`) rather
   // than remounted: a remount took the keyboard away and gave it back on
   // every send, and the composer and the chat dipped and rose with it.
-  const empty = dictation ? !dictation.settled && !dictation.deciding : false;
+  const empty = dictation ? !dictation.settled && !dictation.deciding && !dictation.morph : false;
   // The pill's room for the words: the field less the + and the buttons beside them.
   const [width, setWidth] = useState(0);
   const [oneLine, setOneLine] = useState(0);
@@ -1266,9 +1293,13 @@ export function ComposerField({
                     </>
                   ) : (
                     <>
-                      {dictation.settled}
-                      <Text style={{ color: colors.textSecondary }}>{dictation.deciding}</Text>
-                      <Caret />
+                      <LiveWords
+                        settled={dictation.settled}
+                        deciding={dictation.deciding}
+                        tidying={dictation.tidying}
+                        morph={dictation.morph}
+                      />
+                      {!dictation.tidying && !dictation.morph && <Caret />}
                     </>
                   )}
                 </Text>

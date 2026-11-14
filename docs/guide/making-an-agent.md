@@ -96,7 +96,9 @@ When you stop, your computer writes what you said out again with Whisper, a spee
 on your computer, primed with your agents' and projects' names. Then a quick pass by Claude (Haiku,
 with no tools) fixes only misheard names and punctuation, using the conversation you're in. The box
 says **Tidying…** for a few seconds, then shows the better words; **Undo** puts back what it first
-heard. If Claude Code isn't set up, you get Whisper's words alone.
+heard. On the phone your words stay in the box while that happens, with a soft light passing over
+them, then only the words that changed swap, lit for a moment. If Claude Code isn't set up, you get
+Whisper's words alone.
 
 **Your words.** Settings → Agents → Dictation keeps the names and terms dictation should always get
 right. Add one there, or just fix it: when you change the same dictated word twice before sending
