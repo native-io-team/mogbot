@@ -7185,7 +7185,11 @@ point-in-time messages and result cards.
   "Updated 3 min ago by Log the day's card spend", unpin) over the page's
   blocks, which scroll inside
   a band capped at the smaller of 40% of the window and 320px, so the chat
-  keeps the window. It is furniture, not a reply: the band is a tint off the
+  keeps the window. The divider under it (a hairline with a grip, the shared
+  `PanelResizeHandle`) drags that height between 80px and what leaves the
+  chat 280px (`PAGE_MIN_HEIGHT`, `PAGE_CHAT_ROOM`); arrow keys move it too, a
+  double-click puts the default cap back, and the height is remembered per
+  conversation on this Mac. It is furniture, not a reply: the band is a tint off the
   chat and its tiles lie flat (a hairline, no lift), so a metric on the page
   never looks like one in a reply (`agents-page.css`). Pressing the "Updated"
   line opens a popover listing every kept version, newest first, with what

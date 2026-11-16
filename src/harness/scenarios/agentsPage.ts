@@ -185,11 +185,27 @@ export const agentsPageScenarios: Scenario[] = [
     id: 'agents-page',
     title: 'Agents — a living page pinned above the conversation',
     looksRightWhen:
-      'Under the chat header, in the conversation’s column: a quiet bar with a down chevron and “November budget”, then “Updated 3 min ago by Log the day’s card spend” muted on the right (no version number) and a pin button. The whole band is a tint off the chat (darker in light, lighter in dark), so it reads as the page, not a reply. Under the bar: three flat metric tiles ($1,150 spent, $850 left, 20 days; a faint hairline, no lift), an amber “Heads up” note about eating out, then one card holding “Where it went” (a table, dollar columns right-aligned) and “Bills this month”, scrolling inside the band, which is no taller than 320px. A hairline separates the page from the chat, whose messages carry on below. Tokens only; readable in both themes.',
+      'Under the chat header, in the conversation’s column: a quiet bar with a down chevron and “November budget”, then “Updated 3 min ago by Log the day’s card spend” muted on the right (no version number) and a pin button. The whole band is a tint off the chat (darker in light, lighter in dark), so it reads as the page, not a reply. Under the bar: three flat metric tiles ($1,150 spent, $850 left, 20 days; a faint hairline, no lift), an amber “Heads up” note about eating out, then one card holding “Where it went” (a table, dollar columns right-aligned) and “Bills this month”, scrolling inside the band, which is no taller than 320px. A full-width hairline with a short rounded grip in the middle separates the page from the chat (drag it to resize), whose messages carry on below. Tokens only; readable in both themes.',
     requires: '.agent-page .agent-block-metrics',
     openSelector: AGENTS_TAB,
     steps: [open],
     viewport: VIEW,
+    commands: commands(true),
+  },
+  {
+    id: 'agents-page-resized',
+    title: 'Agents — a page dragged taller with its divider',
+    looksRightWhen:
+      'The page as in agents-page, but its band is taller (about 520px of blocks), so “Where it went” and “Bills this month” show in full with less to scroll. Its lower edge is a hairline the full width of the column with a short rounded grip in the middle, the one thing to drag; the chat carries on below it with room for its messages and the composer. Hovering the hairline shows the up-down resize cursor and darkens the grip.',
+    requires: '.agent-page__body[data-sized]',
+    openSelector: AGENTS_TAB,
+    steps: [open],
+    viewport: VIEW,
+    // Open even in a short window (which starts a page folded), so the divider shows.
+    storage: {
+      'agents.page.height:finance#first': '520',
+      'agents.page.folded:finance#first': '0',
+    },
     commands: commands(true),
   },
   {

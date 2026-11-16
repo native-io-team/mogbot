@@ -432,6 +432,9 @@
   --editor-panel-spacing-padding-bottom-hover: var(--surface-selected-strong);
   /* A band that stays put while its own container scrolls under it. */
   --z-sticky-band: 1;
+  /* The living page's divider (agents-page.css): over the chat below it, whose
+     edge-fade mask puts it in a layer that would cover the divider's lower half. */
+  --z-agent-page-divider: 1;
   --z-editor-spacing-band: 1;
   --z-editor-spacing-surface: 2;
   --z-editor-spacing-field: 3;

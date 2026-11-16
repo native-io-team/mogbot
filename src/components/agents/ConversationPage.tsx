@@ -17,7 +17,10 @@
  *
  * It is furniture, not a reply: a recessed band whose tiles are flat
  * (agents-page.css), and its body scrolls inside a cap of the smaller of
- * 40% of the window and 320px.
+ * 40% of the window and 320px. A divider under it (a grip on a hairline)
+ * drags that height between `PAGE_MIN_HEIGHT` and what leaves the chat
+ * `PAGE_CHAT_ROOM`; arrow keys move it too, a double-click puts the cap
+ * back, and the height is remembered per conversation on this Mac.
  *
  * @module components/agents/ConversationPage
  */
@@ -27,6 +30,7 @@ import { Dropdown } from '../primitives/Dropdown';
 import { ChevronIcon, HistoryIcon, PinIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
+import { PanelResizeHandle } from '../primitives/PanelResizeHandle';
 import { TextButton } from '../primitives/TextButton';
 import type { Agent } from '../../lib/agents';
 import {
@@ -51,6 +55,12 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 
 const FOLD_KEY = 'agents.page.folded:';
+const HEIGHT_KEY = 'agents.page.height:';
+
+/** The page is never dragged shorter than this, in px. */
+export const PAGE_MIN_HEIGHT = 80;
+/** What the chat keeps under a dragged page, in px: some history and the composer. */
+export const PAGE_CHAT_ROOM = 280;
 
 /** A window this short starts a page folded until the user opens it. */
 export const SHORT_WINDOW = '(max-height: 820px)';
@@ -81,6 +91,79 @@ function writeFolded(id: string, folded: boolean) {
   } catch {
     // A private window: folding just isn't remembered.
   }
+}
+
+/** The height the user dragged this page to, or null for the default cap. */
+function readHeight(id: string): number | null {
+  try {
+    const n = Number(window.localStorage.getItem(HEIGHT_KEY + id));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeHeight(id: string, height: number | null) {
+  try {
+    if (height === null) window.localStorage.removeItem(HEIGHT_KEY + id);
+    else window.localStorage.setItem(HEIGHT_KEY + id, String(Math.round(height)));
+  } catch {
+    // A private window: the height just isn't remembered.
+  }
+}
+
+/** The tallest a page starting at `top` may be, so the chat keeps `PAGE_CHAT_ROOM`. */
+function tallest(top: number): number {
+  return Math.max(PAGE_MIN_HEIGHT, Math.round(window.innerHeight - top - PAGE_CHAT_ROOM));
+}
+
+/**
+ * The page's height and the divider's moves. Only the handlers touch the
+ * element; what the divider reports (its height now, the tallest it may go)
+ * is measured by an observer into state.
+ */
+function usePageHeight(id: string) {
+  const [height, setHeight] = useState<number | null>(() => readHeight(id));
+  const [body, setBody] = useState<HTMLDivElement | null>(null);
+  const [bounds, setBounds] = useState({ now: 0, max: PAGE_MIN_HEIGHT });
+
+  useEffect(() => {
+    if (!body) return;
+    const measure = () =>
+      setBounds({ now: body.offsetHeight, max: tallest(body.getBoundingClientRect().top) });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(body);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [body]);
+
+  const set = useCallback(
+    (h: number) => {
+      if (!body) return;
+      const top = body.getBoundingClientRect().top;
+      const next = Math.round(Math.min(Math.max(h, PAGE_MIN_HEIGHT), tallest(top)));
+      setHeight(next);
+      writeHeight(id, next);
+    },
+    [body, id]
+  );
+  const resize = useCallback(
+    (clientY: number) => body && set(clientY - body.getBoundingClientRect().top),
+    [body, set]
+  );
+  const resizeBy = useCallback(
+    (delta: number) => body && set((height ?? body.offsetHeight) + delta),
+    [body, height, set]
+  );
+  const reset = useCallback(() => {
+    setHeight(null);
+    writeHeight(id, null);
+  }, [id]);
+
+  return { height, setBody, now: height ?? bounds.now, max: bounds.max, resize, resizeBy, reset };
 }
 
 /** Re-render once a minute, so "3 min ago" stays true. */
@@ -121,6 +204,15 @@ export const ConversationPage = memo(function ConversationPage({ agent, conversa
 function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
   const id = `${agent.id}#${page.conversation}`;
   const [folded, setFolded] = useState(() => readFolded(id));
+  const {
+    height,
+    setBody,
+    now: heightNow,
+    max: tallestHeight,
+    resize,
+    resizeBy,
+    reset,
+  } = usePageHeight(id);
   const [history, setHistory] = useState(false);
   // An older version opened, for the version the page was on then: a new
   // version arriving shows the page as it is now.
@@ -257,7 +349,12 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
         />
       </div>
       {!folded && (
-        <div className="agent-page__body">
+        <div
+          ref={setBody}
+          className="agent-page__body"
+          data-sized={height !== null || undefined}
+          style={height !== null ? { height } : undefined}
+        >
           {older && (
             <p className="agent-page__older">
               {pageOlderLine(older, now)}{' '}
@@ -276,6 +373,19 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
             </p>
           )}
         </div>
+      )}
+      {!folded && (
+        <PanelResizeHandle
+          orientation="horizontal"
+          className="agent-page__divider"
+          label="Resize the page"
+          value={heightNow}
+          min={PAGE_MIN_HEIGHT}
+          max={tallestHeight}
+          onResize={resize}
+          onResizeBy={resizeBy}
+          onReset={reset}
+        />
       )}
     </section>
   );

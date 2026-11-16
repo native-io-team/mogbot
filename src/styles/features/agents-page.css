@@ -91,6 +91,55 @@
   padding-bottom: var(--spacing-md);
 }
 
+/* Dragged to a height of its own (ConversationPage's divider): that height,
+   and still never so tall the chat loses its room when the window shrinks. */
+.agent-page__body[data-sized] {
+  max-height: max(
+    80px,
+    calc(100vh - 380px)
+  ); /* css-ok: PAGE_MIN_HEIGHT, and the window less the chat's room and the header */
+}
+
+/* Open, the divider is the page's lower edge: the band's own hairline goes. */
+.agent-page:not([data-folded]) {
+  border-bottom: 0;
+}
+
+/* The divider: the shared resize handle, the column's full width, with a grip
+   so it reads as something to drag rather than a split by mistake. */
+.panel-resize-handle--horizontal.agent-page__divider {
+  /* Its grab area reaches as far below the line as above it: the chat under
+     it is masked (agents-motion.css), which would otherwise paint over that half. */
+  z-index: var(--z-agent-page-divider);
+  align-self: stretch;
+  margin-inline: calc(var(--agents-column-inset) * -1);
+  background: var(--border-subtle);
+}
+
+.agent-page__divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--spacing-2xl);
+  height: var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--text-muted);
+  transform: translate(-50%, -50%);
+  transition: background var(--transition-interaction-fast);
+}
+
+.agent-page__divider:hover::after,
+.agent-page__divider:active::after,
+.agent-page__divider:focus-visible::after {
+  background: var(--text-secondary);
+}
+
+.agent-page__divider:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
 /* The versions: a popover off "Updated …", so the page doesn't move. */
 .agent-page__history-menu {
   width: min(380px, calc(100vw - var(--spacing-2xl))); /* css-ok: a popover's width */

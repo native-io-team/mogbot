@@ -80,7 +80,13 @@ vi.mock('../../contexts/ToastContext', () => ({
   useOptionalToast: () => ({ showToast: vi.fn() }),
 }));
 
-import { ConversationPage, ConversationPagePin, SHORT_WINDOW } from './ConversationPage';
+import {
+  ConversationPage,
+  ConversationPagePin,
+  PAGE_CHAT_ROOM,
+  PAGE_MIN_HEIGHT,
+  SHORT_WINDOW,
+} from './ConversationPage';
 import { resetPageCache } from '../../lib/agentPage';
 
 const agent = {
@@ -90,8 +96,18 @@ const agent = {
   status: { state: 'idle' },
 } as unknown as Agent;
 
+// jsdom has no PointerEvent: the divider's drag needs its pointerId and clientY.
+class TestPointerEvent extends MouseEvent {
+  readonly pointerId: number;
+  constructor(type: string, init: MouseEventInit & { pointerId?: number } = {}) {
+    super(type, init);
+    this.pointerId = init.pointerId ?? 1;
+  }
+}
+
 let pinned = true;
 beforeEach(() => {
+  vi.stubGlobal('PointerEvent', TestPointerEvent);
   pinned = true;
   window.localStorage.clear();
   resetPageCache();
@@ -105,7 +121,10 @@ beforeEach(() => {
     return Promise.reject(new Error(`unmocked ${cmd}`));
   });
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
 
 const both = () =>
   render(
@@ -148,6 +167,52 @@ describe('ConversationPage', () => {
     unmount();
     both();
     await screen.findByRole('button', { name: /Job search/, expanded: false });
+  });
+
+  it('drags taller with the divider, remembers it, and a double-click puts it back', async () => {
+    const { unmount } = both();
+    const divider = await screen.findByRole('separator', { name: 'Resize the page' });
+    const body = () => document.querySelector<HTMLElement>('.agent-page__body')!;
+    act(() => {
+      fireEvent.pointerDown(divider, { pointerId: 1, clientY: 200 });
+      fireEvent.pointerMove(divider, { pointerId: 1, clientY: 300 });
+      fireEvent.pointerUp(divider, { pointerId: 1, clientY: 300 });
+    });
+    expect(body().style.height).toBe('300px');
+    unmount();
+    both();
+    await screen.findByRole('separator', { name: 'Resize the page' });
+    expect(body().style.height).toBe('300px');
+    fireEvent.doubleClick(screen.getByRole('separator', { name: 'Resize the page' }));
+    expect(body().style.height).toBe('');
+    expect(body().hasAttribute('data-sized')).toBe(false);
+  });
+
+  it('keeps the chat its room and the page its minimum, by drag or arrow keys', async () => {
+    both();
+    const divider = await screen.findByRole('separator', { name: 'Resize the page' });
+    const body = () => document.querySelector<HTMLElement>('.agent-page__body')!;
+    const tallest = window.innerHeight - PAGE_CHAT_ROOM;
+    act(() => {
+      fireEvent.pointerDown(divider, { pointerId: 1, clientY: 100 });
+      fireEvent.pointerMove(divider, { pointerId: 1, clientY: window.innerHeight });
+      fireEvent.pointerUp(divider, { pointerId: 1, clientY: window.innerHeight });
+    });
+    expect(body().style.height).toBe(`${tallest}px`);
+    fireEvent.keyDown(divider, { key: 'ArrowUp' });
+    expect(body().style.height).toBe(`${tallest - 10}px`);
+    act(() => {
+      fireEvent.pointerDown(divider, { pointerId: 2, clientY: 100 });
+      fireEvent.pointerMove(divider, { pointerId: 2, clientY: 5 });
+      fireEvent.pointerUp(divider, { pointerId: 2, clientY: 5 });
+    });
+    expect(body().style.height).toBe(`${PAGE_MIN_HEIGHT}px`);
+  });
+
+  it('has no divider while folded', async () => {
+    both();
+    fireEvent.click(await screen.findByRole('button', { name: /Job search/, expanded: true }));
+    expect(screen.queryByRole('separator', { name: 'Resize the page' })).toBeNull();
   });
 
   it('starts folded in a short window until the user opens it, then remembers that', async () => {

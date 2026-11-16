@@ -88,6 +88,20 @@ Edit and resend and Rewind to here wait, and the menu says so; Fork from here al
 
 An agent works on one thing at a time. Messages sent while it's busy wait their turn.
 
+## The page above the chat
+
+An agent can keep a page pinned above a conversation: a tracker, a summary, a dashboard it
+keeps up to date. The page and the chat scroll separately.
+
+- **Make it bigger or smaller.** Drag the line under the page (it has a small grip in the
+  middle). The chat always keeps enough room for its messages and the box you type in.
+  Double-click the line to go back to the usual size. The size is remembered for that
+  conversation.
+- **Fold it** with the arrow beside its title, so only its one line shows.
+- **See what changed** by pressing "Updated …" on the right.
+- **Unpin it** with the pin button. The agent keeps it up to date, and **Page** in the chat
+  header pins it back.
+
 ## Dictation
 
 Click the microphone in the message box (or press ⌘⇧D, or hold ⌥Space) and talk. No words show

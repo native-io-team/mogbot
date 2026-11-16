@@ -10,6 +10,8 @@ interface PanelResizeHandleProps {
   onResizeBy: (delta: number) => void;
   orientation?: 'vertical' | 'horizontal';
   onDragChange?: (isDragging: boolean) => void;
+  /** A double-click puts the size back to its default. */
+  onReset?: () => void;
   className?: string;
 }
 
@@ -30,6 +32,7 @@ export function PanelResizeHandle({
   onResizeBy,
   orientation = 'vertical',
   onDragChange,
+  onReset,
   className,
 }: PanelResizeHandleProps) {
   const isDragging = useRef(false);
@@ -131,6 +134,7 @@ export function PanelResizeHandle({
       onPointerCancel={(event) => finishDrag(event, false)}
       onLostPointerCapture={(event) => finishDrag(event, false)}
       onKeyDown={handleKeyDown}
+      onDoubleClick={onReset}
       role="separator"
       aria-label={label}
       aria-orientation={orientation}
