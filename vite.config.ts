@@ -62,6 +62,30 @@ function stripStylesheetCrossoriginPlugin() {
   };
 }
 
+/**
+ * Outside the app shell, the dev server's main page goes to the harness.
+ *
+ * Opening this repo as a project in the app runs plain `vite` in the preview
+ * pane, where `/` has no Tauri side and crashes on
+ * `window.__TAURI_INTERNALS__`. The same server already serves
+ * `/harness.html` (the UI against fixtures), so the page goes there instead.
+ * Dev server only (`apply: 'serve'`), only `index.html`, and only when the
+ * Tauri internals are missing, so `pnpm tauri dev` and every build are as
+ * they were.
+ */
+function devHarnessRedirectPlugin() {
+  return {
+    name: 'dev-harness-redirect',
+    apply: 'serve' as const,
+    transformIndexHtml(html: string, ctx: { path: string }) {
+      if (ctx.path !== '/index.html') return html;
+      const script =
+        "<script>if (!('__TAURI_INTERNALS__' in window)) location.replace('/harness.html' + location.search);</script>";
+      return html.replace('<head>', '<head>\n    ' + script);
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
@@ -90,6 +114,7 @@ export default defineConfig(async () => ({
     }),
     react(),
     stripStylesheetCrossoriginPlugin(),
+    devHarnessRedirectPlugin(),
   ],
 
   define: {
