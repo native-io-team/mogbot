@@ -502,11 +502,23 @@ async fn handle_http(
             // The user's own Chrome through the app's extension: answered
             // only while the user has it on (off by default), else the same
             // bare 404 as a wrong path.
-            let caller = bearer_of(&req).and_then(|s| crate::agents::broker::caller(&s));
-            let Some(caller) = caller.filter(|_| crate::user_chrome::settings::enabled()) else {
+            // An agent's turn names it by its turn's secret; a project tab
+            // or a Terminal session by its own (`user_chrome::sessions`).
+            if !crate::user_chrome::settings::enabled() {
+                return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
+            }
+            let secret = bearer_of(&req);
+            let who = match secret.as_deref() {
+                Some(s) => match crate::agents::broker::caller(s) {
+                    Some(c) => Some(UserChromeCaller::Agent(c.agent_id, c.turn)),
+                    None => crate::user_chrome::sessions::caller(s).map(UserChromeCaller::Session),
+                },
+                None => None,
+            };
+            let Some(who) = who else {
                 return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
             };
-            return handle_user_chrome_http(app, caller.agent_id, caller.turn, req).await;
+            return handle_user_chrome_http(app, who, req).await;
         }
         Some(SecretRoute::Connection(key)) => {
             // A connection the turn was granted: the relay adds the app's
@@ -697,10 +709,17 @@ async fn handle_import_http(
     }
 }
 
+/// Who's calling `/mcp/user-chrome`.
+enum UserChromeCaller {
+    /// An agent's turn (`None`: a take-over).
+    Agent(String, Option<u64>),
+    /// A project tab or a Terminal session.
+    Session(crate::user_chrome::sessions::Session),
+}
+
 async fn handle_user_chrome_http(
     app: tauri::AppHandle,
-    agent_id: String,
-    turn: Option<u64>,
+    who: UserChromeCaller,
     req: Request<Incoming>,
 ) -> Result<Response<ServerBody>, hyper::Error> {
     match *req.method() {
@@ -727,9 +746,14 @@ async fn handle_user_chrome_http(
                     .body(full_body(Bytes::new()))
                     .unwrap());
             }
-            Ok(json_response(
-                crate::user_chrome::tools::handle_rpc(&app, &agent_id, turn, &message).await,
-            ))
+            Ok(json_response(match &who {
+                UserChromeCaller::Agent(agent_id, turn) => {
+                    crate::user_chrome::tools::handle_rpc(&app, agent_id, *turn, &message).await
+                }
+                UserChromeCaller::Session(session) => {
+                    crate::user_chrome::tools::handle_rpc_session(&app, session, &message).await
+                }
+            }))
         }
         Method::DELETE => Ok(plain_response(StatusCode::OK, "")),
         _ => Ok(plain_response(

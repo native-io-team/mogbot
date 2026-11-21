@@ -700,6 +700,23 @@ pub async fn open_session(
         crate::preview_isolation::insert_front(&mut args, extra);
     }
 
+    // Your Chrome for a tab the user opens (`user_chrome::sessions`): its
+    // own secret, in a 0600 config file (Claude Code) or the environment
+    // (Codex, and a launcher started inside any tab). Never a take-over,
+    // which is an agent's.
+    let mut env = env;
+    if spec_account_env {
+        let chrome = crate::user_chrome::sessions::spawn_args(
+            &app,
+            &session_id,
+            agent_id.as_deref(),
+            project_path.as_deref().map(std::path::Path::new),
+        )
+        .await;
+        crate::user_chrome::sessions::place(&mut args, agent_id.as_deref(), chrome.args);
+        env.extend(chrome.env);
+    }
+
     let mut cmd = CommandBuilder::new(&command);
     cmd.args(&args);
     if let Some(ref c) = cwd {

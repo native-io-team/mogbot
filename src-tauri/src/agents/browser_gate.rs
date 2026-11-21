@@ -1233,40 +1233,83 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
         return g;
     }
     if let Some(name) = tool.strip_prefix(USER_CHROME_SERVER) {
-        // The user's own Chrome, through the app's extension: the same
-        // Chrome a phone sign-in drives, so it waits for that too.
-        if let Some(refused) = while_phone_signs_in(super::phone_signin::live()) {
-            return refused;
-        }
         let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
-        let page = page_of(&user_chrome_key(&agent.id));
-        let g = gate_user_chrome_with(
-            crate::user_chrome::settings::enabled(),
-            level,
+        return gate_user_chrome_at(level, agent, tool, name, input, outside);
+    }
+    gate_rest(agent, tool, input, outside)
+}
+
+/// A project tab's or a Terminal session's call to Your Chrome
+/// (`user_chrome::sessions`): the user's own rules for agents, at the
+/// team's level but never past "Bold" ([`session_level`]), so what sends,
+/// posts, pays, deletes or shares always asks on a card.
+pub fn gate_session(agent: &Agent, tool: &str, input: &Value) -> Gate {
+    match tool.strip_prefix(USER_CHROME_SERVER) {
+        Some(name) => gate_user_chrome_at(
+            session_level(super::independence::level()),
             agent,
+            tool,
             name,
             input,
-            outside,
-            &page,
-        );
-        let g = held_for_exact_text(g, agent, tool, input);
-        let g = unless_same_send(g, agent, tool, input);
-        let (n, i) = agents_equivalent(name, input);
-        let exact = super::outward::required(agent);
-        if g == Gate::Ask
-            && only_unlabelled_enter(level, agent, exact, &n, &i, &page)
-            && first_try(&agent.id, input)
-        {
-            return Gate::Refuse(UNLABELLED_ENTER.into());
-        }
-        if g == Gate::Ask
-            && only_unlabelled_click(level, agent, exact, &n, &i, &page)
-            && first_try(&agent.id, input)
-        {
-            return Gate::Refuse(UNLABELLED_CLICK.into());
-        }
-        return g;
+            false,
+        ),
+        None => Gate::NotBrowser,
     }
+}
+
+/// A session's level: the team's, with "Unleashed" held to "Bold". Pure.
+pub fn session_level(team: Level) -> Level {
+    match team {
+        Level::FullSend => Level::GoHard,
+        other => other,
+    }
+}
+
+/// Your Chrome's call at `level`.
+fn gate_user_chrome_at(
+    level: Level,
+    agent: &Agent,
+    tool: &str,
+    name: &str,
+    input: &Value,
+    outside: bool,
+) -> Gate {
+    // The user's own Chrome, through the app's extension: the same
+    // Chrome a phone sign-in drives, so it waits for that too.
+    if let Some(refused) = while_phone_signs_in(super::phone_signin::live()) {
+        return refused;
+    }
+    let page = page_of(&user_chrome_key(&agent.id));
+    let g = gate_user_chrome_with(
+        crate::user_chrome::settings::enabled(),
+        level,
+        agent,
+        name,
+        input,
+        outside,
+        &page,
+    );
+    let g = held_for_exact_text(g, agent, tool, input);
+    let g = unless_same_send(g, agent, tool, input);
+    let (n, i) = agents_equivalent(name, input);
+    let exact = super::outward::required(agent);
+    if g == Gate::Ask
+        && only_unlabelled_enter(level, agent, exact, &n, &i, &page)
+        && first_try(&agent.id, input)
+    {
+        return Gate::Refuse(UNLABELLED_ENTER.into());
+    }
+    if g == Gate::Ask
+        && only_unlabelled_click(level, agent, exact, &n, &i, &page)
+        && first_try(&agent.id, input)
+    {
+        return Gate::Refuse(UNLABELLED_CLICK.into());
+    }
+    g
+}
+
+/// [`gate`] for Claude in Chrome and anything else.
+fn gate_rest(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
     if !tool.starts_with(SERVER) {
         return Gate::NotBrowser;
     }
@@ -1663,6 +1706,8 @@ pub fn agents_equivalent(name: &str, input: &Value) -> (String, Value) {
         "read_page" => ("read_page".into(), i),
         "find" => ("find".into(), i),
         "get_text" => ("get_page_text".into(), i),
+        "read_console" => ("read_console_messages".into(), i),
+        "read_network" => ("read_network_requests".into(), i),
         "close_tab" => ("tabs_close_mcp".into(), i),
         // A picture pasted from this Mac is an upload: the same rules.
         "attach_image" => ("upload_image".into(), i),

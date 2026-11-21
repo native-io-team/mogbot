@@ -520,6 +520,7 @@ fn the_extensions_copy_of_the_protocol_matches() {
         "tab_focus",
         "release",
         "cdp",
+        "tab_logs",
     ] {
         assert!(
             js.contains(&format!("'{kind}'")),

@@ -70,7 +70,8 @@ else (tests hold `cdp.js` to both lists).
 | `protocol.js` | The JS half of the protocol; Rust tests check its version, ops and codes. |
 | `link.js` | One native port; hello; states (`connecting`, `connected`, `app_not_running`, `no_host`, `update_needed`, `refused`, `stopped`); backoff 1/2/5/10/30 s while awake, then a one-minute alarm. An open native port keeps an MV3 service worker alive; the alarm restarts one Chrome stopped. Stale ports (replaced) are ignored. |
 | `tabs.js` | Which tab is whose (`storage.session`, so a restarted worker still knows), the agents' window (unfocused, normal), a tab group per agent with its name, waiting for the first load before anything attaches, events (`tab_closed`, `tab_updated`). |
-| `cdp.js` | `chrome.debugger` with the allow-list; `Runtime.evaluate` narrowed to the app's expressions and `returnByValue`; `Page.navigate` to http(s) only; protected pages refused; the user's Cancel on Chrome's debugging bar pauses all driving for five minutes. |
+| `cdp.js` | `chrome.debugger` with the allow-list; `Runtime.evaluate` narrowed to the app's expressions and `returnByValue`; `Page.navigate` to http(s) only; protected pages refused; the user's Cancel on Chrome's debugging bar pauses all driving for five minutes. On attach the extension itself enables `Page`, `DOM`, `Accessibility`, `Runtime` and `Network`; the app can send none of those domains' commands. |
+| `logs.js` | A tab's console and requests for `tab_logs` (`read_console`, `read_network`), from `chrome.debugger.onEvent`: `Runtime.consoleAPICalled` and `Runtime.exceptionThrown` (as errors); `Network.requestWillBeSent` merged by request with `responseReceived` (status) and `loadingFailed` (the error), a redirect closing the hop before it. Recorded from when the extension first drives the tab (a tab only opened is attached on the first read, which says so), at most 200 of each per tab, text cut at 1,000 characters and addresses at 2,000, in the service worker's memory only: dropped when the tab closes or its agent is let go, and empty after Chrome restarts the worker. No bodies, headers or cookies. |
 | `ops.js`, `service_worker.js` | Op dispatch; top-level listeners; the badge. |
 | `popup.*` | One line of state, the profile's name (shown to agents by `browsers`), Try again. |
 
@@ -126,6 +127,44 @@ and its prompt says to use `mcp__user_chrome__*` wherever it's told to use
 Claude in Chrome, so every existing prompt and access-chain step carries over.
 `browser::for_turn` is now "has the user's Chrome by any route";
 `claude_in_chrome_for_turn` is the old meaning.
+
+## Project tabs and Terminal sessions (`user_chrome/sessions.rs`, `launcher.rs`)
+
+The same `user_chrome` server, for callers that aren't agents, so nothing
+the user runs needs Claude in Chrome (which pairs only with the claude.ai
+account signed in to Chrome):
+
+- **A project tab** the app spawns (Claude Code or Codex, while the switch
+  is on): its own 64-hex secret per pty id (`sessions::for_project_tab`),
+  in a 0600 `--mcp-config` file (`agent-bridge/mcp-*.json`, swept at launch)
+  for Claude Code, or `bearer_token_env_var` = `USER_CHROME_MCP_TOKEN` for
+  Codex; never argv. Its tabs belong to `session-<hash of the pty id>`, in a
+  tab group named for the project folder. Take-overs are agents' and get
+  nothing here.
+- **Terminal**: `<binary> mcp user-chrome`, a stdio launcher (`launcher.rs`),
+  registered once at user scope:
+  `claude mcp add --scope user user_chrome -- <binary> mcp user-chrome`
+  (once per `CLAUDE_CONFIG_DIR`). It reads `user-chrome-mcp.json` (0600,
+  the bridge's port and the Terminal secret, one per app run; a debug build
+  writes `user-chrome-mcp-dev.json` instead) before every message, so it
+  survives app restarts. With the app closed it answers `initialize` and
+  `tools/list` itself and every call says the app isn't open; with the
+  switch off, every call says to turn it on. Inside a project tab it uses
+  that tab's secret (`USER_CHROME_MCP_TOKEN`), so a tab never shows as two
+  callers. The file is removed when the app quits.
+- **Approvals**: the caller is the user at a keyboard, never outside text.
+  `browser_gate::gate_session` applies the agents' rules at the team's
+  level held to "Bold" (`session_level`), so a send, post, payment, delete
+  or share always asks. The card goes to the Chief of Staff's chat
+  (`agents::mcp::decide_for_session`), titled "Terminal: …" or
+  "<project>: …", with the phone and notification an agent's card gets.
+- **Same boundary as the link's token**: another process running as the
+  user can read the endpoint file, as it can read the link's token.
+
+**One alarm** (`user_chrome/alarm.rs`): while the switch is on and no Chrome
+has been linked for five minutes (or the link isn't running), one line in
+the Chief's chat with "Check Your Chrome", and one notification; not again
+until it has come back and gone down again.
 
 ## Which way agents use, and why (`agents/chrome_route.rs`)
 
@@ -338,7 +377,7 @@ signed-in profile, which is what Claude in Chrome does too.
 | list/select/switch_browser | `browsers`, `use_browser` (one connection per profile, named in the popup) |
 | tab groups | yes, one per agent, in an agents' window |
 | javascript_tool, file_upload, upload_image, gif_creator, shortcuts | deliberately not offered (arbitrary script and uploads are the widest ways out; the gate would ask for every one anyway) |
-| read_console_messages / read_network_requests | not yet; would need `Runtime.enable`/`Network.enable` relayed and buffered in the extension |
+| read_console_messages / read_network_requests | `read_console` (`level`), `read_network` (`failed_only`): reads, free at every level; recorded by the extension (`logs.js`) since it first drove the tab. Extension 0.1.3 or later; an older one is named with the version to update to |
 
 ## Computer use, next, on the same bridge
 

@@ -191,6 +191,19 @@ pub enum Op {
         #[serde(default)]
         params: Value,
     },
+    /// What one of the agent's tabs logged (`log`: "console") or requested
+    /// ("network"), recorded by the extension since it first drove the tab:
+    /// the newest `limit`, after `since` (a `seq` from an earlier answer).
+    /// Extension 0.1.3 and later.
+    TabLogs {
+        agent: String,
+        tab_id: i64,
+        log: String,
+        #[serde(default)]
+        since: Option<u64>,
+        #[serde(default)]
+        limit: Option<u32>,
+    },
 }
 
 impl Op {
@@ -203,7 +216,8 @@ impl Op {
             | Op::TabClose { agent, .. }
             | Op::TabFocus { agent, .. }
             | Op::Release { agent }
-            | Op::Cdp { agent, .. } => Some(agent),
+            | Op::Cdp { agent, .. }
+            | Op::TabLogs { agent, .. } => Some(agent),
         }
     }
 }

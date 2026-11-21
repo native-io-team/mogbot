@@ -7,6 +7,7 @@
 // started debugging this browser". Pressing Cancel there stops every
 // agent's driving for a while (`PAUSE_MS`): the user said stop.
 
+import { Logs } from './logs.js';
 import { CODES, ExtError, event, isWebUrl } from './protocol.js';
 
 /** The CDP commands the app may send. Nothing else is relayed. */
@@ -28,8 +29,27 @@ export const METHODS = new Set([
   'Runtime.evaluate',
 ]);
 
-/** Sent by the extension itself when it starts driving a tab. */
-export const ON_ATTACH = ['Page.enable', 'DOM.enable', 'Accessibility.enable'];
+/**
+ * Sent by the extension itself when it starts driving a tab. `Runtime` and
+ * `Network` only report what the page logs and requests, for `tab_logs`
+ * (`logs.js`); neither domain's commands are on [METHODS].
+ */
+export const ON_ATTACH = [
+  'Page.enable',
+  'DOM.enable',
+  'Accessibility.enable',
+  'Runtime.enable',
+  'Network.enable',
+];
+
+/** The events kept for `tab_logs`. */
+export const LOGGED_EVENTS = new Set([
+  'Runtime.consoleAPICalled',
+  'Runtime.exceptionThrown',
+  'Network.requestWillBeSent',
+  'Network.responseReceived',
+  'Network.loadingFailed',
+]);
 
 /** The only expressions the app evaluates in a page: the app's own. */
 export const EXPRESSIONS = new Set([
@@ -176,6 +196,8 @@ export class Cdp {
     this.inputs = new Set();
     this.pausedUntil = 0;
     this.onEvent = () => {};
+    /** What each attached tab logged and requested. */
+    this.logs = new Logs();
   }
 
   listen(onEvent) {
@@ -183,6 +205,10 @@ export class Cdp {
     this.chrome.debugger.onDetach.addListener((source, reason) => {
       void this.detached(source.tabId, reason);
     });
+    this.chrome.debugger.onEvent.addListener((source, method, params) => {
+      if (source && LOGGED_EVENTS.has(method)) this.logs.record(source.tabId, method, params);
+    });
+    this.chrome.tabs.onRemoved.addListener((tabId) => this.logs.drop(tabId));
   }
 
   async detached(tabId, reason) {
@@ -230,6 +256,8 @@ export class Cdp {
       throw new ExtError(CODES.attachFailed, String((e && e.message) || e));
     }
     this.attached.add(tab.id);
+    // Before the domains are on, so nothing they report is missed.
+    this.logs.start(tab.id);
     for (const m of ON_ATTACH) {
       try {
         await this.chrome.debugger.sendCommand({ tabId: tab.id }, m, {});
@@ -262,12 +290,32 @@ export class Cdp {
     }
   }
 
+  /**
+   * What one of `agent`'s tabs logged (`kind` "console") or requested
+   * ("network"). Kept from when the extension first drove the tab; a tab it
+   * hasn't driven yet is attached now, and says so (`started`).
+   */
+  async logsOf(agent, tabId, kind, since, limit) {
+    const tab = await this.tabs.owned(agent, tabId);
+    let started = false;
+    if (!(await this.ours(tabId))) {
+      await this.attach(tab);
+      started = true;
+    }
+    // Attached before a service worker restart: kept from now.
+    this.logs.start(tabId);
+    const got = this.logs.read(tabId, kind, since, limit);
+    if (!got) throw new ExtError(CODES.badRequest, 'kind is console or network');
+    return { started, ...got };
+  }
+
   /** Stop driving `agent`'s tabs. */
   async release(agent) {
     await this.tabs.ready;
     for (const [id, o] of Object.entries(this.tabs.state.tabs)) {
       if (o.agent !== agent) continue;
       const tabId = Number(id);
+      this.logs.drop(tabId);
       if (!this.attached.has(tabId)) continue;
       try {
         await this.chrome.debugger.detach({ tabId });

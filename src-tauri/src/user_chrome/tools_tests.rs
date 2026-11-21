@@ -214,15 +214,32 @@ fn the_extension_relays_exactly_the_page_logics_methods_and_expressions() {
         let double = serde_json::to_string(f).unwrap();
         assert!(js.contains(&double), "cdp.js doesn't allow {double}");
     }
-    // Nothing else: every quoted CDP method in the file is one of ours.
+    // Nothing else: every quoted CDP method in the file is one of ours, a
+    // domain the extension switches on itself, or an event it keeps for
+    // read_console / read_network.
+    let own = [
+        "Page.enable",
+        "DOM.enable",
+        "Accessibility.enable",
+        "Runtime.enable",
+        "Network.enable",
+        "Runtime.consoleAPICalled",
+        "Runtime.exceptionThrown",
+        "Network.requestWillBeSent",
+        "Network.responseReceived",
+        "Network.loadingFailed",
+    ];
     let re = regex::Regex::new(r"'([A-Z][A-Za-z]+\.[a-z][A-Za-z]+)'").unwrap();
     for c in re.captures_iter(&js) {
         let m = &c[1];
         assert!(
-            crate::agent_browser::page::METHODS.contains(&m)
-                || ["Page.enable", "DOM.enable", "Accessibility.enable"].contains(&m),
+            crate::agent_browser::page::METHODS.contains(&m) || own.contains(&m),
             "cdp.js allows {m}, which the app never sends"
         );
+    }
+    // Those are never the app's to send.
+    for m in own {
+        assert!(!crate::agent_browser::page::METHODS.contains(&m));
     }
 }
 
@@ -244,4 +261,184 @@ fn the_smallest_control_under_a_click_names_it() {
     );
     assert_eq!(smallest_under(&boxes, 50.0, 50.0), None);
     assert_eq!(smallest_under(&boxes, 900.0, 900.0), None);
+}
+
+#[test]
+fn a_project_tab_or_terminal_still_asks_before_it_sends_even_unleashed() {
+    use crate::agents::browser_gate::session_level;
+    assert_eq!(session_level(Level::FullSend), Level::GoHard);
+    for l in [Level::Often, Level::Judgement, Level::GoHard] {
+        assert_eq!(session_level(l), l, "below Unleashed: the team's own");
+    }
+    let mut page = Page::default();
+    page.url = Some("https://mail.google.com/mail/u/0/#inbox".into());
+    page.refs.insert("ref_1".into(), "button \"Send\"".into());
+    page.refs.insert("ref_2".into(), "link \"Inbox\"".into());
+    let s = super::super::sessions::Session {
+        id: super::super::sessions::TERMINAL_ID.into(),
+        label: "Terminal".into(),
+        kind: super::super::sessions::Kind::Terminal,
+    };
+    let who = super::super::sessions::agent_of(&s);
+    let at = session_level(Level::FullSend);
+    let send = json!({ "ref": "ref_1" });
+    assert_eq!(
+        gate_user_chrome_with(true, at, &who, "click", &send, false, &page),
+        Gate::Ask
+    );
+    let look = json!({ "ref": "ref_2" });
+    assert_eq!(
+        gate_user_chrome_with(true, at, &who, "click", &look, false, &page),
+        Gate::Allow
+    );
+    assert_eq!(
+        crate::agents::mcp::session_card_title("Terminal", "Send in Gmail"),
+        "Terminal: Send in Gmail"
+    );
+}
+
+#[test]
+fn reading_the_console_and_requests_is_free_at_every_level() {
+    let page = Page::default();
+    for level in [
+        Level::Often,
+        Level::Judgement,
+        Level::GoHard,
+        Level::FullSend,
+    ] {
+        for name in ["read_console", "read_network"] {
+            assert_eq!(
+                gate(level, name, json!({ "tab": 3, "limit": 10 }), &page),
+                Gate::Allow,
+                "{name} at {level:?}"
+            );
+        }
+    }
+    let (n, _) = browser_gate::agents_equivalent("read_console", &json!({}));
+    assert_eq!(n, "read_console_messages");
+    let (n, _) = browser_gate::agents_equivalent("read_network", &json!({}));
+    assert_eq!(n, "read_network_requests");
+}
+
+fn logged(started: bool, entries: Value) -> Logged {
+    let mut l: Logged = serde_json::from_value(json!({ "entries": entries })).unwrap();
+    l.started = started;
+    l
+}
+
+#[test]
+fn console_lines_say_level_text_and_where() {
+    let got = logged(
+        false,
+        json!([
+            { "seq": 1, "t": 0, "level": "log", "text": "booted", "source": "" },
+            { "seq": 2, "t": 0, "level": "warn", "text": "slow\nrender", "source": "https://a.test/app.js:12" },
+            { "seq": 3, "t": 0, "level": "error", "text": "TypeError: x is undefined", "source": "https://a.test/app.js:40" },
+        ]),
+    );
+    assert_eq!(
+        console_text(&got, None, 50),
+        "[log] booted\n[warn] slow render (https://a.test/app.js:12)\n[error] TypeError: x is undefined (https://a.test/app.js:40)"
+    );
+    assert_eq!(
+        console_text(&got, Some("error"), 50),
+        "[error] TypeError: x is undefined (https://a.test/app.js:40)"
+    );
+    assert_eq!(
+        console_text(&got, Some("warning"), 50),
+        "[warn] slow render (https://a.test/app.js:12)"
+    );
+    // The newest, with a count of what's left out.
+    assert_eq!(
+        console_text(&got, None, 1),
+        "(2 older not shown)\n[error] TypeError: x is undefined (https://a.test/app.js:40)"
+    );
+    assert_eq!(
+        console_text(&got, Some("debug"), 50),
+        "No debug messages in this tab's console."
+    );
+    assert_eq!(
+        console_text(&logged(false, json!([])), None, 50),
+        "This tab's console is empty."
+    );
+    // Just attached: says recording started, not "empty".
+    assert!(console_text(&logged(true, json!([])), None, 50).starts_with("Nothing recorded yet"));
+}
+
+#[test]
+fn request_lines_say_method_status_and_address() {
+    let got = logged(
+        false,
+        json!([
+            { "seq": 1, "method": "GET", "url": "https://a.test/", "status": 200 },
+            { "seq": 2, "method": "POST", "url": "https://a.test/api", "status": 500 },
+            { "seq": 3, "method": "GET", "url": "https://cdn.test/x.js", "failed": "net::ERR_BLOCKED_BY_CLIENT" },
+            { "seq": 4, "method": "GET", "url": "https://a.test/slow" },
+        ]),
+    );
+    assert_eq!(
+        network_text(&got, false, 50),
+        "GET 200 https://a.test/\nPOST 500 https://a.test/api\nGET failed (net::ERR_BLOCKED_BY_CLIENT) https://cdn.test/x.js\nGET pending https://a.test/slow"
+    );
+    assert_eq!(
+        network_text(&got, true, 50),
+        "POST 500 https://a.test/api\nGET failed (net::ERR_BLOCKED_BY_CLIENT) https://cdn.test/x.js"
+    );
+    assert_eq!(
+        network_text(
+            &logged(
+                false,
+                json!([{ "method": "GET", "url": "https://a.test/", "status": 200 }])
+            ),
+            true,
+            50
+        ),
+        "No failed requests in this tab."
+    );
+}
+
+#[test]
+fn sessions_are_told_to_ask_the_user_to_sign_in_not_request_login() {
+    let r = session_initialize_result(None);
+    let i = r["instructions"].as_str().unwrap();
+    assert!(i.contains("ask the user to sign in"));
+    assert!(!i.contains("request_login"));
+    assert_eq!(r["serverInfo"]["name"], SERVER_KEY);
+}
+
+#[test]
+fn an_older_extension_is_told_apart_from_a_failure() {
+    assert!(crate::user_chrome::older("0.1.2", LOGS_SINCE));
+    assert!(!crate::user_chrome::older("0.1.3", LOGS_SINCE));
+    let line = logs_need_update("0.1.1");
+    assert!(line.contains("0.1.1") && line.contains(LOGS_SINCE));
+    // The extension's own version is the one this build ships.
+    let manifest: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../chrome-extension/extension/manifest.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(!crate::user_chrome::older(
+        manifest["version"].as_str().unwrap(),
+        LOGS_SINCE
+    ));
+}
+
+#[test]
+fn the_logs_op_has_the_shape_the_extension_reads() {
+    let op = Op::TabLogs {
+        agent: "ops".into(),
+        tab_id: 3,
+        log: "network".into(),
+        since: None,
+        limit: Some(200),
+    };
+    assert_eq!(
+        serde_json::to_value(&op).unwrap(),
+        json!({ "kind": "tab_logs", "agent": "ops", "tab_id": 3, "log": "network", "since": null, "limit": 200 })
+    );
+    assert_eq!(op.agent(), Some("ops"));
 }
