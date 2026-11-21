@@ -72,6 +72,8 @@ fn the_dev_id_is_the_one_the_manifest_key_gives() {
         "tabGroups",
         "storage",
         "alarms",
+        // Keeps the profile (and the link) alive with no windows open.
+        "background",
     ] {
         assert!(perms.contains(&p), "{p} missing");
     }

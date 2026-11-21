@@ -26,5 +26,8 @@ When it isn't installed or isn't connected, a card in the chat says so, with one
 Chrome, where each step ticks Done by itself. **Not now** puts the card away until you next open
 the app. In the Chief of Staff's chat the card comes after the first thing you asked for is back.
 
+It stays connected when you close Chrome's last window, as long as Chrome itself is still
+running; quitting Chrome (⌘Q) ends the link until you open it again.
+
 An agent that needs Chrome while it isn't connected tells you so in one line and carries on with
 whatever else it can do.

@@ -4,7 +4,9 @@
 // MV3 service workers stop when idle, but an open native port keeps one
 // running (Chrome 105+), and a one-minute alarm starts it again if Chrome
 // stopped it anyway (or the app wasn't running): the worker wakes, the
-// alarm's listener connects, and the link is back.
+// alarm's listener connects, and the link is back. Neither helps once
+// Chrome unloads the profile, which macOS Chrome does when its last window
+// closes: the manifest's `background` permission keeps the profile loaded.
 
 import { HOST_NAME, PROTOCOL, fail, hello, ok, parseRequest } from './protocol.js';
 

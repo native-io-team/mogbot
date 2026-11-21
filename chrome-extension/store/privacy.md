@@ -10,6 +10,7 @@
 | `tabGroups` | Put each agent's tabs in a group with its name, so the user sees whose they are. |
 | `storage` | Remember which tabs belong to which agent (session storage, gone when Chrome quits), a random id for this Chrome profile and the name the user gave it (local storage). |
 | `alarms` | Reconnect to the app once a minute when it isn't running, without keeping the service worker awake. |
+| `background` | Keeps the link to the Mogbot app alive when all Chrome windows are closed but Chrome is still running (macOS otherwise unloads the profile, which ends the link until a window opens again). |
 
 No host permissions, no content scripts, no `scripting`, `cookies`,
 `webRequest`, `history`, `downloads` or `management`.
