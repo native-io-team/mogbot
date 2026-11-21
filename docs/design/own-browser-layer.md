@@ -74,8 +74,16 @@ else (tests hold `cdp.js` to both lists).
 | `ops.js`, `service_worker.js` | Op dispatch; top-level listeners; the badge. |
 | `popup.*` | One line of state, the profile's name (shown to agents by `browsers`), Try again. |
 
-Permissions: `nativeMessaging debugger tabs tabGroups storage alarms`. No host
-permissions, no content scripts.
+Permissions: `nativeMessaging debugger tabs tabGroups storage alarms background`.
+No host permissions, no content scripts. `background` is what keeps the link up
+with no windows open: on macOS Chrome keeps running after its last window
+closes but unloads the profile, which stops the service worker and its native
+port, and an unloaded profile fires no alarm and no `onStartup`, so nothing
+came back until a window opened. With `background` the profile stays loaded
+(Chrome's background mode: `background_mode.enabled`, on by default, with no
+toggle in macOS settings; with it off, `background` alone does not keep the
+profile loaded). Checked in Chrome for Testing 159 with a throwaway profile.
+Adding it shows users no new permission warning.
 
 ## Trust
 
