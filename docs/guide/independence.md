@@ -117,6 +117,14 @@ Agents never ask for a password in the chat. When one needs a key or token, it s
 and what you type goes into your Mac's Keychain, not the chat. To connect a service, you get a
 sign-in card: connect the app, use your own browser, or paste an API key.
 
+## When your Chrome isn't linked
+
+If Settings → Agents → Let agents use your Chrome says it couldn't start because another copy of
+Mogbot holds the Chrome link, a second copy of the app is running on this Mac. Quit it: the app
+tries again every 30 seconds and links your Chrome by itself as soon as the other copy is gone.
+If something else changes the link while Mogbot holds it (another copy rewriting Chrome's host
+file or the link's key), Mogbot notices within a minute and puts it back by itself.
+
 ## Pictures in your Chrome
 
 Through Mogbot for Chrome an agent can attach a picture to a post or message, the way pasting it

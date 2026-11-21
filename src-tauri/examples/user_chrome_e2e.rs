@@ -128,11 +128,15 @@ fn main() {
     std::fs::create_dir_all(scratch.join("bin")).unwrap();
     let host_exe = scratch.join("bin/user_chrome_host");
     std::fs::copy(&built, &host_exe).unwrap();
-    let manifest = install::install_host(&udd, &host_exe).unwrap();
+    // Under the installed app's name, the one the extension connects to: a
+    // debug build's own name (`…_dev`) is for the user's real Chrome, and
+    // this is a scratch profile.
+    let host = install::release_host_name();
+    let manifest = install::install_host_named(&udd, &host, &host_exe).unwrap();
     check(
         "host manifest written into the scratch profile",
         manifest.starts_with(&udd)
-            && install::host_state(&udd, &host_exe) == install::HostState::Current,
+            && install::host_state_named(&udd, &host, &host_exe) == install::HostState::Current,
     );
 
     // --- the switch on, in the scratch app data

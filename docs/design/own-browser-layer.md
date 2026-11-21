@@ -84,13 +84,37 @@ permissions, no content scripts.
   argument again.
 - **The app proves itself first**: HMAC-SHA256 over both nonces with a
   per-direction label, token from a 0600 file in a 0700 folder, rewritten
-  each time the link starts. A process squatting on the socket can't pass;
+  each time the link starts, and only after the socket is bound: a copy
+  that finds another copy's live socket leaves that copy's token alone. A
+  process squatting on the socket can't pass;
   a host without the token learns nothing. The extension never holds the
   token.
 - **Never on the network**: a Unix socket (a named pipe on Windows), not a port. No web page can reach
   it (no DNS rebinding, no `fetch` to localhost). Debug builds may move it
   with `MOGBOT_CHROME_LINK_DIR`; release builds ignore that variable, so
   nothing in Chrome's environment can point a real host elsewhere.
+- **A development copy never takes the installed app's link.** `pnpm tauri
+  dev` shares the installed app's data folder, so a debug build keeps its
+  own link (`chrome-link-dev`, or `MOGBOT_CHROME_LINK_DIR`), its own host
+  manifest name (`<identifier>.chrome_link_dev`; the installed app's
+  `<identifier>.chrome_link` keeps naming `/Applications/…`), its own host
+  copy (`chrome-host-dev`) and its own staged extension
+  (`chrome-extension-dev`). The extension connects only to the release
+  name, so a dev copy gets Chrome only through a scratch profile (the
+  end-to-end check) or an extension whose `HOST_NAME` is changed for it.
+- **A link that didn't start tries again** every 30 seconds while the
+  switch is on (`user_chrome::RETRY_EVERY`), so the app takes the link back
+  as soon as whatever held it goes. Settings → Chrome says why meanwhile
+  ("another copy of <app> holds the Chrome link") and that it's retrying.
+- **A link that's listening heals itself** (release builds, `user_chrome::heal`).
+  Every 60 seconds while the switch is on it checks that the host manifest
+  still names this app's binary, that the token file still holds the token
+  its link checks, and that the socket file is still the one it bound (by
+  device and inode). Whatever another copy changed is put back and logged:
+  the manifest rewritten, the token written back (the same token, so hosts
+  already proving it carry on), the socket bound again in place of a
+  removed or replaced one (only the accept loop changes; each linked Chrome
+  keeps its connection). Debug builds never run it.
 - **Per turn**: the bridge's route takes the turn's bearer secret as every
   other agent route does (`agents/reach.rs`), and answers 404 while the
   switch is off.

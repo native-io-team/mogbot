@@ -43,6 +43,9 @@ export interface UserChromeStatus {
   listening: boolean;
   /** Why it isn't listening while switched on. */
   error?: string | null;
+  /** It didn't start, and tries again by itself (every `retryEverySecs`). */
+  retrying?: boolean;
+  retryEverySecs?: number;
   chromeInstalled: boolean;
   host: HostState;
   /** Where each setup step stands, read from the Mac and Chrome's own records. */
@@ -129,7 +132,13 @@ export function userChromeLine(s: UserChromeStatus | null): string {
   if (!s?.enabled) {
     return 'Let agents, on Claude Code or Codex, use the sites you’re signed in to in Chrome, through this app’s own extension. Anything that sends, posts, pays or deletes still asks you first.';
   }
-  if (s.error) return `On, but it couldn’t start: ${s.error.trim().replace(/[.!]+$/, '')}.`;
+  if (s.error) {
+    const why = `On, but it couldn’t start: ${s.error.trim().replace(/[.!]+$/, '')}.`;
+    if (!s.retrying) return why;
+    return s.retryEverySecs
+      ? `${why} Trying again every ${s.retryEverySecs} seconds.`
+      : `${why} Trying again by itself.`;
+  }
   if (s.browsers.length === 1) {
     return 'On. Agents can use your Chrome, in tabs of their own.';
   }

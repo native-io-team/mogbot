@@ -25,17 +25,36 @@ use std::sync::OnceLock;
 
 use super::auth;
 
-/// The native host's name: reverse-DNS from the app's identifier, which is
-/// what Chrome allows (lowercase letters, digits, dots, underscores).
+/// The native host's name for this build ([`host_name_for_build`]): what
+/// this copy of the app writes into Chrome's folder. The installed app's is
+/// [`release_host_name`], the name the extension connects to.
 pub fn host_name() -> String {
+    host_name_for_build(crate::brand::IDENTIFIER, cfg!(debug_assertions))
+}
+
+/// The installed app's host name, the one the extension connects to
+/// (`chrome-extension/extension/src/protocol.js`).
+pub fn release_host_name() -> String {
     host_name_for(crate::brand::IDENTIFIER)
+}
+
+/// A debug build (`pnpm tauri dev`) writes its manifest under a name of its
+/// own (`…chrome_link_dev`), so it never repoints the installed app's
+/// (`…chrome_link`, naming `/Applications/…`) at a development binary. Pure.
+pub fn host_name_for_build(identifier: &str, debug: bool) -> String {
+    let name = host_name_for(identifier);
+    if debug {
+        format!("{name}_dev")
+    } else {
+        name
+    }
 }
 
 /// The host's name under the app's previous identifier (`brand.json`
 /// `previous.identifier`), whose manifest an install removes.
 pub fn previous_host_name() -> Option<String> {
     crate::brand::previous::IDENTIFIER
-        .map(host_name_for)
+        .map(|id| host_name_for_build(id, cfg!(debug_assertions)))
         .filter(|old| *old != host_name())
 }
 
@@ -180,15 +199,24 @@ pub fn chrome_installed() -> bool {
 }
 
 pub fn host_manifest_path(user_data_dir: &Path) -> PathBuf {
+    host_manifest_path_named(user_data_dir, &host_name())
+}
+
+pub fn host_manifest_path_named(user_data_dir: &Path, name: &str) -> PathBuf {
     user_data_dir
         .join("NativeMessagingHosts")
-        .join(format!("{}.json", host_name()))
+        .join(format!("{name}.json"))
 }
 
 /// The host manifest naming `exe` (the app's own binary, run in host mode).
 pub fn host_manifest(exe: &Path) -> Value {
+    host_manifest_named(&host_name(), exe)
+}
+
+/// [`host_manifest`] under `name`.
+pub fn host_manifest_named(name: &str, exe: &Path) -> Value {
     json!({
-        "name": host_name(),
+        "name": name,
         "description": format!(concat!("{}: lets your agents use this Chrome, through the app on this ", crate::computer::noun!()), crate::brand::NAME),
         "path": exe.to_string_lossy(),
         "type": "stdio",
@@ -207,22 +235,38 @@ pub enum HostState {
 }
 
 pub fn host_state(user_data_dir: &Path, exe: &Path) -> HostState {
-    let Ok(raw) = std::fs::read(host_manifest_path(user_data_dir)) else {
+    host_state_named(user_data_dir, &host_name(), exe)
+}
+
+/// [`host_state`] for the manifest under `name`.
+pub fn host_state_named(user_data_dir: &Path, name: &str, exe: &Path) -> HostState {
+    let Ok(raw) = std::fs::read(host_manifest_path_named(user_data_dir, name)) else {
         return HostState::Missing;
     };
     match serde_json::from_slice::<Value>(&raw) {
-        Ok(v) if v == host_manifest(exe) => HostState::Current,
+        Ok(v) if v == host_manifest_named(name, exe) => HostState::Current,
         _ => HostState::Stale,
     }
 }
 
-/// Write the host manifest for `exe` into `user_data_dir`'s folder.
+/// Write the host manifest for `exe` into `user_data_dir`'s folder, under
+/// this build's name ([`host_name`]).
 pub fn install_host(user_data_dir: &Path, exe: &Path) -> std::io::Result<PathBuf> {
-    let path = host_manifest_path(user_data_dir);
+    install_host_named(user_data_dir, &host_name(), exe)
+}
+
+/// [`install_host`] under `name`. Only a scratch Chrome profile (the
+/// end-to-end check) is given the release name by a debug build.
+pub fn install_host_named(
+    user_data_dir: &Path,
+    name: &str,
+    exe: &Path,
+) -> std::io::Result<PathBuf> {
+    let path = host_manifest_path_named(user_data_dir, name);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let body = serde_json::to_vec_pretty(&host_manifest(exe))?;
+    let body = serde_json::to_vec_pretty(&host_manifest_named(name, exe))?;
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, body)?;
     std::fs::rename(&tmp, &path)?;
@@ -283,7 +327,17 @@ pub fn guarded(exe: &Path, home: &Path) -> bool {
 /// Where the copy of the binary Chrome starts lives when it can't start the
 /// app's own ([`guarded`]): the app's data folder, which no prompt guards.
 pub fn host_copy_dir() -> PathBuf {
-    crate::brand::app_support_dir().join("chrome-host")
+    crate::brand::app_support_dir().join(dev_suffixed("chrome-host", cfg!(debug_assertions)))
+}
+
+/// `name`, or `name-dev` in a debug build: the folders a debug build keeps
+/// beside the installed app's in the data folder they share. Pure.
+pub fn dev_suffixed(name: &str, debug: bool) -> String {
+    if debug {
+        format!("{name}-dev")
+    } else {
+        name.to_string()
+    }
 }
 
 /// `exe` is an app bundle's own binary (`….app/Contents/MacOS/…`). A signed
@@ -467,8 +521,10 @@ pub fn extension_source() -> Option<PathBuf> {
 }
 
 /// Where the extension is staged for "Load unpacked": the app's data folder.
+/// A debug build stages its own copy beside it, never over the folder the
+/// user's Chrome loads the installed app's extension from.
 pub fn staged_extension_dir() -> PathBuf {
-    crate::brand::app_support_dir().join("chrome-extension")
+    crate::brand::app_support_dir().join(dev_suffixed("chrome-extension", cfg!(debug_assertions)))
 }
 
 /// The extension's version from its manifest.
