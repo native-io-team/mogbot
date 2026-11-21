@@ -245,3 +245,70 @@ fn the_smallest_control_under_a_click_names_it() {
     assert_eq!(smallest_under(&boxes, 50.0, 50.0), None);
     assert_eq!(smallest_under(&boxes, 900.0, 900.0), None);
 }
+
+#[test]
+fn a_read_without_the_debugger_says_so_and_names_the_extension() {
+    assert_eq!(without_debugger_note(&json!({ "nodes": [] })), None);
+    let note = without_debugger_note(&json!({
+        "nodes": [],
+        "withoutDebugger": { "inTheWay": ["“Grammarly” (kbfnbcaeplbcioakkpcpgfkobkghlhen)"] }
+    }))
+    .unwrap();
+    assert!(note.contains("“Grammarly” (kbfnbcaeplbcioakkpcpgfkobkghlhen) puts its own frame"));
+    assert!(note.contains("click, type"));
+    assert!(note.contains("On click"));
+    // No names from the extension: still said, never blank.
+    let note = without_debugger_note(&json!({ "withoutDebugger": { "inTheWay": [] } })).unwrap();
+    assert!(note.contains("Another extension puts its own frame"));
+}
+
+#[test]
+fn a_tab_another_extension_blocks_names_it_and_says_what_still_works() {
+    let line = CallError::Ext(crate::user_chrome::protocol::ExtError {
+        code: crate::user_chrome::protocol::ErrorCode::ForeignFrame,
+        message: "“Grammarly” (kbfnbcaeplbcioakkpcpgfkobkghlhen) puts its own frame in this page, and Chrome won’t let an extension drive a tab that holds another extension’s frame.".into(),
+    })
+    .line();
+    assert!(line.contains("“Grammarly” (kbfnbcaeplbcioakkpcpgfkobkghlhen)"));
+    assert!(line.contains("Reading still works"));
+    assert!(!line.contains("DevTools"));
+    let code: crate::user_chrome::protocol::ErrorCode =
+        serde_json::from_value(json!("foreign_frame")).unwrap();
+    assert_eq!(code, crate::user_chrome::protocol::ErrorCode::ForeignFrame);
+}
+
+#[test]
+fn a_ref_read_without_the_debugger_scrolls_but_isnt_pressed() {
+    let refs = HashMap::from([
+        (
+            "ref_1".to_string(),
+            RefTarget {
+                backend_node_id: -4,
+                label: "button \"Post\"".into(),
+            },
+        ),
+        (
+            "ref_2".to_string(),
+            RefTarget {
+                backend_node_id: 4,
+                label: "button \"Post\"".into(),
+            },
+        ),
+    ]);
+    set_refs("pressable-test", 7, refs);
+    let e = pressable_ref("pressable-test", 7, "ref_1").unwrap_err();
+    assert!(e.contains("without Chrome's debugger"));
+    assert_eq!(
+        pressable_ref("pressable-test", 7, "ref_2")
+            .unwrap()
+            .backend_node_id,
+        4
+    );
+    assert_eq!(
+        ref_of("pressable-test", 7, "ref_1")
+            .unwrap()
+            .backend_node_id,
+        -4
+    );
+    clear_refs("pressable-test", 7);
+}

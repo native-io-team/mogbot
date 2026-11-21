@@ -123,3 +123,16 @@ Through Mogbot for Chrome an agent can attach a picture to a post or message, th
 would: a PNG, JPEG, GIF or WebP from its own folder or a project. It counts as an upload, so below
 Unleashed it asks you first on a card. The picture goes on the clipboard for a moment, and the
 text that was there comes back after.
+
+## When another extension is in the way
+
+Some extensions put a small frame of their own into every page (a writing helper, a password
+manager's button). Chrome won't let Mogbot for Chrome drive a tab that holds another extension's
+frame. In those tabs agents can still read the page, find things, scroll and go to an address, but
+they can't click, type or take a picture. When that happens the agent tells you which extension it
+is. To fix it, set that extension's **Site access** to "On click" (chrome://extensions → Details)
+or turn it off, and the agent can carry on.
+
+Only one copy of Mogbot for Chrome links to the app in each Chrome profile. A second copy in the
+same profile (say, a loaded one beside the Web Store one) shows "Another copy of this extension
+… is already linked" in its toolbar popup. Remove the extra copy.

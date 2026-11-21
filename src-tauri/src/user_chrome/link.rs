@@ -31,6 +31,10 @@ use super::protocol::{
 /// The handshake and the extension's hello must arrive within this.
 pub const HANDSHAKE_WAIT: Duration = Duration::from_secs(10);
 
+/// How long a profile's live link has to answer before a newer link from
+/// the same profile takes its place.
+pub const DUPLICATE_PING: Duration = Duration::from_secs(2);
+
 /// Why a call didn't get an answer.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CallError {
@@ -61,6 +65,7 @@ impl CallError {
                 ErrorCode::NotOwned => "That tab isn't one you opened. Use `tabs` to see yours, or `open` a new one.".into(),
                 ErrorCode::NoTab => "That tab is gone (it was closed). Use `tabs` to see yours, or `open` a new one.".into(),
                 ErrorCode::AttachFailed => format!("Chrome wouldn't let the app drive that tab ({}). If DevTools is open on it, it has to be closed first.", e.message),
+                ErrorCode::ForeignFrame => format!("Chrome won't let the app click, type, press keys or take pictures in that tab: {} Reading still works there (get_text, read_page, find, scroll, navigate). Tell the user which extension it is, so they can set its Site access to \"On click\" (chrome://extensions → Details) or turn it off, then try again.", e.message),
                 ErrorCode::Protected => "Chrome doesn't let extensions use that page (Chrome's own pages and the Web Store). Use another page.".into(),
                 ErrorCode::NotAllowed => format!("The extension refused that ({}).", e.message),
                 ErrorCode::Busy => "Chrome hasn't finished your last click or key on that tab yet (it may not be painting the tab), so nothing more was sent. Read the page to see where it got to, then try again.".into(),
@@ -212,8 +217,9 @@ impl Registry {
             .find(|c| c.profile_id == profile_id)
     }
 
-    /// Add a connection; one already there for the same profile (a reloaded
-    /// extension, a restarted service worker) is told it was replaced.
+    /// Add a connection; one already there for the same profile that stopped
+    /// answering (a reloaded extension, a restarted service worker) is told it
+    /// was replaced. A live one never gets here: `handle` refuses the newcomer.
     fn add(&self, c: Arc<Conn>) {
         let mut v = self.conns.lock().unwrap_or_else(|e| e.into_inner());
         for old in v.iter().filter(|o| o.profile_id == c.profile_id) {
@@ -503,6 +509,26 @@ pub async fn handle<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
         )
         .await;
         return Err("a malformed profile id".into());
+    }
+    // One extension per Chrome profile. A link from a profile that's already
+    // linked takes over only when the old one has stopped answering (a
+    // reloaded extension, a restarted service worker, whose old port Chrome
+    // is still closing). A live one stays, and the newcomer is told why and
+    // isn't kept, never replacing a working link silently.
+    if let Some(old) = registry.by_profile(&profile_id) {
+        let alive = tokio::task::spawn_blocking(move || old.call(Op::Ping, DUPLICATE_PING).is_ok())
+            .await
+            .unwrap_or(false);
+        if alive {
+            let _ = write_json(
+                &mut stream,
+                &ToExtension::Bye {
+                    reason: "duplicate".into(),
+                },
+            )
+            .await;
+            return Err("a second link from a Chrome profile already linked".into());
+        }
     }
     write_json(
         &mut stream,

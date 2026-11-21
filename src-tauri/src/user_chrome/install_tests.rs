@@ -27,11 +27,11 @@ fn the_manifest_names_this_binary_and_only_our_extension() {
         .iter()
         .filter_map(|v| v.as_str())
         .collect();
-    assert!(origins.contains(&format!("chrome-extension://{}/", auth::DEV_EXTENSION_ID).as_str()));
-    assert!(origins
-        .iter()
-        .all(|o| o.starts_with("chrome-extension://") && o.ends_with('/')));
-    assert!(!origins.iter().any(|o| o.contains('*')));
+    // Exactly one extension: in a debug build (this test), the unpacked one.
+    assert_eq!(
+        origins,
+        vec![format!("chrome-extension://{}/", auth::DEV_EXTENSION_ID).as_str()]
+    );
 }
 
 #[test]
@@ -57,8 +57,10 @@ fn the_dev_id_is_the_one_the_manifest_key_gives() {
     let key = m["key"].as_str().expect("the dev manifest carries its key");
     assert_eq!(id_from_key(key).unwrap(), auth::DEV_EXTENSION_ID);
     assert_eq!(m["manifest_version"], 3);
-    // Only what it needs: no <all_urls> host permission outside debugger,
-    // no cookies, no webRequest, no history.
+    // Only what it needs. Web pages as hosts and `scripting`, to read a tab
+    // Chrome won't attach the debugger to (another extension's frame in it);
+    // `management`, to name that extension. No cookies, no webRequest, no
+    // history, no content scripts.
     let perms: Vec<&str> = m["permissions"]
         .as_array()
         .unwrap()
@@ -72,20 +74,15 @@ fn the_dev_id_is_the_one_the_manifest_key_gives() {
         "tabGroups",
         "storage",
         "alarms",
+        "scripting",
+        "management",
     ] {
         assert!(perms.contains(&p), "{p} missing");
     }
-    for p in [
-        "cookies",
-        "webRequest",
-        "history",
-        "downloads",
-        "management",
-        "scripting",
-    ] {
+    for p in ["cookies", "webRequest", "history", "downloads"] {
         assert!(!perms.contains(&p), "{p} isn't needed");
     }
-    assert!(m.get("host_permissions").is_none());
+    assert_eq!(m["host_permissions"], json!(["http://*/*", "https://*/*"]));
     assert!(m.get("content_scripts").is_none());
 }
 
@@ -119,6 +116,7 @@ fn the_real_extension_stages_whole() {
         "src/service_worker.js",
         "src/protocol.js",
         "src/cdp.js",
+        "src/fallback.js",
         "src/tabs.js",
         "src/link.js",
         "popup.html",

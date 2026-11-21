@@ -2,11 +2,21 @@
   "manifest_version": 3,
   "name": "Mogbot for Chrome",
   "short_name": "Mogbot",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Lets your Mogbot agents use this Chrome, through the Mogbot app on your Mac. Every send, post or payment asks you first.",
   "minimum_chrome_version": "120",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAstG0Fx10lL//33c08czf63AxwNXXpWaZDzBJ5DY99bCdNRADxlxJ724A6Pkvzuq3gU8ADg3J3+3SglcP4+mTOgxRZLGbqjKHLmNZRtZr8v5YWFkJ/pAiZ4kHnyBMBq5sViZr/BJb708kwvVk2MX8I1l3UQ0Wy5pY+bcJ3QsqBebX31J1FrFBpM4I6gp9nugSjoOpXRxILSFB5HkAx7eCtigzWMrNup/1ia66/L09UNBjOFsaTlao/CCWlFAlegWoPBuiTEDkySiERgVKcM6PSVbeAegRPV7YQf/iRkAhw9Ra/DE6kxgpFd+4vEo4+lPq9pljIl23GSI+5niu26+3wQIDAQAB",
-  "permissions": ["nativeMessaging", "debugger", "tabs", "tabGroups", "storage", "alarms"],
+  "permissions": [
+    "nativeMessaging",
+    "debugger",
+    "tabs",
+    "tabGroups",
+    "storage",
+    "alarms",
+    "scripting",
+    "management"
+  ],
+  "host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "service_worker": "src/service_worker.js",
     "type": "module"

@@ -27,16 +27,24 @@ type HmacSha256 = Hmac<Sha256>;
 /// `install_tests.rs` derives it from the manifest, so they can't drift.
 pub const DEV_EXTENSION_ID: &str = "acpipahophpoekcmokoejnkooedofagk";
 
-/// The ids Chrome may start the host for: the dev id, and the Web Store
-/// listing's once `brand.json` names one.
+/// The ids Chrome may start the host for: exactly one, so only one copy of
+/// the extension can ever link to this app. A release build takes the Web
+/// Store listing's (`brand.json` `chromeExtension.webStoreId`), never the
+/// unpacked copy a developer loaded beside it; a debug build takes the
+/// unpacked dev id. A brand with no listing falls back to the dev id.
 pub fn extension_ids() -> Vec<String> {
-    let mut ids = vec![DEV_EXTENSION_ID.to_string()];
-    if let Some(store) = crate::brand::chrome::WEB_STORE_ID {
-        if store != DEV_EXTENSION_ID {
-            ids.push(store.to_string());
-        }
+    vec![extension_id_for(
+        cfg!(debug_assertions),
+        crate::brand::chrome::WEB_STORE_ID,
+    )]
+}
+
+/// [`extension_ids`]' choice, for a build kind and a listing. Pure.
+pub fn extension_id_for(debug: bool, web_store_id: Option<&str>) -> String {
+    match web_store_id {
+        Some(store) if !debug && !store.is_empty() => store.to_string(),
+        _ => DEV_EXTENSION_ID.to_string(),
     }
-    ids
 }
 
 /// `chrome-extension://<id>/` for each id.
@@ -258,6 +266,19 @@ mod tests {
         assert!(!nonce_ok("abc"));
         assert!(!nonce_ok(&"z".repeat(32)));
         assert!(!nonce_ok(&"a".repeat(200)));
+    }
+
+    #[test]
+    fn a_release_build_takes_only_the_web_store_copy_and_a_debug_build_only_the_unpacked_one() {
+        let store = "fjjaafigmeohdpollmkjkihhplacaamh";
+        assert_eq!(extension_id_for(false, Some(store)), store);
+        assert_eq!(extension_id_for(true, Some(store)), DEV_EXTENSION_ID);
+        // A brand with no listing: the unpacked id, in both.
+        assert_eq!(extension_id_for(false, None), DEV_EXTENSION_ID);
+        assert_eq!(extension_id_for(true, None), DEV_EXTENSION_ID);
+        // Always exactly one.
+        assert_eq!(extension_ids().len(), 1);
+        assert_eq!(origins().len(), 1);
     }
 
     #[test]

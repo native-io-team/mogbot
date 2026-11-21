@@ -115,10 +115,15 @@ export function fakeChrome() {
     },
     debugger: {
       onDetach: listeners(),
+      /** Targets `getTargets` reports, beyond nothing (tests set them). */
+      targets: [],
+      /** An error `attach` throws, as Chrome would (tests set it). */
+      attachError: null,
       async getTargets() {
-        return [];
+        return chrome.debugger.targets;
       },
       async attach({ tabId }) {
+        if (chrome.debugger.attachError) throw new Error(chrome.debugger.attachError);
         attached.add(tabId);
       },
       async detach({ tabId }) {
@@ -127,6 +132,23 @@ export function fakeChrome() {
       async sendCommand({ tabId }, method, params) {
         sent.push({ tabId, method, params });
         return { ok: method };
+      },
+    },
+    // Runs the page function here, against whatever `document` the test
+    // set up (jsdom), as Chrome runs it in the tab.
+    scripting: {
+      calls: [],
+      async executeScript({ target, func, args }) {
+        chrome.scripting.calls.push({ tabId: target.tabId, func: func.name, args });
+        return [{ frameId: 0, result: await func(...(args || [])) }];
+      },
+    },
+    management: {
+      installed: {},
+      async get(id) {
+        const e = chrome.management.installed[id];
+        if (!e) throw new Error(`Failed to find extension with id ${id}.`);
+        return { id, ...e };
       },
     },
   };

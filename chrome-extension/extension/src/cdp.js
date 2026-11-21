@@ -6,7 +6,13 @@
 // While the extension drives any tab Chrome shows its own bar, "Mogbot
 // started debugging this browser". Pressing Cancel there stops every
 // agent's driving for a while (`PAUSE_MS`): the user said stop.
+//
+// A tab holding another extension's frame can't be attached to at all; then
+// reading, scrolling and going to an address are answered without the
+// debugger (`fallback.js`), and everything else is refused with the name of
+// the extension in the way (`foreign_frame`).
 
+import { Fallback, foreignFrame, inTheWayMessage } from './fallback.js';
 import { CODES, ExtError, event, isWebUrl } from './protocol.js';
 
 /** The CDP commands the app may send. Nothing else is relayed. */
@@ -61,16 +67,16 @@ const ATTACH_ID = /^a[0-9a-f]{1,40}$/;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 const PICTURE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
+/** Scrolls the box around a node (`SCROLL_WITHIN_FN`). */
+export const SCROLL_WITHIN_FN =
+  "function (dx, dy) { let e = this && this.nodeType === 1 ? this : this && this.parentElement; for (let i = 0; e && i < 64; i++) { if (e.nodeType === 1 && e !== document.body && e !== document.documentElement) { const s = getComputedStyle(e); const y = dy !== 0 && /(auto|scroll|overlay)/.test(s.overflowY) && e.scrollHeight > e.clientHeight; const x = dx !== 0 && /(auto|scroll|overlay)/.test(s.overflowX) && e.scrollWidth > e.clientWidth; if (x || y) { const t = e.scrollTop, l = e.scrollLeft; e.scrollBy({ left: dx, top: dy, behavior: 'instant' }); return e.scrollTop !== t || e.scrollLeft !== l ? 'moved' : 'end'; } } const r = e.getRootNode && e.getRootNode(); e = e.parentElement || (r && r.host) || null; } return 'none'; }";
+
 /**
  * The only functions the app calls on a page's node (`Runtime.callFunctionOn`),
  * with numbers as their only arguments, except the attach functions, whose
  * arguments are checked one by one: the app's own.
  */
-export const FUNCTIONS = new Set([
-  /* SCROLL_WITHIN_FN */ "function (dx, dy) { let e = this && this.nodeType === 1 ? this : this && this.parentElement; for (let i = 0; e && i < 64; i++) { if (e.nodeType === 1 && e !== document.body && e !== document.documentElement) { const s = getComputedStyle(e); const y = dy !== 0 && /(auto|scroll|overlay)/.test(s.overflowY) && e.scrollHeight > e.clientHeight; const x = dx !== 0 && /(auto|scroll|overlay)/.test(s.overflowX) && e.scrollWidth > e.clientWidth; if (x || y) { const t = e.scrollTop, l = e.scrollLeft; e.scrollBy({ left: dx, top: dy, behavior: 'instant' }); return e.scrollTop !== t || e.scrollLeft !== l ? 'moved' : 'end'; } } const r = e.getRootNode && e.getRootNode(); e = e.parentElement || (r && r.host) || null; } return 'none'; }",
-  ATTACH_CHUNK_FN,
-  ATTACH_FILE_FN,
-]);
+export const FUNCTIONS = new Set([SCROLL_WITHIN_FN, ATTACH_CHUNK_FN, ATTACH_FILE_FN]);
 
 /** How long the user's Cancel on Chrome's bar holds. */
 export const PAUSE_MS = 5 * 60 * 1000;
@@ -176,6 +182,7 @@ export class Cdp {
     this.inputs = new Set();
     this.pausedUntil = 0;
     this.onEvent = () => {};
+    this.fallback = new Fallback(chrome, SCROLL_WITHIN_FN);
   }
 
   listen(onEvent) {
@@ -213,7 +220,8 @@ export class Cdp {
     return false;
   }
 
-  async attach(tab) {
+  /** Whether anything may be done to the tab now, debugger or not. */
+  mayDrive(tab) {
     if (Date.now() < this.pausedUntil) {
       throw new ExtError(
         CODES.attachFailed,
@@ -223,11 +231,16 @@ export class Cdp {
     if (protectedUrl(tab.url || tab.pendingUrl)) {
       throw new ExtError(CODES.protected, 'Chrome doesn’t let extensions use this page');
     }
+  }
+
+  async attach(tab) {
+    this.mayDrive(tab);
     if (await this.ours(tab.id)) return;
     try {
       await this.chrome.debugger.attach({ tabId: tab.id }, PROTOCOL_VERSION);
     } catch (e) {
-      throw new ExtError(CODES.attachFailed, String((e && e.message) || e));
+      const message = String((e && e.message) || e);
+      throw new ExtError(foreignFrame(e) ? CODES.foreignFrame : CODES.attachFailed, message);
     }
     this.attached.add(tab.id);
     for (const m of ON_ATTACH) {
@@ -243,6 +256,12 @@ export class Cdp {
   async send(agent, tabId, method, params) {
     const clean = vet(method, params);
     const tab = await this.tabs.owned(agent, tabId);
+    // A ref read without the debugger names a node only this extension
+    // knows: answered here, never sent to Chrome.
+    if (this.fallback.ownsNode(clean)) {
+      this.mayDrive(tab);
+      return this.fallback.run(tabId, method, clean);
+    }
     const input = method.startsWith('Input.');
     if (input && this.inputs.has(tabId)) {
       throw new ExtError(
@@ -250,7 +269,17 @@ export class Cdp {
         'Chrome hasn’t answered the last input event on this tab; nothing more was sent'
       );
     }
-    await this.attach(tab);
+    try {
+      await this.attach(tab);
+    } catch (e) {
+      if (!(e instanceof ExtError) || e.code !== CODES.foreignFrame) throw e;
+      if (this.fallback.can(method, clean)) {
+        const tree = method === 'Accessibility.getFullAXTree';
+        const who = tree ? await this.fallback.inTheWay(tabId) : [];
+        return this.fallback.run(tabId, method, clean, who);
+      }
+      throw new ExtError(CODES.foreignFrame, inTheWayMessage(await this.fallback.inTheWay(tabId)));
+    }
     if (input) this.inputs.add(tabId);
     try {
       const r = await this.chrome.debugger.sendCommand({ tabId }, method, clean);

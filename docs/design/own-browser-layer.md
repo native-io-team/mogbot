@@ -71,11 +71,23 @@ else (tests hold `cdp.js` to both lists).
 | `link.js` | One native port; hello; states (`connecting`, `connected`, `app_not_running`, `no_host`, `update_needed`, `refused`, `stopped`); backoff 1/2/5/10/30 s while awake, then a one-minute alarm. An open native port keeps an MV3 service worker alive; the alarm restarts one Chrome stopped. Stale ports (replaced) are ignored. |
 | `tabs.js` | Which tab is whose (`storage.session`, so a restarted worker still knows), the agents' window (unfocused, normal), a tab group per agent with its name, waiting for the first load before anything attaches, events (`tab_closed`, `tab_updated`). |
 | `cdp.js` | `chrome.debugger` with the allow-list; `Runtime.evaluate` narrowed to the app's expressions and `returnByValue`; `Page.navigate` to http(s) only; protected pages refused; the user's Cancel on Chrome's debugging bar pauses all driving for five minutes. |
+| `fallback.js` | A tab Chrome won't attach to because another extension's frame is in it ("Cannot access a chrome-extension:// URL of different extension"): names that extension (`debugger.getTargets` frames in the tab, the page's own `chrome-extension://` frames, `management.get` for the name) in a `foreign_frame` error, and answers reading without the debugger through `chrome.scripting`, in the extension's isolated world: the text, load state and visibility expressions, a tree shaped like `Accessibility.getFullAXTree` (DOM roles and names, hidden things out, password values never read, marked `withoutDebugger`), page and in-box scrolling, and `Page.navigate` as `tabs.update`. Nodes it names carry negative ids, which Chrome never gives, and are never sent to Chrome. Clicks, keys, typing, screenshots and attaching a picture stay debugger-only. |
 | `ops.js`, `service_worker.js` | Op dispatch; top-level listeners; the badge. |
 | `popup.*` | One line of state, the profile's name (shown to agents by `browsers`), Try again. |
 
-Permissions: `nativeMessaging debugger tabs tabGroups storage alarms`. No host
-permissions, no content scripts.
+Permissions: `nativeMessaging debugger tabs tabGroups storage alarms scripting
+management`, and `http://*/*` `https://*/*` as hosts: `scripting` and the hosts to
+read a tab the debugger can't attach to (`fallback.js`), `management` only to
+name the extension in the way. No content scripts.
+
+**One extension, one link per profile.** The host manifest's `allowed_origins`
+and the host's own check name exactly one id (`auth::extension_ids`): a release
+build the Web Store listing's, a debug build the unpacked dev id (and a brand
+with no listing, the dev id), so an unpacked copy beside the store one never
+links to the installed app. A second link from a Chrome profile that's already
+linked takes over only if the old one doesn't answer a ping within 2 s (a
+reloaded extension, a restarted worker); otherwise the newcomer gets
+`bye: duplicate` and its popup says another copy is linked.
 
 ## Trust
 

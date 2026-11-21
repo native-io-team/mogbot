@@ -29,6 +29,7 @@ const BADGE = {
   update_needed: '!',
   refused: '!',
   stopped: 'off',
+  duplicate: '!',
 };
 
 function onState(state) {
