@@ -255,17 +255,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          REPO=$(node -p "new URL(require('./brand.json').links.releases).pathname.slice(1).replace(/\/$/,'')")
+          # links.releases is the releases *page* (github.com/owner/repo/releases);
+          # gh wants owner/repo, and reads a third part as a host.
+          REPO=$(node -p "new URL(require('./brand.json').links.releases).pathname.split('/').filter(Boolean).slice(0, 2).join('/')")
           NAME=$(node -p "require('./brand.json').name")
           case "${{ matrix.artifact }}" in
             windows-*) PATTERN="${NAME}-${{ matrix.artifact }}-setup.exe" ;;
             *) PATTERN="${NAME}-${{ matrix.artifact }}.deb" ;;
           esac
           mkdir -p old
+          # Without the last release there is nothing to install over, so this
+          # check would pass having checked nothing: it fails instead.
           if ! gh release download -R "$REPO" -p "$PATTERN" -D old; then
-            echo "::warning::The last release has no $PATTERN; nothing to install over"
-            echo "NO_OLD=1" >> "$GITHUB_ENV"
+            echo "::error::Could not download $PATTERN from the last release of $REPO, so installing over it was not checked"
+            exit 1
           fi
+          ls -l old
           echo "NEW_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
           echo "APP_NAME=$NAME" >> "$GITHUB_ENV"
 
@@ -274,10 +279,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not $env:NO_OLD) {
-            $old = Get-ChildItem old -Filter *-setup.exe | Select-Object -First 1
-            Start-Process $old.FullName -ArgumentList '/S' -Wait
-          }
+          $old = Get-ChildItem old -Filter *-setup.exe | Select-Object -First 1
+          if (-not $old) { throw 'the last release was not downloaded' }
+          $p = Start-Process $old.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "the last release's installer exited $($p.ExitCode)" }
           $new = Get-ChildItem new -Filter "$($env:APP_NAME)-*-setup.exe" | Select-Object -First 1
           $p = Start-Process $new.FullName -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "the new installer exited $($p.ExitCode)" }
@@ -294,7 +299,7 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/ci-linux-deps.sh xvfb
-          if [ -z "${NO_OLD:-}" ]; then sudo apt-get install -y ./old/*.deb; fi
+          sudo apt-get install -y ./old/*.deb
           sudo apt-get install -y "./new/${APP_NAME}-${{ matrix.artifact }}.deb"
           PKG=$(dpkg-deb -f "new/${APP_NAME}-${{ matrix.artifact }}.deb" Package)
           V=$(dpkg-query -W -f '${Version}' "$PKG")
