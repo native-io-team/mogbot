@@ -594,7 +594,7 @@ pub(super) fn push(app: &AppHandle, agent_id: &str, mut inbound: Inbound) {
     };
     match admitted {
         Entry::Held => super::paused::after_hold(app, agent_id),
-        Entry::Refused(m) => tell_dropped(app, agent_id, vec![m], Dropped::Stopped),
+        Entry::Refused(m) => tell_dropped(app, agent_id, vec![*m], Dropped::Stopped),
         Entry::Admitted(Ok(true)) => start_worker(app, agent_id),
         Entry::Admitted(Ok(false)) => {}
         // Being deleted: whoever asked hears it won't be done.
@@ -607,7 +607,7 @@ pub(super) fn push(app: &AppHandle, agent_id: &str, mut inbound: Inbound) {
 /// What came of a message at the queue's door.
 pub(super) enum Entry {
     Held,
-    Refused(Inbound),
+    Refused(Box<Inbound>),
     Admitted(Result<bool, Box<Inbound>>),
 }
 
@@ -624,7 +624,7 @@ pub(super) fn admit_or_hold(
     let inbound = match super::paused::decide(agent_id, paused, inbound) {
         super::paused::Decision::Queue(m) => m,
         super::paused::Decision::Held => return Entry::Held,
-        super::paused::Decision::Refused(m) => return Entry::Refused(m),
+        super::paused::Decision::Refused(m) => return Entry::Refused(Box::new(m)),
     };
     let runtime = runtimes.entry(agent_id.to_string()).or_default();
     // Into the turn in progress too, when its engine takes it mid-turn
