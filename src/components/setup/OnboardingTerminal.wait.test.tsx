@@ -27,18 +27,20 @@ vi.mock('@xterm/addon-unicode11', () => ({
   },
 }));
 vi.mock('../../lib/terminalLinks', () => ({ createWebLinksAddon: () => ({ dispose() {} }) }));
-vi.mock('../../lib/fonts', () => ({ loadNerdFonts: vi.fn(async () => {}) }));
-vi.mock('@tauri-apps/api/path', () => ({ homeDir: vi.fn(async () => '/home') }));
+vi.mock('../../lib/fonts', () => ({ loadNerdFonts: vi.fn(() => Promise.resolve()) }));
+vi.mock('@tauri-apps/api/path', () => ({ homeDir: vi.fn(() => Promise.resolve('/home')) }));
 vi.mock('@tauri-apps/plugin-fs', () => ({
-  readDir: vi.fn(async () => []),
-  exists: vi.fn(async () => false),
+  readDir: vi.fn(() => Promise.resolve([])),
+  exists: vi.fn(() => Promise.resolve(false)),
 }));
 vi.mock('../../lib/onboardingPty', () => ({
-  spawnOnboardingPty: vi.fn(async () => ({ write() {}, resize() {}, kill() {}, onData() {} })),
+  spawnOnboardingPty: vi.fn(() =>
+    Promise.resolve({ write() {}, resize() {}, kill() {}, onData() {} })
+  ),
 }));
 vi.mock('../../lib/project', () => ({
-  getSystemEnv: vi.fn(async () => ({})),
-  getShellPath: vi.fn(async () => ''),
+  getSystemEnv: vi.fn(() => Promise.resolve({})),
+  getShellPath: vi.fn(() => Promise.resolve('')),
 }));
 
 let resizeCallbacks: Array<() => void> = [];
@@ -70,13 +72,13 @@ describe('OnboardingTerminal waits for its pane without polling frames', () => {
       <OnboardingTerminal command="sh" args={[]} cwd="/" onExit={() => {}} onOutput={() => {}} />
     );
     const pane = container.querySelector<HTMLElement>('.onboarding-terminal-container')!;
-    // Proof the pane has no box: a hidden pane with a zero-size layout box.
+    // jsdom gives it no box: a hidden pane reports a zero-size layout box.
     pane.style.display = 'none';
     expect(getComputedStyle(pane).display).toBe('none');
     expect(pane.getBoundingClientRect().width).toBe(0);
     expect(pane.getBoundingClientRect().height).toBe(0);
 
-    await act(async () => {});
+    await act(() => Promise.resolve());
     // Red if frame polling comes back: the pane is still empty, so a poll
     // would request a frame and nothing else.
     expect(frames).not.toHaveBeenCalled();
@@ -86,9 +88,10 @@ describe('OnboardingTerminal waits for its pane without polling frames', () => {
     pane.style.display = '';
     pane.getBoundingClientRect = () =>
       ({ width: 640, height: 300, top: 0, left: 0, right: 640, bottom: 300 }) as DOMRect;
-    await act(async () => {
+    act(() => {
       for (const cb of resizeCallbacks) cb();
     });
+    await act(() => Promise.resolve());
     expect(loadNerdFonts).toHaveBeenCalledTimes(1);
   });
 });
