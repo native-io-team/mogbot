@@ -19,7 +19,7 @@ import {
   RELAY_CLOSE_SIGN_IN_NEEDED,
   RELAY_PING_MS,
 } from '@shipstudio/companion-protocol';
-import { reportFault } from './fault';
+import { guarded, reportFault } from './fault';
 import { finishHandshake, startHandshake, type Channel } from './relayCrypto';
 
 /** Whatever answered at the relay couldn't prove it's the pinned Mac. */
@@ -268,7 +268,7 @@ export class RelaySocket {
         const channel = this.channel;
         if (!channel || this.done) return;
         const text = channel.receive.open(bytes);
-        if (text == null) return this.fail(RELAY_BROKEN, 'channel_broken');
+        if (text == null) return guarded(() => this.fail(RELAY_BROKEN, 'channel_broken'));
         try {
           this.got(text);
         } catch (e) {
@@ -295,7 +295,8 @@ export class RelaySocket {
     behind.delete(this);
     const ended = this.ended;
     this.ended = null;
-    if (ended) this.lost(ended.code, ended.reason);
+    // From a timer, or as the app leaves with more to put away: what hears of it may not end either.
+    if (ended) guarded(() => this.lost(ended.code, ended.reason));
   }
 
   /** The app is leaving the front: everything waiting, now (`setAway`). */
@@ -347,6 +348,8 @@ export class RelaySocket {
         this.acked(f.rx);
         this.resumeKey = channel.resumeKey;
         this.attempts = 0;
+        // The grace is for each drop (docs/relay.md, "Sessions", 7), not from the first.
+        this.droppedAt = 0;
         this.untimer(this.tryTimer);
         this.tryTimer = null;
         for (const m of this.unacked) this.inner.send(channel.send.seal(this.frame(m.n, m.text)));

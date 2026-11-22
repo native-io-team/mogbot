@@ -147,6 +147,77 @@ describe('a drop with frames waiting', () => {
   });
 });
 
+describe('the grace', () => {
+  const back = (mac: ReturnType<typeof relayMac>) => {
+    wait(1000);
+    mac.socket.open();
+  };
+
+  it('is for each drop: one long after the first still resumes', () => {
+    const mac = relayMac();
+    const { got, closed } = connect(mac);
+    mac.socket.drop();
+    back(mac);
+    wait(130_000);
+    mac.socket.drop();
+    expect(closed).toEqual([]);
+    back(mac);
+    expect(mac.resumes).toHaveLength(2);
+    mac.frame('f0');
+    expect(got).toEqual(['f0']);
+  });
+
+  it('still ends a session that could not come back in it', () => {
+    const mac = relayMac();
+    const { closed } = connect(mac);
+    mac.socket.drop();
+    for (let i = 0; i < 400 && !closed.length; i++) {
+      wait(1000);
+      if (mac.socket.readyState === 0) mac.socket.drop();
+    }
+    expect(closed).toEqual([1006]);
+    expect(clock - 1_000_000).toBeGreaterThan(120_000);
+    expect(clock - 1_000_000).toBeLessThan(150_000);
+  });
+});
+
+describe('what hears of a close throws', () => {
+  const throwing = (end: (mac: ReturnType<typeof relayMac>) => void) => {
+    const mac = relayMac({ sessions: false });
+    const { socket, got } = connect(mac, false);
+    socket.onclose = () => {
+      throw new Error('onclose');
+    };
+    names(20).forEach(mac.frame);
+    end(mac);
+    return got;
+  };
+
+  it('from the slice that ends it: reported, and goes no further', () => {
+    const got = throwing((mac) => mac.socket.drop(1000));
+    for (let i = 0; i < 20; i++) expect(turn).not.toThrow();
+    expect(got).toEqual(names(20));
+    expect(faults.map((e) => (e as Error).message)).toEqual(['onclose']);
+  });
+
+  it('as the app leaves: the other sockets are opened too', () => {
+    throwing((mac) => mac.socket.drop(1000));
+    const other = relayMac();
+    const { got } = connect(other);
+    names(20).forEach(other.frame);
+    expect(() => setAway(true)).not.toThrow();
+    expect(got).toEqual(names(20));
+    expect(faults.map((e) => (e as Error).message)).toEqual(['onclose']);
+  });
+
+  it('a frame that won’t open, behind others: reported too', () => {
+    const got = throwing((mac) => mac.socket.say(new Uint8Array(40)));
+    for (let i = 0; i < 20; i++) expect(turn).not.toThrow();
+    expect(got).toEqual(names(20));
+    expect(faults.map((e) => (e as Error).message)).toEqual(['onclose']);
+  });
+});
+
 describe('in the background, where no timer fires', () => {
   it('what waited is opened and acked as the app leaves, and what comes after as it comes', () => {
     const mac = relayMac();
