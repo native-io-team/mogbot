@@ -47,6 +47,12 @@ pub(super) fn take_batch(agent_id: &str) -> Option<Batch> {
         },
     );
     let batch: Vec<Inbound> = runtime.queue.drain(..take).collect();
+    // The turn has them now: the held copy was only a crash backup (a Resume
+    // whose queue write failed leaves one), and a second Pause/Resume or a
+    // relaunch must not run them again.
+    for m in &batch {
+        super::paused::drop_held(agent_id, &m.id);
+    }
     save_inbox(agent_id, &runtime.queue);
     runtime.batch_ids = batch.iter().map(|m| m.id.clone()).collect();
     runtime.conversation = batch.first().and_then(|m| m.conversation.clone());

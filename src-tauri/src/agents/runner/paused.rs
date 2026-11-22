@@ -248,6 +248,7 @@ pub fn held_count(agent_id: &str) -> usize {
 /// lock, and the worker starts after it.
 pub fn release(app: &AppHandle, agent_id: &str) {
     let mut start = false;
+    let mut settled = false;
     for _ in 0..3 {
         let fill = conversations_of_held(agent_id);
         let (started, again) = {
@@ -257,8 +258,15 @@ pub fn release(app: &AppHandle, agent_id: &str) {
         };
         start |= started;
         if !again {
+            settled = true;
             break;
         }
+    }
+    if !settled {
+        tracing::warn!(
+            agent = agent_id,
+            "resume: some held messages still lack a conversation after three rounds; they stay held"
+        );
     }
     if start {
         start_worker(app, agent_id);

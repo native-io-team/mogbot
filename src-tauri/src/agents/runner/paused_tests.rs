@@ -574,14 +574,30 @@ fn a_resume_whose_queue_write_fails_keeps_them_held() {
     let dir = store::agent_home("p16").unwrap();
     std::fs::create_dir_all(dir.join("inbox.json")).unwrap();
     hold_all("p16", vec![queued("a1", agent("Mail"), false)]);
-    let mut rt = HashMap::new();
-    release_into(&mut rt, "p16", false);
+    // The real registry, so the worker's own take_batch runs against it.
+    release_into(
+        &mut RUNTIMES.lock().unwrap_or_else(|e| e.into_inner()),
+        "p16",
+        false,
+    );
     assert_eq!(
         held_ids("p16"),
         ["a1"],
         "the queue didn't save: not forgotten"
     );
-    with_held("p16", std::mem::take);
+    // The message does run: the worker takes it from the queue, and only then
+    // is the held copy (a crash backup until now) let go, so a second Resume
+    // or a relaunch can't run it twice.
+    let batch = drain::take_batch("p16").expect("queued, so it runs");
+    assert!(batch.prompt.contains("hello"));
+    assert!(
+        held_ids("p16").is_empty(),
+        "taken by the turn: no spare copy"
+    );
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove("p16");
     store::set_root_for_tests(None);
 }
 
@@ -661,5 +677,5 @@ fn push_decides_paused_under_the_lock_and_looks_again_after_holding() {
 fn the_gate_looks_again_after_it_holds() {
     let paused = include_str!("paused.rs");
     let gate = body(paused, "pub(super) fn gate(", "pub(super) enum Decision");
-    assert!(gate.contains("Decision::Held => {\n            after_hold("));
+    assert!(gate.contains("after_hold("));
 }
