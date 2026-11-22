@@ -1211,6 +1211,7 @@ fn one_send_asks_once_and_opening_a_composer_never_asks() {
     let tool = t("computer");
     assert!(!same_send_allowed(&a, &tool, &click("ref_2")));
     note_allowed_send(&a, &tool, &click("ref_16"));
+    // Julian's Post, Confirm, Schedule: one card.
     assert!(same_send_allowed(&a, &tool, &click("ref_2")));
     assert!(same_send_allowed(&a, &tool, &click("ref_21")));
     // Other words typed: a new send, it asks again.
@@ -1542,4 +1543,114 @@ fn unleashed_lets_recorded_chrome_clicks_through() {
             "{host}"
         );
     }
+}
+
+/// An allowed send (Post, then Confirm and Schedule) with its page memory.
+fn allowed_send(id: &str) -> (Agent, String) {
+    let mut a = agent();
+    a.id = id.into();
+    let mut p = Page::default();
+    on_answer(
+        &mut p,
+        "textbox \"Text editor for creating content\" [ref_1]\nbutton \"Post\" [ref_16]\nbutton \"Confirm\" [ref_2]\nbutton \"Schedule\" [ref_21]",
+    );
+    p.tabs.insert(5, "https://www.linkedin.com/feed/".into());
+    on_typed(
+        &mut p,
+        "form_input",
+        &json!({ "value": "see you all there" }),
+    );
+    with_pages(|pages| pages.insert(a.id.clone(), p));
+    note_allowed_send(&a, &t("computer"), &click_ref("ref_16"));
+    (a, t("computer"))
+}
+
+fn click_ref(r: &str) -> Value {
+    json!({ "action": "left_click", "ref": r, "tabId": 5 })
+}
+
+fn on_page(a: &Agent, f: impl FnOnce(&mut Page)) {
+    with_pages(|pages| f(pages.get_mut(&a.id).unwrap()));
+}
+
+#[test]
+fn an_allowed_send_survives_a_date_typed_and_the_page_changing_its_own_address() {
+    let (a, tool) = allowed_send("send-date");
+    on_page(&a, |p| {
+        on_typed(p, "form_input", &json!({ "value": "Nov 25, 2026" }));
+        on_typed(p, "form_input", &json!({ "value": "11:00 AM" }));
+        // The page moving itself (a composer's own address): not the agent.
+        p.tabs
+            .insert(5, "https://www.linkedin.com/feed/?shareActive=true".into());
+    });
+    assert!(same_send_allowed(&a, &tool, &click_ref("ref_2")));
+    assert!(same_send_allowed(&a, &tool, &click_ref("ref_21")));
+}
+
+#[test]
+fn an_allowed_send_ends_when_the_agent_types_again_even_the_same_words() {
+    let (a, tool) = allowed_send("send-retype");
+    // The same words to a second person, typed again: asks.
+    on_page(&a, |p| {
+        on_typed(p, "form_input", &json!({ "value": "see you all there" }));
+    });
+    assert!(!same_send_allowed(&a, &tool, &click_ref("ref_21")));
+    let (b, tool) = allowed_send("send-retype-keys");
+    on_page(&b, |p| {
+        on_typed(
+            p,
+            "computer",
+            &json!({ "action": "type", "text": "see you all there" }),
+        );
+    });
+    assert!(!same_send_allowed(&b, &tool, &click_ref("ref_21")));
+}
+
+#[test]
+fn an_allowed_send_ends_on_navigate_and_open() {
+    let (a, tool) = allowed_send("send-nav");
+    on_page(&a, |p| {
+        on_typed(
+            p,
+            "navigate",
+            &json!({ "url": "https://www.linkedin.com/feed/" }),
+        );
+        on_typed(p, "form_input", &json!({ "value": "see you all there" }));
+    });
+    assert!(!same_send_allowed(&a, &tool, &click_ref("ref_21")));
+    let (b, tool) = allowed_send("send-open");
+    on_page(&b, |p| on_typed(p, "tabs_create_mcp", &json!({})));
+    assert!(!same_send_allowed(&b, &tool, &click_ref("ref_21")));
+}
+
+#[test]
+fn the_same_control_repeats_for_a_minute_only() {
+    let (a, tool) = allowed_send("send-repeat");
+    // A click retried after a hiccup.
+    assert!(same_send_allowed(&a, &tool, &click_ref("ref_16")));
+    assert!(same_send_allowed(&a, &tool, &click_ref("ref_2")));
+    assert!(same_send_allowed(&a, &tool, &click_ref("ref_2")));
+    // A minute on, a second Post asks.
+    ALLOWED_SENDS
+        .lock()
+        .unwrap()
+        .iter_mut()
+        .filter(|s| s.agent == a.id)
+        .for_each(|s| s.seen.iter_mut().for_each(|(_, at)| *at -= RETRY_MS + 1));
+    assert!(!same_send_allowed(&a, &tool, &click_ref("ref_16")));
+    assert!(!same_send_allowed(&a, &tool, &click_ref("ref_2")));
+}
+
+#[test]
+fn an_allowed_send_covers_only_its_own_tab_and_site() {
+    let (a, tool) = allowed_send("send-tab");
+    let other_tab = json!({ "action": "left_click", "ref": "ref_21", "tabId": 6 });
+    on_page(&a, |p| {
+        p.tabs.insert(6, "https://www.linkedin.com/feed/".into());
+    });
+    assert!(!same_send_allowed(&a, &tool, &other_tab));
+    on_page(&a, |p| {
+        p.tabs.insert(5, "https://x.com/compose".into());
+    });
+    assert!(!same_send_allowed(&a, &tool, &click_ref("ref_21")));
 }

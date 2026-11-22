@@ -277,6 +277,9 @@ pub struct Page {
     /// answer is read for labels only when it is one of these (CTO review
     /// 2026-11-14: `echo 'ref_42 search box'` from Bash relabelled Send).
     pub calls: HashMap<String, String>,
+    /// Counts the agent's typing and its navigations (open, navigate) on
+    /// this browser: an allowed send ends when it moves (`AllowedSend`).
+    pub epoch: u64,
 }
 
 const MAX_REFS: usize = 4000;
@@ -296,6 +299,11 @@ fn on_typed(page: &mut Page, name: &str, input: &Value) {
     let text = match name {
         "navigate" => {
             page.typed.clear();
+            page.epoch += 1;
+            return;
+        }
+        "tabs_create_mcp" => {
+            page.epoch += 1;
             return;
         }
         "form_input" => input.get("value").and_then(Value::as_str),
@@ -304,6 +312,13 @@ fn on_typed(page: &mut Page, name: &str, input: &Value) {
         }
         _ => None,
     };
+    // Typing ends an allowed send, the same words again included; a date or
+    // a time (the schedule step of a post) is not typing.
+    if let Some(t) = text.map(str::trim) {
+        if t.is_empty() || !super::outward::is_schedule_value(t) {
+            page.epoch += 1;
+        }
+    }
     let Some(text) = text.map(str::trim).filter(|t| !t.is_empty()) else {
         return;
     };
@@ -335,6 +350,10 @@ pub fn page_of(agent_id: &str) -> Page {
 }
 
 pub fn forget(agent_id: &str) {
+    ALLOWED_SENDS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .retain(|s| s.agent != agent_id);
     with_pages(|p| p.remove(agent_id));
 }
 
@@ -1379,15 +1398,34 @@ fn first_try(agent_id: &str, input: &Value) -> bool {
     seen.insert(key)
 }
 
-/// Sends the user allowed on a card, by agent: (agent, host, the words
-/// typed on the page, when). Posting is several clicks (Post, Confirm,
-/// Schedule) of one send: once its exact words were allowed, the next steps
-/// of that same send on that site go through instead of asking again for
-/// the same words (Julian, 2026-11-16: three cards per scheduled post).
-static ALLOWED_SENDS: Mutex<Vec<(String, String, String, i64)>> = Mutex::new(Vec::new());
+/// A send the user allowed on a card. Posting is several clicks (Post,
+/// Confirm, Schedule) of one send (Julian, 2026-11-16: three cards per
+/// scheduled post), so the allowed words cover later clicks in the same tab,
+/// on the same site, with the same words, for 15 minutes, and END the next
+/// time the agent types (the same words included; a date or time is not
+/// typing) or navigates (`Page::epoch`). The page changing its own address
+/// doesn't end it. The same control repeats for a minute only (a click
+/// retried after a hiccup); a second Post asks. Money always asks (`send_of`).
+/// It leaves: a site's own Forward or Share button, clicked in that tab on
+/// that page before any typing, rides on the Allow.
+struct AllowedSend {
+    agent: String,
+    host: String,
+    words: String,
+    tab: Option<u64>,
+    epoch: u64,
+    at: i64,
+    /// The controls clicked under this entry, and when.
+    seen: Vec<(String, i64)>,
+}
 
-/// How long an allowed send's later steps go through.
+static ALLOWED_SENDS: Mutex<Vec<AllowedSend>> = Mutex::new(Vec::new());
+
+/// How long an allowed send's later clicks go through.
 const SAME_SEND_MS: i64 = 15 * 60 * 1000;
+
+/// How long the very same control may be clicked again.
+const RETRY_MS: i64 = 60 * 1000;
 
 /// The page, tool name and input a browser call acts on, for any browser.
 fn call_on(agent_id: &str, tool: &str, input: &Value) -> Option<(Page, String, Value)> {
@@ -1397,11 +1435,21 @@ fn call_on(agent_id: &str, tool: &str, input: &Value) -> Option<(Page, String, V
     })
 }
 
-/// The site and the words of a send step: `None` unless it is a step that
-/// goes out under the user's name with words typed on a known site, and
-/// nothing "Full send" still asks for (money, deleting for good, uploads,
-/// scripts).
-fn send_of(agent: &Agent, tool: &str, input: &Value) -> Option<(String, String)> {
+/// What an allowed send is remembered by: the site, the words, the tab, the
+/// page memory's epoch, and the control clicked.
+struct SendOf {
+    host: String,
+    words: String,
+    tab: Option<u64>,
+    epoch: u64,
+    control: String,
+}
+
+/// The send a step is a part of: `None` unless it is a step that goes out
+/// under the user's name with words typed on a known site, and nothing "Full
+/// send" still asks for (money, deleting for good, uploads, scripts). A date
+/// or time typed isn't part of the words.
+fn send_of(agent: &Agent, tool: &str, input: &Value) -> Option<SendOf> {
     let (page, name, input) = call_on(&agent.id, tool, input)?;
     if matches!(
         name.as_str(),
@@ -1413,32 +1461,76 @@ fn send_of(agent: &Agent, tool: &str, input: &Value) -> Option<(String, String)>
         return None;
     }
     let host = url_for(&page, &input).and_then(|u| host_of(&u))?;
-    Some((host, super::outward::norm(&page.typed.join("\n"))))
+    let words: Vec<&str> = page
+        .typed
+        .iter()
+        .map(String::as_str)
+        .filter(|t| !super::outward::is_schedule_value(t))
+        .collect();
+    let tab = tab_of(&input);
+    let control = match input.get("ref").and_then(Value::as_str) {
+        Some(r) => format!("{tab:?}|{}", page.refs.get(r).map_or(r, String::as_str)),
+        None => format!("{tab:?}|{name}|{input}"),
+    };
+    Some(SendOf {
+        host,
+        words: super::outward::norm(&words.join("\n")),
+        tab,
+        epoch: page.epoch,
+        control,
+    })
 }
 
-/// The user allowed this browser step on a card: later steps of the same
-/// send (same site, same words) won't ask again for a while.
+/// The user allowed this browser step on a card: later clicks of the same
+/// send won't ask again (see [`AllowedSend`]).
 pub fn note_allowed_send(agent: &Agent, tool: &str, input: &Value) {
-    let Some((host, words)) = send_of(agent, tool, input) else {
+    let Some(send) = send_of(agent, tool, input) else {
         return;
     };
     let now = super::store::now_ms();
     let mut sends = ALLOWED_SENDS.lock().unwrap_or_else(|e| e.into_inner());
-    sends.retain(|(_, _, _, at)| now - at < SAME_SEND_MS);
-    sends.push((agent.id.clone(), host, words, now));
+    sends.retain(|s| now - s.at < SAME_SEND_MS);
+    sends.push(AllowedSend {
+        agent: agent.id.clone(),
+        host: send.host,
+        words: send.words,
+        tab: send.tab,
+        epoch: send.epoch,
+        at: now,
+        seen: vec![(send.control, now)],
+    });
 }
 
 /// Whether this step continues a send the user already allowed.
 fn same_send_allowed(agent: &Agent, tool: &str, input: &Value) -> bool {
-    let Some((host, words)) = send_of(agent, tool, input) else {
+    let Some(send) = send_of(agent, tool, input) else {
         return false;
     };
     let now = super::store::now_ms();
-    ALLOWED_SENDS
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .iter()
-        .any(|(a, h, w, at)| *a == agent.id && *h == host && *w == words && now - at < SAME_SEND_MS)
+    let mut sends = ALLOWED_SENDS.lock().unwrap_or_else(|e| e.into_inner());
+    sends.retain(|s| now - s.at < SAME_SEND_MS);
+    for s in sends.iter_mut().filter(|s| {
+        s.agent == agent.id
+            && s.host == send.host
+            && s.words == send.words
+            && s.tab == send.tab
+            && s.epoch == send.epoch
+    }) {
+        match s.seen.iter_mut().find(|(c, _)| *c == send.control) {
+            // The same control again: a retry within a minute, never a
+            // second Post.
+            Some((_, at)) => {
+                if now - *at < RETRY_MS {
+                    return true;
+                }
+            }
+            None => {
+                s.seen.push((send.control.clone(), now));
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// A card the gate would raise for the next step of a send already allowed.
