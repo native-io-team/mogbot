@@ -2696,15 +2696,15 @@ budget by trimming two examples from "Getting access".
 
 ### Your browser (`agents/browser.rs`)
 
-The mechanism is Claude Code's **Claude in Chrome**: `claude --chrome` loads
-the `claude-in-chrome` MCP server into a turn, which drives the Claude in
-Chrome extension in the user's own Chrome (open tabs, navigate, read text or
-the accessibility tree, screenshots, click, type, fill forms). The extension
-must be signed in to the **same claude.ai account** as Claude Code, and Claude
-Code must be signed in with claude.ai (an API key keeps it off). Codex has no
-equivalent here: Codex agents never get the browser and ask instead.
+The only way agents reach the user's Chrome is the app's own extension,
+**Mogbot for Chrome** (`user_chrome/`), on any engine and any account; see
+"Mogbot for Chrome is the only browser route" below. Claude Code's Claude in
+Chrome is not a route: every turn runs `--no-chrome`
+(`chrome_route::decide`). Its guided card and team switch
+(`agents/browser.rs`) are still in the app, so "Set up once", "Who gets it"
+and "The way that works right now" below describe that older route.
 
-**Or the app's own extension, for any engine** ("Your Chrome",
+**The app's own extension, for any engine** ("Your Chrome" in older text,
 `user_chrome/`, off by default): Settings → Chrome sets up a
 native host (the app's own binary) and the app's MV3 extension, and every
 turn, on any engine and any account, gets `mcp__user_chrome__*` with the

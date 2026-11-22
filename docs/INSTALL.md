@@ -2,7 +2,7 @@
 
 The quickest way in needs none of this: the signed Mac app from
 [mogbot.app/start](https://mogbot.app/start), and the iPhone app from the
-public [TestFlight beta](https://testflight.apple.com/join/fsm64m5E). There are
+[App Store](https://apps.apple.com/app/mogbot/id6833062484). There are
 Windows and Linux installers too: see [Install](guide/install.md).
 
 This guide is for building the app yourself, on your own Mac, from this repo.
@@ -35,11 +35,11 @@ to expect.
      account, signed in on the Mac **and** the phone with the same account
      **before** you scan the pairing code.
 4. The phone app comes three ways, and the agent will ask which:
-   **TestFlight** (iPhone; minutes; the real app, from the public beta),
+   **the App Store** (iPhone; minutes; the real app),
    **Expo Go** (minutes; runs inside Expo Go while a terminal on the Mac stays
    open; no dictation or share sheet) or **built with Xcode** (the real app;
    30–60 minutes the first time; with a free Apple ID, re-install every 7
-   days). None gets push notifications yet.
+   days). Expo Go and an Xcode build get no push notifications.
 5. Your Mac does the work. Agents stop when the Mac sleeps or the app is closed.
 
 No agent? Follow the same steps by hand: run each **Run** block in Terminal and
@@ -426,28 +426,26 @@ page"*, with **Open the Tailscale page** and **Check again**.
 
 ### Step 13. Choose how to get the phone app
 
-The iPhone app is on a public TestFlight beta (the App Store listing is
-planned for 19 November 2026). Android is in internal testing only, so an
+The iPhone app is on the [App Store](https://apps.apple.com/app/mogbot/id6833062484). Android is in internal testing only, so an
 Android phone uses Expo Go or a self-build. Ask; don't pick for them.
 
-**HUMAN:** *"How do you want the phone app? **1. TestFlight** (iPhone): a few
-minutes. Install TestFlight from the App Store, then open
-https://testflight.apple.com/join/fsm64m5E on the phone (the app's **Get it on
-TestFlight** screen shows that link as a code to scan). **2. Expo Go**: a few
+**HUMAN:** *"How do you want the phone app? **1. The App Store**
+(iPhone): a minute. Open https://apps.apple.com/app/mogbot/id6833062484 on the
+phone, or point its camera at the code on the app's phone screen. **2. Expo Go**: a few
 minutes. It runs inside a free app called Expo Go and only works while a
 terminal on this Mac keeps running. No built-in dictation, no 'Send to agent'
 in the share sheet. **3. Built with Xcode** onto your iPhone: the real app,
 with its own icon, dictation and no terminal to keep open. It takes 30–60
 minutes the first time, needs the full Xcode app (about 25 GB free in total)
 and your iPhone plugged in by cable once. With a free Apple ID it has to be
-re-installed every 7 days. None of them gets push notifications yet, so
-you're alerted only while the app is open. Which one?"*
+re-installed every 7 days. With 2 or 3 you're
+alerted only while the phone app is open. Which one?"*
 
 - **1** → Step 14, then Step 16.
 - **2** → Step 14, then Step 15A.
 - **3** → Step 14, then Step 15B. (Android phone: Step 15A, or the Android
   note at the end of 15B.)
-- Not sure → TestFlight on an iPhone, Expo Go on Android.
+- Not sure → the App Store on an iPhone, Expo Go on Android.
 
 ### Step 14. Tailscale on the phone (before any scanning)
 
@@ -532,8 +530,8 @@ later**), a free Apple ID, and the iPhone plugged in by cable.
 The desktop app's Phone panel can do this same build with an agent beside it
 (**Build it on this Mac…**, or ⌘K → Get the phone app…; docs/mobile.md,
 "Installing the app"), but it is **only offered when the app runs from
-source** (`pnpm tauri dev`), and the panel offers TestFlight instead while
-`brand.json` names a TestFlight link. From the built `.app`, do it by hand as
+source** (`pnpm tauri dev`), and the panel offers the App Store instead while
+`brand.json` names its page. From the built `.app`, do it by hand as
 below.
 
 **Check disk space first.** Xcode plus its iOS components and the first build
@@ -664,40 +662,28 @@ Mac?"*
 **If it fails:** the phone sits on "Reaching …" or says it can't reach the
 Mac: see [Pairing is stuck](#pairing-is-stuck-or-cant-reach-the-mac).
 
-### Step 17. Let agents use Chrome (optional, Claude Code only)
+### Step 17. Let agents use Chrome (optional)
 
 With this, an agent uses the sites the human is already signed in to in their
-own Chrome (Figma, LinkedIn, a dashboard) instead of asking them to log in.
-Reading goes through; every click, typing, post, send or payment, and any site
-the agent wasn't given, asks on a card first. It needs Claude Code signed in
-with a Claude account (not an API key). Codex agents can't use it; they ask
-instead.
+own Chrome (Figma, LinkedIn, a dashboard) instead of asking them to log in, in
+tabs of its own. Reading goes through; what asks on a card first depends on
+the independence level (Step 18). It is the app's own extension, **Mogbot for
+Chrome**: it works on any engine and any Claude account, and it is the only
+way agents reach Chrome. Don't set up any other browser extension for this.
 
 **HUMAN:** *"If you want your agents to use websites in your own Chrome: in
-**each Chrome profile** you want them to use, install the **Claude in Chrome**
-extension (https://claude.ai/chrome) and sign in to it with the **same Claude
-account** you signed in to Claude Code with. Then in the app press ⌘K, choose
-**Let agents use your browser…**, and follow the card until it offers **Turn
-on**; press it. Keep Chrome open while agents work. The first time an agent
-opens a site, the extension asks whether it may use that site: approve it.
-Tell me what the card says."*
+the app open **Settings → Chrome** and turn on **Let agents use your Chrome**.
+Press **Add to Chrome…** and, when Chrome asks, press **Enable**. To give them
+another Chrome profile, add **Mogbot for Chrome** from the Chrome Web Store in
+that profile too:
+https://chromewebstore.google.com/detail/fjjaafigmeohdpollmkjkihhplacaamh.
+Keep Chrome open while agents work. Tell me what the page says under Let
+agents use your Chrome."*
 
-**Check:** the card says *"On. Agents use the sites you're signed in to in
-Chrome, as you…"*. *"On, but Chrome isn't answering right now"* means Chrome
-is closed or the extension isn't connected: see
-[Extension not connected](#chrome-extension-not-connected). From the terminal,
-Claude Code's link to the extension:
-
-```bash
-ls "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json" && echo HELPER_OK
-```
-
-Expected: `HELPER_OK`. That file is Claude Code's link to the extension; the
-app looks for it too ("It needs the Claude in Chrome extension, which isn't
-set up on this Mac yet" on a login card means it's missing). If it's missing,
-run `claude --chrome` once in a terminal, type `/chrome` to see the connection
-status, then `/exit`. It says nothing about whether Chrome is open; with Chrome
-closed, agents report the browser as not connected.
+**Check:** it says *"On. Agents can use your Chrome, in tabs of their own."*
+(with several profiles, *"On. Agents can use 2 of your Chrome profiles…"*). If
+it still says *"Do the steps below"*, no Chrome is connected: see
+[Extension not connected](#chrome-extension-not-connected).
 
 ### Step 18. First run choices
 
@@ -825,7 +811,7 @@ The failures people actually hit, most common first:
 | Links from the app open nothing, or a blank window | A leftover headless Chrome is catching them | [Links open blank](#links-open-nothing-or-a-blank-window) |
 | Phone build fails: Xcode license, "sending 'slot' risks causing data races", or a device id refused | Xcode too old, or its license not accepted after an update; the wrong device id | [Xcode](#xcode-version-license-or-device-id) |
 | `No space left on device`, or a build that dies part-way | Disk full | [Disk full](#disk-full) |
-| An agent says the browser isn't connected, or a card says the Claude in Chrome extension isn't set up | The extension is missing, signed in to another Claude account, or Chrome is closed | [Extension not connected](#chrome-extension-not-connected) |
+| An agent says Chrome isn't connected, or a card says Mogbot for Chrome isn't connected | The extension is missing from that Chrome profile, the switch is off, or Chrome is closed | [Extension not connected](#chrome-extension-not-connected) |
 | Agents don't answer, or "no engine" | Claude Code, Codex or OpenCode not signed in | [Agents don't answer](#agents-dont-answer--no-engine) |
 
 ### Pairing is stuck or can't reach the Mac
@@ -929,20 +915,17 @@ attachments, old downloads); that's the human's call.
 
 ### Chrome extension not connected
 
-1. The **Claude in Chrome** extension (https://claude.ai/chrome) is installed
-   in the Chrome profile the agent should use (each profile needs its own
-   install) and signed in with the **same Claude account** as Claude Code
-   (`claude auth status` shows which). Claude Code signed in with an API key
-   can't use it.
-2. Chrome is open. Agents can't use a closed Chrome. If the agent asks you to
-   bring a Chrome window to the front, do that and press Check again.
-3. ⌘K → **Let agents use your browser…** says "On". If it offers Check again,
-   press it after opening Chrome.
-4. Step 17's terminal check passes (`HELPER_OK`). If not, run
-   `claude --chrome` once and type `/chrome` to see the status.
-5. The extension asked whether it may use the site: approve it in Chrome.
-6. Only Claude Code agents can use Chrome. A Codex agent says so; ask the
-   Chief to switch that agent to Claude Code if it needs the browser.
+1. Settings → Chrome: **Let agents use your Chrome** is on. If the line under
+   it says it couldn't start, turn it off and on again.
+2. **Mogbot for Chrome** is installed and turned on in the Chrome profile the
+   agent should use (each profile needs its own install): open
+   `chrome://extensions` in that profile. Press **Add to Chrome…** in Settings
+   → Chrome, or use the Chrome Web Store link in Step 17, then **Enable**.
+3. Chrome is open. Agents can't use a closed Chrome.
+4. The page says the extension is older than this app's: reload it on
+   `chrome://extensions`.
+5. A Chrome profile managed by work can block extensions: use a personal
+   profile.
 
 ### Port already in use
 

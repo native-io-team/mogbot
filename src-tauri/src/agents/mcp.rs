@@ -1782,8 +1782,8 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
 /// `task_assign`: a line on a teammate's list, from `caller`. Never wakes
 /// the assignee (it is in its next briefing, and the nudge tick chases it),
 /// carries none of the caller's grants, and is refused in a turn answering
-/// outside text. Counts as one agent-to-agent hop, so a chain of
-/// assignments can't run on forever.
+/// outside text. Refused once the agent-to-agent hop cap is spent, but
+/// spends no hop itself.
 fn task_assign(app: &AppHandle, caller: &store::Agent, _turn: Option<u64>, args: &Value) -> Value {
     // From outside text, whatever the turn: never fails open.
     let outside = runner::from_outside(&caller.id);
