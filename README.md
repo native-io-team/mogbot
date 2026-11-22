@@ -35,8 +35,8 @@
 You talk to a **Chief of Staff**. It makes an agent for each job you hand it,
 briefs it, and comes back with the result. Every agent has its own
 instructions, memory, routines and model, and works on your computer with your
-apps and your files. Anything that spends money, uses your passwords or deletes
-for good waits for your **Allow**, on the desk or on your phone.
+apps and your files. Spending money always waits for your **Allow**, on the desk
+or on your phone. You choose how much else does.
 
 ## Why Mogbot
 
@@ -57,8 +57,8 @@ Slack, GitHub, Figma and more), the tools on your computer, their own browser
 or your signed-in Chrome when you allow it.
 
 **You decide how much they do alone.** One slider per team or per agent:
-Careful, Steady, Bold, Unleashed. Even at Unleashed they stop for money,
-passwords, deleting for good and going live.
+Careful, Steady, Bold, Unleashed. Up to Bold they also stop for passwords,
+deleting for good and going live. Unleashed stops only before spending money.
 
 **On your phone.** Pair by QR code. Chat, approve from the Lock Screen, review
 results and start routines from anywhere.
