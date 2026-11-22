@@ -529,3 +529,42 @@ fn after_a_failed_save_and_a_relaunch_a_paused_agent_holds_what_it_would_have_he
     with_held("p15", std::mem::take);
     store::set_root_for_tests(None);
 }
+
+/// The three call sites that need a live `AppHandle` (so no test can run
+/// them) are held by reading their own source: each must still make the
+/// decision the helpers are tested for. Put the old code back and these go
+/// red. The helpers' behaviour is proven by the tests above.
+fn body<'a>(src: &'a str, from: &str, to: &str) -> &'a str {
+    let a = src.find(from).unwrap_or_else(|| panic!("{from} moved"));
+    let b = src[a..].find(to).unwrap_or_else(|| panic!("{to} moved")) + a;
+    &src[a..b]
+}
+
+#[test]
+fn set_paused_pauses_with_the_queue_kept_never_the_plain_stop() {
+    let admin = include_str!("../admin.rs");
+    let set_paused = body(admin, "pub fn set_paused(", "\nfn pause(");
+    assert!(set_paused.contains("pause_action(on, saved)"));
+    assert!(set_paused.contains("runner::stop_for_pause("));
+    assert!(!set_paused.contains("runner::stop("), "a pause is not a plain Stop");
+    assert!(set_paused.contains("runner::release_held("));
+}
+
+#[test]
+fn push_decides_paused_under_the_lock_and_looks_again_after_holding() {
+    let inbox = include_str!("inbox.rs");
+    let push = body(inbox, "pub(super) fn push(", "/// What came of a message");
+    let lock = push.find("RUNTIMES.lock()").expect("push takes the lock");
+    let read = push.find("a.paused").expect("push reads paused");
+    let door = push.find("admit_or_hold(").expect("push goes through the door helper");
+    assert!(lock < read && read < door, "paused is read under the lock, then decided");
+    assert!(push.contains("after_hold("), "a held message is looked at again");
+    assert!(push.contains("paused::gate("));
+}
+
+#[test]
+fn the_gate_looks_again_after_it_holds() {
+    let paused = include_str!("paused.rs");
+    let gate = body(paused, "pub(super) fn gate(", "pub(super) enum Decision");
+    assert!(gate.contains("Decision::Held => {\n            after_hold("));
+}
