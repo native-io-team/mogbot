@@ -67,8 +67,8 @@ describe('Catch up', () => {
 describe('Allow and Deny on the card in front', () => {
   const m = (key: string, over: Partial<KeyLike> = {}) => press({ metaKey: true, key, ...over });
   it('⌘↩ allows and ⌘⌫ denies', () => {
-    expect(cardAnswerForKey(m('Enter'))).toBe('allow');
-    expect(cardAnswerForKey(m('Backspace'))).toBe('deny');
+    expect(cardAnswerForKey(m('Enter'), document, true)).toBe('allow');
+    expect(cardAnswerForKey(m('Backspace'), document, true)).toBe('deny');
   });
   it('needs ⌘ alone: ⌃⌘↩, ⌥⌘↩, ⇧⌘↩, a bare ↩ and a repeat do nothing', () => {
     for (const over of [
@@ -77,21 +77,26 @@ describe('Allow and Deny on the card in front', () => {
       { shiftKey: true },
       { repeat: true },
     ]) {
-      expect(cardAnswerForKey(m('Enter', over))).toBeNull();
+      expect(cardAnswerForKey(m('Enter', over), document, true)).toBeNull();
     }
-    expect(cardAnswerForKey(press({ key: 'Enter' }))).toBeNull();
-    expect(cardAnswerForKey(press({ key: 'Backspace' }))).toBeNull();
+    expect(cardAnswerForKey(press({ key: 'Enter' }), document, true)).toBeNull();
+    expect(cardAnswerForKey(press({ key: 'Backspace' }), document, true)).toBeNull();
+  });
+  it('is Mac only: Super+Enter and Super+Backspace on Windows or Linux answer nothing', () => {
+    expect(cardAnswerForKey(m('Enter'), document, false)).toBeNull();
+    expect(cardAnswerForKey(m('Backspace'), document, false)).toBeNull();
+    expect(cardAnswerForKey(m('Enter'), document, true)).toBe('allow');
   });
   it('does nothing while a text box has focus, so sending a message with ⌘↩ is untouched', () => {
     const box = document.createElement('textarea');
     document.body.append(box);
-    expect(cardAnswerForKey(m('Enter', { target: box }))).toBeNull();
+    expect(cardAnswerForKey(m('Enter', { target: box }), document, true)).toBeNull();
     box.focus();
-    expect(cardAnswerForKey(m('Backspace', { target: document.body }))).toBeNull();
+    expect(cardAnswerForKey(m('Backspace', { target: document.body }), document, true)).toBeNull();
     box.remove();
     const editable = document.createElement('div');
     editable.setAttribute('contenteditable', 'true');
-    expect(cardAnswerForKey(m('Enter', { target: editable }))).toBeNull();
+    expect(cardAnswerForKey(m('Enter', { target: editable }), document, true)).toBeNull();
   });
   it('presses the first waiting card’s button, and not a disabled or missing one', () => {
     document.body.innerHTML = `<div data-keys><button data-allow>Allow</button><button data-deny>Deny</button></div>

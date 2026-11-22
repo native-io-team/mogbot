@@ -10,6 +10,7 @@
 
 import { keyLookFor } from '../../packages/companion-protocol/src/agentKeys';
 import type { Agent } from './agents';
+import { isMac } from './setup';
 
 export interface KeyLike {
   key: string;
@@ -57,8 +58,17 @@ export function isCatchUpKey(e: KeyLike, cIsTaken: boolean): boolean {
   return e.shiftKey === cIsTaken;
 }
 
-/** What ⌘↩ / ⌘⌫ answer on the card in front, or null: no typing, no other modifier. */
-export function cardAnswerForKey(e: KeyLike, doc: Document = document): 'allow' | 'deny' | null {
+/**
+ * What ⌘↩ / ⌘⌫ answer on the card in front, or null: no typing, no other
+ * modifier. Mac only: on Windows and Linux the Super key is `metaKey`, and
+ * Super+Enter or Super+Backspace must never answer a card there.
+ */
+export function cardAnswerForKey(
+  e: KeyLike,
+  doc: Document = document,
+  mac: boolean = isMac()
+): 'allow' | 'deny' | null {
+  if (!mac) return null;
   if (e.defaultPrevented || e.repeat) return null;
   if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return null;
   if (e.key !== 'Enter' && e.key !== 'Backspace') return null;
