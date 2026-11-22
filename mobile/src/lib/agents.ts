@@ -395,12 +395,31 @@ export function formatAgo(ts: number, now = Date.now()): string {
  */
 export function formatDate(ts: number, now = Date.now()): string {
   const d = new Date(ts);
-  return d.toLocaleDateString([], {
-    month: 'short',
-    day: 'numeric',
-    ...(d.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}),
-  });
+  const withYear = d.getFullYear() !== new Date(now).getFullYear();
+  const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${withYear}`;
+  let words = dates.get(key);
+  if (words === undefined) {
+    // 0.4 ms each on Hermes (a formatter is made every time), and every row
+    // more than a day old says one each time it draws.
+    words = d.toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+      ...(withYear ? { year: 'numeric' } : {}),
+    });
+    if (dates.size > 500) dates.clear();
+    dates.set(key, words);
+  }
+  return words;
 }
+
+/** The days already written out. */
+const dates = new Map<string, string>();
+
+/**
+ * The app came forward: the phone's language may have been changed in its
+ * settings meanwhile (on Android that needn't restart the JavaScript).
+ */
+export const forgetDates = () => dates.clear();
 
 /**
  * Whether the phone can answer this card. An import's review card only on a

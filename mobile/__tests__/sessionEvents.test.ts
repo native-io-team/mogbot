@@ -78,6 +78,7 @@ jest.mock('expo-notifications', () => ({
   setBadgeCountAsync: jest.fn(() => Promise.resolve()),
 }));
 
+import { formatDate } from '../src/lib/agents';
 import { adopt, call, watchLifecycle } from '../src/lib/session';
 import { getApp, setApp } from '../src/lib/store';
 
@@ -133,6 +134,18 @@ afterEach(() => {
 });
 const caughtUp = (n: number) =>
   mac.event({ type: 'sync.caughtUp', cursor: at(n) } as CompanionEvent);
+
+describe('the app coming forward', () => {
+  it('writes dates again: the phone’s language may have changed while it was away', () => {
+    const [then, now] = [new Date(2026, 10, 4).getTime(), new Date(2026, 10, 22).getTime()];
+    const words = formatDate(then, now);
+    jest.spyOn(Date.prototype, 'toLocaleDateString').mockReturnValue('4 nov.');
+    go('background');
+    expect(formatDate(then, now)).toBe(words);
+    go('active');
+    expect(formatDate(then, now)).toBe('4 nov.');
+  });
+});
 
 describe('an event it can’t apply', () => {
   it('never fails the request whose answer comes next', async () => {

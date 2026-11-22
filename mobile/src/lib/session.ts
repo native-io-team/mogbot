@@ -38,7 +38,7 @@ import { FIRST_CONVERSATION } from '@shipstudio/companion-protocol';
 import { announce, replyAnnouncement } from './a11y';
 import { speakable } from './readAloud';
 import { conversationOfKey } from './conversations';
-import { needsYou } from './agents';
+import { needsYou, forgetDates } from './agents';
 import {
   badgeCount,
   clearAll,
@@ -507,6 +507,7 @@ export function watchLifecycle(): () => void {
     // Before anything else: frames waiting for a slice are opened, since no
     // timer may fire from here on (`setAway`).
     setAway(state === 'background');
+    if (fg) forgetDates();
     transport?.setForeground(fg);
     // The app may be killed from the background: put the copy on disk now.
     if (!fg) {
