@@ -1443,11 +1443,47 @@ struct SendOf {
     tab: Option<u64>,
     epoch: u64,
     control: String,
+    /// Its label is a step of getting words out (`continues_a_send`).
+    covered: bool,
 }
+
+/// Labels that are steps of getting words out. Anything else (Delete
+/// project, Invite, a label in another language) is not covered by an Allow
+/// for a post: it asks.
+const SEND_STEPS: &[&str] = &[
+    "post", "send", "reply", "publish", "schedule", "confirm", "next", "done", "save",
+];
+
+/// Words that may sit beside a send step ("Post now", "Send message").
+const SEND_FILLER: &[&str] = &[
+    "now", "it", "this", "the", "your", "a", "message", "comment",
+];
+
+/// Whether a control is one more step of getting words out: no label at all,
+/// or only send-step words.
+fn continues_a_send(label: Option<&str>) -> bool {
+    let Some(label) = label else {
+        return true;
+    };
+    let name = name_in(label);
+    let tokens = words(&name);
+    if !label.contains('"') {
+        // A role with no name: unlabelled.
+        return true;
+    }
+    !tokens.is_empty()
+        && tokens.iter().any(|t| SEND_STEPS.contains(&t.as_str()))
+        && tokens
+            .iter()
+            .all(|t| SEND_STEPS.contains(&t.as_str()) || SEND_FILLER.contains(&t.as_str()))
+}
+
+/// How many different controls one Allow covers.
+const MAX_CONTROLS: usize = 4;
 
 /// The send a step is a part of: `None` unless it is a step that goes out
 /// under the user's name with words typed on a known site, and nothing "Full
-/// send" still asks for (money, deleting for good, uploads, scripts). A date
+/// send" still asks for (money, uploads, scripts). A date
 /// or time typed isn't part of the words.
 fn send_of(agent: &Agent, tool: &str, input: &Value) -> Option<SendOf> {
     let (page, name, input) = call_on(&agent.id, tool, input)?;
@@ -1472,7 +1508,13 @@ fn send_of(agent: &Agent, tool: &str, input: &Value) -> Option<SendOf> {
         Some(r) => format!("{tab:?}|{}", page.refs.get(r).map_or(r, String::as_str)),
         None => format!("{tab:?}|{name}|{input}"),
     };
+    let label = input
+        .get("ref")
+        .and_then(Value::as_str)
+        .and_then(|r| page.refs.get(r))
+        .map(String::as_str);
     Some(SendOf {
+        covered: continues_a_send(label),
         host,
         words: super::outward::norm(&words.join("\n")),
         tab,
@@ -1524,10 +1566,11 @@ fn same_send_allowed(agent: &Agent, tool: &str, input: &Value) -> bool {
                     return true;
                 }
             }
-            None => {
+            None if send.covered && s.seen.len() < MAX_CONTROLS => {
                 s.seen.push((send.control.clone(), now));
                 return true;
             }
+            None => {}
         }
     }
     false

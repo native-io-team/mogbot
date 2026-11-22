@@ -21,6 +21,7 @@ fn page_with(refs: &[(&str, &str)], url: &str) -> Page {
         last_target: None,
         typed: Vec::new(),
         calls: Default::default(),
+        epoch: 0,
     }
 }
 

@@ -53,7 +53,9 @@ Unleashed too. That one card is the OK for the whole send: allowing it covers ev
 those words out in that tab on that site (paste, the date, Schedule, Post), with no second card, for
 up to 15 minutes. It ends the moment the agent types again (even the same words, say to a second
 person; a date or time doesn't count) or opens or navigates to a page, and clicking the same button a
-second time asks again. Different words are a new card. One thing it can't tell apart: a site's own
+second time asks again. Only buttons that are steps of getting the words out (Post, Send, Reply,
+Publish, Schedule, Confirm, Next, Done, Save, or none at all) ride on it, up to four different ones;
+a Delete or Invite button, or a button in another language, asks. Different words are a new card. One thing it can't tell apart: a site's own
 Forward or Share button, clicked on that page before any typing.
 
 At Bold, a picture, video or PDF the agent made in its own folder, or a picture or video in your
