@@ -9,8 +9,9 @@ Your own team of AI agents, on your own Mac, on the Claude or ChatGPT plan you
 already pay for. You talk to a **Chief of Staff**; it sets up named agents for
 the work you hand it, briefs them, delegates and comes back with results. Each
 agent remembers you, keeps its own instructions and routines, and runs on
-Claude Code or Codex on your Mac. Anything that spends money, sends something
-as you, or changes what other people see waits for your **Allow**. A phone app
+Claude Code or Codex on your Mac. To start with, anything that spends money,
+sends something as you, or changes what other people see waits for your
+**Allow**. You choose how much they ask; spending money always does. A phone app
 lets you chat, approve and review from anywhere, talking only to your own Mac:
 through a free sign-in on the Mac (our relay, end to end encrypted), or over
 your own Tailscale, where nothing goes through our servers.

@@ -705,9 +705,9 @@ closed, agents report the browser as not connected.
 by default they work on this Mac on their own and ask before anything
 leaves it (sending, posting, spending). You can change it any time by
 telling your Chief ("ask me less", "ask me more") or in Settings →
-Independence, on a slider from Careful through Steady (the default) and Bold
-to Unleashed. Even at Unleashed, spending money, logins and deleting for good
-still ask you first. **Your team**: the Chief of Staff
+Independence, on a slider from Careful through Steady and Bold (the default)
+to Unleashed. Unleashed stops only before spending money: it sends, deletes,
+uses your logins and pushes without asking. **Your team**: the Chief of Staff
 creates, changes and removes the other agents for you, and you can change an
 agent's instructions or routines just by asking in the chat. The Chief is also
 the team's **admin**: it can OK other agents' everyday local work for you, and
