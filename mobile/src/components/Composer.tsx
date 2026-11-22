@@ -167,6 +167,7 @@ import {
   tidyDictation,
   upload,
 } from '../lib/session';
+import { useShallow } from 'zustand/react/shallow';
 import { getApp, useApp, useServed } from '../lib/store';
 import {
   keySize,
@@ -233,7 +234,11 @@ export function Composer({
   const [preparing, setPreparing] = useState(false);
   // The Mac's last answer while it's away: "+" stays, disabled, so the field doesn't jump.
   const canAttach = useServed('agents.files');
-  const team = useApp((s) => s.overview?.agents ?? NONE);
+  // The team only while an @ is being typed, and its names for dictation: the
+  // whole list is new with every line any agent says, and this box drew on each.
+  const mentioning = mentionQuery(draft.text) != null;
+  const team = useApp((s) => (mentioning ? s.overview?.agents : undefined) ?? NONE);
+  const vocabulary = useApp(useShallow((s) => (s.overview?.agents ?? NONE).map((a) => a.name)));
   // Settings → Voice: a voice message takes its audio along too.
   const keepRecording = useApp((s) => s.prefs.voiceRecording);
   const seq = useRef(0);
@@ -252,7 +257,6 @@ export function Composer({
     const t = setTimeout(() => setRestored(false), 5000);
     return () => clearTimeout(t);
   }, [restored]);
-  const vocabulary = useMemo(() => team.map((a) => a.name), [team]);
   // Send pressed while the computer still tidies what was said: the message is
   // already in the chat (dimmed, "Tidying…") and the field is free. The words
   // still coming (the last ones, then the better ones) go to it, not the field.

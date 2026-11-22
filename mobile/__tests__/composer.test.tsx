@@ -6,6 +6,7 @@
  */
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Profiler } from 'react';
 import { Composer } from '../src/components/Composer';
 import { setApp } from '../src/lib/store';
 import { agent } from './helpers';
@@ -155,6 +156,64 @@ describe('the message field', () => {
       undefined,
       undefined
     );
+  });
+});
+
+describe('the team, in the message box', () => {
+  const mail = (over = {}) => agent({ id: 'mail', name: 'Mail', ...over });
+  const team = (...agents: unknown[]) =>
+    setApp({ overview: { agents, engineReady: true, engines: [] } as never });
+  const type = (text: string) =>
+    act(async () => {
+      await fireEvent.changeText(screen.getByLabelText('Message Ops'), text);
+    });
+
+  it('draws nothing again for what another agent says or does', async () => {
+    state();
+    team(idle, mail());
+    let draws = 0;
+    await render(
+      <Profiler id="box" onRender={() => (draws += 1)}>
+        {composer()}
+      </Profiler>
+    );
+    const atRest = draws;
+    for (let i = 1; i <= 20; i++) {
+      await act(async () => {
+        team(
+          idle,
+          mail({
+            unread: i,
+            lastActivityAt: i,
+            status: { state: 'working', activity: `Step ${i}`, since: 1 },
+          })
+        );
+      });
+    }
+    expect(draws).toBe(atRest);
+    // The count can move: a word typed draws it.
+    await type('hi');
+    expect(draws).toBeGreaterThan(atRest);
+  });
+
+  it('@ lists the team as it is now, others than this one', async () => {
+    state();
+    team(idle, mail());
+    await render(composer());
+    expect(screen.queryByLabelText('Mention Mail')).toBeNull();
+    // Came after the box was drawn.
+    await act(async () => team(idle, mail(), agent({ id: 'maps', name: 'Maps' })));
+    await type('ask @');
+    expect(screen.getByLabelText('Mention Mail')).toBeTruthy();
+    expect(screen.getByLabelText('Mention Maps')).toBeTruthy();
+    expect(screen.queryByLabelText('Mention Ops')).toBeNull();
+    // Renamed, and one gone, while it's being typed.
+    await act(async () => team(idle, mail({ name: 'Mailroom' })));
+    await type('ask @ma');
+    expect(screen.getByLabelText('Mention Mailroom')).toBeTruthy();
+    expect(screen.queryByLabelText('Mention Maps')).toBeNull();
+    await type('ask them');
+    expect(screen.queryByLabelText('Mention Mailroom')).toBeNull();
   });
 });
 
