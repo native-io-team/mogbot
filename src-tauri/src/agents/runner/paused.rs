@@ -247,6 +247,20 @@ pub fn held_count(agent_id: &str) -> usize {
 /// nothing held. The conversation a message goes to is worked out before the
 /// lock, and the worker starts after it.
 pub fn release(app: &AppHandle, agent_id: &str) {
+    if release_step(agent_id) {
+        start_worker(app, agent_id);
+    }
+}
+
+/// After a message was held: the agent may have been resumed in the moment
+/// between the decision and the hold, so look again and release if so. Still
+/// paused, nothing is released.
+pub(super) fn after_hold(app: &AppHandle, agent_id: &str) {
+    release(app, agent_id);
+}
+
+/// [`release`] without the worker: whether one must start.
+pub(super) fn release_step(agent_id: &str) -> bool {
     let mut start = false;
     let mut settled = false;
     for _ in 0..3 {
@@ -268,9 +282,7 @@ pub fn release(app: &AppHandle, agent_id: &str) {
             "resume: some held messages still lack a conversation after three rounds; they stay held"
         );
     }
-    if start {
-        start_worker(app, agent_id);
-    }
+    start
 }
 
 /// The conversation each held message would have been given at the door.

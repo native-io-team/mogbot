@@ -679,3 +679,37 @@ fn the_gate_looks_again_after_it_holds() {
     let gate = body(paused, "pub(super) fn gate(", "pub(super) enum Decision");
     assert!(gate.contains("after_hold("));
 }
+
+#[test]
+fn a_message_held_just_as_the_agent_resumes_is_released_by_the_look_after() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    let a = store::create(store::NewAgent {
+        name: "Looker".into(),
+        role: "Does things".into(),
+        instructions: "Be brief.".into(),
+        shape: None,
+        color: None,
+        is_main: false,
+    })
+    .unwrap();
+    store::update(&a.id, |a| a.paused = true).unwrap();
+    hold_all(&a.id, vec![queued("a1", agent("Mail"), false)]);
+    // Still paused: the look after releases nothing.
+    assert!(!release_step(&a.id));
+    assert_eq!(held_ids(&a.id), ["a1"]);
+    // Resumed between the decision and the hold: the look after runs it.
+    store::update(&a.id, |a| a.paused = false).unwrap();
+    assert!(release_step(&a.id), "a worker must start");
+    assert!(held_ids(&a.id).is_empty());
+    let queued_ids: Vec<String> = RUNTIMES
+        .lock()
+        .unwrap()
+        .get(&a.id)
+        .map(|r| r.queue.iter().map(|m| m.id.clone()).collect())
+        .unwrap_or_default();
+    assert_eq!(queued_ids, ["a1"]);
+    RUNTIMES.lock().unwrap().remove(&a.id);
+    store::set_root_for_tests(None);
+}
