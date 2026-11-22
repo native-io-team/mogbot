@@ -10,8 +10,8 @@ The easiest way is to let an AI coding agent do it for you.
 
 ## For the human (read this first)
 
-Invited to try it? Start with [WELCOME.md](WELCOME.md): what this is and what
-to expect.
+What it is and what setup looks like: [README](../README.md) and the guide's
+[Install](guide/install.md) page.
 
 1. Open this folder in **Claude Code** or **Codex** and say: *"Set this up on my
    Mac and phone. Follow docs/INSTALL.md."*
