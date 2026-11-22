@@ -57,8 +57,10 @@ Slack, GitHub, Figma and more), the tools on your computer, their own browser
 or your signed-in Chrome when you allow it.
 
 **You decide how much they do alone.** One slider per team or per agent:
-Careful, Steady, Bold, Unleashed. Up to Bold they also stop for passwords,
-deleting for good and going live. Unleashed stops only before spending money.
+Careful, Steady, Bold, Unleashed. Up to Bold, an agent asks before it spends
+money, opens saved credentials, deletes for good or pushes to production.
+Unleashed still asks before spending money, and before typing into a password or
+card-code box in your browser.
 
 **On your phone.** Pair by QR code. Chat, approve from the Lock Screen, review
 results and start routines from anywhere.
@@ -90,10 +92,10 @@ provider, no plan needed. Setup takes about five minutes: pick an engine, the
 app installs and signs it in, and you're in a chat with your Chief of Staff.
 
 Already using another assistant? Bring your agents over: connect it (Claude,
-ChatGPT, Grok…) and it hands them over in a conversation (on Mac today),
-drop in an export from Grok Bot, OpenBot, OpenClaw or Hermes, or paste back one
-reply from any assistant. You review it all on one card before anything is
-imported. Ship Studio's agents copy straight in.
+ChatGPT, Grok…) and it hands them over in a conversation, drop in an export
+from Grok Bot, OpenBot, OpenClaw or Hermes, or paste back one reply from any
+assistant. You review it all on one card before anything is imported. Ship
+Studio's agents copy straight in.
 
 ## How it compares
 

@@ -706,8 +706,9 @@ by default they work on this Mac on their own and ask before anything
 leaves it (sending, posting, spending). You can change it any time by
 telling your Chief ("ask me less", "ask me more") or in Settings →
 Independence, on a slider from Careful through Steady and Bold (the default)
-to Unleashed. Unleashed stops only before spending money: it sends, deletes,
-uses your logins and pushes without asking. **Your team**: the Chief of Staff
+to Unleashed. Unleashed sends, deletes, uses your logins and pushes without
+asking; it still asks before spending money, and before typing into a password
+or card-code box in your browser. **Your team**: the Chief of Staff
 creates, changes and removes the other agents for you, and you can change an
 agent's instructions or routines just by asking in the chat. The Chief is also
 the team's **admin**: it can OK other agents' everyday local work for you, and
