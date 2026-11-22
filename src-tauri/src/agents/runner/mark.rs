@@ -298,19 +298,30 @@ impl Cause {
 /// so a quit, crash or update doesn't lose it. Written whenever the queue
 /// changes, under the runtimes lock, so writes land in order.
 pub(super) fn save_inbox(agent_id: &str, queue: &VecDeque<Inbound>) {
+    save_inbox_ok(agent_id, queue);
+}
+
+/// [`save_inbox`], and whether the file now says what `queue` does.
+pub(super) fn save_inbox_ok(agent_id: &str, queue: &VecDeque<Inbound>) -> bool {
     let Ok(home) = store::agent_home(agent_id) else {
-        return;
+        return false;
     };
     let path = home.join("inbox.json");
     if queue.is_empty() {
-        let _ = std::fs::remove_file(path);
-    } else if let Ok(json) = serde_json::to_value(queue).and_then(|mut v| {
+        return !path.exists() || std::fs::remove_file(path).is_ok();
+    }
+    let Ok(json) = serde_json::to_value(queue).and_then(|mut v| {
         super::secrets::redact_value(&mut v);
         serde_json::to_vec(&v)
-    }) {
-        // By rename: a crash mid-write leaves the last good queue, never half.
-        if let Err(e) = super::store::write_atomic(&path, &json) {
+    }) else {
+        return false;
+    };
+    // By rename: a crash mid-write leaves the last good queue, never half.
+    match super::store::write_atomic(&path, &json) {
+        Ok(_) => true,
+        Err(e) => {
             tracing::warn!("[Agents] couldn't save {agent_id}'s queue: {e}");
+            false
         }
     }
 }

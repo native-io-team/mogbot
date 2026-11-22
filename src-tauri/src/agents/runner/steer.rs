@@ -127,6 +127,9 @@ pub(super) fn heard(agent_id: &str, id: &str) -> bool {
     };
     let handed = slot.handed.remove(at);
     slot.heard.push(handed.id.clone());
+    // A pause that came before this read kept the message to run on Resume:
+    // the engine has it now, so it is not kept too.
+    super::paused::drop_held(agent_id, &handed.id);
     if let Some(typed) = handed.typed {
         runtime.typed = Some(match runtime.typed.take() {
             Some(before) => format!("{before}\n{typed}"),
@@ -178,6 +181,15 @@ fn finish(agent_id: &str, runtime: &mut Runtime) {
     }
     runtime.queue.retain(|m| !slot.heard.contains(&m.id));
     save_inbox(agent_id, &runtime.queue);
+}
+
+/// What the engine has already read in the turn in progress.
+pub(super) fn heard_ids(runtime: &Runtime) -> Vec<String> {
+    runtime
+        .steer
+        .as_ref()
+        .map(|s| s.heard.clone())
+        .unwrap_or_default()
 }
 
 /// What the status shows (`TurnWork::handed`, `heard`).

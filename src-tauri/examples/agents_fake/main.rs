@@ -309,11 +309,11 @@ async fn normal(h: &H) -> Check {
     .await?;
     h.turn(&a.id).await?;
     no_errors(&a.id)?;
-    // The short line before it went on working is narration: it goes in
-    // the timeline, and the chat keeps the final reply (`narration`).
+    // The short line before it went on working stays in the chat, as its own
+    // bubble (778503823: progress lines no longer fold into the timeline).
     let said = replies(&a.id);
     ensure(
-        said.len() == 1 && said[0].starts_with("Done:"),
+        said.len() == 2 && said[0] == "Looking into it." && said[1].starts_with("Done:"),
         format!("bubbles: {said:?}"),
     )?;
     ensure(h.drafting(&a.id, 5), "the reply never streamed as a draft")?;
@@ -325,16 +325,11 @@ async fn normal(h: &H) -> Check {
     let agent = store::get(&a.id).unwrap();
     let session = agent.session_id.clone().ok_or("no session kept")?;
     ensure(
-        said[0].contains(&session) && said[0].contains("turn 1"),
+        said[1].contains(&session) && said[1].contains("turn 1"),
         format!(
             "session {session} not the one the engine ran: {:?}",
-            said[0]
+            said[1]
         ),
-    )?;
-    let labels = format!("{steps:?}");
-    ensure(
-        labels.contains("Looking into it."),
-        format!("the narration isn't in \"What it did\": {labels}"),
     )?;
     ensure(agent.usage.all_time.turns >= 1, "no usage recorded")?;
 

@@ -435,7 +435,21 @@ def script_of(prompt):
 
 
 def stream_turn(args):
-    prompt = sys.stdin.read()
+    if "stream-json" in args:
+        # The app keeps stdin open and sends one JSON line per message
+        # ({"type":"user","message":{"content":"<text>"}}): read that line,
+        # not to end of input, and hand the script the text inside it.
+        prompt = sys.stdin.readline()
+        try:
+            content = json.loads(prompt)["message"]["content"]
+            if isinstance(content, str):
+                prompt = content
+            elif isinstance(content, list):
+                prompt = "\n".join(c.get("text", "") for c in content if isinstance(c, dict))
+        except Exception:
+            pass
+    else:
+        prompt = sys.stdin.read()
     resume = flag(args, "--resume")
     # As a Claude Code that dropped the hidden flag would: refused before any output.
     if os.environ.get("FAKE_CLAUDE_NO_RESUME_AT") and "--resume-session-at" in args:

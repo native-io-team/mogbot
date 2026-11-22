@@ -281,15 +281,16 @@ pub(super) fn room_inbound(text: String, room: super::rooms::RoomRef, outside: b
 /// it's busy with something else, or waiting for a slot.
 pub fn queued_for_room(agent_id: &str, room_id: &str) -> bool {
     let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let here = |m: &Inbound| m.room.as_ref().is_some_and(|x| x.room_id == room_id);
+    // Held for a pause is still waiting: it runs on Resume (also after a
+    // restart, when the agent has no runtime yet).
+    let held = super::paused::held_any(agent_id, here);
     let Some(r) = runtimes.get(agent_id) else {
-        return false;
+        return held;
     };
     let in_this_room = r.room.as_ref().is_some_and(|x| x.room_id == room_id);
-    let asked = r
-        .queue
-        .iter()
-        .any(|m| m.room.as_ref().is_some_and(|x| x.room_id == room_id));
-    asked && (!in_this_room || r.queued)
+    let asked = r.queue.iter().any(here) || held;
+    asked && (!in_this_room || r.queued || held)
 }
 
 /// Whether the agent's turn in progress answers text from outside (a
@@ -587,22 +588,53 @@ pub(super) fn push(app: &AppHandle, agent_id: &str, mut inbound: Inbound) {
     }
     let admitted = {
         let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
-        let runtime = runtimes.entry(agent_id.to_string()).or_default();
-        // Into the turn in progress too, when its engine takes it mid-turn
-        // (`steer`); it is queued either way, until the engine has read it.
-        super::steer::offer(runtime, &inbound);
-        let admitted = runtime.admit(inbound);
-        if admitted.is_ok() {
-            save_inbox(agent_id, &runtime.queue);
-        }
-        admitted
+        // Read under the lock, where a pause drains the queue.
+        let paused = store::get(agent_id).is_ok_and(|a| a.paused);
+        admit_or_hold(&mut runtimes, agent_id, paused, inbound)
     };
     match admitted {
-        Ok(true) => start_worker(app, agent_id),
-        Ok(false) => {}
+        Entry::Held => super::paused::after_hold(app, agent_id),
+        Entry::Refused(m) => tell_dropped(app, agent_id, vec![*m], Dropped::Stopped),
+        Entry::Admitted(Ok(true)) => start_worker(app, agent_id),
+        Entry::Admitted(Ok(false)) => {}
         // Being deleted: whoever asked hears it won't be done.
-        Err(refused) => tell_dropped(app, agent_id, vec![*refused], Dropped::Deleting),
+        Entry::Admitted(Err(refused)) => {
+            tell_dropped(app, agent_id, vec![*refused], Dropped::Deleting)
+        }
     }
+}
+
+/// What came of a message at the queue's door.
+pub(super) enum Entry {
+    Held,
+    Refused(Box<Inbound>),
+    Admitted(Result<bool, Box<Inbound>>),
+}
+
+/// Under the runtime lock: a message that passed the gate while the agent
+/// wasn't paused is decided again if it has been paused since (a pause drains
+/// the queue under this lock, so what is admitted after it would run), then
+/// queued, and handed to the turn in progress when the engine takes it.
+pub(super) fn admit_or_hold(
+    runtimes: &mut HashMap<String, Runtime>,
+    agent_id: &str,
+    paused: bool,
+    inbound: Inbound,
+) -> Entry {
+    let inbound = match super::paused::decide(agent_id, paused, inbound) {
+        super::paused::Decision::Queue(m) => m,
+        super::paused::Decision::Held => return Entry::Held,
+        super::paused::Decision::Refused(m) => return Entry::Refused(Box::new(m)),
+    };
+    let runtime = runtimes.entry(agent_id.to_string()).or_default();
+    // Into the turn in progress too, when its engine takes it mid-turn
+    // (`steer`); it is queued either way, until the engine has read it.
+    super::steer::offer(runtime, &inbound);
+    let admitted = runtime.admit(inbound);
+    if admitted.is_ok() {
+        save_inbox(agent_id, &runtime.queue);
+    }
+    Entry::Admitted(admitted)
 }
 
 /// The conversation a message that didn't say goes to: an answer to the

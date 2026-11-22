@@ -93,18 +93,73 @@ pub fn stop(app: &AppHandle, agent_id: &str) -> bool {
     stopped
 }
 
+/// Pause: stop the turn in progress, but keep what waited behind it. The
+/// user's and other agents' queued messages (rooms too) are held, in order,
+/// for Resume (`paused`); a queued routine or "When…" run is refused and told
+/// so, as a Stop would. Whatever is sent after the pause follows the pause's
+/// own rules (`paused::gate`): the user's words run at once, ahead of the held.
+pub fn stop_for_pause(app: &AppHandle, agent_id: &str) -> bool {
+    let (stopped, refused) = pause_queue(agent_id);
+    tell_dropped(app, agent_id, refused, Dropped::Stopped);
+    super::expiry::sweep_agent(app, agent_id, super::expiry::Moment::Stopped);
+    stopped
+}
+
+/// [`stop_for_pause`]'s part under the lock: what was refused, and whether a
+/// turn was told to stop. What is kept is written to `held.json` before the
+/// queue on disk is emptied, so a crash between the two can only repeat a
+/// message, never lose one.
+pub(super) fn pause_queue(agent_id: &str) -> (bool, Vec<Inbound>) {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(runtime) = runtimes.get_mut(agent_id) else {
+        return (false, Vec::new());
+    };
+    // What the engine already read is part of the turn being stopped: it
+    // stays queued only until the turn ends (`steer::finish`), so keeping it
+    // would run it twice on Resume.
+    let heard = super::steer::heard_ids(runtime);
+    let all: Vec<Inbound> = runtime.queue.drain(..).collect();
+    let (kept, refused) =
+        super::paused::split_queue(all.into_iter().filter(|m| !heard.contains(&m.id)).collect());
+    // The queue's copy on disk is emptied only once the held copy is. A
+    // failed write leaves what was kept (and only that: not the routines
+    // refused, nor what the engine read) in the inbox file instead, so the
+    // words survive a quit; the held copy stays in memory and is retried.
+    let kept_copy: VecDeque<Inbound> = kept.iter().cloned().collect();
+    if super::paused::hold_all(agent_id, kept) {
+        save_inbox(agent_id, &runtime.queue);
+    } else {
+        save_inbox(agent_id, &kept_copy);
+    }
+    runtime.interrupt = false;
+    let stopped = match &runtime.cancel {
+        Some(cancel) => {
+            update_mark(agent_id, |m| m.stopped = true);
+            cancel.notify_one();
+            true
+        }
+        None => false,
+    };
+    (stopped, refused)
+}
+
 /// Stop only what this agent was doing for a room: what was asked of it
 /// there and hasn't started is dropped, and a turn answering there is
 /// stopped. Anything said to it elsewhere stays queued and runs next.
 pub fn stop_in_room(agent_id: &str, room_id: &str) -> bool {
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    // A held ask for this room goes with the room's Stop too, whether or not
+    // the agent has a runtime (after a restart a paused agent has only its
+    // held.json).
+    let held_here = !super::paused::take_for_room(agent_id, room_id).is_empty();
     let Some(runtime) = runtimes.get_mut(agent_id) else {
-        return false;
+        return held_here;
     };
     let here = |m: &Inbound| m.room.as_ref().is_some_and(|r| r.room_id == room_id);
     let before = runtime.queue.len();
     runtime.queue.retain(|m| !here(m));
     let dropped = runtime.queue.len() < before;
+    let dropped = dropped || held_here;
     if dropped {
         save_inbox(agent_id, &runtime.queue);
     }
@@ -150,7 +205,13 @@ pub(super) fn stop_queue(agent_id: &str, deleting: bool) -> (bool, Vec<Inbound>)
     let Some(runtime) = runtimes.get_mut(agent_id) else {
         return (false, Vec::new());
     };
-    let dropped: Vec<Inbound> = runtime.queue.drain(..).collect();
+    let mut dropped: Vec<Inbound> = runtime.queue.drain(..).collect();
+    // A plain Stop leaves what a pause held: it waits for Resume, which is
+    // the user's way of saying go on. A delete ends the agent: nobody will
+    // ever resume it, so those who asked are told.
+    if deleting {
+        dropped.extend(super::paused::take_all(agent_id));
+    }
     save_inbox(agent_id, &runtime.queue);
     runtime.interrupt = false;
     let stopped = match &runtime.cancel {
@@ -378,13 +439,22 @@ pub(super) fn begin_fresh_as(
 /// Another agent with a request from `agent_id` it hasn't answered yet:
 /// working on it (owed), or not started on it (queued).
 pub(super) fn owes_reply(runtimes: &HashMap<String, Runtime>, agent_id: &str) -> Option<String> {
-    runtimes.iter().find_map(|(id, r)| {
-        let asked = r.owed.iter().any(|a| a.id == agent_id)
+    runtimes
+        .iter()
+        .find_map(|(id, r)| {
+            let asked = r.owed.iter().any(|a| a.id == agent_id)
             || r.queue.iter().any(|m| {
                 !m.reply && matches!(&m.from, From::Agent { sender, .. } if sender.id == agent_id)
+            })
+            // Held for a pause is still asked, only waiting for Resume.
+            || super::paused::held_any(id, |m| {
+                !m.reply && matches!(&m.from, From::Agent { sender, .. } if sender.id == agent_id)
             });
-        (id != agent_id && asked).then(|| id.clone())
-    })
+            (id != agent_id && asked).then(|| id.clone())
+        })
+        // A paused agent that only has its held.json (after a restart) has no
+        // runtime to look in.
+        .or_else(|| super::paused::holder_of_ask_from(agent_id))
 }
 
 /// Stop the turn in progress so what's queued in the agent's own chat runs

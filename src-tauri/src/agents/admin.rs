@@ -1471,6 +1471,28 @@ fn admin_switches(check_ins: &[super::schedule::CheckIn], on: bool) -> Vec<Strin
         .collect()
 }
 
+/// What a pause or resume does to the queue, once its flag is (or isn't) saved.
+#[derive(Debug, PartialEq, Eq)]
+enum PauseAction {
+    StopKeepingQueue,
+    Release,
+    Nothing,
+}
+
+/// Pure. A pause stops the turn and keeps the queue (never the plain Stop,
+/// which drops it) only when the flag saved: else the menu still says Pause
+/// while the queue would be held, so nothing is held. A resume releases what
+/// was held only when the unpause was saved (else the agent is still paused
+/// and would hold it again).
+fn pause_action(on: bool, saved: bool) -> PauseAction {
+    match (on, saved) {
+        (true, true) => PauseAction::StopKeepingQueue,
+        (true, false) => PauseAction::Nothing,
+        (false, true) => PauseAction::Release,
+        (false, false) => PauseAction::Nothing,
+    }
+}
+
 /// Pause (`on`) or resume an agent, for the user (its ⋯ menu) or an admin:
 /// its routines (the ones this switches are marked, so Resume starts only
 /// them, never one the user paused or an import left for review), what it is
@@ -1484,7 +1506,7 @@ pub fn set_paused(app: &AppHandle, target: &store::Agent, on: bool) -> (usize, b
         }
     }
     let changed = switched.len();
-    store::update(&target.id, |a| {
+    let saved = store::update(&target.id, |a| {
         a.paused = on;
         for c in a.check_ins.iter_mut() {
             // Only the routines this pause switched off are the admin's to
@@ -1497,12 +1519,18 @@ pub fn set_paused(app: &AppHandle, target: &store::Agent, on: bool) -> (usize, b
             }
         }
     })
-    .or_log("which routines an admin paused");
-    let stopped = on && runner::stop(app, &target.id);
-    // Resume: what other agents sent meanwhile runs now.
-    if !on {
-        runner::release_held(app, &target.id);
-    }
+    .or_log("which routines an admin paused")
+    .is_some();
+    let stopped = match pause_action(on, saved) {
+        // Not a plain stop: what waited in the queue is kept for Resume.
+        PauseAction::StopKeepingQueue => runner::stop_for_pause(app, &target.id),
+        // Resume: what other agents sent meanwhile runs now.
+        PauseAction::Release => {
+            runner::release_held(app, &target.id);
+            false
+        }
+        PauseAction::Nothing => false,
+    };
     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     (changed, stopped)
 }

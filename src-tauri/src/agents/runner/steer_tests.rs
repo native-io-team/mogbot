@@ -136,3 +136,35 @@ fn claude_says_which_message_it_read() {
     let first: serde_json::Value = serde_json::from_str(&claude_line("go", None)).unwrap();
     assert!(first.get("uuid").is_none());
 }
+
+/// A pause while a turn answers the user: what the engine already read is
+/// not kept for Resume (it would run twice), what was handed but not read
+/// is, and a read that comes after the pause takes its message back out.
+#[test]
+fn a_pause_keeps_what_the_engine_has_not_read_and_never_what_it_has() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    let agent = "steer-pause";
+    std::fs::create_dir_all(store::agent_home(agent).unwrap()).unwrap();
+    let mut rx = turn(agent);
+    assert!(push_into(agent, typed("read", "first", "c1")));
+    assert!(push_into(agent, typed("handed", "second", "c1")));
+    assert!(push_into(agent, typed("late", "third", "c1")));
+    let _ = (rx.try_recv(), rx.try_recv(), rx.try_recv());
+    assert!(heard(agent, "read"));
+    let (stopped, _) = control::pause_queue(agent);
+    let _ = stopped;
+    let held = || paused::held_ids(agent);
+    assert_eq!(held(), ["handed", "late"], "the read one is not kept");
+    assert!(queue_ids(agent).is_empty());
+    // The engine reads one more before the turn ends: it is part of the
+    // turn, so it comes out of what Resume runs.
+    assert!(heard(agent, "late"));
+    assert_eq!(held(), ["handed"]);
+    close(agent);
+    assert_eq!(held(), ["handed"], "handed, never read: still held");
+    paused::drop_held(agent, "handed");
+    forget(agent);
+    store::set_root_for_tests(None);
+}
