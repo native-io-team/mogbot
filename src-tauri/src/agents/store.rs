@@ -128,8 +128,9 @@ pub struct Agent {
     #[serde(default)]
     pub muted: bool,
     /// Paused: its routines are off (those this switched off are marked, so
-    /// Resume starts only them) and what it was doing was stopped. Messages
-    /// still reach it. Set by the user (its ⋯ menu) or an admin
+    /// Resume starts only them) and what it was doing was stopped; what
+    /// waited in its queue is held for Resume, and later messages follow
+    /// `runner::paused` (the user's run, others' are held). Set by the user (its ⋯ menu) or an admin
     /// (`agents::admin::set_paused`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paused: bool,

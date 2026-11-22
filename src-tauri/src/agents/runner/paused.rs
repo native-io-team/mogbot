@@ -90,6 +90,20 @@ pub(super) fn gate(app: &AppHandle, agent_id: &str, m: Inbound) -> Option<Inboun
     }
 }
 
+/// Pause, for what already waited in the queue (not yet started): everything
+/// the user or another agent said is kept, in order, to run on Resume; a
+/// routine or "When…" firing is refused. Returns (kept, refused). Pure.
+pub(super) fn split_queue(queue: Vec<Inbound>) -> (Vec<Inbound>, Vec<Inbound>) {
+    queue.into_iter().partition(|m| !m.routine)
+}
+
+/// Keep `kept` for Resume, after anything already held.
+pub(super) fn hold_all(agent_id: &str, kept: Vec<Inbound>) {
+    if !kept.is_empty() {
+        with_held(agent_id, |held| held.extend(kept));
+    }
+}
+
 /// How many messages wait for this agent's Resume.
 pub fn held_count(agent_id: &str) -> usize {
     with_held(agent_id, |held| held.len())

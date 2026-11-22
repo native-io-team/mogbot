@@ -93,6 +93,42 @@ pub fn stop(app: &AppHandle, agent_id: &str) -> bool {
     stopped
 }
 
+/// Pause: stop the turn in progress, but keep what waited behind it. The
+/// user's and other agents' queued messages (rooms too) are held, in order,
+/// for Resume (`paused`); a queued routine or "When…" run is refused and told
+/// so, as a Stop would. Whatever is sent after the pause follows the pause's
+/// own rules (`paused::gate`): the user's words run at once, ahead of the held.
+pub fn stop_for_pause(app: &AppHandle, agent_id: &str) -> bool {
+    let (stopped, refused) = pause_queue(agent_id);
+    tell_dropped(app, agent_id, refused, Dropped::Stopped);
+    super::expiry::sweep_agent(app, agent_id, super::expiry::Moment::Stopped);
+    stopped
+}
+
+/// [`stop_for_pause`]'s part under the lock: what was refused, and whether a
+/// turn was told to stop. What is kept is written to `held.json` before the
+/// queue on disk is emptied, so a crash between the two can only repeat a
+/// message, never lose one.
+pub(super) fn pause_queue(agent_id: &str) -> (bool, Vec<Inbound>) {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(runtime) = runtimes.get_mut(agent_id) else {
+        return (false, Vec::new());
+    };
+    let (kept, refused) = super::paused::split_queue(runtime.queue.drain(..).collect());
+    super::paused::hold_all(agent_id, kept);
+    save_inbox(agent_id, &runtime.queue);
+    runtime.interrupt = false;
+    let stopped = match &runtime.cancel {
+        Some(cancel) => {
+            update_mark(agent_id, |m| m.stopped = true);
+            cancel.notify_one();
+            true
+        }
+        None => false,
+    };
+    (stopped, refused)
+}
+
 /// Stop only what this agent was doing for a room: what was asked of it
 /// there and hasn't started is dropped, and a turn answering there is
 /// stopped. Anything said to it elsewhere stays queued and runs next.
