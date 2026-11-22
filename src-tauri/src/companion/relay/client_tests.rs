@@ -888,6 +888,8 @@ struct SessionPhone {
     tx: u64,
     rx: u64,
     resumed: bool,
+    url: String,
+    fingerprint: String,
 }
 
 impl SessionPhone {
@@ -916,6 +918,8 @@ impl SessionPhone {
             tx: 0,
             rx: back.as_ref().map_or(0, |b| b.1),
             resumed: false,
+            url: url.to_string(),
+            fingerprint: pinned.to_string(),
         };
         let sess = p.raw().await;
         assert_eq!(sess["t"], "sess", "{sess}");
@@ -1127,6 +1131,44 @@ async fn requests_sent_mid_replay_never_stall_the_acks() {
         FIRST + 100,
         "every request answered once"
     );
+}
+
+/// The socket goes while the Mac's window is full (the handler's replies are
+/// waiting, none dropped): the session parks and the phone's resume gets every
+/// answer exactly once.
+#[tokio::test]
+async fn a_socket_lost_with_the_window_full_resumes_with_every_answer_once() {
+    let (mut phone, keep) = burst_phone().await;
+    const N: u64 = 300;
+    for id in 1..=N {
+        phone
+            .send_noack(json!({ "t": "req", "id": id, "method": "rooms.list", "params": {} }))
+            .await;
+    }
+    let mut answered: Vec<u64> = Vec::new();
+    let began = std::time::Instant::now();
+    while began.elapsed() < Duration::from_millis(250) && phone.rx < 120 {
+        if let Ok(f) = tokio::time::timeout(Duration::from_millis(50), phone.next()).await {
+            if f["t"] == "res" {
+                answered.push(f["id"].as_u64().unwrap());
+            }
+        }
+    }
+    // Gone with the window full and nothing acked.
+    let (sid, key, rx) = (phone.sid.clone(), phone.keys.resume, phone.rx);
+    let url = phone.url.clone();
+    let fingerprint = phone.fingerprint.clone();
+    drop(phone.ws);
+    let mut back = SessionPhone::connect(&url, &fingerprint, Some((&sid, rx, 1, key))).await;
+    assert!(back.resumed, "the session was parked, not ended");
+    back.ack().await;
+    read_acking(&mut back, &mut answered, N as usize).await;
+    let mut sorted = answered.clone();
+    sorted.sort_unstable();
+    assert_eq!(answered.len(), sorted.len(), "no answer twice");
+    sorted.dedup();
+    assert_eq!(sorted, (1..=N).collect::<Vec<_>>(), "every answer");
+    drop(keep);
 }
 
 /// A phone that reads but never acks, with the Mac's window full, is ended

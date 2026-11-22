@@ -86,25 +86,22 @@ impl Session {
     }
 
     /// Whether another frame can be numbered now: fewer than [`MAX_FRAMES`]
-    /// and fewer than [`MAX_BYTES`] unacked. The channel listens to its
-    /// handler only while this holds, so acks pace a long replay.
+    /// unacked, and under [`MAX_BYTES`] (or fewer than 8 frames, so one big
+    /// frame is never refused for the bytes of earlier ones). The channel
+    /// listens to its handler only while this holds, so acks pace a long
+    /// replay and `wrap` never has to refuse a frame it has already taken.
     pub fn has_room(&self) -> bool {
-        self.unacked.len() < MAX_FRAMES && self.bytes < MAX_BYTES
+        self.unacked.len() < MAX_FRAMES && (self.bytes < MAX_BYTES || self.unacked.len() < 8)
     }
 
     pub fn unacked_len(&self) -> usize {
         self.unacked.len()
     }
 
-    /// Anything sent that the phone hasn't acked (an ack would free room).
-    pub fn has_unacked(&self) -> bool {
-        !self.unacked.is_empty()
-    }
-
     /// Number and keep `text`; the frame to seal. `None`: too much is
     /// unacked and the session is over.
     pub fn wrap(&mut self, text: &str) -> Option<String> {
-        if self.unacked.len() >= MAX_FRAMES || self.bytes + text.len() > MAX_BYTES {
+        if !self.has_room() {
             return None;
         }
         self.tx += 1;
@@ -404,6 +401,13 @@ mod tests {
         assert!(mac.wrap("x").is_none());
         let mut big = Session::new([1; 32]).unwrap();
         assert!(big.wrap(&"y".repeat(MAX_BYTES)).is_some());
+        // Byte-full: only a few small frames more (fewer than 8 in all), so a
+        // big frame is never refused for the bytes of earlier ones.
+        for _ in 0..7 {
+            assert!(big.has_room());
+            assert!(big.wrap("z").is_some());
+        }
+        assert!(!big.has_room());
         assert!(big.wrap("z").is_none());
     }
 

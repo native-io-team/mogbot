@@ -35,7 +35,8 @@ pub const MAX_PAYLOAD: usize = 1024 * 1024 - 64;
 /// Bytes from the phone waiting for this channel to take them. Past it the
 /// channel is closed as stuck (`client`), so a phone that sends faster than
 /// it's served holds at most this much of the Mac's memory, not its queue's
-/// 256 payloads of 256 KiB each.
+/// 256 payloads of 256 KiB each. The phone's requests a channel holds for its
+/// handler (while that waits on acks) are capped by it too, besides 1,024 frames.
 pub const MAX_QUEUED_BYTES: usize = 16 * 1024 * 1024;
 /// A channel that never became an authenticated socket (HTTP only, or
 /// nothing at all after the handshake) closes after this long with no
@@ -248,9 +249,6 @@ async fn serve(
     }
     let mut heard = Instant::now();
     let mut idle_check = tokio::time::interval(IDLE / 3);
-    // A handler frame taken while the session had room for it only in part
-    // (the byte cap): it waits for acks, never dropped, never reordered.
-    let mut held: Option<String> = None;
     // The phone's requests the handler hasn't taken yet. The handler may be
     // waiting on this loop (its replay), so the loop never waits on it: a
     // frame goes in with try_send, and the rest wait here, bounded.
@@ -264,24 +262,7 @@ async fn serve(
         // a long replay waits for acks (a round trip) instead of overrunning
         // the unacked limit and ending the session. Without a session
         // (an older phone) there is no limit to wait on.
-        if let Some(text) = held.take() {
-            let Some(s) = sess.as_mut() else { continue };
-            match s.wrap(&text) {
-                Some(framed) => {
-                    if !seal_out(&mut keys, ch, out, framed.as_bytes()).await {
-                        break 'serve End::Done;
-                    }
-                }
-                None if s.has_unacked() => held = Some(text),
-                None => {
-                    tracing::warn!(
-                        "[Relay] a frame over the session's byte limit; ending its session"
-                    );
-                    break 'serve End::Done;
-                }
-            }
-        }
-        let room = held.is_none() && sess.as_ref().map_or(true, Session::has_room);
+        let room = sess.as_ref().map_or(true, Session::has_room);
         if room {
             full_since = None;
         } else if full_since.is_none() {
@@ -387,7 +368,13 @@ async fn serve(
                             tokio::spawn(server::serve_socket_as(c.clone(), adapter, peer));
                             to_handler = Some(in_tx);
                         }
-                        if to_pending.len() >= QUEUE * 16 {
+                        let pending_bytes: usize = to_pending
+                            .iter()
+                            .map(|m| if let Message::Text(t) = m { t.len() } else { 0 })
+                            .sum();
+                        if to_pending.len() >= QUEUE * 16
+                            || pending_bytes + text.len() > MAX_QUEUED_BYTES
+                        {
                             tracing::warn!("[Relay] a phone's requests piled up unread; closing");
                             break 'serve End::Done;
                         }
@@ -408,13 +395,9 @@ async fn serve(
                         None => text,
                         Some(s) => match s.wrap(&text) {
                             Some(f) => f,
-                            // Over the byte limit with frames unacked: wait for acks.
-                            None if s.has_unacked() => {
-                                held = Some(text);
-                                continue;
-                            }
+                            // Not reached while the loop listens only with room.
                             None => {
-                                tracing::warn!("[Relay] a frame over the session's byte limit; ending its session");
+                                tracing::warn!("[Relay] no room to number a frame; ending its session");
                                 break 'serve End::Done;
                             }
                         },
