@@ -28,7 +28,7 @@ import {
   waitingForSlot,
   waitingOnMac,
 } from '../lib/agents';
-import { useClock } from '../lib/useClock';
+import { useClockText } from '../lib/useClock';
 import { useSteadyLine } from '../lib/steady';
 import { useApp } from '../lib/store';
 import { useAgentLevelLabel } from './IndependenceSetting';
@@ -282,15 +282,16 @@ function RowBody({
   // Running (not queued for a slot): the line says what and how long, on a
   // clock that ticks only while it works (the key is pressed meanwhile).
   const running = live && !quiet && agent.status.state === 'working' && !waitingForSlot(agent);
-  const now = useClock(running);
   // Waiting on you: say what for, when the saved chat knows.
-  const line = useApp((s) =>
+  const asking = useApp((s) =>
     quiet
       ? SETTING_UP_LINE
       : needsYou(agent)
         ? needsLine(agent, s.chats[agent.id]?.messages)
-        : subtitle(agent, now)
+        : null
   );
+  const doing = useClockText(running, (now) => (asking === null ? subtitle(agent, now) : null));
+  const line = asking ?? doing ?? '';
   // Waiting on you, a turn that didn't finish, or out of usage: the state as
   // a pill, the rest in the line's own ink (one coloured thing per row).
   const pill = state && live ? rowPill(agent, line) : null;

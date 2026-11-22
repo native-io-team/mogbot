@@ -382,13 +382,7 @@ function callUntimed<M extends MethodName>(
   opts?: CallOptions
 ): Promise<Result<M>> {
   if (!transport) return Promise.reject(new Error('Not paired'));
-  const go = () =>
-    reads.call(
-      method,
-      params,
-      () => ask(method, params),
-      opts
-    );
+  const go = () => reads.call(method, params, () => ask(method, params), opts);
   // A change asked for during a drop waits for the link (a card's answer, a
   // stop, a toggle) and goes when it's back, so a short drop shows nothing;
   // past QUIET_MS the bar speaks and the ask fails as before. Reads wait the

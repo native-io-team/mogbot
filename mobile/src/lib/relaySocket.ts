@@ -270,7 +270,15 @@ export class RelaySocket {
   /** A plaintext from the Mac. */
   private got(text: string) {
     if (!this.awaitSess && !this.sid) return void this.onmessage?.({ data: text });
-    let f: { t?: unknown; sid?: unknown; resumed?: unknown; rx?: unknown; n?: unknown; a?: unknown; d?: unknown };
+    let f: {
+      t?: unknown;
+      sid?: unknown;
+      resumed?: unknown;
+      rx?: unknown;
+      n?: unknown;
+      a?: unknown;
+      d?: unknown;
+    };
     try {
       f = JSON.parse(text) as typeof f;
     } catch {
@@ -278,7 +286,8 @@ export class RelaySocket {
     }
     if (this.awaitSess) {
       this.awaitSess = false;
-      if (f.t !== 'sess' || typeof f.sid !== 'string') return this.fail(RELAY_BROKEN, 'channel_broken');
+      if (f.t !== 'sess' || typeof f.sid !== 'string')
+        return this.fail(RELAY_BROKEN, 'channel_broken');
       const channel = this.channel!;
       if (this.sid) {
         // Back on a new socket: the Mac must say it is the same session.
@@ -394,7 +403,8 @@ export class RelaySocket {
     const answered = code === RELAY_CLOSE_MAC_OFFLINE || code === RELAY_CLOSE_SIGN_IN_NEEDED;
     if (!this.sid || this.readyState !== 1 || answered) return this.finish(code, reason);
     if (!this.droppedAt) this.droppedAt = Date.now();
-    if (Date.now() - this.droppedAt > (this.opts.graceMs ?? 120_000)) return this.finish(code, reason);
+    if (Date.now() - this.droppedAt > (this.opts.graceMs ?? 120_000))
+      return this.finish(code, reason);
     this.dropInner(this.inner);
     const wait = RETRY_MS[Math.min(this.attempts++, RETRY_MS.length - 1)];
     this.retry = this.timer(() => {

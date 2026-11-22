@@ -30,8 +30,9 @@ import {
   subscribePackDrawings,
   type AgentIndependence,
   type KeyState,
+  type Agent,
 } from '@shipstudio/companion-protocol';
-import { useEffect, useId, useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { memo, useEffect, useId, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -77,35 +78,61 @@ import {
   type KeyColors,
 } from '../lib/theme';
 
-/**
- * Every agent's key and independence as one string, so a streaming reply
- * (which updates the store every few frames) never re-renders a key.
- */
-const useTeamKeys = () =>
-  useApp(
-    (s) =>
-      `${s.overview?.independence ?? ''}\n` +
-      (s.overview?.agents ?? [])
-        .map((a) => {
-          const k = keyLookFor(a);
-          return `${a.id}\t${k.colorway}\t${k.icon}\t${k.boundKey ?? ''}\t${a.independence ?? ''}`;
-        })
-        .join('\n')
-  );
+type SavedLook = {
+  colorway: string;
+  icon: string;
+  boundKey: string | null;
+  independence: AgentIndependence | null;
+};
 
-function keyFromTeam(team: string, id: string) {
-  const [teamLevel, ...lines] = team.split('\n');
-  for (const line of lines) {
-    const [lineId, colorway, icon, boundKey, level] = line.split('\t');
-    if (lineId !== id) continue;
-    return {
-      colorway,
-      icon,
-      boundKey: boundKey || null,
-      level: ((level || teamLevel) as AgentIndependence) || null,
+/** Agents by id, once per list, and each agent's look, once per copy of it. */
+const byId = new WeakMap<readonly Agent[], Map<string, Agent>>();
+const looks = new WeakMap<Agent, SavedLook>();
+
+/**
+ * The look the registry holds for one agent. Each agent's is worked out once
+ * per copy of it (the store keeps an unchanged agent's object), so a key asks
+ * for its own in one lookup: every key used to build all the agents' looks
+ * into a string on every store change, each streamed word included.
+ */
+function savedLook(agents: readonly Agent[] | undefined, id: string | undefined) {
+  if (!id || !agents) return null;
+  let index = byId.get(agents);
+  if (!index) byId.set(agents, (index = new Map(agents.map((a) => [a.id, a]))));
+  const agent = index.get(id);
+  if (!agent) return null;
+  let look = looks.get(agent);
+  if (!look) {
+    const k = keyLookFor(agent);
+    look = {
+      colorway: k.colorway,
+      icon: k.icon,
+      boundKey: k.boundKey ?? null,
+      independence: (agent.independence as AgentIndependence | undefined) ?? null,
     };
+    looks.set(agent, look);
   }
-  return null;
+  return look;
+}
+
+/** It as one string, so a key re-renders only when its own look changed. */
+const useSavedLook = (id: string | undefined) =>
+  useApp((s) => {
+    const look = savedLook(s.overview?.agents, id);
+    if (!look) return null;
+    const level = look.independence ?? s.overview?.independence ?? '';
+    return `${look.colorway}\t${look.icon}\t${look.boundKey ?? ''}\t${level}`;
+  });
+
+function readLook(line: string | null) {
+  if (!line) return null;
+  const [colorway, icon, boundKey, level] = line.split('\t');
+  return {
+    colorway,
+    icon,
+    boundKey: boundKey || null,
+    level: (level as AgentIndependence) || null,
+  };
 }
 
 export interface AgentKeyProps {
@@ -129,7 +156,12 @@ export interface AgentKeyProps {
   pressed?: boolean;
 }
 
-export function AgentKey({
+/**
+ * Memoised: a key is a dozen drawn shapes, and the lists it's in re-render on
+ * every line an agent says. Its props are plain values, so it redraws only
+ * when what it shows changed.
+ */
+export const AgentKey = memo(function AgentKey({
   id,
   name = '',
   role,
@@ -144,9 +176,9 @@ export function AgentKey({
   pressed = false,
 }: AgentKeyProps) {
   const appearance = useAppearance();
-  const team = useTeamKeys();
+  const savedLine = useSavedLook(id);
   const look = useMemo(() => {
-    const saved = id ? keyFromTeam(team, id) : null;
+    const saved = readLook(savedLine);
     const fallback = keyLookFor({ name, role, color, isMain });
     return {
       colorway: colorway ?? saved?.colorway ?? fallback.colorway,
@@ -154,7 +186,7 @@ export function AgentKey({
       boundKey: boundKey !== undefined ? boundKey : (saved?.boundKey ?? null),
       level: level !== undefined ? level : (saved?.level ?? null),
     };
-  }, [team, id, name, role, color, isMain, colorway, icon, boundKey, level]);
+  }, [savedLine, name, role, color, isMain, colorway, icon, boundKey, level]);
   const way = colorwayOf(look.colorway);
   const base = keyColorways[way.id] ?? keyColorways.blue;
   const g = keyGeometry(size);
@@ -309,7 +341,7 @@ export function AgentKey({
       </View>
     </View>
   );
-}
+});
 
 /** The spill's colour: the key's own face warmed (working, live), or amber (needs your OK). */
 function spillColor(light: KeyLight, paint: KeyColors, faceShare: number): string {

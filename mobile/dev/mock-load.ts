@@ -66,7 +66,10 @@ export function addLoadAccount(
     const old = Array.from({ length: LINES }, (_, i) =>
       line(a.id, i, now - 86_400_000 + i * 120_000 + n)
     );
-    messages.set(a.id, [...old, ...had].sort((x, y) => x.ts - y.ts));
+    messages.set(
+      a.id,
+      [...old, ...had].sort((x, y) => x.ts - y.ts)
+    );
     // What fills the real overview: each agent's routines and its usage.
     Object.assign(a, {
       checkIns: Array.from({ length: 3 }, (_, i) => ({

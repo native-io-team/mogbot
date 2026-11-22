@@ -207,6 +207,8 @@ export default function Agents() {
   }, []);
 
   const teamSetup = useApp((s) => s.teamSetup);
+  // The row an unchanged agent already has, so its cell holds still too.
+  const [held] = useState(() => new Map<string, Extract<Row, { kind: 'agent' }>>());
   const rows = useMemo<Row[]>(() => {
     // A Mac that removed this phone shows nothing of its agents: only the way back.
     if (!overview || removed) return [];
@@ -214,8 +216,16 @@ export default function Agents() {
     // the Catch up tab's, counted on its badge: no bar for it here too.
     const home = buildHome(overview.agents, live ? teamSetup : null);
     const out: Row[] = [];
-    const add = (a: Agent) =>
-      out.push({ kind: 'agent', key: a.id, agent: a, quiet: home.quiet.has(a.id) });
+    const add = (a: Agent) => {
+      const quiet = home.quiet.has(a.id);
+      const was = held.get(a.id);
+      const row: Extract<Row, { kind: 'agent' }> =
+        was && was.agent === a && was.quiet === quiet
+          ? was
+          : { kind: 'agent', key: a.id, agent: a, quiet };
+      held.set(a.id, row);
+      out.push(row);
+    };
     // With Rooms below, the agents get their own label. Offline, when it last heard
     // is the connection bar's to say, once. No "3 working" line: each key says
     // whether its agent works, is free or needs you.
@@ -237,7 +247,7 @@ export default function Agents() {
       if (showHidden) hidden.forEach(add);
     }
     return out;
-  }, [overview, showHidden, removed, live, rooms, teamSetup]);
+  }, [overview, showHidden, removed, live, rooms, teamSetup, held]);
 
   const flash = useCallback((text: string, run?: () => void) => {
     const entry = { text, run: run ?? (() => {}) };
@@ -330,6 +340,63 @@ export default function Agents() {
   // loads holds still.
   const agentKeys = useMemo(() => rows.flatMap((r) => (r.kind === 'agent' ? [r.key] : [])), [rows]);
   const arrived = useArrivedKeys(agentKeys, !!overview, false);
+  // One function while nothing a row reads changes: a new one re-renders every cell.
+  const renderItem = useCallback(
+    ({ item, index }: { item: Row; index: number }) =>
+      item.kind === 'header' ? (
+        <SectionHeader
+          title={item.title}
+          live={live}
+          first={index === 0}
+          underCard={index === 0 && glanceShown}
+        />
+      ) : item.kind === 'hidden' ? (
+        <Pressable
+          onPress={() => {
+            tap();
+            setShowHidden((v) => !v);
+          }}
+          android_ripple={ripple}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showHidden }}
+          style={({ pressed }) => [styles.hiddenToggle, pressed && PRESSED]}
+        >
+          <Icon
+            name={showHidden ? 'chevron.down' : 'chevron.right'}
+            size={iconSize.inline}
+            color={colors.textMuted}
+          />
+          <T variant="small" color={colors.textSecondary}>
+            Hidden · {item.count}
+          </T>
+        </Pressable>
+      ) : item.kind === 'room' ? (
+        <RoomRow room={item.room} live={live} />
+      ) : arrived.has(item.key) ? (
+        <Arrive>
+          <AgentRow
+            agent={item.agent}
+            quiet={item.quiet}
+            caps={caps}
+            live={live}
+            selected={item.agent.id === shown}
+            onPress={split ? () => setSelected(item.agent.id) : undefined}
+            onAction={onAction}
+          />
+        </Arrive>
+      ) : (
+        <AgentRow
+          agent={item.agent}
+          quiet={item.quiet}
+          caps={caps}
+          live={live}
+          selected={item.agent.id === shown}
+          onPress={split ? () => setSelected(item.agent.id) : undefined}
+          onAction={onAction}
+        />
+      ),
+    [live, glanceShown, styles, ripple, colors, showHidden, arrived, caps, shown, split, onAction]
+  );
   const list = (
     <Animated.FlatList
       data={rows}
@@ -368,60 +435,7 @@ export default function Agents() {
       ListEmptyComponent={
         removed ? undefined : <Empty hasOverview={!!overview} macName={macName} />
       }
-      renderItem={({ item, index }) =>
-        item.kind === 'header' ? (
-          <SectionHeader
-            title={item.title}
-            live={live}
-            first={index === 0}
-            underCard={index === 0 && glanceShown}
-          />
-        ) : item.kind === 'hidden' ? (
-          <Pressable
-            onPress={() => {
-              tap();
-              setShowHidden((v) => !v);
-            }}
-            android_ripple={ripple}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showHidden }}
-            style={({ pressed }) => [styles.hiddenToggle, pressed && PRESSED]}
-          >
-            <Icon
-              name={showHidden ? 'chevron.down' : 'chevron.right'}
-              size={iconSize.inline}
-              color={colors.textMuted}
-            />
-            <T variant="small" color={colors.textSecondary}>
-              Hidden · {item.count}
-            </T>
-          </Pressable>
-        ) : item.kind === 'room' ? (
-          <RoomRow room={item.room} live={live} />
-        ) : arrived.has(item.key) ? (
-          <Arrive>
-            <AgentRow
-              agent={item.agent}
-              quiet={item.quiet}
-              caps={caps}
-              live={live}
-              selected={item.agent.id === shown}
-              onPress={split ? () => setSelected(item.agent.id) : undefined}
-              onAction={onAction}
-            />
-          </Arrive>
-        ) : (
-          <AgentRow
-            agent={item.agent}
-            quiet={item.quiet}
-            caps={caps}
-            live={live}
-            selected={item.agent.id === shown}
-            onPress={split ? () => setSelected(item.agent.id) : undefined}
-            onAction={onAction}
-          />
-        )
-      }
+      renderItem={renderItem}
     />
   );
 

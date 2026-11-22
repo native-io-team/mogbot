@@ -51,8 +51,7 @@ export function createEventBatch<E>(
   const beat = opts.beatMs ?? BEAT_MS;
   const longest = opts.holdMs ?? HOLD_MS;
   const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
-  const clearTimer =
-    opts.clearTimer ?? ((t) => clearTimeout(t as ReturnType<typeof setTimeout>));
+  const clearTimer = opts.clearTimer ?? ((t) => clearTimeout(t as ReturnType<typeof setTimeout>));
   let waiting: E[] = [];
   let timer: unknown = null;
   let holding = false;

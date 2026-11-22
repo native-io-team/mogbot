@@ -19,7 +19,7 @@
 import type { Agent } from '@shipstudio/companion-protocol';
 import { failurePill, previewText, type AgentMessage } from '@shipstudio/companion-protocol';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated';
 import { AgentKey } from '../../../components/AgentKey';
@@ -52,7 +52,6 @@ import {
   FIRST_LOOK_MS,
   sinceItems,
   sinceTitle,
-  type SinceItem,
 } from '../../../lib/catchUpTab';
 import { haptic } from '../../../lib/haptics';
 import { SETUP_TITLE } from '../../../lib/home';
@@ -215,6 +214,14 @@ export default function CatchUp() {
         : '/one-at-a-time'
     );
   };
+  // One callback for every row, always the newest `open`.
+  const opening = useRef(open);
+  useEffect(() => {
+    opening.current = open;
+  });
+  const onOpen = useCallback((at: FeedItem) => opening.current(at), []);
+  // eslint-disable-next-line react-hooks/purity -- the clock is read in render on purpose; it only feeds labels
+  const now = Date.now();
   // Identical rows (same agent, same words) are one row, "×3" in its line.
   const pickRows = useMemo(
     () =>
@@ -296,7 +303,8 @@ export default function CatchUp() {
                         agent={agent}
                         count={count}
                         first={i === 0}
-                        onPress={() => open(item)}
+                        when={formatAgo(item.ts, now)}
+                        onOpen={onOpen}
                       />
                     </Animated.View>
                   ) : null;
@@ -318,7 +326,17 @@ export default function CatchUp() {
                 {happened.map((h, i) => {
                   const agent = overview?.agents.find((a) => a.id === h.agentId);
                   return agent ? (
-                    <SinceRow key={h.key} item={h} agent={agent} first={i === 0} />
+                    <SinceRow
+                      key={h.key}
+                      id={agent.id}
+                      name={agent.name}
+                      color={agent.color}
+                      messageId={h.messageId}
+                      title={h.title}
+                      line={h.line ?? ''}
+                      when={formatAgo(h.ts, now)}
+                      first={i === 0}
+                    />
                   ) : null;
                 })}
               </View>
@@ -479,20 +497,39 @@ function KeysRow({ keys }: { keys: Agent[] }) {
   );
 }
 
+/** The same waiting thing: the list builds its items anew on every change. */
+function samePick(
+  a: { item: FeedItem; agent: Agent; count: number; when: string; first: boolean },
+  b: { item: FeedItem; agent: Agent; count: number; when: string; first: boolean }
+) {
+  return (
+    a.agent === b.agent &&
+    a.count === b.count &&
+    a.when === b.when &&
+    a.first === b.first &&
+    a.item.key === b.item.key &&
+    a.item.kind === b.item.kind &&
+    a.item.ts === b.item.ts
+  );
+}
+
 /** One thing waiting, quietly: its key, what it wants, who and when. No buttons. */
-function PickRow({
+const PickRow = memo(function PickRow({
   item,
   agent,
   count,
+  when,
   first,
-  onPress,
+  onOpen,
 }: {
   item: FeedItem;
   agent: Agent;
   /** Identical rows this one stands for ("×3"). */
   count: number;
+  /** How long ago, worked out by the list, so the words move with its clock. */
+  when: string;
   first: boolean;
-  onPress: () => void;
+  onOpen: (item: FeedItem) => void;
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -504,13 +541,11 @@ function PickRow({
       : undefined
   );
   const [title] = rowWords(item, agent, card, setup ? setupProgress(setup) : null);
-  // eslint-disable-next-line react-hooks/purity -- the clock is read in render on purpose; it only feeds a label
-  const when = formatAgo(item.ts, Date.now());
   return (
     <>
       {!first && <View style={styles.divider} />}
       <Pressable
-        onPress={onPress}
+        onPress={() => onOpen(item)}
         android_ripple={ripple}
         accessibilityRole="button"
         accessibilityLabel={`${title}, ${agent.name}, ${when}`}
@@ -536,7 +571,7 @@ function PickRow({
       </Pressable>
     </>
   );
-}
+}, samePick);
 
 /** What a row is about: its one line of what's asked, and the agent's one line of why. */
 /** "a Stripe key", "an API key": the article a noun phrase takes. */
@@ -593,7 +628,25 @@ function rowWords(
 }
 
 /** One thing that happened: a result, a routine, a turn that didn't finish, new replies. */
-function SinceRow({ item, agent, first }: { item: SinceItem; agent: Agent; first: boolean }) {
+const SinceRow = memo(function SinceRow({
+  id,
+  name,
+  color,
+  messageId,
+  title,
+  line,
+  when,
+  first,
+}: {
+  id: string;
+  name: string;
+  color: string;
+  messageId?: string;
+  title: string;
+  line: string;
+  when: string;
+  first: boolean;
+}) {
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
@@ -606,41 +659,39 @@ function SinceRow({ item, agent, first }: { item: SinceItem; agent: Agent; first
           haptic.select();
           router.push({
             pathname: '/chat/[id]',
-            params: { id: agent.id, ...(item.messageId ? { at: item.messageId } : {}) },
+            params: { id, ...(messageId ? { at: messageId } : {}) },
           });
         }}
         android_ripple={ripple}
         accessibilityRole="button"
-        accessibilityLabel={[agent.name, item.title, item.line, formatAgo(item.ts)]
-          .filter(Boolean)
-          .join('. ')}
+        accessibilityLabel={[name, title, line, when].filter(Boolean).join('. ')}
         style={({ pressed }) => [styles.sinceRow, pressed && PRESSED]}
       >
         <View style={styles.sinceKey}>
-          <AgentKey id={agent.id} name={agent.name} color={agent.color} size={keySize.sm} />
+          <AgentKey id={id} name={name} color={color} size={keySize.sm} />
         </View>
         <View style={styles.grow}>
           <View style={styles.rowTitle}>
             <T variant="small" color={colors.textPrimary} numberOfLines={1} style={styles.grow}>
               <T variant="small" color={colors.textStrong}>
-                {agent.name}
+                {name}
               </T>
-              {` · ${item.title}`}
+              {` · ${title}`}
             </T>
             <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={chromeScale}>
-              {formatAgo(item.ts)}
+              {when}
             </T>
           </View>
-          {!!item.line && (
+          {!!line && (
             <T variant="small" color={colors.textSecondary} numberOfLines={1}>
-              {item.line}
+              {line}
             </T>
           )}
         </View>
       </Pressable>
     </>
   );
-}
+});
 
 const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingBottom: space['2xl'] },

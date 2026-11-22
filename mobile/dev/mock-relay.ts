@@ -185,7 +185,9 @@ export function createMockRelay(opts: MockRelayOptions) {
         channel = { send: new Cipher(keys.macToPhone), receive: new Cipher(keys.phoneToMac) };
         const proof = opts.prove(transcript);
         const wantsSession = hello.s === 1;
-        phone.send(enc.encode(JSON.stringify({ v: 1, e: macE, ...proof, ...(wantsSession ? { s: 1 } : {}) })));
+        phone.send(
+          enc.encode(JSON.stringify({ v: 1, e: macE, ...proof, ...(wantsSession ? { s: 1 } : {}) }))
+        );
         if (!wantsSession) return;
         // A session: a returning phone proves the old one, or a new one starts.
         const r = hello.resume;
