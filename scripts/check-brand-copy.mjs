@@ -165,7 +165,6 @@ for (const dir of ['src', 'public']) {
       'index.html',
       'README.md',
       'docs/INSTALL.md',
-      'docs/WELCOME.md',
       'docs/mobile.md',
       'docs/app-store.md',
     ];

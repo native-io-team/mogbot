@@ -255,18 +255,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          REPO=$(node -p "new URL(require('./brand.json').links.releases).pathname.slice(1).replace(/\/$/,'')")
+          # links.releases is the releases *page* (github.com/owner/repo/releases);
+          # gh wants owner/repo, and reads a third part as a host.
+          REPO=$(node -p "new URL(require('./brand.json').links.releases).pathname.split('/').filter(Boolean).slice(0, 2).join('/')")
           NAME=$(node -p "require('./brand.json').name")
           case "${{ matrix.artifact }}" in
             windows-*) PATTERN="${NAME}-${{ matrix.artifact }}-setup.exe" ;;
             *) PATTERN="${NAME}-${{ matrix.artifact }}.deb" ;;
           esac
           mkdir -p old
-          if ! gh release download -R "$REPO" -p "$PATTERN" -D old; then
-            echo "::warning::The last release has no $PATTERN; nothing to install over"
-            echo "NO_OLD=1" >> "$GITHUB_ENV"
+          # Without the last release there is nothing to install over, so this
+          # check would pass having checked nothing: it fails instead.
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          TAG=$(gh release view -R "$REPO" --json tagName --jq .tagName)
+          # The same version over itself is no upgrade: apt would keep the old
+          # package, and the version check after it would pass.
+          if [ "${TAG#v}" = "$NEW_VERSION" ]; then
+            echo "::error::The last release is already $NEW_VERSION, so there is no older one to install over: this was not checked"
+            exit 1
           fi
-          echo "NEW_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+          if ! gh release download "$TAG" -R "$REPO" -p "$PATTERN" -D old; then
+            echo "::error::Could not download $PATTERN from $TAG of $REPO, so installing over it was not checked"
+            exit 1
+          fi
+          ls -l old
+          echo "OLD_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+          echo "NEW_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
           echo "APP_NAME=$NAME" >> "$GITHUB_ENV"
 
       - name: Install the last release, then this one (Windows)
@@ -274,10 +288,16 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not $env:NO_OLD) {
-            $old = Get-ChildItem old -Filter *-setup.exe | Select-Object -First 1
-            Start-Process $old.FullName -ArgumentList '/S' -Wait
-          }
+          $old = Get-ChildItem old -Filter *-setup.exe | Select-Object -First 1
+          if (-not $old) { throw 'the last release was not downloaded' }
+          $p = Start-Process $old.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "the last release's installer exited $($p.ExitCode)" }
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\$($env:APP_NAME)" -Recurse -Filter *.exe |
+            Where-Object { $_.Name -notmatch 'uninstall' } | Select-Object -First 1
+          if (-not $exe) { throw "the last release left no app under $env:LOCALAPPDATA\$($env:APP_NAME)" }
+          $v = $exe.VersionInfo.ProductVersion
+          Write-Host "installed first: $($exe.FullName) $v"
+          if (-not $v.StartsWith($env:OLD_VERSION)) { throw "the last release installed as $v, expected $env:OLD_VERSION" }
           $new = Get-ChildItem new -Filter "$($env:APP_NAME)-*-setup.exe" | Select-Object -First 1
           $p = Start-Process $new.FullName -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "the new installer exited $($p.ExitCode)" }
@@ -294,9 +314,11 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/ci-linux-deps.sh xvfb
-          if [ -z "${NO_OLD:-}" ]; then sudo apt-get install -y ./old/*.deb; fi
-          sudo apt-get install -y "./new/${APP_NAME}-${{ matrix.artifact }}.deb"
           PKG=$(dpkg-deb -f "new/${APP_NAME}-${{ matrix.artifact }}.deb" Package)
+          sudo apt-get install -y ./old/*.deb
+          V=$(dpkg-query -W -f '${Version}' "$PKG")
+          [ "$V" = "$OLD_VERSION" ] || { echo "::error::the last release installed as $V, expected $OLD_VERSION"; exit 1; }
+          sudo apt-get install -y "./new/${APP_NAME}-${{ matrix.artifact }}.deb"
           V=$(dpkg-query -W -f '${Version}' "$PKG")
           echo "installed: $PKG $V"
           [ "$V" = "$NEW_VERSION" ] || { echo "::error::installed $V, expected $NEW_VERSION"; exit 1; }

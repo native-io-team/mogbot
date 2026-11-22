@@ -35,8 +35,8 @@
 You talk to a **Chief of Staff**. It makes an agent for each job you hand it,
 briefs it, and comes back with the result. Every agent has its own
 instructions, memory, routines and model, and works on your computer with your
-apps and your files. Anything that spends money, uses your passwords or deletes
-for good waits for your **Allow**, on the desk or on your phone.
+apps and your files. Spending money always waits for your **Allow**, on the desk
+or on your phone. You choose how much else does.
 
 ## Why Mogbot
 
@@ -57,8 +57,10 @@ Slack, GitHub, Figma and more), the tools on your computer, their own browser
 or your signed-in Chrome when you allow it.
 
 **You decide how much they do alone.** One slider per team or per agent:
-Careful, Steady, Bold, Unleashed. Even at Unleashed they stop for money,
-passwords, deleting for good and going live.
+Careful, Steady, Bold, Unleashed. Up to Bold, an agent asks before it spends
+money, opens saved credentials, deletes for good or pushes to production.
+Unleashed still asks before spending money. At every level, Mogbot's
+browser and Your Chrome refuse to let an agent type into a password box.
 
 **On your phone.** Pair by QR code. Chat, approve from the Lock Screen, review
 results and start routines from anywhere.
@@ -75,12 +77,12 @@ results and start routines from anywhere.
 | | Get it | Notes |
 |---|---|---|
 | **Mac** | [Mogbot.dmg](https://github.com/native-io-team/mogbot-releases/releases/latest/download/Mogbot.dmg) | Apple silicon, macOS 14 or later. Signed, notarized, updates itself |
-| **Windows** | [Installer (.exe)](https://github.com/native-io-team/mogbot-releases/releases/latest/download/Mogbot-windows-x86_64-setup.exe) · [.msi](https://github.com/native-io-team/mogbot-releases/releases/latest/download/Mogbot-windows-x86_64.msi) | 64-bit (x64), signed and ready. No auto-update yet |
-| **Linux** (early beta) | [All builds](https://github.com/native-io-team/mogbot-releases/releases/latest) | AppImage, .deb and .rpm for x86_64 and arm64. Less tested. No auto-update yet |
+| **Windows** | [Installer (.exe)](https://github.com/native-io-team/mogbot-releases/releases/latest/download/Mogbot-windows-x86_64-setup.exe) · [.msi](https://github.com/native-io-team/mogbot-releases/releases/latest/download/Mogbot-windows-x86_64.msi) | 64-bit (x64), signed |
+| **Linux** (early beta) | [All builds](https://github.com/native-io-team/mogbot-releases/releases/latest) | AppImage, .deb and .rpm for x86_64 and arm64. Less tested |
 | **iPhone** | [App Store](https://apps.apple.com/app/mogbot/id6833062484) | Free |
 | **Android** | Coming soon | In testing |
 
-Mac 1.0.8 is the full release. Windows 1.0.8 is signed and ready. Linux is an early beta. On Windows and Linux, pairing your phone, app sign-ins and connecting your other assistants are still coming.
+Every computer gets the same release. The Mac is the one we use every day. The Windows and Linux builds have phone pairing, app sign-ins and connecting your other assistants too, but we haven't tried those on real machines yet.
 
 Or go to **[mogbot.app/start](https://mogbot.app/start)**, which picks the right one for your device.
 
@@ -90,10 +92,10 @@ provider, no plan needed. Setup takes about five minutes: pick an engine, the
 app installs and signs it in, and you're in a chat with your Chief of Staff.
 
 Already using another assistant? Bring your agents over: connect it (Claude,
-ChatGPT, Grok…) and it hands them over in a conversation (on Mac today),
-drop in an export from Grok Bot, OpenBot, OpenClaw or Hermes, or paste back one
-reply from any assistant. You review it all on one card before anything is
-imported. Ship Studio's agents copy straight in.
+ChatGPT, Grok…) and it hands them over in a conversation, drop in an export
+from Grok Bot, OpenBot, OpenClaw or Hermes, or paste back one reply from any
+assistant. You review it all on one card before anything is imported. Ship
+Studio's agents copy straight in.
 
 ## How it compares
 

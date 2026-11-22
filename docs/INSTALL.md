@@ -10,8 +10,8 @@ The easiest way is to let an AI coding agent do it for you.
 
 ## For the human (read this first)
 
-Invited to try it? Start with [WELCOME.md](WELCOME.md): what this is and what
-to expect.
+What it is and what setup looks like: [README](../README.md) and the guide's
+[Install](guide/install.md) page.
 
 1. Open this folder in **Claude Code** or **Codex** and say: *"Set this up on my
    Mac and phone. Follow docs/INSTALL.md."*
@@ -691,9 +691,10 @@ it still says *"Do the steps below"*, no Chrome is connected: see
 by default they work on this Mac on their own and ask before anything
 leaves it (sending, posting, spending). You can change it any time by
 telling your Chief ("ask me less", "ask me more") or in Settings →
-Independence, on a slider from Careful through Steady (the default) and Bold
-to Unleashed. Even at Unleashed, spending money, logins and deleting for good
-still ask you first. **Your team**: the Chief of Staff
+Independence, on a slider from Careful through Steady and Bold (the default)
+to Unleashed. Unleashed sends, deletes, uses your logins and pushes without
+asking; it still asks before spending money. At every level, Mogbot's browser and
+Your Chrome refuse to let an agent type into a password box. **Your team**: the Chief of Staff
 creates, changes and removes the other agents for you, and you can change an
 agent's instructions or routines just by asking in the chat. The Chief is also
 the team's **admin**: it can OK other agents' everyday local work for you, and
