@@ -110,7 +110,9 @@ pub(super) fn recap_lines(log: &[store::AgentMessage]) -> Vec<String> {
 
 /// The ids of what the turn in progress answers and what is queued behind it.
 pub(super) fn on_the_way(agent_id: &str) -> std::collections::HashSet<String> {
-    RUNTIMES
+    // Held for a pause: on its way too, it runs on Resume.
+    let held = super::paused::held_ids(agent_id);
+    let mut ids: std::collections::HashSet<String> = RUNTIMES
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get(agent_id)
@@ -122,7 +124,9 @@ pub(super) fn on_the_way(agent_id: &str) -> std::collections::HashSet<String> {
                 .cloned()
                 .collect()
         })
-        .unwrap_or_default()
+        .unwrap_or_default();
+    ids.extend(held.into_iter().filter(|id| !id.is_empty()));
+    ids
 }
 
 /// One message as a recap line, or `None` for what isn't conversation.

@@ -281,15 +281,16 @@ pub(super) fn room_inbound(text: String, room: super::rooms::RoomRef, outside: b
 /// it's busy with something else, or waiting for a slot.
 pub fn queued_for_room(agent_id: &str, room_id: &str) -> bool {
     let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let here = |m: &Inbound| m.room.as_ref().is_some_and(|x| x.room_id == room_id);
+    // Held for a pause is still waiting: it runs on Resume (also after a
+    // restart, when the agent has no runtime yet).
+    let held = super::paused::held_any(agent_id, here);
     let Some(r) = runtimes.get(agent_id) else {
-        return false;
+        return held;
     };
     let in_this_room = r.room.as_ref().is_some_and(|x| x.room_id == room_id);
-    let asked = r
-        .queue
-        .iter()
-        .any(|m| m.room.as_ref().is_some_and(|x| x.room_id == room_id));
-    asked && (!in_this_room || r.queued)
+    let asked = r.queue.iter().any(here) || held;
+    asked && (!in_this_room || r.queued || held)
 }
 
 /// Whether the agent's turn in progress answers text from outside (a
@@ -587,6 +588,22 @@ pub(super) fn push(app: &AppHandle, agent_id: &str, mut inbound: Inbound) {
     }
     let admitted = {
         let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+        // Paused between the gate above and now (a pause drains the queue
+        // under this lock, so what is admitted after it would run): decided
+        // again, here, with the pause's own rules.
+        let inbound = if store::get(agent_id).is_ok_and(|a| a.paused) {
+            match super::paused::decide(agent_id, true, inbound) {
+                super::paused::Decision::Queue(m) => m,
+                super::paused::Decision::Held => return,
+                super::paused::Decision::Refused(m) => {
+                    drop(runtimes);
+                    tell_dropped(app, agent_id, vec![m], Dropped::Stopped);
+                    return;
+                }
+            }
+        } else {
+            inbound
+        };
         let runtime = runtimes.entry(agent_id.to_string()).or_default();
         // Into the turn in progress too, when its engine takes it mid-turn
         // (`steer`); it is queued either way, until the engine has read it.

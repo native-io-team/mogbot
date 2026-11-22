@@ -68,6 +68,8 @@ pub fn prepare_recovery() {
         for message in queued.iter_mut().filter(|m| m.id.is_empty()) {
             message.id = store::new_id();
         }
+        let to_forget =
+            reconcile_held(&agent.id, store::get(&agent.id).is_ok_and(|a| a.paused), &mut queued);
         if !marked && queued.is_empty() {
             continue;
         }
@@ -80,9 +82,35 @@ pub fn prepare_recovery() {
             // Still on disk, should the app close again before they're sent.
             save_inbox(&agent.id, &runtime.queue);
         }
+        // Forgotten only now that the inbox copy is written.
+        super::paused::forget(&agent.id, &to_forget);
         found.insert(agent.id, queued);
     }
     *leftovers = Some(found);
+}
+
+/// A crash between a pause's two writes (or a Resume's) left some messages
+/// both held and in the inbox. Paused: Resume runs the held ones, so their
+/// inbox copy doesn't start now. Not paused (a Resume that didn't finish):
+/// the inbox copy runs, and what was held but never requeued joins it
+/// (returned: the ids to forget once the merged queue is saved).
+pub(super) fn reconcile_held(agent_id: &str, paused: bool, queued: &mut Vec<Inbound>) -> Vec<String> {
+    let held = super::paused::held_ids(agent_id);
+    if held.is_empty() {
+        return Vec::new();
+    }
+    if paused {
+        queued.retain(|m| !held.contains(&m.id));
+        return Vec::new();
+    }
+    let rest = super::paused::held_all(agent_id);
+    for m in rest {
+        if !queued.iter().any(|q| q.id == m.id) {
+            queued.push(m);
+        }
+    }
+    // The caller forgets them once `queued` is on disk.
+    held
 }
 
 /// Whether `agent_id` still has leftovers from the last run to deal with.
