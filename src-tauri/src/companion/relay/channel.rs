@@ -262,7 +262,7 @@ async fn serve(
         // a long replay waits for acks (a round trip) instead of overrunning
         // the unacked limit and ending the session. Without a session
         // (an older phone) there is no limit to wait on.
-        let room = sess.as_ref().map_or(true, Session::has_room);
+        let room = sess.as_ref().is_none_or(Session::has_room);
         if room {
             full_since = None;
         } else if full_since.is_none() {
