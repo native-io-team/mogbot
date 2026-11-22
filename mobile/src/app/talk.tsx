@@ -24,7 +24,7 @@ import { AgentAccent, useAccent } from '../lib/accent';
 import { announce } from '../lib/a11y';
 import { agentKeyState, needsYou, pendingApproval } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
-import { VOICE_LEVEL, dictationHint, listeningNote, useDictation } from '../lib/dictation';
+import { VOICE_LEVEL, listeningNote, useDictation, useDictationHint } from '../lib/dictation';
 import { haptic } from '../lib/haptics';
 import { canReadAloud, readAloud, stopReading, useReading } from '../lib/readAloud';
 import { describeError, loadLatest, send, setOpenChat } from '../lib/session';
@@ -113,11 +113,11 @@ function TalkScreen({ id }: { id: string }) {
     dispatch({ type: 'heard', text });
   }, []);
   const dictation = useDictation({ getDraft, setDraft, vocabulary, onLevel });
-  const hint = dictationHint(dictation.support);
   const dictationRef = useRef(dictation);
   dictationRef.current = dictation;
 
   const hearing = state.phase === 'listening' || state.phase === 'countdown';
+  const hint = useDictationHint(dictation.support, hearing && dictation.phase === 'idle');
 
   // How a listening session ended, for the loop.
   const handled = useRef(dictation.state);

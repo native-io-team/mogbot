@@ -11,6 +11,7 @@ import { act, renderHook } from '@testing-library/react-native';
 import {
   AUTO_STOP_SILENCE_MS,
   DICTATION_IDLE,
+  HINT_AGAIN_MS,
   HOLD_CANCEL_DISTANCE,
   NOTHING_HEARD_MS,
   RECORDING,
@@ -34,6 +35,7 @@ import {
   tidiedDraft,
   tidyReducer,
   useDictation,
+  useDictationHint,
   type DictationEvent,
   type DictationState,
   type TidyAnswer,
@@ -345,10 +347,67 @@ describe('the hook', () => {
     expect(draft()).toBe('Ask Inbox to archive receipts today');
   });
 
+  it('never asks the phone what it can do while drawing, only when the mic is pressed', async () => {
+    const r = fakeRecognizer();
+    const available = jest.spyOn(
+      r as unknown as { isRecognitionAvailable(): boolean },
+      'isRecognitionAvailable'
+    );
+    const onDevice = jest.spyOn(
+      r as unknown as { supportsOnDeviceRecognition(): boolean },
+      'supportsOnDeviceRecognition'
+    );
+    const { hook } = await setup(r);
+    // Each answer waits on the system's speech service, and the box draws on every keystroke.
+    expect(available).not.toHaveBeenCalled();
+    expect(onDevice).not.toHaveBeenCalled();
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    expect(available).toHaveBeenCalled();
+  });
+
+  it('Talk asks as it opens and before it listens, and again while it can’t, never per draw', async () => {
+    jest.useFakeTimers();
+    try {
+      let can: 'on-device' | 'unavailable' = 'on-device';
+      const support = jest.fn(() => can);
+      const hook = await renderHook(
+        ({ about }: { about: boolean }) => useDictationHint(support, about),
+        { initialProps: { about: true } }
+      );
+      expect(hook.result.current).toBeNull();
+      await hook.rerender({ about: true });
+      await hook.rerender({ about: true });
+      expect(support).toHaveBeenCalledTimes(1);
+      await hook.rerender({ about: false });
+      can = 'unavailable';
+      await hook.rerender({ about: true });
+      await act(async () => {
+        jest.advanceTimersByTime(0);
+      });
+      expect(hook.result.current).toMatch(/isn’t available/);
+      expect(support).toHaveBeenCalledTimes(2);
+      // Back by itself once the phone can, and then no more asking.
+      can = 'on-device';
+      await act(async () => {
+        jest.advanceTimersByTime(HINT_AGAIN_MS);
+      });
+      expect(hook.result.current).toBeNull();
+      expect(support).toHaveBeenCalledTimes(3);
+      await act(async () => {
+        jest.advanceTimersByTime(HINT_AGAIN_MS * 5);
+      });
+      expect(support).toHaveBeenCalledTimes(3);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('falls back to the platform’s recognizer when the phone can’t, and says so', async () => {
     const r = fakeRecognizer({ onDevice: false });
     const { hook } = await setup(r);
-    expect(hook.result.current.support).toBe('server');
+    expect(hook.result.current.support()).toBe('server');
     await act(async () => {
       expect(await hook.result.current.start()).toBe(true);
     });

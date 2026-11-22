@@ -127,6 +127,38 @@ export function dictationHint(support: DictationSupport): string | null {
   }
 }
 
+/** How often Talk asks again while it can't listen. */
+export const HINT_AGAIN_MS = 3000;
+
+/**
+ * Why Talk can't listen, or null: asked as it opens, each time it's about to
+ * listen, and every few seconds while it can't, never while drawing (`support`
+ * takes the system a moment).
+ */
+export function useDictationHint(
+  support: () => DictationSupport,
+  aboutToListen: boolean
+): string | null {
+  const [hint, setHint] = useState(() => dictationHint(support()));
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!opened.current) {
+      opened.current = true; // asked just now, as it opened
+      return;
+    }
+    if (!aboutToListen) return;
+    // After the draw, and before Talk starts the mic (250 ms later).
+    const t = setTimeout(() => setHint(dictationHint(support())), 0);
+    return () => clearTimeout(t);
+  }, [aboutToListen, support]);
+  useEffect(() => {
+    if (!hint) return;
+    const t = setInterval(() => setHint(dictationHint(support())), HINT_AGAIN_MS);
+    return () => clearInterval(t);
+  }, [hint, support]);
+  return hint;
+}
+
 /**
  * The line over the field while it listens off the phone. iOS's server
  * recognition is Apple's; Android's is whichever service the phone has set,
@@ -679,7 +711,11 @@ export function useDictation({
   now?: () => number;
 }) {
   const r = given === undefined ? getRecognizer() : given;
-  const support = dictationSupport(r);
+  // Asked when it matters (the mic pressed), never while drawing: on iOS each
+  // answer makes a speech recognizer and waits on the system's speech service
+  // (164 ms measured), and the message box draws on every keystroke and every
+  // change to the team. Tapping anything waited behind it.
+  const support = useCallback(() => dictationSupport(r), [r]);
   const [state, setState] = useState<DictationState>(DICTATION_IDLE);
   const [startedAt, setStartedAt] = useState(0);
   const [via, setVia] = useState<DictationVia>('on-device');

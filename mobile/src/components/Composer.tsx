@@ -359,10 +359,11 @@ export function Composer({
     return () => clearTimeout(t);
   }, [listening]);
   const mic = ({ hold = false }: { hold?: boolean } = {}) => {
-    const hint = dictationHint(dictation.support);
+    const support = dictation.support();
+    const hint = dictationHint(support);
     if (hint) {
       // No recognizer in this build: the keyboard has one.
-      if (dictation.support === 'no-module') input.current?.focus();
+      if (support === 'no-module') input.current?.focus();
       setMicHint(hint);
       return false;
     }
