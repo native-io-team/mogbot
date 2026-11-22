@@ -692,8 +692,8 @@ fn an_admins_resume_wakes_only_what_an_admin_paused() {
 #[test]
 fn a_pause_keeps_the_queue_and_a_resume_releases_only_when_saved() {
     assert_eq!(pause_action(true, true), PauseAction::StopKeepingQueue);
-    // The flag not saving doesn't make a pause a plain Stop either.
-    assert_eq!(pause_action(true, false), PauseAction::StopKeepingQueue);
+    // The flag didn't save: nothing is held while the menu says Pause.
+    assert_eq!(pause_action(true, false), PauseAction::Nothing);
     assert_eq!(pause_action(false, true), PauseAction::Release);
     assert_eq!(pause_action(false, false), PauseAction::Nothing);
 }

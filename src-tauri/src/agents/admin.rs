@@ -1480,11 +1480,14 @@ enum PauseAction {
 }
 
 /// Pure. A pause stops the turn and keeps the queue (never the plain Stop,
-/// which drops it); a resume releases what was held only when the unpause was
-/// saved (else the agent is still paused and would hold it again).
+/// which drops it) only when the flag saved: else the menu still says Pause
+/// while the queue would be held, so nothing is held. A resume releases what
+/// was held only when the unpause was saved (else the agent is still paused
+/// and would hold it again).
 fn pause_action(on: bool, saved: bool) -> PauseAction {
     match (on, saved) {
-        (true, _) => PauseAction::StopKeepingQueue,
+        (true, true) => PauseAction::StopKeepingQueue,
+        (true, false) => PauseAction::Nothing,
         (false, true) => PauseAction::Release,
         (false, false) => PauseAction::Nothing,
     }

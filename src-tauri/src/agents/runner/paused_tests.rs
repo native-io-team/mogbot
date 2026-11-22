@@ -81,6 +81,19 @@ fn held_messages_survive_a_restart_and_come_back_in_order() {
     store::set_root_for_tests(None);
 }
 
+/// Resume's step under the lock, on `rt`: the queue it leaves, in order.
+fn release_into(rt: &mut HashMap<String, Runtime>, id: &str, paused: bool) -> Vec<String> {
+    let fill: HashMap<String, String> = held_all(id)
+        .into_iter()
+        .filter(|m| m.room.is_none() && m.conversation.is_none())
+        .map(|m| (m.id, "c1".to_string()))
+        .collect();
+    release_locked(rt, id, paused, &fill);
+    rt.get(id)
+        .map(|r| r.queue.iter().map(|m| m.id.clone()).collect())
+        .unwrap_or_default()
+}
+
 fn queued(id: &str, from: From, routine: bool) -> Inbound {
     let mut m = msg(from, routine, false);
     m.id = id.into();
@@ -139,21 +152,10 @@ fn a_pause_holds_the_queue_on_disk_and_resume_runs_it_once_in_order() {
     assert_eq!(held_count("p2"), 3);
     let ids: Vec<String> = with_held("p2", |h| h.iter().map(|m| m.id.clone()).collect());
     assert_eq!(ids, ["u1", "a1", "room1"]);
-    // Resume requeues them while they are still on disk, then forgets them:
-    // a crash in the middle repeats a message, never loses one.
-    let mut run = Vec::new();
-    release_with("p2", |m| {
-        assert!(
-            store::agent_home("p2").unwrap().join("held.json").exists(),
-            "still held while it is requeued"
-        );
-        run.push(m.id);
-    });
-    assert_eq!(run, ["u1", "a1", "room1"]);
-    // A second Resume has nothing left to run.
-    let mut again = 0;
-    release_with("p2", |_| again += 1);
-    assert_eq!(again, 0);
+    // Resume appends them to the queue and saves it before forgetting them.
+    let mut rt = HashMap::new();
+    assert_eq!(release_into(&mut rt, "p2", false), ["u1", "a1", "room1"]);
+    assert!(store::agent_home("p2").unwrap().join("inbox.json").exists());
     assert_eq!(held_count("p2"), 0);
     assert!(!store::agent_home("p2").unwrap().join("held.json").exists());
     store::set_root_for_tests(None);
@@ -182,9 +184,12 @@ fn what_is_said_after_the_pause_runs_ahead_of_the_held_and_resume_runs_them_afte
     ));
     assert_eq!(held_ids("p5"), ["old", "later"]);
     // Resume: the held ones come in the order they were held, after "now".
-    let mut queue = vec!["now".to_string()];
-    release_with("p5", |m| queue.push(m.id));
-    assert_eq!(queue, ["now", "old", "later"]);
+    let mut rt: HashMap<String, Runtime> = HashMap::new();
+    rt.entry("p5".into())
+        .or_default()
+        .queue
+        .push_back(queued("now", From::User, false));
+    assert_eq!(release_into(&mut rt, "p5", false), ["now", "old", "later"]);
     assert!(held_ids("p5").is_empty());
     store::set_root_for_tests(None);
 }
@@ -258,43 +263,33 @@ fn recovery_sorts_out_a_message_both_held_and_in_the_inbox() {
     std::fs::create_dir_all(store::agent_home("p8").unwrap()).unwrap();
     // Paused: the held copy runs on Resume, the inbox copy doesn't start.
     hold_all("p8", vec![queued("u1", From::User, false)]);
-    let mut inbox = vec![queued("u1", From::User, false), queued("u2", From::User, false)];
-    assert!(recovery::reconcile_held("p8", true, &mut inbox).is_empty());
-    assert_eq!(inbox.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["u2"]);
+    let mut inbox = vec![
+        queued("u1", From::User, false),
+        queued("u2", From::User, false),
+    ];
+    assert!(recovery::reconcile_held("p8", true, &mut inbox)
+        .0
+        .is_empty());
+    assert_eq!(
+        inbox.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+        ["u2"]
+    );
     assert_eq!(held_ids("p8"), ["u1"]);
     // Not paused (a Resume that didn't finish): the inbox copy runs, and
     // what was held but never requeued joins it, once.
     hold_all("p8", vec![queued("u3", From::User, false)]);
     let mut inbox = vec![queued("u1", From::User, false)];
-    let forget_after = recovery::reconcile_held("p8", false, &mut inbox);
-    assert_eq!(inbox.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["u1", "u3"]);
+    let (forget_after, _) = recovery::reconcile_held("p8", false, &mut inbox);
+    assert_eq!(
+        inbox.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+        ["u1", "u3"]
+    );
     // Still held until the merged queue is on disk: the caller forgets then.
     assert_eq!(held_ids("p8"), ["u1", "u3"]);
     forget("p8", &forget_after);
     assert!(held_ids("p8").is_empty());
     store::set_root_for_tests(None);
 }
-#[test]
-fn a_message_held_twice_runs_once_on_resume() {
-    let _serial = store::tests_lock();
-    let home = tempfile::tempdir().unwrap();
-    store::set_root_for_tests(Some(home.path().to_path_buf()));
-    std::fs::create_dir_all(store::agent_home("p3").unwrap()).unwrap();
-    hold_all("p3", vec![queued("u1", From::User, false)]);
-    hold_all(
-        "p3",
-        vec![queued("u1", From::User, false), queued("u2", From::User, false)],
-    );
-    // Not deduplicated when held (see `hold_all`), but Resume runs u1 once.
-    let mut run = Vec::new();
-    release_with("p3", |m| run.push(m.id));
-    assert_eq!(run, ["u1", "u2"]);
-    // As many copies are forgotten as were held: nothing runs again later.
-    assert!(held_ids("p3").is_empty());
-    with_held("p3", std::mem::take);
-    store::set_root_for_tests(None);
-}
-
 #[test]
 fn a_held_message_is_on_its_way_and_owed_and_waiting_in_its_room() {
     let _serial = store::tests_lock();
@@ -319,29 +314,6 @@ fn a_held_message_is_on_its_way_and_owed_and_waiting_in_its_room() {
     assert!(queued_for_room("p4", "room1"));
     RUNTIMES.lock().unwrap().remove("p4");
     with_held("p4", std::mem::take);
-    store::set_root_for_tests(None);
-}
-
-#[test]
-fn a_resume_whose_requeue_holds_it_again_loses_nothing() {
-    let _serial = store::tests_lock();
-    let home = tempfile::tempdir().unwrap();
-    store::set_root_for_tests(Some(home.path().to_path_buf()));
-    std::fs::create_dir_all(store::agent_home("p9").unwrap()).unwrap();
-    hold_all("p9", vec![queued("u1", agent("Mail"), false), queued("u2", agent("Mail"), false)]);
-    // The agent is paused again (or never left it): requeue goes through the
-    // gate, which holds another agent's message a second time (the user's own
-    // words would pass it).
-    release_with("p9", |m| {
-        let _ = decide("p9", true, m);
-    });
-    assert_eq!(held_ids("p9"), ["u1", "u2"], "one copy of each stays held");
-    // A pause that lands mid-release holds the queue's copy too.
-    release_with("p9", |m| {
-        hold_all("p9", vec![m]);
-    });
-    assert_eq!(held_ids("p9"), ["u1", "u2"]);
-    with_held("p9", std::mem::take);
     store::set_root_for_tests(None);
 }
 
@@ -439,44 +411,13 @@ fn a_failed_hold_leaves_only_the_kept_words_in_the_inbox_file() {
     pause_queue("p11");
     let on_disk = std::fs::read_to_string(dir.join("inbox.json")).unwrap();
     assert!(on_disk.contains("u1"), "the kept words survive a quit");
-    assert!(!on_disk.contains("\"rt\""), "a refused routine doesn't come back at launch");
+    assert!(
+        !on_disk.contains("\"rt\""),
+        "a refused routine doesn't come back at launch"
+    );
     RUNTIMES.lock().unwrap().remove("p11");
     with_held("p11", std::mem::take);
     UNSAVED.lock().unwrap().clear();
-    store::set_root_for_tests(None);
-}
-
-#[test]
-fn two_copies_in_the_snapshot_and_one_held_mid_release_leave_exactly_one() {
-    let _serial = store::tests_lock();
-    let home = tempfile::tempdir().unwrap();
-    store::set_root_for_tests(Some(home.path().to_path_buf()));
-    std::fs::create_dir_all(store::agent_home("p12").unwrap()).unwrap();
-    hold_all("p12", vec![queued("u1", agent("Mail"), false)]);
-    hold_all("p12", vec![queued("u1", agent("Mail"), false)]);
-    release_with("p12", |m| {
-        // A pause lands while it is released: the same message is held again.
-        hold_all("p12", vec![m]);
-    });
-    assert_eq!(held_ids("p12"), ["u1"]);
-    with_held("p12", std::mem::take);
-    store::set_root_for_tests(None);
-}
-
-#[test]
-fn a_resume_that_left_the_agent_paused_releases_nothing() {
-    let _serial = store::tests_lock();
-    let home = tempfile::tempdir().unwrap();
-    store::set_root_for_tests(Some(home.path().to_path_buf()));
-    std::fs::create_dir_all(store::agent_home("p13").unwrap()).unwrap();
-    hold_all("p13", vec![queued("a1", agent("Mail"), false)]);
-    let mut run = 0;
-    assert!(!release_if_resumed("p13", true, |_| run += 1));
-    assert_eq!(run, 0);
-    assert_eq!(held_ids("p13"), ["a1"]);
-    assert!(release_if_resumed("p13", false, |_| run += 1));
-    assert_eq!(run, 1);
-    assert!(held_ids("p13").is_empty());
     store::set_root_for_tests(None);
 }
 
@@ -490,7 +431,12 @@ fn a_message_that_gets_past_the_gate_just_before_a_pause_is_held_at_the_door() {
     // Paused by now: another agent's words are held, not queued; a routine
     // is refused; the user's own words go in.
     assert!(matches!(
-        admit_or_hold(&mut runtimes, "p14", true, queued("a1", agent("Mail"), false)),
+        admit_or_hold(
+            &mut runtimes,
+            "p14",
+            true,
+            queued("a1", agent("Mail"), false)
+        ),
         Entry::Held
     ));
     assert!(matches!(
@@ -505,7 +451,12 @@ fn a_message_that_gets_past_the_gate_just_before_a_pause_is_held_at_the_door() {
     assert_eq!(held_ids("p14"), ["a1"]);
     // Not paused: it queues.
     assert!(matches!(
-        admit_or_hold(&mut runtimes, "p14", false, queued("a2", agent("Mail"), false)),
+        admit_or_hold(
+            &mut runtimes,
+            "p14",
+            false,
+            queued("a2", agent("Mail"), false)
+        ),
         Entry::Admitted(Ok(_))
     ));
     with_held("p14", std::mem::take);
@@ -523,10 +474,143 @@ fn after_a_failed_save_and_a_relaunch_a_paused_agent_holds_what_it_would_have_he
         queued("rt", From::User, true),
         queued("u1", From::User, false),
     ];
-    assert!(recovery::reconcile_held("p15", true, &mut inbox).is_empty());
-    assert_eq!(inbox.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["u1"]);
+    assert!(recovery::reconcile_held("p15", true, &mut inbox)
+        .0
+        .is_empty());
+    assert_eq!(
+        inbox.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+        ["u1"]
+    );
     assert_eq!(held_ids("p15"), ["a1"]);
     with_held("p15", std::mem::take);
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn a_message_held_twice_runs_once_on_resume() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    std::fs::create_dir_all(store::agent_home("p3").unwrap()).unwrap();
+    // A held copy a failed Resume left, and the same message held again.
+    with_held("p3", |h| {
+        h.push(queued("u1", From::User, false));
+        h.push(queued("u1", From::User, false));
+        h.push(queued("u2", From::User, false));
+    });
+    let mut rt = HashMap::new();
+    assert_eq!(release_into(&mut rt, "p3", false), ["u1", "u2"]);
+    assert!(held_ids("p3").is_empty(), "every copy is cleared with it");
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn two_resumes_run_a_message_once_even_after_the_worker_took_it() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    std::fs::create_dir_all(store::agent_home("p12").unwrap()).unwrap();
+    hold_all("p12", vec![queued("u1", agent("Mail"), false)]);
+    let mut rt = HashMap::new();
+    assert_eq!(release_into(&mut rt, "p12", false), ["u1"]);
+    // The worker takes it off the queue; a second Resume (double tap, the
+    // phone, an admin) finds nothing held, so it is not queued again.
+    rt.get_mut("p12").unwrap().queue.clear();
+    assert!(release_into(&mut rt, "p12", false).is_empty());
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn resume_pause_resume_keeps_one_copy_of_each() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    std::fs::create_dir_all(store::agent_home("p9").unwrap()).unwrap();
+    hold_all(
+        "p9",
+        vec![
+            queued("a1", agent("Mail"), false),
+            queued("a2", agent("Mail"), false),
+        ],
+    );
+    {
+        let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+        release_into(&mut runtimes, "p9", false);
+        assert_eq!(runtimes.get("p9").unwrap().queue.len(), 2);
+    }
+    assert!(held_ids("p9").is_empty());
+    pause_queue("p9");
+    assert_eq!(held_ids("p9"), ["a1", "a2"]);
+    assert!(RUNTIMES.lock().unwrap().get("p9").unwrap().queue.is_empty());
+    {
+        let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(release_into(&mut runtimes, "p9", false), ["a1", "a2"]);
+    }
+    assert!(held_ids("p9").is_empty());
+    RUNTIMES.lock().unwrap().remove("p9");
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn a_resume_that_left_the_agent_paused_releases_nothing() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    std::fs::create_dir_all(store::agent_home("p13").unwrap()).unwrap();
+    hold_all("p13", vec![queued("a1", agent("Mail"), false)]);
+    let mut rt = HashMap::new();
+    assert!(release_into(&mut rt, "p13", true).is_empty());
+    assert_eq!(held_ids("p13"), ["a1"]);
+    assert_eq!(release_into(&mut rt, "p13", false), ["a1"]);
+    assert!(held_ids("p13").is_empty());
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn a_resume_whose_queue_write_fails_keeps_them_held() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    let dir = store::agent_home("p16").unwrap();
+    std::fs::create_dir_all(dir.join("inbox.json")).unwrap();
+    hold_all("p16", vec![queued("a1", agent("Mail"), false)]);
+    let mut rt = HashMap::new();
+    release_into(&mut rt, "p16", false);
+    assert_eq!(
+        held_ids("p16"),
+        ["a1"],
+        "the queue didn't save: not forgotten"
+    );
+    with_held("p16", std::mem::take);
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn a_room_ask_another_agent_brought_in_is_held_not_run() {
+    let mut m = in_room(queued("r1", From::User, false));
+    assert_eq!(fate(&m), Fate::Run, "the user's own room ask runs");
+    m.room.as_mut().unwrap().asker = super::super::rooms::Asker::Agent {
+        name: "Scout".into(),
+    };
+    assert_eq!(fate(&m), Fate::Hold);
+}
+
+#[test]
+fn a_damaged_held_file_is_set_aside_not_read_as_empty() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    let dir = store::agent_home("p17").unwrap();
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("held.json"), b"{ not json").unwrap();
+    assert_eq!(held_count("p17"), 0);
+    hold_all("p17", vec![queued("a1", agent("Mail"), false)]);
+    let kept = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .any(|e| e.file_name().to_string_lossy().contains("corrupt"));
+    assert!(kept, "the damaged file is still there, set aside");
+    with_held("p17", std::mem::take);
     store::set_root_for_tests(None);
 }
 
@@ -546,7 +630,10 @@ fn set_paused_pauses_with_the_queue_kept_never_the_plain_stop() {
     let set_paused = body(admin, "pub fn set_paused(", "\nfn pause(");
     assert!(set_paused.contains("pause_action(on, saved)"));
     assert!(set_paused.contains("runner::stop_for_pause("));
-    assert!(!set_paused.contains("runner::stop("), "a pause is not a plain Stop");
+    assert!(
+        !set_paused.contains("runner::stop("),
+        "a pause is not a plain Stop"
+    );
     assert!(set_paused.contains("runner::release_held("));
 }
 
@@ -556,9 +643,17 @@ fn push_decides_paused_under_the_lock_and_looks_again_after_holding() {
     let push = body(inbox, "pub(super) fn push(", "/// What came of a message");
     let lock = push.find("RUNTIMES.lock()").expect("push takes the lock");
     let read = push.find("a.paused").expect("push reads paused");
-    let door = push.find("admit_or_hold(").expect("push goes through the door helper");
-    assert!(lock < read && read < door, "paused is read under the lock, then decided");
-    assert!(push.contains("after_hold("), "a held message is looked at again");
+    let door = push
+        .find("admit_or_hold(")
+        .expect("push goes through the door helper");
+    assert!(
+        lock < read && read < door,
+        "paused is read under the lock, then decided"
+    );
+    assert!(
+        push.contains("after_hold("),
+        "a held message is looked at again"
+    );
     assert!(push.contains("paused::gate("));
 }
 

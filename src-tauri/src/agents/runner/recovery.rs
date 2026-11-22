@@ -68,22 +68,31 @@ pub fn prepare_recovery() {
         for message in queued.iter_mut().filter(|m| m.id.is_empty()) {
             message.id = store::new_id();
         }
-        let to_forget =
-            reconcile_held(&agent.id, store::get(&agent.id).is_ok_and(|a| a.paused), &mut queued);
-        if !marked && queued.is_empty() {
+        let (to_forget, keep_on_disk) = reconcile_held(
+            &agent.id,
+            store::get(&agent.id).is_ok_and(|a| a.paused),
+            &mut queued,
+        );
+        if !marked && queued.is_empty() && keep_on_disk.is_empty() {
             continue;
         }
-        if !queued.is_empty() {
+        if !queued.is_empty() || !keep_on_disk.is_empty() {
             let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
             let runtime = runtimes.entry(agent.id.clone()).or_default();
             for (i, message) in queued.iter().enumerate() {
                 runtime.queue.insert(i, message.clone());
             }
-            // Still on disk, should the app close again before they're sent.
-            save_inbox(&agent.id, &runtime.queue);
+            // Still on disk, should the app close again before they're sent:
+            // the queue, and what couldn't be held (it is not run, only kept).
+            let mut on_disk = runtime.queue.clone();
+            on_disk.extend(keep_on_disk);
+            // Forgotten only once that is written.
+            if save_inbox_ok(&agent.id, &on_disk) {
+                super::paused::forget(&agent.id, &to_forget);
+            } else {
+                tracing::error!(agent = %agent.id, "[Agents] launch couldn't save the queue: held copies kept");
+            }
         }
-        // Forgotten only now that the inbox copy is written.
-        super::paused::forget(&agent.id, &to_forget);
         found.insert(agent.id, queued);
     }
     *leftovers = Some(found);
@@ -94,7 +103,11 @@ pub fn prepare_recovery() {
 /// inbox copy doesn't start now. Not paused (a Resume that didn't finish):
 /// the inbox copy runs, and what was held but never requeued joins it
 /// (returned: the ids to forget once the merged queue is saved).
-pub(super) fn reconcile_held(agent_id: &str, paused: bool, queued: &mut Vec<Inbound>) -> Vec<String> {
+pub(super) fn reconcile_held(
+    agent_id: &str,
+    paused: bool,
+    queued: &mut Vec<Inbound>,
+) -> (Vec<String>, Vec<Inbound>) {
     let held = super::paused::held_ids(agent_id);
     if paused {
         queued.retain(|m| !held.contains(&m.id));
@@ -107,11 +120,17 @@ pub(super) fn reconcile_held(agent_id: &str, paused: bool, queued: &mut Vec<Inbo
             .partition(|m| super::paused::fate(m) == super::paused::Fate::Run);
         hold.retain(|m| !m.routine);
         *queued = run;
-        super::paused::hold_all(agent_id, hold);
-        return Vec::new();
+        // Not held (the write failed again): they go back in the inbox file,
+        // which `take_inbox` emptied, but are not run.
+        let unsaved = if super::paused::hold_all(agent_id, hold.clone()) {
+            Vec::new()
+        } else {
+            hold
+        };
+        return (Vec::new(), unsaved);
     }
     if held.is_empty() {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     }
     let rest = super::paused::held_all(agent_id);
     for m in rest {
@@ -120,7 +139,7 @@ pub(super) fn reconcile_held(agent_id: &str, paused: bool, queued: &mut Vec<Inbo
         }
     }
     // The caller forgets them once `queued` is on disk.
-    held
+    (held, Vec::new())
 }
 
 /// Whether `agent_id` still has leftovers from the last run to deal with.

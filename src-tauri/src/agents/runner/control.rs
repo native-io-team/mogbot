@@ -119,9 +119,8 @@ pub(super) fn pause_queue(agent_id: &str) -> (bool, Vec<Inbound>) {
     // would run it twice on Resume.
     let heard = super::steer::heard_ids(runtime);
     let all: Vec<Inbound> = runtime.queue.drain(..).collect();
-    let (kept, refused) = super::paused::split_queue(
-        all.into_iter().filter(|m| !heard.contains(&m.id)).collect(),
-    );
+    let (kept, refused) =
+        super::paused::split_queue(all.into_iter().filter(|m| !heard.contains(&m.id)).collect());
     // The queue's copy on disk is emptied only once the held copy is. A
     // failed write leaves what was kept (and only that: not the routines
     // refused, nor what the engine read) in the inbox file instead, so the
@@ -440,8 +439,10 @@ pub(super) fn begin_fresh_as(
 /// Another agent with a request from `agent_id` it hasn't answered yet:
 /// working on it (owed), or not started on it (queued).
 pub(super) fn owes_reply(runtimes: &HashMap<String, Runtime>, agent_id: &str) -> Option<String> {
-    runtimes.iter().find_map(|(id, r)| {
-        let asked = r.owed.iter().any(|a| a.id == agent_id)
+    runtimes
+        .iter()
+        .find_map(|(id, r)| {
+            let asked = r.owed.iter().any(|a| a.id == agent_id)
             || r.queue.iter().any(|m| {
                 !m.reply && matches!(&m.from, From::Agent { sender, .. } if sender.id == agent_id)
             })
@@ -449,11 +450,11 @@ pub(super) fn owes_reply(runtimes: &HashMap<String, Runtime>, agent_id: &str) ->
             || super::paused::held_any(id, |m| {
                 !m.reply && matches!(&m.from, From::Agent { sender, .. } if sender.id == agent_id)
             });
-        (id != agent_id && asked).then(|| id.clone())
-    })
-    // A paused agent that only has its held.json (after a restart) has no
-    // runtime to look in.
-    .or_else(|| super::paused::holder_of_ask_from(agent_id))
+            (id != agent_id && asked).then(|| id.clone())
+        })
+        // A paused agent that only has its held.json (after a restart) has no
+        // runtime to look in.
+        .or_else(|| super::paused::holder_of_ask_from(agent_id))
 }
 
 /// Stop the turn in progress so what's queued in the agent's own chat runs
