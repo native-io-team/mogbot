@@ -289,8 +289,8 @@ fn a_message_held_twice_runs_once_on_resume() {
     let mut run = Vec::new();
     release_with("p3", |m| run.push(m.id));
     assert_eq!(run, ["u1", "u2"]);
-    // The spare copy is what stays; it can only run again on a later Resume.
-    assert_eq!(held_ids("p3"), ["u1"]);
+    // As many copies are forgotten as were held: nothing runs again later.
+    assert!(held_ids("p3").is_empty());
     with_held("p3", std::mem::take);
     store::set_root_for_tests(None);
 }
@@ -443,5 +443,89 @@ fn a_failed_hold_leaves_only_the_kept_words_in_the_inbox_file() {
     RUNTIMES.lock().unwrap().remove("p11");
     with_held("p11", std::mem::take);
     UNSAVED.lock().unwrap().clear();
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn two_copies_in_the_snapshot_and_one_held_mid_release_leave_exactly_one() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    std::fs::create_dir_all(store::agent_home("p12").unwrap()).unwrap();
+    hold_all("p12", vec![queued("u1", agent("Mail"), false)]);
+    hold_all("p12", vec![queued("u1", agent("Mail"), false)]);
+    release_with("p12", |m| {
+        // A pause lands while it is released: the same message is held again.
+        hold_all("p12", vec![m]);
+    });
+    assert_eq!(held_ids("p12"), ["u1"]);
+    with_held("p12", std::mem::take);
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn a_resume_that_left_the_agent_paused_releases_nothing() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    std::fs::create_dir_all(store::agent_home("p13").unwrap()).unwrap();
+    hold_all("p13", vec![queued("a1", agent("Mail"), false)]);
+    let mut run = 0;
+    assert!(!release_if_resumed("p13", true, |_| run += 1));
+    assert_eq!(run, 0);
+    assert_eq!(held_ids("p13"), ["a1"]);
+    assert!(release_if_resumed("p13", false, |_| run += 1));
+    assert_eq!(run, 1);
+    assert!(held_ids("p13").is_empty());
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn a_message_that_gets_past_the_gate_just_before_a_pause_is_held_at_the_door() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    std::fs::create_dir_all(store::agent_home("p14").unwrap()).unwrap();
+    let mut runtimes: HashMap<String, Runtime> = HashMap::new();
+    // Paused by now: another agent's words are held, not queued; a routine
+    // is refused; the user's own words go in.
+    assert!(matches!(
+        admit_or_hold(&mut runtimes, "p14", true, queued("a1", agent("Mail"), false)),
+        Entry::Held
+    ));
+    assert!(matches!(
+        admit_or_hold(&mut runtimes, "p14", true, queued("rt", From::User, true)),
+        Entry::Refused(_)
+    ));
+    assert!(runtimes.get("p14").is_none_or(|r| r.queue.is_empty()));
+    assert!(matches!(
+        admit_or_hold(&mut runtimes, "p14", true, queued("u1", From::User, false)),
+        Entry::Admitted(Ok(_))
+    ));
+    assert_eq!(held_ids("p14"), ["a1"]);
+    // Not paused: it queues.
+    assert!(matches!(
+        admit_or_hold(&mut runtimes, "p14", false, queued("a2", agent("Mail"), false)),
+        Entry::Admitted(Ok(_))
+    ));
+    with_held("p14", std::mem::take);
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn after_a_failed_save_and_a_relaunch_a_paused_agent_holds_what_it_would_have_held() {
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    std::fs::create_dir_all(store::agent_home("p15").unwrap()).unwrap();
+    let mut inbox = vec![
+        queued("a1", agent("Mail"), false),
+        queued("rt", From::User, true),
+        queued("u1", From::User, false),
+    ];
+    assert!(recovery::reconcile_held("p15", true, &mut inbox).is_empty());
+    assert_eq!(inbox.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["u1"]);
+    assert_eq!(held_ids("p15"), ["a1"]);
+    with_held("p15", std::mem::take);
     store::set_root_for_tests(None);
 }

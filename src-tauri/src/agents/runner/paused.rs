@@ -93,7 +93,10 @@ pub(super) fn gate(app: &AppHandle, agent_id: &str, m: Inbound) -> Option<Inboun
     let paused = store::get(agent_id).is_ok_and(|a| a.paused);
     match decide(agent_id, paused, m) {
         Decision::Queue(m) => Some(m),
-        Decision::Held => None,
+        Decision::Held => {
+            after_hold(app, agent_id);
+            None
+        }
         Decision::Refused(m) => {
             tracing::info!(
                 agent = agent_id,
@@ -216,33 +219,51 @@ pub fn held_count(agent_id: &str) -> usize {
 
 /// Resume: what was held runs now, in the order it came.
 pub fn release(app: &AppHandle, agent_id: &str) {
-    // Still paused (an unpause that didn't save): nothing is released, so
-    // `gate` can't hold it again.
-    if store::get(agent_id).is_ok_and(|a| a.paused) {
+    let paused = store::get(agent_id).is_ok_and(|a| a.paused);
+    release_if_resumed(agent_id, paused, |m| push(app, agent_id, m));
+}
+
+/// [`release`] without the app. Still paused (an unpause that didn't save):
+/// nothing is released, so `gate` can't hold it again. True when it ran.
+pub(super) fn release_if_resumed(
+    agent_id: &str,
+    paused: bool,
+    requeue: impl FnMut(Inbound),
+) -> bool {
+    if paused {
         tracing::warn!(agent = agent_id, "[Agents] Resume left the agent paused: nothing released");
-        return;
+        return false;
     }
-    release_with(agent_id, |m| push(app, agent_id, m));
+    release_with(agent_id, requeue);
+    true
+}
+
+/// A message held just after a Resume had looked is never seen: after
+/// holding, look again, and release when the agent is no longer paused.
+pub(super) fn after_hold(app: &AppHandle, agent_id: &str) {
+    if !store::get(agent_id).is_ok_and(|a| a.paused) {
+        release(app, agent_id);
+    }
 }
 
 /// Requeue first, then forget: a crash in between repeats a message (its
 /// inbox copy is dropped at launch when it is also held, or run once when
-/// the agent is no longer paused), never loses one. A message a requeue held
-/// again (the agent was paused again meanwhile) has two copies now: one is
-/// forgotten, one stays held.
+/// the agent is no longer paused), never loses one. Each id is requeued once
+/// however many copies were held, and as many copies are forgotten as the
+/// snapshot had: what a requeue held again (the agent was paused again
+/// meanwhile) is a copy added during the release, and stays.
 pub(super) fn release_with(agent_id: &str, mut requeue: impl FnMut(Inbound)) {
-    let held = with_held(agent_id, |held| held.clone());
-    let mut ids: Vec<String> = Vec::new();
-    for m in held {
-        // Two copies of one id (see `hold_all`) run once.
-        if m.id.is_empty() || !ids.contains(&m.id) {
-            ids.push(m.id.clone());
-            requeue(m);
+    let snapshot = with_held(agent_id, |held| held.clone());
+    let mut seen: Vec<&str> = Vec::new();
+    for m in &snapshot {
+        if m.id.is_empty() || !seen.contains(&m.id.as_str()) {
+            seen.push(&m.id);
+            requeue(m.clone());
         }
     }
     with_held(agent_id, |held| {
-        for id in ids.iter().filter(|id| !id.is_empty()) {
-            if let Some(at) = held.iter().position(|h| &h.id == id) {
+        for m in snapshot.iter().filter(|m| !m.id.is_empty()) {
+            if let Some(at) = held.iter().position(|h| h.id == m.id) {
                 held.remove(at);
             }
         }

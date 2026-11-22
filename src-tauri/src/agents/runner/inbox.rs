@@ -588,38 +588,53 @@ pub(super) fn push(app: &AppHandle, agent_id: &str, mut inbound: Inbound) {
     }
     let admitted = {
         let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
-        // Paused between the gate above and now (a pause drains the queue
-        // under this lock, so what is admitted after it would run): decided
-        // again, here, with the pause's own rules.
-        let inbound = if store::get(agent_id).is_ok_and(|a| a.paused) {
-            match super::paused::decide(agent_id, true, inbound) {
-                super::paused::Decision::Queue(m) => m,
-                super::paused::Decision::Held => return,
-                super::paused::Decision::Refused(m) => {
-                    drop(runtimes);
-                    tell_dropped(app, agent_id, vec![m], Dropped::Stopped);
-                    return;
-                }
-            }
-        } else {
-            inbound
-        };
-        let runtime = runtimes.entry(agent_id.to_string()).or_default();
-        // Into the turn in progress too, when its engine takes it mid-turn
-        // (`steer`); it is queued either way, until the engine has read it.
-        super::steer::offer(runtime, &inbound);
-        let admitted = runtime.admit(inbound);
-        if admitted.is_ok() {
-            save_inbox(agent_id, &runtime.queue);
-        }
-        admitted
+        // Read under the lock, where a pause drains the queue.
+        let paused = store::get(agent_id).is_ok_and(|a| a.paused);
+        admit_or_hold(&mut runtimes, agent_id, paused, inbound)
     };
     match admitted {
-        Ok(true) => start_worker(app, agent_id),
-        Ok(false) => {}
+        Entry::Held => super::paused::after_hold(app, agent_id),
+        Entry::Refused(m) => tell_dropped(app, agent_id, vec![m], Dropped::Stopped),
+        Entry::Admitted(Ok(true)) => start_worker(app, agent_id),
+        Entry::Admitted(Ok(false)) => {}
         // Being deleted: whoever asked hears it won't be done.
-        Err(refused) => tell_dropped(app, agent_id, vec![*refused], Dropped::Deleting),
+        Entry::Admitted(Err(refused)) => {
+            tell_dropped(app, agent_id, vec![*refused], Dropped::Deleting)
+        }
     }
+}
+
+/// What came of a message at the queue's door.
+pub(super) enum Entry {
+    Held,
+    Refused(Inbound),
+    Admitted(Result<bool, Box<Inbound>>),
+}
+
+/// Under the runtime lock: a message that passed the gate while the agent
+/// wasn't paused is decided again if it has been paused since (a pause drains
+/// the queue under this lock, so what is admitted after it would run), then
+/// queued, and handed to the turn in progress when the engine takes it.
+pub(super) fn admit_or_hold(
+    runtimes: &mut HashMap<String, Runtime>,
+    agent_id: &str,
+    paused: bool,
+    inbound: Inbound,
+) -> Entry {
+    let inbound = match super::paused::decide(agent_id, paused, inbound) {
+        super::paused::Decision::Queue(m) => m,
+        super::paused::Decision::Held => return Entry::Held,
+        super::paused::Decision::Refused(m) => return Entry::Refused(m),
+    };
+    let runtime = runtimes.entry(agent_id.to_string()).or_default();
+    // Into the turn in progress too, when its engine takes it mid-turn
+    // (`steer`); it is queued either way, until the engine has read it.
+    super::steer::offer(runtime, &inbound);
+    let admitted = runtime.admit(inbound);
+    if admitted.is_ok() {
+        save_inbox(agent_id, &runtime.queue);
+    }
+    Entry::Admitted(admitted)
 }
 
 /// The conversation a message that didn't say goes to: an answer to the

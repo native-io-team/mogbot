@@ -96,11 +96,21 @@ pub fn prepare_recovery() {
 /// (returned: the ids to forget once the merged queue is saved).
 pub(super) fn reconcile_held(agent_id: &str, paused: bool, queued: &mut Vec<Inbound>) -> Vec<String> {
     let held = super::paused::held_ids(agent_id);
-    if held.is_empty() {
-        return Vec::new();
-    }
     if paused {
         queued.retain(|m| !held.contains(&m.id));
+        // A paused agent runs nothing the gate would have held: what a failed
+        // save left in the inbox file (another agent's words, outside text)
+        // is held again, a routine is refused. The user's own words run, as
+        // they would had they been sent after the pause.
+        let (run, mut hold): (Vec<Inbound>, Vec<Inbound>) = std::mem::take(queued)
+            .into_iter()
+            .partition(|m| super::paused::fate(m) == super::paused::Fate::Run);
+        hold.retain(|m| !m.routine);
+        *queued = run;
+        super::paused::hold_all(agent_id, hold);
+        return Vec::new();
+    }
+    if held.is_empty() {
         return Vec::new();
     }
     let rest = super::paused::held_all(agent_id);
