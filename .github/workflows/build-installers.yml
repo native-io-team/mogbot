@@ -292,6 +292,12 @@ jobs:
           if (-not $old) { throw 'the last release was not downloaded' }
           $p = Start-Process $old.FullName -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "the last release's installer exited $($p.ExitCode)" }
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\$($env:APP_NAME)" -Recurse -Filter *.exe |
+            Where-Object { $_.Name -notmatch 'uninstall' } | Select-Object -First 1
+          if (-not $exe) { throw "the last release left no app under $env:LOCALAPPDATA\$($env:APP_NAME)" }
+          $v = $exe.VersionInfo.ProductVersion
+          Write-Host "installed first: $($exe.FullName) $v"
+          if (-not $v.StartsWith($env:OLD_VERSION)) { throw "the last release installed as $v, expected $env:OLD_VERSION" }
           $new = Get-ChildItem new -Filter "$($env:APP_NAME)-*-setup.exe" | Select-Object -First 1
           $p = Start-Process $new.FullName -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "the new installer exited $($p.ExitCode)" }

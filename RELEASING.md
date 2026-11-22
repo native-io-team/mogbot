@@ -16,8 +16,10 @@ The two scripts:
 - `scripts/ci-local.sh` is the one list of checks: CI's Frontend job runs
   `ci-local.sh frontend`, pre-push runs `frontend` and `rust`, and every step
   runs even after one fails, so one round fixes every failure.
-- `scripts/publish-when-green.sh` waits for CI on HEAD to finish
-  (`gh run watch --exit-status`) and publishes only if it's green.
+- `scripts/publish-when-green.sh` waits for CI on HEAD and the installers run
+  for its tag to finish (`gh run watch --exit-status`) and publishes only if both
+  are green. Rerunning the installers' upgrade check after publishing fails: the
+  last release is then this version.
 - `scripts/release-mac.sh` builds, signs, notarizes and staples, makes the
   updater bundle from the stapled app and signs it, writes `latest.json`, makes
   and notarizes the DMG, and verifies all of it. With `--publish` (opt-in) it
