@@ -982,13 +982,9 @@ impl SessionPhone {
     }
 }
 
-/// A burst of more than 256 frames toward a phone that acks only after a
-/// round trip (here, 250 ms of nothing, then every 8): the Mac waits for the
-/// acks instead of ending the session ("a phone is too far behind"), and
-/// every answer arrives once, in order, on the same session.
-#[tokio::test]
-async fn a_long_burst_waits_for_acks_instead_of_ending_the_session() {
-    let (c, _stub) = Stub::companion();
+/// A welcomed session phone over the fake relay; what keeps it alive rides along.
+async fn burst_phone() -> (SessionPhone, Box<dyn std::any::Any>) {
+    let (c, stub) = Stub::companion();
     let fingerprint = c.registry.identity().unwrap().fingerprint();
     let (_record, token, _) = c
         .registry
@@ -1003,7 +999,7 @@ async fn a_long_burst_waits_for_acks_instead_of_ending_the_session() {
     let port = loopback(c.clone()).await;
     let relay = fake_relay(json!({ "id": "user_1", "email": "j@x.com" })).await;
     let link = Arc::new(Link::default());
-    let (_stop_tx, stop_rx) = oneshot::channel();
+    let (stop_tx, stop_rx) = oneshot::channel();
     let cfg = Config {
         base: relay.base(),
         port: Some(port),
@@ -1011,60 +1007,149 @@ async fn a_long_burst_waits_for_acks_instead_of_ending_the_session() {
     tokio::spawn(run(c.clone(), cfg, link.clone(), stop_rx));
     until("the link", || link.status().state == RelayState::Connected).await;
     let url = link.route().unwrap().url;
-
     let mut phone = SessionPhone::connect(&url, &fingerprint, None).await;
     phone.send(challenge()).await;
     assert_eq!(phone.next().await["t"], "identity");
     phone.send(hello(&token)).await;
     assert_eq!(phone.next().await["t"], "welcome");
+    (phone, Box::new((c, stub, relay, link, stop_tx)))
+}
 
-    const N: u64 = 300;
-    for id in 1..=N {
-        phone
-            .send(json!({ "t": "req", "id": id, "method": "rooms.list", "params": {} }))
-            .await;
+impl SessionPhone {
+    /// A request whose frame acks nothing (the phone is still reading).
+    async fn send_noack(&mut self, v: Value) {
+        self.tx += 1;
+        let q = json!({ "t": "q", "n": self.tx, "a": 0, "d": v.to_string() });
+        let sealed = self.keys.outgoing.seal(q.to_string().as_bytes()).unwrap();
+        self.ws.send(Message::Binary(sealed)).await.unwrap();
     }
-    let mut answered: Vec<u64> = Vec::new();
-    let mut take = |f: &Value, answered: &mut Vec<u64>| {
-        if f["t"] == "res" {
-            answered.push(f["id"].as_u64().unwrap());
-        }
-    };
-    // Reading, but not acking: the round trip hasn't happened yet.
-    let began = std::time::Instant::now();
-    while began.elapsed() < Duration::from_millis(250) {
-        if let Ok(f) = tokio::time::timeout(Duration::from_millis(50), phone.next()).await {
-            take(&f, &mut answered);
-        }
-    }
-    // Now the acks come, every 8 frames taken.
+}
+
+/// Reads answers, acking every 8 frames after a short round trip, until `n`
+/// distinct ones came; returns them in the order they arrived.
+async fn read_acking(phone: &mut SessionPhone, ids: &mut Vec<u64>, n: usize) {
     let mut sent_ack = phone.rx;
-    phone.ack().await;
-    while (answered.len() as u64) < N {
+    while ids.len() < n {
         let f = phone.next().await;
-        take(&f, &mut answered);
+        if f["t"] == "res" {
+            ids.push(f["id"].as_u64().unwrap());
+        }
         if phone.rx >= sent_ack + 8 {
             sent_ack = phone.rx;
+            tokio::time::sleep(Duration::from_millis(20)).await;
             phone.ack().await;
         }
     }
+}
+
+/// A burst of 1,180 answers toward a phone that acks only after a round trip
+/// (250 ms of nothing, then every 8 frames, each 20 ms late): the Mac waits
+/// for the acks instead of ending the session ("a phone is too far behind"),
+/// and every answer arrives once, in frame order, on the same session.
+#[tokio::test]
+async fn a_long_burst_waits_for_acks_instead_of_ending_the_session() {
+    let (mut phone, _keep) = burst_phone().await;
+    const N: u64 = 1180;
+    // Half now; the rest once the acks have started (a phone's requests
+    // aren't all sent in one instant).
+    for id in 1..=N / 2 {
+        phone
+            .send_noack(json!({ "t": "req", "id": id, "method": "rooms.list", "params": {} }))
+            .await;
+    }
+    let mut answered: Vec<u64> = Vec::new();
+    let began = std::time::Instant::now();
+    while began.elapsed() < Duration::from_millis(250) {
+        if let Ok(f) = tokio::time::timeout(Duration::from_millis(50), phone.next()).await {
+            if f["t"] == "res" {
+                answered.push(f["id"].as_u64().unwrap());
+            }
+        }
+    }
+    phone.ack().await;
+    for id in N / 2 + 1..=N {
+        phone
+            .send_noack(json!({ "t": "req", "id": id, "method": "rooms.list", "params": {} }))
+            .await;
+    }
+    read_acking(&mut phone, &mut answered, N as usize).await;
     let mut sorted = answered.clone();
     sorted.sort_unstable();
     sorted.dedup();
     assert_eq!(sorted.len() as u64, N, "every answer once");
-    // Still the one session: a request is answered on it.
     phone
-        .send(json!({ "t": "req", "id": 1000, "method": "rooms.list", "params": {} }))
+        .send(json!({ "t": "req", "id": 5000, "method": "rooms.list", "params": {} }))
         .await;
     let mut ok = false;
     for _ in 0..8 {
         let f = phone.next().await;
-        if f["t"] == "res" && f["id"] == 1000 {
+        if f["t"] == "res" && f["id"] == 5000 {
             ok = true;
             break;
         }
     }
     assert!(ok, "the session lived through the burst");
+}
+
+/// While the Mac waits on acks the phone sends 100 more requests (frames that
+/// ack nothing): the loop never waits on the handler, so the acks that follow
+/// are read, and every request is answered.
+#[tokio::test]
+async fn requests_sent_mid_replay_never_stall_the_acks() {
+    let (mut phone, _keep) = burst_phone().await;
+    const FIRST: u64 = 400;
+    for id in 1..=FIRST {
+        phone
+            .send_noack(json!({ "t": "req", "id": id, "method": "rooms.list", "params": {} }))
+            .await;
+    }
+    let mut answered: Vec<u64> = Vec::new();
+    let began = std::time::Instant::now();
+    while began.elapsed() < Duration::from_millis(200) {
+        if let Ok(f) = tokio::time::timeout(Duration::from_millis(50), phone.next()).await {
+            if f["t"] == "res" {
+                answered.push(f["id"].as_u64().unwrap());
+            }
+        }
+    }
+    for id in 1001..=1100u64 {
+        phone
+            .send_noack(json!({ "t": "req", "id": id, "method": "rooms.list", "params": {} }))
+            .await;
+    }
+    phone.ack().await;
+    read_acking(&mut phone, &mut answered, (FIRST + 100) as usize).await;
+    let mut sorted = answered.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(
+        sorted.len() as u64,
+        FIRST + 100,
+        "every request answered once"
+    );
+}
+
+/// A phone that reads but never acks, with the Mac's window full, is ended
+/// after the idle time rather than held forever.
+#[tokio::test]
+async fn a_phone_that_never_acks_ends_after_the_idle_time() {
+    let (mut phone, _keep) = burst_phone().await;
+    for id in 1..=400u64 {
+        phone
+            .send_noack(json!({ "t": "req", "id": id, "method": "rooms.list", "params": {} }))
+            .await;
+    }
+    let began = std::time::Instant::now();
+    loop {
+        let f = phone.raw().await;
+        if f["t"] == "closed" {
+            break;
+        }
+        assert!(
+            began.elapsed() < Duration::from_secs(4),
+            "the session should have ended"
+        );
+    }
 }
 
 #[tokio::test]

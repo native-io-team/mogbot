@@ -92,6 +92,10 @@ impl Session {
         self.unacked.len() < MAX_FRAMES && self.bytes < MAX_BYTES
     }
 
+    pub fn unacked_len(&self) -> usize {
+        self.unacked.len()
+    }
+
     /// Anything sent that the phone hasn't acked (an ack would free room).
     pub fn has_unacked(&self) -> bool {
         !self.unacked.is_empty()

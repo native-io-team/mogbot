@@ -10,6 +10,7 @@
 
 use futures_util::{Sink, Stream};
 use serde_json::Value;
+use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -250,6 +251,13 @@ async fn serve(
     // A handler frame taken while the session had room for it only in part
     // (the byte cap): it waits for acks, never dropped, never reordered.
     let mut held: Option<String> = None;
+    // The phone's requests the handler hasn't taken yet. The handler may be
+    // waiting on this loop (its replay), so the loop never waits on it: a
+    // frame goes in with try_send, and the rest wait here, bounded.
+    let mut to_pending: VecDeque<Message> = VecDeque::new();
+    // Since when the session has been full with no ack: a phone that never
+    // acks ends after IDLE.
+    let mut full_since: Option<Instant> = None;
 
     let end = 'serve: loop {
         // The handler is only listened to while the phone has room for more:
@@ -274,6 +282,16 @@ async fn serve(
             }
         }
         let room = held.is_none() && sess.as_ref().map_or(true, Session::has_room);
+        if room {
+            full_since = None;
+        } else if full_since.is_none() {
+            full_since = Some(Instant::now());
+        }
+        let waiter = if to_pending.is_empty() {
+            None
+        } else {
+            to_handler.clone()
+        };
         tokio::select! {
             _ = idle_check.tick() => {
                 let busy = http.as_mut().map_or(0, Http::in_flight) > 0;
@@ -281,9 +299,20 @@ async fn serve(
                     tracing::debug!("[Relay] a channel with nothing going on closed");
                     break 'serve End::Done;
                 }
-                // Waiting on acks from a phone that has said nothing: gone.
-                if !room && heard.elapsed() >= IDLE {
+                // Full, and no ack in all that time: the phone is gone.
+                if full_since.is_some_and(|t| t.elapsed() >= IDLE) {
                     tracing::warn!("[Relay] a phone stopped acking; ending its session");
+                    break 'serve End::Done;
+                }
+            }
+            // The handler has room again for what the phone sent.
+            _ = async {
+                match waiter {
+                    Some(t) => { let _ = t.reserve().await; }
+                    None => std::future::pending::<()>().await,
+                }
+            } => {
+                if !flush_to_handler(&to_handler, &mut to_pending) {
                     break 'serve End::Done;
                 }
             }
@@ -321,16 +350,25 @@ async fn serve(
                     }
                     _ => {
                         // On a session the protocol frames are numbered.
+                        let unacked_before = sess.as_ref().map_or(0, Session::unacked_len);
                         let text = match sess.as_mut() {
                             None => text,
                             Some(s) => match s.take(&text) {
                                 Taken::Frame(d, due) => {
+                                    if s.unacked_len() < unacked_before {
+                                        full_since = None;
+                                    }
                                     if due && !seal_out(&mut keys, ch, out, s.ack().as_bytes()).await {
                                         break 'serve End::Done;
                                     }
                                     d
                                 }
-                                Taken::Nothing => continue,
+                                Taken::Nothing => {
+                                    if s.unacked_len() < unacked_before {
+                                        full_since = None;
+                                    }
+                                    continue;
+                                }
                                 Taken::Broken => {
                                     tracing::debug!("[Relay] a session frame was out of order; closing");
                                     break 'serve End::Done;
@@ -349,8 +387,12 @@ async fn serve(
                             tokio::spawn(server::serve_socket_as(c.clone(), adapter, peer));
                             to_handler = Some(in_tx);
                         }
-                        let Some(tx) = &to_handler else { break 'serve End::Done };
-                        if tx.send(Message::Text(text)).await.is_err() {
+                        if to_pending.len() >= QUEUE * 16 {
+                            tracing::warn!("[Relay] a phone's requests piled up unread; closing");
+                            break 'serve End::Done;
+                        }
+                        to_pending.push_back(Message::Text(text));
+                        if !flush_to_handler(&to_handler, &mut to_pending) {
                             // The handler has finished with this phone.
                             break 'serve End::Done;
                         }
@@ -403,12 +445,41 @@ async fn serve(
 
     // The phone's socket went, not the phone: keep its handler for it.
     match sess {
+        // Frames the phone sent that its handler hadn't taken are already
+        // acked to it, so a session can't be parked without them.
+        Some(s) if matches!(end, End::Park) && !to_pending.is_empty() => {
+            tracing::info!(
+                "[Relay] a socket went with requests unread by the handler; the session ends"
+            );
+            session::forget(&s.sid);
+        }
         Some(s) if matches!(end, End::Park) && to_handler.is_some() => {
             session::park(s, to_handler, from_handler, authed);
         }
         Some(s) => session::forget(&s.sid),
         None => {}
     }
+}
+
+/// Hands the handler what it will take now, in order; false when it has gone.
+fn flush_to_handler(
+    to_handler: &Option<mpsc::Sender<Message>>,
+    pending: &mut VecDeque<Message>,
+) -> bool {
+    let Some(tx) = to_handler else {
+        return pending.is_empty();
+    };
+    while let Some(m) = pending.pop_front() {
+        match tx.try_send(m) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(m)) => {
+                pending.push_front(m);
+                return true;
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => return false,
+        }
+    }
+    true
 }
 
 /// How a channel's loop ended.
