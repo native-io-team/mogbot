@@ -16,6 +16,7 @@ import { homeDir } from '@tauri-apps/api/path';
 import { getSystemEnv, getShellPath } from '../../lib/project';
 import { readDir, exists } from '@tauri-apps/plugin-fs';
 import { loadNerdFonts } from '../../lib/fonts';
+import { whenSized } from '../../lib/whenSized';
 import { isWindows, needsCmdExeWrapper, resolveCliPath, ResolvedCli } from '../../lib/setup';
 import { isPasteChord, readClipboardText } from '../../lib/clipboard';
 import { createPtyChunkDecoder, toPtyBytes, type PtyChunk } from '../../lib/terminalDiagnostics';
@@ -126,17 +127,10 @@ export function OnboardingTerminal({
     if (!container) return;
 
     // Wait for container to have dimensions AND fonts to load
-    const checkReady = async () => {
-      const rect = container.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        // Load Nerd Fonts before initializing terminal
-        await loadNerdFonts();
-        setIsReady(true);
-      } else {
-        requestAnimationFrame(() => void checkReady());
-      }
-    };
-    void checkReady();
+    return whenSized(container, () => {
+      // Load Nerd Fonts before initializing terminal
+      void loadNerdFonts().then(() => setIsReady(true));
+    });
   }, []);
 
   // Create terminal when ready

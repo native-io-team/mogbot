@@ -20,6 +20,7 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { createWebLinksAddon } from '../../lib/terminalLinks';
 import { loadNerdFonts } from '../../lib/fonts';
+import { whenSized } from '../../lib/whenSized';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { CopyIcon } from '@/components/icons';
@@ -128,16 +129,9 @@ export function DevServerLogs({
     const container = containerRef.current;
     if (!container) return;
 
-    const checkReady = async () => {
-      const rect = container.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        await loadNerdFonts();
-        setIsReady(true);
-      } else {
-        requestAnimationFrame(() => void checkReady());
-      }
-    };
-    void checkReady();
+    return whenSized(container, () => {
+      void loadNerdFonts().then(() => setIsReady(true));
+    });
   }, []);
 
   // Create terminal when ready
