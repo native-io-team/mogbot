@@ -59,8 +59,8 @@ or your signed-in Chrome when you allow it.
 **You decide how much they do alone.** One slider per team or per agent:
 Careful, Steady, Bold, Unleashed. Up to Bold, an agent asks before it spends
 money, opens saved credentials, deletes for good or pushes to production.
-Unleashed still asks before spending money, and before typing into a password or
-card-code box in your browser.
+Unleashed still asks before spending money. At every level, Mogbot's
+browser and Your Chrome refuse to let an agent type into a password box.
 
 **On your phone.** Pair by QR code. Chat, approve from the Lock Screen, review
 results and start routines from anywhere.
