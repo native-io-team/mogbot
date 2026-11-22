@@ -10,7 +10,7 @@
 //! an error the phone can show, never a frame that kills its socket. The
 //! direct (Tailscale) path has no such limit and is never touched.
 
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use super::super::wire::{ProtocolCode, ServerFrame, WireError};
 
@@ -136,6 +136,7 @@ pub fn fit(text: String) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn chat(n: usize, each: usize) -> String {
         let messages: Vec<Value> = (0..n)
