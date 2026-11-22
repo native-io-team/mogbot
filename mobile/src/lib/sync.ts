@@ -188,6 +188,97 @@ export function applyEvent(s: SyncState, event: CompanionEvent, cursor?: Cursor)
   return cursor ? { ...next, cursor } : next;
 }
 
+/** An event as the socket hands it over. */
+export interface Arrived {
+  event: CompanionEvent;
+  cursor?: Cursor;
+}
+
+/**
+ * [`applyEvent`] for many at once, with the same result as one after another:
+ * what the phone missed, or what arrived within a beat (`eventBatch.ts`).
+ * Messages go in together, each chat merged once and the sequence table copied
+ * once: line by line that copied every chat and the whole table per line.
+ * They move no other part of the state, so the events between them are
+ * applied as they come; a draft, a snapshot or a catch-up is what a message
+ * must not be carried past, and settles them first.
+ */
+export function applyEvents(s: SyncState, arrived: readonly Arrived[]): SyncState {
+  if (arrived.length === 1) return applyEvent(s, arrived[0].event, arrived[0].cursor);
+  let out = s;
+  let lines: Arrived[] = [];
+  let cursor: Cursor | undefined;
+  const settle = () => {
+    if (lines.length) out = applyLines(out, lines);
+    lines = [];
+    if (cursor) out = { ...out, cursor };
+    cursor = undefined;
+  };
+  for (const one of arrived) {
+    switch (one.event.type) {
+      case 'agents.message':
+        lines.push(one);
+        cursor = one.cursor ?? cursor;
+        break;
+      case 'agents.status':
+      case 'agents.registry':
+      case 'rooms.changed':
+      case 'system.status':
+      case 'projects.changed':
+      case 'projects.removed':
+        out = reduce(out, one.event, one.cursor);
+        cursor = one.cursor ?? cursor;
+        break;
+      default:
+        settle();
+        out = applyEvent(out, one.event, one.cursor);
+    }
+  }
+  settle();
+  return out;
+}
+
+/** The `agents.message` events of a batch (`reduce`'s rules, over all of them). */
+function applyLines(s: SyncState, lines: readonly Arrived[]): SyncState {
+  const seqs = { ...s.seqs };
+  const drafts = { ...s.drafts };
+  let pending = s.pending;
+  /** The newest copy of each line, per chat it shows in. */
+  const perChat = new Map<string, Map<string, AgentMessage>>();
+  for (const { event, cursor } of lines) {
+    if (event.type !== 'agents.message') continue;
+    const m = asMessage(event.message);
+    if (!m) continue;
+    const written = seqs[m.id];
+    if (
+      cursor &&
+      s.cursor?.epoch === cursor.epoch &&
+      written != null &&
+      written !== Number.MAX_SAFE_INTEGER &&
+      written > cursor.seq
+    ) {
+      continue;
+    }
+    seqs[m.id] = cursor?.seq ?? Number.MAX_SAFE_INTEGER;
+    for (const key of chatKeysOf(m)) {
+      let chat = perChat.get(key);
+      if (!chat) perChat.set(key, (chat = new Map()));
+      // A later copy of a line replaces the earlier one where it now belongs.
+      chat.delete(m.id);
+      chat.set(m.id, m);
+    }
+    if (m.agentId && drafts[m.agentId]?.id === m.id) delete drafts[m.agentId];
+    pending = settlePending(pending, m);
+  }
+  if (perChat.size === 0) return s;
+  const chats = { ...s.chats };
+  for (const [key, held] of perChat) {
+    const chat = chats[key] ?? emptyChat();
+    chats[key] = { ...chat, messages: upsertAll(chat.messages, [...held.values()]) };
+  }
+  return { ...s, chats, seqs, drafts, pending };
+}
+
 function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState {
   switch (event.type) {
     case 'agents.message': {
@@ -240,7 +331,7 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
     }
     case 'rooms.changed': {
       const rooms = asRooms(event.rooms);
-      return rooms ? { ...s, rooms } : s;
+      return rooms ? { ...s, rooms: shareStructure(s.rooms, rooms) } : s;
     }
     case 'system.status':
       return { ...s, mac: event.status };

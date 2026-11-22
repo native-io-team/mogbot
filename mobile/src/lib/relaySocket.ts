@@ -54,6 +54,12 @@ const TRY_MS = 8000;
 const MAX_FRAMES = 256;
 const MAX_BYTES = 4 * 1024 * 1024;
 const ACK_EVERY = 8;
+/**
+ * How long opening frames may hold the thread before taps get a turn.
+ * Opening one is JavaScript on the thread that answers touches, and a phone
+ * coming back is sent hundreds at once: done in one go they froze the app.
+ */
+export const SLICE_MS = 8;
 
 /** What a socket's `data` holds, as bytes, whichever realm made it. Null for text. */
 function asBytes(data: unknown): Uint8Array | null {
@@ -119,6 +125,11 @@ export class RelaySocket {
   private attempts = 0;
   private retry: unknown = null;
   private tryTimer: unknown = null;
+  /** Frames of this channel not opened yet, oldest first, and their turn. */
+  private inbox: Uint8Array[] = [];
+  private pump: ReturnType<typeof setTimeout> | null = null;
+  private spent = 0;
+  private idleSince = 0;
 
   constructor(
     private readonly url: string,
@@ -143,6 +154,7 @@ export class RelaySocket {
     this.inner = ws;
     this.channel = null;
     this.awaitSess = false;
+    this.dropInbox();
     const mine = (): boolean => ws === this.inner && !this.done;
     ws.onopen = () => {
       if (!mine()) return;
@@ -184,14 +196,15 @@ export class RelaySocket {
         this.opened();
         return;
       }
-      const text = this.channel.receive.open(bytes);
-      if (text == null) return this.fail(RELAY_BROKEN, 'channel_broken');
-      this.got(text);
+      this.arrived(bytes);
     };
     ws.onerror = (ev) => {
       if (mine() && this.readyState !== 1) this.onerror?.(ev);
     };
     ws.onclose = (ev) => {
+      if (ws !== this.inner) return;
+      // What came before the close counts.
+      this.take(Infinity);
       if (ws === this.inner) this.lost(ev?.code ?? 1006, ev?.reason ?? '');
     };
     this.untimer(this.tryTimer);
@@ -204,6 +217,49 @@ export class RelaySocket {
           }
         }, TRY_MS)
       : null;
+  }
+
+  /** A sealed frame: opened now, or behind the ones already waiting. */
+  private arrived(bytes: Uint8Array) {
+    this.inbox.push(bytes);
+    if (this.pump) return;
+    // Frames right behind one another share a slice; after a pause it starts over.
+    if (Date.now() - this.idleSince > SLICE_MS * 2) this.spent = 0;
+    this.take(SLICE_MS - this.spent);
+  }
+
+  /** Opens what waits, for about `ms`; the rest after the thread has had a turn. */
+  private take(ms: number) {
+    if (this.pump) clearTimeout(this.pump);
+    this.pump = null;
+    const from = Date.now();
+    let at = 0;
+    while (at < this.inbox.length && (Date.now() - from < ms || ms === Infinity)) {
+      const bytes = this.inbox[at++];
+      const channel = this.channel;
+      if (!channel || this.done) break;
+      const text = channel.receive.open(bytes);
+      if (text == null) return this.fail(RELAY_BROKEN, 'channel_broken');
+      this.got(text);
+      // What it carried closed this, or started another channel.
+      if (this.done || this.channel !== channel) return;
+    }
+    this.inbox.splice(0, at);
+    this.idleSince = Date.now();
+    this.spent += this.idleSince - from;
+    if (this.inbox.length === 0) return;
+    this.pump = setTimeout(() => {
+      this.pump = null;
+      this.spent = 0;
+      this.take(SLICE_MS);
+    }, 0);
+  }
+
+  private dropInbox() {
+    if (this.pump) clearTimeout(this.pump);
+    this.pump = null;
+    this.inbox = [];
+    this.spent = 0;
   }
 
   private opened() {
@@ -331,6 +387,7 @@ export class RelaySocket {
     this.pingTimer = null;
     this.mine = null;
     this.channel = null;
+    this.dropInbox();
     this.untimer(this.tryTimer);
     this.tryTimer = null;
     // The relay's own answers (the Mac is away, signed out) are the news, not a blip.
@@ -357,6 +414,7 @@ export class RelaySocket {
     if (this.done) return;
     this.done = true;
     this.readyState = 3;
+    this.dropInbox();
     if (this.pingTimer) clearInterval(this.pingTimer);
     this.pingTimer = null;
     this.untimer(this.retry);

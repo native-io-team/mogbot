@@ -74,6 +74,10 @@ interface MockSession {
   drop: ReturnType<typeof setTimeout> | null;
 }
 
+/** What the real Mac keeps for a phone that went away (`relay/client.rs`). */
+const PARKED_FRAMES = 256;
+const PARKED_BYTES = 4 * 1024 * 1024;
+
 export function createMockRelay(opts: MockRelayOptions) {
   const sessions = new Map<string, MockSession>();
   let mac: MockRelayMac = 'online';
@@ -128,6 +132,19 @@ export function createMockRelay(opts: MockRelayOptions) {
       if (!sess) return seal(text);
       const n = ++sess.tx;
       sess.unacked.push({ n, text });
+      // A phone away keeps no more than the real Mac holds for it: past that
+      // its session ends, and it comes back by its cursor.
+      if (!sess.sealRaw) {
+        const bytes = sess.unacked.reduce((sum, m) => sum + m.text.length, 0);
+        if (sess.unacked.length > PARKED_FRAMES || bytes > PARKED_BYTES) {
+          const over = sess;
+          if (over.drop) clearTimeout(over.drop);
+          sessions.delete(over.sid);
+          over.unacked = [];
+          over.loopback?.terminate();
+          return;
+        }
+      }
       sess.sealRaw?.(frameOf(sess, n, text));
     };
     const requests = new Map<number, { head: RelayHttpRequest; parts: Uint8Array[] }>();

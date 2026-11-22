@@ -101,6 +101,7 @@ import { blocksMessages, briefMessages } from './mock-blocks';
 import { tablesMessages } from './mock-tables';
 import { PAGE_AGENT, pageMock } from './mock-page';
 import { addHeavyAccount, heavyImportTalk } from './mock-heavy';
+import { addLoadAccount, loadAction } from './mock-load';
 import {
   STORE_DIFF,
   STORE_PROJECT,
@@ -260,6 +261,8 @@ export interface MockOptions {
    * waiting across the team, paused routines, long chats, an import going on.
    */
   heavy?: boolean;
+  /** A 42-agent team at its real size (dev/mock-load.ts), with `/dev/burst` and `/dev/stream`. */
+  load?: boolean;
   /** The chat torture set (dev/mock-torture.ts) and its `/dev/torture` driver. */
   torture?: boolean;
   /**
@@ -788,6 +791,7 @@ export function createMockServer(opts: MockOptions = {}) {
     }
   }
   if (opts.heavy) addHeavyAccount(agents, messages, agentBase(now), now);
+  if (opts.load) addLoadAccount(agents, messages, agentBase(now), now);
   if (opts.torture) addTortureAccount(agents, messages, agentBase(now), now);
   if (opts.liveWork) addLiveWork(agents, messages, now);
   if (opts.probe) addProbeAccount(agents, messages, agentBase(now), now, !!opts.restarted);
@@ -5601,6 +5605,25 @@ export function createMockServer(opts: MockOptions = {}) {
       });
       res.end(`answered ${done}`);
       return;
+    }
+    if (opts.load && req.method === 'GET' && req.url?.startsWith('/dev/')) {
+      const done = loadAction(
+        {
+          agents,
+          putMessage,
+          setStatus,
+          registry: () => emit({ type: 'agents.registry', overview: overview() }),
+          draft: (agentId, id, text) => {
+            for (const c of conns) {
+              const from = c.draftSent.get(id) ?? 0;
+              ephemeral({ type: 'agents.draft', agentId, id, from, text: text.slice(from) }, c);
+              c.draftSent.set(id, text.length);
+            }
+          },
+        },
+        new URL(req.url, 'http://x')
+      );
+      if (done) return void res.writeHead(200, { 'Content-Type': 'text/plain' }).end(done);
     }
     if (opts.torture && req.method === 'GET' && req.url?.startsWith('/dev/torture?')) {
       const q = new URL(req.url, 'http://x').searchParams;

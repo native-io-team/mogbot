@@ -72,7 +72,8 @@ import { getApp, setApp, update, useApp } from './store';
 import {
   addPending,
   closeCard,
-  applyEvent,
+  applyEvents,
+  type Arrived,
   type PendingAttachment,
   type PendingSend,
   confirmSend,
@@ -83,6 +84,7 @@ import {
 } from './sync';
 import { clearCache, http, localFiles, type PickedFile } from './files';
 import { relayImage, retryRelayImage, retryRelayImages } from './relayImages';
+import { createEventBatch } from './eventBatch';
 import { createReads, isRead, type CallOptions } from './reads';
 import { createReadTimings } from './readTimings';
 import { roomIdOf, roomKey, roomsOffered } from './rooms';
@@ -222,6 +224,7 @@ let caughtUp = false;
 function connect(c: Credentials) {
   transport?.close();
   transport = null;
+  events.clear();
   if (readsFor !== c.serverId) reads.forget();
   readsFor = c.serverId;
   if (!c.fingerprint) return refuseUnpinned();
@@ -229,7 +232,11 @@ function connect(c: Credentials) {
   // snapshot; within a run, every reconnect resumes where it left off.
   const t = isDemo(c)
     ? new DemoTransport()
-    : transportFor({ ...c, fingerprint: c.fingerprint }, () => getApp().cursor);
+    : transportFor({ ...c, fingerprint: c.fingerprint }, () => {
+        // What already came is in the cursor the Mac replays from.
+        events.flush();
+        return getApp().cursor;
+      });
   t.onState((link) => {
     // "As of" for everything shown while it's away: the moment it stopped being live.
     const was = getApp().link.kind;
@@ -240,6 +247,7 @@ function connect(c: Credentials) {
   t.onRefused((refusal) => setApp({ refusal }));
   t.onWelcome((welcome) => {
     caughtUp = false;
+    events.hold();
     timings.welcomed();
     retryRelayImages();
     setApp({
@@ -269,23 +277,46 @@ function connect(c: Credentials) {
     }
   });
   t.onEvent((event, cursor) => {
-    if (event.type === 'agents.message') {
+    events.add({ event, cursor });
+    // A snapshot is the whole screen, and "caught up" ends the wait for it.
+    if (event.type === 'sync.caughtUp') events.release();
+    else if (event.type === 'sync.snapshot') events.flush();
+  });
+  transport = t;
+}
+
+/**
+ * What arrived, applied to the store as one update (`lib/eventBatch`), with
+ * what each event sets off before and after it, in order.
+ */
+function applyArrived(arrived: Arrived[]) {
+  // Of one line's copies only the newest is news: the ones it replaced within
+  // this batch were never on screen.
+  const newest = new Map<string, Arrived>();
+  for (const one of arrived) {
+    if (one.event.type === 'agents.message') newest.set(one.event.message?.id, one);
+  }
+  for (const one of arrived) {
+    const { event } = one;
+    if (event.type === 'agents.message' && newest.get(event.message?.id) === one) {
       const m = asMessage(event.message);
-      if (m) {
-        noticeMessage(m);
-        // A Mac that sends alerts decides which cards to post; an older one
-        // leaves it to this phone.
-        if (macSendsAlerts()) liveAlerts.heard(m);
-        else alertApproval(m);
-      }
+      if (!m) continue;
+      noticeMessage(m);
+      // A Mac that sends alerts decides which cards to post; an older one
+      // leaves it to this phone.
+      if (macSendsAlerts()) liveAlerts.heard(m);
+      else alertApproval(m);
     }
     if (event.type === 'sync.snapshot') timings.frame('snapshot');
-    update((s) => applyEvent(s, event, cursor));
+  }
+  update((s) => applyEvents(s, arrived));
+  let registry = false;
+  for (const { event } of arrived) {
     if (event.type === 'alert') void notify(event.alert);
-    if (event.type === 'system.status') learnRoutes(event.status.routes);
-    // The Mac fires a registry event whenever setting up the team may read differently.
-    if (event.type === 'agents.registry') refreshTeamSetupSoon();
-    if (event.type === 'sync.snapshot') learnRoutes(event.status.routes);
+    if (event.type === 'system.status' || event.type === 'sync.snapshot') {
+      learnRoutes(event.status.routes);
+    }
+    if (event.type === 'agents.registry') registry = true;
     // After a snapshot every chat is stale; re-fetch the one on screen now,
     // the others when they're opened. Then send what waited for the Mac.
     if (event.type === 'sync.caughtUp') {
@@ -297,8 +328,17 @@ function connect(c: Credentials) {
       void refreshTeamSetup().catch(() => {});
       void flushOutbox();
     }
-  });
-  transport = t;
+  }
+  // The Mac fires a registry event whenever setting up the team may read differently.
+  if (registry) refreshTeamSetupSoon();
+}
+
+const events = createEventBatch<Arrived>(applyArrived);
+
+/** A request on the link: what it caused is on screen before its answer is handled. */
+function ask<M extends MethodName>(method: M, params: Params<M>): Promise<Result<M>> {
+  if (!transport) return Promise.reject(new Error('Not paired'));
+  return transport.request(method, params).finally(() => events.flush());
 }
 
 /** The Mac's routes change (a new DHCP address, Tailscale turned on); keep the latest. */
@@ -346,10 +386,7 @@ function callUntimed<M extends MethodName>(
     reads.call(
       method,
       params,
-      () => {
-        if (!transport) return Promise.reject(new Error('Not paired'));
-        return transport.request(method, params);
-      },
+      () => ask(method, params),
       opts
     );
   // A change asked for during a drop waits for the link (a card's answer, a
@@ -414,10 +451,7 @@ export function callFresh<M extends MethodName>(
   maxAgeMs: number
 ): Promise<Result<M>> {
   if (!transport) return Promise.reject(new Error('Not paired'));
-  return reads.fresh(method, params, maxAgeMs, () => {
-    if (!transport) return Promise.reject(new Error('Not paired'));
-    return transport.request(method, params);
-  });
+  return reads.fresh(method, params, maxAgeMs, () => ask(method, params));
 }
 
 /** Hand the Mac this phone's push token, when it may have one. Never asks. */
@@ -459,6 +493,7 @@ export function watchLifecycle(): () => void {
     transport?.setForeground(fg);
     // The app may be killed from the background: put the copy on disk now.
     if (!fg) {
+      events.flush();
       void flushCache();
       void flushDrafts();
     }
@@ -573,7 +608,9 @@ export async function refreshRooms() {
 /** "Setting up your team", read again (null on a Mac without it). */
 export async function refreshTeamSetup() {
   if (!canCall('agents.teamSetup')) return;
-  setApp({ teamSetup: await call('agents.teamSetup', {}) });
+  const teamSetup = await call('agents.teamSetup', {});
+  // The same card again is the same object: everything that reads it holds still.
+  setApp((s) => ({ teamSetup: shareStructure(s.teamSetup, teamSetup) }));
 }
 
 let teamSetupTimer: ReturnType<typeof setTimeout> | null = null;

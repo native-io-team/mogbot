@@ -99,6 +99,7 @@ function selfSigned(dir: string) {
     designColorway: args.find((a) => a.startsWith('--design-colorway='))?.split('=')[1],
     folders: args.includes('--folders'),
     heavy: args.includes('--heavy'),
+    load: args.includes('--load'),
     torture: args.includes('--torture'),
     liveWork: args.includes('--live-work'),
     probe: args.includes('--probe'),
