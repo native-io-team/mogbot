@@ -199,7 +199,7 @@ numbered and kept until acked, and re-sealed under the new keys.
    per request) are wrapped, each way, from 1: `{"t":"q","n":<seq>,"a":<last seq taken from the
    other side>,"d":"<the frame's text>"}`. Alone, every 8 frames taken: `{"t":"a","a":<seq>}`.
    A repeat (`n` ≤ last taken) is dropped; a hole (`n` > last taken + 1) ends the session.
-   Each side keeps what the other hasn't acked: at most 256 frames or 4 MiB; past it the session ends.
+   Each side keeps what the other hasn't acked: at most 256 frames or 4 MiB. The Mac stops taking frames from the phone's handler at that limit and goes on when acks free room (a long replay is paced by the phone's acks, a round trip each), holding at most one frame over the byte limit meanwhile; a phone that says nothing for the idle time while the Mac waits is ended. The session no longer ends for being behind (it did, 13 times on 20-21 Nov, "a phone is too far behind").
 5. **Resume.** A phone socket that died after step 3 reconnects (a new socket, so a new channel)
    and opens with a hello carrying `"resume":{"sid","rx","k","mac"}`: `rx` the last Mac→phone
    `n` it took, `k` a counter from 1 that grows with every resume attempt, `mac` =

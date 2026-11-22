@@ -85,6 +85,18 @@ impl Session {
         json!({ "t": "q", "n": n, "a": self.rx, "d": text }).to_string()
     }
 
+    /// Whether another frame can be numbered now: fewer than [`MAX_FRAMES`]
+    /// and fewer than [`MAX_BYTES`] unacked. The channel listens to its
+    /// handler only while this holds, so acks pace a long replay.
+    pub fn has_room(&self) -> bool {
+        self.unacked.len() < MAX_FRAMES && self.bytes < MAX_BYTES
+    }
+
+    /// Anything sent that the phone hasn't acked (an ack would free room).
+    pub fn has_unacked(&self) -> bool {
+        !self.unacked.is_empty()
+    }
+
     /// Number and keep `text`; the frame to seal. `None`: too much is
     /// unacked and the session is over.
     pub fn wrap(&mut self, text: &str) -> Option<String> {

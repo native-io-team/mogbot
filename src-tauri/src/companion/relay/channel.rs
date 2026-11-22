@@ -247,13 +247,43 @@ async fn serve(
     }
     let mut heard = Instant::now();
     let mut idle_check = tokio::time::interval(IDLE / 3);
+    // A handler frame taken while the session had room for it only in part
+    // (the byte cap): it waits for acks, never dropped, never reordered.
+    let mut held: Option<String> = None;
 
     let end = 'serve: loop {
+        // The handler is only listened to while the phone has room for more:
+        // a long replay waits for acks (a round trip) instead of overrunning
+        // the unacked limit and ending the session. Without a session
+        // (an older phone) there is no limit to wait on.
+        if let Some(text) = held.take() {
+            let Some(s) = sess.as_mut() else { continue };
+            match s.wrap(&text) {
+                Some(framed) => {
+                    if !seal_out(&mut keys, ch, out, framed.as_bytes()).await {
+                        break 'serve End::Done;
+                    }
+                }
+                None if s.has_unacked() => held = Some(text),
+                None => {
+                    tracing::warn!(
+                        "[Relay] a frame over the session's byte limit; ending its session"
+                    );
+                    break 'serve End::Done;
+                }
+            }
+        }
+        let room = held.is_none() && sess.as_ref().map_or(true, Session::has_room);
         tokio::select! {
             _ = idle_check.tick() => {
                 let busy = http.as_mut().map_or(0, Http::in_flight) > 0;
                 if to_handler.is_none() && !busy && heard.elapsed() >= IDLE {
                     tracing::debug!("[Relay] a channel with nothing going on closed");
+                    break 'serve End::Done;
+                }
+                // Waiting on acks from a phone that has said nothing: gone.
+                if !room && heard.elapsed() >= IDLE {
+                    tracing::warn!("[Relay] a phone stopped acking; ending its session");
                     break 'serve End::Done;
                 }
             }
@@ -327,7 +357,7 @@ async fn serve(
                     }
                 }
             }
-            msg = from_handler.recv() => match msg {
+            msg = from_handler.recv(), if room => match msg {
                 Some(Message::Text(text)) => {
                     // Over the relay's limit, a frame is trimmed first (`fit`).
                     let Some(text) = super::fit::fit(text) else { continue };
@@ -336,8 +366,13 @@ async fn serve(
                         None => text,
                         Some(s) => match s.wrap(&text) {
                             Some(f) => f,
+                            // Over the byte limit with frames unacked: wait for acks.
+                            None if s.has_unacked() => {
+                                held = Some(text);
+                                continue;
+                            }
                             None => {
-                                tracing::warn!("[Relay] a phone is too far behind; ending its session");
+                                tracing::warn!("[Relay] a frame over the session's byte limit; ending its session");
                                 break 'serve End::Done;
                             }
                         },
