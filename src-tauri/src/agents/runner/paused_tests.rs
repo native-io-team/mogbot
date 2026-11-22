@@ -487,6 +487,29 @@ fn after_a_failed_save_and_a_relaunch_a_paused_agent_holds_what_it_would_have_he
 }
 
 #[test]
+fn holding_the_same_message_twice_keeps_one_copy() {
+    // The pause's hold and a Resume whose queue write failed can both offer
+    // the same id: the held list (its count, `on_the_way`, a restart's read
+    // of held.json) must carry it once. `Runtime::admit` also dedupes at
+    // release, but only against the queue; this is the held list's own rule.
+    let _serial = store::tests_lock();
+    let home = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(home.path().to_path_buf()));
+    std::fs::create_dir_all(store::agent_home("p20").unwrap()).unwrap();
+    assert!(hold_all("p20", vec![queued("u1", From::User, false)]));
+    assert!(hold_all(
+        "p20",
+        vec![
+            queued("u1", From::User, false),
+            queued("u2", From::User, false)
+        ]
+    ));
+    assert_eq!(held_ids("p20"), ["u1", "u2"]);
+    assert_eq!(held_count("p20"), 2);
+    store::set_root_for_tests(None);
+}
+
+#[test]
 fn a_message_held_twice_runs_once_on_resume() {
     let _serial = store::tests_lock();
     let home = tempfile::tempdir().unwrap();
