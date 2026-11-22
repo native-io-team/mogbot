@@ -8,6 +8,7 @@ import type {
   Conversations,
   Alert,
   AgentMessage,
+  CompanionEvent,
   MemoryChange,
   MethodName,
   Params,
@@ -72,8 +73,6 @@ import { getApp, setApp, update, useApp } from './store';
 import {
   addPending,
   closeCard,
-  applyEvents,
-  type Arrived,
   type PendingAttachment,
   type PendingSend,
   confirmSend,
@@ -84,7 +83,9 @@ import {
 } from './sync';
 import { clearCache, http, localFiles, type PickedFile } from './files';
 import { relayImage, retryRelayImage, retryRelayImages } from './relayImages';
-import { createEventBatch } from './eventBatch';
+import { createIncoming } from './incoming';
+import { isAway, setAway } from './relaySocket';
+import { reportFault } from './fault';
 import { createReads, isRead, type CallOptions } from './reads';
 import { createReadTimings } from './readTimings';
 import { roomIdOf, roomKey, roomsOffered } from './rooms';
@@ -98,7 +99,7 @@ import {
   type DownloadProgress,
 } from './transport';
 import { recordCrash, sendCrashes } from './crash';
-import { asMessage, asOverview, asProjects, asRooms } from './wellFormed';
+import { asOverview, asProjects, asRooms } from './wellFormed';
 
 // A frame the phone couldn't handle is skipped (transport.ts) and logged here.
 setTransportFaultReporter((e) => void recordCrash(e, 'js', false).catch(() => {}));
@@ -247,7 +248,7 @@ function connect(c: Credentials) {
   t.onRefused((refusal) => setApp({ refusal }));
   t.onWelcome((welcome) => {
     caughtUp = false;
-    events.hold();
+    events.welcome();
     timings.welcomed();
     retryRelayImages();
     setApp({
@@ -276,50 +277,26 @@ function connect(c: Credentials) {
       ).catch(() => undefined);
     }
   });
-  t.onEvent((event, cursor) => {
-    events.add({ event, cursor });
-    // A snapshot is the whole screen, and "caught up" ends the wait for it.
-    if (event.type === 'sync.caughtUp') events.release();
-    else if (event.type === 'sync.snapshot') events.flush();
-  });
+  t.onEvent(events.event);
   transport = t;
 }
 
-/**
- * What arrived, applied to the store as one update (`lib/eventBatch`), with
- * what each event sets off before and after it, in order.
- */
-function applyArrived(arrived: Arrived[]) {
-  // Of one line's copies only the newest is news: the ones it replaced within
-  // this batch were never on screen.
-  const newest = new Map<string, Arrived>();
-  for (const one of arrived) {
-    if (one.event.type === 'agents.message') newest.set(one.event.message?.id, one);
-  }
-  for (const one of arrived) {
-    const { event } = one;
-    if (event.type === 'agents.message' && newest.get(event.message?.id) === one) {
-      const m = asMessage(event.message);
-      if (!m) continue;
-      noticeMessage(m);
-      // A Mac that sends alerts decides which cards to post; an older one
-      // leaves it to this phone.
-      if (macSendsAlerts()) liveAlerts.heard(m);
-      else alertApproval(m);
-    }
-    if (event.type === 'sync.snapshot') timings.frame('snapshot');
-  }
-  update((s) => applyEvents(s, arrived));
-  let registry = false;
-  for (const { event } of arrived) {
-    if (event.type === 'alert') void notify(event.alert);
-    if (event.type === 'system.status' || event.type === 'sync.snapshot') {
-      learnRoutes(event.status.routes);
-    }
-    if (event.type === 'agents.registry') registry = true;
+/** What an event sets off once it's in the store. */
+function afterEvent(event: CompanionEvent) {
+  switch (event.type) {
+    case 'alert':
+      void notify(event.alert).catch(reportFault);
+      return;
+    case 'system.status':
+      return learnRoutes(event.status.routes);
+    case 'sync.snapshot':
+      return learnRoutes(event.status.routes);
+    // The Mac fires a registry event whenever setting up the team may read differently.
+    case 'agents.registry':
+      return refreshTeamSetupSoon();
     // After a snapshot every chat is stale; re-fetch the one on screen now,
     // the others when they're opened. Then send what waited for the Mac.
-    if (event.type === 'sync.caughtUp') {
+    case 'sync.caughtUp': {
       caughtUp = true;
       timings.frame('caught up');
       const open = getApp().openChat;
@@ -329,11 +306,24 @@ function applyArrived(arrived: Arrived[]) {
       void flushOutbox();
     }
   }
-  // The Mac fires a registry event whenever setting up the team may read differently.
-  if (registry) refreshTeamSetupSoon();
 }
 
-const events = createEventBatch<Arrived>(applyArrived);
+/** What the Mac says, applied to the store together (`lib/incoming`). */
+const events = createIncoming(
+  {
+    get: getApp,
+    set: setApp,
+    notices: [
+      noticeMessage,
+      // A Mac that sends alerts decides which cards to post; an older one
+      // leaves it to this phone.
+      (m) => (macSendsAlerts() ? liveAlerts.heard(m) : alertApproval(m)),
+    ],
+    snapshot: () => timings.frame('snapshot'),
+    after: afterEvent,
+  },
+  { away: isAway }
+);
 
 /** A request on the link: what it caused is on screen before its answer is handled. */
 function ask<M extends MethodName>(method: M, params: Params<M>): Promise<Result<M>> {
@@ -482,8 +472,12 @@ export function networkKey(s: {
 
 /** Foreground/background and network changes. Returns a cleanup. */
 export function watchLifecycle(): () => void {
+  setAway(AppState.currentState === 'background');
   const app = AppState.addEventListener('change', (state) => {
     const fg = state === 'active';
+    // Before anything else: frames waiting for a slice are opened, since no
+    // timer may fire from here on (`setAway`).
+    setAway(state === 'background');
     transport?.setForeground(fg);
     // The app may be killed from the background: put the copy on disk now.
     if (!fg) {

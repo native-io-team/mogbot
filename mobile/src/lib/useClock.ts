@@ -36,19 +36,25 @@ function subscribe(fn: () => void): () => void {
 
 const never = () => () => {};
 
+/** One reader's own reading: moved on only while it counts, so it stops at its last. */
+function reading() {
+  let at = Date.now();
+  return (counting: boolean) => {
+    if (counting) at = Math.max(at, shared);
+    return at;
+  };
+}
+
 /** What `read` makes of the time: re-read every second while `active` and on screen. */
 export function useClockText<T extends string | number | null>(
   active: boolean,
   read: (now: number) => T
 ): T {
-  const [mounted] = useState(Date.now);
+  const [own] = useState(reading);
   const ticking = useShowing() && active;
-  return useSyncExternalStore(ticking ? subscribe : never, () =>
-    // Not counting: the moment it stopped (or was first drawn).
-    read(active ? Math.max(shared, mounted) : mounted)
-  );
+  return useSyncExternalStore(ticking ? subscribe : never, () => read(own(active)));
 }
 
-/** The time itself. `active` false keeps the reading it was first drawn with. */
+/** The time itself. `active` false keeps its last reading. */
 export const useClock = (active: boolean): number => useClockText(active, same);
 const same = (now: number) => now;

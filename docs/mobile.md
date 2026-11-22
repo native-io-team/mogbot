@@ -288,6 +288,16 @@ connect it sends `hello.resume`:
   status sent, and a late status follows as `system.status`, so a busy Mac
   sends a partial snapshot rather than a silent socket.
 
+Events are applied together ([`eventBatch.ts`](../mobile/src/lib/eventBatch.ts),
+[`incoming.ts`](../mobile/src/lib/incoming.ts)): a replay is one update, live
+ones keep a 90 ms beat, and a relay backlog is opened in 8 ms slices so taps get
+through (`relaySocket.ts`). An event the phone can't apply is reported and
+skipped alone, and its cursor stays before it until the next replay or
+snapshot. Nothing in that path throws: it runs from timers and other requests'
+answers. In the background Android fires no JavaScript timers
+(`JavaTimerManager.onHostPause`), so there frames are opened, acked and applied
+as they come; an alert is never kept for the batch, since it is never replayed.
+
 Nothing is ever doubled: messages are upserts by id (an answered approval
 replaces its card), and `agents.send` requires a `clientId` that the Mac
 remembers for 24 h and echoes on the message, so a retried send returns the

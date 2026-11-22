@@ -44,30 +44,15 @@ import {
 } from './relayHttp';
 import { RELAY_NOT_YOUR_MAC, RelaySocket } from './relaySocket';
 import { pairedComputer } from './computer';
+import { guarded, reportFault } from './fault';
 
-/**
- * Where a frame this phone couldn't handle is reported (the session sends it
- * to the crash log). A throw out of a socket callback is fatal in a release
- * build, so a frame from a Mac of another version, or a listener that trips
- * on one, is reported and skipped, never let through.
- */
-let reportFault: (error: unknown) => void = () => {};
-export function setTransportFaultReporter(report: (error: unknown) => void) {
-  reportFault = report;
-}
+/** A frame from a Mac of another version, or a listener that trips on one (`fault.ts`). */
+export { setFaultReporter as setTransportFaultReporter } from './fault';
 
 /** Call each listener; one that throws is reported and the rest still run. */
 function each<A extends unknown[]>(listeners: Set<(...a: A) => void>, ...args: A) {
   for (const l of listeners) {
-    try {
-      l(...args);
-    } catch (e) {
-      try {
-        reportFault(e);
-      } catch {
-        // Reporting is best effort.
-      }
-    }
+    guarded(() => l(...args));
   }
 }
 

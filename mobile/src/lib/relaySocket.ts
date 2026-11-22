@@ -19,6 +19,7 @@ import {
   RELAY_CLOSE_SIGN_IN_NEEDED,
   RELAY_PING_MS,
 } from '@shipstudio/companion-protocol';
+import { reportFault } from './fault';
 import { finishHandshake, startHandshake, type Channel } from './relayCrypto';
 
 /** Whatever answered at the relay couldn't prove it's the pinned Mac. */
@@ -60,6 +61,23 @@ const ACK_EVERY = 8;
  * coming back is sent hundreds at once: done in one go they froze the app.
  */
 export const SLICE_MS = 8;
+
+/**
+ * The app is in the background, where Android fires no timers
+ * (`JavaTimerManager.onHostPause`) while sockets still deliver: a frame left
+ * for the next slice would sit unopened and unacked, the Mac giving the
+ * session up at 256 of them, and an alert in it unposted. So nothing waits
+ * for a slice then, and what was waiting is opened as the app leaves.
+ */
+let away = false;
+/** Sockets with frames waiting for their slice. */
+const behind = new Set<{ catchUp(): void }>();
+
+export function setAway(next: boolean) {
+  away = next;
+  if (away) for (const socket of [...behind]) socket.catchUp();
+}
+export const isAway = () => away;
 
 /** What a socket's `data` holds, as bytes, whichever realm made it. Null for text. */
 function asBytes(data: unknown): Uint8Array | null {
@@ -130,6 +148,9 @@ export class RelaySocket {
   private pump: ReturnType<typeof setTimeout> | null = null;
   private spent = 0;
   private idleSince = 0;
+  private taking = false;
+  /** The socket closed with frames still waiting: how, for when they're through. */
+  private ended: { code: number; reason: string } | null = null;
 
   constructor(
     private readonly url: string,
@@ -203,9 +224,13 @@ export class RelaySocket {
     };
     ws.onclose = (ev) => {
       if (ws !== this.inner) return;
-      // What came before the close counts.
-      this.take(Infinity);
-      if (ws === this.inner) this.lost(ev?.code ?? 1006, ev?.reason ?? '');
+      const ended = { code: ev?.code ?? 1006, reason: ev?.reason ?? '' };
+      // What came before the close counts, and is opened in slices like the
+      // rest: the close waits for it. Dropping it would cost a long replay
+      // its progress (the Mac ends a session that's too far behind, and the
+      // next one starts from what was opened).
+      if (this.inbox.length) this.ended = ended;
+      else this.lost(ended.code, ended.reason);
     };
     this.untimer(this.tryTimer);
     this.tryTimer = this.sid
@@ -222,7 +247,7 @@ export class RelaySocket {
   /** A sealed frame: opened now, or behind the ones already waiting. */
   private arrived(bytes: Uint8Array) {
     this.inbox.push(bytes);
-    if (this.pump) return;
+    if (this.pump || this.taking) return;
     // Frames right behind one another share a slice; after a pause it starts over.
     if (Date.now() - this.idleSince > SLICE_MS * 2) this.spent = 0;
     this.take(SLICE_MS - this.spent);
@@ -230,29 +255,52 @@ export class RelaySocket {
 
   /** Opens what waits, for about `ms`; the rest after the thread has had a turn. */
   private take(ms: number) {
+    if (this.taking) return;
     if (this.pump) clearTimeout(this.pump);
     this.pump = null;
+    this.taking = true;
     const from = Date.now();
-    let at = 0;
-    while (at < this.inbox.length && (Date.now() - from < ms || ms === Infinity)) {
-      const bytes = this.inbox[at++];
-      const channel = this.channel;
-      if (!channel || this.done) break;
-      const text = channel.receive.open(bytes);
-      if (text == null) return this.fail(RELAY_BROKEN, 'channel_broken');
-      this.got(text);
-      // What it carried closed this, or started another channel.
-      if (this.done || this.channel !== channel) return;
+    try {
+      while (this.inbox.length && (away || Date.now() - from < ms)) {
+        // Off the list before it's opened: opening one moves the channel's
+        // counter, so one left there would never open again.
+        const bytes = this.inbox.shift()!;
+        const channel = this.channel;
+        if (!channel || this.done) return;
+        const text = channel.receive.open(bytes);
+        if (text == null) return this.fail(RELAY_BROKEN, 'channel_broken');
+        try {
+          this.got(text);
+        } catch (e) {
+          // From a timer it would end the app; the frames behind it still count.
+          reportFault(e);
+        }
+        // What it carried closed this, or started another channel.
+        if (this.done || this.channel !== channel) return;
+      }
+    } finally {
+      this.taking = false;
     }
-    this.inbox.splice(0, at);
     this.idleSince = Date.now();
     this.spent += this.idleSince - from;
-    if (this.inbox.length === 0) return;
-    this.pump = setTimeout(() => {
-      this.pump = null;
-      this.spent = 0;
-      this.take(SLICE_MS);
-    }, 0);
+    if (this.inbox.length) {
+      behind.add(this);
+      this.pump = setTimeout(() => {
+        this.pump = null;
+        this.spent = 0;
+        this.take(SLICE_MS);
+      }, 0);
+      return;
+    }
+    behind.delete(this);
+    const ended = this.ended;
+    this.ended = null;
+    if (ended) this.lost(ended.code, ended.reason);
+  }
+
+  /** The app is leaving the front: everything waiting, now (`setAway`). */
+  catchUp() {
+    this.take(SLICE_MS);
   }
 
   private dropInbox() {
@@ -260,6 +308,8 @@ export class RelaySocket {
     this.pump = null;
     this.inbox = [];
     this.spent = 0;
+    this.ended = null;
+    behind.delete(this);
   }
 
   private opened() {

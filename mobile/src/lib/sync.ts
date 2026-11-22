@@ -238,6 +238,44 @@ export function applyEvents(s: SyncState, arrived: readonly Arrived[]): SyncStat
   return out;
 }
 
+/** The cursor kept while an event after it couldn't be applied (null: none was held yet). */
+export interface HeldCursor {
+  cursor: Cursor | null;
+}
+
+/**
+ * [`applyEvents`], whatever the events hold. One that can't be applied is
+ * reported and skipped and the others apply (the batch is halved until it's
+ * alone). The cursor never passes it: it stays at the last event before it
+ * until a snapshot brings the whole, so the next reconnect replays from there
+ * (replayed events never double) instead of the line being lost for good.
+ * Pass `held` back in with the next batch.
+ */
+export function applySafely(
+  s: SyncState,
+  arrived: readonly Arrived[],
+  held: HeldCursor | null,
+  report: (error: unknown) => void
+): { state: SyncState; held: HeldCursor | null } {
+  try {
+    const state = applyEvents(s, arrived);
+    if (!held) return { state, held };
+    if (arrived.some((one) => one.event.type === 'sync.snapshot')) return { state, held: null };
+    return { state: { ...state, cursor: held.cursor }, held };
+  } catch (e) {
+    if (arrived.length > 1) {
+      const half = arrived.length >> 1;
+      const first = applySafely(s, arrived.slice(0, half), held, report);
+      return applySafely(first.state, arrived.slice(half), first.held, report);
+    }
+    report(e);
+    const [one] = arrived;
+    // A draft or an alert moves no cursor; the Mac never replays it.
+    const counts = !!one?.cursor || one?.event.type === 'sync.snapshot';
+    return { state: s, held: held ?? (counts ? { cursor: s.cursor } : null) };
+  }
+}
+
 /** The `agents.message` events of a batch (`reduce`'s rules, over all of them). */
 function applyLines(s: SyncState, lines: readonly Arrived[]): SyncState {
   const seqs = { ...s.seqs };
@@ -262,7 +300,7 @@ function applyLines(s: SyncState, lines: readonly Arrived[]): SyncState {
     seqs[m.id] = cursor?.seq ?? Number.MAX_SAFE_INTEGER;
     for (const key of chatKeysOf(m)) {
       let chat = perChat.get(key);
-      if (!chat) perChat.set(key, (chat = new Map()));
+      if (!chat) perChat.set(key, (chat = new Map<string, AgentMessage>()));
       // A later copy of a line replaces the earlier one where it now belongs.
       chat.delete(m.id);
       chat.set(m.id, m);

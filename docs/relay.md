@@ -210,6 +210,8 @@ numbered and kept until acked, and re-sealed under the new keys.
    always, and its first sealed frame is `{"t":"sess","sid":…,"resumed":true,"rx":<last phone→Mac n it took>}`.
    Both sides drop what the other's `rx` says it took, then re-send the rest in order as fresh
    `q` frames with the same `n`. The Mac's socket handler (device, subscriptions) never noticed.
+   Frames the phone was sent before its socket died and hasn't opened yet are opened first, in
+   slices, and only then is the close acted on: its `rx` covers everything that arrived.
 6. **Anything else is a fresh session** (unknown or expired `sid`, bad `mac`, old `k`): the Mac
    answers a normal first sess frame with `"resumed":false` and a new `sid`; the phone then ends
    the socket as closed, and its transport reconnects from scratch (a new `hello`), as before.

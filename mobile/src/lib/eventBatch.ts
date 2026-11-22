@@ -15,6 +15,11 @@
  *   agents working is at most a dozen updates a second, not one per event.
  * - **Never behind an answer.** The Mac sends what a request caused before its
  *   answer, so whoever handles an answer calls `flush()` first.
+ * - **Never on a timer that won't fire.** Put away (`away`), each live event is
+ *   applied as it comes: Android runs no JavaScript timers then
+ *   (`JavaTimerManager.onHostPause`).
+ * - **Never a way out for an error.** It's applied from timers and from other
+ *   requests' answers, so what `apply` throws goes to `onError`.
  *
  * Pure apart from the clock and timers, so it's tested without a socket.
  */
@@ -41,6 +46,10 @@ export interface EventBatchOptions {
   /** Lets one through at once when nothing was applied within the beat (off in tests that count). */
   beatMs?: number;
   holdMs?: number;
+  /** The app is in the background: nothing waits for the beat. */
+  away?: () => boolean;
+  /** What `apply` threw. */
+  onError?: (error: unknown) => void;
 }
 
 export function createEventBatch<E>(
@@ -67,7 +76,11 @@ export function createEventBatch<E>(
     if (waiting.length === 0) return;
     const events = waiting;
     waiting = [];
-    apply(events);
+    try {
+      apply(events);
+    } catch (e) {
+      opts.onError?.(e);
+    }
     // After, not before: the beat is the quiet between updates, however long one took.
     appliedAt = now();
   }
@@ -83,6 +96,7 @@ export function createEventBatch<E>(
     add(event) {
       waiting.push(event);
       if (holding) return arm(longest);
+      if (opts.away?.()) return flush();
       const since = now() - appliedAt;
       if (since >= beat || since < 0) return flush();
       arm(beat - since);
