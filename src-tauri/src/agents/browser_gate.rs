@@ -1478,8 +1478,9 @@ fn continues_a_send(label: Option<&str>) -> bool {
             .all(|t| SEND_STEPS.contains(&t.as_str()) || SEND_FILLER.contains(&t.as_str()))
 }
 
-/// How many different controls one Allow covers.
-const MAX_CONTROLS: usize = 4;
+/// How many different controls one Allow covers (a click by position is
+/// looked at twice, raw and then labelled, so it counts twice).
+const MAX_CONTROLS: usize = 8;
 
 /// The send a step is a part of: `None` unless it is a step that goes out
 /// under the user's name with words typed on a known site, and nothing "Full
@@ -1558,6 +1559,7 @@ fn same_send_allowed(agent: &Agent, tool: &str, input: &Value) -> bool {
             && s.tab == send.tab
             && s.epoch == send.epoch
     }) {
+        let room = send.covered && s.seen.len() < MAX_CONTROLS;
         match s.seen.iter_mut().find(|(c, _)| *c == send.control) {
             // The same control again: a retry within a minute, never a
             // second Post.
@@ -1566,7 +1568,7 @@ fn same_send_allowed(agent: &Agent, tool: &str, input: &Value) -> bool {
                     return true;
                 }
             }
-            None if send.covered && s.seen.len() < MAX_CONTROLS => {
+            None if room => {
                 s.seen.push((send.control.clone(), now));
                 return true;
             }

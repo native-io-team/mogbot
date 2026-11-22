@@ -1552,7 +1552,7 @@ fn allowed_send(id: &str) -> (Agent, String) {
     let mut p = Page::default();
     on_answer(
         &mut p,
-        "textbox \"Text editor for creating content\" [ref_1]\nbutton \"Post\" [ref_16]\nbutton \"Confirm\" [ref_2]\nbutton \"Schedule\" [ref_21]\nbutton \"Delete project\" [ref_30]\nbutton \"Delete account\" [ref_31]\nbutton \"Invite\" [ref_32]\nbutton \"Enviar\" [ref_33]\nbutton \"Next\" [ref_50]\nbutton \"Save\" [ref_51]",
+        "textbox \"Text editor for creating content\" [ref_1]\nbutton \"Post\" [ref_16]\nbutton \"Confirm\" [ref_2]\nbutton \"Schedule\" [ref_21]\nbutton \"Delete project\" [ref_30]\nbutton \"Delete account\" [ref_31]\nbutton \"Invite\" [ref_32]\nbutton \"Enviar\" [ref_33]\nbutton \"Share\" [ref_34]\nbutton \"Merge\" [ref_35]\nbutton \"Publish\" [ref_60]\nbutton \"Send\" [ref_61]\nbutton \"Reply\" [ref_62]\nbutton \"Send now\" [ref_63]\nbutton \"Post now\" [ref_64]\nbutton \"Send it\" [ref_65]",
     );
     p.tabs.insert(5, "https://www.linkedin.com/feed/".into());
     on_typed(
@@ -1658,16 +1658,19 @@ fn an_allowed_send_covers_only_its_own_tab_and_site() {
 #[test]
 fn an_allowed_post_covers_only_steps_of_getting_words_out() {
     let (a, tool) = allowed_send("send-labels");
-    for r in ["ref_30", "ref_31", "ref_32", "ref_33"] {
+    for r in ["ref_30", "ref_31", "ref_32", "ref_33", "ref_34", "ref_35"] {
         // Delete project, Delete account, Invite, a label in another
-        // language: each asks.
+        // language, Share, Merge: each asks.
         assert!(!same_send_allowed(&a, &tool, &click_ref(r)), "{r}");
     }
-    // Four different controls per Allow (the Post itself counts): the fifth asks.
-    assert!(same_send_allowed(&a, &tool, &click_ref("ref_2")));
-    assert!(same_send_allowed(&a, &tool, &click_ref("ref_21")));
-    assert!(same_send_allowed(&a, &tool, &click_ref("ref_50")));
-    assert!(!same_send_allowed(&a, &tool, &click_ref("ref_51")));
+    // Eight different controls per Allow (the Post itself counts): the
+    // ninth asks.
+    for r in [
+        "ref_2", "ref_21", "ref_60", "ref_61", "ref_62", "ref_63", "ref_64",
+    ] {
+        assert!(same_send_allowed(&a, &tool, &click_ref(r)), "{r}");
+    }
+    assert!(!same_send_allowed(&a, &tool, &click_ref("ref_65")));
     assert!(continues_a_send(None));
     assert!(continues_a_send(Some("button")));
     assert!(continues_a_send(Some("button \"Post now\"")));
@@ -1700,4 +1703,40 @@ fn an_allowed_send_in_a_live_browser_is_told_by_its_tab() {
     assert!(same_send_allowed(&a, &tool, &click("ref_2", 5)));
     assert!(!same_send_allowed(&a, &tool, &click("ref_30", 5)));
     assert!(!same_send_allowed(&a, &tool, &click("ref_2", 6)));
+}
+
+/// Your Chrome clicks by position: each is looked at raw, then again with
+/// the label found under it. Post, Confirm, Schedule that way is one card.
+#[test]
+fn three_position_clicks_in_your_chrome_are_one_card() {
+    let mut a = agent();
+    a.id = "send-points".into();
+    let key = user_chrome_key(&a.id);
+    let mut p = Page::default();
+    p.tabs.insert(5, "https://www.linkedin.com/feed/".into());
+    on_typed(
+        &mut p,
+        "form_input",
+        &json!({ "value": "see you all there" }),
+    );
+    with_pages(|pages| pages.insert(key.clone(), p));
+    let label = |l: &str| {
+        with_pages(|pages| {
+            pages
+                .get_mut(&key)
+                .unwrap()
+                .refs
+                .insert("@point".into(), format!("button \"{l}\""));
+        })
+    };
+    let tool = format!("{USER_CHROME_SERVER}click");
+    let raw = |x: u32| json!({ "x": x, "y": 40, "tab": 5 });
+    let labelled = json!({ "ref": "@point", "tab": 5 });
+    label("Post");
+    note_allowed_send(&a, &tool, &labelled);
+    for (x, l) in [(100, "Confirm"), (200, "Schedule")] {
+        assert!(same_send_allowed(&a, &tool, &raw(x)), "raw {l}");
+        label(l);
+        assert!(same_send_allowed(&a, &tool, &labelled), "labelled {l}");
+    }
 }
