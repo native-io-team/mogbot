@@ -2,8 +2,8 @@
 
 The quickest way in needs none of this: the signed Mac app from
 [mogbot.app/start](https://mogbot.app/start), and the iPhone app from the
-public [TestFlight beta](https://testflight.apple.com/join/fsm64m5E). It runs
-on a Mac for now; Windows and Linux are coming.
+public [TestFlight beta](https://testflight.apple.com/join/fsm64m5E). There are
+Windows and Linux installers too: see [Install](guide/install.md).
 
 This guide is for building the app yourself, on your own Mac, from this repo.
 The easiest way is to let an AI coding agent do it for you.

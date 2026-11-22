@@ -321,7 +321,7 @@ claude --print --output-format stream-json --verbose --include-partial-messages
        --permission-prompt-tool mcp__app__approve
        --mcp-config <app support>/agent-bridge/mcp-<random>.json   (0600; see below)
        --allowedTools mcp__app
-       --append-system-prompt <voice + role + team rules>
+       --append-system-prompt-file <file: voice + role + team rules>
        --add-dir <projects root> --add-dir <each external project>
        --disallowedTools 'Edit(**/.git/**)' 'Edit(**/.shipstudio/**)'
                          'Edit(/<each added dir>/**/.git/**)' …
@@ -2712,7 +2712,7 @@ agents' browser's tool names. The same gate decides it (below), outside text
 never gets it, and a turn that has it runs `--no-chrome`. **It wins whenever
 it's connected** (`agents/chrome_route.rs`): every engine, every account, so
 switching Claude accounts never needs the Claude extension signed in again;
-Claude in Chrome is only the fallback. Settings → Chrome says which way
+there is no other browser route since 1.0.23 ("Mogbot for Chrome is the only browser route", below). Settings → Chrome says which way
 agents use now and why, and each agent's "What it can reach" says its own. A
 Chrome profile managed by work (Developer mode off) is detected and the page
 offers a personal profile instead (`user_chrome/managed.rs`). On macOS and
@@ -3624,7 +3624,7 @@ the agent has a conversation on its engine (`sessionId`, not `newEngine`).
     `--print`, `--output-format`, `--verbose`, `--include-partial-messages`,
     `--permission-prompt-tool` (it asks in the terminal, to you): `--chrome
     --resume <session> --permission-mode acceptEdits --mcp-config …
-    --allowedTools mcp__app --append-system-prompt … --add-dir …`.
+    --allowedTools mcp__app --append-system-prompt-file … --add-dir …`.
     Its secret is granted with no turn (and revoked at hand-back), so anything
     that reaches `approve` is refused; the agent's other tools (message an
     agent, share a file) work.
@@ -8054,7 +8054,7 @@ One row at the end of the chat (`AgentWorkingIndicator`; the phone's `LiveStep`)
 
 ### Task tools between agents (`agents/tasks.rs`)
 
-`task_assign(agent, title, note?)` puts a line on a teammate's list: it lands in their Next as "from <you> · <time>", their chat gets one centred note ("Mail added a task for Lead Gen · title"), and **no turn starts** (it is in their next briefing; the nudge tick chases it). It carries none of the caller's grants, counts as one agent-to-agent hop, is capped at 5 open lines per assigner on one teammate, can't be aimed at yourself, and is refused in a turn answering outside text. The assignee hands a line back with `task_update` (`dropped` with the reason, or `waiting`): the reason goes to the assigner as a message. Each agent in the overview carries `tasks` `{ doing?, toDo, waits }` (the header's quiet line, counted once: `toDo` = Next + Stuck).
+`task_assign(agent, title, note?)` puts a line on a teammate's list: it lands in their Next as "from <you> · <time>", their chat gets one centred note ("Mail added a task for Lead Gen · title"), and **no turn starts** (it is in their next briefing; the nudge tick chases it). It carries none of the caller's grants, is refused when the agent-to-agent hop cap is already spent (it spends no hop itself), is capped at 5 open lines per assigner on one teammate, can't be aimed at yourself, and is refused in a turn answering outside text. The assignee hands a line back with `task_update` (`dropped` with the reason, or `waiting`): the reason goes to the assigner as a message. Each agent in the overview carries `tasks` `{ doing?, toDo, waits }` (the header's quiet line, counted once: `toDo` = Next + Stuck).
 
 ### Keeping the list at the end of a turn (`agents/tasks_keep.rs`)
 

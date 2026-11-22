@@ -36,14 +36,16 @@ The two scripts:
 #    or let release.sh write it from -n:
 ./scripts/release.sh patch -n "**Faster replies** - What changed, in plain words."
 
-# 2. Build, notarize, staple, sign the update, write latest.json, make the DMG.
-#    Waits on Apple twice (the app, then the DMG), usually a few minutes each.
-./scripts/release-mac.sh
-
-# 3. Push the release commit and tag (the owner's go-ahead), once. If CI goes
+# 2. Push the release commit and tag (the owner's go-ahead), once. If CI goes
 #    red, read every failed job, fix them all in one commit, and don't push
 #    again while a run is going: each push cancels the run before it.
 git push origin <branch> && git push origin v1.0.1
+
+# 3. Build, notarize, staple, sign the update, write latest.json, make the DMG.
+#    Waits on Apple twice (the app, then the DMG), usually a few minutes each.
+#    It refuses until CI on main is green for this commit; --allow-red-ci builds
+#    sooner (a local build, which can't be published until CI is green).
+./scripts/release-mac.sh
 
 # 4. Publish once CI on that exact commit is green (the owner's go-ahead: it
 #    creates a public GitHub release and every installed copy updates to it).
@@ -52,11 +54,11 @@ git push origin <branch> && git push origin v1.0.1
 ./scripts/publish-when-green.sh
 ```
 
-`--skip-build` in step 3 reuses step 2's app; an app that is already stapled
+`--skip-build` in step 4 reuses step 3's app; an app that is already stapled
 isn't sent to Apple again (the DMG is remade and notarized again, a few
 minutes).
 
-Steps 2 and 3 stop first unless CI on main is green for the commit being released:
+Steps 3 and 4 stop first unless CI on main is green for the commit being released:
 its own completed run, every job (Windows, Frontend and a11y included). Publishing
 has no override. `--allow-red-ci` only lets a local build go ahead while CI is red
 or still running; that build can't be published until CI on its commit is green.

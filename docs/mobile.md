@@ -38,7 +38,7 @@ commit.
 ┌──────────────────────────┐            ┌──────────────────────────────────────────┐
 │ screens (expo-router)    │            │ companion::server (hyper)                │
 │ store (zustand) + JSON   │  tailnet   │   127.0.0.1:P ◀── tailscale serve        │
-│   cache, drafts, outbox  │ ─ HTTPS ─▶ │                   --https=47443          │
+│   cache, drafts, outbox  │ ─ HTTPS ─▶ │                   --https=47463          │
 │ DirectTransport          │ (ts.net    │   auth · rate limit · audit              │
 │   one WebSocket + HTTP   │  cert)     │ hub: journal (epoch, seq) ◀── agents://* │
 │ expo-notifications       │            │ router ─▶ commands/agents.rs (same fns)  │
@@ -340,10 +340,10 @@ at both seams:
 
 The phone connects over **Tailscale**: the Mac binds `127.0.0.1:<port>` (kept
 in `companion.json` so the handler stays valid) and runs
-`tailscale serve --bg --https=47443 http://127.0.0.1:<port>`, so the phone
+`tailscale serve --bg --https=47463 http://127.0.0.1:<port>`, so the phone
 sees the real `*.ts.net` certificate with stock `fetch` and `WebSocket`. The
 route is reported on only when `tailscale serve status --json` shows that exact
-handler, unfunnelled. Off runs `tailscale serve --https=47443 off`; nothing
+handler, unfunnelled. Off runs `tailscale serve --https=47463 off`; nothing
 else in the serve config is touched.
 
 **Kept up** (`keep_step` in `companion/desktop.rs`): while the phone server is
@@ -358,7 +358,7 @@ Certificate renewal is Tailscale's: `tailscale serve` renews the `*.ts.net`
 certificate itself, and the phone pins the Mac's Ed25519 identity, never the
 certificate, so a renewed one changes nothing for it.
 
-**Why 47443:** Funnel can only publish 443, 8443 and 10000, per port, and
+**Why 47463:** Funnel can only publish 443, 8443 and 10000, per port, and
 Remote Access already funnels 443. A mount on a Funnel port would be one
 toggle from the public internet.
 
@@ -386,7 +386,7 @@ Both sides walk it one screen per step, one question and one big button each, in
 2. **Phone:** scan in the app or with the Camera, or paste the link. A link
    is untrusted input (any page or message can open one), so the phone
    **always asks first**: "Pair with *Sam's MacBook Pro*? at
-   *sams-mbp.tail1234.ts.net:47443*", the code's last four characters,
+   *sams-mbp.tail1234.ts.net:47463*", the code's last four characters,
    and, when a Mac is already paired, "This replaces *that Mac*". A
    Tailscale route must be `https://<name>.ts.net[:port]`
    (`parsePairingLink`); a link with more than one route is refused, so the

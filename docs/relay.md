@@ -93,7 +93,7 @@ clear 404 unlinks it (`checkStillThere`; any other answer keeps it).
    - Data both ways as **binary**: 4-byte big-endian channel id, then the payload bytes.
    - Mac → relay text `{"t":"close","ch":<u32>}` closes that phone's socket (code 1000).
 5. Keep-alive: text `ping` → `pong`, answered by the relay without waking (auto-response). The Mac
-   sends one every 30 s and treats 75 s without anything as dead.
+   sends one every 10 s and treats 25 s without anything as dead (`PING_EVERY`, `DEAD_AFTER`).
    A Mac that has said nothing, not even a `ping`, for 60 s (`MAC_STALE_MS`) has a dead link the relay
    hasn't noticed: it is closed `4410 stale`, and a phone connecting then is told `4404 mac_offline`
    at once, instead of being handed a channel nobody serves and waiting a minute for a hello.
@@ -286,7 +286,7 @@ Reviewed 2026-11-11 across the Worker and Durable Object (`services/relay/src`),
   tailnet user who paired it; over the relay the token alone is enough. A stolen token is revoked
   from the desk as before.
 - **Determined slot squatting.** Someone with the fingerprint and many addresses can still keep a
-  Mac's 8 relay slots busy (each channel making a slow request). Tailscale is unaffected. A fix
+  Mac's 24 relay slots (`MAX_PHONES`) busy (each channel making a slow request). Tailscale is unaffected. A fix
   would need the phone to prove a device before the relay counts it, which the relay can't check.
 - **Cost.** There's no per-message limit on a phone socket; a stranger can make the relay's bill
   bigger, not read or change anything.

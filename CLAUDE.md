@@ -63,7 +63,7 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Site Migration** - Rebuild a live URL here, measured page by page against the original (see `docs/site-migration.md`)
 - **Assets, Skills & MCP, IDE integration** - As in Ship Studio (the plugin system was removed; a Ship Studio project's `.shipstudio/plugins/` folder is left on disk and ignored)
 
-**Across both:** the Cmd+K palette (every feature registers there), the macOS menu bar and Dock menu (`app_menu.rs`, `dock_menu.rs`: every item works where you are or is greyed out, every key is also in ⌘K; [docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Telemetry, issue reporting and the template catalogue are off until `brand.json` names an endpoint for them; updates come from the public releases repo (see "Releasing New Versions"). macOS only.
+**Across both:** the Cmd+K palette (every feature registers there), the macOS menu bar and Dock menu (`app_menu.rs`, `dock_menu.rs`: every item works where you are or is greyed out, every key is also in ⌘K; [docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Telemetry, issue reporting and the template catalogue are off until `brand.json` names an endpoint for them; updates come from the public releases repo (see "Releasing New Versions"). The app ships for macOS, Windows and Linux.
 
 **Compatible with Ship Studio, both directions:** the `~/ShipStudio` projects folder and the in-project `.shipstudio/` format are shared, so either app opens the other's projects; app state is this app's own, so both run side by side.
 
@@ -1035,5 +1035,5 @@ The updater bundle is made by `release-mac.sh` from the **stapled** app, so
 the private key). Losing `~/.tauri/mogbot-updater.key` means installed copies can never update again.
 
 The dashboard's "What's new" (`src/components/dashboard/Changelog.tsx`) is empty by design and hidden
-while it is; once it has entries, `release.sh` requires one per release. macOS only: there is no
-Windows release.
+while it is; once it has entries, `release.sh` requires one per release. The Windows and
+Linux installers are built by the `Build installers` workflow and published in the same release.

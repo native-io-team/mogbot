@@ -143,11 +143,9 @@ function, `chrome_route::decide`, picks per turn:
    Claude Code `mcp__claude-in-chrome` is added to `--disallowedTools` too.
    Its prompt says never to send the user to sign in to or out of the Claude
    extension.
-2. **Claude in Chrome only as the fallback**: Your Chrome off or not
-   connected, the team set Claude in Chrome up, Claude Code, and the last
-   `chrome_health` probe didn't find it down.
-3. **None**, with the reason (outside text, taken away from this agent, its
-   settings, Codex without Your Chrome, Claude in Chrome down, nothing set up).
+2. **None**, with the reason (outside text, taken away from this agent, its
+   settings, Your Chrome on but not connected, nothing set up). Claude in
+   Chrome was the fallback here until 1.0.23; `decide` no longer returns it.
 
 `connections::for_turn` takes the route from it and lays it in through one
 pure function, `connections::lay_in_chrome`, so the turn and the words
