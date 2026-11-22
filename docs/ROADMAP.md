@@ -45,10 +45,11 @@ good one exists.
    (MISSION). Next step: the same app headless on your own Linux box or in
    Docker, paired to your desk and phone like any computer (your box, not
    ours: docs/OPEN-AND-HOSTED.md). Needs Windows/Linux parity first.
-11. **Windows and Linux at parity.** Both ship (1.0.8), but secrets have no
-    store off macOS yet (logins, keys, phone pairing), remote access is
-    Mac-only, and neither updates itself. Secret stores are being built
-    (Credential Manager, Secret Service); then remote access, then updates.
+11. **Windows and Linux at parity.** Both ship with every release, with a
+    secret store (Credential Manager; Secret Service, or an encrypted file
+    where there is no keyring), remote access and updates from inside the app.
+    None of it has been tried on a real Windows or Linux machine by us yet.
+    Next: first run, pairing a phone, app sign-ins and an update on each.
 12. **More engines.** Gemini through its own CLI (Google AI Pro/Ultra plans),
     and any agent that speaks ACP (OpenCode already runs over ACP), so Grok,
     Cursor, Copilot and others plug in without one-off code. Then a local
