@@ -226,6 +226,7 @@ function connect(c: Credentials) {
   transport?.close();
   transport = null;
   events.clear();
+  missed.overview = missed.projects = false;
   if (readsFor !== c.serverId) reads.forget();
   readsFor = c.serverId;
   if (!c.fingerprint) return refuseUnpinned();
@@ -281,6 +282,32 @@ function connect(c: Credentials) {
   transport = t;
 }
 
+/** Read again once caught up: an event that would have said it couldn't be applied. */
+const missed = { overview: false, projects: false };
+
+function passedEvent(event: CompanionEvent) {
+  if (event.type === 'agents.status' || event.type === 'agents.registry') missed.overview = true;
+  else if (event.type === 'projects.changed' || event.type === 'projects.removed')
+    missed.projects = true;
+  // Rooms are read at every catch-up; a message's chat is (`unloadChats`).
+  if (caughtUp) readMissed();
+}
+
+function readMissed() {
+  const { overview, projects } = missed;
+  missed.overview = missed.projects = false;
+  // Not read: the next catch-up asks again.
+  if (overview) void refreshOverview().catch(() => (missed.overview = true));
+  if (projects && canCall('projects.list'))
+    void refreshProjects().catch(() => (missed.projects = true));
+}
+
+/** The team as the Mac has it now. */
+async function refreshOverview() {
+  const fresh = asOverview(await call('agents.overview', {}));
+  if (fresh) setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
+}
+
 /** What an event sets off once it's in the store. */
 function afterEvent(event: CompanionEvent) {
   switch (event.type) {
@@ -301,6 +328,7 @@ function afterEvent(event: CompanionEvent) {
       timings.frame('caught up');
       const open = getApp().openChat;
       if (open && !getApp().chats[open]?.loaded) void loadLatest(open);
+      readMissed();
       if (roomsOffered(getApp().welcome)) void refreshRooms().catch(() => {});
       void refreshTeamSetup().catch(() => {});
       void flushOutbox();
@@ -320,6 +348,7 @@ const events = createIncoming(
       (m) => (macSendsAlerts() ? liveAlerts.heard(m) : alertApproval(m)),
     ],
     snapshot: () => timings.frame('snapshot'),
+    passed: passedEvent,
     after: afterEvent,
   },
   { away: isAway }
@@ -1137,8 +1166,7 @@ export async function createAgent(
 ) {
   const stored = await call('agents.create', { input, clientId });
   if (!getApp().overview?.agents.some((a) => a.id === stored.id)) {
-    const fresh = asOverview(await call('agents.overview', {}));
-    if (fresh) setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
+    await refreshOverview();
   }
   return stored;
 }

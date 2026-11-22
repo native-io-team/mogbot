@@ -173,9 +173,17 @@ describe('applySafely', () => {
       seq
     );
   const line = (n: number) => e({ type: 'agents.message', message: msg(`m${n}`, 'a', 100 + n) }, n);
-  const run = (list: Arrived[], s = start(), held: HeldCursor | null = null) => {
+  const run = (
+    list: Arrived[],
+    s = start(),
+    held: HeldCursor | null = null,
+    pass: (one: Arrived) => boolean = () => false
+  ) => {
     const reported: string[] = [];
-    const out = applySafely(s, list, held, (x) => reported.push((x as Error).message));
+    const out = applySafely(s, list, held, (x, one) => {
+      reported.push((x as Error).message);
+      return pass(one);
+    });
     return { ...out, reported, ids: out.state.chats.a.messages.map((m) => m.id) };
   };
 
@@ -239,14 +247,23 @@ describe('applySafely', () => {
     expect(again.state.cursor).toEqual(at(8));
   });
 
+  it('one that may be passed: the cursor goes on, unless an earlier one holds it', () => {
+    const all = run([line(6), bad(7), line(8)], start(), null, () => true);
+    expect(all.ids).toEqual(['a1', 'a2', 'm6', 'm8']);
+    expect(all.state.cursor).toEqual(at(8));
+    expect(run([line(6), bad(7)], start(), null, () => true).state.cursor).toEqual(at(7));
+    const later = run([bad(6), line(7), bad(8)], start(), null, (o) => o.cursor?.seq === 8);
+    expect(later.state.cursor).toEqual(at(5));
+  });
+
   it('one that moves no cursor (a draft, an alert) holds nothing', () => {
     const out = run([line(6), bad(), line(7)]);
     expect(out.state.cursor).toEqual(at(7));
     expect(out.held).toBeNull();
   });
 
-  it('a snapshot that can’t be applied is never passed, even into its new epoch', () => {
-    const out = run([
+  it.each([false, true])('a snapshot that can’t be applied is never passed (%s)', (pass) => {
+    const list = [
       e({
         type: 'sync.snapshot',
         get overview() {
@@ -257,7 +274,8 @@ describe('applySafely', () => {
         event: { type: 'agents.message', message: msg('x', 'a', 200) } as CompanionEvent,
         cursor: { epoch: 'f', seq: 3 },
       },
-    ]);
+    ];
+    const out = run(list, start(), null, () => pass);
     expect(out.reported).toEqual(['bad snapshot']);
     expect(out.state.cursor).toEqual(at(5));
     expect(out.ids).toContain('x');

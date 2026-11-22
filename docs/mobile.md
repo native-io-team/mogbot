@@ -293,7 +293,9 @@ Events are applied together ([`eventBatch.ts`](../mobile/src/lib/eventBatch.ts),
 ones keep a 90 ms beat, and a relay backlog is opened in 8 ms slices so taps get
 through (`relaySocket.ts`). An event the phone can't apply is reported and
 skipped alone, and its cursor stays before it until the next replay or
-snapshot. Nothing in that path throws: it runs from timers and other requests'
+snapshot. Failing on that replay too it is passed (the Mac cuts a long replay
+off, so a cursor kept there would never be caught up) and what it was about is
+read again: the message's chat, the overview, the projects. Nothing in that path throws: it runs from timers and other requests'
 answers. In the background Android fires no JavaScript timers
 (`JavaTimerManager.onHostPause`), so there frames are opened, acked and applied
 as they come; an alert is never kept for the batch, since it is never replayed.

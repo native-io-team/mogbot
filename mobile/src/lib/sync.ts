@@ -243,19 +243,21 @@ export interface HeldCursor {
   cursor: Cursor | null;
 }
 
+/** An event couldn't be applied. True: the cursor may pass it (it failed before). */
+export type OnBadEvent = (error: unknown, one: Arrived) => boolean;
+
 /**
  * [`applyEvents`], whatever the events hold. One that can't be applied is
- * reported and skipped and the others apply (the batch is halved until it's
- * alone). The cursor never passes it: it stays at the last event before it
- * until a snapshot brings the whole, so the next reconnect replays from there
- * (replayed events never double) instead of the line being lost for good.
- * Pass `held` back in with the next batch.
+ * skipped and the others apply (the batch is halved until it's alone). Unless
+ * `failed` lets it be passed, the cursor stays at the last event before it,
+ * so the next reconnect replays from there (replayed events never double);
+ * a snapshot brings the whole. Pass `held` back in with the next batch.
  */
 export function applySafely(
   s: SyncState,
   arrived: readonly Arrived[],
   held: HeldCursor | null,
-  report: (error: unknown) => void
+  failed: OnBadEvent
 ): { state: SyncState; held: HeldCursor | null } {
   try {
     const state = applyEvents(s, arrived);
@@ -265,15 +267,27 @@ export function applySafely(
   } catch (e) {
     if (arrived.length > 1) {
       const half = arrived.length >> 1;
-      const first = applySafely(s, arrived.slice(0, half), held, report);
-      return applySafely(first.state, arrived.slice(half), first.held, report);
+      const first = applySafely(s, arrived.slice(0, half), held, failed);
+      return applySafely(first.state, arrived.slice(half), first.held, failed);
     }
-    report(e);
     const [one] = arrived;
+    const pass = failed(e, one);
+    if (pass && one.cursor && one.event.type !== 'sync.snapshot') {
+      return { state: { ...s, cursor: held ? held.cursor : one.cursor }, held };
+    }
     // A draft or an alert moves no cursor; the Mac never replays it.
-    const counts = !!one?.cursor || one?.event.type === 'sync.snapshot';
+    const counts = !!one.cursor || one.event.type === 'sync.snapshot';
     return { state: s, held: held ?? (counts ? { cursor: s.cursor } : null) };
   }
+}
+
+/** The chats a message shows in, to be read again: their page has the line an event couldn't bring. */
+export function unloadChats(s: SyncState, m: AgentMessage): SyncState {
+  const keys = chatKeysOf(m).filter((key) => s.chats[key]?.loaded);
+  if (!keys.length) return s;
+  const chats = { ...s.chats };
+  for (const key of keys) chats[key] = { ...chats[key], loaded: false };
+  return { ...s, chats };
 }
 
 /** The `agents.message` events of a batch (`reduce`'s rules, over all of them). */

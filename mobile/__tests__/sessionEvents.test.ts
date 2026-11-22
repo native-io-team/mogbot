@@ -16,6 +16,7 @@ interface Fake {
   welcomed: (w: WelcomeFrame) => void;
   state: { kind: string };
   answer: (v: unknown) => void;
+  asked: string[];
 }
 const mockMade: Fake[] = [];
 jest.mock('../src/lib/transport', () => {
@@ -40,7 +41,9 @@ jest.mock('../src/lib/transport', () => {
     onEvent(l: unknown) {
       this.event = l;
     }
-    request() {
+    asked: string[] = [];
+    request(method: string) {
+      this.asked.push(method);
       return new Promise((r) => (this.answer = r));
     }
     setForeground() {}
@@ -153,6 +156,28 @@ describe('an event it can’t apply', () => {
     mac.event(line('m4', 4), at(4));
     expect(mac.opts.getResume()).toEqual(at(2));
     expect(ids()).toEqual(['m1', 'm2', 'm4']);
+  });
+
+  it('failing on its replay too, the team is read again once caught up', async () => {
+    const round = () => {
+      mac.welcomed({ t: 'welcome', methods: [], features: ['alerts'] } as unknown as WelcomeFrame);
+      mac.event(bad(), at(1));
+      mac.event(line('m2', 2), at(2));
+      mac.opts.getResume();
+      const before = mac.asked.includes('agents.overview');
+      caughtUp(2);
+      return before;
+    };
+    round();
+    await Promise.resolve();
+    expect(getApp().cursor).toEqual(at(0));
+    expect(mac.asked).not.toContain('agents.overview');
+    // Not while it is still catching up: what follows would put older news over it.
+    expect(round()).toBe(false);
+    await Promise.resolve();
+    expect(getApp().cursor).toEqual(at(2));
+    expect(mac.asked.filter((m) => m === 'agents.overview')).toHaveLength(1);
+    expect(mockRecord).toHaveBeenCalledTimes(2);
   });
 
   it('a status with no routes to learn costs nothing else', () => {

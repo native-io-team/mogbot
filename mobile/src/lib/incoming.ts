@@ -8,12 +8,17 @@
  * nothing here throws: one event that can't be applied is reported and
  * skipped, the rest of its batch applies, and the cursor stays before it
  * until the Mac next replays or sends the whole (`applySafely`).
+ *
+ * That replay is its one retry. Failing again it is passed, and what it would
+ * have brought is read another way (`passed`): the Mac cuts a replay it isn't
+ * acked for (docs/relay.md, "Sessions"), so a cursor kept before it for good
+ * would start every one over at the same place and never be caught up.
  */
 
 import type { AgentMessage, CompanionEvent, Cursor } from '@shipstudio/companion-protocol';
 import { createEventBatch, type EventBatchOptions } from './eventBatch';
 import { guarded, reportFault } from './fault';
-import { applySafely, type Arrived, type HeldCursor, type SyncState } from './sync';
+import { applySafely, unloadChats, type Arrived, type HeldCursor, type SyncState } from './sync';
 import { asMessage } from './wellFormed';
 
 export interface IncomingDeps {
@@ -23,6 +28,8 @@ export interface IncomingDeps {
   notices: ((m: AgentMessage) => void)[];
   /** A snapshot is about to be stored. */
   snapshot: () => void;
+  /** An event failed on its replay too, and the cursor went past it: read what it was about. */
+  passed: (event: CompanionEvent) => void;
   /** What an event sets off once it is stored. */
   after: (event: CompanionEvent) => void;
 }
@@ -40,6 +47,25 @@ export interface Incoming {
 export function createIncoming(deps: IncomingDeps, opts: EventBatchOptions = {}): Incoming {
   /** Where the cursor stays after an event that couldn't be applied. */
   let held: HeldCursor | null = null;
+  /** How often each event of this epoch failed, by seq: kept over reconnects. */
+  let tries = new Map<number, number>();
+  let triesEpoch: string | null = null;
+
+  function failed(error: unknown, { cursor }: Arrived): boolean {
+    // Moves no cursor: the Mac never replays it.
+    if (!cursor) {
+      reportFault(error);
+      return false;
+    }
+    if (triesEpoch !== cursor.epoch) {
+      triesEpoch = cursor.epoch;
+      tries = new Map();
+    }
+    const n = (tries.get(cursor.seq) ?? 0) + 1;
+    tries.set(cursor.seq, n);
+    if (n <= 2) reportFault(error);
+    return n > 1;
+  }
 
   function apply(arrived: Arrived[]) {
     // Of one line's copies only the newest is news: the ones it replaced within
@@ -58,10 +84,23 @@ export function createIncoming(deps: IncomingDeps, opts: EventBatchOptions = {})
       }
       if (event.type === 'sync.snapshot') guarded(deps.snapshot);
     }
-    const applied = applySafely(deps.get(), arrived, held, reportFault);
+    const passed: CompanionEvent[] = [];
+    const applied = applySafely(deps.get(), arrived, held, (error, one) => {
+      const pass = failed(error, one);
+      if (pass) passed.push(one.event);
+      return pass;
+    });
     held = applied.held;
+    let { state } = applied;
+    for (const event of passed) {
+      guarded(() => {
+        const m = event.type === 'agents.message' ? asMessage(event.message) : null;
+        if (m) state = unloadChats(state, m);
+      });
+    }
     // Something drawn from the store may throw here: the events are in it all the same.
-    guarded(() => deps.set(applied.state));
+    guarded(() => deps.set(state));
+    for (const event of passed) guarded(() => deps.passed(event));
     for (const { event } of arrived) guarded(() => deps.after(event));
   }
 
@@ -86,6 +125,7 @@ export function createIncoming(deps: IncomingDeps, opts: EventBatchOptions = {})
     clear() {
       batch.clear();
       held = null;
+      tries = new Map();
     },
   };
 }

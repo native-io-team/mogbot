@@ -42,6 +42,7 @@ function setup(over: Partial<IncomingDeps> = {}) {
       },
       notices: [(m) => log.push(`notice ${m.id}`)],
       snapshot: () => {},
+      passed: (e) => log.push(`passed ${e.type}`),
       after: (e) => log.push(`after ${e.type}`),
       ...over,
     },
@@ -93,6 +94,111 @@ describe('an error', () => {
     incoming.event(caughtUp(3));
     expect(ids()).toEqual(['m1', 'm2', 'm3']);
     expect(box.state.cursor).toEqual(at(3));
+  });
+
+  it('in an event that fails on its replay too: passed, reported twice at most, what it was about read again', () => {
+    const { box, incoming, ids, log } = setup();
+    const round = () => {
+      incoming.welcome();
+      incoming.event(line('m1', 1), at(1));
+      incoming.event(bad(), at(2));
+      incoming.event(line('m3', 3), at(3));
+      incoming.event(caughtUp(3));
+    };
+    round();
+    expect(box.state.cursor).toEqual(at(1));
+    expect(log).not.toContain('passed agents.registry');
+    round();
+    expect(box.state.cursor).toEqual(at(3));
+    expect(log.filter((l) => l.startsWith('passed'))).toEqual(['passed agents.registry']);
+    round();
+    expect(faults).toEqual(['bad event', 'bad event']);
+    expect(ids()).toEqual(['m1', 'm3']);
+    // Another Mac’s events are counted from the start.
+    incoming.clear();
+    box.state = { ...box.state, cursor: at(0) };
+    incoming.welcome();
+    incoming.event(bad(), at(2));
+    incoming.event(caughtUp(2));
+    expect(box.state.cursor).toEqual(at(0));
+  });
+
+  it('in a message, twice: its chat is read again', () => {
+    const { box, incoming } = setup();
+    incoming.event(line('m1', 1), at(1));
+    incoming.flush();
+    const chats = box.state.chats;
+    const loaded = { a: { ...chats.a, loaded: true }, b: { ...chats.a, loaded: true } };
+    box.state = { ...box.state, chats: loaded };
+    // Trips the store, not the reading of it.
+    const tripped = () => {
+      const seqs = box.state.seqs;
+      box.state = {
+        ...box.state,
+        seqs: new Proxy(seqs, {
+          get: (t, k) => {
+            if (k === 'm2') throw new Error('m2');
+            return t[k as string];
+          },
+        }),
+      };
+      incoming.welcome();
+      incoming.event(line('m2', 2), at(2));
+      incoming.flush();
+    };
+    tripped();
+    expect(box.state.chats.a.loaded).toBe(true);
+    tripped();
+    expect(box.state.cursor).toEqual(at(2));
+    expect(box.state.chats.a.loaded).toBe(false);
+    expect(box.state.chats.b.loaded).toBe(true);
+  });
+
+  it('in a replay the Mac cuts off every 256 frames: still caught up, all 600 in order', () => {
+    const { box, incoming, ids } = setup();
+    const journal: [CompanionEvent, Cursor][] = [[bad(), at(1)]];
+    for (let i = 2; i <= 601; i++) journal.push([line(`m${i}`, i), at(i)]);
+    let rounds = 0;
+    let done = false;
+    while (!done && rounds < 12) {
+      rounds++;
+      incoming.flush();
+      const from = box.state.cursor!.seq;
+      incoming.welcome();
+      const rest = journal.slice(from);
+      for (const [event, cursor] of rest.slice(0, 256)) incoming.event(event, cursor);
+      if (rest.length <= 256) {
+        incoming.event(caughtUp(601));
+        done = true;
+      }
+    }
+    expect(done).toBe(true);
+    expect(rounds).toBe(4);
+    expect(ids()).toEqual(journal.slice(1).map((_, i) => `m${i + 2}`));
+    expect(box.state.cursor).toEqual(at(601));
+    expect(faults).toHaveLength(2);
+  });
+
+  it('several, each new one found in a later round: still caught up', () => {
+    const { box, incoming, ids } = setup();
+    const trips = new Set([1, 100, 300, 301, 520, 601]);
+    const journal: [CompanionEvent, Cursor][] = [];
+    for (let i = 1; i <= 601; i++) journal.push([trips.has(i) ? bad() : line(`m${i}`, i), at(i)]);
+    let done = false;
+    for (let rounds = 0; !done && rounds < 12; rounds++) {
+      incoming.flush();
+      const rest = journal.slice(box.state.cursor!.seq);
+      incoming.welcome();
+      for (const [event, cursor] of rest.slice(0, 256)) incoming.event(event, cursor);
+      // Caught up counts once nothing is held: the next replay is empty.
+      if (rest.length <= 256) {
+        incoming.event(caughtUp(601));
+        done = box.state.cursor!.seq === 601;
+      }
+    }
+    expect(done).toBe(true);
+    expect(ids()).toHaveLength(601 - trips.size);
+    expect(faults).toHaveLength(2 * trips.size);
   });
 
   it('while catching up: the hold’s own timer, caught up and a flush never throw', () => {
@@ -158,6 +264,7 @@ describe('an error', () => {
         },
         notices: [],
         snapshot: () => {},
+        passed: () => {},
         after: (e) => log.push(`after ${e.type}`),
       },
       {}
