@@ -256,6 +256,11 @@ pub fn release(app: &AppHandle, agent_id: &str) {
 /// between the decision and the hold, so look again and release if so. Still
 /// paused, nothing is released.
 pub(super) fn after_hold(app: &AppHandle, agent_id: &str) {
+    // The ordinary case: still paused, the message is held and a later Resume
+    // sees it. Read outside the lock, which is safe for that reason.
+    if store::get(agent_id).is_ok_and(|a| a.paused) {
+        return;
+    }
     release(app, agent_id);
 }
 
