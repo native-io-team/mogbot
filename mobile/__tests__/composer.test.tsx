@@ -6,6 +6,7 @@
  */
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { Composer } from '../src/components/Composer';
 import { setApp } from '../src/lib/store';
 import { agent } from './helpers';
@@ -118,6 +119,14 @@ describe('the message field', () => {
       disabled: true,
     });
     expect(screen.queryByLabelText(/^Stop /)).toBeNull();
+  });
+
+  it('keeps its buttons on the field’s bottom inset however tall the input comes out', async () => {
+    state();
+    await render(composer());
+    const pill = StyleSheet.flatten(screen.getByTestId('composer-pill').props.style);
+    expect(pill.alignItems).toBe('flex-end');
+    expect(pill.minHeight).toBeGreaterThanOrEqual(48);
   });
 
   it('says it queues while the agent works, with Send now on that line', async () => {

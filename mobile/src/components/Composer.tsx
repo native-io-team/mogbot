@@ -1272,7 +1272,14 @@ export function ComposerField({
         </Text>
       </View>
       {top ? <View style={field.top}>{top}</View> : null}
-      <View style={card ? null : [field.pill, leading ? field.pillLed : null]}>
+      {/* At least the field's height: the input alone can come out shorter than
+          its 48 (seen on iOS 26), which left the buttons on the top edge. */}
+      <View
+        testID="composer-pill"
+        style={
+          card ? null : [field.pill, { minHeight: size.field }, leading ? field.pillLed : null]
+        }
+      >
         {!card && leading ? leading : null}
         {dictation?.bare ? null : (
           <View
