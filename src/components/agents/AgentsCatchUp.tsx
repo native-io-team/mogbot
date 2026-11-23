@@ -386,7 +386,7 @@ function Preview({
   );
 }
 
-function Decision({
+export function Decision({
   item,
   onOpenChat,
   onLater,
@@ -422,14 +422,29 @@ function Decision({
   );
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // A key this card owns is the card's, even when it does nothing yet (Allow
+    // not armed): left to bubble, the same letter also opened the agent whose
+    // key it is (useAgentKeyShortcuts skips a handled press).
+    const claim = () => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
     const k = approvalKey(e.nativeEvent);
-    if (here && k === 'deny') void answer(false);
-    else if (here && k === 'allow' && armed) void answer(true);
-    else if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) {
+    if (here && k) {
+      claim();
+      if (k === 'deny') void answer(false);
+      else if (armed) void answer(true);
+    } else if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat) {
       const t = e.target as HTMLElement;
       if (t.closest('input, textarea')) return;
-      if (e.key.toLowerCase() === 'o') onOpenChat();
-      else if (e.key.toLowerCase() === 'l') onLater();
+      const key = e.key.toLowerCase();
+      if (key === 'o') {
+        claim();
+        onOpenChat();
+      } else if (key === 'l') {
+        claim();
+        onLater();
+      }
     }
   };
 

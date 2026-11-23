@@ -1418,10 +1418,13 @@ const ApprovalCardBody = memo(function ApprovalCard({
   const keys = pending && !noting && !compact && !skill;
   const onCardKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const which = approvalKey(event);
-    if (!which || busy) return;
-    if (which === 'allow' && (nothingToAllow || !armed)) return;
+    if (!which) return;
+    // The card's key even when it can't act yet (busy, not armed): left to
+    // bubble, A or D also opened the agent whose key that letter is.
     event.preventDefault();
     event.stopPropagation();
+    if (busy) return;
+    if (which === 'allow' && (nothingToAllow || !armed)) return;
     void answer(which === 'allow');
   };
   return (
