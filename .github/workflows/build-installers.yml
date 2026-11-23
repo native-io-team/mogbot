@@ -183,7 +183,12 @@ jobs:
           for f in $B/rpm/*.rpm; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.rpm"; done
           for f in $B/appimage/*.AppImage; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.AppImage"; done
           # Update bundles and their signatures, when the updater key was set.
+          # Every installer type updates from its own kind (latest.json names
+          # each one as <os>-<arch>-<bundle>), so each signature is kept.
           for f in $B/nsis/*-setup.exe.sig; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}-setup.exe.sig"; done
+          for f in $B/msi/*.msi.sig; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.msi.sig"; done
+          for f in $B/deb/*.deb.sig; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.deb.sig"; done
+          for f in $B/rpm/*.rpm.sig; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.rpm.sig"; done
           for f in $B/appimage/*.AppImage.sig; do cp "$f" "out/${NAME}_${VERSION}_${{ matrix.artifact }}.AppImage.sig"; done
           # Stable names too, so releases/latest/download/<name> always means
           # the newest one (like Mogbot.dmg on the Mac).

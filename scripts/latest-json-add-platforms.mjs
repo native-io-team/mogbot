@@ -27,11 +27,24 @@ if (!releases) {
   process.exit(1);
 }
 
-// Tauri's updater platform keys, and which bundle each one updates from.
+// Tauri's updater platform keys, and which bundle each one updates from. An
+// installed copy looks for `<os>-<arch>-<its installer>` first and only then
+// `<os>-<arch>`; with the plain key alone, a .deb, .rpm or .msi install was
+// handed the AppImage or the .exe, which its updater refuses (wrong format),
+// so those installs never updated. The plain keys stay for copies that report
+// no installer type.
 const TARGETS = [
   { key: 'windows-x86_64', artifact: 'windows-x86_64', suffix: '-setup.exe' },
+  { key: 'windows-x86_64-nsis', artifact: 'windows-x86_64', suffix: '-setup.exe' },
+  { key: 'windows-x86_64-msi', artifact: 'windows-x86_64', suffix: '.msi' },
   { key: 'linux-x86_64', artifact: 'linux-x86_64', suffix: '.AppImage' },
+  { key: 'linux-x86_64-appimage', artifact: 'linux-x86_64', suffix: '.AppImage' },
+  { key: 'linux-x86_64-deb', artifact: 'linux-x86_64', suffix: '.deb' },
+  { key: 'linux-x86_64-rpm', artifact: 'linux-x86_64', suffix: '.rpm' },
   { key: 'linux-aarch64', artifact: 'linux-aarch64', suffix: '.AppImage' },
+  { key: 'linux-aarch64-appimage', artifact: 'linux-aarch64', suffix: '.AppImage' },
+  { key: 'linux-aarch64-deb', artifact: 'linux-aarch64', suffix: '.deb' },
+  { key: 'linux-aarch64-rpm', artifact: 'linux-aarch64', suffix: '.rpm' },
 ];
 
 function walk(d) {

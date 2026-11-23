@@ -113,6 +113,13 @@ another one: the build replaces the `.app` that release is about to staple.
 - `latest.json` has one platform for an Apple Silicon build
   (`darwin-aarch64`); an Intel Mac finds no entry and reports no update. A
   `--universal` build lists both.
+- Windows and Linux entries come from the `build-installers.yml` run
+  (`scripts/latest-json-add-platforms.mjs`). Each installer kind has its own
+  entry (`windows-x86_64-nsis`, `-msi`; `linux-<arch>-appimage`, `-deb`,
+  `-rpm`), because an installed copy asks for its own kind first and refuses
+  another format. The plain `windows-x86_64` / `linux-<arch>` keys stay as the
+  fallback (the `.exe` and the AppImage). `--publish` refuses a release that
+  is missing any of them.
 
 ## The update key
 
