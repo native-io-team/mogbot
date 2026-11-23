@@ -239,14 +239,43 @@ fn save_one(
     })
 }
 
+/// An image the chat draws, and so one the user can place among their words
+/// as `[Image N]`: the same list as the composer's `isImageMime`.
+pub fn is_shown_image(mime: &str) -> bool {
+    matches!(
+        mime,
+        "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/svg+xml"
+    )
+}
+
+/// `[Image N] ` for the message's Nth shown image, in the order attached;
+/// empty for anything else. The composer writes the same label into the
+/// words where the user put that image (`src/lib/inlineImages.ts`).
+pub fn image_labels(attachments: &[Attachment]) -> Vec<String> {
+    let mut n = 0;
+    attachments
+        .iter()
+        .map(|a| {
+            if is_shown_image(&a.mime) {
+                n += 1;
+                format!("[Image {n}] ")
+            } else {
+                String::new()
+            }
+        })
+        .collect()
+}
+
 /// The lines appended to the prompt so the agent knows what it was handed.
 pub fn prompt_block(home: &Path, attachments: &[Attachment]) -> String {
     if attachments.is_empty() {
         return String::new();
     }
+    let labels = image_labels(attachments);
     let lines = attachments
         .iter()
-        .map(|a| {
+        .zip(&labels)
+        .map(|(a, label)| {
             let kind = if a.mime.starts_with("image/") {
                 " (image)"
             } else if a.mime == "application/pdf" {
@@ -254,11 +283,16 @@ pub fn prompt_block(home: &Path, attachments: &[Attachment]) -> String {
             } else {
                 ""
             };
-            format!("- {}{kind}", home.join(&a.path).display())
+            format!("- {label}{}{kind}", home.join(&a.path).display())
         })
         .collect::<Vec<_>>()
         .join("\n");
-    format!("[Attached, read them with the Read tool:\n{lines}]")
+    let placed = if labels.iter().any(|l| !l.is_empty()) {
+        "; an [Image N] in the message marks where that image belongs"
+    } else {
+        ""
+    };
+    format!("[Attached, read them with the Read tool{placed}:\n{lines}]")
 }
 
 /// An attachment's absolute path, only if it really is one: a relative path
@@ -494,10 +528,20 @@ mod tests {
         // Two pastes with the same name both survive.
         assert_eq!(saved[2].name, "image 2.png");
         let prompt = prompt_block(home.path(), &saved);
+        // Images are numbered among images only, as the composer's [Image N].
         assert!(prompt.contains(&format!(
-            "- {} (image)",
+            "- [Image 1] {} (image)",
             home.path().join("attachments/m1/image.png").display()
         )));
+        assert!(prompt.contains(&format!(
+            "- [Image 2] {} (image)",
+            home.path().join("attachments/m1/image 2.png").display()
+        )));
+        assert!(prompt.contains(&format!(
+            "- {} (PDF)",
+            home.path().join("attachments/m1/spec.pdf").display()
+        )));
+        assert!(prompt.contains("an [Image N] in the message marks where that image belongs"));
         assert!(prompt.contains("spec.pdf (PDF)"));
     }
 

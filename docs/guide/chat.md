@@ -23,6 +23,10 @@ Hover a message and one quiet **⋯** appears beside it, level with its first li
 
 On the desk the box is a softly rounded rectangle whose corners match its buttons, and on the phone it is a round bar. On the desk it is one row: a **+** (attach files) on the left, your words, then the mic and Send on the right. Once your words wrap, or in a narrow box such as a project's Session panel, the words take the whole width and the +, the mic and Send sit in a row under them. The model isn't in the box: click the agent's name at the top, then **Next turn**. Send is your bubble's colour on the same chrome as the other buttons (a fine border and a soft shadow): a muted arrow while the box is empty, lit once there is something to send, and a stop square while your agent is working and the box is empty; Stop stops the turn. On the phone, change the model from **Model and controls** in the ⋯ menu.
 
+### Pictures in the middle of what you say
+
+Paste, drop or attach a picture (PNG, JPG, GIF, WebP or SVG) and it goes into your words as **[Image 1]** where the caret is, the way a terminal does it; the next is **[Image 2]**, and you can add up to ten files. Each picture's chip above the box carries the same number. Delete the marker (Backspace takes all of it) and the picture goes with it; remove the chip and its marker goes too, and the others are numbered again so they stay 1, 2, 3. If you haven't clicked into the box yet, a dropped picture goes after your words. Once sent, each picture sits inside your message at the place you put it, and the agent is told which file is which image. Other files (a PDF, a spreadsheet) still sit above your message. This works in a chat, a room and Quick entry. On the phone your pictures still sit above the message for now.
+
 Send something while it is working and it waits its turn. Under your message you see **Next**, and **Send now** if you'd rather it stop and read yours straight away. The agent's one working line sits below; that is all the chat says about it.
 
 ## A page above the chat

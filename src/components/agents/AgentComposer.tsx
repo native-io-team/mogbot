@@ -32,6 +32,7 @@ import type { ReplyRef } from '../../lib/replyTo';
 import { AgentSecretHint } from './AgentSecretHint';
 import { useMentionPicker } from './AgentMentions';
 import type { DraftAttachment } from './useComposerAttachments';
+import { useInlineImages } from './useInlineImages';
 import { sortAgents, type Agent, type ResultRef } from '../../lib/agents';
 import { getAgentsSnapshot } from '../../lib/agentsStore';
 import { setComposerDraft, useComposerDraft } from '../../lib/composerDraft';
@@ -214,6 +215,14 @@ export const AgentComposer = memo(function AgentComposer({
     return [...mentionSet].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   }, [mentionSet, draft]); // eslint-disable-line react-hooks/exhaustive-deps -- `draft`: re-read the order as you type
   const mentionPicker = useMentionPicker(mentionable, inputRef, setDraft);
+  // A new image goes in as [Image N] where the caret is (lib/inlineImages).
+  const inline = useInlineImages({
+    inputRef,
+    items: staged,
+    draft,
+    setDraft,
+    remove: onRemoveStaged,
+  });
 
   // While it works and you've typed: ↵ queues, ⌘↵ interrupts. Said in a
   // quiet caption under the box until you've used both a few times
@@ -335,7 +344,7 @@ export const AgentComposer = memo(function AgentComposer({
       <ComposerEditing text={editing} code={editingCode} onCancel={() => onCancelEditing?.()} />
       <ComposerRevising revising={revising} onRemove={onClearRevising} />
       <ComposerQuotes quotes={quotes} onRemove={onRemoveQuote} />
-      <ComposerAttachments items={staged} onRemove={onRemoveStaged} />
+      <ComposerAttachments items={staged} onRemove={inline.removeItem} />
       <TextArea
         ref={inputRef}
         className="agent-composer__input"
@@ -344,7 +353,7 @@ export const AgentComposer = memo(function AgentComposer({
         placeholder={dictating ? '' : narrow ? 'Message' : `Message ${agentName}`}
         readOnly={dictating}
         onChange={(e) => {
-          setDraft(e.target.value);
+          inline.onChange(e.target.value, e.target.selectionStart);
           mentionPicker.sync();
         }}
         onSelect={mentionPicker.sync}
@@ -352,6 +361,7 @@ export const AgentComposer = memo(function AgentComposer({
         onKeyDown={(e) => {
           if (dictation.onComposerKeyDown(e, () => !blank && sendFromHere(e.metaKey))) return;
           if (mentionPicker.onKeyDown(e)) return;
+          if (inline.onKeyDown(e)) return;
           if (
             e.key === 'ArrowUp' &&
             !e.shiftKey &&

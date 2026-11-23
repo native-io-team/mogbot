@@ -59,6 +59,7 @@ import {
   useFileDrop,
   type DraftAttachment,
 } from './useComposerAttachments';
+import { useInlineImages } from './useInlineImages';
 import { useArrivals, useFollowBottom, usePresence } from './useAgentMotion';
 import {
   AgentBubble,
@@ -815,6 +816,13 @@ function RoomComposer({
   // @ offers the room's members and @everyone, nobody else.
   const mentionable = useMemo(() => [...members, everyoneEntry(members.length)], [members]);
   const mentionPicker = useMentionPicker(mentionable, inputRef, setDraft);
+  const inline = useInlineImages({
+    inputRef,
+    items: staged,
+    draft,
+    setDraft,
+    remove: attachments.remove,
+  });
   const to: Addressed = addressed(draft, members, room.lead);
   // Quiet while the mention menu is up: who answers is still being picked.
   const toLine =
@@ -836,7 +844,7 @@ function RoomComposer({
       }}
     >
       {mentionPicker.menu}
-      <ComposerAttachments items={staged} onRemove={attachments.remove} />
+      <ComposerAttachments items={staged} onRemove={inline.removeItem} />
       <TextArea
         ref={inputRef}
         className="agent-composer__input"
@@ -851,7 +859,7 @@ function RoomComposer({
         }
         readOnly={dictating}
         onChange={(e) => {
-          setDraft(e.target.value);
+          inline.onChange(e.target.value, e.target.selectionStart);
           mentionPicker.sync();
           if (asking) setAsking(false);
         }}
@@ -860,6 +868,7 @@ function RoomComposer({
         onKeyDown={(e) => {
           if (dictation.onComposerKeyDown(e, () => onSend())) return;
           if (mentionPicker.onKeyDown(e)) return;
+          if (inline.onKeyDown(e)) return;
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             onSend();

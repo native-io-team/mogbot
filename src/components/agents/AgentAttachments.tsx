@@ -5,7 +5,7 @@
  * @module components/agents/AgentAttachments
  */
 
-import { useCallback, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { CloseIcon, FileIcon, FileTextIcon, FolderOpenIcon, ImageIcon } from '@/components/icons';
 import { IconButton } from '../primitives/IconButton';
 import { GalleryLightbox, imagesOf, useImageViewer } from './AgentGallery';
@@ -19,6 +19,7 @@ import {
   type Attachment,
 } from '../../lib/agents';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { imagesIn, notPlaced, placedImages, splitAtImages } from '../../lib/inlineImages';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import type { DraftAttachment } from './useComposerAttachments';
 
@@ -42,47 +43,69 @@ interface ComposerAttachmentsProps {
   items: DraftAttachment[];
   /** Absent once they're on their way (a message still sending shows them as they were). */
   onRemove?: (id: string) => void;
+  /** Each image's number, as its [Image N] says. Off for a sending message's leftovers. */
+  numbered?: boolean;
 }
 
 /** Staged files above the text, each removable until it's sent. */
-export function ComposerAttachments({ items, onRemove }: ComposerAttachmentsProps) {
+export function ComposerAttachments({
+  items,
+  onRemove,
+  numbered = true,
+}: ComposerAttachmentsProps) {
   if (items.length === 0) return null;
+  // Image N is the Nth image, as its [Image N] in the words says.
+  const images = numbered ? imagesIn(items) : [];
   return (
     <ul className="agent-composer__attachments" aria-label="Attached files">
-      {items.map((item) => (
-        <li
-          key={item.id}
-          className="agent-attachment-chip"
-          data-kind={item.previewUrl ? 'image' : 'file'}
-          title={`${item.name} · ${formatBytes(item.size)}`}
-        >
-          {item.previewUrl ? (
-            <img className="agent-attachment-chip__thumb" src={item.previewUrl} alt={item.name} />
-          ) : (
-            <>
-              <span className="agent-attachment-chip__glyph" aria-hidden>
-                <FileGlyph mime={item.mime} />
-              </span>
-              <span className="agent-attachment-chip__text">
-                <span className="agent-attachment-chip__name">{item.name}</span>
-                <span className="agent-attachment-chip__meta">
-                  {kindLabel(item.name)} · {formatBytes(item.size)}
+      {items.map((item) => {
+        const n = images.indexOf(item) + 1;
+        return (
+          <li
+            key={item.id}
+            className="agent-attachment-chip"
+            data-kind={item.previewUrl ? 'image' : 'file'}
+            title={`${n ? `Image ${n} · ` : ''}${item.name} · ${formatBytes(item.size)}`}
+          >
+            {item.previewUrl ? (
+              <>
+                <img
+                  className="agent-attachment-chip__thumb"
+                  src={item.previewUrl}
+                  alt={n ? `Image ${n}: ${item.name}` : item.name}
+                />
+                {n > 0 && (
+                  <span className="agent-attachment-chip__number" aria-hidden>
+                    {n}
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="agent-attachment-chip__glyph" aria-hidden>
+                  <FileGlyph mime={item.mime} />
                 </span>
-              </span>
-            </>
-          )}
-          {onRemove && (
-            <IconButton
-              variant="secondary"
-              size="compact"
-              className="agent-attachment-chip__remove"
-              icon={<CloseIcon size={12} />}
-              onClick={() => onRemove(item.id)}
-              aria-label={`Remove ${item.name}`}
-            />
-          )}
-        </li>
-      ))}
+                <span className="agent-attachment-chip__text">
+                  <span className="agent-attachment-chip__name">{item.name}</span>
+                  <span className="agent-attachment-chip__meta">
+                    {kindLabel(item.name)} · {formatBytes(item.size)}
+                  </span>
+                </span>
+              </>
+            )}
+            {onRemove && (
+              <IconButton
+                variant="secondary"
+                size="compact"
+                className="agent-attachment-chip__remove"
+                icon={<CloseIcon size={12} />}
+                onClick={() => onRemove(item.id)}
+                aria-label={`Remove ${item.name}`}
+              />
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -307,5 +330,75 @@ export function AttachmentLightbox({
       onIndex={setIndex}
       onClose={onClose}
     />
+  );
+}
+
+/**
+ * A message's pictures where its words put them (`[Image N]`, lib/inlineImages):
+ * `image(n)` draws image N there, `rest` / `restSending` are what the row
+ * above the words still shows, and `viewer` is the full-size view when the
+ * chat has none of its own.
+ */
+export function useBubbleImages(
+  agent: Agent,
+  text: string,
+  attachments: Attachment[],
+  sending?: DraftAttachment[]
+) {
+  const images = imagesIn(attachments);
+  const drafts = sending ? imagesIn(sending) : [];
+  const count = sending?.length ? drafts.length : images.length;
+  const placed = placedImages(text, count);
+  const { view, viewer } = useImageViewer(agent, () => imagesOf(agent.id, images));
+  const image = (n: number): ReactNode => {
+    if (sending?.length) {
+      const draft = drafts[n - 1];
+      return (
+        <span key={`image-${n}`} className="agent-bubble__image" data-sending="">
+          <img src={draft.previewUrl} alt={draft.name} />
+        </span>
+      );
+    }
+    const file = images[n - 1];
+    return (
+      <button
+        key={`image-${n}`}
+        type="button"
+        className="agent-bubble__image"
+        onClick={() => view(file)}
+        aria-label={`View ${file.name}`}
+        title={file.name}
+      >
+        <AttachmentImage agent={agent} attachment={file} />
+      </button>
+    );
+  };
+  return {
+    count,
+    image,
+    viewer,
+    rest: notPlaced(attachments, placed),
+    restSending: sending ? notPlaced(sending, placed) : undefined,
+  };
+}
+
+/** Words with the pictures put among them: each run of words drawn by `words`. */
+export function WordsWithImages({
+  text,
+  count,
+  image,
+  words,
+}: {
+  text: string;
+  count: number;
+  image: (n: number) => ReactNode;
+  words: (text: string, key: string) => ReactNode;
+}) {
+  return (
+    <>
+      {splitAtImages(text, count).map((segment, i) =>
+        segment.kind === 'image' ? image(segment.n) : words(segment.text, `words-${i}`)
+      )}
+    </>
   );
 }

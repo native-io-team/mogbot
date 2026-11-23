@@ -59,6 +59,26 @@
   object-fit: cover;
 }
 
+/* Image N's number, matching its [Image N] in the words. */
+.agent-attachment-chip__number {
+  position: absolute;
+  bottom: var(--spacing-3xs);
+  left: var(--spacing-3xs);
+  min-width: var(--spacing-lg);
+  height: var(--spacing-lg);
+  padding: 0 var(--spacing-3xs);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  line-height: var(--spacing-lg);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--text-primary);
+  background: var(--surface-control);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+}
+
 .agent-attachment-chip__glyph {
   display: flex;
   flex: 0 0 auto;
@@ -377,6 +397,52 @@
 .agent-bubble__quote + .agent-bubble__text,
 .agent-bubble__text + .agent-bubble__quote {
   margin-top: var(--spacing-xs);
+}
+
+/* A picture you put among your words ([Image N]): on a line of its own, at
+   the place in the message where you put it. */
+.agent-bubble__image {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: var(--spacing-xs) 0;
+  padding: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--surface-control);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  transition: border-color var(--transition-interaction-fast);
+}
+
+.agent-bubble__image:first-child {
+  margin-top: 0;
+}
+
+.agent-bubble__image:last-child {
+  margin-bottom: 0;
+}
+
+.agent-bubble__image[data-sending] {
+  cursor: default;
+}
+
+.agent-bubble__image:hover:not([data-sending]) {
+  border-color: var(--border-strong);
+}
+
+.agent-bubble__image:focus-visible {
+  outline: var(--border-width-emphasis) solid var(--focus-ring);
+  outline-offset: var(--spacing-3xs);
+}
+
+.agent-bubble__image img {
+  display: block;
+  /* A length, not a percentage: a percentage of a fit-content frame sized
+     the frame to the picture's own width and left a band beside it. */
+  max-width: var(--agents-attachment-image-max);
+  max-height: var(--agents-attachment-image-max);
+  object-fit: contain;
 }
 
 /* ----------------------------------------------------------- drop zone */
