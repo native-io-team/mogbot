@@ -72,6 +72,8 @@ export interface Prefs {
   voiceRecording: boolean;
   /** Settings → Error reports: this phone's crashes go to the Mac to report (lib/crash.ts `sendCrashes`). */
   errorReports: boolean;
+  /** Agents list sections folded on this phone (folder keys, "rooms"), as the desk's sidebar folds its own. */
+  folded: string[];
 }
 
 export const defaultPrefs: Prefs = {
@@ -80,6 +82,7 @@ export const defaultPrefs: Prefs = {
   textSize: 'default',
   voiceRecording: false,
   errorReports: true,
+  folded: [],
 };
 
 export const useApp = create<AppState>(() => ({

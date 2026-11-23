@@ -10,7 +10,16 @@ const FILE = 'prefs.json';
 export function readPrefs(saved: Partial<Prefs> | null | undefined): Prefs {
   const prefs = { ...defaultPrefs, ...saved };
   if (!Object.hasOwn(TEXT_SIZES, prefs.textSize)) prefs.textSize = defaultPrefs.textSize;
+  prefs.folded = Array.isArray(prefs.folded)
+    ? prefs.folded.filter((k): k is string => typeof k === 'string')
+    : defaultPrefs.folded;
   return prefs;
+}
+
+/** Fold a section of the agents list, or open it again. */
+export function toggleFolded(key: string) {
+  const folded = getApp().prefs.folded;
+  setPref('folded', folded.includes(key) ? folded.filter((k) => k !== key) : [...folded, key]);
 }
 
 export async function loadPrefs() {

@@ -58,6 +58,7 @@ import {
   unpair,
 } from '../../../lib/session';
 import { setApp, useApp } from '../../../lib/store';
+import { toggleFolded } from '../../../lib/prefs';
 import { asOverview } from '../../../lib/wellFormed';
 import { useRefresh } from '../../../lib/refresh';
 import { RefreshStatus } from '../../../components/RefreshStatus';
@@ -66,6 +67,7 @@ import {
   keySize,
   chromeScale,
   depthOf,
+  fonts,
   iconSize,
   PRESSED,
   radius,
@@ -75,7 +77,7 @@ import { makeStyles, useColors } from '../../../lib/appearance';
 import { useComputer } from '../../../lib/computer';
 
 type Row =
-  | { kind: 'header'; key: string; title: string }
+  | { kind: 'header'; key: string; title: string; fold?: string; folded?: boolean }
   | { kind: 'agent'; key: string; agent: Agent; quiet?: boolean }
   | { kind: 'room'; key: string; room: RoomView }
   | { kind: 'hidden'; key: string; count: number };
@@ -207,6 +209,7 @@ export default function Agents() {
   }, []);
 
   const teamSetup = useApp((s) => s.teamSetup);
+  const folded = useApp((s) => s.prefs.folded);
   const rows = useMemo<Row[]>(() => {
     // A Mac that removed this phone shows nothing of its agents: only the way back.
     if (!overview || removed) return [];
@@ -219,25 +222,43 @@ export default function Agents() {
     // With Rooms below, the agents get their own label. Offline, when it last heard
     // is the connection bar's to say, once. No "3 working" line: each key says
     // whether its agent works, is free or needs you.
+    // Rooms and each titled folder fold on a tap, as on the desk; this phone remembers which.
+    const shut = new Set(folded);
     if (rooms?.length) out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
     if (home.chief) add(home.chief);
     // In the folders made on the Mac, when there are any (the desk's sidebar).
     for (const section of homeSections(home, overview.folders)) {
+      const sectionShut = !!section.title && shut.has(section.key);
       if (section.title)
-        out.push({ kind: 'header', key: `h-${section.key}`, title: section.title });
-      section.agents.forEach(add);
+        out.push({
+          kind: 'header',
+          key: `h-${section.key}`,
+          title: section.title,
+          fold: section.key,
+          folded: sectionShut,
+        });
+      if (!sectionShut) section.agents.forEach(add);
     }
     const hidden = home.hidden;
     if (rooms?.length) {
-      out.push({ kind: 'header', key: 'h-rooms', title: 'Rooms' });
-      for (const room of sortRooms(rooms)) out.push({ kind: 'room', key: `room:${room.id}`, room });
+      const roomsShut = shut.has('rooms');
+      out.push({
+        kind: 'header',
+        key: 'h-rooms',
+        title: 'Rooms',
+        fold: 'rooms',
+        folded: roomsShut,
+      });
+      if (!roomsShut)
+        for (const room of sortRooms(rooms))
+          out.push({ kind: 'room', key: `room:${room.id}`, room });
     }
     if (hidden.length) {
       out.push({ kind: 'hidden', key: 'hidden', count: hidden.length });
       if (showHidden) hidden.forEach(add);
     }
     return out;
-  }, [overview, showHidden, removed, live, rooms, teamSetup]);
+  }, [overview, showHidden, removed, live, rooms, teamSetup, folded]);
 
   const flash = useCallback((text: string, run?: () => void) => {
     const entry = { text, run: run ?? (() => {}) };
@@ -375,6 +396,8 @@ export default function Agents() {
             live={live}
             first={index === 0}
             underCard={index === 0 && glanceShown}
+            fold={item.fold}
+            folded={item.folded}
           />
         ) : item.kind === 'hidden' ? (
           <Pressable
@@ -484,7 +507,8 @@ export default function Agents() {
 
 /**
  * "NEEDS YOU", or "AGENTS · AS OF 4 MIN AGO" when the Mac isn't answering,
- * with an optional text action at the right.
+ * with an optional text action at the right. A folder's or Rooms' label folds
+ * the rows under it on a tap: name left, chevron right, as on the desk.
  */
 function SectionHeader({
   title,
@@ -492,6 +516,8 @@ function SectionHeader({
   first,
   underCard = false,
   action,
+  fold,
+  folded = false,
 }: {
   title: string;
   live: boolean;
@@ -499,6 +525,9 @@ function SectionHeader({
   /** Straight under the usage card, whose room below already holds its shadow. */
   underCard?: boolean;
   action?: ReactNode;
+  /** The section's key in `prefs.folded`: set, the label is a fold button. */
+  fold?: string;
+  folded?: boolean;
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -506,20 +535,47 @@ function SectionHeader({
   useNow(30_000);
   const asOf = useApp((s) => (s.link.kind === 'refused' ? s.syncedAt : null));
   const label = live || !asOf ? title : `${title} · as of ${formatAgo(asOf)}`;
-  return (
-    // A label belongs to the rows under it: close below, a clear gap above.
-    <View
-      style={[styles.section, !first && styles.sectionNext, underCard && styles.sectionUnderCard]}
+  const place = [
+    styles.section,
+    !first && styles.sectionNext,
+    underCard && styles.sectionUnderCard,
+  ];
+  const text = (
+    <T
+      variant="small"
+      color={colors.textSecondary}
+      style={styles.sectionLabel}
+      maxFontSizeMultiplier={chromeScale}
+      accessibilityRole={fold ? undefined : 'header'}
     >
-      <T
-        variant="caption"
-        color={colors.textMuted}
-        style={styles.sectionLabel}
-        maxFontSizeMultiplier={chromeScale}
-        accessibilityRole="header"
+      {label}
+    </T>
+  );
+  if (fold) {
+    return (
+      // A label belongs to the rows under it: close below, a clear gap above.
+      <Pressable
+        onPress={() => {
+          tap();
+          toggleFolded(fold);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ expanded: !folded }}
+        style={({ pressed }) => [...place, pressed && PRESSED]}
       >
-        {label}
-      </T>
+        {text}
+        <Icon
+          name={folded ? 'chevron.right' : 'chevron.down'}
+          size={iconSize.inline}
+          color={colors.textMuted}
+        />
+      </Pressable>
+    );
+  }
+  return (
+    <View style={place}>
+      {text}
       {action}
     </View>
   );
@@ -630,7 +686,7 @@ const useStyles = makeStyles((colors) => ({
     paddingTop: space.lg,
     paddingBottom: space.xs,
   },
-  sectionLabel: { flex: 1 },
+  sectionLabel: { flex: 1, fontFamily: fonts.medium },
   sectionNext: { paddingTop: space.xl },
   sectionUnderCard: { paddingTop: 0 },
   // The card's shadow reaches well past it. On iOS the list's header ends at

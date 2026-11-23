@@ -4,10 +4,11 @@
  */
 
 import type { RoomView, WelcomeFrame } from '@shipstudio/companion-protocol';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
 import Agents from '../src/app/(tabs)/agents/index';
-import { setApp } from '../src/lib/store';
+import { defaultPrefs, setApp } from '../src/lib/store';
+import { readPrefs } from '../src/lib/prefs';
 import { agent } from './helpers';
 
 jest.mock('expo-router', () => ({
@@ -73,6 +74,7 @@ function state(features: string[] | undefined) {
     } as unknown as WelcomeFrame,
     rooms: [room],
     chats: {},
+    prefs: defaultPrefs,
   });
 }
 
@@ -90,4 +92,43 @@ it('shows no rooms from a Mac that doesn’t say it does them', async () => {
   expect(screen.queryByText('Rooms')).toBeNull();
   expect(screen.queryByText('Month end')).toBeNull();
   expect(screen.getByText('Finance')).toBeTruthy();
+});
+
+it('folds Rooms on a tap and opens them again', async () => {
+  state(['rooms']);
+  await render(<Agents />);
+  await fireEvent.press(screen.getByLabelText('Rooms'));
+  expect(screen.queryByText('Month end')).toBeNull();
+  expect(screen.getByText('Finance')).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Rooms'));
+  expect(screen.getByText('Month end')).toBeTruthy();
+});
+
+it('folds a folder made on the Mac, leaving the others open', async () => {
+  state(['rooms']);
+  setApp({
+    overview: {
+      agents: [
+        { ...finance, folder: 'f1', pinned: false },
+        { ...ops, pinned: false },
+      ],
+      folders: { folders: [{ id: 'f1', name: 'Clients' }] },
+      engineReady: true,
+      engines: [],
+    } as never,
+  });
+  await render(<Agents />);
+  expect(screen.getByText('Finance')).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Clients'));
+  expect(screen.queryByText('Finance')).toBeNull();
+  expect(screen.getByText('Ops')).toBeTruthy();
+});
+
+it('keeps only names in the saved folds', () => {
+  expect(readPrefs({ folded: ['rooms', 3, 'folder:f1'] as never }).folded).toEqual([
+    'rooms',
+    'folder:f1',
+  ]);
+  expect(readPrefs({ folded: 'rooms' as never }).folded).toEqual([]);
+  expect(readPrefs(null).folded).toEqual([]);
 });
