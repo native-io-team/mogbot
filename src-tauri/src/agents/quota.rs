@@ -237,7 +237,11 @@ pub fn merge(known: &mut Vec<Quota>, reading: Quota, now: i64) {
 /// 77%, then 78% (issue #13). Within one window (the same reset, to the
 /// second or so) usage never goes down, so a lower figure for it keeps the
 /// higher one already known; a new window (a later reset) starts afresh.
+/// Only a small step back is a disagreement: a bigger drop is real (the
+/// provider refilled early and kept the reset time, as OpenAI did for Codex:
+/// a beta tester's account then read 100% until the old reset).
 const SAME_RESET_MS: i64 = 60 * 1000;
+const WOBBLE_POINTS: f64 = 2.0;
 
 fn hold_peak(known: &[QuotaWindow], new: &mut [QuotaWindow], now: i64) {
     for w in new.iter_mut() {
@@ -252,6 +256,7 @@ fn hold_peak(known: &[QuotaWindow], new: &mut [QuotaWindow], now: i64) {
                     .is_some_and(|r| (r - reset).abs() < SAME_RESET_MS)
             })
             .filter_map(|k| k.used_percent)
+            .filter(|&k| k - used <= WOBBLE_POINTS)
             .fold(used, f64::max);
         w.used_percent = Some(peak);
     }
@@ -394,6 +399,35 @@ mod tests {
         let next = reset + 7 * 24 * HOUR_MS;
         merge(&mut known, q(w(2.0, next)), NOW);
         assert_eq!(known[0].windows[0].used_percent, Some(2.0));
+    }
+
+    #[test]
+    fn an_early_refill_with_the_same_reset_is_taken() {
+        // A beta tester's Codex read 100% after OpenAI refilled it early:
+        // the refill kept the reset time, and the held peak hid the drop.
+        let w = |used: f64, reset: i64| QuotaWindow {
+            kind: "primary".into(),
+            used_percent: Some(used),
+            resets_at: Some(reset),
+            window_minutes: Some(300),
+            limited: used >= 100.0,
+            observed_at: NOW,
+        };
+        let q = |win: QuotaWindow| Quota {
+            engine: Engine::Codex,
+            windows: vec![win],
+            plan: None,
+        };
+        let reset = NOW + 2 * HOUR_MS;
+        let mut known = Vec::new();
+        merge(&mut known, q(w(100.0, reset)), NOW);
+        merge(&mut known, q(w(0.0, reset)), NOW);
+        assert_eq!(known[0].windows[0].used_percent, Some(0.0));
+        assert_eq!(limited_until(&known, Engine::Codex, NOW), None);
+        // A one-point step back is still held.
+        merge(&mut known, q(w(40.0, reset)), NOW);
+        merge(&mut known, q(w(39.0, reset)), NOW);
+        assert_eq!(known[0].windows[0].used_percent, Some(40.0));
     }
 
     #[test]
