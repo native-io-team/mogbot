@@ -1280,6 +1280,9 @@ pub async fn agents_update(
     if let Some(direct) = input.work_directly {
         let id = agent_id.clone();
         blocking(move || agents::policy::set_direct(&id, direct)).await?;
+        // Its open copy's work goes into the project (at its turn's end if
+        // one is running).
+        agents::task::bring_in_waiting(&app);
     }
     // The name and role are written into CLAUDE.md's heading, so any change
     // to them (or the instructions) rewrites it — memory is preserved.
@@ -2208,6 +2211,8 @@ pub async fn agents_policy_set(
         let app = app.clone();
         let _ = blocking(move || Ok(agents::mcp::sweep_auto_allowed(&app))).await;
     }
+    // Switched to work directly: an open copy's work goes into the project.
+    agents::task::bring_in_waiting(&app);
     emit_registry(&app);
     let _ = app.emit(agents::policy_card::EVENT, ());
     Ok(())

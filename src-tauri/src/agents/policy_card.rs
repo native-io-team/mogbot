@@ -21,9 +21,14 @@
 //!   narrowed or taken away on the same card ([`GrantChange`]): giving one
 //!   or widening it is a card; taking it away or down to read applies with a
 //!   line. No sign-in happens here, and no token is seen.
-//! - **Nothing that strands work.** A change that would leave an open copy's
-//!   work or the project an agent is set to work in out of reach is refused
-//!   up front, with the step to take first (`policy::blocker`).
+//! - **Nothing that strands work.** A change that would leave the project an
+//!   agent is set to work in out of reach is refused up front, with the step
+//!   to take first (`policy::blocker`). An open copy doesn't: switched to
+//!   work directly, its work goes into the project (`task::bring_in`).
+//! - **"Work in my real folder", said by the user.** An agent asked in the
+//!   user's own message to work in its project itself rather than its copy
+//!   switches with no card ([`own_folder_only`]): the folder is already its
+//!   own project, so nothing new is reached.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1116,6 +1121,42 @@ fn offer(app: &AppHandle, caller: &Agent, proposal: Proposal, agents: &[Agent]) 
         agents,
         super::independence::level(),
     );
+    // The user's own message asked it to work in its project itself.
+    if !lowers
+        && runner::users_own_ask(&caller.id)
+        && own_folder_only(
+            caller,
+            &proposal,
+            &policy::load(),
+            agents,
+            super::independence::level(),
+        )
+    {
+        return match apply_proposal(&proposal) {
+            Ok(_) => {
+                let folder = caller
+                    .project
+                    .as_deref()
+                    .map(super::project::folder_name)
+                    .unwrap_or_default()
+                    .to_string();
+                let _ = runner::record(
+                    app,
+                    runner::new_message(
+                        &caller.id,
+                        MessageKind::Note,
+                        format!("Settings changed: works directly in {folder}, not a copy"),
+                    ),
+                );
+                let _ = app.emit(runner::EVENT_REGISTRY, ());
+                let _ = app.emit(EVENT, ());
+                text(format!(
+                    "Done, without a card: the user asked for it. From your next turn you work directly in {folder}. This turn stays in your copy, and everything you changed in it goes into {folder} when this turn ends, so carry on with what they asked here. Say in one line that from now on you work in their folder itself."
+                ))
+            }
+            Err(e) => error(e),
+        };
+    }
     if lowers {
         return match apply_proposal(&proposal) {
             Ok(applied) => {
@@ -1164,6 +1205,48 @@ fn offer(app: &AppHandle, caller: &Agent, proposal: Proposal, agents: &[Agent]) 
     text(format!(
         "A card is in this chat for the user to allow:\n{lines}\nNothing has changed yet. Say in one line what you proposed and stop; you'll be told when they answer."
     ))
+}
+
+/// Whether `p` only moves the caller itself from its own copy to working
+/// directly in its project: one target, itself; no level, team default,
+/// grant or switch of this Mac; and for it nothing else changes.
+pub fn own_folder_only(
+    caller: &Agent,
+    p: &Proposal,
+    saved: &Saved,
+    agents: &[Agent],
+    level: Level,
+) -> bool {
+    if p.mac.is_some() || !p.grants.is_empty() || caller.project.is_none() {
+        return false;
+    }
+    if !matches!(p.targets.as_slice(), [Target::Agent { agent_id }] if *agent_id == caller.id) {
+        return false;
+    }
+    let Ok((after, new_level)) = simulate(saved, &p.targets, &p.change, level) else {
+        return false;
+    };
+    if new_level != level || after.team != saved.team {
+        return false;
+    }
+    let mut moved = false;
+    for a in agents {
+        let b = policy::resolve(saved, a, level);
+        let mut x = policy::resolve(&after, a, new_level);
+        if b == x {
+            continue;
+        }
+        if a.id != caller.id || b.projects.how != How::Copy || x.projects.how != How::Direct {
+            return false;
+        }
+        x.projects.how = How::Copy;
+        x.own = b.own.clone();
+        if b != x {
+            return false;
+        }
+        moved = true;
+    }
+    moved
 }
 
 /// Whether `p` only lowers independence: every agent it changes differs in
@@ -1493,3 +1576,7 @@ mod agent_level_tests;
 #[cfg(test)]
 #[path = "settings_chat_tests.rs"]
 mod settings_chat_tests;
+
+#[cfg(test)]
+#[path = "own_folder_tests.rs"]
+mod own_folder_tests;

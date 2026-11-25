@@ -1224,8 +1224,19 @@ pub async fn keep_copy(
     .await
     .map(|s| lines(&s).len() as u32)
     .unwrap_or(0);
-    let ff = git(project, &["merge", "--ff-only", "-q", &copy.branch]).await?;
+    // What the project already has exactly as these changes have it (the
+    // same file copied in, the same edit made by hand) can't be lost by
+    // taking them: set aside so git doesn't refuse, put back if it does.
+    let aside = set_aside_identical(project, &target, &copy.branch).await;
+    let ff = match git(project, &["merge", "--ff-only", "-q", &copy.branch]).await {
+        Ok(ff) => ff,
+        Err(e) => {
+            put_back(&aside);
+            return Err(e);
+        }
+    };
     if !ff.status.success() {
+        put_back(&aside);
         let stderr = String::from_utf8_lossy(&ff.stderr).to_string();
         let touched: Vec<String> = stderr
             .lines()
@@ -1260,6 +1271,200 @@ pub async fn keep_copy(
         branch: target,
         left_out,
     })
+}
+
+/// Copies whose bringing in was refused (not an overlap: an error), by id.
+static TRIED: LazyLock<Mutex<std::collections::HashSet<String>>> = LazyLock::new(Default::default);
+
+/// A project file set aside for Keep, with what it held.
+struct Aside {
+    path: PathBuf,
+    bytes: Vec<u8>,
+}
+
+/// The files `branch` changes since `target` that the project holds, not
+/// saved in git, byte for byte as `branch` has them: a file of its own
+/// (untracked) is removed, an unsaved edit (modified, not staged) undone,
+/// so the fast-forward that writes the very same bytes isn't refused.
+/// Anything else (staged, deleted, a link, different bytes) is left alone
+/// and still stops Keep, naming it.
+async fn set_aside_identical(project: &Path, target: &str, branch: &str) -> Vec<Aside> {
+    let mut out = Vec::new();
+    let Some(names) = read(
+        project,
+        &["diff", "--name-only", "-z", &format!("{target}...{branch}")],
+    )
+    .await
+    else {
+        return out;
+    };
+    let Ok(st) = git(
+        project,
+        &["status", "--porcelain", "-z", "--untracked-files=all"],
+    )
+    .await
+    else {
+        return out;
+    };
+    let status = String::from_utf8_lossy(&st.stdout).to_string();
+    let mut states: HashMap<&str, &str> = HashMap::new();
+    let mut entries = status.split('\0');
+    while let Some(e) = entries.next() {
+        if e.len() < 4 {
+            continue;
+        }
+        let (xy, path) = (&e[..2], &e[3..]);
+        if xy.starts_with('R') || xy.starts_with('C') {
+            entries.next();
+        }
+        states.insert(path, xy);
+    }
+    for name in names.split('\0').filter(|n| !n.is_empty()) {
+        let Some(&xy) = states.get(name) else {
+            continue;
+        };
+        if xy != "??" && xy != " M" {
+            continue;
+        }
+        let file = project.join(name);
+        if !std::fs::symlink_metadata(&file).is_ok_and(|m| m.is_file()) {
+            continue;
+        }
+        let Some(want) = read(
+            project,
+            &["rev-parse", "--verify", "-q", &format!("{branch}:{name}")],
+        )
+        .await
+        else {
+            continue;
+        };
+        let Some(have) = read(project, &["hash-object", "--", name]).await else {
+            continue;
+        };
+        if have != want {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&file) else {
+            continue;
+        };
+        let cleared = if xy == "??" {
+            std::fs::remove_file(&file).is_ok()
+        } else {
+            git(project, &["checkout", "-q", "HEAD", "--", name])
+                .await
+                .is_ok_and(|o| o.status.success())
+        };
+        if cleared {
+            out.push(Aside { path: file, bytes });
+        }
+    }
+    out
+}
+
+/// Keep was refused after all: the files set aside go back as they were.
+fn put_back(aside: &[Aside]) {
+    for a in aside {
+        if let Err(e) = std::fs::write(&a.path, &a.bytes) {
+            tracing::warn!("[Agents] couldn't put {} back: {e}", a.path.display());
+        }
+    }
+}
+
+/// Set to work directly in its project while a copy of it is still open
+/// (the user asked it to work in the real folder): the copy's work goes into
+/// the project as Keep would bring it, and the copy goes, with a line in the
+/// chat. When it can't (an overlap, another branch), the copy stays with a
+/// line saying why, and its card's Keep and Discard still work. Callers make
+/// sure no turn of its is running in the copy (turn start, turn end, idle).
+pub async fn bring_in(app: &AppHandle, agent_id: &str) {
+    let Some(copy) = store::get(agent_id).ok().and_then(|a| waiting_copy(&a)) else {
+        return;
+    };
+    if super::runner::driven(agent_id) {
+        return;
+    }
+    let _guard = lock(&copy.project).await;
+    let Ok(agent) = store::get(agent_id) else {
+        return;
+    };
+    let Some(copy) = waiting_copy(&agent) else {
+        return;
+    };
+    let name = super::project::folder_name(&copy.project).to_string();
+    let kept = keep_copy(&copy, &agent.name, Some(agent.engine.label()), None).await;
+    let line = match &kept {
+        Ok(k @ (Kept::Kept { .. } | Kept::Nothing { .. })) => {
+            let done = kept_note(k, &name, &agent.name).unwrap_or_default();
+            format!("{done} · works directly in {name} now")
+        }
+        Ok(Kept::OtherBranch { current, base }) => format!(
+            "{}'s copy of {name} couldn't go into {name}: it was made from {}, and {name} is on {current} now. It's still there: Keep or Discard it on its card.",
+            agent.name,
+            base.as_deref().unwrap_or("another branch")
+        ),
+        Ok(other) => format!(
+            "{} It's still in the copy: Keep or Discard it on its card.",
+            kept_note(other, &name, &agent.name).unwrap_or_default()
+        ),
+        Err(e) => format!(
+            "{}'s copy of {name} couldn't go into {name}: {e} It's still there: Keep or Discard it on its card.",
+            agent.name
+        ),
+    };
+    let stuck = match &kept {
+        Ok(Kept::Kept { .. } | Kept::Nothing { .. }) | Err(_) => None,
+        Ok(blocked) => Some(blocked.clone()),
+    };
+    // Refused for another reason: not tried again on every turn (its card's
+    // Keep still is), until the app starts again.
+    if kept.is_err() {
+        TRIED
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(copy.id.clone());
+    }
+    let gone = matches!(kept, Ok(Kept::Kept { .. } | Kept::Nothing { .. }));
+    store::update(agent_id, |a| {
+        if gone {
+            a.copy = None;
+        } else if let Some(c) = a.copy.as_mut().filter(|c| c.id == copy.id) {
+            if stuck.is_some() {
+                c.stuck = stuck.clone();
+            }
+        }
+    })
+    .or_log("a copy brought into its project");
+    note(app, agent_id, line);
+    let _ = tauri::Emitter::emit(app, super::runner::EVENT_REGISTRY, ());
+}
+
+/// Its open copy of its own project, when it is set to work directly there
+/// and the copy hasn't already been tried and stopped.
+fn waiting_copy(agent: &store::Agent) -> Option<TaskCopy> {
+    let copy = agent.copy.as_ref()?;
+    let tried = TRIED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(&copy.id);
+    (agent.work_directly
+        && agent.project.as_deref() == Some(copy.project.as_str())
+        && copy.stuck.is_none()
+        && !tried
+        && Path::new(&copy.path).is_dir())
+    .then(|| copy.clone())
+}
+
+/// After a settings change: every agent now set to work directly whose copy
+/// is still open and isn't in a turn brings it in (a turn's own end does it
+/// for one that is).
+pub fn bring_in_waiting(app: &AppHandle) {
+    for agent in store::list().unwrap_or_default() {
+        if waiting_copy(&agent).is_none() || super::runner::in_turn(&agent.id) {
+            continue;
+        }
+        let (app, id) = (app.clone(), agent.id.clone());
+        tauri::async_runtime::spawn(async move { bring_in(&app, &id).await });
+    }
 }
 
 /* ------------------------------------------------------ the agent side */
@@ -1336,6 +1541,9 @@ pub async fn prepare(
     if store::get(agent_id)?.project.is_none() {
         return Ok(None);
     }
+    // Set to work directly since its copy was made: the copy's work goes
+    // into the project before this turn starts there.
+    bring_in(app, agent_id).await;
     let root = crate::utils::projects_root().map_err(super::err_other)?;
     let prepared = prepare_in(agent_id, request, &root, |activity| {
         super::runner::set_status(app, agent_id, super::runner::Status::working(activity));
@@ -2444,6 +2652,45 @@ mod tests {
             "the user's own untracked draft\n"
         );
         assert!(Path::new(&copy.path).is_dir());
+    }
+
+    /// The user's folder already has, unsaved, exactly what the copy made:
+    /// the same new file and the same edit. Nothing would be lost, so Keep
+    /// goes through and the folder ends with the copy's work, committed.
+    #[tokio::test]
+    async fn identical_unsaved_files_in_the_folder_dont_stop_keep() {
+        let (_d, root, repo) = project();
+        let copy = copy_of(&repo, &root, "Acme", "about page").await;
+        let dir = Path::new(&copy.path);
+        std::fs::write(dir.join("about.html"), "<h1>About</h1>\n").unwrap();
+        std::fs::write(dir.join("style.css"), "h1 { color: teal; }\n").unwrap();
+        std::fs::write(repo.join("about.html"), "<h1>About</h1>\n").unwrap();
+        std::fs::write(repo.join("style.css"), "h1 { color: teal; }\n").unwrap();
+        let kept = keep_it(&copy).await.unwrap();
+        assert!(matches!(kept, Kept::Kept { .. }), "{kept:?}");
+        assert_eq!(read_file(repo.join("about.html")), "<h1>About</h1>\n");
+        assert_eq!(read_file(repo.join("style.css")), "h1 { color: teal; }\n");
+        assert_eq!(sh(&repo, &["status", "--porcelain"]), "", "all committed");
+        assert!(!dir.is_dir(), "the copy is gone");
+    }
+
+    /// One file the same, one different: Keep still stops, names only the
+    /// different one, and the identical one is back exactly as it was.
+    #[tokio::test]
+    async fn a_different_file_still_stops_keep_and_the_same_one_is_put_back() {
+        let (_d, root, repo) = project();
+        let copy = copy_of(&repo, &root, "Acme", "two pages").await;
+        let dir = Path::new(&copy.path);
+        std::fs::write(dir.join("about.html"), "agent\n").unwrap();
+        std::fs::write(dir.join("team.html"), "agent team\n").unwrap();
+        std::fs::write(repo.join("about.html"), "agent\n").unwrap();
+        std::fs::write(repo.join("team.html"), "the user's own draft\n").unwrap();
+        let err = keep_it(&copy).await.unwrap_err().to_string();
+        assert!(err.contains("team.html"), "{err}");
+        assert!(!err.contains("about.html"), "{err}");
+        assert_eq!(read_file(repo.join("about.html")), "agent\n");
+        assert_eq!(read_file(repo.join("team.html")), "the user's own draft\n");
+        assert!(dir.is_dir(), "nothing lost: the copy stays");
     }
 
     /// A tracked `.shipstudio/project.json`: the copy's own port never

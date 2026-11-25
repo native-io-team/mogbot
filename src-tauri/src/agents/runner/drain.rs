@@ -620,6 +620,9 @@ pub(super) async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mu
         if let Some(copy) = &made {
             super::task::drop_if_unused(&app, &agent_id, copy).await;
         }
+        // Asked during this turn to work in the project itself: what it did
+        // in the copy goes into the project now, not at its next message.
+        super::task::bring_in(&app, &agent_id).await;
         // A turn that finished without a word (or left helpers behind) ends
         // on one line saying so, its timeline under it: never silence.
         let left = super::turn_end::take(&agent_id);

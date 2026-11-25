@@ -111,7 +111,8 @@ Good to know:
   changes nothing leaves no copy behind.
 - If your project has moved to a different branch, Keep tells you and offers to keep into the
   current one instead. If the changes overlap with yours, it stops and says so rather than
-  overwriting anything.
+  overwriting anything. Files your folder already has exactly as the agent made them (the same
+  file copied in, the same edit) don't stop it.
 - Files that look like secrets (like `.env` files) and very large files are never included, and
   the card lists what was left out.
 - The copy runs the same dev server you already allowed for the project, so picking an agent in a
@@ -120,8 +121,12 @@ Good to know:
 - Picking an agent in a project, or coming back to the project from Agents, starts its dev server
   if it isn't running, so the preview beside the chat is live.
 - Any number of agents can each have their own copy of a project. A copy needs at least 2 GB free on your computer.
-- To have an agent work straight in your folder instead, turn on **Work directly in the project**
-  in its editor.
+- To have an agent work straight in your folder instead, tell it in its chat ("work in the real
+  folder"), or turn on **Work directly in the project** in its editor. Asked in your own message,
+  it switches with no card. If it has a copy open, what it did there goes into your folder, as
+  Keep would bring it, and the copy goes. If that can't be done (the changes overlap with yours,
+  or your folder moved to another branch), the chat says why and the copy's card still has Keep
+  and Discard.
 - On the phone you can Keep or Discard. Preview and pull requests are on the computer.
 - When a task in a project asks something (a menu like Claude Code's folder trust or Bypass
   Permissions warning), the phone offers every answer, not only the one already highlighted.

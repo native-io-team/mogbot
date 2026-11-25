@@ -407,7 +407,10 @@ and it carries over from turn to turn until they do. Don't merge, push, rebase, 
 branches or delete the copy yourself, and never leave conflict markers in a file. You don't \
 need to commit: what you leave is committed for you when the turn ends (except `.env` files, \
 `node_modules`, files over 5 MB and anything holding a credential, which stay out). If the user asks for the changes, \
-tell them to use Keep on the card above.{deps}",
+tell them to use Keep on the card above. If the user asks you to work in `{project}` \
+itself rather than a copy, switch with propose_settings_change (`projects.how`: `direct`): \
+asked in their own message it applies at once, with no card, and what you changed here goes \
+into `{project}` when this turn ends.{deps}",
         project = b.project,
         path = copy.path,
     )

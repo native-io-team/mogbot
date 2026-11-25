@@ -970,7 +970,9 @@ fn a_change_that_strands_work_is_refused_first() {
         "id": "c1", "base": "abc", "createdAt": 0
     })).unwrap());
     let agents = vec![chief(), hiring.clone()];
-    let err = card::build(
+    // An open copy doesn't strand work any more: switched to work directly,
+    // its work is brought into the project (`task::bring_in`).
+    let p = card::build(
         &chief(),
         true,
         vec![Target::Agent {
@@ -984,9 +986,8 @@ fn a_change_that_strands_work_is_refused_first() {
         &saved,
         &agents,
         Level::Judgement,
-    )
-    .unwrap_err();
-    assert!(err.contains("Keep or discard"));
+    );
+    assert!(p.is_ok(), "{:?}", p.err());
     hiring.copy = None;
     let agents = vec![chief(), hiring.clone()];
     listed_marketing(&mut saved);

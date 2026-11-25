@@ -1143,6 +1143,15 @@ pub fn verdict(
             {
                 None
             }
+            (Reach::Read, true) if copy_only_reach(eff, &project, own) => {
+                Some(Verdict::Deny(format!(
+                    "You work in your own copy of {0}, so {0} itself isn't changed in place. If the user asked you to work in {0} itself, switch with propose_settings_change (projects.how: direct): asked in their own message it applies with no card, and what you changed in the copy goes into {0} when this turn ends.",
+                    project
+                        .file_name()
+                        .map(|n| n.to_string_lossy())
+                        .unwrap_or_default()
+                )))
+            }
             (Reach::Read, true) => Some(Verdict::Deny(format!(
                 "Your settings let you read {} but not change it in place. {ASK_LINE}",
                 project
@@ -1975,20 +1984,11 @@ pub fn apply(
 }
 
 /// What applying a change would do to an agent's working state that can't
-/// just be switched: an open copy with unkept work, or the project it's set
-/// to work in going out of reach.
+/// just be switched: the project it's set to work in going out of reach.
+///
+/// An open copy doesn't stop it working directly: its work is brought into
+/// the project when the switch lands (`task::bring_in`).
 pub fn blocker(agent: &Agent, after: &Effective) -> Option<String> {
-    if agent.copy.is_some() && agent.project.is_some() && after.projects.how != How::Copy {
-        let name = agent
-            .copy
-            .as_ref()
-            .map(|c| name_of(&c.project))
-            .unwrap_or_default();
-        return Some(format!(
-            "{} has a copy of {name} open with changes that haven't been kept. Keep or discard them first, then ask again.",
-            agent.name
-        ));
-    }
     own_refusal(after, agent).map(|_| {
         format!(
             "{} is set to work in {}, which this would take away. Move it to another project first, or keep that project in its list.",
