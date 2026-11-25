@@ -108,7 +108,7 @@ function savedLook(agents: readonly Agent[] | undefined, id: string | undefined)
       colorway: k.colorway,
       icon: k.icon,
       boundKey: k.boundKey ?? null,
-      independence: (agent.independence as AgentIndependence | undefined) ?? null,
+      independence: agent.independence ?? null,
     };
     looks.set(agent, look);
   }
