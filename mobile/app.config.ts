@@ -42,7 +42,7 @@ export const storeBuild = (env: Record<string, string | undefined> = process.env
  * number itself (`appVersionSource: remote`, `autoIncrement`); a local
  * archive passes COMPANION_BUILD_NUMBER.
  */
-export const APP_VERSION = '1.1.1';
+export const APP_VERSION = '1.1.2';
 /**
  * Who publishes the store build: the Apple team it signs with, and the
  * copyright line. A self-build signs with the user's own team (APPLE_TEAM_ID)
