@@ -64,6 +64,81 @@ fn what_is_stored_reads_back_the_same() {
 }
 
 #[test]
+fn choices_keep_a_description_and_one_recommended_option() {
+    let set = one(json!({ "kind": "choices", "question": "Which host?", "options": [
+        { "label": "Vercel", "description": "Fastest to set up; free for this size.", "recommended": true },
+        { "label": "Netlify", "description": "  " },
+        "Self-host"
+    ]}))
+    .unwrap();
+    let v = stored(&set);
+    let o = &v["items"][0]["options"];
+    assert_eq!(
+        o[0]["description"],
+        "Fastest to set up; free for this size."
+    );
+    assert_eq!(o[0]["recommended"], true);
+    assert!(
+        o[1].get("description").is_none(),
+        "blank descriptions are dropped"
+    );
+    assert!(o[2].get("recommended").is_none());
+    let back: BlockSet = serde_json::from_value(v.clone()).unwrap();
+    assert_eq!(back, set);
+    assert!(message_text(&set).contains("“Vercel” (recommended)"));
+    let e = one(json!({ "kind": "choices", "options": [
+        { "label": "A", "recommended": true }, { "label": "B", "recommended": true }
+    ]}))
+    .unwrap_err();
+    assert!(e.contains("only one of `options`"), "{e}");
+}
+
+#[test]
+fn choices_can_ask_up_to_four_questions_answered_together() {
+    let set = one(json!({ "kind": "choices", "questions": [
+        { "question": "Which host?", "header": "Host", "options": [
+            { "label": "Vercel", "recommended": true }, "Netlify"
+        ]},
+        { "question": "Which extras?", "header": " ", "multi": true, "options": ["Analytics", "Forms", "Auth"] }
+    ]}))
+    .unwrap();
+    let v = stored(&set);
+    let q = &v["items"][0]["questions"];
+    assert_eq!(q[0]["header"], "Host");
+    assert!(q[1].get("header").is_none(), "a blank header is dropped");
+    assert_eq!(q[1]["multi"], true);
+    assert_eq!(q[1]["options"][2]["reply"], "Auth");
+    // Left out, so a phone that knows only one question falls back to text.
+    assert!(v["items"][0].get("options").is_none());
+    let back: BlockSet = serde_json::from_value(v.clone()).unwrap();
+    assert_eq!(back, set);
+    let text = message_text(&set);
+    assert!(
+        text.contains("Which host?: “Vercel” (recommended) / “Netlify”"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Which extras? (pick any): “Analytics”"),
+        "{text}"
+    );
+
+    let both = one(
+        json!({ "kind": "choices", "options": ["A", "B"], "questions": [
+            { "question": "Q?", "options": ["A", "B"] }
+        ]}),
+    )
+    .unwrap_err();
+    assert!(both.contains("not both"), "{both}");
+    let five = json!({ "question": "Q?", "options": ["A", "B"] });
+    let e = one(json!({ "kind": "choices", "questions": [five.clone(), five.clone(), five.clone(), five.clone(), five] }))
+        .unwrap_err();
+    assert!(e.contains("`questions`"), "{e}");
+    let e =
+        one(json!({ "kind": "choices", "questions": [{ "options": ["A", "B"] }] })).unwrap_err();
+    assert!(e.contains("questions[0] has no `question`"), "{e}");
+}
+
+#[test]
 fn unknown_kinds_and_missing_kinds_are_refused_with_the_list() {
     let e = one(json!({ "kind": "map", "places": [] })).unwrap_err();
     assert!(

@@ -298,6 +298,7 @@ fn greet(agent_id: &str) {
         result: None,
         revises: None,
         reply_to: None,
+        answers: None,
         takeover: false,
         room: None,
         decide: Vec::new(),

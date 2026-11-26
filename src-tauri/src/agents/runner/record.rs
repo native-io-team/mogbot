@@ -353,6 +353,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         result: None,
         revises: None,
         reply_to: None,
+        answers: None,
         takeover: false,
         room: None,
         decide: Vec::new(),

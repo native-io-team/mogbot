@@ -109,7 +109,7 @@ describe('AgentBlocks', () => {
   it('a choice sends the user’s words once, then shows what was picked', () => {
     const { reply } = draw([choices]);
     fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
-    expect(reply.send).toHaveBeenCalledWith('Yes, ship it.');
+    expect(reply.send).toHaveBeenCalledWith('Yes, ship it.', agent.id, 'm1');
     expect(screen.queryByRole('button', { name: 'Not yet' })).toBeNull();
   });
 
@@ -119,11 +119,145 @@ describe('AgentBlocks', () => {
     expect(screen.getByText('Not yet')).toBeTruthy();
   });
 
+  it('options stack one per row, with a description and one Recommended', () => {
+    draw([
+      {
+        kind: 'choices',
+        summary: '',
+        question: 'Which host?',
+        options: [
+          {
+            label: 'Vercel',
+            reply: 'Vercel',
+            description: 'Fastest to set up.',
+            recommended: true,
+          },
+          { label: 'Netlify', reply: 'Netlify' },
+        ],
+      },
+    ]);
+    const group = screen.getByRole('group', { name: 'Which host?' });
+    const rows = within(group).getAllByRole('button');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      '1VercelRecommendedFastest to set up.',
+      '2Netlify',
+      '3OtherType your own answer',
+    ]);
+    expect(rows[0].hasAttribute('data-recommended')).toBe(true);
+  });
+
+  it('Other sends what you type, to the agent that asked', () => {
+    const { reply } = draw([choices]);
+    fireEvent.click(screen.getByRole('button', { name: /Other/ }));
+    const box = screen.getByRole('textbox', { name: 'Your answer' });
+    fireEvent.change(box, { target: { value: 'Ship it Monday.' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(reply.send).toHaveBeenCalledWith('Ship it Monday.', agent.id, 'm1');
+    expect(screen.getByText('Ship it Monday.')).toBeTruthy();
+  });
+
+  it('with no chat to answer in, the rows are off and say where to answer', () => {
+    render(<AgentBlocks messageId="m1" agent={agent} set={{ v: 1, items: [choices] }} />);
+    expect(screen.getByRole('button', { name: 'Yes' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(/agent's own chat/)).toBeTruthy();
+  });
+
+  it('several questions page one at a time and send one answer', () => {
+    const { reply } = draw([
+      {
+        kind: 'choices',
+        summary: '',
+        options: [],
+        questions: [
+          {
+            question: 'Which host?',
+            header: 'Host',
+            options: [
+              { label: 'Vercel', reply: 'Vercel', recommended: true },
+              { label: 'Netlify', reply: 'Netlify' },
+            ],
+          },
+          {
+            question: 'Which extras?',
+            header: 'Extras',
+            multi: true,
+            options: [
+              { label: 'Analytics', reply: 'Analytics' },
+              { label: 'Forms', reply: 'Forms' },
+              { label: 'Auth', reply: 'Auth' },
+            ],
+          },
+          {
+            question: 'Which region?',
+            header: 'Region',
+            options: [
+              { label: 'US', reply: 'US' },
+              { label: 'EU', reply: 'EU' },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(screen.getByText('1 of 3')).toBeTruthy();
+    // A single pick moves on.
+    fireEvent.click(screen.getByRole('radio', { name: /Vercel/ }));
+    expect(screen.getByText('2 of 3')).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Analytics' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Auth' }));
+    expect(screen.getByText('2 of 3')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    const submit = screen.getByRole('button', { name: 'Submit' });
+    // ⌘↵ sends what's answered; the skipped region is left out.
+    fireEvent.keyDown(submit, { key: 'Enter', metaKey: true });
+    expect(reply.send).toHaveBeenCalledWith(
+      'Host: Vercel\nExtras: Analytics, Auth',
+      agent.id,
+      'm1'
+    );
+    expect(screen.getByText('Host: Vercel')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Submit' })).toBeNull();
+  });
+
+  it('Submit waits for at least one answer; Back returns to a page', () => {
+    const { reply } = draw([
+      {
+        kind: 'choices',
+        summary: '',
+        options: [],
+        questions: [
+          {
+            question: 'A?',
+            header: 'A',
+            options: [
+              { label: 'One', reply: 'One' },
+              { label: 'Two', reply: 'Two' },
+            ],
+          },
+          {
+            question: 'B?',
+            header: 'B',
+            options: [
+              { label: 'Three', reply: 'Three' },
+              { label: 'Four', reply: 'Four' },
+            ],
+          },
+        ],
+      },
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(screen.getByRole('button', { name: 'Submit' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByText('A?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: 'Two' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(reply.send).toHaveBeenCalledWith('A: Two', agent.id, 'm1');
+  });
+
   it('blocks from outside text stage the words, never send them', () => {
     const { reply } = draw([choices], { outside: true });
     expect(screen.getByText(/goes into your message first/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
-    expect(reply.stage).toHaveBeenCalledWith('Yes, ship it.');
+    expect(reply.stage).toHaveBeenCalledWith('Yes, ship it.', agent.id);
     expect(reply.send).not.toHaveBeenCalled();
   });
 
@@ -146,7 +280,7 @@ describe('AgentBlocks', () => {
     fireEvent.change(screen.getByLabelText(/Name/), { target: { value: 'Launch' } });
     fireEvent.click(screen.getByRole('radio', { name: 'Online' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send details' }));
-    expect(reply.send).toHaveBeenCalledWith('Event\nName: Launch\nWhere: Online');
+    expect(reply.send).toHaveBeenCalledWith('Event\nName: Launch\nWhere: Online', agent.id, 'm1');
     expect(screen.getByText('Sent')).toBeTruthy();
   });
 
@@ -165,7 +299,7 @@ describe('AgentBlocks', () => {
     expect(picks[0].className).toContain('button--strong');
     expect(picks[0].className).not.toContain('button--primary');
     fireEvent.click(picks[1]);
-    expect(reply.send).toHaveBeenCalledWith('Go with B.');
+    expect(reply.send).toHaveBeenCalledWith('Go with B.', agent.id, 'm1');
   });
 
   it('a table sorts by a column and shows the rest on request', () => {
@@ -260,14 +394,14 @@ describe('a turn’s blocks, as the Mac kept them', () => {
   it('a tap sends exactly the words the Mac then kept as the user’s answer', () => {
     const reply = drawKept(() => null);
     fireEvent.click(screen.getByRole('button', { name: 'Mango' }));
-    expect(reply.send).toHaveBeenCalledWith(answer.text);
+    expect(reply.send).toHaveBeenCalledWith(answer.text, agent.id, 'm-blocks');
   });
 
   it('once answered, shows the pick and offers nothing', () => {
     const reply = drawKept((id) => answerAfter(messages, id));
     expect(screen.queryByRole('button', { name: 'Apple' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Mango' })).toBeNull();
-    const picked = document.querySelectorAll('.agent-block-choices__picked');
+    const picked = document.querySelectorAll('.agent-block-choices__answer');
     expect([...picked].map((p) => p.textContent)).toEqual(['Mango']);
     expect(reply.send).not.toHaveBeenCalled();
   });

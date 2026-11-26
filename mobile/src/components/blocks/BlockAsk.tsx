@@ -48,6 +48,51 @@ export interface Answering {
 /* ---- Choices ------------------------------------------------------------------- */
 
 export function BlockChoices({ block, answering }: { block: ChoicesBlock; answering: Answering }) {
+  return block.questions?.length ? (
+    <BlockQuestionsText block={block} answering={answering} />
+  ) : (
+    <OneChoice block={block} answering={answering} />
+  );
+}
+
+/**
+ * Several questions in one card: the Mac pages them; here each is read as
+ * its question and options, answered by typing (or on the Mac).
+ */
+function BlockQuestionsText({ block, answering }: { block: ChoicesBlock; answering: Answering }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={styles.ask}>
+      {(block.questions ?? []).map((q, i) => (
+        <View key={i} style={styles.options}>
+          <T variant="body" color={colors.textBody}>
+            {q.question}
+            {q.multi ? ' (pick any)' : ''}
+          </T>
+          {q.options.map((o) => (
+            <T key={o.label} variant="body" color={colors.textMuted}>
+              {`• ${o.label}${o.recommended ? ' (recommended)' : ''}`}
+            </T>
+          ))}
+        </View>
+      ))}
+      {answering.answer != null ? (
+        <T variant="caption" color={colors.textMuted}>
+          Answered
+        </T>
+      ) : (
+        answering.live && (
+          <T variant="caption" color={colors.textMuted}>
+            Answer on your Mac, or type your reply below
+          </T>
+        )
+      )}
+    </View>
+  );
+}
+
+function OneChoice({ block, answering }: { block: ChoicesBlock; answering: Answering }) {
   const colors = useColors();
   const styles = useStyles();
   const picked = pickedReply(

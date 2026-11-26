@@ -7,7 +7,7 @@ vi.mock('../../contexts/ToastContext', async (importOriginal) => ({
   useOptionalToast: () => ({ showToast: toast }),
 }));
 
-import { RoomChat } from './RoomChat';
+import { RoomChat, roomAnswerAfter } from './RoomChat';
 import { AgentProjectsProvider } from './AgentProject';
 import { composerDraft, setComposerDraft } from '../../lib/composerDraft';
 import { takeHandedRevision } from '../../lib/agentRooms';
@@ -168,6 +168,37 @@ describe('RoomChat', () => {
     expect(screen.getByText('To Finance')).toBeTruthy();
   });
 
+  it('a member’s choice is answered here, to that member, and then shows the pick', async () => {
+    const ask: AgentMessage = {
+      id: 'q1',
+      agentId: 'ops',
+      room: 'r1',
+      ts: 4,
+      kind: 'agent',
+      text: 'Which first?',
+      blocks: {
+        v: 1,
+        items: [
+          {
+            kind: 'choices',
+            summary: '',
+            question: 'Which first?',
+            options: [
+              { label: 'Northwind', reply: 'Northwind first.' },
+              { label: 'Globex', reply: 'Globex first.' },
+            ],
+          },
+        ],
+      },
+    } as AgentMessage;
+    thread = [...THREAD, ask];
+    await open(room({ lead: 'fin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Globex' }));
+    await waitFor(() => expect(sends).toHaveLength(1));
+    expect(sends[0]).toMatchObject({ roomId: 'r1', text: 'Globex first.', mentions: ['ops'] });
+    expect(screen.queryByRole('button', { name: 'Northwind' })).toBeNull();
+  });
+
   it('asks who should answer when nobody is named and there is no lead', async () => {
     await open(room());
     const input = screen.getByLabelText('Message Month end');
@@ -315,5 +346,37 @@ describe('the room’s draft', () => {
     await open(room());
     expect(box().value).toBe('');
     setComposerDraft('room:other', '');
+  });
+});
+
+describe('a block’s answer in a room', () => {
+  const q: AgentMessage = { id: 'q', agentId: 'ops', room: 'r1', ts: 1, kind: 'agent', text: '?' };
+  const to = (id: string, text: string, who: string[]): AgentMessage => ({
+    id,
+    agentId: '',
+    room: 'r1',
+    ts: 2,
+    kind: 'user',
+    text,
+    mentions: who.map((w) => ({ id: w, name: w })),
+  });
+
+  it('is your next line to the member that asked, not a line to someone else', () => {
+    const lines = [q, to('u1', 'Finance, status?', ['fin']), to('u2', 'Globex first.', ['ops'])];
+    expect(roomAnswerAfter(lines, 'q', 'ops')).toBe('Globex first.');
+    expect(roomAnswerAfter(lines.slice(0, 2), 'q', 'ops')).toBeNull();
+  });
+
+  it('counts a line naming nobody when the member is the lead', () => {
+    const lines = [q, to('u1', 'Globex.', [])];
+    expect(roomAnswerAfter(lines, 'q', 'ops', 'ops')).toBe('Globex.');
+    expect(roomAnswerAfter(lines, 'q', 'ops', 'fin')).toBeNull();
+  });
+
+  it('a tap on another card of the same member is not this card’s answer', () => {
+    const q2 = { ...q, id: 'q2' };
+    const tap = { ...to('u1', "I'll make them myself", ['ops']), answers: 'q' };
+    expect(roomAnswerAfter([q, q2, tap], 'q', 'ops')).toBe("I'll make them myself");
+    expect(roomAnswerAfter([q, q2, tap], 'q2', 'ops')).toBeNull();
   });
 });

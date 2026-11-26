@@ -318,6 +318,7 @@ impl Backend for DesktopBackend {
                 extras.conversation,
                 extras.written_at,
                 extras.reply_to,
+                None,
             )
             .await?,
         )
@@ -568,6 +569,7 @@ impl Backend for DesktopBackend {
                 Some(send.mentions),
                 Some(send.everyone),
                 send.client_id,
+                None,
                 None,
             )
             .await?,

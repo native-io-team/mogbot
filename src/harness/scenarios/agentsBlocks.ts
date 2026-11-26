@@ -196,8 +196,17 @@ const CHOICES = {
   summary: '',
   question: 'Want me to move the DNS over as well?',
   options: [
-    { label: 'Yes, move it', reply: 'Yes, move the DNS too.' },
-    { label: 'Not yet', reply: 'Not yet.' },
+    {
+      label: 'Yes, move it',
+      reply: 'Yes, move the DNS too.',
+      description: 'About 10 minutes. The site stays up while it switches over.',
+      recommended: true,
+    },
+    {
+      label: 'Not yet',
+      reply: 'Not yet.',
+      description: 'DNS stays where it is; I’ll bring it up again on Friday.',
+    },
     { label: 'What does that involve?', reply: 'What does moving the DNS involve?' },
   ],
 };
@@ -362,6 +371,50 @@ const OUTSIDE = [
 const team = () =>
   overview(TEAM.map((a) => (a.id === 'finance' ? { ...a, status: status('idle') } : a)));
 
+const QUESTIONS = [
+  msg('user', 'Set up the staging site the way we discussed.', 6, fin({})),
+  blocks('m-questions', 5, 'Three quick decisions before I start.', [
+    {
+      kind: 'choices',
+      summary: '',
+      options: [],
+      questions: [
+        {
+          question: 'Where should staging live?',
+          header: 'Host',
+          options: [
+            {
+              label: 'Vercel',
+              reply: 'Vercel',
+              description: 'Preview links per branch; free at this size.',
+              recommended: true,
+            },
+            { label: 'Netlify', reply: 'Netlify', description: 'Same idea; forms built in.' },
+          ],
+        },
+        {
+          question: 'Which extras should it have from day one?',
+          header: 'Extras',
+          multi: true,
+          options: [
+            { label: 'Analytics', reply: 'Analytics', description: 'Plausible, no cookie banner.' },
+            { label: 'Password', reply: 'Password', description: 'Keeps it off search engines.' },
+            { label: 'Comments', reply: 'Comments', description: 'Pins on the page for review.' },
+          ],
+        },
+        {
+          question: 'Who should get the link?',
+          header: 'Share',
+          options: [
+            { label: 'Just you', reply: 'Just me' },
+            { label: 'The whole team', reply: 'The whole team' },
+          ],
+        },
+      ],
+    },
+  ]),
+];
+
 const commands = (chat: unknown[]) => ({
   agents_overview: team(),
   agents_messages: (args: Record<string, unknown>) =>
@@ -431,7 +484,7 @@ export const agentsBlocksScenarios: Scenario[] = [
     id: 'agents-blocks-decide',
     title: 'Agents — blocks: a comparison, quick replies and a form',
     looksRightWhen:
-      '“Where to host the new site”: three option cards side by side, Vercel ringed in a neutral outline with a “Recommended” badge; each with its line, cost and build time right-aligned, green + pros and red − cons under a hairline, and “Pick this” at the bottom (Vercel’s strong neutral, the others outlined; never the accent). Then “Want me to move the DNS over as well?” with three outlined buttons. Then a card “The launch event” with Event name, Date (a date input), Guests, Where as three toggle buttons, Anything else as a text area, “Optional” beside the optional ones, and “Send details” right-aligned, strong neutral.',
+      '“Where to host the new site”: three option cards side by side, Vercel ringed in a neutral outline with a “Recommended” badge; each with its line, cost and build time right-aligned, green + pros and red − cons under a hairline, and “Pick this” at the bottom (Vercel’s strong neutral, the others outlined; never the accent). Then “Want me to move the DNS over as well?” with its options one per row, full width, at reading size: “1 Yes, move it” with a Recommended badge and a grey line under it, “2 Not yet” with its line, “3 What does that involve?”, and “4 Other · Type your own answer”. Then a card “The launch event” with Event name, Date (a date input), Guests, Where as three radio rows one under the other, Anything else as a text area, “Optional” beside the optional ones, and “Send details” right-aligned, strong neutral.',
     requires: '.agent-block-compare',
     openSelector: AGENTS_TAB,
     steps: [open],
@@ -480,5 +533,30 @@ export const agentsBlocksScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     steps: [open, { click: '.agent-block-choices button', text: 'Ask for a call' }],
     commands: commands(OUTSIDE),
+  },
+  {
+    id: 'agents-blocks-questions',
+    title: 'Agents — blocks: several questions, one page each',
+    looksRightWhen:
+      'A card under “Three quick decisions before I start.”: chips “Host” (filled, current), “Extras”, “Share” and “1 of 3” on the right; “Where should staging live?”; two radio rows (Vercel with Recommended and its line, Netlify with its line) and Other; Next bottom-right.',
+    requires: '.agent-questions',
+    openSelector: AGENTS_TAB,
+    steps: [open],
+    commands: commands(QUESTIONS),
+  },
+  {
+    id: 'agents-blocks-questions-multi',
+    title: 'Agents — blocks: several questions, a pick-any page',
+    looksRightWhen:
+      'After picking Vercel the card is on “2 of 3”: Host chip ticked, Extras filled; “Which extras should it have from day one? Pick any.” with square checkboxes, Analytics and Comments ticked; Back on the left, Skip and Next on the right.',
+    requires: '.agent-questions',
+    openSelector: AGENTS_TAB,
+    steps: [
+      open,
+      { click: '.agent-questions .agent-choice', text: 'Vercel' },
+      { click: '.agent-questions .agent-choice', text: 'Analytics' },
+      { click: '.agent-questions .agent-choice', text: 'Comments' },
+    ],
+    commands: commands(QUESTIONS),
   },
 ];

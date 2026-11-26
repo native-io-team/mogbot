@@ -129,10 +129,51 @@ export interface ComparisonBlock extends Base {
   options: ComparisonOption[];
 }
 
+export interface ChoiceOption {
+  label: string;
+  /** What picking it sends, as the user. */
+  reply: string;
+  /** One plain line under the label: what picking it means. */
+  description?: string;
+  recommended?: boolean;
+}
+
+/** One page of a multi-question choice. */
+export interface ChoiceQuestion {
+  question: string;
+  /** A word or two: the page's chip and its line in the answer. */
+  header?: string;
+  options: ChoiceOption[];
+  /** Pick any number, not just one. */
+  multi?: boolean;
+}
+
 export interface ChoicesBlock extends Base {
   kind: 'choices';
   question?: string;
-  options: { label: string; reply: string }[];
+  /** Empty when `questions` is given. */
+  options: ChoiceOption[];
+  /** 1-4 questions, one page each, answered together in one message. */
+  questions?: ChoiceQuestion[];
+}
+
+/**
+ * The one message that answers a multi-question choice: a line per question
+ * answered ("Host: Vercel"; several picks joined), skipped ones left out. A
+ * single question is just its picks.
+ */
+export function questionsAnswer(
+  questions: readonly ChoiceQuestion[],
+  answers: readonly (readonly string[])[]
+): string {
+  if (questions.length === 1) return (answers[0] ?? []).join(', ');
+  return questions
+    .map((q, i) => {
+      const picked = answers[i] ?? [];
+      return picked.length ? `${q.header?.trim() || q.question}: ${picked.join(', ')}` : null;
+    })
+    .filter((line): line is string => line != null)
+    .join('\n');
 }
 
 export type FieldType = 'text' | 'long_text' | 'choice' | 'date' | 'number';
@@ -260,7 +301,11 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 export function readBlocks(message: Pick<AgentMessage, 'blocks'>): BlockSet | null {
   const raw: unknown = message.blocks;
   if (!isObject(raw) || raw.v !== BLOCKS_VERSION || !Array.isArray(raw.items)) return null;
-  const items = raw.items.filter(wellFormed);
+  // Several questions come without `options` (an older phone drops the
+  // block and shows the text); here they read as an empty list.
+  const items = raw.items
+    .filter(wellFormed)
+    .map((b) => (b.kind === 'choices' && !Array.isArray(b.options) ? { ...b, options: [] } : b));
   if (!items.length) return null;
   return {
     v: BLOCKS_VERSION,
@@ -297,8 +342,16 @@ function wellFormed(b: unknown): b is Block {
         arr(b.options) &&
         b.options.every((o) => isObject(o) && str(o.name) && arr(o.pros) && arr(o.cons))
       );
-    case 'choices':
-      return arr(b.options) && b.options.every((o) => isObject(o) && str(o.label));
+    case 'choices': {
+      const labelled = (list: unknown) =>
+        arr(list) && list.every((o) => isObject(o) && str(o.label));
+      if (b.questions === undefined) return labelled(b.options);
+      return (
+        arr(b.questions) &&
+        b.questions.length > 0 &&
+        b.questions.every((q) => isObject(q) && str(q.question) && labelled(q.options))
+      );
+    }
     case 'form':
       return arr(b.fields) && b.fields.every((f) => isObject(f) && str(f.id) && str(f.label));
     case 'callout':
@@ -387,19 +440,29 @@ export function attachmentsOutsideBlocks(
 /* ---- Answers ----------------------------------------------------------------- */
 
 /**
+ * Whether a user message answers the card `messageId`: a tap on a card says
+ * which card (`answers`), so it answers that one only; a typed line answers
+ * every card before it.
+ */
+export function answersCard(m: Pick<AgentMessage, 'kind' | 'answers'>, messageId: string): boolean {
+  return m.kind === 'user' && (m.answers == null || m.answers === messageId);
+}
+
+/**
  * What the user said after these blocks, if anything: their next message in
- * the chat. Once they have answered, a choice shows which one (when the
- * words match) and nothing on it sends again.
+ * the chat that answers them (`answersCard`). Once they have answered, a
+ * choice shows which one (when the words match) and nothing on it sends
+ * again.
  */
 export function answerAfter(
-  messages: readonly Pick<AgentMessage, 'id' | 'kind' | 'text'>[],
+  messages: readonly Pick<AgentMessage, 'id' | 'kind' | 'text' | 'answers'>[],
   messageId: string
 ): string | null {
   const at = messages.findIndex((m) => m.id === messageId);
   if (at < 0) return null;
   for (let i = at + 1; i < messages.length; i++) {
     const m = messages[i];
-    if (m.kind === 'user') return m.text;
+    if (answersCard(m, messageId)) return m.text;
   }
   return null;
 }

@@ -1573,6 +1573,8 @@ export interface AgentMessage {
   revises?: ResultRef;
   /** On a user message: the message it replies to, filled by the Mac from its own log. */
   replyTo?: ReplyRef;
+  /** On a user message sent from a card: that card's message id. The card shows it; other cards open beside it don't. */
+  answers?: string;
   /** On a `note` (an `error` from older Macs): a take-over's terminal closed by itself; not a turn's failure. */
   takeover?: boolean;
   /**

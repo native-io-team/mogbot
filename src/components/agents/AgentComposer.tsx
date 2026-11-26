@@ -124,6 +124,37 @@ export function ListeningStatus({
 }
 
 /**
+ * A room's field grows with what's typed, as an agent's chat does: up to the
+ * CSS cap (440px), then it scrolls. Returns whether it runs past one line, so
+ * the words take a row of their own above the tools.
+ */
+export function useGrowingInput(
+  inputRef: RefObject<HTMLTextAreaElement | null>,
+  draft: string
+): boolean {
+  const [wrapped, setWrapped] = useState(false);
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (draft === '') {
+      el.style.height = '';
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- layout measurement decides the row
+      setWrapped(false);
+      return;
+    }
+    const style = getComputedStyle(el);
+    const cap = parseFloat(style.maxHeight) || 440;
+    const oneLine =
+      parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    el.style.height = 'auto';
+    const full = el.scrollHeight;
+    el.style.height = `${Math.min(full, cap)}px`;
+    setWrapped(full > oneLine * 1.5);
+  }, [draft, inputRef, wrapped]);
+  return wrapped;
+}
+
+/**
  * While dictating, keep the newest words in view: the field is read-only and
  * its value set from outside, so past its cap it would sit on the first lines.
  * When it ends (stopped, cancelled or cut off), the field takes focus with the

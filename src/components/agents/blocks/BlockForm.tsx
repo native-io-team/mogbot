@@ -9,9 +9,9 @@
  */
 
 import { useId, useState, type FormEvent } from 'react';
+import { OptionRows } from './BlockChoices';
 import { Button } from '../../primitives/Button';
 import { TextArea, TextField } from '../../primitives/TextField';
-import { ToggleButton } from '../../primitives/ToggleButton';
 import {
   badNumbers,
   formReply,
@@ -67,26 +67,13 @@ export function BlockForm({ block, answering }: { block: FormBlock; answering: A
               {!f.required && <span className="agent-block-form__optional">Optional</span>}
             </label>
             {f.type === 'choice' ? (
-              <div
-                className="agent-block-form__choices"
-                role="radiogroup"
-                aria-labelledby={`${id}-label`}
-              >
-                {(f.options ?? []).map((o) => (
-                  <ToggleButton
-                    key={o}
-                    size="compact"
-                    variant="secondary"
-                    pressed={values[f.id] === o}
-                    role="radio"
-                    aria-checked={values[f.id] === o}
-                    disabled={off}
-                    onClick={() => set(f.id, values[f.id] === o ? '' : o)}
-                  >
-                    {o}
-                  </ToggleButton>
-                ))}
-              </div>
+              <OptionRows
+                options={f.options ?? []}
+                value={values[f.id]}
+                disabled={off}
+                labelledBy={`${id}-label`}
+                onChange={(v) => set(f.id, v)}
+              />
             ) : f.type === 'long_text' ? (
               <TextArea
                 id={id}

@@ -54,7 +54,7 @@ pub const DESCRIPTION: &str = "Answer with UI, not just prose: post a message wi
 - checklist: `items` [{text, done, note}].\n\
 - steps: `items` [{title, detail, status: done|current|todo|failed, when}].\n\
 - comparison: `options` (2-3) [{name, summary, pros, cons, facts [{label, value}], recommended, reply (what Pick this sends; default \"Let's go with <name>.\")}].\n\
-- choices: `question`; `options` (2-6): labels, or {label, reply}.\n\
+- choices: `question`; `options` (2-6): labels, or {label, reply, description (one line), recommended}. Several related decisions at once: `questions` (1-4) instead, each {question, header (1-2 words), options, multi (pick any)}; shown one page each, answered in one message. Write questions that stand alone; the user can also type another answer.\n\
 - form: `fields` (up to 8) [{id, label, type: text|long_text|choice|date|number, options (choice), required, placeholder}]; `submit` (the button's words).\n\
 - links: `items` [{url, label, note}] (the domain is shown; nothing is fetched).\n\
 - callout: `tone` info|warning|success; `text`.\n\
@@ -440,6 +440,11 @@ pub struct Comparison {
 pub struct Choice {
     pub label: String,
     pub reply: String,
+    /// One plain line under the label: what picking it means.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub recommended: bool,
 }
 
 impl<'de> Deserialize<'de> for Choice {
@@ -450,6 +455,10 @@ impl<'de> Deserialize<'de> for Choice {
             label: String,
             #[serde(default, deserialize_with = "de_text")]
             reply: String,
+            #[serde(default, deserialize_with = "de_opt_text")]
+            description: Option<String>,
+            #[serde(default)]
+            recommended: bool,
         }
         match Value::deserialize(d)? {
             Value::Object(map) => {
@@ -458,11 +467,15 @@ impl<'de> Deserialize<'de> for Choice {
                 Ok(Choice {
                     label: f.label,
                     reply: f.reply,
+                    description: f.description.filter(|t| !t.trim().is_empty()),
+                    recommended: f.recommended,
                 })
             }
             other => Ok(Choice {
                 label: de_text(other).map_err(serde::de::Error::custom)?,
                 reply: String::new(),
+                description: None,
+                recommended: false,
             }),
         }
     }
@@ -476,8 +489,32 @@ pub struct Choices {
         skip_serializing_if = "Option::is_none"
     )]
     pub question: Option<String>,
+    /// Left out when `questions` is given, so a phone that only knows one
+    /// question drops the block and shows the message's text instead.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<Choice>,
+    /// Instead of `question` + `options`: 1-4 questions shown one page at a
+    /// time and answered together in one message.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub questions: Vec<Question>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Question {
+    #[serde(default, deserialize_with = "de_text")]
+    pub question: String,
+    /// A word or two naming it: the page's chip and its line in the answer.
+    #[serde(
+        default,
+        deserialize_with = "de_opt_text",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub header: Option<String>,
     #[serde(default)]
     pub options: Vec<Choice>,
+    /// Pick any number of the options, not just one.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub multi: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -734,6 +771,40 @@ pub fn attach(set: &mut BlockSet, index: usize, file: super::attachments::Attach
             }
         }
     }
+}
+
+/// “A” (recommended) / “B”: a choice's options on one plain line.
+fn option_line(options: &[Choice]) -> String {
+    options
+        .iter()
+        .map(|o| {
+            if o.recommended {
+                format!("“{}” (recommended)", o.label)
+            } else {
+                format!("“{}”", o.label)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" / ")
+}
+
+/// A choice's options: 2-6 labelled, each with a reply, at most one recommended.
+fn check_options(options: &mut [Choice], what: &str) -> Result<(), String> {
+    list_size(options, 2, 6, &format!("`{what}`"))?;
+    for (i, o) in options.iter_mut().enumerate() {
+        short(&o.label, &format!("{what}[{i}].label"))?;
+        if o.reply.trim().is_empty() {
+            o.reply = o.label.clone();
+        }
+        too_long(&o.reply, 500, &format!("{what}[{i}].reply"))?;
+        if let Some(d) = &o.description {
+            too_long(d, 200, &format!("{what}[{i}].description"))?;
+        }
+    }
+    if options.iter().filter(|o| o.recommended).count() > 1 {
+        return Err(format!("only one of `{what}` can be `recommended`."));
+    }
+    Ok(())
 }
 
 fn too_long(s: &str, max: usize, what: &str) -> Result<(), String> {
@@ -1038,16 +1109,27 @@ fn check(block: &mut Block) -> Result<(), String> {
             }
         }
         Body::Choices(c) => {
-            list_size(&c.options, 2, 6, "`options`")?;
             if let Some(q) = &c.question {
                 too_long(q, 300, "`question`")?;
             }
-            for (i, o) in c.options.iter_mut().enumerate() {
-                short(&o.label, &format!("options[{i}].label"))?;
-                if o.reply.trim().is_empty() {
-                    o.reply = o.label.clone();
+            if c.questions.is_empty() {
+                check_options(&mut c.options, "options")?;
+            } else {
+                if !c.options.is_empty() {
+                    return Err("give `question` and `options` for one question, or `questions` for several, not both.".into());
                 }
-                too_long(&o.reply, 500, &format!("options[{i}].reply"))?;
+                list_size(&c.questions, 1, 4, "`questions`")?;
+                for (i, q) in c.questions.iter_mut().enumerate() {
+                    if q.question.trim().is_empty() {
+                        return Err(format!("questions[{i}] has no `question`."));
+                    }
+                    too_long(&q.question, 300, &format!("questions[{i}].question"))?;
+                    q.header = q.header.take().filter(|h| !h.trim().is_empty());
+                    if let Some(h) = &q.header {
+                        too_long(h, 20, &format!("questions[{i}].header"))?;
+                    }
+                    check_options(&mut q.options, &format!("questions[{i}].options"))?;
+                }
             }
         }
         Body::Form(f) => {
@@ -1547,13 +1629,13 @@ pub fn summary_of(block: &Block) -> String {
                 .or(title.map(str::to_string))
                 .into_iter()
                 .collect();
-            lines.push(
-                c.options
-                    .iter()
-                    .map(|o| format!("“{}”", o.label))
-                    .collect::<Vec<_>>()
-                    .join(" / "),
-            );
+            if c.questions.is_empty() {
+                lines.push(option_line(&c.options));
+            }
+            for q in &c.questions {
+                let pick = if q.multi { " (pick any)" } else { "" };
+                lines.push(format!("{}{pick}: {}", q.question, option_line(&q.options)));
+            }
             lines.join("\n")
         }
         Body::Form(f) => {
@@ -1684,6 +1766,7 @@ pub fn unseen_answer(blocks: &Value, text: &str) -> bool {
         Body::Choices(c) => c
             .options
             .iter()
+            .chain(c.questions.iter().flat_map(|q| q.options.iter()))
             .any(|o| same(&o.reply, text) && !same(&o.reply, &o.label)),
         Body::Comparison(c) => c.options.iter().any(|o| {
             same(&o.reply, text) && !same(&o.reply, &format!("Let's go with {}.", o.name.trim()))

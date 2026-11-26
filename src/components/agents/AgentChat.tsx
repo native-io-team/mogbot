@@ -429,6 +429,8 @@ interface Pending {
   revises?: ResultRef;
   /** A reply: the message it answers, shown as a quote until the Mac's own lands. */
   replyTo?: ReplyRef;
+  /** Sent from a card: that card's message id. */
+  answers?: string;
 }
 
 function newPending(text: string, mentions: AgentRef[], extra: Partial<Pending> = {}): Pending {
@@ -941,6 +943,7 @@ export const AgentChat = memo(function AgentChat({
         mentions: p.mentions,
         ...(p.revises ? { revises: p.revises } : {}),
         ...(p.replyTo ? { replyTo: p.replyTo } : {}),
+        ...(p.answers ? { answers: p.answers } : {}),
       });
       if (p.failed) failed.add(p.key);
       else if (p.files) sending.set(p.key, p.files);
@@ -1631,7 +1634,8 @@ export const AgentChat = memo(function AgentChat({
         entry.revises?.id,
         viewing,
         undefined,
-        entry.replyTo?.id
+        entry.replyTo?.id,
+        entry.answers
       );
       setPending((list) => list.map((p) => (p.key === entry.key ? { ...p, id: message.id } : p)));
       upsertMessage(message);
@@ -1700,8 +1704,8 @@ export const AgentChat = memo(function AgentChat({
   };
 
   /** A starter: sent, and the composer ready for the answer to whatever it asks back. */
-  const sendStarter = (text: string) => {
-    sendText(text);
+  const sendStarter = (text: string, card?: string) => {
+    sendText(text, false, card ? { answers: card } : {});
     inputRef.current?.focus();
   };
 
@@ -1747,7 +1751,9 @@ export const AgentChat = memo(function AgentChat({
 
     [agent.name]
   );
-  const replySend = useStableEvent((text: string) => sendStarter(text));
+  const replySend = useStableEvent((text: string, _from: string, card: string) =>
+    sendStarter(text, card)
+  );
   const replyStage = useStableEvent((text: string) => typeStarter(text));
   const blockReply = useMemo<BlockReply>(
     () => ({

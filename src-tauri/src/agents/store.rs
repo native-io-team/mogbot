@@ -636,6 +636,25 @@ pub struct AgentMessage {
     /// from the log; the turn is told it once. Older builds show the text alone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<super::reply::ReplyRef>,
+    /// On a user message sent from a card (a choice, "Pick this", a form):
+    /// that card's message id, so the card shows this answer and the other
+    /// cards still open beside it don't. Absent on typed lines, which answer
+    /// every card before them, as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answers: Option<String>,
+}
+
+/// A card's message id as a client names it in `answers`: kept when it looks
+/// like one of ours (a short run of letters, digits, `-` and `_`), else
+/// dropped. It only says which card shows the answer, so nothing is looked up.
+pub fn card_id(raw: Option<String>) -> Option<String> {
+    let id = raw?.trim().to_string();
+    let ok = !id.is_empty()
+        && id.len() <= 64
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    ok.then_some(id)
 }
 
 /// A fix a note offers, as a button that opens where it's done.

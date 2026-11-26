@@ -1,0 +1,278 @@
+/* Agents' decision cards (`blocks/BlockChoices.tsx`, `blocks/BlockQuestions.tsx`),
+   split from agents-blocks.css: a question, its options one per row, and
+   several questions paged in one card. Form choice fields reuse the rows. */
+
+.agent-block-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.agent-block-choices__question {
+  margin: 0;
+  font-size: var(--font-size-subhead-lg);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-reading);
+  color: var(--text-primary);
+}
+
+.agent-block-choices__off {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+.agent-block-choices__answer {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-subhead-lg);
+  line-height: var(--line-height-reading);
+  color: var(--text-primary);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-control);
+}
+
+.agent-block-choices__answer > svg {
+  flex: none;
+  color: var(--accent-success);
+}
+
+/* Options one under the other, each a full-width row: a number (or a radio
+   in a form), the label at reading size, and a line on what it means. */
+.agent-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.agent-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font: inherit;
+  color: var(--text-primary);
+  text-align: start;
+  cursor: pointer;
+  background: transparent;
+  /* The fields' own outline, so rows read on a card's fill as well. */
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  transition:
+    background-color var(--transition-interaction-fast),
+    border-color var(--transition-interaction-fast);
+}
+
+.agent-choice:hover:not(:disabled) {
+  background: var(--tint-subtle);
+  border-color: var(--text-muted);
+}
+
+.agent-choice:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.agent-choice:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.agent-choice[data-recommended],
+.agent-choice[data-picked] {
+  border-color: var(--text-muted);
+}
+
+.agent-choice__mark,
+.agent-choice__radio {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  /* One line of the label tall, so it sits on the label's first line. */
+  width: var(--spacing-xl);
+  height: var(--spacing-xl);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.agent-choice__radio {
+  border-radius: 50%;
+}
+
+.agent-choice[data-picked] .agent-choice__radio {
+  color: var(--text-on-inverse);
+  background: var(--surface-inverse);
+  border-color: var(--surface-inverse);
+}
+
+.agent-choice__box {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-xl);
+  height: var(--spacing-xl);
+  color: var(--text-secondary);
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.agent-choice[data-picked] .agent-choice__box {
+  color: var(--text-on-inverse);
+  background: var(--surface-inverse);
+  border-color: var(--surface-inverse);
+}
+
+.agent-choice__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  min-width: 0;
+}
+
+.agent-choice__label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-subhead-lg);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-reading);
+  overflow-wrap: anywhere;
+}
+
+.agent-choice__description {
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-reading);
+  color: var(--text-secondary);
+}
+
+.agent-choice__badge {
+  padding: 0 var(--spacing-xs);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-help);
+  color: var(--text-on-inverse);
+  background: var(--surface-inverse);
+  border-radius: var(--radius-sm);
+}
+
+.agent-choice--typing {
+  flex-direction: column;
+  align-items: stretch;
+  cursor: default;
+  border-color: var(--text-muted);
+}
+
+.agent-choice--typing textarea {
+  font-size: var(--font-size-subhead-lg);
+}
+
+/* Several questions, one page each. */
+.agent-questions__head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.agent-questions__chips {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-questions__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  font: inherit;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-pill);
+}
+
+.agent-questions__chip[aria-current='step'] {
+  color: var(--text-on-inverse);
+  background: var(--surface-inverse);
+  border-color: var(--surface-inverse);
+}
+
+.agent-questions__chip[data-answered]:not([aria-current]) {
+  color: var(--text-primary);
+}
+
+.agent-questions__chip:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.agent-questions__count {
+  flex: none;
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.agent-questions__hint {
+  font-weight: var(--font-weight-body);
+  color: var(--text-secondary);
+}
+
+.agent-questions__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.agent-questions__spacer {
+  flex: 1;
+}
+
+.agent-questions__answer {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-subhead-lg);
+  line-height: var(--line-height-reading);
+  list-style: none;
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-control);
+}
+
+.agent-questions__answer li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-xs);
+}
+
+.agent-questions__answer svg {
+  flex: none;
+  color: var(--accent-success);
+}
+
+.agent-choice__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-xs);
+}

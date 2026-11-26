@@ -226,6 +226,22 @@ describe('tables and answers', () => {
     expect(pickedReply(['No'], null)).toBe(-1);
   });
 
+  it('a tap on one card answers that card only; a typed line answers them all', () => {
+    const cards = [1, 2, 3, 4].map((n) => ({ id: `card${n}`, kind: 'agent' as const, text: '' }));
+    const tapped = {
+      id: 't',
+      kind: 'user' as const,
+      text: "I'll make them myself",
+      answers: 'card1',
+    };
+    expect(answerAfter([...cards, tapped], 'card1')).toBe("I'll make them myself");
+    for (const id of ['card2', 'card3', 'card4'])
+      expect(answerAfter([...cards, tapped], id)).toBeNull();
+    const later = { id: 'u', kind: 'user' as const, text: 'Skip the rest' };
+    expect(answerAfter([...cards, tapped, later], 'card1')).toBe("I'll make them myself");
+    expect(answerAfter([...cards, tapped, later], 'card3')).toBe('Skip the rest');
+  });
+
   it('a form checks what it needs and replies in plain lines', () => {
     const form: FormBlock = {
       kind: 'form',

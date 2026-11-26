@@ -75,6 +75,7 @@ pub async fn agents_room_messages(
 
 /// Say something in a room: to the agents in `mentions`, everyone, or the
 /// room's lead. Refused (nothing recorded) when that's nobody.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 #[tracing::instrument(skip(app, text, attachments))]
 pub async fn agents_room_send(
@@ -85,6 +86,7 @@ pub async fn agents_room_send(
     everyone: Option<bool>,
     client_id: Option<String>,
     attachments: Option<Vec<crate::agents::attachments::OutgoingAttachment>>,
+    answers: Option<String>,
 ) -> Result<rooms::Sent, CommandError> {
     let app2 = app.clone();
     blocking(move || {
@@ -96,6 +98,7 @@ pub async fn agents_room_send(
             everyone.unwrap_or(false),
             client_id,
             attachments.unwrap_or_default(),
+            crate::agents::store::card_id(answers),
         )
     })
     .await

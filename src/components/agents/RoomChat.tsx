@@ -10,11 +10,13 @@
  *
  * Each agent answers from its own session, shown the room's recent lines.
  * Approval cards, timelines and result cards appear inline, under the agent
- * whose turn they belong to, and are answered here as in its own chat.
+ * whose turn they belong to, and are answered here as in its own chat. So are
+ * a member's choices, comparisons and forms: your answer goes to that member.
  *
  * @module components/agents/RoomChat
  */
 
+import { answersCard } from '../../../packages/companion-protocol/src/blocks';
 import { useNextLine } from './useNextLine';
 import { useMessageGaps } from './messageGaps';
 import {
@@ -52,7 +54,12 @@ import { ConversationBar, ConversationBars } from './AgentCard';
 import { tintMentionsIn, useMentionPicker } from './AgentMentions';
 import { useDictation } from './useDictation';
 import { ComposerAttachments } from './AgentAttachments';
-import { ListeningStatus, sendDisabled, useFollowDictation } from './AgentComposer';
+import {
+  ListeningStatus,
+  sendDisabled,
+  useFollowDictation,
+  useGrowingInput,
+} from './AgentComposer';
 import {
   toOutgoing,
   useComposerAttachments,
@@ -60,6 +67,7 @@ import {
   type DraftAttachment,
 } from './useComposerAttachments';
 import { useArrivals, useFollowBottom, usePresence } from './useAgentMotion';
+import { BlockReplyContext, type BlockReply } from './blocks/blockReply';
 import {
   AgentBubble,
   ApprovalCard,
@@ -130,6 +138,8 @@ interface Pending {
   failed?: boolean;
   /** Files still being copied in: shown as staged, "Sending…", until it lands. */
   files?: DraftAttachment[];
+  /** Sent from a card: that card's message id. */
+  answers?: string;
 }
 
 interface RoomChatProps extends RoomActions {
@@ -254,6 +264,7 @@ export function RoomChat({
         text: p.text,
         mentions: p.mentions,
         room: room.id,
+        ...(p.answers ? { answers: p.answers } : {}),
       });
       if (p.failed) failed.add(p.key);
       else if (p.files) sending.set(p.key, p.files);
@@ -335,7 +346,14 @@ export function RoomChat({
 
   const deliver = async (entry: Pending, mentionIds: string[], everyone: boolean) => {
     try {
-      const sent = await sendRoomMessage(room.id, entry.text, mentionIds, everyone);
+      const sent = await sendRoomMessage(
+        room.id,
+        entry.text,
+        mentionIds,
+        everyone,
+        [],
+        entry.answers
+      );
       setPending((list) =>
         list.map((p) => (p.key === entry.key ? { ...p, id: sent.message.id } : p))
       );
@@ -401,6 +419,42 @@ export function RoomChat({
       void deliver(entry, mentionIds, aim.kind === 'everyone');
     }
   };
+
+  /** A block's answer, as your line to the member that asked it. */
+  const answerTo = (text: string, agentId: string, card: string) => {
+    const member = members.find((m) => m.id === agentId);
+    if (!member || !text.trim()) return;
+    const entry: Pending = {
+      key: `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      text,
+      ts: Date.now(),
+      mentions: [{ id: member.id, name: member.name }],
+      answers: card,
+    };
+    setPending((list) => [...list, entry]);
+    atBottomRef.current = true;
+    void deliver(entry, [member.id], false);
+  };
+  /** Outside text: the answer waits in the composer, addressed, to be read first. */
+  const stageTo = (text: string, agentId: string) => {
+    const member = members.find((m) => m.id === agentId);
+    setDraft(member ? `@${member.name} ${text}` : text);
+    inputRef.current?.focus();
+  };
+  const replyRef = useRef({ answerTo, stageTo });
+  replyRef.current = { answerTo, stageTo };
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const blockReply = useMemo<BlockReply>(
+    () => ({
+      send: (text, from, card) => replyRef.current.answerTo(text, from, card),
+      stage: (text, from) => replyRef.current.stageTo(text, from),
+      answerOf: (id, from) => roomAnswerAfter(shownRef.current, id, from, room.lead),
+    }),
+    // A line arriving can answer a block: re-read then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shown.length, room.lead]
+  );
 
   const stop = () =>
     void stopRoom(room.id).catch((error: unknown) =>
@@ -517,199 +571,160 @@ export function RoomChat({
 
   return (
     <AccentScopeProvider scope={accentScope}>
-      <section
-        ref={sectionRef}
-        className="agent-chat agent-room"
-        aria-label={`Room ${room.name}`}
-        data-dropping={dropping || undefined}
-        {...accentScope}
-        {...dropHandlers}
-      >
-        <header className="agent-chat__header" data-window-drag>
-          {compact && (
-            <CompactModeToggle
-              mode="agents"
-              onProjects={compact.onGoProjects}
-              className="agent-chat__mode"
-            />
-          )}
-          <div className="agent-chat__title agent-room__title">
-            <RoomAvatars members={members} />
-            <span className="agent-room__heading">
-              <span className="agent-room__name">{room.name}</span>
-              <span className="agent-room__members" title={memberLine}>
-                {memberLine}
+      <BlockReplyContext.Provider value={blockReply}>
+        <section
+          ref={sectionRef}
+          className="agent-chat agent-room"
+          aria-label={`Room ${room.name}`}
+          data-dropping={dropping || undefined}
+          {...accentScope}
+          {...dropHandlers}
+        >
+          <header className="agent-chat__header" data-window-drag>
+            {compact && (
+              <CompactModeToggle
+                mode="agents"
+                onProjects={compact.onGoProjects}
+                className="agent-chat__mode"
+              />
+            )}
+            <div className="agent-chat__title agent-room__title">
+              <RoomAvatars members={members} />
+              <span className="agent-room__heading">
+                <span className="agent-room__name">{room.name}</span>
+                <span className="agent-room__members" title={memberLine}>
+                  {memberLine}
+                </span>
               </span>
-            </span>
-          </div>
-          <div className="agent-chat__actions">
-            <Dropdown
-              align="right"
-              portal
-              menuClassName="agent-model-menu"
-              className="agent-chat__menu"
-              trigger={(p) => (
-                <IconButton
-                  {...p}
-                  tabIndex={0}
-                  variant="ghost"
-                  icon={<MoreHorizontalIcon size={14} />}
-                  title="Room actions"
-                  aria-label={`Actions for ${room.name}`}
+            </div>
+            <div className="agent-chat__actions">
+              <Dropdown
+                align="right"
+                portal
+                menuClassName="agent-model-menu"
+                className="agent-chat__menu"
+                trigger={(p) => (
+                  <IconButton
+                    {...p}
+                    tabIndex={0}
+                    variant="ghost"
+                    icon={<MoreHorizontalIcon size={14} />}
+                    title="Room actions"
+                    aria-label={`Actions for ${room.name}`}
+                  />
+                )}
+              >
+                <DropdownItem icon={<EditIcon size={12} />} onSelect={() => onEditRoom(room)}>
+                  Members and name…
+                </DropdownItem>
+                <DropdownItem
+                  icon={room.muted ? <BellIcon size={12} /> : <BellOffIcon size={12} />}
+                  onSelect={() => onToggleRoomMuted(room)}
+                >
+                  {room.muted ? 'Unmute' : 'Mute'}
+                </DropdownItem>
+                {replying && (
+                  <DropdownItem icon={<CloseIcon size={12} />} onSelect={stop}>
+                    Stop replies here
+                  </DropdownItem>
+                )}
+                <DropdownDivider />
+                <DropdownItem
+                  icon={<TrashIcon size={12} />}
+                  variant="danger"
+                  onSelect={() => onDeleteRoom(room)}
+                >
+                  Delete room…
+                </DropdownItem>
+              </Dropdown>
+            </div>
+          </header>
+
+          <div
+            className="agent-chat__scroll"
+            ref={scrollRef}
+            onScroll={onScroll}
+            tabIndex={0}
+            role="region"
+            aria-label="Messages"
+          >
+            <div className="agent-chat__messages" ref={messagesRef}>
+              {items.length === 0 && messages !== undefined ? (
+                <RoomEmpty
+                  room={room}
+                  members={members}
+                  madeBy={room.createdBy ? agentsById.get(room.createdBy)?.name : undefined}
+                  onPick={(a) => insertMention(a)}
+                  onStart={(t) => {
+                    setDraft(t);
+                    requestAnimationFrame(() => {
+                      const el = inputRef.current;
+                      if (!el) return;
+                      el.focus();
+                      el.setSelectionRange(el.value.length, el.value.length);
+                    });
+                  }}
+                />
+              ) : (
+                rows
+              )}
+              {indicator.mounted && (
+                <RoomWorking
+                  room={room}
+                  working={working}
+                  waiting={waiting}
+                  theme={theme}
+                  entering={indicator.entering}
+                  leaving={indicator.leaving}
+                  onExited={indicator.onExited}
                 />
               )}
-            >
-              <DropdownItem icon={<EditIcon size={12} />} onSelect={() => onEditRoom(room)}>
-                Members and name…
-              </DropdownItem>
-              <DropdownItem
-                icon={room.muted ? <BellIcon size={12} /> : <BellOffIcon size={12} />}
-                onSelect={() => onToggleRoomMuted(room)}
-              >
-                {room.muted ? 'Unmute' : 'Mute'}
-              </DropdownItem>
-              {replying && (
-                <DropdownItem icon={<CloseIcon size={12} />} onSelect={stop}>
-                  Stop replies here
-                </DropdownItem>
-              )}
-              <DropdownDivider />
-              <DropdownItem
-                icon={<TrashIcon size={12} />}
-                variant="danger"
-                onSelect={() => onDeleteRoom(room)}
-              >
-                Delete room…
-              </DropdownItem>
-            </Dropdown>
+            </div>
           </div>
-        </header>
 
-        <div
-          className="agent-chat__scroll"
-          ref={scrollRef}
-          onScroll={onScroll}
-          tabIndex={0}
-          role="region"
-          aria-label="Messages"
-        >
-          <div className="agent-chat__messages" ref={messagesRef}>
-            {items.length === 0 && messages !== undefined ? (
-              <RoomEmpty
-                room={room}
-                members={members}
-                madeBy={room.createdBy ? agentsById.get(room.createdBy)?.name : undefined}
-                onPick={(a) => insertMention(a)}
-                onStart={(t) => {
-                  setDraft(t);
-                  requestAnimationFrame(() => {
-                    const el = inputRef.current;
-                    if (!el) return;
-                    el.focus();
-                    el.setSelectionRange(el.value.length, el.value.length);
-                  });
-                }}
-              />
-            ) : (
-              rows
-            )}
-            {indicator.mounted && (
-              <RoomWorking
-                room={room}
-                working={working}
-                waiting={waiting}
-                theme={theme}
-                entering={indicator.entering}
-                leaving={indicator.leaving}
-                onExited={indicator.onExited}
+          <div className="agent-chat__footer">
+            {jump.mounted && (
+              <IconButton
+                tabIndex={0}
+                size="compact"
+                className="agent-chat__jump"
+                data-leaving={jump.leaving || undefined}
+                onAnimationEnd={jump.leaving ? jump.onExited : undefined}
+                icon={<ArrowDownIcon size={14} />}
+                onClick={() =>
+                  scrollRef.current?.scrollTo({
+                    top: scrollRef.current.scrollHeight,
+                    behavior: scrollMotion(),
+                  })
+                }
+                aria-label="Jump to latest"
+                title="Jump to latest"
               />
             )}
-          </div>
-        </div>
-
-        <div className="agent-chat__footer">
-          {jump.mounted && (
-            <IconButton
-              tabIndex={0}
-              size="compact"
-              className="agent-chat__jump"
-              data-leaving={jump.leaving || undefined}
-              onAnimationEnd={jump.leaving ? jump.onExited : undefined}
-              icon={<ArrowDownIcon size={14} />}
-              onClick={() =>
-                scrollRef.current?.scrollTo({
-                  top: scrollRef.current.scrollHeight,
-                  behavior: scrollMotion(),
-                })
-              }
-              aria-label="Jump to latest"
-              title="Jump to latest"
-            />
-          )}
-          <ConversationBars
-            bars={[
-              {
-                id: 'dictation',
-                node: blocked && (
-                  <ConversationBar
-                    role="alert"
-                    state="waiting"
-                    title={blocked.message}
-                    actions={
-                      <>
-                        <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
-                        {blocked.settings && (
-                          <Button
-                            size="compact"
-                            variant="secondary"
-                            onClick={() => {
-                              const url = blocked.settings;
-                              if (url) void openPrivacySettings(url);
-                            }}
-                          >
-                            Open System Settings
-                          </Button>
-                        )}
-                      </>
-                    }
-                  />
-                ),
-              },
-            ]}
-          />
-          {members.length < MIN_ROOM_MEMBERS && (
             <ConversationBars
               bars={[
                 {
-                  id: 'engine',
-                  node: (
+                  id: 'dictation',
+                  node: blocked && (
                     <ConversationBar
-                      icon={<CollaboratorsIcon size={14} />}
-                      data-testid="room-too-few"
-                      title={
-                        members.length === 1
-                          ? `Only ${members[0].name} is left in this room`
-                          : 'Nobody is left in this room'
-                      }
-                      detail="A room needs two members. Add someone, or delete it."
+                      role="alert"
+                      state="waiting"
+                      title={blocked.message}
                       actions={
                         <>
-                          <Button
-                            tabIndex={0}
-                            size="compact"
-                            variant="secondary"
-                            onClick={() => onDeleteRoom(room)}
-                          >
-                            Delete room
-                          </Button>
-                          <Button
-                            tabIndex={0}
-                            size="compact"
-                            variant="strong"
-                            onClick={() => onEditRoom(room)}
-                          >
-                            Add members
-                          </Button>
+                          <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
+                          {blocked.settings && (
+                            <Button
+                              size="compact"
+                              variant="secondary"
+                              onClick={() => {
+                                const url = blocked.settings;
+                                if (url) void openPrivacySettings(url);
+                              }}
+                            >
+                              Open System Settings
+                            </Button>
+                          )}
                         </>
                       }
                     />
@@ -717,45 +732,86 @@ export function RoomChat({
                 },
               ]}
             />
-          )}
-          {asking && (
-            <WhoShouldAnswer
+            {members.length < MIN_ROOM_MEMBERS && (
+              <ConversationBars
+                bars={[
+                  {
+                    id: 'engine',
+                    node: (
+                      <ConversationBar
+                        icon={<CollaboratorsIcon size={14} />}
+                        data-testid="room-too-few"
+                        title={
+                          members.length === 1
+                            ? `Only ${members[0].name} is left in this room`
+                            : 'Nobody is left in this room'
+                        }
+                        detail="A room needs two members. Add someone, or delete it."
+                        actions={
+                          <>
+                            <Button
+                              tabIndex={0}
+                              size="compact"
+                              variant="secondary"
+                              onClick={() => onDeleteRoom(room)}
+                            >
+                              Delete room
+                            </Button>
+                            <Button
+                              tabIndex={0}
+                              size="compact"
+                              variant="strong"
+                              onClick={() => onEditRoom(room)}
+                            >
+                              Add members
+                            </Button>
+                          </>
+                        }
+                      />
+                    ),
+                  },
+                ]}
+              />
+            )}
+            {asking && (
+              <WhoShouldAnswer
+                members={members}
+                onPick={(target) => send(target)}
+                onCancel={() => {
+                  setAsking(false);
+                  inputRef.current?.focus();
+                }}
+              />
+            )}
+            <RoomComposer
+              room={room}
               members={members}
-              onPick={(target) => send(target)}
-              onCancel={() => {
-                setAsking(false);
-                inputRef.current?.focus();
-              }}
+              draftKey={draftKey}
+              inputRef={inputRef}
+              micRef={micRef}
+              dictation={dictation}
+              staged={staged}
+              attachments={attachments}
+              engineReady={engineReady}
+              pickFiles={pickFiles}
+              asking={asking}
+              setAsking={setAsking}
+              replying={replying}
+              onSend={() => send()}
+              onStop={stop}
             />
-          )}
-          <RoomComposer
-            room={room}
-            members={members}
-            draftKey={draftKey}
-            inputRef={inputRef}
-            micRef={micRef}
-            dictation={dictation}
-            staged={staged}
-            attachments={attachments}
-            engineReady={engineReady}
-            pickFiles={pickFiles}
-            asking={asking}
-            setAsking={setAsking}
-            replying={replying}
-            onSend={() => send()}
-            onStop={stop}
-          />
-        </div>
-
-        <div className="agent-chat__drop" aria-hidden={!dropping}>
-          <div className="agent-chat__drop-label">
-            <span className="agent-chat__drop-icon">
-              <PaperclipIcon size={18} />
-            </span>
-            Drop files for {room.name}
           </div>
-        </div>
-      </section>
+
+          <div className="agent-chat__drop" aria-hidden={!dropping}>
+            <div className="agent-chat__drop-label">
+              <span className="agent-chat__drop-icon">
+                <PaperclipIcon size={18} />
+              </span>
+              Drop files for {room.name}
+            </div>
+          </div>
+        </section>
+      </BlockReplyContext.Provider>
     </AccentScopeProvider>
   );
 
@@ -812,6 +868,7 @@ function RoomComposer({
   const setDraft = useCallback((text: string) => setComposerDraft(draftKey, text), [draftKey]);
   const dictating = dictation.phase !== 'idle';
   useFollowDictation(inputRef, draft, dictating);
+  const wrapped = useGrowingInput(inputRef, draft);
   // @ offers the room's members and @everyone, nobody else.
   const mentionable = useMemo(() => [...members, everyoneEntry(members.length)], [members]);
   const mentionPicker = useMentionPicker(mentionable, inputRef, setDraft);
@@ -828,6 +885,7 @@ function RoomComposer({
     <form
       className="agent-composer"
       data-dictation={dictation.phase}
+      data-wrapped={wrapped || undefined}
       data-has-attachments={staged.length > 0 || undefined}
       onSubmit={(e) => {
         e.preventDefault();
@@ -1310,4 +1368,27 @@ function RoomEmpty({
       </div>
     </div>
   );
+}
+
+/**
+ * Your answer to a member's block: your next line in the room to that member
+ * (named in it, or the lead's when you named nobody). Lines to others in
+ * between don't count, nor a tap on another card (`answersCard`).
+ */
+export function roomAnswerAfter(
+  messages: readonly AgentMessage[],
+  messageId: string,
+  agentId: string,
+  lead?: string
+): string | null {
+  const at = messages.findIndex((m) => m.id === messageId);
+  if (at < 0) return null;
+  for (let i = at + 1; i < messages.length; i++) {
+    const m = messages[i];
+    if (!answersCard(m, messageId)) continue;
+    const named = m.mentions ?? [];
+    if (named.some((r) => r.id === agentId)) return m.text;
+    if (named.length === 0 && agentId === lead) return m.text;
+  }
+  return null;
 }

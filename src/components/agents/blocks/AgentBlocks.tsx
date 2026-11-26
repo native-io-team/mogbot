@@ -29,7 +29,6 @@ import { BlockForm } from './BlockForm';
 import {
   BlockCallout,
   BlockChecklist,
-  BlockChoices,
   BlockCode,
   BlockComparison,
   BlockFacts,
@@ -37,6 +36,7 @@ import {
   BlockMetrics,
   BlockSteps,
 } from './BlockParts';
+import { BlockChoices } from './BlockChoices';
 import { BlockTable } from './BlockTable';
 import { useBlockReply, type Answering } from './blockReply';
 
@@ -48,10 +48,12 @@ interface AgentBlocksProps {
 
 export const AgentBlocks = memo(function AgentBlocks({ messageId, agent, set }: AgentBlocksProps) {
   const ctx = useBlockReply();
-  const answer = ctx?.answerOf(messageId) ?? null;
+  const answer = ctx?.answerOf(messageId, agent.id) ?? null;
   const staged = !!set.fromOutside;
   const answering: Answering = {
-    reply: ctx ? (staged ? ctx.stage : ctx.send) : null,
+    reply: ctx
+      ? (text) => (staged ? ctx.stage(text, agent.id) : ctx.send(text, agent.id, messageId))
+      : null,
     staged,
     answer,
   };

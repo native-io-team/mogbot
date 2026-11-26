@@ -114,7 +114,9 @@ export const sendRoomMessage = (
   text: string,
   mentions: string[],
   everyone: boolean,
-  attachments: OutgoingAttachment[] = []
+  attachments: OutgoingAttachment[] = [],
+  /** Sent from a card: that card's message id (`AgentMessage.answers`). */
+  answers?: string
 ) =>
   invoke<RoomSent>('agents_room_send', {
     roomId,
@@ -122,6 +124,7 @@ export const sendRoomMessage = (
     mentions: mentions.length ? mentions : undefined,
     everyone: everyone || undefined,
     attachments: attachments.length ? attachments : undefined,
+    answers,
   });
 export const focusRoom = (roomId: string | null) => invoke<void>('agents_room_focus', { roomId });
 export const stopRoom = (roomId: string) => invoke<number>('agents_room_stop', { roomId });

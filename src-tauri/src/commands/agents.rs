@@ -479,6 +479,7 @@ pub async fn agents_send(
     conversation: Option<String>,
     written_at: Option<i64>,
     reply_to: Option<String>,
+    answers: Option<String>,
 ) -> Result<store::AgentMessage, CommandError> {
     send_in(
         app,
@@ -492,6 +493,7 @@ pub async fn agents_send(
         conversation,
         written_at,
         reply_to,
+        answers,
     )
     .await
 }
@@ -523,6 +525,7 @@ pub(crate) async fn send_as(
         None,
         None,
         None,
+        None,
     )
     .await
 }
@@ -543,6 +546,7 @@ pub(crate) async fn send_in(
     conversation: Option<String>,
     written_at: Option<i64>,
     reply_to: Option<String>,
+    answers: Option<String>,
 ) -> Result<store::AgentMessage, CommandError> {
     let began = std::time::Instant::now();
     let text = text.trim().to_string();
@@ -608,6 +612,7 @@ pub(crate) async fn send_in(
         .await
         .map_err(agents::err_other)?;
     }
+    message.answers = agents::store::card_id(answers);
     // A phone's send id, echoed so its optimistic bubble reconciles by id.
     message.client_id = client_id.filter(|c| !c.is_empty());
     // Only real agents, other than the recipient, once each; anything else is dropped.

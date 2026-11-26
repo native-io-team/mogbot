@@ -113,7 +113,9 @@
   order: 3;
   align-self: stretch;
   min-height: calc(var(--agent-composer-line) + (var(--spacing-xs) * 2));
-  max-height: calc((var(--agent-composer-line) * 8) + (var(--spacing-xs) * 2));
+  /* Grows with what's typed up to 440px (Matt, 22 Nov), never more than
+     half a short window; past that it scrolls. */
+  max-height: min(440px, 50dvh);
   padding: var(--spacing-xs) var(--spacing-xs);
   /* The size the message will be once it's sent: what you type is what
      lands in the bubble, not a point smaller. */

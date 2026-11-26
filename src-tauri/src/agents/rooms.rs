@@ -968,6 +968,7 @@ pub(crate) fn already_sent(id: &str, client_id: &str) -> Option<AgentMessage> {
 
 /// The user said `text` in the room. Recorded in the thread (with whom it
 /// was for as `mentions`), then queued for each addressed member.
+#[allow(clippy::too_many_arguments)]
 pub fn send(
     app: &AppHandle,
     id: &str,
@@ -976,6 +977,7 @@ pub fn send(
     everyone: bool,
     client_id: Option<String>,
     incoming: Vec<super::attachments::OutgoingAttachment>,
+    answers: Option<String>,
 ) -> Result<Sent, CommandError> {
     let text = text.trim();
     if text.is_empty() && incoming.is_empty() {
@@ -1019,6 +1021,7 @@ pub fn send(
     message.room = Some(id.to_string());
     message.mentions = asked.clone();
     message.client_id = client_id.filter(|c| !c.is_empty());
+    message.answers = answers;
     message.attachments = save_attachments(&members, &message.id, incoming)?;
     let message = super::secrets::redact_message(message);
     append(id, &message)?;

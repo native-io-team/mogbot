@@ -168,6 +168,7 @@ fn pages_back_through_the_log() {
                 result: None,
                 revises: None,
                 reply_to: None,
+                answers: None,
                 takeover: false,
                 room: None,
                 decide: Vec::new(),
@@ -499,6 +500,7 @@ fn approvals_resolve_once_and_stale_ones_expire() {
             result: None,
             revises: None,
             reply_to: None,
+            answers: None,
             takeover: false,
             room: None,
             decide: Vec::new(),
@@ -560,6 +562,7 @@ fn note(agent_id: &str, text: &str) -> AgentMessage {
         result: None,
         revises: None,
         reply_to: None,
+        answers: None,
         takeover: false,
         room: None,
         decide: Vec::new(),
@@ -1382,4 +1385,21 @@ fn paused_is_kept_only_when_true() {
     let mut v = serde_json::to_value(&a).unwrap();
     v.as_object_mut().unwrap().remove("paused");
     assert!(!serde_json::from_value::<Agent>(v).unwrap().paused);
+}
+
+#[test]
+fn a_card_id_is_kept_only_when_it_looks_like_one_of_ours() {
+    use super::card_id;
+    assert_eq!(
+        card_id(Some(" 3e9b44228cc3 ".into())),
+        Some("3e9b44228cc3".into())
+    );
+    assert_eq!(
+        card_id(Some("local-1a2b_c".into())),
+        Some("local-1a2b_c".into())
+    );
+    for bad in ["", "   ", "a b", "../x", &"x".repeat(65)] {
+        assert_eq!(card_id(Some(bad.to_string())), None, "{bad}");
+    }
+    assert_eq!(card_id(None), None);
 }

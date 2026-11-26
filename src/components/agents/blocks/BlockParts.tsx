@@ -6,7 +6,6 @@
  * @module components/agents/blocks/BlockParts
  */
 
-import { useState } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ArrowDownIcon,
@@ -29,7 +28,6 @@ import {
   pickedReply,
   type CalloutBlock,
   type ChecklistBlock,
-  type ChoicesBlock,
   type CodeBlock,
   type ComparisonBlock,
   type FactsBlock,
@@ -209,7 +207,7 @@ export function BlockSteps({ block }: { block: StepsBlock }) {
   );
 }
 
-/* ---- Comparison and choices -------------------------------------------------- */
+/* ---- Comparison -------------------------------------------------------------- */
 
 export function BlockComparison({
   block,
@@ -288,53 +286,6 @@ export function BlockComparison({
           </div>
         </section>
       ))}
-    </div>
-  );
-}
-
-export function BlockChoices({ block, answering }: { block: ChoicesBlock; answering: Answering }) {
-  const [sent, setSent] = useState<number | null>(null);
-  const answer = answering.answer;
-  const fromAnswer = pickedReply(
-    block.options.map((o) => o.reply),
-    answer
-  );
-  const picked = fromAnswer >= 0 ? fromAnswer : sent;
-  const answered = answer != null || sent != null;
-  return (
-    <div className="agent-block-choices">
-      {block.question && <p className="agent-block-choices__question">{block.question}</p>}
-      <div
-        className="agent-block-choices__row"
-        role="group"
-        aria-label={block.question ?? 'Replies'}
-      >
-        {block.options.map((o, i) =>
-          answered ? (
-            picked === i && (
-              <span key={i} className="agent-block-choices__picked">
-                <CheckIcon size={12} />
-                {o.label}
-              </span>
-            )
-          ) : (
-            <Button
-              key={i}
-              variant="secondary"
-              disabled={!answering.reply}
-              onClick={() => {
-                answering.reply?.(o.reply);
-                if (!answering.staged) setSent(i);
-              }}
-            >
-              {o.label}
-            </Button>
-          )
-        )}
-        {answered && picked == null && (
-          <span className="agent-block-choices__picked">Answered</span>
-        )}
-      </div>
     </div>
   );
 }
