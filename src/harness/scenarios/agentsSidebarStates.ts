@@ -51,7 +51,7 @@ export const agentsSidebarStatesScenarios: Scenario[] = [
   sidebar(
     'agents-sidebar-rows',
     'Agents sidebar — every kind of row',
-    'Catch up with “1 needs you” and the first names. The Chief and Native App pinned (small pin), Lead Gen with the amber “Needs your OK” tag alone (no excerpt), Acme Site with a 6px grey dot and its step, its clock (“2m”) in the time column, Finance with the blue unread dot under its time, Social Posts muted (bell-off mark), Hidden · 1 folded. The open row is the selected fill; nothing is accent-coloured.'
+    'Catch up with “1 needs you” and the first names. The Chief and Native App pinned (small pin), Lead Gen with the amber “Needs your OK” tag alone (no excerpt), Acme Site with a 6px grey dot and its step, its clock (“2m”) in the time column, Finance with the blue unread dot under its time, Social Posts muted (bell-off mark), Hidden (1) folded like a folder header. The open row is the selected fill; nothing is accent-coloured.'
   ),
   sidebar(
     'agents-sidebar-catchup-clear',

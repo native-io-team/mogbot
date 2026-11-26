@@ -548,15 +548,17 @@ export function AgentsSidebar({
             </div>
           )}
           {hidden.length > 0 && (
+            // Drawn as a folder header: the same size, title and count.
             <button
               type="button"
               tabIndex={0}
-              className="agents-list__hidden-toggle"
+              className="agents-list__group-toggle"
               aria-expanded={showHidden}
               onClick={onToggleShowHidden}
             >
               <ChevronRightIcon size={10} className="agents-list__hidden-chevron" />
-              Hidden · {hidden.length}
+              <span className="agents-list__group-title">Hidden</span>
+              <span className="agents-list__group-count">{hidden.length}</span>
             </button>
           )}
           {showHidden && hidden.map(row)}
