@@ -21,7 +21,7 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from 'react';
-import { ArrowUpIcon, MicrophoneIcon, PlusIcon } from '@/components/icons';
+import { MicrophoneIcon, PlusIcon } from '@/components/icons';
 import { IconButton } from '../primitives/IconButton';
 import { TextArea } from '../primitives/TextField';
 import { ComposerAttachments, ComposerQuotes } from './AgentAttachments';
@@ -53,13 +53,6 @@ export interface ComposerDictation {
   meter: DictationMeter;
   /** Heard but couldn't be written out: Try again. */
   retry: (() => void) | null;
-}
-
-/** Send works while listening (it stops, then sends); not while tidying. */
-export function sendDisabled(phase: DictationPhase, canSend: boolean): boolean {
-  if (phase === 'listening' || phase === 'starting') return false;
-  if (phase !== 'idle') return true;
-  return !canSend;
 }
 
 interface AgentComposerProps {
@@ -121,6 +114,44 @@ export function ListeningStatus({
   onRetry?: (() => void) | null;
 }) {
   return <DictationLive phase={phase} meter={meter} onCancel={onCancel} onRetry={onRetry} />;
+}
+
+/**
+ * A room's field grows with what's typed, as an agent's chat does: up to the
+ * CSS cap (440px), then it scrolls. Returns whether it runs past one line, so
+ * the words take a row of their own above the tools.
+ *
+ * Once wrapped it stays wrapped until the field empties: the wrapped field is
+ * wider, so a draft just past one line fits one line again there, and
+ * unwrapping on that would flip the two layouts forever (React's "Maximum
+ * update depth exceeded", which took a room's whole pane down mid-typing).
+ */
+export function useGrowingInput(
+  inputRef: RefObject<HTMLTextAreaElement | null>,
+  draft: string
+): boolean {
+  const [wrapped, setWrapped] = useState(false);
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (draft === '') {
+      el.style.height = '';
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- layout measurement decides the row
+      setWrapped(false);
+      return;
+    }
+    const style = getComputedStyle(el);
+    const cap = parseFloat(style.maxHeight) || 440;
+    const oneLine =
+      parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    el.style.height = 'auto';
+    const full = el.scrollHeight;
+    el.style.height = `${Math.min(full, cap)}px`;
+    const pastOneLine = full > oneLine * 1.5;
+    setWrapped((was) => was || pastOneLine);
+    // `wrapped` re-measures the height in the wider field it moves to.
+  }, [draft, inputRef, wrapped]);
+  return wrapped;
 }
 
 /**
@@ -451,7 +482,9 @@ export const AgentComposer = memo(function AgentComposer({
             aria-label={dictating ? 'Stop dictating' : 'Dictate'}
             title={dictating ? 'Stop dictating (Esc to discard)' : 'Dictate (⌘⇧D, or hold ⌥Space)'}
           />
-          {working && !canSend && !blank && !dictating ? (
+          {/* No Send button: Enter sends (⌘Enter sends now while it works).
+              Stop shows while it works with nothing typed. */}
+          {working && !canSend && !blank && !dictating && (
             <IconButton
               tabIndex={0}
               variant="default"
@@ -461,21 +494,6 @@ export const AgentComposer = memo(function AgentComposer({
               onClick={onStop}
               aria-label={`Stop ${agentName}`}
               title="Stop (Esc twice)"
-            />
-          ) : (
-            <IconButton
-              tabIndex={0}
-              type="submit"
-              variant="default"
-              className="agent-composer__send"
-              icon={<ArrowUpIcon size={14} />}
-              disabled={sendDisabled(dictation.phase, canSend)}
-              aria-label="Send"
-              title={
-                busy
-                  ? `Queue it: ${agentName} reads it when it finishes (↵). Interrupt and send now: ⌘↵`
-                  : 'Send'
-              }
             />
           )}
         </div>

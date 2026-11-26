@@ -189,6 +189,11 @@ const ACME_OWN = [
   ...THREAD.filter((m) => (m as { agentId: string }).agentId === 'acme'),
 ];
 
+const LONG_DRAFT = Array.from(
+  { length: 30 },
+  (_, i) => `Line ${i + 1}: notes for the quarterly review, so everyone sees the same list.`
+).join('\n');
+
 const openRoom = (id: string) => ({ click: `[data-agent-id="room:${id}"]` });
 const openRoomMenu = { click: '.agent-room .agent-chat__menu button' };
 
@@ -298,6 +303,16 @@ const APPROVAL_TEAM = () =>
   });
 
 export const agentsRoomsScenarios: Scenario[] = [
+  {
+    id: 'agents-room-composer-tall',
+    title: 'Rooms — a long message in the composer',
+    looksRightWhen:
+      'The room’s composer has grown with the text to about 440px tall, the words on a row of their own above the + and mic, and a scrollbar inside it for the rest.',
+    requires: '.agent-room .agent-composer[data-wrapped]',
+    openSelector: AGENTS_TAB,
+    steps: [openRoom(LAUNCH), { fill: '.agent-composer__input', value: LONG_DRAFT }],
+    commands: roomCommands(THREAD),
+  },
   {
     id: 'agents-room-thread',
     title: 'Rooms — four agents in one thread, @everyone and a hand-off',

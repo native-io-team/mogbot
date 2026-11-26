@@ -305,7 +305,9 @@ describe('the room’s draft', () => {
     cleanup();
     await open(room());
     expect(box().value).toBe('@Finance hello');
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    // No Send button: Enter sends.
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    fireEvent.keyDown(box(), { key: 'Enter' });
     await waitFor(() => expect(sends).toHaveLength(1));
     expect(composerDraft('room:r1')).toBe('');
   });

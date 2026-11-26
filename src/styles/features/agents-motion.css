@@ -213,8 +213,7 @@
   transition: border-color var(--transition-interaction);
 }
 
-/* Send ⇄ Stop swap in place rather than cut. */
-.agent-composer__send,
+/* Stop pops in rather than cuts. */
 .agent-composer__stop {
   animation: agents-motion-pop-in var(--transition-interaction) backwards;
 }
@@ -324,7 +323,6 @@
   .agent-approval__outcome[data-resolved],
   .agent-card__outcome[data-resolved],
   .agent-chat__jump,
-  .agent-composer__send,
   .agent-composer__stop,
   .agent-composer__notice,
   .agents-list__status > *,

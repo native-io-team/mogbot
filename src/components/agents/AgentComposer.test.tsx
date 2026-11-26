@@ -120,7 +120,7 @@ describe('the composer owns what is typed', () => {
     const box = screen.getByRole('textbox', { name: 'Message Ops' });
     expect(box).toHaveValue('Half a thought');
     fireEvent.change(box, { target: { value: '' } });
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(box).toHaveValue('');
   });
 
   it('still offers to keep a key typed into it out of the chat', () => {
@@ -140,12 +140,10 @@ describe('a starter’s brief with its blank still empty', () => {
     setComposerDraft('a1', brief);
     render(<Chat id="a1" onSend={onSend} renders={() => {}} unfilled={brief} />);
     const box = screen.getByRole('textbox', { name: 'Message Ops' });
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     expect(screen.getByText('Fill in the end, then send')).toBeInTheDocument();
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(onSend).not.toHaveBeenCalled();
     fireEvent.change(box, { target: { value: `${brief}AI chips` } });
-    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
     expect(screen.queryByText('Fill in the end, then send')).toBeNull();
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(onSend).toHaveBeenCalledWith(false);
@@ -205,14 +203,14 @@ describe('the bar: Send, Dictate, Stop', () => {
     expect(screen.getByRole('button', { name: 'Dictate' })).toBeInTheDocument();
   });
 
-  it('draws Send on the default button chrome (its bubble colour comes from CSS), never the accent key, and off until there is something to send', () => {
-    // Julian, 20 Nov: Send wears the user's bubble colour on the New agent
-    // button's chrome; never the accent's primary key, never a black block.
-    render(<Chat id="a1" onSend={() => {}} renders={() => {}} />);
-    const send = screen.getByRole('button', { name: 'Send' });
-    expect(send).toBeDisabled();
-    expect(send.className).toMatch(/button--default/);
-    expect(send.className).not.toMatch(/primary|strong/);
+  it('has no Send button: Enter sends', () => {
+    const onSend = vi.fn<(now?: boolean) => void>();
+    render(<Chat id="a1" onSend={onSend} renders={() => {}} />);
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    fireEvent.change(box, { target: { value: 'hi' } });
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledWith(false);
   });
 
   it('turns Send into Stop while it works with nothing typed, and Stop stops the turn', () => {

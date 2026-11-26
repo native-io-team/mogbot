@@ -40,7 +40,8 @@
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: end;
-  margin: 0 var(--agents-column-inset) var(--spacing-lg);
+  /* Twice the column's side gutter below it. */
+  margin: 0 var(--agents-column-inset) var(--spacing-2xl);
   padding: var(--spacing-tight);
   background: var(--surface-panel);
   border: var(--border-width-default) solid var(--border-default);
@@ -113,7 +114,9 @@
   order: 3;
   align-self: stretch;
   min-height: calc(var(--agent-composer-line) + (var(--spacing-xs) * 2));
-  max-height: calc((var(--agent-composer-line) * 8) + (var(--spacing-xs) * 2));
+  /* Grows with what's typed up to 440px, never more than half a short
+     window; past that it scrolls. */
+  max-height: min(440px, 50dvh);
   padding: var(--spacing-xs) var(--spacing-xs);
   /* The size the message will be once it's sent: what you type is what
      lands in the bubble, not a point smaller. */
@@ -135,7 +138,8 @@
   box-shadow: none;
 }
 
-/* [mic] [send] on the right of the text's last line. */
+/* [mic] (and [stop] while it works) on the right of the text's last line.
+   There is no Send button: Enter sends. */
 .agent-composer__actions {
   grid-column: 4;
   order: 4;
@@ -146,25 +150,20 @@
 }
 
 .agent-composer__attach,
-.agent-composer__send,
 .agent-composer__stop {
   flex: 0 0 auto;
 }
 
-/* Send and Stop wear your bubble's colour and ink (Julian, 20 Nov: "the same
-   color as the chat bubbles") on the chrome of every default button, the
-   sidebar's New agent: its 1px border, its soft shadow, its press. Not a 3D
-   key's lip, and not a black block. 6px corners, concentric with the 12px
-   box. Empty, Send is the same button at the disabled opacity. The + is a
-   bare icon, no circle. */
-.agent-composer .agent-composer__send,
+/* Stop wears your bubble's colour and ink (Julian, 20 Nov: "the same color as
+   the chat bubbles") on the chrome of every default button, the sidebar's New
+   agent: its 1px border, its soft shadow, its press. 6px corners, concentric
+   with the 12px box. The + is a bare icon, no circle. */
 .agent-composer .agent-composer__stop {
   border-radius: var(--agents-composer-button-radius);
   background: var(--bubble-user-fill, var(--accent-user));
   color: var(--bubble-user-ink, var(--accent-on-user));
 }
 
-.agent-composer .agent-composer__send:hover:not(:disabled),
 .agent-composer .agent-composer__stop:hover:not(:disabled) {
   background: color-mix(
     in srgb,
