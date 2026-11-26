@@ -31,6 +31,8 @@ export async function handle(op, { tabs, cdp }) {
     case 'cdp':
       if (typeof op.method !== 'string') throw new ExtError(CODES.badRequest, 'no method');
       return cdp.send(op.agent, tabId(op), op.method, op.params);
+    case 'tab_logs':
+      return cdp.logsOf(op.agent, tabId(op), op.log, op.since, op.limit);
     default:
       throw new ExtError(CODES.badRequest, 'unknown op');
   }

@@ -115,6 +115,7 @@ export function fakeChrome() {
     },
     debugger: {
       onDetach: listeners(),
+      onEvent: listeners(),
       async getTargets() {
         return [];
       },

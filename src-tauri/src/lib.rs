@@ -390,8 +390,12 @@ pub fn run() {
             {
                 let handle = _app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(e) = agent_bridge::start_global_agent_bridge(handle).await {
-                        tracing::error!("[AgentBridge] Failed to start global bridge: {}", e);
+                    match agent_bridge::start_global_agent_bridge(handle).await {
+                        // Terminal sessions find the bridge here (`user_chrome::launcher`).
+                        Ok((port, _)) => user_chrome::sessions::publish(port),
+                        Err(e) => {
+                            tracing::error!("[AgentBridge] Failed to start global bridge: {}", e)
+                        }
                     }
                 });
             }
@@ -452,6 +456,8 @@ pub fn run() {
                 }
                 // Listening only when the user turned it on (off by default).
                 tauri::async_runtime::spawn(user_chrome::start());
+                // One alarm when it stays down while on (`user_chrome::alarm`).
+                user_chrome::alarm::watch(_app.handle().clone());
             }
 
             // Build the main window programmatically so we can attach an
@@ -1326,6 +1332,8 @@ pub fn run() {
                 agent_browser::service::shutdown();
                 // The user's Chrome hears that the app is gone.
                 user_chrome::stop("quit");
+                // Terminal sessions hear the app is closed.
+                user_chrome::sessions::unpublish();
                 // Whisper's Metal context must be gone before the process exits.
                 voice::transcribe::release();
                 // Phones hear it's going away, so they wait for it calmly.

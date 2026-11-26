@@ -25,6 +25,7 @@
 //!
 //! Design, threat model and what's verified: docs/design/own-browser-layer.md.
 
+pub mod alarm;
 pub mod auth;
 pub mod clipboard;
 pub mod frame;
@@ -39,9 +40,11 @@ pub mod host {
     }
 }
 pub mod install;
+pub mod launcher;
 pub mod link;
 pub mod managed;
 pub mod protocol;
+pub mod sessions;
 pub mod settings;
 pub mod setup;
 pub mod tools;

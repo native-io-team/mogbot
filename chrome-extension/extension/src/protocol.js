@@ -21,6 +21,7 @@ export const OPS = [
   'tab_focus',
   'release',
   'cdp',
+  'tab_logs',
 ];
 
 /** Every error code this extension answers with. */
