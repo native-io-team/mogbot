@@ -248,6 +248,40 @@ pub fn set_app_theme(app: AppHandle, theme: String) -> Result<(), CommandError> 
     Ok(())
 }
 
+const CHAT_WIDTH_IDS: &[&str] = &["narrow", "medium", "wide"];
+
+fn normalized_chat_width(value: Option<&str>) -> &'static str {
+    match value {
+        Some("medium") => "medium",
+        Some("wide") => "wide",
+        _ => "narrow",
+    }
+}
+
+/// Get the conversation column width (`narrow`, `medium`, or `wide`).
+#[tauri::command]
+#[tracing::instrument]
+pub fn get_chat_width() -> Result<String, CommandError> {
+    Ok(normalized_chat_width(read_app_state().chat_width.as_deref()).to_string())
+}
+
+/// Persist the conversation column width. Each window applies it itself
+/// (src/lib/chatWidth.ts).
+#[tauri::command]
+#[tracing::instrument]
+pub fn set_chat_width(width: String) -> Result<(), CommandError> {
+    if !CHAT_WIDTH_IDS.contains(&width.as_str()) {
+        return Err(CommandError::Validation {
+            field: "width".to_string(),
+            reason: "Choose one of narrow, medium, or wide".to_string(),
+        });
+    }
+    let mut state = read_app_state();
+    state.chat_width = Some(width);
+    write_app_state(&state).map_err(CommandError::from)?;
+    Ok(())
+}
+
 /// Get whether the macOS Spotify widget is enabled.
 ///
 /// Opt-in: defaults to `false` so no existing install starts talking to
@@ -585,8 +619,8 @@ pub async fn pick_projects_root(app: AppHandle) -> Result<Option<String>, Comman
 mod tests {
     use super::{
         effective_theme, interface_style_is_dark, normalized_app_icon, normalized_app_theme,
-        validate_app_icon, validate_app_theme, window_background_for, DARK_WINDOW_BACKGROUND,
-        LIGHT_WINDOW_BACKGROUND,
+        normalized_chat_width, validate_app_icon, validate_app_theme, window_background_for,
+        DARK_WINDOW_BACKGROUND, LIGHT_WINDOW_BACKGROUND,
     };
     use tauri::Theme;
 
@@ -652,6 +686,14 @@ mod tests {
         assert_eq!(normalized_app_theme(Some("sepia")), "system");
         assert_eq!(normalized_app_theme(None), "system");
         assert_eq!(normalized_app_theme(Some("light")), "light");
+    }
+
+    #[test]
+    fn unknown_saved_chat_widths_are_narrow() {
+        assert_eq!(normalized_chat_width(None), "narrow");
+        assert_eq!(normalized_chat_width(Some("huge")), "narrow");
+        assert_eq!(normalized_chat_width(Some("medium")), "medium");
+        assert_eq!(normalized_chat_width(Some("wide")), "wide");
     }
 
     #[test]

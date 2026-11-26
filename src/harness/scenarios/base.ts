@@ -193,6 +193,8 @@ export const baseCommands: CommandMap = {
   // The harness's `?theme=` param overrides this (fakeBackend.ts).
   get_app_theme: 'dark',
   set_app_theme: null,
+  get_chat_width: 'narrow',
+  set_chat_width: null,
   // `null` is the real third state here: never asked. The toggle then reflects
   // default-on, and the explainer runs before the first capture.
   get_thumbnails_enabled: null,

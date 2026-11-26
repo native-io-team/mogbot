@@ -36,6 +36,7 @@ import { ConnectedPage } from '../agents/ConnectedPage';
 import { AccentColorSetting } from './AccentColorSetting';
 import { AccountPage } from './AccountPage';
 import { ThemeSetting } from './ThemeSetting';
+import { ChatWidthSetting } from './ChatWidthSetting';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { Group, Row, Toggle } from '../agents/AgentSettingsRows';
@@ -752,6 +753,7 @@ export function SettingsModal({
                 <div className="agents-settings">
                   <Group id="appearance-look" title="Look">
                     <ThemeSetting />
+                    <ChatWidthSetting />
                     <AccentColorSetting />
                     {SLACK_INVITE_URL && (
                       <Row

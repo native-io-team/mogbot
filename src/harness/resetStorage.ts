@@ -58,6 +58,12 @@ for (const [key, value] of Object.entries(seeded)) {
  * the same path a real launch does; the fake backend's `get_app_theme`
  * answers the same value, so nothing reconciles it away.
  */
+/** `&chatWidth=medium|wide`: the saved Chat width (Narrow otherwise). */
+export const harnessChatWidth = (() => {
+  const value = params.get('chatWidth');
+  return value === 'narrow' || value === 'medium' || value === 'wide' ? value : null;
+})();
+
 export const harnessTheme = (() => {
   const value = params.get('theme');
   return value === 'light' || value === 'dark' || value === 'system' ? value : null;

@@ -807,6 +807,31 @@
   color: var(--text-muted);
 }
 
+/* Wider than Narrow (Settings → Chat width): the gutter either side is the
+   space under the composer, the agent's reply is prose on the canvas across
+   the column, and yours is the only bubble, in the faint tint of the reading
+   text and the reading ink, so the agent's colour stays on its key and the
+   send button. The collapsed rail's wider gutter (above) still wins. */
+:root:is([data-chat-width='medium'], [data-chat-width='wide']) .agent-chat {
+  --agents-chat-gutter: var(--spacing-lg);
+}
+
+:root:is([data-chat-width='medium'], [data-chat-width='wide']) .agent-bubble--agent {
+  max-width: min(var(--agents-prose-measure), 100%);
+  padding-inline: 0;
+  background: none;
+  border-radius: 0;
+}
+
+:root:is([data-chat-width='medium'], [data-chat-width='wide']) .agent-bubble--user {
+  background: color-mix(in srgb, var(--text-primary) var(--agents-bubble-tint), transparent);
+  color: var(--text-primary);
+}
+
+:root:is([data-chat-width='medium'], [data-chat-width='wide']) .agent-bubble__stopped {
+  padding-left: 0;
+}
+
 .agent-chat__failed {
   display: inline-flex;
   align-items: center;

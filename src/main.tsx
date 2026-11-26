@@ -32,10 +32,12 @@ import { isExpectedCommandError } from './lib/errors';
 import { OverlayScrollbars } from 'overlayscrollbars';
 import 'overlayscrollbars/overlayscrollbars.css';
 import { initTheme } from './lib/theme';
+import { initChatWidth } from './lib/chatWidth';
 import { installNavigationGuard } from './lib/navigationGuard';
 
 // Follow the saved theme (index.html already painted the first frame in it).
 initTheme();
+initChatWidth();
 
 // No link or form ever loads in the app window (see lib/navigationGuard).
 installNavigationGuard();

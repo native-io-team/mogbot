@@ -80,6 +80,17 @@
   --agents-card-shadow: var(--shadow-card);
 }
 
+/* Settings → Appearance → Chat width (lib/chatWidth.ts). Narrow is the 720px
+   column above; Medium and Wide widen it, and agents-chat.css takes the
+   reply's bubble away there. */
+:root[data-chat-width='medium'] {
+  --agents-chat-width: 1060px;
+}
+
+:root[data-chat-width='wide'] {
+  --agents-chat-width: 1400px;
+}
+
 /* White is the strongest neutral of the theme: near-black on light, as the
    accent itself is (LIGHT_THEME_WHITE in accent.ts). */
 :root[data-theme='light'] {

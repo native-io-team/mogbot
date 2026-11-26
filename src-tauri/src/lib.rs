@@ -1034,6 +1034,8 @@ pub fn run() {
             commands::settings::set_thumbnails_enabled,
             commands::settings::get_app_theme,
             commands::settings::set_app_theme,
+            commands::settings::get_chat_width,
+            commands::settings::set_chat_width,
             // Accounts (Workspaces)
             commands::accounts::list_accounts,
             commands::accounts::create_account,

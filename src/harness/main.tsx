@@ -35,6 +35,7 @@ import {
 } from './commandBridge';
 import { HarnessOverlay } from './HarnessOverlay';
 import { initTheme } from '../lib/theme';
+import { initChatWidth } from '../lib/chatWidth';
 import { holdCopiedFlag } from '../hooks/useCopyToClipboard';
 
 const params = new URLSearchParams(window.location.search);
@@ -59,6 +60,7 @@ installFakeBackend(scenario);
 
 // `?theme=light|dark|system` (resetStorage.ts seeds it before any app module).
 initTheme();
+initChatWidth();
 
 /**
  * What each scripted step did, so a capture can say a step never happened

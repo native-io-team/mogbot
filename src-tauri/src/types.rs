@@ -991,6 +991,10 @@ pub struct AppState {
     /// `system`, which follows the macOS appearance live.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_theme: Option<String>,
+    /// How wide the conversation column is (`narrow`, `medium`, or `wide`).
+    /// Defaults to `narrow`, the original 720px column.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chat_width: Option<String>,
     /// Workspaces (org/client accounts) with isolated Claude/GitHub config and credentials
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub accounts: Vec<Account>,

@@ -554,7 +554,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--agents-bubble-pad-y",
@@ -3482,7 +3482,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--tabs-tray-surface",
@@ -5930,7 +5930,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 682
+      "consumerCount": 684
     },
     {
       "name": "--text-secondary",
@@ -7586,7 +7586,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 682
+      "consumerCount": 684
     },
     {
       "name": "--text-secondary",
