@@ -53,13 +53,34 @@ pub fn extension_allowed(origin: &str) -> bool {
 }
 
 /// The folder the link lives in: the socket and the token.
+///
+/// A debug build (`pnpm tauri dev`) shares the installed app's data folder,
+/// so it gets a link of its own, `chrome-link-dev`: one that held the
+/// installed app's socket left the agents without the user's Chrome.
 pub fn link_dir() -> PathBuf {
-    #[cfg(debug_assertions)]
-    if let Some(d) = std::env::var_os(DIR_ENV).filter(|d| !d.is_empty()) {
-        return PathBuf::from(d);
-    }
-    crate::brand::app_support_dir().join("chrome-link")
+    link_dir_for(
+        std::env::var_os(DIR_ENV),
+        &crate::brand::app_support_dir(),
+        cfg!(debug_assertions),
+    )
 }
+
+/// [`link_dir`], pure. `env`: [`DIR_ENV`]'s value, honoured only when
+/// `debug`.
+pub fn link_dir_for(env: Option<std::ffi::OsString>, app_support: &Path, debug: bool) -> PathBuf {
+    if !debug {
+        return app_support.join(LINK_DIR_NAME);
+    }
+    match env.filter(|d| !d.is_empty()) {
+        Some(d) => PathBuf::from(d),
+        None => app_support.join(DEV_LINK_DIR_NAME),
+    }
+}
+
+/// The installed app's link folder, in its data folder.
+pub const LINK_DIR_NAME: &str = "chrome-link";
+/// A debug build's, beside it: never the installed app's.
+pub const DEV_LINK_DIR_NAME: &str = "chrome-link-dev";
 
 /// Debug builds only: run the link somewhere else (the end-to-end check runs
 /// it in a scratch folder, never the app's own). Release builds ignore it,
@@ -91,15 +112,32 @@ pub fn token_path(dir: &Path) -> PathBuf {
 /// its terminator).
 pub const MAX_SOCKET_PATH: usize = 103;
 
-/// Make the folder (0700) and a fresh token (0600). Returns the token.
-pub fn fresh_token(dir: &Path) -> std::io::Result<String> {
+/// Make the link's folder (0700). Writes nothing in it.
+pub fn prepare_dir(dir: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
     }
+    Ok(())
+}
+
+/// Make the folder (0700) and a fresh token (0600). Returns the token.
+/// Only once this copy of the app holds the link (`start_at`): the token
+/// is the one the socket's owner checks, and rewriting it under another
+/// copy's live socket locks every host out of that copy.
+pub fn fresh_token(dir: &Path) -> std::io::Result<String> {
     let token = random_hex(32);
+    write_token(dir, &token)?;
+    Ok(token)
+}
+
+/// Write `token` as the link's token (0600, atomically), in a 0700 folder.
+/// The self-heal (`heal`) puts the token this copy proves with back when
+/// something else rewrote the file.
+pub fn write_token(dir: &Path, token: &str) -> std::io::Result<()> {
+    prepare_dir(dir)?;
     let path = token_path(dir);
     let tmp = dir.join(".token.tmp");
     let _ = std::fs::remove_file(&tmp);
@@ -117,7 +155,7 @@ pub fn fresh_token(dir: &Path) -> std::io::Result<String> {
         f.sync_all()?;
     }
     std::fs::rename(&tmp, &path)?;
-    Ok(token)
+    Ok(())
 }
 
 /// The token, as the host reads it. Refuses a token file anyone else could
@@ -285,6 +323,35 @@ mod tests {
         assert_eq!(
             a,
             pipe_name(Path::new(r"c:\users\ANN\appdata\local\app\chrome-link"))
+        );
+    }
+
+    #[test]
+    fn a_debug_build_never_runs_the_installed_apps_link() {
+        let support = Path::new("/Users/ann/Library/Application Support/App");
+        // The installed app (release): its own folder, whatever the environment says.
+        assert_eq!(
+            link_dir_for(Some("/tmp/elsewhere".into()), support, false),
+            support.join("chrome-link")
+        );
+        assert_eq!(
+            link_dir_for(None, support, false),
+            support.join("chrome-link")
+        );
+        // A debug build beside it: a folder of its own by default…
+        let dev = link_dir_for(None, support, true);
+        assert_eq!(dev, support.join("chrome-link-dev"));
+        assert_ne!(dev, link_dir_for(None, support, false));
+        assert_eq!(link_dir_for(Some("".into()), support, true), dev);
+        // …or the one the environment names.
+        assert_eq!(
+            link_dir_for(Some("/tmp/scratch-link".into()), support, true),
+            PathBuf::from("/tmp/scratch-link")
+        );
+        // The running test binary is a debug build: never the installed folder.
+        assert_ne!(
+            link_dir(),
+            crate::brand::app_support_dir().join(LINK_DIR_NAME)
         );
     }
 

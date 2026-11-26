@@ -269,6 +269,21 @@ describe('userChromeLine', () => {
       'On, but it couldn’t start: Port in use.'
     );
   });
+
+  it('says another copy holds the link, and that it tries again', () => {
+    expect(
+      userChromeLine(
+        status({
+          listening: false,
+          error: 'another copy of Mogbot holds the Chrome link',
+          retrying: true,
+          retryEverySecs: 30,
+        })
+      )
+    ).toBe(
+      'On, but it couldn’t start: another copy of Mogbot holds the Chrome link. Trying again every 30 seconds.'
+    );
+  });
 });
 
 describe('which way agents use, and why', () => {

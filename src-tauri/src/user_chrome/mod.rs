@@ -28,6 +28,7 @@
 pub mod auth;
 pub mod clipboard;
 pub mod frame;
+pub mod heal;
 #[cfg(any(unix, windows))]
 pub mod host;
 /// No native host elsewhere ([`SUPPORTED`]).
@@ -50,7 +51,9 @@ pub mod win;
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 /// The link runs here: a Unix socket (macOS, Linux) or a named pipe
 /// (Windows), and the native host Chrome starts.
@@ -77,6 +80,11 @@ pub fn registry() -> Arc<link::Registry> {
 pub struct Running {
     task: tokio::task::JoinHandle<()>,
     socket: PathBuf,
+    /// The token this copy's hosts prove with ([`heal`] puts it back).
+    token: String,
+    /// The socket file this copy bound, by device and inode: one that was
+    /// removed or replaced no longer reaches this copy ([`heal`] re-binds).
+    socket_id: Option<(u64, u64)>,
 }
 
 impl Running {
@@ -96,13 +104,32 @@ impl Running {
 
 /// Start the link in `dir` with a fresh token. Must run inside the async
 /// runtime.
+///
+/// Binds first, and writes the token only once this copy holds the socket:
+/// another copy of the app listening there (`AddrInUse`) keeps the token
+/// its hosts prove, rather than being locked out by one it never saw.
 pub async fn start_at(dir: &Path, registry: Arc<link::Registry>) -> std::io::Result<Running> {
     #[cfg(any(unix, windows))]
     {
-        let token = auth::fresh_token(dir)?;
+        auth::prepare_dir(dir)?;
         let (listener, socket) = link::bind(dir)?;
-        let task = tokio::spawn(link::serve(listener, token, registry));
-        Ok(Running { task, socket })
+        let token = match auth::fresh_token(dir) {
+            Ok(t) => t,
+            Err(e) => {
+                drop(listener);
+                #[cfg(unix)]
+                let _ = std::fs::remove_file(&socket);
+                return Err(e);
+            }
+        };
+        let socket_id = heal::socket_id(&socket);
+        let task = tokio::spawn(link::serve(listener, token.clone(), registry));
+        Ok(Running {
+            task,
+            socket,
+            token,
+            socket_id,
+        })
     }
     #[cfg(not(any(unix, windows)))]
     {
@@ -116,6 +143,16 @@ pub async fn start_at(dir: &Path, registry: Arc<link::Registry>) -> std::io::Res
 
 static RUNNING: Mutex<Option<Running>> = Mutex::new(None);
 static LAST_ERROR: Mutex<Option<String>> = Mutex::new(None);
+/// One start at a time: the launch, the switch and the retry never race
+/// each other to the socket (the loser would read the winner as "another
+/// copy").
+static STARTING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+/// A retry loop is running ([`retry_every`] over `try_listen`).
+static RETRYING: AtomicBool = AtomicBool::new(false);
+
+/// How often a link that didn't start tries again: the installed app takes
+/// the link back within this long of the other copy going away.
+pub const RETRY_EVERY: Duration = Duration::from_secs(30);
 
 /// The link is listening.
 pub fn listening() -> bool {
@@ -124,7 +161,9 @@ pub fn listening() -> bool {
 
 /// Turn the link on, if the switch is: listen, and make sure Chrome can
 /// find the host and the extension's files are staged. Called at launch
-/// and when the switch is turned on.
+/// and when the switch is turned on. When it can't listen (another copy of
+/// the app holds the link, or anything else), it tries again every
+/// [`RETRY_EVERY`] until it does or the switch goes off.
 pub async fn start() {
     if !settings::enabled() {
         return;
@@ -134,8 +173,29 @@ pub async fn start() {
     if let Err(e) = prepare_install() {
         tracing::warn!(error = %e, "[UserChrome] couldn't set up the host or the extension's files");
     }
-    if listening() {
+    // Release builds: every minute, put the host manifest, the token and
+    // the socket back if something else changed them.
+    heal::watch();
+    if try_listen().await {
         return;
+    }
+    if !RETRYING.swap(true, Ordering::SeqCst) {
+        tokio::spawn(async {
+            retry_every(RETRY_EVERY, try_listen).await;
+            RETRYING.store(false, Ordering::SeqCst);
+        });
+    }
+}
+
+/// One go at listening. `true` when there's nothing left to try: it
+/// listens, or the switch is off.
+async fn try_listen() -> bool {
+    let _one = STARTING.lock().await;
+    if !settings::enabled() {
+        return true;
+    }
+    if listening() {
+        return true;
     }
     let outcome = start_at(&auth::link_dir(), registry()).await;
     let mut err = LAST_ERROR.lock().unwrap_or_else(|e| e.into_inner());
@@ -144,11 +204,48 @@ pub async fn start() {
             tracing::info!(socket = %r.socket.display(), "[UserChrome] listening");
             *RUNNING.lock().unwrap_or_else(|e| e.into_inner()) = Some(r);
             *err = None;
+            drop(err);
+            // Switched off while it bound: off it is.
+            if !settings::enabled() {
+                stop("off");
+            }
+            true
         }
         Err(e) => {
-            tracing::warn!(error = %e, "[UserChrome] the link didn't start");
-            *err = Some(e.to_string());
+            let reason = why_not(&e);
+            if err.as_deref() != Some(reason.as_str()) {
+                tracing::warn!(error = %e, "[UserChrome] the link didn't start; trying again every {}s", RETRY_EVERY.as_secs());
+            }
+            *err = Some(reason);
+            false
         }
+    }
+}
+
+/// Wait `every`, then `attempt`, until it says it's done. Pure of the
+/// app's state, so the tests drive it with a real socket.
+pub async fn retry_every<F, Fut>(every: Duration, mut attempt: F)
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    loop {
+        tokio::time::sleep(every).await;
+        if attempt().await {
+            return;
+        }
+    }
+}
+
+/// Why the link isn't listening, in Settings → Chrome's words.
+pub fn why_not(e: &std::io::Error) -> String {
+    if e.kind() == std::io::ErrorKind::AddrInUse {
+        format!(
+            "another copy of {} holds the Chrome link",
+            crate::brand::NAME
+        )
+    } else {
+        e.to_string()
     }
 }
 
@@ -157,6 +254,7 @@ pub fn stop(reason: &str) {
     if let Some(r) = RUNNING.lock().unwrap_or_else(|e| e.into_inner()).take() {
         r.stop(&registry(), reason);
     }
+    *LAST_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
     tools::forget_all();
 }
 
@@ -232,6 +330,9 @@ pub struct Status {
     pub listening: bool,
     /// Why the link isn't listening while switched on.
     pub error: Option<String>,
+    /// It didn't start, and tries again every [`RETRY_EVERY`].
+    pub retrying: bool,
+    pub retry_every_secs: u64,
     /// Chrome is installed on this Mac.
     pub chrome_installed: bool,
     pub host: install::HostState,
@@ -302,11 +403,15 @@ pub fn status() -> Status {
         &profiles,
         !browsers.is_empty(),
     );
+    let listening_now = listening();
+    let error = LAST_ERROR.lock().unwrap_or_else(|e| e.into_inner()).clone();
     Status {
         supported: SUPPORTED,
         enabled,
-        listening: listening(),
-        error: LAST_ERROR.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+        listening: listening_now,
+        error,
+        retrying: enabled && !listening_now && RETRYING.load(Ordering::SeqCst),
+        retry_every_secs: RETRY_EVERY.as_secs(),
         chrome_installed,
         host,
         steps,
@@ -343,3 +448,7 @@ pub async fn set_enabled(on: bool) -> Result<Status, crate::errors::CommandError
 #[cfg(all(test, unix))]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "heal_tests.rs"]
+mod heal_tests;

@@ -7,12 +7,58 @@ fn extension_dir() -> PathBuf {
 
 #[test]
 fn host_name_is_one_chrome_accepts() {
-    let n = host_name();
-    assert!(n.ends_with(".chrome_link"));
-    assert!(n
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '_'));
-    assert!(!n.starts_with('.') && !n.contains(".."));
+    for n in [host_name(), release_host_name()] {
+        assert!(n.contains(".chrome_link"));
+        assert!(n
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '_'));
+        assert!(!n.starts_with('.') && !n.contains(".."));
+    }
+    assert!(release_host_name().ends_with(".chrome_link"));
+}
+
+#[test]
+fn a_debug_build_never_rewrites_the_installed_apps_manifest() {
+    // Release: the name the extension connects to. Debug: one of its own.
+    assert_eq!(
+        host_name_for_build("io.native.app", false),
+        "io.native.app.chrome_link"
+    );
+    assert_eq!(
+        host_name_for_build("io.native.app", true),
+        "io.native.app.chrome_link_dev"
+    );
+    // This test binary is a debug build: it writes, reads and removes only
+    // its own manifest, and the installed app's (naming /Applications) stays.
+    assert_ne!(host_name(), release_host_name());
+    let udd = tempfile::tempdir().unwrap();
+    let installed = Path::new("/Applications/App.app/Contents/MacOS/app");
+    let theirs = install_host_named(udd.path(), &release_host_name(), installed).unwrap();
+    let before = std::fs::read(&theirs).unwrap();
+
+    let dev = Path::new("/Users/ann/code/app/target/debug/app");
+    let ours = install_host(udd.path(), dev).unwrap();
+    assert_ne!(ours, theirs);
+    assert_eq!(
+        std::fs::read(&theirs).unwrap(),
+        before,
+        "the installed app's manifest is untouched"
+    );
+    assert_eq!(
+        host_state_named(udd.path(), &release_host_name(), installed),
+        HostState::Current
+    );
+    assert_eq!(host_state(udd.path(), dev), HostState::Current);
+    remove_host(udd.path());
+    assert!(!ours.exists());
+    assert_eq!(std::fs::read(&theirs).unwrap(), before);
+
+    // The folders a debug build keeps in the shared data folder are its own.
+    assert_eq!(dev_suffixed("chrome-host", false), "chrome-host");
+    assert_eq!(dev_suffixed("chrome-host", true), "chrome-host-dev");
+    let support = crate::brand::app_support_dir();
+    assert_ne!(host_copy_dir(), support.join("chrome-host"));
+    assert_ne!(staged_extension_dir(), support.join("chrome-extension"));
 }
 
 #[test]

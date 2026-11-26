@@ -390,6 +390,112 @@ async fn a_live_socket_isnt_taken_over_and_a_stale_one_is() {
     );
 }
 
+/// A host gets through to whichever copy holds the link in `dir`.
+async fn host_gets_through(dir: &std::path::Path) -> bool {
+    let dir = dir.to_path_buf();
+    tokio::task::spawn_blocking(move || host::connect(&dir, &origin()).is_ok())
+        .await
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_copy_that_cant_bind_leaves_the_holders_token_alone() {
+    // Another copy of the app (a dev build, say) holds the link.
+    let (dir, other, other_reg) = started().await;
+    let token = auth::read_token(dir.path()).unwrap();
+    assert!(host_gets_through(dir.path()).await);
+
+    // This copy starts: it can't bind, and says why in Settings' words.
+    let reg = link::Registry::new();
+    let Err(e) = start_at(dir.path(), reg.clone()).await else {
+        panic!("bound over another copy's live link");
+    };
+    assert_eq!(e.kind(), std::io::ErrorKind::AddrInUse);
+    assert_eq!(
+        why_not(&e),
+        format!(
+            "another copy of {} holds the Chrome link",
+            crate::brand::NAME
+        )
+    );
+    // The holder's token is untouched, so its hosts still prove themselves.
+    assert_eq!(auth::read_token(dir.path()).unwrap(), token);
+    assert!(host_gets_through(dir.path()).await);
+    other.stop(&other_reg, "test");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_link_that_didnt_start_takes_it_back_when_the_other_copy_goes() {
+    let (dir, other, other_reg) = started().await;
+    let held = auth::read_token(dir.path()).unwrap();
+    let reg = link::Registry::new();
+    let won: Arc<Mutex<Option<Running>>> = Arc::new(Mutex::new(None));
+    let tries = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+    let retry = {
+        let (dir, reg, won, tries) = (
+            dir.path().to_path_buf(),
+            reg.clone(),
+            won.clone(),
+            tries.clone(),
+        );
+        tokio::spawn(async move {
+            retry_every(Duration::from_millis(20), || {
+                let (dir, reg, won, tries) = (dir.clone(), reg.clone(), won.clone(), tries.clone());
+                async move {
+                    tries.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    match start_at(&dir, reg).await {
+                        Ok(r) => {
+                            *won.lock().unwrap() = Some(r);
+                            true
+                        }
+                        Err(e) => {
+                            assert_eq!(e.kind(), std::io::ErrorKind::AddrInUse);
+                            false
+                        }
+                    }
+                }
+            })
+            .await
+        })
+    };
+
+    // While the other copy holds it: tries, fails, and keeps its hands off.
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    assert!(tries.load(std::sync::atomic::Ordering::SeqCst) >= 2);
+    assert!(won.lock().unwrap().is_none());
+    assert_eq!(auth::read_token(dir.path()).unwrap(), held);
+    assert!(host_gets_through(dir.path()).await);
+
+    // The other copy goes away: the next try takes the link back.
+    other.stop(&other_reg, "quit");
+    tokio::time::timeout(Duration::from_secs(5), retry)
+        .await
+        .expect("took the link back")
+        .unwrap();
+    let running = won.lock().unwrap().take().expect("listening");
+    let fresh = auth::read_token(dir.path()).unwrap();
+    assert_ne!(
+        fresh, held,
+        "a fresh token, written once it held the socket"
+    );
+    assert!(host_gets_through(dir.path()).await);
+    wait_for(&reg, 0).await;
+    running.stop(&reg, "test");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_crashed_copys_stale_socket_is_taken_on_the_next_try() {
+    let dir = tempfile::tempdir().unwrap();
+    auth::prepare_dir(dir.path()).unwrap();
+    // A socket file nobody listens on (a copy that crashed).
+    drop(std::os::unix::net::UnixListener::bind(auth::socket_path(dir.path())).unwrap());
+    let reg = link::Registry::new();
+    let running = start_at(dir.path(), reg.clone()).await.unwrap();
+    assert!(host_gets_through(dir.path()).await);
+    running.stop(&reg, "test");
+}
+
 #[test]
 fn the_host_relays_both_ways_unchanged_and_tells_chrome_when_the_app_is_away() {
     // App away: one frame telling the extension, then nothing.
@@ -554,7 +660,7 @@ fn the_extension_connects_to_the_host_name_the_app_installs() {
     assert!(
         js.contains(&format!(
             "export const HOST_NAME = '{}';",
-            install::host_name()
+            install::release_host_name()
         )),
         "protocol.js names another native host"
     );
