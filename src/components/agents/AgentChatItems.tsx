@@ -48,7 +48,12 @@ import { IconButton } from '../primitives/IconButton';
 import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
 import { Tooltip } from '../primitives/Tooltip';
-import { ComposerAttachments, MessageAttachments } from './AgentAttachments';
+import {
+  ComposerAttachments,
+  MessageAttachments,
+  useBubbleImages,
+  WordsWithImages,
+} from './AgentAttachments';
 import { LocalLinks } from './AgentLocalLinks';
 import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
@@ -450,7 +455,10 @@ export const UserBubble = memo(function UserBubble({
   goBack,
   onGoBack,
 }: UserBubbleProps) {
-  const attachments = message.attachments ?? [];
+  // Images put among the words ([Image N]) sit there; the rest stay above.
+  const pictures = useBubbleImages(agent, message.text, message.attachments ?? [], sending);
+  const attachments = pictures.rest;
+  const staging = pictures.restSending;
   const replies = useReply();
   const onReply =
     replies && !failed && !sending && !tidying && canReplyTo(message)
@@ -488,11 +496,20 @@ export const UserBubble = memo(function UserBubble({
             {part.text}
           </blockquote>
         ) : (
-          <p key={i} className="agent-bubble__text">
-            <MentionText text={part.text} mentions={message.mentions} colorwayOf={colorwayOf} />
-          </p>
+          <WordsWithImages
+            key={i}
+            text={part.text}
+            count={pictures.count}
+            image={pictures.image}
+            words={(text, key) => (
+              <p key={key} className="agent-bubble__text">
+                <MentionText text={text} mentions={message.mentions} colorwayOf={colorwayOf} />
+              </p>
+            )}
+          />
         )
       )}
+      {pictures.viewer}
     </div>
   );
   // Written in Slack, not here: "From Slack · #launch".
@@ -509,9 +526,9 @@ export const UserBubble = memo(function UserBubble({
       data-attachments={attachments.length > 0 || Boolean(sending?.length) || undefined}
       data-message-ids={message.id}
     >
-      {sending && sending.length > 0 && (
+      {staging && staging.length > 0 && (
         <div className="agent-chat__line">
-          <ComposerAttachments items={sending} />
+          <ComposerAttachments items={staging} numbered={false} />
         </div>
       )}
       {attachments.length > 0 && (

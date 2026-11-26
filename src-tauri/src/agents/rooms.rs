@@ -1179,13 +1179,18 @@ fn line_for(
     let said = said_line(m, me, names)?;
     let files: Vec<String> = home
         .map(|home| {
+            let labels = super::attachments::image_labels(&m.attachments);
             m.attachments
                 .iter()
-                .filter_map(|a| super::attachments::resolve(home, &a.path).ok())
-                .map(|p| p.display().to_string())
+                .zip(labels)
+                .filter_map(|(a, label)| {
+                    super::attachments::resolve(home, &a.path)
+                        .ok()
+                        .map(|p| (label, p.display().to_string()))
+                })
                 // As `attachments::prompt_block` lists them, on one line each.
-                .filter(|p| !p.chars().any(|c| c.is_control() || store::breaks_line(c)))
-                .map(|p| format!("- {p}"))
+                .filter(|(_, p)| !p.chars().any(|c| c.is_control() || store::breaks_line(c)))
+                .map(|(label, p)| format!("- {label}{p}"))
                 .collect()
         })
         .unwrap_or_default();

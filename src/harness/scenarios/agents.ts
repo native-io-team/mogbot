@@ -1594,6 +1594,29 @@ const LAUNCH_CHAT = [
   ),
 ];
 
+/** Pictures put among the words ([Image N]): each sits where it was put. */
+const INLINE_CHAT = [
+  ...ACME_CHAT,
+  msg(
+    'user',
+    'Two more from the client. On mobile the pricing cards [Image 1] still touch the edges, and the footer [Image 2] needs the same 24px gutters. The brand guide is attached for the spacing.',
+    8,
+    {
+      agentId: 'acme',
+      attachments: [
+        shot('Pricing on mobile.jpg', 40_266),
+        {
+          name: 'Acme brand guidelines 2026.pdf',
+          path: 'attachments/m-att2/Acme brand guidelines 2026.pdf',
+          mime: 'application/pdf',
+          size: 4_812_330,
+        },
+        shot('Footer links.jpg', 36_471),
+      ],
+    }
+  ),
+];
+
 /** One agent, several conversations: each chat its own, the invoices one waiting on you. */
 const CONVERSATIONS = {
   // The invoices conversation holds a card, so the agent waits on you as a
@@ -4622,6 +4645,20 @@ export const agentsScenarios: Scenario[] = [
       agents_overview: acmeWith(ACME_FRESH),
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'acme' ? FRESH_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'agents-inline-images',
+    title: 'Agents — pictures in the middle of what you said',
+    looksRightWhen:
+      'Your last message to Acme Site reads in order: “Two more from the client. On mobile the pricing cards”, then the pricing screenshot inside the bubble on a line of its own, “still touch the edges, and the footer”, the footer screenshot, then the rest of the sentence. The brand guide PDF chip sits above the bubble; neither picture is repeated in a row above it.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-bubble__image',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: {
+      agents_overview: acmeWith(ACME_FRESH),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? INLINE_CHAT : messagesFor(args),
     },
   },
   {

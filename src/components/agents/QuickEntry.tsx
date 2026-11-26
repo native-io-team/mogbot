@@ -28,6 +28,7 @@ import { ListeningStatus, useFollowDictation } from './AgentComposer';
 import { useMentionPicker } from './AgentMentions';
 import { useDictation } from './useDictation';
 import { toOutgoing, useComposerAttachments } from './useComposerAttachments';
+import { useInlineImages } from './useInlineImages';
 import {
   getAgentsOverview,
   mentionedAgents,
@@ -81,6 +82,13 @@ export function QuickEntry() {
 
   const attachments = useComposerAttachments(setProblem);
   const picker = useMentionPicker(agents, inputRef, setDraft);
+  const inline = useInlineImages({
+    inputRef,
+    items: attachments.items,
+    draft,
+    setDraft,
+    remove: attachments.remove,
+  });
   const getVocabulary = useCallback(
     () =>
       Promise.resolve(
@@ -245,7 +253,7 @@ export function QuickEntry() {
             esc
           </span>
         </div>
-        <ComposerAttachments items={attachments.items} onRemove={attachments.remove} />
+        <ComposerAttachments items={attachments.items} onRemove={inline.removeItem} />
         <TextArea
           ref={inputRef}
           autoFocus
@@ -255,7 +263,7 @@ export function QuickEntry() {
           placeholder={dictating ? '' : `Message ${to?.name ?? 'your agents'}`}
           readOnly={dictating}
           onChange={(e) => {
-            setDraft(e.target.value);
+            inline.onChange(e.target.value, e.target.selectionStart);
             picker.sync();
           }}
           onSelect={picker.sync}
@@ -263,6 +271,7 @@ export function QuickEntry() {
           onKeyDown={(e) => {
             if (dictation.onComposerKeyDown(e)) return;
             if (picker.onKeyDown(e)) return;
+            if (inline.onKeyDown(e)) return;
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void send();
