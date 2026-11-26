@@ -67,6 +67,9 @@ pub struct TurnSpec<'a> {
     /// The model's context window from the agent's last reading, for
     /// Codex's compaction threshold (`tidy::codex_config`).
     pub window: Option<u64>,
+    /// A turn the user started in their chat: Claude Code predicts what
+    /// they'll say next (`--prompt-suggestions`), for the composer.
+    pub suggest: bool,
 }
 
 impl Driver {
@@ -129,12 +132,13 @@ impl Driver {
     pub fn args(self, spec: &TurnSpec) -> Vec<String> {
         let args = with_compaction(self, self.base_args(spec), spec.window);
         let args = with_effort(self, args, spec.effort);
-        match spec.access {
+        let args = match spec.access {
             Some(access) => with_access(self, args, access),
             // Fail closed: a turn nobody worked out the reach of gets no
             // browser.
             None => with_access(self, args, &super::connections::TurnAccess::default()),
-        }
+        };
+        with_suggestions(self, args, spec.suggest)
     }
 
     fn base_args(self, spec: &TurnSpec) -> Vec<String> {
@@ -297,6 +301,20 @@ fn with_compaction(driver: Driver, mut args: Vec<String>, window: Option<u64>) -
 /// `codex exec` the `model_reasoning_effort` override, placed where the other
 /// `-c` overrides go. The app-server's goes on `turn/start` (`codex_app`).
 /// Only a level `store::normalize_effort` let through ever gets here.
+/// Claude Code's guess at the user's next message, sent as a
+/// `prompt_suggestion` line after the turn's `result` (`stream::claude_steps`).
+/// Claude Code only: the other engines have none. The flag takes an optional
+/// value, so it goes last: whatever follows it is always another flag.
+/// Verified on 2.1.330: it skips a turn whose last request wrote a large
+/// cache (a session's first), and needs stdin open until it's sent
+/// (`runner::turn`, `SUGGESTION_WAIT`).
+fn with_suggestions(driver: Driver, mut args: Vec<String>, suggest: bool) -> Vec<String> {
+    if suggest && driver == Driver::ClaudePrint {
+        args.push("--prompt-suggestions".to_string());
+    }
+    args
+}
+
 fn with_effort(driver: Driver, mut args: Vec<String>, effort: Option<&str>) -> Vec<String> {
     let Some(effort) = effort.filter(|e| super::store::EFFORTS.contains(e)) else {
         return args;
@@ -386,6 +404,7 @@ mod tests {
             protected: None,
             access: None,
             window: None,
+            suggest: false,
         }
     }
 
@@ -559,6 +578,20 @@ mod tests {
         let fresh = Driver::CodexExec.args(&spec("", false, &dirs));
         assert_eq!(fresh[0], "exec");
         assert_ne!(fresh[1], "resume");
+    }
+
+    #[test]
+    fn only_a_users_claude_turn_asks_for_a_suggestion() {
+        let writable: Vec<String> = Vec::new();
+        let mut s = spec("sid", true, &writable);
+        let flag = "--prompt-suggestions".to_string();
+        assert!(!Driver::ClaudePrint.args(&s).contains(&flag));
+        s.suggest = true;
+        // Last, so its optional value can never swallow another argument.
+        assert_eq!(Driver::ClaudePrint.args(&s).last(), Some(&flag));
+        for other in [Driver::CodexApp, Driver::CodexExec, Driver::OpenCodeAcp] {
+            assert!(!other.args(&s).contains(&flag));
+        }
     }
 
     #[test]

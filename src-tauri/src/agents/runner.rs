@@ -129,6 +129,9 @@ pub const EVENT_CONVERSATIONS: &str = "agents://conversations";
 /// A reply being written: `{agentId, id, text}`, the text so far. The message
 /// that completes it arrives on [`EVENT_MESSAGE`] with the same id.
 pub const EVENT_DRAFT: &str = "agents://draft";
+/// What the user might say next, for the composer: `{agentId, text}`, or
+/// `text: null` when the last one no longer applies (a new turn began).
+pub const EVENT_SUGGESTION: &str = "agents://suggestion";
 /// An engine reported how much of the plan is left (`super::quota`).
 pub const EVENT_QUOTA: &str = "agents://quota";
 /// The usage mode or the list of ideas for leftover usage changed (`agents::usage_plan`).

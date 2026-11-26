@@ -55,6 +55,9 @@ pub enum Step {
     Failed(String),
     /// The turn's result is in.
     Done,
+    /// Claude Code's guess at what the user will say next, sent after the
+    /// result (`--prompt-suggestions`): offered in the composer.
+    Suggestion(String),
     /// Something the engine said along the way that explains a turn which
     /// then ends without a result.
     Detail(String),
@@ -113,6 +116,17 @@ pub fn claude_steps(value: &Value, now: i64) -> Vec<Step> {
                 out.push(Step::Failed(super::runner::result_error_text(value)));
             }
             out.push(Step::Done);
+        }
+        // Observed on 2.1.330: `{"type":"prompt_suggestion","suggestion":"Draft
+        // the schema","uuid":…,"session_id":…}`, a second or two after `result`.
+        Some("prompt_suggestion") => {
+            let text = value
+                .get("suggestion")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            if !text.trim().is_empty() {
+                out.push(Step::Suggestion(text.trim().to_string()));
+            }
         }
         _ => {}
     }
@@ -248,6 +262,18 @@ mod tests {
     use super::*;
 
     const SAMPLE: &str = include_str!("testdata/stream-partial.jsonl");
+
+    #[test]
+    fn a_suggestion_after_the_result_is_offered_and_an_empty_one_is_not() {
+        // As 2.1.330 sends it (`--prompt-suggestions`).
+        let line = serde_json::json!({"type": "prompt_suggestion", "suggestion": " Draft the schema ", "uuid": "u", "session_id": "s"});
+        assert_eq!(
+            claude_steps(&line, 0),
+            [Step::Suggestion("Draft the schema".into())]
+        );
+        let empty = serde_json::json!({"type": "prompt_suggestion", "suggestion": " "});
+        assert!(claude_steps(&empty, 0).is_empty());
+    }
 
     fn ids() -> impl FnMut() -> String {
         let mut n = 0;

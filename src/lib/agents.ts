@@ -1407,6 +1407,8 @@ export const AGENT_EVENTS = {
   registry: 'agents://registry',
   /** A reply being written: `{ agentId, id, text }`, the text so far. */
   draft: 'agents://draft',
+  /** What the user might say next: `{ agentId, text }`, text null to take it away. */
+  suggestion: 'agents://suggestion',
   /** An agent's conversations changed (one named or started); payload is its id. */
   conversations: 'agents://conversations',
   /** An engine reported its plan's limits; read `agents_quota` again. */

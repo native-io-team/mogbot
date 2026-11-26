@@ -331,6 +331,19 @@ pub(super) fn emit_draft(app: &AppHandle, agent_id: &str, id: &str, text: &str) 
     let _ = app.emit(EVENT_DRAFT, Payload { agent_id, id, text });
 }
 
+/// Offer the user's likely next message in the agent's composer (`None`
+/// takes the last one away).
+pub(super) fn emit_suggestion(app: &AppHandle, agent_id: &str, text: Option<&str>) {
+    #[derive(Serialize, Clone)]
+    #[serde(rename_all = "camelCase")]
+    struct Payload<'a> {
+        agent_id: &'a str,
+        text: Option<String>,
+    }
+    let text = text.map(|t| super::secrets::redact(t).into_owned());
+    let _ = app.emit(EVENT_SUGGESTION, Payload { agent_id, text });
+}
+
 pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -> AgentMessage {
     AgentMessage {
         id: store::new_id(),

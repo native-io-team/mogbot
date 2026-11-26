@@ -6,6 +6,8 @@ import { newDictationMeter } from './useDictation';
 import { composerDraft, setComposerDraft } from '../../lib/composerDraft';
 import { resetChatRestoreForTests, unsentDraft } from '../../lib/chatRestore';
 import { QUEUE_HINT_LEARNED_AFTER } from '../../lib/queueHint';
+import { act } from 'react';
+import { composerSuggestion, setComposerSuggestion } from '../../lib/composerSuggestion';
 
 const dictation = {
   phase: 'idle' as const,
@@ -67,6 +69,45 @@ afterEach(() => {
   setComposerDraft('a2', '');
   resetChatRestoreForTests();
   localStorage.clear();
+});
+
+describe('a suggestion of what to say next', () => {
+  afterEach(() => setComposerSuggestion('a1', null));
+
+  it('shows in the empty box; Tab takes it in and Enter sends it', () => {
+    const onSend = vi.fn();
+    render(<Chat id="a1" onSend={onSend} renders={() => {}} />);
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    expect(box).toHaveAttribute('placeholder', 'Message Ops');
+    act(() => setComposerSuggestion('a1', 'Yes, ship it'));
+    expect(box).toHaveAttribute('placeholder', 'Yes, ship it');
+    fireEvent.keyDown(box, { key: 'Tab' });
+    expect(box).toHaveValue('Yes, ship it');
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(composerSuggestion('a1')).toBeNull();
+  });
+
+  it('leaves Tab alone once anything is typed, and Esc puts the usual placeholder back', () => {
+    render(<Chat id="a1" onSend={() => {}} renders={() => {}} />);
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    act(() => setComposerSuggestion('a1', 'Yes, ship it'));
+    fireEvent.change(box, { target: { value: 'No' } });
+    fireEvent.keyDown(box, { key: 'Tab' });
+    expect(box).toHaveValue('No');
+    fireEvent.change(box, { target: { value: '' } });
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(box).toHaveAttribute('placeholder', 'Message Ops');
+  });
+
+  it('is not offered while the agent is working', () => {
+    render(<Chat id="a1" onSend={() => {}} renders={() => {}} busy />);
+    const box = screen.getByRole('textbox', { name: 'Message Ops' });
+    act(() => setComposerSuggestion('a1', 'Yes, ship it'));
+    expect(box).toHaveAttribute('placeholder', 'Message Ops');
+    fireEvent.keyDown(box, { key: 'Tab' });
+    expect(box).toHaveValue('');
+  });
 });
 
 describe('↑ brings back what you last sent', () => {

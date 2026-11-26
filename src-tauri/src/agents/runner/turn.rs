@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// How long after its result a turn that's guessing the user's next words
+/// keeps stdin open for the guess. Observed on 2.1.330: it arrives about a
+/// second after the result (one small request on the cached conversation).
+const SUGGESTION_WAIT: Duration = Duration::from_secs(4);
+
 /// Wait for `claude` to exit, at most [`EXIT_BOUND`] (a moment, once its
 /// result is in and only background work could be keeping it); then stop
 /// its tree.
@@ -517,6 +522,14 @@ pub(super) async fn run_turn(
         .as_ref()
         .map(super::reach::ConfigFile::arg)
         .unwrap_or_default();
+    // Only a turn answering the user's own message in their chat guesses at
+    // what they'll say next: a routine's, a teammate's or the app's own would
+    // put words in the composer the user never had in mind.
+    let suggesting = driver == Driver::ClaudePrint
+        && !quiet
+        && !routine
+        && !outside
+        && super::now::answering_user(agent_id);
     let mut cmd = crate::utils::create_command(&binary);
     cmd.args(driver.args(&TurnSpec {
         model,
@@ -531,6 +544,7 @@ pub(super) async fn run_turn(
         protected: protected.as_deref(),
         access: Some(&access),
         window: agent.context.as_ref().map(|c| c.window),
+        suggest: suggesting,
     }));
     // A new session that starts as `session` did at entry `at`: Claude
     // Code's own fork, leaving that transcript as it was.
@@ -893,6 +907,15 @@ pub(super) async fn run_turn(
     // Saved at most every PROGRESS_EVERY, off the async workers: a whole
     // reply redacted and written each second was a steady cost for nothing.
     let mut progress_saved = std::time::Instant::now();
+    // The last turn's suggestion is stale the moment this one starts.
+    if !quiet {
+        emit_suggestion(app, agent_id, None);
+    }
+    // After a result, stdin stays open until Claude Code's suggestion is in
+    // (or SUGGESTION_WAIT passes): closed at once, it exits before sending one.
+    let close_after = tokio::time::sleep(SUGGESTION_WAIT);
+    tokio::pin!(close_after);
+    let mut close_pending = false;
 
     loop {
         tokio::select! {
@@ -910,6 +933,8 @@ pub(super) async fn run_turn(
                 // one means the turn isn't over until the next (`turn_end`),
                 // and the row that went idle at that `result` is working again.
                 if driver == Driver::ClaudePrint && turn_end.on_line(&value) {
+                    // Working again: it closes at its next result instead.
+                    close_pending = false;
                     let now = status_of(agent_id);
                     if now.state == "idle" || now.activity.as_deref().is_some_and(super::turn_end::is_waiting_line) {
                         set_status(app, agent_id, Status { state: "working", activity: None, since: Some(started), work: None, room: None });
@@ -1160,6 +1185,17 @@ pub(super) async fn run_turn(
                         Step::Model(model) => super::work::on_model(agent_id, &model),
                         Step::Failed(text) => result_error = Some(text),
                         Step::Detail(text) => last_detail = Some(text),
+                        Step::Suggestion(text) => {
+                            if suggesting {
+                                emit_suggestion(app, agent_id, Some(&text));
+                            }
+                            if close_pending {
+                                close_pending = false;
+                                if super::steer::close_if_idle(agent_id) {
+                                    send(&writer, None);
+                                }
+                            }
+                        }
                         Step::Done => {
                             saw_result = true;
                             turn_end.on_done();
@@ -1180,7 +1216,12 @@ pub(super) async fn run_turn(
                             }
                             // Let Claude Code go unless a message of the user's
                             // is still waiting: it answers that next (`steer`).
-                            if driver == Driver::ClaudePrint && super::steer::close_if_idle(agent_id) {
+                            // A turn that's guessing the user's next words
+                            // waits a moment for the guess first.
+                            if suggesting {
+                                close_pending = true;
+                                close_after.as_mut().reset(tokio::time::Instant::now() + SUGGESTION_WAIT);
+                            } else if driver == Driver::ClaudePrint && super::steer::close_if_idle(agent_id) {
                                 send(&writer, None);
                             }
                             // Codex ends its turn once; only Claude Code's can reopen.
@@ -1212,6 +1253,12 @@ pub(super) async fn run_turn(
                     _ => super::steer::not_taken(agent_id, &handed.id),
                 }
                 refresh_status(app, agent_id);
+            }
+            _ = &mut close_after, if close_pending => {
+                close_pending = false;
+                if super::steer::close_if_idle(agent_id) {
+                    send(&writer, None);
+                }
             }
             _ = draft_tick.tick(), if drafts.dirty() => {
                 progress_dirty = true;

@@ -35,6 +35,7 @@ import type { DraftAttachment } from './useComposerAttachments';
 import { sortAgents, type Agent, type ResultRef } from '../../lib/agents';
 import { getAgentsSnapshot } from '../../lib/agentsStore';
 import { setComposerDraft, useComposerDraft } from '../../lib/composerDraft';
+import { setComposerSuggestion, useComposerSuggestion } from '../../lib/composerSuggestion';
 import type { DictationMeter, DictationPhase } from './useDictation';
 import { DictationLive } from './DictationLive';
 import { noteQueueHintUse, queueHintLearned } from '../../lib/queueHint';
@@ -206,6 +207,21 @@ export const AgentComposer = memo(function AgentComposer({
   const dictating = dictation.phase !== 'idle';
   const blank = isUnfilled(draft, unfilled);
   const canSend = !blank && (draft.trim().length > 0 || staged.length > 0 || quotes.length > 0);
+  // What you might say next (lib/composerSuggestion), in place of the
+  // placeholder while the box is empty and nothing waits above it: Tab takes
+  // it in, Enter then sends it. Mid-turn it would answer a question not yet asked.
+  const suggestion = useComposerSuggestion(agentId);
+  const suggested =
+    suggestion !== null &&
+    !busy &&
+    !dictating &&
+    draft === '' &&
+    staged.length === 0 &&
+    quotes.length === 0 &&
+    revising === null &&
+    editing === null
+      ? suggestion
+      : null;
 
   // In sidebar order as it is now: computed again as you type, so the picker
   // opening on "@" lists them the way the sidebar does at that moment.
@@ -224,6 +240,7 @@ export const AgentComposer = memo(function AgentComposer({
   const queueing = busy && working && canSend && !dictating && !blank;
   const sendFromHere = (now: boolean) => {
     if (busy) setLearned(queueHintLearned(noteQueueHintUse(now)));
+    setComposerSuggestion(agentId, null);
     onSend(now);
   };
   const queueSentence = `Enter queues it for when ${agentName} finishes. Command Enter interrupts ${agentName} and sends it now.`;
@@ -321,6 +338,7 @@ export const AgentComposer = memo(function AgentComposer({
       data-narrow={narrow || undefined}
       data-queueing={(queueing && !learned) || undefined}
       data-dictation={dictation.phase}
+      data-suggesting={suggested !== null || undefined}
       data-has-attachments={
         staged.length > 0 || quotes.length > 0 || revising !== null || editing !== null || undefined
       }
@@ -341,7 +359,7 @@ export const AgentComposer = memo(function AgentComposer({
         className="agent-composer__input"
         rows={1}
         value={draft}
-        placeholder={dictating ? '' : narrow ? 'Message' : `Message ${agentName}`}
+        placeholder={dictating ? '' : (suggested ?? (narrow ? 'Message' : `Message ${agentName}`))}
         readOnly={dictating}
         onChange={(e) => {
           setDraft(e.target.value);
@@ -352,6 +370,23 @@ export const AgentComposer = memo(function AgentComposer({
         onKeyDown={(e) => {
           if (dictation.onComposerKeyDown(e, () => !blank && sendFromHere(e.metaKey))) return;
           if (mentionPicker.onKeyDown(e)) return;
+          if (
+            suggested !== null &&
+            e.key === 'Tab' &&
+            !e.shiftKey &&
+            !e.altKey &&
+            !e.metaKey &&
+            !e.ctrlKey &&
+            !e.nativeEvent.isComposing
+          ) {
+            // Tab takes the suggestion in, caret at its end, ready to send or
+            // change. An empty box with none keeps Tab for moving focus.
+            e.preventDefault();
+            setDraft(suggested);
+            const el = e.currentTarget;
+            requestAnimationFrame(() => el.setSelectionRange(suggested.length, suggested.length));
+            return;
+          }
           if (
             e.key === 'ArrowUp' &&
             !e.shiftKey &&
@@ -378,6 +413,10 @@ export const AgentComposer = memo(function AgentComposer({
             if (!blank) sendFromHere(e.metaKey);
           } else if (e.key === 'Escape' && onEscape?.()) {
             e.preventDefault();
+          } else if (e.key === 'Escape' && suggested !== null) {
+            // Not what you'd say: Esc puts the usual placeholder back.
+            e.preventDefault();
+            setComposerSuggestion(agentId, null);
           } else if (e.key === 'Escape' && working && !canSend) {
             e.preventDefault();
             if (escArmed) {

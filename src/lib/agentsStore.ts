@@ -38,6 +38,7 @@ import { initDefaultAgent, terminalIdOf } from './agent';
 import { logger } from './logger';
 import { countEvent, noteOverview, watchShown } from './shownTiming';
 import { syncFolders } from './agentGroups';
+import { readableSuggestion, setComposerSuggestion } from './composerSuggestion';
 import { getRoomMessages, getRooms, roomIdOf, roomKey, ROOMS_EVENT, type Room } from './agentRooms';
 import {
   FIRST_CONVERSATION,
@@ -797,6 +798,14 @@ function start() {
         resync('draft');
       }
     }),
+    listen<unknown>(AGENT_EVENTS.suggestion, (e) =>
+      safely('suggestion', () => {
+        countEvent();
+        if (readableSuggestion(e.payload)) {
+          setComposerSuggestion(e.payload.agentId, e.payload.text);
+        }
+      })
+    ),
     listen(ROOMS_EVENT, () => scheduleRoomsRefresh()),
     listen<unknown>(AGENT_EVENTS.conversations, (e) =>
       safely('conversations', () => {
