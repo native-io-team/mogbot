@@ -12,6 +12,10 @@
      less a gutter each side when the pane is narrower. Declared here, not on
      :root, so a gutter changed on this element (the collapsed rail) reaches it. */
   --agents-column-inset: max(var(--agents-chat-gutter), (100% - var(--agents-chat-width)) / 2);
+  /* What a person reads (messages, cards, the composer), sized to read like
+     Claude desktop's chat (Matt, 25 Nov). */
+  --font-size-subhead-lg: var(--font-size-16);
+  --line-height-reading: var(--line-height-medium);
   position: relative;
   display: flex;
   flex: 1;
@@ -34,6 +38,8 @@
    toggle, or nothing), the title, the actions. The title's column can shrink
    to nothing, so it truncates instead of running under the actions. */
 .agent-chat__header {
+  /* The header's name stays at its 15px: only what you read grows to 18px. */
+  --font-size-subhead-lg: var(--font-size-15);
   position: relative;
   container: agent-chat-header / inline-size;
   display: grid;
@@ -288,7 +294,7 @@
   font-weight: var(--font-weight-heading);
   line-height: var(--line-height-compact);
   letter-spacing: var(--tracking-title);
-  color: var(--text-primary);
+  color: var(--text-reading);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -655,6 +661,9 @@
   padding: var(--agents-bubble-pad-y) var(--spacing-md);
   font-size: var(--font-size-subhead-lg);
   line-height: var(--agents-bubble-line);
+  /* Reading ink for the words and anything inside that asks for primary
+     (a heading, a list, bold). */
+  --text-primary: var(--text-reading);
   color: var(--text-primary);
   border-radius: var(--radius-lg);
   overflow-wrap: anywhere;

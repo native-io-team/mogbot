@@ -48,8 +48,8 @@ one row, while the export list is checked exactly against the source file.
 | Layer | Definition files | Token count | Sample names |
 | --- | --- | ---: | --- |
 | core | `src/styles/global/fonts.css`<br>`src/styles/global/tokens-core.css` | 228 | `--color-white`, `--color-white-o15`, `--color-black`, `--color-black-o15`, `--color-black-o38`, `--color-black-o75` |
-| semantic | `src/styles/global/tokens-semantic.css` | 327 | `--font-size-micro`, `--font-size-caption`, `--tracking-micro`, `--surface-app`, `--surface-panel`, `--surface-control` |
-| components | `src/styles/global/tokens-components.css` | 450 | `--draft-label-width`, `--draft-row-pad`, `--draft-body-max`, `--size-control-standard`, `--size-control-large`, `--size-control-medium` |
+| semantic | `src/styles/global/tokens-semantic.css` | 332 | `--font-size-micro`, `--font-size-caption`, `--tracking-micro`, `--surface-app`, `--surface-panel`, `--surface-control` |
+| components | `src/styles/global/tokens-components.css` | 451 | `--draft-label-width`, `--draft-row-pad`, `--draft-body-max`, `--size-control-standard`, `--size-control-large`, `--size-control-medium` |
 | compatibility | `src/styles/global/tokens-compatibility.css` | 42 | `--modified-yellow`, `--info`, `--info-hover`, `--info-light`, `--info-dark`, `--purple` |
 
 ## Drift checks

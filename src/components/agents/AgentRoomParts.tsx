@@ -16,7 +16,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '../primitives/ContextMenu';
-import { StatusPill } from '../primitives/StatusPill';
 import { TextButton } from '../primitives/TextButton';
 import { agentInitials } from '../../lib/agentInitials';
 import { AgentKey } from './AgentKey';
@@ -131,17 +130,14 @@ export const RoomRow = memo(function RoomRow({
                 <BellOffIcon size={10} className="agents-list__pin" aria-label="Muted" />
               )}
             </span>
-            {showLine &&
-              (asking ? (
-                <span className="agents-list__preview agents-list__preview--pill">
-                  <StatusPill tone="waiting">{line.text}</StatusPill>
-                  <span className="agents-list__rest">{line.asking}</span>
-                </span>
-              ) : (
-                <span className="agents-list__preview" data-state={line.state}>
-                  {line.text}
-                </span>
-              ))}
+            {/* One line, as every row is (25 Nov): what's happening there is
+                said to a screen reader, and the key marks unread. */}
+            {showLine && (
+              <span className="sr-only">
+                , {line.text}
+                {asking ? `: ${line.asking}` : ''}
+              </span>
+            )}
           </span>
           {/* The same one mark as an agent's row: unread. Who is replying or
               waiting on you is in the line, and on the members' own keys. */}

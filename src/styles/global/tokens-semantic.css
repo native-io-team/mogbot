@@ -21,6 +21,9 @@
 
   --text-white: var(--color-white);
   --text-primary: var(--color-gray-200);
+  /* What a person reads, the chat and the sidebar's names: near-white, as
+     Claude desktop's are (measured 25 Nov), a step above primary. */
+  --text-reading: var(--color-gray-100);
   --text-secondary: var(--color-gray-400);
   /* AA (4.5:1) on app, panel and control (a card): gray-600 was 3.8:1 on the
      panel, and muted carries real words (an agent's role, a routine's next
@@ -130,6 +133,11 @@
   --font-size-subhead: var(--font-size-14);
   --font-size-body-lg: var(--font-size-13);
   --font-size-body-md: var(--font-size-12);
+  /* The sidebar list, matched to Claude desktop (25 Nov): a row's name, and
+     the line under it and a folder's name. */
+  --font-size-list-name: var(--font-size-15);
+  --font-size-list-room: var(--font-size-16);
+  --font-size-list-meta: var(--font-size-14);
 
   --font-size-body-sm: var(--font-size-11);
   --font-size-control: var(--font-size-11);
@@ -353,6 +361,7 @@
      is the darkest. The name predates the theme. */
   --text-white: var(--color-ink-950);
   --text-primary: var(--color-ink-900);
+  --text-reading: var(--color-ink-900);
   --text-secondary: var(--color-ink-600);
   /* Muted clears AA on every light surface up to selected-strong (#dcdcdc),
      which leaves little room below secondary: quiet sits halfway. */

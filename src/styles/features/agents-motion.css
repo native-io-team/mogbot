@@ -240,10 +240,6 @@
   background: var(--tint-strong);
 }
 
-.agents-list__preview {
-  transition: color var(--transition-interaction);
-}
-
 /* An agent made while the list is up rises into its place once (useNewKeys);
    the list as it loads holds still. */
 .agents-list > .agents-list__row[data-arrived] {

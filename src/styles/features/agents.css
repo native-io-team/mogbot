@@ -288,11 +288,11 @@
   align-items: center;
   gap: var(--spacing-xs);
   min-width: 0;
-  font-size: var(--font-size-body-lg);
+  font-size: var(--font-size-list-name);
   font-weight: var(--font-weight-label);
   line-height: var(--line-height-compact);
   letter-spacing: var(--tracking-name);
-  color: var(--text-primary);
+  color: var(--text-reading);
 }
 
 /* The text ellipsises; the pin beside it never gets pushed out. */
@@ -304,8 +304,12 @@
   text-overflow: ellipsis;
 }
 
+.agents-list__row--room .agents-list__name {
+  font-size: var(--font-size-list-room);
+}
+
 .agents-list__row.is-current .agents-list__name {
-  color: var(--text-primary);
+  color: var(--text-reading);
 }
 
 .agents-list__pin {
@@ -332,33 +336,6 @@
   white-space: nowrap;
 }
 
-/* One line, cut with an ellipsis (as on the phone): a second line that came
-   and went as a step's words changed length was what made the list jump. */
-.agents-list__preview {
-  display: block;
-  overflow: hidden;
-  font-size: var(--font-size-body-md);
-  line-height: var(--line-height-compact);
-  color: var(--text-secondary);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* A working row: the step, cut short, then its time in a column of its own,
-   so "9s" → "10s" and a long step after a short one move nothing. (What's in
-   flight keeps them inline, in its own one-line cut.) */
-.agents-list__preview .agents-list__working {
-  display: flex;
-  min-width: 0;
-}
-
-.agents-list__preview .agents-list__step {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* The selected fill (the open row, your own bubble, the current search hit)
    is lighter than the panel in dark: secondary is 4.3:1 on it and muted 2.6:1.
    Words sitting on it step up to one shade that clears AA. */
@@ -377,58 +354,6 @@
 /* In light the selected fill darkens the amber "Needs you" to 3.8:1. */
 :root[data-theme='light'] .agents-list__row.is-current {
   --accent-warning: var(--color-orange-900);
-}
-
-.agents-list__row.is-current .agents-list__preview {
-  color: var(--text-secondary);
-  /* The fill snaps in, so its words do too: easing from the plain colour
-     left them below AA on the selected fill for a moment. */
-  transition: none;
-}
-
-/* Waiting on you is attention, not success: the label takes the amber of its
-   dot, here and in the conversation header. */
-.agents-list__row .agents-list__preview[data-state='waiting'] {
-  color: var(--accent-warning);
-}
-
-/* Live (you're driving it): the word in green, as on the board. */
-.agents-list__state-word {
-  font-weight: var(--font-weight-label);
-}
-.agents-list__state-word[data-state='live'] {
-  color: var(--text-success);
-}
-
-/* A state in a pill, then its words: one line, the words cut first. The pill
-   sits in the line's own height (no vertical padding here), so a row that
-   turns amber or red never grows. */
-.agents-list__preview--pill {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  min-width: 0;
-}
-
-.agents-list__preview--pill .status-pill {
-  padding-block: 0;
-  max-width: 100%;
-}
-
-.agents-list__rest {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-secondary);
-}
-
-/* A turn that didn't finish shows where it happened. A usage limit heals on
-   its own, so it stays quiet: no colour and no dot, only its words (when it
-   resets). Amber is kept for what needs you. */
-.agents-list__row .agents-list__preview[data-state='failed'] {
-  color: var(--accent-error-light);
 }
 
 /* Fixed status slot, like the project row's, so states never shift the text. */
@@ -487,19 +412,15 @@
 }
 
 /* The open list's right edge is clean: the key says working, free or needs
-   you, the pill says what's wrong, and unread is the row's ink. Only the
+   you, and unread is the heavier name and the dot under the time. Only the
    collapsed rail, with no words, keeps the unread mark on the badge. */
 .workspace-sidebar:not(.is-hidden) .agents-list__status {
   display: none;
 }
 
-/* Unread: the name and its line in full-strength ink, the name heavier. */
+/* Unread: the name heavier. */
 .agents-list__row[data-unread] .agents-list__name-text {
   font-weight: var(--font-weight-heading);
-}
-.agents-list__row[data-unread] .agents-list__preview,
-.agents-list__row[data-unread] .agents-list__rest {
-  color: var(--text-primary);
 }
 
 .agents-list__rail-mark {
@@ -664,15 +585,6 @@
   margin-top: var(--spacing-xs);
 }
 
-/* The time column: tabular figures, right-aligned, wide enough for "· 59m". */
-.agents-list__preview .agents-list__elapsed {
-  flex: 0 0 auto;
-  min-width: 5ch;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  white-space: nowrap;
-}
-
 /* ------------------------------------------- optional groups (lib/agentGroups) */
 
 /* components/agents/AgentGroupParts.tsx: a group's header reads as the
@@ -688,12 +600,12 @@
   gap: var(--spacing-sm);
   /* On the rows' inset, with no hairline: the header is a label, not a row. */
   width: calc(100% - 2 * var(--spacing-sm));
-  height: var(--control-height-standard);
+  height: calc(var(--control-height-standard) + var(--spacing-2xs));
   margin: var(--spacing-xs) var(--spacing-sm) 0;
   padding: 0 var(--spacing-sm);
   border-radius: var(--radius-lg);
   font: inherit;
-  font-size: var(--font-size-caption);
+  font-size: var(--font-size-list-meta);
   font-weight: var(--font-weight-label);
   color: var(--text-muted);
   text-align: left;
@@ -860,38 +772,6 @@ body[data-agent-dragging] * {
 }
 
 /* ------------------------------------------------- narrow (under 240px) */
-
-/* No excerpts: a name, its time and, where something needs you, an amber dot
-   in the tag's place. The tag's words stay for a screen reader and the title. */
-.workspace-sidebar.is-narrow .agents-list__preview:not(.agents-list__preview--pill) {
-  display: none;
-}
-
-.workspace-sidebar.is-narrow .agents-list__preview--pill .agents-list__rest {
-  display: none;
-}
-
-.workspace-sidebar.is-narrow .agents-list__preview--pill .status-pill {
-  width: var(--status-pill-dot);
-  height: var(--status-pill-dot);
-  padding: 0;
-  background: none;
-  font-size: 0;
-  overflow: hidden;
-}
-
-.workspace-sidebar.is-narrow .agents-list__preview--pill .status-pill__label {
-  position: absolute;
-  width: 1px; /* css-ok: visually hidden, still read aloud */
-  height: 1px; /* css-ok: visually hidden, still read aloud */
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-
-.workspace-sidebar.is-narrow .agents-list__preview--pill .status-pill__dot {
-  width: var(--spacing-sm);
-  height: var(--spacing-sm);
-}
 
 /* A row with no second line centres its name against the key. */
 .workspace-sidebar.is-narrow .agents-list__text {

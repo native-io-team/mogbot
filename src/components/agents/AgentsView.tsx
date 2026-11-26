@@ -1195,7 +1195,6 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   count={needsYouCount}
                   waiting={waitingNames}
                   open={catchUpOpen}
-                  collapsed={sidebarProps.isSidebarHidden ?? false}
                   onOpen={openCatchUp}
                 />
               }

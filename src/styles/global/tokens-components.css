@@ -28,16 +28,18 @@
   --size-sidebar-project-shortcut: 24px;
   --size-sidebar-project: 214px;
   --size-sidebar-project-row: 46px;
-  /* An agent row: its name and one line under it. Fixed, so a step's words,
-     a wrap or a state change never moves the rows below. */
-  --size-agents-list-row: 52px;
+  /* An agent row: its key and its name on one line, as Claude desktop's
+     sidebar is (25 Nov). The key (30px) and the row's 8px padding set it. */
+  --size-agents-list-row: 46px;
+  /* A row on the Catch up desk: a name and one line under it. */
+  --size-agents-desk-row: 58px; /* 16px name + 14px line under it (25 Nov) */
   /* Catch up on the desk (direction 2): the queue beside the open card. */
   /* Chat bubbles, Grok's measurements (chat-spec-vs-grok.md): a faint ink tint
-     for the agent's (4% in dark, 6% in light), 7x12 padding, 15/20 type, and
+     for the agent's (4% in dark, 6% in light), 7x12 padding, 16/21 type (Matt, 25 Nov), and
      the user's bubble at most 560px. */
   --agents-bubble-tint: 4%;
   --agents-bubble-pad-y: 7px;
-  --agents-bubble-line: 20px;
+  --agents-bubble-line: 21px;
   /* Desk box 12 with its buttons 6, inset 7 (6 + the border): concentric, not a pill. */
   --agents-composer-radius: var(--radius-lg);
   --agents-composer-button-radius: var(--radius-6);

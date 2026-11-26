@@ -2550,7 +2550,8 @@ export function agentKeyState(
 ): KeyState {
   return keyStateOf({
     needsOk: needsYou(agent),
-    paused: usageLimited(agent),
+    // A usage limit, or you paused it: either way it isn't taking turns.
+    paused: usageLimited(agent) || Boolean(agent.paused),
     working,
     live: Boolean(agent.takeover),
   });

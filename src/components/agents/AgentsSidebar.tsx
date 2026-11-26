@@ -30,7 +30,6 @@ import {
   useRef,
   type KeyboardEvent,
   type PointerEvent,
-  type ReactNode,
   type RefObject,
 } from 'react';
 import {
@@ -72,10 +71,9 @@ const ROOMS_KEY = 'rooms';
 import { Button } from '../primitives/Button';
 import { FooterRowIcon } from '../workspace/FooterRowIcon';
 import { IconButton } from '../primitives/IconButton';
-import { StatusPill } from '../primitives/StatusPill';
 import { Tooltip } from '../primitives/Tooltip';
 import { AgentKey } from './AgentKey';
-import { AgentWorkingLine, WorkingElapsed } from './AgentWorkingLine';
+import { WorkingElapsed } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
 import { AgentLevelBadge } from './AgentLevelPicker';
 import { AgentActionItems, type AgentActions } from './AgentActions';
@@ -88,10 +86,6 @@ import { useSteadyList } from './useAttentionOrder';
 import { useLiveAgent } from '../../lib/agentsStore';
 import {
   agentKeyState,
-  failedTurn,
-  failureLine,
-  failurePill,
-  type StatusTone,
   needsYou,
   usageLimited,
   roleWithoutPath,
@@ -100,9 +94,7 @@ import {
   type SearchHit,
 } from '../../lib/agents';
 import { kbd } from '../../lib/shortcuts';
-import { toDoLine } from './AgentTasksPanel';
 import { markLaunchAfterPaint } from '../../lib/launchMarks';
-import { previewText } from '../../../packages/companion-protocol/src/preview';
 
 interface AgentsSidebarProps {
   agents: Agent[];
@@ -127,78 +119,6 @@ interface AgentsSidebarProps {
   onNew?: () => void;
 }
 
-function subtitle(agent: Agent): ReactNode {
-  // A request outranks driving: the row's words and its amber dot agree.
-  // With a dozen agents waiting the label alone repeats down the list; what
-  // it's asking (`askingLine`, beside this) or how many it holds is what
-  // tells one waiting row from the next.
-  if (needsYou(agent)) {
-    const n = agent.pendingApprovals ?? 0;
-    return n > 1 ? `Needs your OK · ${n}` : 'Needs your OK';
-  }
-  // Live, in its colour, as the site's board says it; the key above is lit.
-  if (agent.takeover)
-    return (
-      <>
-        <span className="agents-list__state-word" data-state="live">
-          Live
-        </span>
-        {' · You’re driving it'}
-      </>
-    );
-  // The step it's on and how long it's been at it, not "Working…".
-  const toDo = agent.tasks?.toDo ?? 0;
-  // A working agent keeps its step line, unless it is Busy (ten or more open):
-  // then the row says how much is waiting behind this step.
-  if (agent.status.state === 'working') {
-    return toDo >= BUSY_AT ? toDoSubline(toDo) : <AgentWorkingLine agent={agent} inRow />;
-  }
-  const failure = failedTurn(agent);
-  if (failure) return failureLine(failure, previewText(agent.preview), agent.engine);
-  // Open work: how much, and Busy (ten or more) in amber; a quiet agent says Idle.
-  if (toDo > 0) return toDoSubline(toDo);
-  return previewText(agent.preview) || (agent.isMain ? FIRST_LINE : 'Idle');
-}
-
-/** Ten or more lines to do is Busy (docs/guide/asks.md). */
-const BUSY_AT = 10;
-
-/** "5 to do", or "14 to do · Busy" with Busy in amber. */
-function toDoSubline(toDo: number): ReactNode {
-  return (
-    <>
-      {toDoLine(toDo)}
-      {toDo >= BUSY_AT && (
-        <>
-          {' · '}
-          <span className="agents-list__busy">Busy</span>
-        </>
-      )}
-    </>
-  );
-}
-
-/** The Chief's row before it has said anything else (the stored greeting's first line). */
-const FIRST_LINE = 'Hi. Tell me what you want to get done.';
-
-/**
- * Waiting on you or a turn that didn't finish: the state as a pill and the
- * rest in words. Driving and working keep their own line (the step and its
- * clock say more than "Working" would, and the running dot is beside them).
- */
-function rowPill(agent: Agent): { tone: StatusTone; label: string; rest: string } | null {
-  if (needsYou(agent)) {
-    const n = agent.pendingApprovals ?? 0;
-    // The tag alone: how many when more than one, never an excerpt beside it.
-    return { tone: 'waiting', label: n > 1 ? `Needs your OK · ${n}` : 'Needs your OK', rest: '' };
-  }
-  // A paused agent says so on its row, without opening the menu.
-  if (agent.paused) return { tone: 'idle', label: 'Paused', rest: '' };
-  if (agent.takeover || agent.status.state === 'working') return null;
-  const failure = failedTurn(agent);
-  return failure ? failurePill(failure, previewText(agent.preview), agent.engine) : null;
-}
-
 /**
  * What the key and the row's ink say, in words for a screen reader: ", working",
  * ", paused", ", unread". The line itself says needs-your-OK and the time.
@@ -210,16 +130,6 @@ function rowStateWords(agent: Agent, unread: boolean): string {
   else if (usageLimited(agent) || agent.paused) words.push('paused');
   if (unread) words.push('unread');
   return words.length ? `, ${words.join(', ')}` : '';
-}
-
-/** The row's second line takes the colour of its state. */
-function lineState(agent: Agent): string | undefined {
-  if (needsYou(agent)) return 'waiting';
-  if (agent.takeover) return 'live';
-  if (agent.status.state === 'working') return 'working';
-  const failure = failedTurn(agent);
-  if (failure) return failure.kind === 'usage_limit' ? 'limited' : 'failed';
-  return undefined;
 }
 
 /** Its name and role as a tooltip; the name alone when it has no role and the row cuts it short. */
@@ -321,21 +231,19 @@ export function InFlightBell({
 /**
  * Catch up: one row under the search panel's border that never scrolls, the
  * height and hairline of a conversation row, so it lines up with the list.
- * A neutral tile where an agent's key sits; under the name, who is waiting
- * (an amber pill, never an agent's colour), or "All clear".
+ * A neutral tile where an agent's key sits, the waiting count on its corner.
+ * One line, as every row is (25 Nov): who is waiting is in its tooltip.
  */
 export function CatchUpRow({
   count,
   waiting,
   open,
-  collapsed,
   onOpen,
 }: {
   count: number;
-  /** The agents waiting on you, in list order: their names make the second line. */
+  /** The agents waiting on you, in list order: their names make the tooltip. */
   waiting: readonly { name: string }[];
   open: boolean;
-  collapsed: boolean;
   onOpen: () => void;
 }) {
   const shown = waiting.slice(0, 2).map((a) => a.name);
@@ -347,12 +255,13 @@ export function CatchUpRow({
       tabIndex={0}
       className={`agents-list__row agents-catchup-row${open ? ' is-current' : ''}`}
       aria-current={open ? 'page' : undefined}
+      aria-label={count > 0 ? `Catch up, ${count} need you: ${who}` : 'Catch up, all clear'}
+      title={who || undefined}
       onClick={onOpen}
     >
       <span className="agents-catchup-row__tile" aria-hidden="true">
         <CollaboratorsIcon size={14} />
-        {/* The rail has no line to read: the count rides the tile's corner. */}
-        {collapsed && count > 0 && (
+        {count > 0 && (
           <span className="agents-catchup-row__count">{count > 99 ? '99+' : count}</span>
         )}
       </span>
@@ -360,16 +269,6 @@ export function CatchUpRow({
         <span className="agents-list__name">
           <span className="agents-list__name-text">Catch up</span>
         </span>
-        {count > 0 ? (
-          <span className="agents-list__preview agents-list__preview--pill">
-            <StatusPill tone="waiting">
-              {count > 99 ? '99+' : count} {count === 1 ? 'needs' : 'need'} you
-            </StatusPill>
-            {who && <span className="agents-list__rest">{who}</span>}
-          </span>
-        ) : (
-          <span className="agents-list__preview">All clear</span>
-        )}
       </span>
     </button>
   );
@@ -719,7 +618,6 @@ const AgentRow = memo(function AgentRow({
   // The Chief stays first: it neither moves nor takes a row above it.
   const movable = !agent.isMain;
   const drag = useAgentPointerDrag({ agentId: agent.id, enabled: movable, group, onReorder });
-  const pill = rowPill(agent);
   // Read already when it's the one open; a muted agent never shows unread.
   const unread = !current && !agent.muted && agent.unread > 0;
   return (
@@ -762,18 +660,6 @@ const AgentRow = memo(function AgentRow({
               <AgentEngineBadge engine={agent.engine} />
               <AgentLevelBadge agent={agent} />
             </span>
-            {pill ? (
-              // The state in a pill, what it's about in the row's ordinary ink:
-              // one coloured thing per row, never a whole amber or red line.
-              <span className="agents-list__preview agents-list__preview--pill">
-                <StatusPill tone={pill.tone}>{pill.label}</StatusPill>
-                {pill.rest && <span className="agents-list__rest">{pill.rest}</span>}
-              </span>
-            ) : (
-              <span className="agents-list__preview" data-state={lineState(agent)}>
-                {subtitle(agent)}
-              </span>
-            )}
           </span>
           {/* The key says working, free or needs you, and unread is the row's
               ink, so the right edge stays clean. Said in words for a screen

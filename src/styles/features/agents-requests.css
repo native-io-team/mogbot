@@ -541,7 +541,7 @@
   align-items: center;
   gap: var(--spacing-md);
   width: 100%;
-  height: var(--size-agents-list-row);
+  height: var(--size-agents-desk-row);
   padding: 0 var(--spacing-sm);
   border: var(--border-width-default) solid transparent;
   border-radius: var(--radius-lg);
@@ -867,7 +867,7 @@ button.agents-catchup__row:hover:not(.is-selected) {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  height: var(--size-agents-list-row);
+  height: var(--size-agents-desk-row);
   padding: 0;
   border: 0;
   border-top: var(--border-width-default) solid var(--border-subtle);
