@@ -20,6 +20,8 @@ export const ALARM = 'mogbot-link';
  * - `update_needed`: this extension and the app speak different versions
  * - `refused`: the host and the app didn't trust each other
  * - `stopped`: the app turned the link off
+ * - `duplicate`: another copy of the extension in this Chrome profile is
+ *   already linked, and still answering; tried again only at the slow end
  */
 export class Link {
   /**
@@ -157,7 +159,13 @@ export class Link {
       case 'bye':
         if (msg.reason === 'version') this.disconnect('update_needed');
         else if (msg.reason === 'off') this.disconnect('stopped');
-        else if (msg.reason === 'quit') {
+        else if (msg.reason === 'duplicate') {
+          // A working link from this profile is already there: no quick
+          // retries, only the slow end, which links once that one is gone.
+          this.attempt = BACKOFF_MS.length;
+          this.disconnect('duplicate');
+          this.retry();
+        } else if (msg.reason === 'quit') {
           // The app is quitting, most often to start again (an update, a
           // rebuild): from the quick end of the backoff, so the link is back
           // seconds after the app is, then the alarm if it stays away.

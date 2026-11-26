@@ -364,13 +364,70 @@ async fn the_same_profile_reconnecting_replaces_the_old_link() {
     let _ = recv(&mut other);
     wait_for(&reg, 2).await;
     assert!(old.is_closed());
-    let bye = tokio::task::spawn_blocking(move || recv(&mut first))
+    // It was asked first (a ping it never answered), then let go.
+    let bye = tokio::task::spawn_blocking(move || recv_until_bye(&mut first))
         .await
         .unwrap();
     assert_eq!(bye, json!({ "t": "bye", "reason": "replaced" }));
     let ids: Vec<String> = reg.conns().iter().map(|c| c.profile_id.clone()).collect();
     assert_eq!(ids, vec!["p-2".to_string(), "p-1".to_string()]);
     running.stop(&reg, "test");
+}
+
+/// Frames until a bye, the requests before it unanswered.
+fn recv_until_bye(s: &mut UnixStream) -> Value {
+    loop {
+        let v = recv(s);
+        if v["t"] == "bye" {
+            return v;
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_second_copy_in_a_profile_already_linked_is_refused_not_swapped_in() {
+    let (dir, running, reg) = started().await;
+    let mut first = {
+        let path = dir.path().to_path_buf();
+        tokio::task::spawn_blocking(move || host::connect(&path, &origin()).unwrap())
+            .await
+            .unwrap()
+    };
+    send(&mut first, &hello("p-1", PROTOCOL));
+    let _ = recv(&mut first);
+    wait_for(&reg, 1).await;
+    let live = reg.conns().pop().unwrap();
+    // The live extension answers whatever it's asked, until the app says bye.
+    let answering = std::thread::spawn(move || loop {
+        let v = recv(&mut first);
+        if v["t"] == "bye" {
+            return v;
+        }
+        if v["t"] == "req" {
+            send(
+                &mut first,
+                &json!({ "t": "res", "id": v["id"], "ok": true, "result": {} }),
+            );
+        }
+    });
+    let mut second = {
+        let path = dir.path().to_path_buf();
+        tokio::task::spawn_blocking(move || host::connect(&path, &origin()).unwrap())
+            .await
+            .unwrap()
+    };
+    send(&mut second, &hello("p-1", PROTOCOL));
+    let answer = tokio::task::spawn_blocking(move || recv(&mut second))
+        .await
+        .unwrap();
+    assert_eq!(answer, json!({ "t": "bye", "reason": "duplicate" }));
+    // The working link is untouched, and still the only one.
+    assert!(!live.is_closed());
+    let conns = reg.conns();
+    assert_eq!(conns.len(), 1);
+    assert_eq!(conns[0].serial, live.serial);
+    running.stop(&reg, "test");
+    assert_eq!(answering.join().unwrap()["t"], "bye");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -532,6 +589,7 @@ fn the_extensions_copy_of_the_protocol_matches() {
         "no_tab",
         "not_allowed",
         "attach_failed",
+        "foreign_frame",
         "cdp",
         "protected",
         "busy",

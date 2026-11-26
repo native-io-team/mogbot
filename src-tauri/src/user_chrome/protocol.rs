@@ -125,6 +125,10 @@ pub enum ErrorCode {
     /// Chrome wouldn't let the extension drive the tab (DevTools open on
     /// it, another extension debugging it, a page Chrome protects).
     AttachFailed,
+    /// Chrome wouldn't let the extension drive the tab because another
+    /// extension's frame is in it; the message names that extension. Reading
+    /// and scrolling still work there, answered without the debugger.
+    ForeignFrame,
     /// Chrome answered the command with an error.
     Cdp,
     /// The page is one extensions may not touch (`chrome://`, the Web Store).

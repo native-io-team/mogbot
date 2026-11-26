@@ -11,6 +11,8 @@ const LINES = {
   refused:
     'The app and this extension couldn’t confirm each other. Turn Your Chrome off and on in the app.',
   stopped: 'Turned off in the app (Settings → Chrome → Your Chrome).',
+  duplicate:
+    'Another copy of this extension in this Chrome profile is already linked to the app, so this one isn’t. Remove the extra copy in chrome://extensions.',
 };
 
 const $ = (id) => document.getElementById(id);

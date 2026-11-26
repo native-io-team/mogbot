@@ -409,6 +409,18 @@ fn ref_of(agent: &str, tab: i64, r: &str) -> Result<RefTarget, String> {
     })
 }
 
+/// A ref to click, type into or drop a picture on. One from a read made
+/// without Chrome's debugger (a negative id: another extension's frame keeps
+/// the debugger out of the tab) can only be scrolled, so it says so instead
+/// of "read the page again", which would read the same way.
+fn pressable_ref(agent: &str, tab: i64, r: &str) -> Result<RefTarget, String> {
+    let t = ref_of(agent, tab, r)?;
+    if t.backend_node_id < 0 {
+        return Err(format!("{r} came from a read made without Chrome's debugger: another extension's frame is in this tab, so Chrome won't let the app click, type or drop a picture here. Tell the user which extension it is (the read named it), so they can set its Site access to \"On click\" or turn it off."));
+    }
+    Ok(t)
+}
+
 fn clear_refs(agent: &str, tab: i64) {
     with(|s| s.refs.remove(&(agent.to_string(), tab)));
 }
@@ -458,6 +470,32 @@ fn note_where(agent: &str, active: Option<&Owned>) {
             p.url = Some(a.url.clone());
         }
     });
+}
+
+/// The line added to a read the extension made without Chrome's debugger
+/// (another extension's frame is in the tab, so Chrome won't attach): its
+/// refs scroll but can't be clicked or typed into. `None` for an ordinary
+/// read.
+pub fn without_debugger_note(tree: &Value) -> Option<String> {
+    let w = tree.get("withoutDebugger")?;
+    let who: Vec<String> = w["inTheWay"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .map(|s| s.chars().take(120).collect())
+                .take(5)
+                .collect()
+        })
+        .unwrap_or_default();
+    let who = if who.is_empty() {
+        "Another extension".to_string()
+    } else {
+        who.join(", ")
+    };
+    Some(format!(
+        "\n(Read without Chrome's debugger: {who} puts its own frame in this page, and Chrome won't let the app drive a tab that holds one. Reading, find, scroll and navigate work here; click, type, press, screenshot and attach_image don't. Tell the user which extension it is, so they can set its Site access to \"On click\" (chrome://extensions → Details) or turn it off.)"
+    ))
 }
 
 fn text(s: impl Into<String>) -> Value {
@@ -879,8 +917,10 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
             let p = page(&conn, agent, &tab);
             let interactive = name == "read_page"
                 && args.get("interactive").and_then(Value::as_bool) == Some(true);
-            let r = axtree::render(&p.ax_nodes()?, interactive);
-            let out = if name == "find" {
+            let tree = p.cdp("Accessibility.getFullAXTree", json!({}))?;
+            let nodes = tree["nodes"].as_array().cloned().unwrap_or_default();
+            let r = axtree::render(&nodes, interactive);
+            let mut out = if name == "find" {
                 let q = args.get("query").and_then(Value::as_str).unwrap_or("");
                 let found = axtree::find(&r, q);
                 if found.is_empty() {
@@ -891,6 +931,9 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
             } else {
                 r.text.clone()
             };
+            if let Some(note) = without_debugger_note(&tree) {
+                out.push_str(&note);
+            }
             set_refs(agent, tab.tab_id, r.refs);
             let tab = refreshed(&conn, agent, &tab);
             note_where(agent, Some(&tab));
@@ -923,7 +966,7 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
             to_front(&conn, agent, &tab)?;
             let p = page(&conn, agent, &tab);
             let (x, y) = match args.get("ref").and_then(Value::as_str) {
-                Some(r) => p.center_of(ref_of(agent, tab.tab_id, r)?.backend_node_id)?,
+                Some(r) => p.center_of(pressable_ref(agent, tab.tab_id, r)?.backend_node_id)?,
                 None => xy(args).ok_or(if name == "click" {
                     "Click takes a ref, or x and y."
                 } else {
@@ -958,7 +1001,7 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
             to_front(&conn, agent, &tab)?;
             let p = page(&conn, agent, &tab);
             if let Some(r) = args.get("ref").and_then(Value::as_str) {
-                let node = ref_of(agent, tab.tab_id, r)?;
+                let node = pressable_ref(agent, tab.tab_id, r)?;
                 if p.node_is_secret(node.backend_node_id) {
                     return Err(crate::agent_browser::tools::NO_PASSWORDS.into());
                 }
@@ -982,7 +1025,7 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
             to_front(&conn, agent, &tab)?;
             let p = page(&conn, agent, &tab);
             let node = match args.get("ref").and_then(Value::as_str) {
-                Some(r) => Some(ref_of(agent, tab.tab_id, r)?.backend_node_id),
+                Some(r) => Some(pressable_ref(agent, tab.tab_id, r)?.backend_node_id),
                 None => None,
             };
             // First as a file, the way the site's own upload takes it

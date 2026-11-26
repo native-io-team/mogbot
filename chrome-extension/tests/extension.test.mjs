@@ -337,6 +337,24 @@ test('a stale port (replaced) is ignored', async () => {
   assert.equal(port.posted.length, 1, 'only the hello: nothing answered on a stale port');
 });
 
+test('a second copy in a profile already linked says so, and tries again only slowly', async () => {
+  const { chrome } = fakeChrome();
+  const { l, timers, states } = link(chrome);
+  await l.connect();
+  const port = chrome.runtime.ports[0];
+  port.onMessage.fire({ t: 'bye', reason: 'duplicate' });
+  await tick();
+  assert.equal(l.state, 'duplicate');
+  assert.equal(states.at(-1), 'duplicate');
+  assert.ok(port.closed);
+  assert.equal(timers.at(-1).ms, BACKOFF_MS.at(-1));
+  // Chrome's disconnect that follows changes nothing.
+  const n = timers.length;
+  port.onDisconnect.fire();
+  assert.equal(timers.length, n);
+  assert.equal(l.state, 'duplicate');
+});
+
 test('a node function runs only if it is the app’s own, with numbers only', () => {
   const [fn] = FUNCTIONS;
   assert.ok(fn.includes("behavior: 'instant'"));

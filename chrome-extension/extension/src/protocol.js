@@ -30,6 +30,7 @@ export const CODES = {
   noTab: 'no_tab',
   notAllowed: 'not_allowed',
   attachFailed: 'attach_failed',
+  foreignFrame: 'foreign_frame',
   cdp: 'cdp',
   protected: 'protected',
   busy: 'busy',
