@@ -836,6 +836,35 @@ body[data-agent-dragging] .agents-list__group-empty::before {
   bottom: 0;
 }
 
+/* A folder dragged by its header (useFolderPointerDrag): it dims where it
+   was, and a line above or below the folder it's over marks where it lands. */
+.agents-list__group[data-folder-dragging] {
+  opacity: var(--button-disabled-opacity);
+}
+
+.agents-list__group[data-folder-drop] {
+  position: relative;
+}
+
+.agents-list__group[data-folder-drop]::after {
+  content: '';
+  position: absolute;
+  left: var(--spacing-sm);
+  right: var(--spacing-sm);
+  height: var(--border-width-emphasis);
+  border-radius: var(--radius-pill);
+  background: var(--text-primary);
+  pointer-events: none;
+}
+
+.agents-list__group[data-folder-drop='before']::after {
+  top: 0;
+}
+
+.agents-list__group[data-folder-drop='after']::after {
+  bottom: 0;
+}
+
 /* A row being dragged (AgentGroupParts, useAgentPointerDrag): it dims where
    it was, and nothing on the page selects while the pointer moves. */
 .agents-list__row[data-dragging] {

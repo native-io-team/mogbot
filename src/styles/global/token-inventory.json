@@ -2034,7 +2034,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "consumerCount": 11
+      "consumerCount": 12
     },
     {
       "name": "--button-active-scale",
@@ -5930,7 +5930,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 682
+      "consumerCount": 683
     },
     {
       "name": "--text-secondary",
@@ -6074,7 +6074,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 57
+      "consumerCount": 58
     },
     {
       "name": "--accent-selected",
@@ -6986,7 +6986,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 1073
+      "consumerCount": 1075
     },
     {
       "name": "--spacing-md",
@@ -7074,7 +7074,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 98
+      "consumerCount": 99
     },
     {
       "name": "--radius-bubble",
@@ -7586,7 +7586,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 682
+      "consumerCount": 683
     },
     {
       "name": "--text-secondary",

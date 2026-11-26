@@ -21,6 +21,7 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   addGroup,
+  moveGroup,
   moveToGroup,
   removeGroup,
   renameGroup,
@@ -132,6 +133,78 @@ export function useAgentPointerDrag({
   return enabled ? { onPointerDown } : {};
 }
 
+/**
+ * Drag a folder by its header to put it before or after another folder.
+ * Pointer events, as for rows (see above). Only folders take part: the
+ * pinned section (the Chief) and "Not in a folder" keep their places. The
+ * target folder gets `data-folder-drop` ("before" or "after"), the one
+ * moving `data-folder-dragging`; the CSS draws the line from them.
+ */
+function useFolderPointerDrag(groupId: string | undefined) {
+  const change = useMacChange();
+  if (!groupId) return {};
+  const onPointerDown = (event: PointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
+    const group = event.currentTarget.closest<HTMLElement>('.agents-list__group');
+    const list = group?.closest('.agents-list');
+    if (!group || !list) return;
+    const x0 = event.clientX;
+    const y0 = event.clientY;
+    let started = false;
+    let over: HTMLElement | null = null;
+    const clear = () => {
+      over?.removeAttribute('data-folder-drop');
+      over = null;
+    };
+    const move = (e: globalThis.PointerEvent) => {
+      if (!started) {
+        if (Math.hypot(e.clientX - x0, e.clientY - y0) < DRAG_START_PX) return;
+        started = true;
+        group.setAttribute('data-folder-dragging', '');
+        document.body.setAttribute('data-agent-dragging', '');
+      }
+      e.preventDefault();
+      clear();
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      if (!under || !list.contains(under)) return;
+      const target = under.closest<HTMLElement>('.agents-list__group[data-group-id]');
+      if (!target || target === group || !target.dataset.groupId) return;
+      // Above a folder's header line: before it. Anywhere lower in it: after.
+      const head = target.firstElementChild?.getBoundingClientRect();
+      const mid = head ? head.top + head.height / 2 : target.getBoundingClientRect().top;
+      target.setAttribute('data-folder-drop', e.clientY < mid ? 'before' : 'after');
+      over = target;
+    };
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', cancel);
+      group.removeAttribute('data-folder-dragging');
+      document.body.removeAttribute('data-agent-dragging');
+      if (!started) return;
+      // The release isn't a click on the header (which would fold it).
+      const swallow = (c: MouseEvent) => {
+        c.stopPropagation();
+        c.preventDefault();
+      };
+      window.addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0);
+      const target = over?.dataset.groupId;
+      if (target) change(moveGroup(groupId, target, over?.dataset.folderDrop === 'after'));
+      clear();
+    };
+    const cancel = () => {
+      started = false;
+      clear();
+      end();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', cancel);
+  };
+  return { onPointerDown };
+}
+
 /** A change sent to the Mac, its failure said in a toast. */
 function useMacChange() {
   const { showToast } = useOptionalToast();
@@ -158,6 +231,7 @@ export function AgentGroupSection({
 }) {
   const [renaming, setRenaming] = useState(false);
   const change = useMacChange();
+  const drag = useFolderPointerDrag(section.groupId);
   const header = renaming ? (
     <FolderNameField
       initial={section.title}
@@ -174,6 +248,7 @@ export function AgentGroupSection({
       className="agents-list__group-toggle"
       aria-expanded={!collapsed}
       onClick={() => toggleCollapsed(section.key)}
+      {...drag}
     >
       <ChevronRightIcon size={10} className="agents-list__hidden-chevron" />
       <span className="agents-list__group-title">{section.title}</span>

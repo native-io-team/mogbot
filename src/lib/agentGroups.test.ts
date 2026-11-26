@@ -10,6 +10,7 @@ import {
   inYourOrder,
   reorder,
   getAgentGroups,
+  moveGroup,
   moveToGroup,
   parseLocal,
   removeGroup,
@@ -171,6 +172,16 @@ describe('changing folders', () => {
     expect(getAgentGroups().assign).toEqual({ a: 'f1' });
     expect(getAgentGroups().pinned).toBe('inFolder');
     expect(getAgentGroups().mode).toBe('custom');
+  });
+
+  it('reorders folders at once and sends the new order to the Mac', async () => {
+    const three = ['f1', 'f2', 'f3'].map((id) => ({ id, name: id.toUpperCase() }));
+    syncFolders({ folders: three, pinned: 'top' }, []);
+    await moveGroup('f3', 'f1', false);
+    expect(getAgentGroups().groups.map((g) => g.id)).toEqual(['f3', 'f1', 'f2']);
+    expect(calls).toContainEqual(['agents_folders_reorder', { ids: ['f3', 'f1', 'f2'] }]);
+    await moveGroup('f3', 'f2', true);
+    expect(getAgentGroups().groups.map((g) => g.id)).toEqual(['f1', 'f2', 'f3']);
   });
 
   it('never names a folder with nothing', async () => {

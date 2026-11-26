@@ -290,6 +290,20 @@ export async function moveToGroup(agentId: string, groupId: string | null): Prom
   await invoke('agents_set_folder', { agentId, folder: groupId }).catch(failed('filing an agent'));
 }
 
+/** A folder dragged before or after another: the Mac keeps the new order. */
+export async function moveGroup(moved: string, target: string, after: boolean): Promise<void> {
+  const ids = reorder(
+    mac.groups.map((g) => g.id),
+    moved,
+    target,
+    after
+  );
+  const byId = new Map(mac.groups.map((g) => [g.id, g]));
+  mac = { ...mac, groups: ids.flatMap((id) => byId.get(id) ?? []) };
+  publish();
+  await invoke('agents_folders_reorder', { ids }).catch(failed('reordering folders'));
+}
+
 export async function setPinnedPlacement(pinned: PinnedPlacement): Promise<void> {
   mac = { ...mac, pinned };
   publish();
